@@ -28,12 +28,34 @@ pandas / numpy / bs4 / requests 整窝拖入启动路径。单个 akshare import
 - 冷启动 silent 期 ~10s → 0s（spinner 立即可见）
 - baostock 主路径不再触发 pandas / numpy / bs4 / requests 等间接依赖
 
+### Added · 自动更新机制
+
+**核心**：
+- `kan update` 命令 · 检查并升级到最新版本（`-y` 跳过 confirm · `--check` 仅查不升）
+- 启动 atexit hook 自动检查（主命令完成后才查 · 不阻塞主流程）
+- 首次发现新版本 prompt y/n/skip 询问偏好 · 偏好持久化 `~/.local/share/kan/config.json`
+
+**5 个交互场景**：
+- 首次发现新版 + TTY → prompt 询问 auto_update 偏好
+- 选 y → 后续自动调对应包管理器 upgrade
+- 选 n → 每周限流 hint + `kan update` 命令引导
+- 网络失败 / PyPI 不可达 → 静默跳过 · 不破坏主命令
+- 非 TTY / `KAN_NO_UPDATE_CHECK=1` → 完全静默
+
+**安装方式自动检测**：通过 `sys.executable` 路径模式判 uv tool / pipx / pip venv
+
+**性能 + 隐私**：daily cache（同一天再启动跳过 PyPI 请求）· 3s timeout · 失败静默
+
 ### Internal
 - `kan/paths.py`：`is_stock_names_cache_fresh()` + `NAMES_CACHE_MAX_AGE_DAYS` 常量
 - `kan/watchlist.py`：移除顶层 `import akshare as ak` · 保留 re-export 兼容
-- `tests/test_paths.py`：4 case 守护 fresh 检查（缺失 / 新鲜 / 过期 / 边界）
-- `tests/test_watchlist.py::TestColdStartInvariants`：subprocess 隔离
-  invariant 测试 + monkeypatch sentinel · 双重防 akshare 顶层 import 回归
+- `kan/config.py`（新）· schema 持久化 + 损坏自愈 + atomic write
+- `kan/updater.py`（新）· PyPI 查询 + 包管理器派发 + 版本对比
+- `kan/cli.py`：抽 `_load_names_with_optional_spinner` helper + 新 `kan update` 命令 + atexit register `_check_updates_atexit`
+- `tests/test_paths.py`：4 case 守护 fresh 检查
+- `tests/test_watchlist.py::TestColdStartInvariants`：subprocess + monkeypatch 双重防 akshare 顶层 import 回归
+- `tests/test_config.py`（新）· 10 case 守护配置持久化（损坏自愈 + Unicode + atomic）
+- `tests/test_updater.py`（新）· 27 case 守护 PyPI / cache / 派发 / 升级各路径
 
 ## [0.0.1] - 2026-05-10
 

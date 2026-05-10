@@ -1,0 +1,310 @@
+"""kan/updater.py · PyPI 查询 + 版本对比 + 包管理器派发测试
+
+守护:
+- 网络失败 / timeout / 解析失败 → 静默 fallback (atexit hook 不破坏主命令)
+- daily cache 命中不发请求 (隐私 + 性能)
+- 版本号比较 (packaging + fallback)
+- 安装方式检测 (uv tool / pipx / pip)
+- 升级派发 (返回码 / timeout / 命令找不到)
+"""
+
+import json
+import subprocess
+from datetime import date, timedelta
+from io import BytesIO
+from unittest.mock import MagicMock, patch
+
+import pytest
+
+from kan import config, paths, updater
+
+
+class _FakeUrlResponse:
+    """模拟 urllib.request.urlopen 返回的 context manager"""
+
+    def __init__(self, body: bytes) -> None:
+        self.body = body
+
+    def __enter__(self) -> BytesIO:
+        return BytesIO(self.body)
+
+    def __exit__(self, *args) -> bool:
+        return False
+
+
+@pytest.fixture
+def temp_config_path(tmp_path, monkeypatch):
+    cfg_path = tmp_path / "config.json"
+    monkeypatch.setattr(paths, "BASE_DIR", tmp_path)
+    monkeypatch.setattr(config, "CONFIG_PATH", cfg_path)
+    return cfg_path
+
+
+# --- fetch_latest_version_from_pypi ---
+
+
+class TestFetchPypi:
+    def test_success_returns_version(self):
+        body = json.dumps({"info": {"version": "0.0.5"}}).encode()
+        with patch(
+            "kan.updater.urllib.request.urlopen",
+            return_value=_FakeUrlResponse(body),
+        ):
+            assert updater.fetch_latest_version_from_pypi() == "0.0.5"
+
+    def test_url_error_returns_none(self):
+        import urllib.error
+        with patch(
+            "kan.updater.urllib.request.urlopen",
+            side_effect=urllib.error.URLError("connection refused"),
+        ):
+            assert updater.fetch_latest_version_from_pypi() is None
+
+    def test_timeout_returns_none(self):
+        with patch(
+            "kan.updater.urllib.request.urlopen",
+            side_effect=TimeoutError("timeout"),
+        ):
+            assert updater.fetch_latest_version_from_pypi() is None
+
+    def test_oserror_returns_none(self):
+        """DNS / 路由 / socket 错误 → None"""
+        with patch(
+            "kan.updater.urllib.request.urlopen",
+            side_effect=OSError("network unreachable"),
+        ):
+            assert updater.fetch_latest_version_from_pypi() is None
+
+    def test_non_dict_response_returns_none(self):
+        body = json.dumps([1, 2, 3]).encode()
+        with patch(
+            "kan.updater.urllib.request.urlopen",
+            return_value=_FakeUrlResponse(body),
+        ):
+            assert updater.fetch_latest_version_from_pypi() is None
+
+    def test_missing_info_returns_none(self):
+        body = json.dumps({"other": {}}).encode()
+        with patch(
+            "kan.updater.urllib.request.urlopen",
+            return_value=_FakeUrlResponse(body),
+        ):
+            assert updater.fetch_latest_version_from_pypi() is None
+
+    def test_missing_version_returns_none(self):
+        body = json.dumps({"info": {"name": "manmankan"}}).encode()
+        with patch(
+            "kan.updater.urllib.request.urlopen",
+            return_value=_FakeUrlResponse(body),
+        ):
+            assert updater.fetch_latest_version_from_pypi() is None
+
+    def test_invalid_json_returns_none(self):
+        body = b"not valid json at all"
+        with patch(
+            "kan.updater.urllib.request.urlopen",
+            return_value=_FakeUrlResponse(body),
+        ):
+            assert updater.fetch_latest_version_from_pypi() is None
+
+
+# --- is_newer ---
+
+
+class TestIsNewer:
+    def test_strictly_newer(self):
+        assert updater.is_newer("0.0.3", "0.0.2") is True
+
+    def test_strictly_older(self):
+        assert updater.is_newer("0.0.1", "0.0.2") is False
+
+    def test_equal(self):
+        assert updater.is_newer("0.0.2", "0.0.2") is False
+
+    def test_minor_version_jump(self):
+        assert updater.is_newer("0.1.0", "0.0.9") is True
+
+    def test_major_version_jump(self):
+        assert updater.is_newer("1.0.0", "0.99.0") is True
+
+
+# --- check_for_updates ---
+
+
+class TestCheckForUpdates:
+    def test_cache_hit_does_not_call_pypi(self, temp_config_path):
+        """daily cache 命中 · 不发网络请求 (隐私 + 性能 invariant)"""
+        cfg = config.load()
+        cfg["last_check_date"] = date.today().isoformat()
+        cfg["latest_seen_version"] = "0.0.5"
+        config.save(cfg)
+
+        sentinel = MagicMock(side_effect=AssertionError("PyPI fetch should NOT be called"))
+        with patch.object(updater, "fetch_latest_version_from_pypi", sentinel):
+            info = updater.check_for_updates(force=False)
+
+        assert info.latest == "0.0.5"
+        assert info.from_cache is True
+        sentinel.assert_not_called()
+
+    def test_force_skips_cache(self, temp_config_path):
+        """force=True 跳过 cache 强制查 (kan update 命令用)"""
+        cfg = config.load()
+        cfg["last_check_date"] = date.today().isoformat()
+        cfg["latest_seen_version"] = "0.0.5"
+        config.save(cfg)
+
+        with patch.object(updater, "fetch_latest_version_from_pypi", return_value="0.0.7"):
+            info = updater.check_for_updates(force=True)
+
+        assert info.latest == "0.0.7"
+        assert info.from_cache is False
+
+    def test_cache_miss_writes_cache(self, temp_config_path):
+        """cache miss 后写 cache · 下次命中"""
+        with patch.object(updater, "fetch_latest_version_from_pypi", return_value="0.0.5"):
+            info = updater.check_for_updates(force=False)
+
+        assert info.from_cache is False
+        cfg = config.load()
+        assert cfg["last_check_date"] == date.today().isoformat()
+        assert cfg["latest_seen_version"] == "0.0.5"
+
+    def test_network_failure_returns_no_latest(self, temp_config_path):
+        """网络失败 · latest=None · 不写 cache"""
+        with patch.object(updater, "fetch_latest_version_from_pypi", return_value=None):
+            info = updater.check_for_updates(force=False)
+
+        assert info.latest is None
+        assert info.has_update is False
+        cfg = config.load()
+        assert cfg["last_check_date"] is None  # 没写 cache
+
+    def test_yesterday_cache_misses(self, temp_config_path):
+        """昨天的 cache 不算命中 · 重新查"""
+        cfg = config.load()
+        cfg["last_check_date"] = (date.today() - timedelta(days=1)).isoformat()
+        cfg["latest_seen_version"] = "0.0.5"
+        config.save(cfg)
+
+        with patch.object(updater, "fetch_latest_version_from_pypi", return_value="0.0.6"):
+            info = updater.check_for_updates(force=False)
+
+        assert info.latest == "0.0.6"
+        assert info.from_cache is False
+
+
+# --- detect_install_method ---
+
+
+class TestDetectInstallMethod:
+    def test_uv_tool(self, monkeypatch):
+        monkeypatch.setattr(
+            "sys.executable",
+            "/Users/x/.local/share/uv/tools/manmankan/bin/python",
+        )
+        result = updater.detect_install_method()
+        assert result.name == "uv tool"
+        assert result.upgrade_cmd == ["uv", "tool", "upgrade", "manmankan"]
+
+    def test_pipx(self, monkeypatch):
+        monkeypatch.setattr(
+            "sys.executable",
+            "/Users/x/.local/pipx/venvs/manmankan/bin/python",
+        )
+        result = updater.detect_install_method()
+        assert result.name == "pipx"
+        assert result.upgrade_cmd == ["pipx", "upgrade", "manmankan"]
+
+    def test_pip_venv(self, monkeypatch):
+        monkeypatch.setattr(
+            "sys.executable",
+            "/Users/x/projects/manmankan/.venv/bin/python",
+        )
+        result = updater.detect_install_method()
+        assert result.name == "pip / venv"
+        assert "manmankan" in result.upgrade_cmd
+        assert "--upgrade" in result.upgrade_cmd
+
+    def test_unknown_falls_back_to_uv_tool_guess(self, monkeypatch):
+        """完全无法识别 · 兜底用 uv tool（最常见）"""
+        monkeypatch.setattr("sys.executable", "/usr/bin/python3")
+        result = updater.detect_install_method()
+        assert "uv tool" in result.name
+
+
+# --- run_upgrade ---
+
+
+class TestRunUpgrade:
+    def _make_completed(self, returncode: int, stdout: str = "", stderr: str = ""):
+        m = MagicMock()
+        m.returncode = returncode
+        m.stdout = stdout
+        m.stderr = stderr
+        return m
+
+    def test_success_returncode_zero(self, monkeypatch):
+        monkeypatch.setattr(
+            "sys.executable",
+            "/Users/x/.local/share/uv/tools/manmankan/bin/python",
+        )
+        with patch(
+            "kan.updater.subprocess.run",
+            return_value=self._make_completed(0, "Upgraded successfully"),
+        ):
+            status, msg = updater.run_upgrade()
+        assert status == "success"
+        assert msg == "uv tool"
+
+    def test_failed_nonzero_returncode(self, monkeypatch):
+        monkeypatch.setattr(
+            "sys.executable",
+            "/Users/x/.local/share/uv/tools/manmankan/bin/python",
+        )
+        with patch(
+            "kan.updater.subprocess.run",
+            return_value=self._make_completed(1, "", "Permission denied"),
+        ):
+            status, msg = updater.run_upgrade()
+        assert status == "failed"
+        assert "Permission denied" in msg
+
+    def test_timeout(self, monkeypatch):
+        monkeypatch.setattr(
+            "sys.executable",
+            "/Users/x/.local/share/uv/tools/manmankan/bin/python",
+        )
+        with patch(
+            "kan.updater.subprocess.run",
+            side_effect=subprocess.TimeoutExpired(cmd="uv", timeout=120),
+        ):
+            status, msg = updater.run_upgrade()
+        assert status == "failed"
+        assert "超时" in msg
+
+    def test_command_not_found(self, monkeypatch):
+        monkeypatch.setattr(
+            "sys.executable",
+            "/Users/x/.local/share/uv/tools/manmankan/bin/python",
+        )
+        with patch(
+            "kan.updater.subprocess.run",
+            side_effect=FileNotFoundError("uv not found"),
+        ):
+            status, msg = updater.run_upgrade()
+        assert status == "failed"
+        assert "未找到" in msg
+
+    def test_unexpected_exception_swallowed(self, monkeypatch):
+        """RuntimeError / 其他异常都吞掉返回 failed"""
+        monkeypatch.setattr(
+            "sys.executable",
+            "/Users/x/.local/share/uv/tools/manmankan/bin/python",
+        )
+        with patch(
+            "kan.updater.subprocess.run",
+            side_effect=RuntimeError("unexpected"),
+        ):
+            status, msg = updater.run_upgrade()
+        assert status == "failed"
