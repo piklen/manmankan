@@ -1,0 +1,85 @@
+[project]
+name = "manmankan"
+version = "0.0.1"
+description = "A 股自选股位置感 CLI 工具 · 多周期位置扫描 + 共振信号 + 连续涨跌看板"
+requires-python = ">=3.11"
+license = { text = "MIT" }
+authors = [
+    { name = "piklen" },
+]
+readme = "README.md"
+keywords = ["stock", "a-share", "cli", "position", "scanner", "akshare", "中国股市"]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Environment :: Console",
+    "Intended Audience :: End Users/Desktop",
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: OS Independent",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Topic :: Office/Business :: Financial",
+    "Topic :: Utilities",
+    "Natural Language :: Chinese (Simplified)",
+]
+
+dependencies = [
+    "akshare>=1.14",
+    "pandas>=2.0",
+    "pydantic>=2.0",
+    "rich>=13.0",
+    "typer>=0.12",
+    "pyarrow>=15.0",  # pandas 读写 parquet 的运行时依赖
+    "baostock>=0.9.1",
+]
+
+[project.urls]
+Homepage = "https://github.com/piklen/manmankan"
+Repository = "https://github.com/piklen/manmankan"
+Issues = "https://github.com/piklen/manmankan/issues"
+Changelog = "https://github.com/piklen/manmankan/blob/main/CHANGELOG.md"
+
+[project.scripts]
+kan = "kan.cli:cli_main"
+
+[dependency-groups]
+dev = [
+    "pytest>=8.0",
+    "pytest-cov>=5.0",
+    "ruff>=0.4",
+]
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "N", "W", "UP", "B", "C4", "SIM", "RUF"]
+ignore = [
+    "E501",    # line-too-long (中文 docstring 换行难，line-length=100 已够)
+    "RUF001",  # 中文全角标点 (， 。 ：) — 中文 CLI 必然产物
+    "RUF002",  # docstring 全角标点 — 同上
+    "RUF003",  # comment 全角标点 — 同上
+]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+
+[tool.coverage.run]
+source = ["kan"]
+omit = ["tests/*"]
+
+[tool.coverage.report]
+exclude_lines = [
+    "pragma: no cover",
+    "if __name__ == .__main__.:",
+    "raise NotImplementedError",
+    "if TYPE_CHECKING:",
+]
+
+[tool.hatch.build.targets.wheel]
+packages = ["kan"]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"

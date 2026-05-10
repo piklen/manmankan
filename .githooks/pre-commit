@@ -1,0 +1,51 @@
+#!/usr/bin/env bash
+#
+# manmankan pre-commit hook
+#
+# 启用方式 (一次性):
+#   git config core.hooksPath .githooks
+#
+# 跳过 (不推荐 · 仅紧急情况):
+#   git commit --no-verify
+#
+# 详见 CONTRIBUTING.md「公开输出语言规范」
+
+set -uo pipefail
+
+REPO_ROOT="$(git rev-parse --show-toplevel)"
+cd "$REPO_ROOT"
+
+echo ""
+echo "═══ pre-commit 自检 ═══"
+echo ""
+
+# 1. 隐私泄漏自检
+echo "[1/2] 公开档案隐私自检 ..."
+if ! bash scripts/check-privacy-leaks.sh; then
+  echo ""
+  echo "❌ pre-commit 拦截 · 修复后再 commit"
+  echo "💡 临时跳过 (不推荐): git commit --no-verify"
+  exit 1
+fi
+
+echo ""
+echo "[2/2] ruff lint ..."
+if command -v uv >/dev/null 2>&1; then
+  if ! uv run ruff check kan/ tests/ 2>&1; then
+    echo ""
+    echo "❌ ruff lint 失败 · 修复后再 commit"
+    exit 1
+  fi
+elif command -v ruff >/dev/null 2>&1; then
+  if ! ruff check kan/ tests/ 2>&1; then
+    echo ""
+    echo "❌ ruff lint 失败 · 修复后再 commit"
+    exit 1
+  fi
+else
+  echo "⚠️ uv / ruff 未安装 · 跳过 lint (建议装上)"
+fi
+
+echo ""
+echo "✅ pre-commit 全部通过"
+echo ""
