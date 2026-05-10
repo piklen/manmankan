@@ -112,6 +112,34 @@ def help_cmd() -> None:
 """)
 
 
+def _load_names_with_optional_spinner(console) -> dict[str, str]:
+    """加载 A 股代码表 · 缓存过期时 spinner 包住 watchlist 重 import + preload。
+
+    设计要点：fresh 检查走极轻的 kan.paths（~370μs）· spinner 提前到 watchlist
+    重模块（akshare lazy 后约 ~40ms 热启动 / ~1-2s 冷启动）import 之前显示，
+    避免按回车后用户面对一段 silent 期。
+    """
+    import time as _time
+
+    from kan.paths import is_stock_names_cache_fresh
+    cache_fresh = is_stock_names_cache_fresh()
+
+    if cache_fresh:
+        from kan.watchlist import preload_stock_names
+        return preload_stock_names()
+
+    t_start = _time.monotonic()
+    with console.status(
+        "[yellow]⏳ 正在加载 A 股代码表 (首次约 5-15s · 后续 7 天内秒级)...[/yellow]",
+        spinner="dots",
+    ):
+        from kan.watchlist import preload_stock_names
+        names = preload_stock_names()
+    elapsed = _time.monotonic() - t_start
+    console.print(f"[green]✅ A 股代码表加载完成 · 用时 {elapsed:.1f}s[/green]")
+    return names
+
+
 @app.command()
 def add(
     symbols: Annotated[list[str], typer.Argument(help="股票代码或名称（如 600519 茅台）")],
@@ -119,35 +147,22 @@ def add(
     """添加自选股（支持代码或名称搜索）"""
     import time as _time
 
-    from kan.watchlist import (
-        add_stock,
-        is_stock_names_cache_fresh,
-        load_watchlist,
-        preload_stock_names,
-        save_watchlist,
-        search_by_name,
-    )
-
     batch = len(symbols) > 1
-    cache_fresh = is_stock_names_cache_fresh()
 
     from rich.console import Console
-    # spinner 写 stderr · 防被 baostock/akshare 内部 stdout/stderr 重定向干扰 ·
+    # spinner 写 stderr · 防被 baostock 内部 stdout/stderr 重定向干扰 ·
     # tqdm/login banner 抑制已下沉到 watchlist.py 各 _fetch_* 函数内部 self-suppress
     _console = Console(stderr=True)
 
-    if not cache_fresh:
-        # 首次或缓存过期 · baostock 主源 ~5-7s · spinner 防用户疑似挂死
-        t_start = _time.monotonic()
-        with _console.status(
-            "[yellow]⏳ 正在加载 A 股代码表 (首次约 5-15s · 后续 7 天内秒级)...[/yellow]",
-            spinner="dots",
-        ):
-            names = preload_stock_names()
-        elapsed = _time.monotonic() - t_start
-        _console.print(f"[green]✅ A 股代码表加载完成 · 用时 {elapsed:.1f}s[/green]")
-    else:
-        names = preload_stock_names()
+    names = _load_names_with_optional_spinner(_console)
+
+    # watchlist 已被 helper 加载到 sys.modules · 第二次 import 是 dict 查找
+    from kan.watchlist import (
+        add_stock,
+        load_watchlist,
+        save_watchlist,
+        search_by_name,
+    )
 
     wl = load_watchlist()
     changed = False

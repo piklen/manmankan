@@ -7,6 +7,34 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.0.2] - 2026-05-11
+
+### Performance · 冷启动延迟修复
+
+**根因（v0.0.1 实测）**：`kan/watchlist.py` 顶层 `import akshare as ak` 把
+pandas / numpy / bs4 / requests 整窝拖入启动路径。单个 akshare import
+占 watchlist 模块加载成本 85%（热启动 229ms / 冷启动约 8s）。
+用户视角：按回车后 silent ~10s 才看到 ⏳ 加载提示。
+
+**修复**：
+- `akshare` 改 lazy import（仅在 baostock 主路径失败 fallback 时才付 import 成本）
+- 新增 `kan.paths.is_stock_names_cache_fresh()` + `NAMES_CACHE_MAX_AGE_DAYS`，
+  让 CLI 在 import 重模块前用极轻 paths（~370μs）先决策
+- `kan/cli.py` 抽 `_load_names_with_optional_spinner` helper，
+  spinner 提前到 watchlist 重模块 import 之前显示
+- `kan add` 用户视角：按回车后 0 silent 期 · ⏳ 加载提示立即可见
+
+**实测收益**（首次添加股票场景）：
+- 冷启动 silent 期 ~10s → 0s（spinner 立即可见）
+- baostock 主路径不再触发 pandas / numpy / bs4 / requests 等间接依赖
+
+### Internal
+- `kan/paths.py`：`is_stock_names_cache_fresh()` + `NAMES_CACHE_MAX_AGE_DAYS` 常量
+- `kan/watchlist.py`：移除顶层 `import akshare as ak` · 保留 re-export 兼容
+- `tests/test_paths.py`：4 case 守护 fresh 检查（缺失 / 新鲜 / 过期 / 边界）
+- `tests/test_watchlist.py::TestColdStartInvariants`：subprocess 隔离
+  invariant 测试 + monkeypatch sentinel · 双重防 akshare 顶层 import 回归
+
 ## [0.0.1] - 2026-05-10
 
 ### Added · 首次公开发布
@@ -52,5 +80,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - 所有数据本地存储 · 不上传任何用户数据
 - `CONTRIBUTING.md` + `SECURITY.md` + 公开输出语言纪律
 
-[Unreleased]: https://github.com/piklen/manmankan/compare/v0.0.1...HEAD
+[Unreleased]: https://github.com/piklen/manmankan/compare/v0.0.2...HEAD
+[0.0.2]: https://github.com/piklen/manmankan/compare/v0.0.1...v0.0.2
 [0.0.1]: https://github.com/piklen/manmankan/releases/tag/v0.0.1
