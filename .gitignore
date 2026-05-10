@@ -1,0 +1,54 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.egg
+*.egg-info/
+dist/
+build/
+.eggs/
+
+# Virtual env
+.venv/
+venv/
+.uv/
+
+# Environment variables
+.env
+.env.local
+
+# Database / Data
+*.db
+*.sqlite
+data/
+*.parquet
+
+# Testing
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+htmlcov/
+.coverage
+.coverage.*
+.tox/
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Local / private (any user-private files we don't want to track)
+*.local
+*.private
+*.secret
+*.bak
+
+# AI assistant private system prompts (not for public repo)
+CLAUDE.md
+.claude/
