@@ -1,4 +1,4 @@
-"""K 线数据拉取层 · 多源 fallback（东方财富 → baostock → 腾讯）"""
+"""K 线数据拉取层 · 多源 fallback（baostock → 新浪 → 东财 → 腾讯）"""
 
 from __future__ import annotations
 
