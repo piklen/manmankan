@@ -258,6 +258,23 @@ kan fetch --force              # 强制刷新(忽略今日已更新的缓存)
 kan fetch 600519 000858        # 只拉指定股票
 ```
 
+### 自动更新
+
+```bash
+kan update                     # 检查并升级到最新版本(默认带确认)
+kan update --yes               # 跳过确认(脚本 / CI 用)
+kan update --check             # 仅检查不升级
+```
+
+> 💡 任意 `kan` 命令运行后会自动检查 PyPI 最新版本(主命令完成后才查 · 不阻塞)。
+> 首次发现新版本会询问是否「以后自动升级」(y / n / skip):
+> - 选 **y** → 后续自动调对应包管理器升级(uv tool / pipx / pip)
+> - 选 **n** → 不再自动升级 · 仅每周一次 hint
+> - 选 **skip** → 下次启动再问
+>
+> 想关闭这个自动行为:`export KAN_NO_UPDATE_CHECK=1` 后再跑。
+> daily cache:同一天再启动跳过网络请求,3s timeout 失败静默不影响主命令。
+
 ### 卸载
 
 ```bash
