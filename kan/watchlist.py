@@ -11,18 +11,24 @@ from datetime import date, datetime
 from pathlib import Path
 from typing import Any
 
-import akshare as ak
 import typer
 
 from kan.models import Stock
 from kan.paths import (
+    NAMES_CACHE_MAX_AGE_DAYS,
     STOCK_NAMES_CACHE,
     WATCHLIST_PATH,
     ensure_dirs,
+    is_stock_names_cache_fresh,
 )
 
-NAMES_CACHE_MAX_AGE_DAYS = 7
 MAX_CSV_SIZE = 10 * 1024 * 1024  # 10 MB · CSV 导入文件大小上限
+
+__all__ = [  # 显式 re-export · is_stock_names_cache_fresh / NAMES_CACHE_MAX_AGE_DAYS 来自 paths
+    "NAMES_CACHE_MAX_AGE_DAYS",
+    "STOCK_NAMES_CACHE",
+    "is_stock_names_cache_fresh",
+]
 
 
 def _atomic_write_json(path: Path, data: Any) -> None:
@@ -130,11 +136,17 @@ def _fetch_names_baostock() -> dict[str, str] | None:
 def _fetch_names_akshare() -> dict[str, str] | None:
     """akshare stock_info_a_code_name · fallback · 实测 ~16s · baostock 失败时兜底。
 
+    Lazy import akshare · 不在 watchlist 顶层 import：akshare 拖 pandas/numpy/bs4/requests
+    整窝进启动路径，单个就占 watchlist 冷启动成本 85%（~8s 冷启动 ***REMOVED***）。
+    本函数仅在 baostock 主路径失败时调用，95%+ 的常规启动不该付这个成本。
+
     内部 self-suppress akshare 的 tqdm 'n/16' 误导进度条（写到 stderr）。
     不依赖 cli.py 外层重定向 stderr · 避免干扰 cli 的 spinner Live Display。
     """
     import io
     import sys
+
+    import akshare as ak  # lazy: 见 docstring
 
     _real_stderr = sys.stderr
     sys.stderr = io.StringIO()
@@ -166,14 +178,6 @@ def search_by_name(query: str, _names_cache: dict[str, str] | None = None) -> li
 def preload_stock_names() -> dict[str, str]:
     """Pre-load A-share stock name mapping. Triggers HTTP fetch if cache is stale."""
     return _load_stock_names()
-
-
-def is_stock_names_cache_fresh() -> bool:
-    """股票名称缓存是否新鲜（< 7 天）· 不读文件内容只看 mtime · 用于决定是否显示 spinner。"""
-    if not STOCK_NAMES_CACHE.exists():
-        return False
-    mtime = datetime.fromtimestamp(STOCK_NAMES_CACHE.stat().st_mtime)
-    return (datetime.now() - mtime).days < NAMES_CACHE_MAX_AGE_DAYS
 
 
 def add_stock(wl: Watchlist, symbol: str, name: str) -> bool:

@@ -27,6 +27,22 @@ STOCK_NAMES_CACHE = BASE_DIR / "stock_names.json"
 SNAPSHOT_PATH = BASE_DIR / "last_scan.json"
 SNAPSHOTS_DIR = BASE_DIR / "snapshots"
 
+NAMES_CACHE_MAX_AGE_DAYS = 7
+
+
+def is_stock_names_cache_fresh() -> bool:
+    """A 股代码表本地缓存是否新鲜（< NAMES_CACHE_MAX_AGE_DAYS 天）。
+
+    只看 mtime · 不读文件内容 · 保持极轻 (~370μs import 成本)。
+    放在 paths.py 而非 watchlist.py：让 CLI 在 import 重模块（akshare/pandas）
+    之前就能决策是否需要拉取，spinner 可以提前到重模块 import 之前显示。
+    """
+    if not STOCK_NAMES_CACHE.exists():
+        return False
+    from datetime import datetime
+    mtime = datetime.fromtimestamp(STOCK_NAMES_CACHE.stat().st_mtime)
+    return (datetime.now() - mtime).days < NAMES_CACHE_MAX_AGE_DAYS
+
 
 def ensure_dirs() -> None:
     """确保数据目录存在。"""

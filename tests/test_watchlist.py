@@ -271,3 +271,59 @@ class TestStockGroups:
         data = s.model_dump(mode="json")
         s2 = Stock(**data)
         assert s2.groups == s.groups
+
+
+# --- 冷启动延迟回归保护 (v0.0.2 引入 · akshare lazy import) ---
+
+
+class TestColdStartInvariants:
+    """守护 akshare 不在 kan.watchlist 顶层被 import · 防冷启动 ***REMOVED***回归。
+
+    v0.0.1 实测：watchlist.py 顶层 `import akshare as ak` 把 pandas/numpy/bs4/requests
+    整窝拖入启动路径，单 akshare 占 watchlist 加载成本 85%（热启动 229ms / 冷启动约 8s）。
+    """
+
+    def test_watchlist_top_level_does_not_load_akshare(self):
+        """import kan.watchlist 时 akshare 不应出现在 sys.modules（子进程隔离）。
+
+        sys.modules 是 process-global · 单进程 pytest 内可能被其他测试污染，
+        必须用 subprocess 隔离才能可靠检查"watchlist 自己有没有 import akshare"。
+        """
+        import subprocess
+        import sys
+
+        result = subprocess.run(
+            [
+                sys.executable, "-c",
+                "import kan.watchlist as w; "
+                "import sys; "
+                "leaked = [m for m in sys.modules if 'akshare' in m.lower()]; "
+                "assert not leaked, f'akshare leaked: {leaked}'",
+            ],
+            capture_output=True, text=True
+        )
+        assert result.returncode == 0, (
+            f"akshare leaked into top-level imports of kan.watchlist\n"
+            f"stdout: {result.stdout}\nstderr: {result.stderr}"
+        )
+
+    def test_baostock_success_does_not_call_akshare_fallback(self, temp_kan_dir, monkeypatch):
+        """baostock 主路径成功 → akshare fallback 不应被调用（避免无谓 import 成本）。"""
+        fallback_called: list[bool] = []
+
+        def sentinel() -> None:
+            fallback_called.append(True)
+            raise AssertionError(
+                "akshare fallback should NOT be called when baostock succeeds"
+            )
+
+        monkeypatch.setattr(watchlist, "_fetch_names_akshare", sentinel)
+        monkeypatch.setattr(
+            watchlist, "_fetch_names_baostock",
+            lambda: {"600519": "贵州茅台", "000858": "五粮液"},
+        )
+
+        names = watchlist._load_stock_names()
+
+        assert names == {"600519": "贵州茅台", "000858": "五粮液"}
+        assert not fallback_called, "akshare fallback unexpectedly invoked"
