@@ -991,6 +991,74 @@ def _human_size(size_bytes: int) -> str:
 
 
 @app.command()
+def update(
+    yes: Annotated[bool, typer.Option("--yes", "-y", help="跳过确认 · 用于脚本 / CI")] = False,
+    check_only: Annotated[bool, typer.Option("--check", help="仅检查 · 不升级")] = False,
+) -> None:
+    """检查并升级到最新版本
+
+    工作流程:
+      1. 实时查 PyPI 拿最新版本号 (force=True 跳过 daily cache)
+      2. 跟当前版本对比
+      3. 有新版 + 用户 confirm → 调对应包管理器 upgrade (uv tool / pipx / pip)
+      4. 失败显示友好错误 + 退出码 1
+
+    用法:
+      kan update              检查并升级 (会 prompt 确认)
+      kan update -y           跳过确认 · 用于脚本
+      kan update --check      仅检查不升级
+    """
+    from rich.console import Console
+
+    from kan import updater
+
+    console = Console()
+
+    info = updater.check_for_updates(force=True)
+
+    if info.latest is None:
+        _print_err("[yellow]⚠️ 无法连接 PyPI · 请检查网络后重试[/yellow]")
+        raise typer.Exit(1)
+
+    console.print(f"当前版本: [cyan]v{info.current}[/cyan]")
+    console.print(f"最新版本: [cyan]v{info.latest}[/cyan]")
+
+    if not info.has_update:
+        console.print("[green]✅ 已是最新版本[/green]")
+        return
+
+    console.print(
+        "更新说明: https://github.com/piklen/manmankan/blob/main/CHANGELOG.md"
+    )
+
+    if check_only:
+        console.print(
+            f"[dim]跑 [bold]kan update[/bold] 升级到 v{info.latest}[/dim]"
+        )
+        return
+
+    if not yes and not typer.confirm(f"是否升级到 v{info.latest}?"):
+        console.print("[dim]已取消[/dim]")
+        return
+
+    install = updater.detect_install_method()
+    console.print(
+        f"[dim]检测到安装方式: {install.name} · 升级中...[/dim]"
+    )
+
+    status, msg = updater.run_upgrade()
+    if status == "success":
+        console.print(
+            f"[green]✅ 已升级到 v{info.latest}[/green] "
+            f"[dim](方式: {msg} · 下次跑 kan 命令生效)[/dim]"
+        )
+    else:
+        _print_err("[red]❌ 升级失败[/red]")
+        _print_err(f"[dim]{msg}[/dim]")
+        raise typer.Exit(1)
+
+
+@app.command()
 def uninstall(
     yes: Annotated[bool, typer.Option("--yes", "-y", help="跳过确认 · 用于脚本 / CI")] = False,
     keep_data: Annotated[bool, typer.Option("--keep-data", help="只输出包卸载提示 · 不删数据")] = False,
@@ -1299,6 +1367,131 @@ def _auto_install_completion() -> None:
         pass
 
 
+def _check_updates_atexit() -> None:
+    """主命令完成后异步检查更新 · 静默 fallback · 5 个交互场景对应。
+
+    场景:
+      A) auto_update is None + TTY  → prompt y/n/skip 询问偏好 · 选 y 立即升级
+      B) auto_update is True         → 自动调包管理器 upgrade · 失败静默
+      C) auto_update is False        → 仅 hint · 每周限流一次
+      D) PyPI 不可达 / 网络失败       → 完全静默 · 不破坏主命令
+      E) 非 TTY / KAN_NO_UPDATE_CHECK → 直接返回 · 不发请求
+
+    所有异常都吞掉 · atexit hook 不能让主命令 exit code 改变。
+    """
+    import os
+    import sys
+
+    if os.environ.get("KAN_NO_UPDATE_CHECK") == "1":
+        return
+    # 用户已经在跑 kan update · atexit 不重复检查防双重升级 / 双重 prompt
+    if len(sys.argv) >= 2 and sys.argv[1] == "update":
+        return
+    # 非 TTY (pipe / CI) 不弹 prompt 不打扰
+    if not (sys.stdout.isatty() or sys.stderr.isatty()):
+        return
+
+    try:
+        from datetime import date, timedelta
+
+        from rich.console import Console
+
+        from kan import config, updater
+
+        info = updater.check_for_updates()
+        if info.latest is None or not info.has_update:
+            return
+
+        cfg = config.load()
+        auto_update = cfg.get("auto_update")
+        console = Console(stderr=True)
+
+        # 场景 B: 已选 True · 自动升级
+        if auto_update is True:
+            console.print(
+                f"\n[dim]💡 检测到新版本 v{info.latest} · 自动升级中...[/dim]"
+            )
+            status, msg = updater.run_upgrade()
+            if status == "success":
+                console.print(
+                    f"[dim]✅ 已升级到 v{info.latest} · 下次跑 kan 命令生效[/dim]"
+                )
+            # 升级失败 atexit 静默不打扰主命令
+            return
+
+        # 场景 C: 已选 False · 仅 hint · 每周限流
+        if auto_update is False:
+            should_hint = True
+            last_hint = cfg.get("last_hint_date")
+            if isinstance(last_hint, str):
+                try:
+                    last = date.fromisoformat(last_hint)
+                    should_hint = (date.today() - last) >= timedelta(days=7)
+                except ValueError:
+                    pass
+            if should_hint:
+                console.print(
+                    f"\n[dim]💡 当前 v{info.current} · 最新 v{info.latest} · "
+                    f"跑 [bold]kan update[/bold] 升级 (本提示每周一次)[/dim]"
+                )
+                cfg["last_hint_date"] = date.today().isoformat()
+                try:
+                    config.save(cfg)
+                except OSError:
+                    pass
+            return
+
+        # 场景 A: 首次发现新版 (auto_update is None) · 阻塞 prompt
+        console.print(
+            f"\n[bold yellow]💡 发现新版本 v{info.latest}[/bold yellow] "
+            f"[dim](当前 v{info.current})[/dim]"
+        )
+        try:
+            choice = typer.prompt(
+                "是否启用「以后自动升级」 [y/n/skip]",
+                default="skip",
+                show_default=True,
+            ).strip().lower()
+        except (EOFError, KeyboardInterrupt):
+            return
+
+        if choice in ("y", "yes"):
+            cfg["auto_update"] = True
+            try:
+                config.save(cfg)
+            except OSError:
+                pass
+            console.print("[green]✅ 偏好已保存 · 立即升级中...[/green]")
+            status, msg = updater.run_upgrade()
+            if status == "success":
+                console.print(
+                    f"[green]✅ 已升级到 v{info.latest} · 下次跑 kan 命令生效[/green]"
+                )
+            else:
+                console.print(
+                    "[red]❌ 升级失败 (主命令不受影响 · 可手动 kan update 重试)[/red]"
+                )
+                console.print(f"[dim]{msg}[/dim]")
+        elif choice in ("n", "no"):
+            cfg["auto_update"] = False
+            try:
+                config.save(cfg)
+            except OSError:
+                pass
+            console.print(
+                "[dim]✅ 偏好已保存 · 不再自动升级 · "
+                "以后跑 [bold]kan update[/bold] 手动升级[/dim]"
+            )
+        else:
+            # skip / 其他 · 不写偏好 · 下次再问
+            console.print(
+                "[dim]跳过 · 跑 [bold]kan update[/bold] 升级 · 下次启动时再询问偏好[/dim]"
+            )
+    except Exception:
+        # atexit hook 不能让主命令受影响 · 任何异常都吞掉
+        pass
+
+
 def cli_main() -> None:
     """CLI entry point · sys.argv 预处理后再交给 typer。
 
@@ -1312,6 +1505,8 @@ def cli_main() -> None:
     migrate_legacy()
     _normalize_help_args()
     _normalize_streak_args()
-    # 命令结束后才装补全 + 打印提示 · 不抢主流程 stderr
+    # 命令结束后才装补全 + 检查更新 · 不抢主流程 stderr
+    # atexit LIFO 执行 · 后注册先跑 · update 检查先于 completion install
     atexit.register(_auto_install_completion)
+    atexit.register(_check_updates_atexit)
     app()
