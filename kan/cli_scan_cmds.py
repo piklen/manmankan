@@ -350,7 +350,15 @@ def info(
         tag += " [bold green]跌停[/bold green]"
 
     console.print(f"\n[bold]{title}[/bold]{tag}")
-    console.print(f"  现价 {result.current_price:.2f} · {trend_result.direction} · 累计 {abs(trend_result.streak_pct):.2f}%")
+    # v0.0.4.4: 累计涨跌加 ▲/▼ 符号 + 红涨绿跌颜色 · 与 trend 命令详情列对齐
+    # 修复 v0.0.4.3 用户报告："跌1天 · 累计 0.85%" 让人困惑（正数+负方向语义冲突）
+    if trend_result.streak > 0:
+        cum_str = f"[red]▲{abs(trend_result.streak_pct):.2f}%[/red]"
+    elif trend_result.streak < 0:
+        cum_str = f"[green]▼{abs(trend_result.streak_pct):.2f}%[/green]"
+    else:
+        cum_str = f"{abs(trend_result.streak_pct):.2f}%"
+    console.print(f"  现价 {result.current_price:.2f} · {trend_result.direction} · 累计 {cum_str}")
     console.print()
 
     # 全周期位置表
