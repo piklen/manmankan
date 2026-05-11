@@ -130,6 +130,11 @@ def _fetch_names_baostock() -> dict[str, str] | None:
 
         return mapping if mapping else None
     except Exception:
+        from rich.console import Console
+
+        Console(stderr=True).print(
+            "[yellow]⚠️ baostock 失败 · 切换 akshare 备用源（约 16s）[/yellow]"
+        )
         return None
 
 
