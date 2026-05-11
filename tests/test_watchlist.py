@@ -307,6 +307,31 @@ class TestColdStartInvariants:
             f"stdout: {result.stdout}\nstderr: {result.stderr}"
         )
 
+    def test_scanner_top_level_does_not_load_pandas(self):
+        """import kan.scanner 时 pandas/numpy 不应出现在 sys.modules（v0.0.4.4 加）。
+
+        v0.0.4.3 ***REMOVED***根因之一：scanner.py:8 顶层 `import pandas as pd`
+        触发 numpy C-extension load · macOS Gatekeeper 拒载老 .so cache。
+        v0.0.4.4 改为 `if TYPE_CHECKING: import pandas` + 函数体 lazy。
+        """
+        import subprocess
+        import sys
+
+        result = subprocess.run(
+            [
+                sys.executable, "-c",
+                "import kan.scanner as s; "
+                "import sys; "
+                "leaked = [m for m in sys.modules if any(x in m.lower() for x in ('pandas', 'numpy'))]; "
+                "assert not leaked, f'pandas/numpy leaked: {leaked}'",
+            ],
+            capture_output=True, text=True
+        )
+        assert result.returncode == 0, (
+            f"pandas/numpy leaked into top-level imports of kan.scanner\n"
+            f"stdout: {result.stdout}\nstderr: {result.stderr}"
+        )
+
     def test_baostock_success_does_not_call_akshare_fallback(self, temp_kan_dir, monkeypatch):
         """baostock 主路径成功 → akshare fallback 不应被调用（避免无谓 import 成本）。"""
         fallback_called: list[bool] = []
