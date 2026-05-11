@@ -25,6 +25,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `docs/reviews/v0.0.3.md` 标注 200ms 是 aspirational target，实际回归阈值按
   wrapper 路径测量。
 
+### Performance · 早期可见反馈
+
+- `kan add/scan/fetch/low/high/info/trend` 在 TTY 下先输出 `⏳ 启动中...` 到
+  stderr，再进入 Typer/Rich 路由。真实 wrapper 路径下首个可见反馈约 10-20ms。
+- 支持 `KAN_NO_BOOT_BANNER=1` 关闭该早期提示。
+
 ## [0.0.4.2] - 2026-05-12
 
 ### Changed · 阶段反馈

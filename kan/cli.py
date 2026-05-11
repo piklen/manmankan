@@ -8,7 +8,30 @@
 实际命令实现拆到 cli_*_cmds.py · 共享 helper 在 cli_helpers.py · atexit hook 在 cli_atexit.py。
 拆分蓝图详见 docs/v0.0.3-cli-refactor-plan.md。
 """
-from kan.app import app
+import os as _os
+import sys as _sys
+
+_BOOT_BANNER_COMMANDS = {"add", "scan", "fetch", "low", "high", "info", "trend"}
+
+
+def _maybe_print_boot_banner() -> None:
+    if _os.environ.get("KAN_NO_BOOT_BANNER") == "1":
+        return
+    if not _sys.stderr.isatty():
+        return
+    if len(_sys.argv) < 2:
+        return
+    if _sys.argv[1] not in _BOOT_BANNER_COMMANDS:
+        return
+    if "--help" in _sys.argv[2:] or "-h" in _sys.argv[2:]:
+        return
+    _sys.stderr.write("⏳ 启动中...\r")
+    _sys.stderr.flush()
+
+
+_maybe_print_boot_banner()
+
+from kan.app import app  # noqa: E402
 
 
 def cli_main() -> None:
