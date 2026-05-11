@@ -139,6 +139,11 @@ def test_help_ttfb_stays_fast(tmp_path: Path) -> None:
     [
         (["add", "600519"], False),
         (["scan"], True),
+        (["fetch", "600519", "--force"], False),
+        (["low", "60"], True),
+        (["high", "60"], True),
+        (["info", "600519"], True),
+        (["trend"], True),
     ],
 )
 def test_heavy_commands_show_spinner_within_slo(

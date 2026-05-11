@@ -7,6 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.0.4.1] - 2026-05-12
+
+### Fixed · 覆盖剩余命令
+
+- `kan fetch` / `kan low` / `kan high` / `kan info` / `kan trend` 在加载
+  `fetcher` / `scanner` / `render` 等数据模块前先显示 stderr spinner。
+- `tests/test_cli_silent_period.py` 的 PTY 真终端测试扩展覆盖 `fetch` / `low` /
+  `high` / `info` / `trend` 首帧 SLO。
+
 ## [0.0.4.0] - 2026-05-12
 
 ### Fixed · scan 启动 silent 期
@@ -155,7 +164,8 @@ pandas / numpy / bs4 / requests 整窝拖入启动路径。单个 akshare import
 - 所有数据本地存储 · 不上传任何用户数据
 - `CONTRIBUTING.md` + `SECURITY.md` + 公开输出语言纪律
 
-[Unreleased]: https://github.com/piklen/manmankan/compare/v0.0.4.0...HEAD
+[Unreleased]: https://github.com/piklen/manmankan/compare/v0.0.4.1...HEAD
+[0.0.4.1]: https://github.com/piklen/manmankan/compare/v0.0.4.0...v0.0.4.1
 [0.0.4.0]: https://github.com/piklen/manmankan/compare/v0.0.3...v0.0.4.0
 [0.0.3]: https://github.com/piklen/manmankan/compare/v0.0.2...v0.0.3
 [0.0.2]: https://github.com/piklen/manmankan/compare/v0.0.1...v0.0.2
