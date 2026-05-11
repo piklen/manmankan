@@ -66,3 +66,67 @@ def test_subcommand_help_unaffected() -> None:
     # typer 默认 help 标志：Usage: 行 + Options 段
     assert "Usage:" in result.stdout
     assert "Options" in result.stdout
+
+
+# --- _maybe_print_boot_banner 测试 (v0.0.4.4 加 · 修代码 CR Finding ***REMOVED***)
+#
+# v0.0.4.3 在 kan/cli.py:14-32 加了 stderr boot banner 但零测试覆盖 ·
+# 违反 LOCKED 5-10「新功能必须同步写测试」· v0.0.4.4 补齐 4 case 参数化测试
+
+
+@pytest.mark.parametrize(
+    "command, extra_args, env_no_banner, isatty, should_write",
+    [
+        # case 1: 白名单内 + TTY + 无 --help → 应写
+        ("scan", [], False, True, True),
+        # case 2: 白名单外 + TTY → 不写 (e.g. kan update)
+        ("update", [], False, True, False),
+        # case 3: 白名单内 + --help → 不写 (帮助文档已经清晰)
+        ("scan", ["--help"], False, True, False),
+        # case 4: KAN_NO_BOOT_BANNER=1 env → 不写
+        ("scan", [], True, True, False),
+    ],
+    ids=["whitelist+tty", "non-whitelist", "with-help", "env-suppressed"],
+)
+def test_maybe_print_boot_banner(
+    command: str,
+    extra_args: list[str],
+    env_no_banner: bool,
+    isatty: bool,
+    should_write: bool,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """_maybe_print_boot_banner 4 case 参数化测试 (v0.0.4.4)。
+
+    覆盖：白名单 / --help 排除 / KAN_NO_BOOT_BANNER env / TTY 判断 所有分支。
+    """
+    import io
+
+    from kan.cli import _maybe_print_boot_banner
+
+    # 构造 sys.argv
+    argv = ["kan", command, *extra_args]
+    monkeypatch.setattr(sys, "argv", argv)
+
+    # 构造 stderr (StringIO + isatty 通过 setattr 模拟)
+    buf = io.StringIO()
+    buf.isatty = lambda: isatty  # type: ignore[assignment]
+    monkeypatch.setattr(sys, "stderr", buf)
+
+    # KAN_NO_BOOT_BANNER env
+    if env_no_banner:
+        monkeypatch.setenv("KAN_NO_BOOT_BANNER", "1")
+    else:
+        monkeypatch.delenv("KAN_NO_BOOT_BANNER", raising=False)
+
+    _maybe_print_boot_banner()
+
+    output = buf.getvalue()
+    if should_write:
+        assert "启动中" in output, (
+            f"expected banner in stderr · case: {command} {extra_args}"
+        )
+    else:
+        assert "启动中" not in output, (
+            f"unexpected banner · case: {command} {extra_args} · got: {output!r}"
+        )
