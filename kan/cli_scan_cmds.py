@@ -22,7 +22,11 @@ def fetch(
     force: Annotated[bool, typer.Option("--force", "-f", help="强制刷新（忽略缓存）")] = False,
 ) -> None:
     """拉取股票历史 K 线数据"""
-    from kan.fetcher import fetch_kline, is_fresh
+    from rich.console import Console
+
+    status_console = Console(stderr=True)
+    with _with_heavy_imports_spinner(status_console, "⏳ 加载数据模块..."):
+        from kan.fetcher import fetch_kline, is_fresh
 
     if not symbols:
         from kan.watchlist import load_watchlist
@@ -197,12 +201,15 @@ def scan(
 def _filter_extreme_cmd(periods: list[int], mode: str) -> None:
     """low/high 共享实现"""
     from rich.console import Console
-    from rich.table import Table
-    from rich.text import Text
 
-    from kan.fetcher import cache_age
-    from kan.render import DISCLAIMER
-    from kan.scanner import filter_extreme
+    status_console = Console(stderr=True)
+    with _with_heavy_imports_spinner(status_console, "⏳ 加载数据模块..."):
+        from rich.table import Table
+        from rich.text import Text
+
+        from kan.fetcher import cache_age
+        from kan.render import DISCLAIMER
+        from kan.scanner import filter_extreme
 
     console = Console()
     for p in periods:
@@ -278,13 +285,16 @@ def info(
 ) -> None:
     """单只股票详情（全周期位置 + 涨跌信息）"""
     from rich.console import Console
-    from rich.table import Table
-    from rich.text import Text
 
-    from kan.fetcher import cache_age, fetch_kline, get_cached, is_fresh
-    from kan.render import DISCLAIMER, format_pct
-    from kan.scanner import calc_trend, scan_stock
-    from kan.watchlist import _lookup_name, _normalize_symbol
+    status_console = Console(stderr=True)
+    with _with_heavy_imports_spinner(status_console, "⏳ 加载数据模块..."):
+        from rich.table import Table
+        from rich.text import Text
+
+        from kan.fetcher import cache_age, fetch_kline, get_cached, is_fresh
+        from kan.render import DISCLAIMER, format_pct
+        from kan.scanner import calc_trend, scan_stock
+        from kan.watchlist import _lookup_name, _normalize_symbol
 
     console = Console()
 

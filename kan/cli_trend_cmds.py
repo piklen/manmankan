@@ -8,7 +8,12 @@ from typing import Annotated
 import typer
 
 from kan.app import app
-from kan.cli_helpers import _auto_fetch_stale, _get_watchlist_pairs, _print_err
+from kan.cli_helpers import (
+    _auto_fetch_stale,
+    _get_watchlist_pairs,
+    _print_err,
+    _with_heavy_imports_spinner,
+)
 
 
 @app.command()
@@ -20,12 +25,15 @@ def trend(
 ) -> None:
     """连续涨跌看板"""
     from rich.console import Console
-    from rich.table import Table
-    from rich.text import Text
 
-    from kan.fetcher import cache_age
-    from kan.render import DISCLAIMER, max_trend_dates
-    from kan.scanner import trend_batch
+    status_console = Console(stderr=True)
+    with _with_heavy_imports_spinner(status_console, "⏳ 加载数据模块..."):
+        from rich.table import Table
+        from rich.text import Text
+
+        from kan.fetcher import cache_age
+        from kan.render import DISCLAIMER, max_trend_dates
+        from kan.scanner import trend_batch
 
     console = Console()
     watchlist_pairs = _get_watchlist_pairs()
