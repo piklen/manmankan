@@ -13,7 +13,8 @@ from unittest.mock import patch
 import pytest
 from typer.testing import CliRunner
 
-from kan.cli import _normalize_help_args, app
+from kan.cli import app
+from kan.cli_helpers import _normalize_help_args
 
 # --- _normalize_help_args 纯函数测试 ---
 

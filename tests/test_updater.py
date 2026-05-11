@@ -306,5 +306,5 @@ class TestRunUpgrade:
             "kan.updater.subprocess.run",
             side_effect=RuntimeError("unexpected"),
         ):
-            status, msg = updater.run_upgrade()
+            status, _msg = updater.run_upgrade()
         assert status == "failed"
