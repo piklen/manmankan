@@ -198,6 +198,9 @@ class TestCheckForUpdates:
 
 
 class TestDetectInstallMethod:
+    # v0.0.4.4: 升级命令全改为 force-reinstall 模式
+    # 防 partial state 升级 (老 .so cache 不重链触发 macOS Gatekeeper 拒载)
+
     def test_uv_tool(self, monkeypatch):
         monkeypatch.setattr(
             "sys.executable",
@@ -205,7 +208,7 @@ class TestDetectInstallMethod:
         )
         result = updater.detect_install_method()
         assert result.name == "uv tool"
-        assert result.upgrade_cmd == ["uv", "tool", "upgrade", "manmankan"]
+        assert result.upgrade_cmd == ["uv", "tool", "install", "--reinstall", "manmankan"]
 
     def test_pipx(self, monkeypatch):
         monkeypatch.setattr(
@@ -214,7 +217,7 @@ class TestDetectInstallMethod:
         )
         result = updater.detect_install_method()
         assert result.name == "pipx"
-        assert result.upgrade_cmd == ["pipx", "upgrade", "manmankan"]
+        assert result.upgrade_cmd == ["pipx", "install", "--force", "manmankan"]
 
     def test_pip_venv(self, monkeypatch):
         monkeypatch.setattr(
@@ -224,7 +227,7 @@ class TestDetectInstallMethod:
         result = updater.detect_install_method()
         assert result.name == "pip / venv"
         assert "manmankan" in result.upgrade_cmd
-        assert "--upgrade" in result.upgrade_cmd
+        assert "--force-reinstall" in result.upgrade_cmd
 
     def test_unknown_falls_back_to_uv_tool_guess(self, monkeypatch):
         """完全无法识别 · 兜底用 uv tool（最常见）"""
