@@ -29,9 +29,10 @@ SPINNER_BYTES = (
     b"\xe2\xa0\x87",
     b"\xe2\xa0\x8f",
 )
+BOOT_BANNER_BYTES = "⏳ 启动中".encode()
 
 
-def measure(args: list[str]) -> tuple[float | None, float | None]:
+def measure(args: list[str]) -> tuple[float | None, float | None, float | None]:
     pid, fd = pty.fork()
     if pid == 0:
         env = os.environ.copy()
@@ -42,6 +43,7 @@ def measure(args: list[str]) -> tuple[float | None, float | None]:
 
     start = time.monotonic()
     first_byte: float | None = None
+    boot_banner_t: float | None = None
     spinner_t: float | None = None
 
     try:
@@ -57,6 +59,8 @@ def measure(args: list[str]) -> tuple[float | None, float | None]:
                 now = time.monotonic() - start
                 if first_byte is None:
                     first_byte = now
+                if boot_banner_t is None and BOOT_BANNER_BYTES in data:
+                    boot_banner_t = now
                 if spinner_t is None and any(frame in data for frame in SPINNER_BYTES):
                     spinner_t = now
                     break
@@ -74,7 +78,7 @@ def measure(args: list[str]) -> tuple[float | None, float | None]:
         with suppress(OSError):
             os.close(fd)
 
-    return first_byte, spinner_t
+    return first_byte, boot_banner_t, spinner_t
 
 
 def main() -> None:
@@ -87,17 +91,19 @@ def main() -> None:
         ["info", "600519"],
         ["trend"],
     ]
-    print(f"{'cmd':<22}{'TTFB(min/3)':>14}{'spinner(min/3)':>16}")
+    print(f"{'cmd':<22}{'TTFB(min/3)':>14}{'boot(min/3)':>14}{'spinner(min/3)':>16}")
     for args in cmds:
         runs = []
         for _ in range(3):
             runs.append(measure(args))
             time.sleep(0.1)
-        ttfbs = [first * 1000 for first, _ in runs if first is not None]
-        spinners = [spinner * 1000 for _, spinner in runs if spinner is not None]
+        ttfbs = [first * 1000 for first, _, _ in runs if first is not None]
+        banners = [banner * 1000 for _, banner, _ in runs if banner is not None]
+        spinners = [spinner * 1000 for _, _, spinner in runs if spinner is not None]
         ttfb = f"{min(ttfbs):.0f}ms" if ttfbs else "None"
+        banner = f"{min(banners):.0f}ms" if banners else "None"
         spinner = f"{min(spinners):.0f}ms" if spinners else "None"
-        print(f"{'kan ' + ' '.join(args):<22}{ttfb:>14}{spinner:>16}")
+        print(f"{'kan ' + ' '.join(args):<22}{ttfb:>14}{banner:>14}{spinner:>16}")
 
 
 if __name__ == "__main__":
