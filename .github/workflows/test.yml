@@ -29,6 +29,6 @@ jobs:
       - name: Install dependencies
         run: uv sync --all-extras
       - name: Run tests
-        run: uv run pytest -q
+        run: uv run pytest -q -m "not tty"
       - name: Lint
         run: uv run ruff check kan/

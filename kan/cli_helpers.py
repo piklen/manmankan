@@ -12,6 +12,7 @@ lazy import 模式保留 · 顶层只 import 极轻的 stdlib + typer · rich/ak
 """
 import os
 import re as _re
+from contextlib import contextmanager
 
 import typer
 
@@ -102,6 +103,13 @@ def _load_names_with_optional_spinner(console) -> dict[str, str]:
     elapsed = _time.monotonic() - t_start
     console.print(f"[green]✅ A 股代码表加载完成 · 用时 {elapsed:.1f}s[/green]")
     return names
+
+
+@contextmanager
+def _with_heavy_imports_spinner(console, message: str):
+    """在重模块 import 前先打开 spinner，避免 CLI 路由后出现 silent 期。"""
+    with console.status(f"[yellow]{message}[/yellow]", spinner="dots") as status:
+        yield status
 
 
 def _get_watchlist_pairs() -> list[tuple[str, str]]:

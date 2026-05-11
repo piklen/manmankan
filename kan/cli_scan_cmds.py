@@ -12,6 +12,7 @@ from kan.cli_helpers import (
     _get_watchlist_pairs,
     _print_err,
     _safe_error_msg,
+    _with_heavy_imports_spinner,
 )
 
 
@@ -54,18 +55,21 @@ def scan(
 ) -> None:
     """扫描自选股多周期位置（10 周期全景模式）"""
     from rich.console import Console
-    from rich.table import Table
-    from rich.text import Text
 
-    from kan.fetcher import cache_age
-    from kan.render import DISCLAIMER, format_pct, responsive_periods
-    from kan.scanner import (
-        PERIODS,
-        compute_diff,
-        load_snapshot,
-        save_snapshot,
-        scan_batch,
-    )
+    status_console = Console(stderr=True)
+    with _with_heavy_imports_spinner(status_console, "⏳ 加载数据模块..."):
+        from rich.table import Table
+        from rich.text import Text
+
+        from kan.fetcher import cache_age
+        from kan.render import DISCLAIMER, format_pct, responsive_periods
+        from kan.scanner import (
+            PERIODS,
+            compute_diff,
+            load_snapshot,
+            save_snapshot,
+            scan_batch,
+        )
 
     console = Console()
     watchlist_pairs = _get_watchlist_pairs()

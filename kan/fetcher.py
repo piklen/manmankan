@@ -8,13 +8,12 @@ from datetime import date, datetime, timedelta
 from pathlib import Path
 from typing import TYPE_CHECKING
 
-import akshare as ak
-import pandas as pd
-
 from kan.paths import DATA_DIR
 
 if TYPE_CHECKING:
     from collections.abc import Callable
+
+    import pandas as pd
 
 # ── K 线标准 schema ──────────────────────────────────────────────────
 # 所有数据源的出口必须经过 _normalize_kline() 归一化到此格式。
@@ -41,6 +40,8 @@ _SYMBOL_PATTERN = re.compile(r"^\d{6}$")
 
 def _normalize_kline(df: pd.DataFrame) -> pd.DataFrame:
     """统一归一化：类型转换 + 补缺失列 + 排序 + 去 NaN。所有数据源的出口。"""
+    import pandas as pd
+
     for col in KLINE_REQUIRED:
         if col not in df.columns:
             raise ValueError(f"数据缺少必需列: {col}")
@@ -100,6 +101,8 @@ def _fetch_eastmoney(symbol: str, start: str) -> pd.DataFrame | None:
     if _eastmoney_ok is False:
         return None
     try:
+        import akshare as ak
+
         raw = ak.stock_zh_a_hist(
             symbol=symbol, period="daily", adjust="qfq",
             start_date=start, timeout=5,
@@ -140,6 +143,7 @@ def _ensure_bs_login() -> None:
 def _fetch_baostock(symbol: str, start: str) -> pd.DataFrame | None:
     try:
         import baostock as bs
+        import pandas as pd
     except ImportError:
         return None
 
@@ -183,6 +187,8 @@ def _fetch_sina(symbol: str, start: str) -> pd.DataFrame | None:
     import io
     import sys
 
+    import akshare as ak
+
     prefix = "sh" if symbol.startswith(("6", "9")) else "sz"
     end = (datetime.now() + timedelta(days=1)).strftime("%Y%m%d")
 
@@ -220,6 +226,8 @@ def _fetch_tencent(symbol: str, start: str) -> pd.DataFrame | None:
     """
     import io
     import sys
+
+    import akshare as ak
 
     _real_stderr = sys.stderr
     sys.stderr = io.StringIO()
@@ -262,6 +270,8 @@ def fetch_kline(symbol: str, days: int = 180, force: bool = False) -> pd.DataFra
     cache = _cache_path(symbol)
 
     if not force and _is_cache_fresh(cache):
+        import pandas as pd
+
         return pd.read_parquet(cache)
 
     start = (datetime.now() - timedelta(days=int(days * 1.8))).strftime("%Y%m%d")
@@ -342,6 +352,8 @@ def get_cached(symbol: str) -> pd.DataFrame | None:
     cache = _cache_path(symbol)
     if not cache.exists():
         return None
+    import pandas as pd
+
     df = pd.read_parquet(cache)
     for col in KLINE_OPTIONAL:
         if col not in df.columns:

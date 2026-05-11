@@ -7,6 +7,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.0.4.0] - 2026-05-12
+
+### Fixed · scan 启动 silent 期
+
+- `kan/fetcher.py` 移除顶层 `akshare` / `pandas` import，改为数据源函数和
+  parquet 读写函数内部 lazy import。
+- 新增 `_with_heavy_imports_spinner(console, message)`，统一在重模块 import 前打开
+  `console.status(..., spinner="dots")`。
+- `kan scan` 入口用 stderr spinner 包住 `fetcher` / `scanner` / `render` import，
+  冷启动首帧从约 500-700ms 降到 200ms 内。
+
+### Docs
+
+- 新增 `docs/reviews/v0.0.3.md` 记录 v0.0.3 silent 期审计和漏修原因。
+
 ## [0.0.3] - 2026-05-11
 
 ### Changed · 内部重构（零行为变更）
@@ -140,6 +155,8 @@ pandas / numpy / bs4 / requests 整窝拖入启动路径。单个 akshare import
 - 所有数据本地存储 · 不上传任何用户数据
 - `CONTRIBUTING.md` + `SECURITY.md` + 公开输出语言纪律
 
-[Unreleased]: https://github.com/piklen/manmankan/compare/v0.0.2...HEAD
+[Unreleased]: https://github.com/piklen/manmankan/compare/v0.0.4.0...HEAD
+[0.0.4.0]: https://github.com/piklen/manmankan/compare/v0.0.3...v0.0.4.0
+[0.0.3]: https://github.com/piklen/manmankan/compare/v0.0.2...v0.0.3
 [0.0.2]: https://github.com/piklen/manmankan/compare/v0.0.1...v0.0.2
 [0.0.1]: https://github.com/piklen/manmankan/releases/tag/v0.0.1
