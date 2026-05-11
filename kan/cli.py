@@ -40,21 +40,38 @@ def cli_main() -> None:
     实现细节：_auto_install_completion 推迟到命令完成后（atexit）执行，
     防止其 stderr 输出跟 add 命令的 Live Display spinner 共享 stderr 时
     buffer 竞争（用户可能看不到 spinner 动画的 corner case）。
+
+    v0.0.4.4: 顶层 try/except (ImportError, ModuleNotFoundError) 兜底 ·
+    防 v0.0.4.3 装机崩抛 60+ 行 traceback 地狱 · 给用户清晰 reinstall 引导。
     """
     import atexit
 
-    from kan.cli_atexit import _auto_install_completion, _check_updates_atexit
-    from kan.cli_helpers import _normalize_help_args, _normalize_streak_args
-    from kan.paths import migrate_legacy
+    try:
+        from kan.cli_atexit import _auto_install_completion, _check_updates_atexit
+        from kan.cli_helpers import _normalize_help_args, _normalize_streak_args
+        from kan.paths import migrate_legacy
 
-    migrate_legacy()
-    _normalize_help_args()
-    _normalize_streak_args()
-    # 命令结束后才装补全 + 检查更新 · 不抢主流程 stderr
-    # atexit LIFO 执行 · 后注册先跑 · update 检查先于 completion install
-    atexit.register(_auto_install_completion)
-    atexit.register(_check_updates_atexit)
-    app()
+        migrate_legacy()
+        _normalize_help_args()
+        _normalize_streak_args()
+        # 命令结束后才装补全 + 检查更新 · 不抢主流程 stderr
+        # atexit LIFO 执行 · 后注册先跑 · update 检查先于 completion install
+        atexit.register(_auto_install_completion)
+        atexit.register(_check_updates_atexit)
+        app()
+    except (ImportError, ModuleNotFoundError) as e:
+        # v0.0.4.4: 装机不完整时给清晰行动建议 · 不抛 traceback
+        # 用 stdlib stderr write · 不依赖 rich (rich 可能正是 ImportError 来源)
+        _sys.stderr.write(
+            f"\n❌ kan 安装文件不完整 ({type(e).__name__}: {str(e)[:120]})\n"
+            "\n这通常发生在 kan update 升级中途被打断 · 或上游 deps 版本错位。\n"
+            "请运行以下命令之一手动 reinstall:\n\n"
+            "  uv tool install manmankan --reinstall\n"
+            "  pipx install manmankan --force\n"
+            "  pip install --force-reinstall manmankan\n"
+            "\n如问题持续 · 请到 https://github.com/piklen/manmankan/issues 报告。\n"
+        )
+        _sys.exit(2)
 
 
 # 触发子模块装饰器执行 · MUST be at module top-level (不能在 cli_main 函数体内)
