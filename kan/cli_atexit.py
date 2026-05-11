@@ -123,6 +123,9 @@ def _check_updates_atexit() -> None:
                 console.print(
                     f"[dim]✅ 已升级到 v{info.latest} · 下次跑 kan 命令生效[/dim]"
                 )
+                console.print(
+                    "[dim]   建议开新终端窗口跑下次命令 · 当前终端有旧进程缓存[/dim]"
+                )
             # 升级失败 atexit 静默不打扰主命令
             return
 
@@ -169,6 +172,9 @@ def _check_updates_atexit() -> None:
             if status == "success":
                 console.print(
                     f"[green]✅ 已升级到 v{info.latest} · 下次跑 kan 命令生效[/green]"
+                )
+                console.print(
+                    "[dim]   建议开新终端窗口跑下次命令 · 当前终端有旧进程缓存[/dim]"
                 )
             else:
                 console.print(
