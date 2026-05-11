@@ -7,6 +7,44 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.0.3] - 2026-05-11
+
+### Changed · 内部重构（零行为变更）
+
+`kan/cli.py` **1512 → 44 行**八文件拆分，业务逻辑切到独立子模块：
+
+- `kan/app.py`: `typer.Typer` 单例 + version / main callback（避免循环 import）
+- `kan/cli_helpers.py`: 12 个共享 helper（错误脱敏 / 网络异常友好化 / 进度反馈 /
+  argv normalize / shell 检测 / install 检测 / watchlist 加载 / auto fetch）
+- `kan/cli_watchlist_cmds.py`: `help` / `add` / `remove` / `list` / `import` / `clear`
+- `kan/cli_scan_cmds.py`: `fetch` / `scan` / `low` / `high` / `info`
+- `kan/cli_trend_cmds.py`: `trend`
+- `kan/cli_meta_cmds.py`: `update` / `uninstall` / `completion`
+- `kan/cli_atexit.py`: 自动补全 + 自动更新 atexit hooks
+- `kan/cli.py`: 极薄 entry · `cli_main` + 末尾 import 触发 `@app.command` 注册
+
+共享 helper `_auto_fetch_stale` / `_get_watchlist_pairs` 被 5 个命令组（scan / trend /
+low / high / info）复用，挪到 `cli_helpers.py` 让命令组之间 **0 耦合**。
+
+### Added · 测试守护
+
+- `tests/test_cli_registration.py`: import-side-effect canary（命令数 + 命令名
+  集合断言 · 锁定 15 命令）· 任何子模块漏 import 立刻红
+- pytest 全套从 207 → **209**
+
+### Fixed · CI Lint
+
+- 5 类 7 处 ruff lint 一并清掉（SIM105 `contextlib.suppress` 替代 try/except pass ·
+  RUF100 / I001 / RUF059）
+- 顺手清 `kan/updater.py` SIM105（pre-existing on main · 熵减）
+
+### Docs
+
+- 删除过时的 `docs/publish-v0.0.2.md` 本地 publish runbook（v0.0.2 实际已通过
+  tag-trigger workflow 自动 publish）
+- 新增 `docs/publish-template.md`: Trusted Publisher OIDC + tag-trigger 工作流
+  标准 checklist · 每次发版照此走
+
 ## [0.0.2] - 2026-05-11
 
 ### Performance · 冷启动延迟修复
