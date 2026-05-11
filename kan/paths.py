@@ -45,10 +45,13 @@ def is_stock_names_cache_fresh() -> bool:
 
 
 def ensure_dirs() -> None:
-    """确保数据目录存在。"""
-    BASE_DIR.mkdir(parents=True, exist_ok=True)
-    DATA_DIR.mkdir(parents=True, exist_ok=True)
-    SNAPSHOTS_DIR.mkdir(parents=True, exist_ok=True)
+    """确保数据目录存在。
+
+    v0.0.4.4: mode=0o700 保护用户金融持仓画像（防同机其他用户/容器逃逸/SSH 多用户跳板机）。
+    """
+    BASE_DIR.mkdir(mode=0o700, parents=True, exist_ok=True)
+    DATA_DIR.mkdir(mode=0o700, parents=True, exist_ok=True)
+    SNAPSHOTS_DIR.mkdir(mode=0o700, parents=True, exist_ok=True)
 
 
 def migrate_legacy() -> None:

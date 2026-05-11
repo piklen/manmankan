@@ -27,14 +27,18 @@ DEFAULT_CONFIG: dict[str, Any] = {
 
 
 def _atomic_write_json(path: Path, data: Any) -> None:
-    """先写 .tmp 再 os.replace · 防半截写入。"""
-    path.parent.mkdir(parents=True, exist_ok=True)
+    """先写 .tmp 再 os.replace · 防半截写入。
+
+    v0.0.4.4: 父目录 mode=0o700 + 写完 chmod 0o600 · 保护用户配置。
+    """
+    path.parent.mkdir(mode=0o700, parents=True, exist_ok=True)
     tmp_path = path.with_suffix(path.suffix + ".tmp")
     with open(tmp_path, "w", encoding="utf-8") as f:
         json.dump(data, f, ensure_ascii=False, indent=2)
         f.flush()
         os.fsync(f.fileno())
     os.replace(tmp_path, path)
+    os.chmod(path, 0o600)
 
 
 def load() -> dict[str, Any]:
