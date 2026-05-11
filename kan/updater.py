@@ -128,18 +128,20 @@ def detect_install_method() -> DetectedInstall:
       - pip / venv: 含 site-packages 或 .venv
     """
     exe = sys.executable
+    # v0.0.4.4: 全部命令改用 force-reinstall 模式 · 避免 partial state 升级
+    # 老 .so cache 不重链导致 macOS Gatekeeper 拒载等场景 (v0.0.4.3 ***REMOVED***根因)
     if "uv/tools" in exe and "manmankan" in exe:
-        return DetectedInstall("uv tool", ["uv", "tool", "upgrade", "manmankan"])
+        return DetectedInstall("uv tool", ["uv", "tool", "install", "--reinstall", "manmankan"])
     if "pipx/venvs/manmankan" in exe:
-        return DetectedInstall("pipx", ["pipx", "upgrade", "manmankan"])
+        return DetectedInstall("pipx", ["pipx", "install", "--force", "manmankan"])
     if "site-packages" in exe or ".venv" in exe:
         return DetectedInstall(
             "pip / venv",
-            [exe, "-m", "pip", "install", "--upgrade", "manmankan"],
+            [exe, "-m", "pip", "install", "--force-reinstall", "manmankan"],
         )
     return DetectedInstall(
         "uv tool (推测)",
-        ["uv", "tool", "upgrade", "manmankan"],
+        ["uv", "tool", "install", "--reinstall", "manmankan"],
     )
 
 
@@ -167,6 +169,24 @@ def run_upgrade() -> tuple[UpgradeStatus, str]:
         return "failed", f"{install.name} upgrade 异常: {type(e).__name__}"
 
     if result.returncode == 0:
+        # v0.0.4.4: 升级文件下载成功 ≠ 装得起来 · 跑 import smoke 验证
+        # 防 v0.0.4.3 类***REMOVED*** (deps partial state · old .so cache 不重链)
+        try:
+            smoke = subprocess.run(
+                [sys.executable, "-c",
+                 "import kan; from kan import scanner, fetcher, watchlist"],
+                capture_output=True, text=True, timeout=10,
+            )
+        except (subprocess.TimeoutExpired, FileNotFoundError):
+            return "success", install.name  # smoke 自身失败不阻塞 · 信任 returncode
+        if smoke.returncode != 0:
+            smoke_err = (smoke.stderr.strip() or smoke.stdout.strip())[:300]
+            return "failed", (
+                f"{install.name} 升级文件已下载但导入失败 · 建议手动 reinstall:\n"
+                f"  uv tool install manmankan --reinstall\n"
+                f"  或 pipx install manmankan --force\n"
+                f"详情: {smoke_err}"
+            )
         return "success", install.name
 
     err = (result.stderr.strip() or result.stdout.strip())[:500]
