@@ -7,6 +7,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.0.4.3] - 2026-05-12
+
+### Fixed · 测试口径
+
+- `tests/test_cli_silent_period.py` 改用真实 `kan` wrapper 测试（`os.execvpe`）。
+  之前用 `python -c bootstrap` 启动跳过了 wrapper 和 entry point 开销，导致测试
+  结果偏低。
+- SLO 回归阈值从 200ms 调整为 400ms。200ms 保留为理想目标，但真实 `uv tool`
+  wrapper 路径受 Python startup 物理开销约束，当前架构不能把它作为硬性阈值。
+- 新增 `scripts/measure_slo.py`，统一用真实 `kan` 命令测 TTFB 和 spinner 第一帧。
+
+### Docs
+
+- 重写 `docs/reviews/v0.0.4.md` 的 SLO 段，删除旧版“全部 ≤ 200ms”的误导性结论，
+  改为真实 wrapper 数据。
+- `docs/reviews/v0.0.3.md` 标注 200ms 是 aspirational target，实际回归阈值按
+  wrapper 路径测量。
+
 ## [0.0.4.2] - 2026-05-12
 
 ### Changed · 阶段反馈
@@ -183,7 +201,8 @@ pandas / numpy / bs4 / requests 整窝拖入启动路径。单个 akshare import
 - 所有数据本地存储 · 不上传任何用户数据
 - `CONTRIBUTING.md` + `SECURITY.md` + 公开输出语言纪律
 
-[Unreleased]: https://github.com/piklen/manmankan/compare/v0.0.4.2...HEAD
+[Unreleased]: https://github.com/piklen/manmankan/compare/v0.0.4.3...HEAD
+[0.0.4.3]: https://github.com/piklen/manmankan/compare/v0.0.4.2...v0.0.4.3
 [0.0.4.2]: https://github.com/piklen/manmankan/compare/v0.0.4.1...v0.0.4.2
 [0.0.4.1]: https://github.com/piklen/manmankan/compare/v0.0.4.0...v0.0.4.1
 [0.0.4.0]: https://github.com/piklen/manmankan/compare/v0.0.3...v0.0.4.0
