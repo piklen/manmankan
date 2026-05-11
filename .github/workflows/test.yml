@@ -38,8 +38,8 @@ jobs:
       - name: Lint
         run: uv run ruff check kan/
 
-  # v0.0.4.4 安全审计 Finding S-5: pre-commit hook 未激活 + CI 无禁词兜底
-  # 历史触发: v0.0.3.3.0~4 五版 PyPI 含「鼠鼠」泄漏 P0 (LOCKED 5-10)
+  # v0.0.4.4: pre-commit hook 未激活 + CI 无禁词兜底
+  # 历史背景: 早期 5 个 PyPI 版本含私人称谓泄漏 P0 · 防止此类失误零成本复发
   privacy-scan:
     runs-on: ubuntu-latest
     steps:

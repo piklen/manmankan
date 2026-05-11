@@ -82,7 +82,7 @@ def _load_names_with_optional_spinner(console) -> dict[str, str]:
 
     设计要点：fresh 检查走极轻的 kan.paths（~370μs）· spinner 提前到 watchlist
     重模块（akshare lazy 后约 ~40ms 热启动 / ~1-2s 冷启动）import 之前显示，
-    避免按回车后用户面对一段 silent 期。
+    避免按回车后用户面对一段 启动反馈。
     """
     import time as _time
 
@@ -107,7 +107,7 @@ def _load_names_with_optional_spinner(console) -> dict[str, str]:
 
 @contextmanager
 def _with_heavy_imports_spinner(console, message: str):
-    """在重模块 import 前先打开 spinner，避免 CLI 路由后出现 silent 期。"""
+    """在重模块 import 前先打开 spinner，避免 CLI 路由后出现 启动反馈。"""
     with console.status(f"[yellow]{message}[/yellow]", spinner="dots") as status:
         yield status
 
