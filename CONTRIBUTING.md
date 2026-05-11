@@ -10,7 +10,13 @@
 git clone https://github.com/piklen/manmankan.git
 cd manmankan
 uv sync
+
+# v0.0.4.4: 激活 pre-commit hook (隐私词扫描 · 防 PII 泄漏)
+git config core.hooksPath .githooks
 ```
+
+> ⚠️ 必须设 `core.hooksPath .githooks` 才能跑本地 pre-commit hook（隐私词扫描 + ruff lint）。
+> CI 也会兜底跑（`.github/workflows/test.yml` privacy-scan job），但本地拦截能省一次 push 失败。
 
 ## 运行测试
 

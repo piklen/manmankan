@@ -12,6 +12,11 @@ on:
   pull_request:
     branches: [main]
 
+# v0.0.4.4: 显式声明最小权限 · 防 supply chain 投毒链
+# (fork PR 中恶意 dep 借继承的 GITHUB_TOKEN 写仓库内容触发 release.yml)
+permissions:
+  contents: read
+
 jobs:
   test:
     runs-on: ${{ matrix.os }}
@@ -32,3 +37,36 @@ jobs:
         run: uv run pytest -q -m "not tty"
       - name: Lint
         run: uv run ruff check kan/
+
+  # v0.0.4.4 安全审计 Finding S-5: pre-commit hook 未激活 + CI 无禁词兜底
+  # 历史触发: v0.0.3.3.0~4 五版 PyPI 含「***REMOVED***」泄漏 P0 (LOCKED 5-10)
+  privacy-scan:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
+      - name: Privacy / mental-model leaks scan
+        run: bash scripts/check-privacy-leaks.sh
+
+  # v0.0.4.4 代码 CR Finding ***REMOVED***: CI -m "not tty" 排除真测 → ***REMOVED***根因
+  # TTY 真测覆盖 spinner / Live Display first-frame SLO + 真 entry point 调用
+  tty-test:
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+        python-version: ['3.11', '3.12']
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
+      - uses: astral-sh/setup-uv@08807647e7069bb48b6ef5acd8ec9567f424441b
+        with:
+          python-version: ${{ matrix.python-version }}
+          enable-cache: true
+      - name: Install dependencies + manmankan as tool
+        run: |
+          uv sync --all-extras
+          uv tool install --reinstall .
+      - name: TTY real terminal tests (via script PTY wrapper)
+        run: |
+          # ubuntu 用 script · macos 也用 script (macOS 自带 script 命令)
+          script -q -c "uv run pytest -q -m tty tests/test_cli_silent_period.py" /dev/null

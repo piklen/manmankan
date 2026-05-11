@@ -64,6 +64,14 @@ DENY_TERMS=(
   "***REMOVED***"
   "***REMOVED***"
   "***REMOVED***"
+  # v0.0.4.4: 内部 mental model / OKR 节奏代号（安全审计 Finding S-6）
+  # 防社工攻击者用同款话术构造钓鱼 PR / issue
+  "***REMOVED***"
+  "***REMOVED***"
+  "***REMOVED***"
+  "***REMOVED***"
+  "***REMOVED***"
+  "***REMOVED***"
 )
 
 # 排除路径 (build artifacts + 私有目录)
@@ -90,6 +98,12 @@ EXCLUDES=(
 SELF_EXCLUDES=(
   "scripts/check-privacy-leaks.sh"
   "CONTRIBUTING.md"
+  # v0.0.4.4: docs/reviews/ 历史归档允许保留内部话语 (***REMOVED*** / round N / SLO 等术语)
+  # 这些 review 文档是工程笔记 · 非 PyPI 首屏可见 · 历史价值 > 防泄漏需求
+  "docs/reviews/v0.0.1.md"
+  "docs/reviews/v0.0.2.md"
+  "docs/reviews/v0.0.3.md"
+  "docs/reviews/v0.0.4.md"
 )
 
 echo "🔍 manmankan 公开档案隐私泄漏自检 ..."
