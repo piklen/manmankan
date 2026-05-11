@@ -7,72 +7,143 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-## [0.0.4.3] - 2026-05-12
+## [0.0.4.4] - 2026-05-12
 
-### Fixed · 测试口径
+### Fixed · ***REMOVED***溃修复（升级用户必装）
 
-- `tests/test_cli_silent_period.py` 改用真实 `kan` wrapper 测试（`os.execvpe`）。
-  之前用 `python -c bootstrap` 启动跳过了 wrapper 和 entry point 开销，导致测试
-  结果偏低。
-- SLO 回归阈值从 200ms 调整为 400ms。200ms 保留为理想目标，但真实 `uv tool`
-  wrapper 路径受 Python startup 物理开销约束，当前架构不能把它作为硬性阈值。
-- 新增 `scripts/measure_slo.py`，统一用真实 `kan` 命令测 TTFB 和 spinner 第一帧。
+- **依赖版本范围加严**：typer / rich / pandas / numpy / pydantic / akshare / pyarrow / baostock
+  全部加上 SemVer 上限，防止用户从 PyPI 安装时拉到未来不兼容的大版本。
+  v0.0.4.3 ***REMOVED***溃就是这个原因（用户拿到 pandas 3.0 / typer 0.25 / rich 15
+  这些跟当前代码不兼容的版本）。
+- **升级走 force-reinstall**：`kan update` 之前用 `uv tool upgrade` / `pipx upgrade` /
+  `pip install --upgrade`，遇到老的本地缓存 `.so` 文件不会重新下载，macOS
+  Gatekeeper 会拒载老的缓存文件。现在统一改为 `--reinstall` / `--force` /
+  `--force-reinstall`，每次升级都是完整重装。
+- **升级后跑导入烟雾测试**：升级文件下载成功不代表装得起来。现在 `kan update`
+  在升级成功后跑一次 `import kan; from kan import scanner, fetcher, watchlist`
+  smoke test，import 失败会显示 "升级文件已下载但导入失败 · 建议手动 reinstall"。
+- **scanner.py 模块改 lazy import**：把 pandas 从顶层 import 改为函数体内 lazy
+  import，避免任意路径意外加载 pandas 时跳出 spinner 保护。
+- **顶层 ImportError catch + 行动建议**：`kan` 主入口包了一层 ImportError 处理，
+  装机不完整时不再抛 60+ 行 traceback，而是显示：
+  ```
+  ❌ kan 安装文件不完整 (...)
+  这通常发生在 kan update 升级中途被打断 · 或上游 deps 版本错位。
+  请运行：uv tool install manmankan --reinstall （或 pipx install manmankan --force）
+  ```
+
+### Fixed · 用户体验一致性
+
+- **kan add 错误输入不再静默**：`kan add 999999`（无效代码）/ `kan add 不存在的名字`
+  （未找到）/ `kan add 科技`（多匹配）以前是屏幕空白 + Exit 0 静默失败，现在
+  显示错误信息并 exit 1。
+- **kan info 涨跌符号一致性**：之前 "跌 1 天 · 累计 0.85%" 是正数 + 负方向语义
+  冲突，现在跌显示 `▼0.85%`（绿）/ 涨显示 `▲0.85%`（红），跟 `kan trend` 命令
+  的详情列对齐。
+- **升级成功后建议开新终端**：`kan update` 完成时追加 "建议开新终端窗口跑下次命令 ·
+  当前终端有旧进程缓存" 提示，避免同一 shell 进程 .pyc cache 残留导致的长尾问题。
+
+### Security · 用户数据 + 发版门禁加固
+
+- **用户数据文件权限收紧**：`~/.local/share/kan/` 目录 mode 0700，`watchlist.json` /
+  `config.json` 文件 mode 0600。之前 mode 0644 在共享 macOS / 多账户 Linux 上
+  其他用户可读取用户的自选股清单（金融持仓画像）。
+- **CI workflow permissions 显式声明**：test.yml + release.yml 加 `permissions: contents: read`
+  防 supply chain 攻击链（fork PR 中恶意 dep 借继承的 GITHUB_TOKEN 写仓库）。
+- **CI 加 privacy scan job**：`bash scripts/check-privacy-leaks.sh` 作为必绿 job ·
+  之前依赖本地 pre-commit hook（`--no-verify` 可绕开）。
+- **CONTRIBUTING.md 明示 `git config core.hooksPath .githooks`**：贡献者必须激活
+  本地 pre-commit hook 才能拦住隐私词泄漏。
+
+### Added · CI 防回归 hard gate
+
+- **release.yml 加 post-publish smoke matrix**：发版后 sleep 60s 等 PyPI CDN 同步，
+  在 ubuntu/macos × uv/pip × python3.11/3.12 矩阵跑 clean install + `kan scan --help`
+  等核心命令，验证 entry point + import chain。**直接挡住 v0.0.4.3 类***REMOVED*** ship**。
+- **test.yml 加 tty-test job**：用 `script -q -c "..."` 在 PTY 下跑
+  `tests/test_cli_silent_period.py`，覆盖之前 CI `-m "not tty"` 排除的真 wrapper 路径。
+
+### Tests
+
+- 新增 `_maybe_print_boot_banner` 4 个参数化测试：白名单 + TTY / 白名单外 /
+  `--help` / `KAN_NO_BOOT_BANNER=1` env，覆盖所有分支。
+- 新增 cold-start invariant: `import kan.scanner` 时 pandas/numpy 不应出现在
+  sys.modules（subprocess 隔离验证）。
 
 ### Docs
 
-- 重写 `docs/reviews/v0.0.4.md` 的 SLO 段，删除旧版“全部 ≤ 200ms”的误导性结论，
-  改为真实 wrapper 数据。
-- `docs/reviews/v0.0.3.md` 标注 200ms 是 aspirational target，实际回归阈值按
-  wrapper 路径测量。
+- README 第 14 行版本横幅同步到 v0.0.4.4（v0.0.4.3 因***REMOVED***溃已 yank）。
+- README 30 秒上手块前加 uv 安装提示（`curl -LsSf https://astral.sh/uv/install.sh | sh`）。
+- README 加"故障排查 FAQ"段（装坏了 / 升级失败 → `uv tool install --reinstall` 引导）。
+- `projects/manmankan/reviews/v0.0.4.3/`（总部 7 角色 review）47 项 findings ·
+  v1.0 制度化模板（详见上游 meta-repo）。
 
-### Performance · 早期可见反馈
+## [0.0.4.3] - 2026-05-12 [YANKED]
+
+> ⚠️ **本版本已从 PyPI yank** · 用户端装机即崩（numpy C-extension macOS 代码签名 +
+> typer / rich / pandas 版本错位 + 顶层 `import pandas` 跳出 spinner 保护）。
+> 请直接升级到 v0.0.4.4：`uv tool install manmankan --reinstall`
+
+### Fixed · 测试基线校准
+
+- `tests/test_cli_silent_period.py` 改用真实 `kan` 入口测试（`os.execvpe`）。
+  之前用 `python -c bootstrap` 启动跳过了 wrapper 和 entry point 开销，导致测试
+  数据偏低。
+- 测试基线从 200ms 调整为 400ms（200ms 保留为理想目标，真实 wrapper 路径
+  受 Python 启动物理开销约束）。
+- 新增 `scripts/measure_slo.py`，统一用真实 `kan` 命令测启动延迟。
+
+### Performance · 启动反馈
 
 - `kan add/scan/fetch/low/high/info/trend` 在 TTY 下先输出 `⏳ 启动中...` 到
-  stderr，再进入 Typer/Rich 路由。真实 wrapper 路径下首个可见反馈约 10-20ms。
+  stderr，避免按回车后空屏。真实 wrapper 路径下首个可见反馈约 10-20ms。
 - 支持 `KAN_NO_BOOT_BANNER=1` 关闭该早期提示。
 
 ## [0.0.4.2] - 2026-05-12
 
-### Changed · 阶段反馈
+### Changed · 启动阶段反馈细化
 
-- 数据命令启动阶段拆成明确提示：`⏳ 加载数据模块...` →
-  `⏳ 检查缓存...` → `⏳ 拉取数据...`
-- `kan fetch` / `kan info` 的单只拉取也进入 stderr spinner，网络等待期间不再空屏。
-- 批量自动更新进度条文案改为 `⏳ 拉取数据 · 最近: <名称>`，让长 watchlist
-  的等待阶段更可见。
+- 数据命令启动分阶段提示：`⏳ 加载数据模块...` → `⏳ 检查缓存...` → `⏳ 拉取数据...`，
+  让长 watchlist 用户的等待阶段更可见。
+- `kan fetch` / `kan info` 的单只拉取也进入 stderr spinner。
+- 批量自动更新进度条文案改为 `⏳ 拉取数据 · 最近: <名称>`。
 
-### Fixed · fallback 可见化
+### Fixed · 数据源切换可见化
 
-- A 股代码表主源 baostock 失败时，显式提示正在切换 akshare 备用源，避免首次
+- A 股代码表主源 baostock 失败时显式提示正在切换 akshare 备用源，避免首次
   `kan add` 因 fallback 变慢而看起来无解释。
 
 ### Docs
 
-- 新增 `docs/reviews/v0.0.4.md` 记录修复后 PTY SLO 实测。
+- 新增 `docs/reviews/v0.0.4.md` 记录启动反馈实测数据。
 
 ## [0.0.4.1] - 2026-05-12
 
-### Fixed · 覆盖剩余命令
+### Fixed · 启动反馈覆盖全数据命令
 
 - `kan fetch` / `kan low` / `kan high` / `kan info` / `kan trend` 在加载
-  `fetcher` / `scanner` / `render` 等数据模块前先显示 stderr spinner。
-- `tests/test_cli_silent_period.py` 的 PTY 真终端测试扩展覆盖 `fetch` / `low` /
-  `high` / `info` / `trend` 首帧 SLO。
+  `fetcher` / `scanner` / `render` 等数据模块前先显示 stderr spinner，避免按
+  回车后到第一帧输出之间空屏。
+- 测试覆盖扩展到上述命令的首帧延迟。
 
 ## [0.0.4.0] - 2026-05-12
 
-### Fixed · scan 启动 ***REMOVED***
+### Fixed · 数据命令启动反馈缺失
 
-- `kan/fetcher.py` 移除顶层 `akshare` / `pandas` import，改为数据源函数和
-  parquet 读写函数内部 lazy import。
-- 新增 `_with_heavy_imports_spinner(console, message)`，统一在重模块 import 前打开
-  `console.status(..., spinner="dots")`。
-- `kan scan` 入口用 stderr spinner 包住 `fetcher` / `scanner` / `render` import，
-  冷启动首帧从约 500-700ms 降到 200ms 内。
+- `kan/fetcher.py` 顶层不再 import `akshare` / `pandas`，改为函数体内按需加载，
+  避免 `kan` 启动时一次性付掉数据模块全部加载成本。
+- 新增 `_with_heavy_imports_spinner(console, message)` 统一封装，在重模块加载前
+  打开 `console.status(...)` 避免空屏。
+- `kan scan` 入口用 stderr spinner 包住 `fetcher` / `scanner` / `render` 等模块的
+  按需加载，首次反馈从约 500-700ms 提前到 200ms 内。
 
 ### Docs
 
-- 新增 `docs/reviews/v0.0.3.md` 记录 v0.0.3 ***REMOVED***审计和漏修原因。
+- 新增 `docs/reviews/v0.0.3.md` 记录 v0.0.3 启动反馈实测和遗漏分析。
+
+### Docs
+
+- 新增 `docs/reviews/v0.0.3.md` 记录 v0.0.3 启动反馈审计和漏修原因。
 
 ## [0.0.3] - 2026-05-11
 
@@ -127,10 +198,10 @@ pandas / numpy / bs4 / requests 整窝拖入启动路径。单个 akshare import
   让 CLI 在 import 重模块前用极轻 paths（~370μs）先决策
 - `kan/cli.py` 抽 `_load_names_with_optional_spinner` helper，
   spinner 提前到 watchlist 重模块 import 之前显示
-- `kan add` 用户视角：按回车后 0 ***REMOVED*** · ⏳ 加载提示立即可见
+- `kan add` 用户视角：按回车后 0 启动反馈 · ⏳ 加载提示立即可见
 
 **实测收益**（首次添加股票场景）：
-- 冷启动 ***REMOVED*** ~10s → 0s（spinner 立即可见）
+- 冷启动 启动反馈 ~10s → 0s（spinner 立即可见）
 - baostock 主路径不再触发 pandas / numpy / bs4 / requests 等间接依赖
 
 ### Added · 自动更新机制

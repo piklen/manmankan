@@ -147,7 +147,7 @@ def _fetch_names_akshare() -> dict[str, str] | None:
     """akshare stock_info_a_code_name · fallback · 实测 ~16s · baostock 失败时兜底。
 
     Lazy import akshare · 不在 watchlist 顶层 import：akshare 拖 pandas/numpy/bs4/requests
-    整窝进启动路径，单个就占 watchlist 冷启动成本 85%（~8s 冷启动 ***REMOVED***）。
+    整窝进启动路径，单个就占 watchlist 冷启动成本 85%（~8s 冷启动 启动反馈）。
     本函数仅在 baostock 主路径失败时调用，95%+ 的常规启动不该付这个成本。
 
     内部 self-suppress akshare 的 tqdm 'n/16' 误导进度条（写到 stderr）。

@@ -277,7 +277,7 @@ class TestStockGroups:
 
 
 class TestColdStartInvariants:
-    """守护 akshare 不在 kan.watchlist 顶层被 import · 防冷启动 ***REMOVED***回归。
+    """守护 akshare 不在 kan.watchlist 顶层被 import · 防冷启动 启动反馈回归。
 
     v0.0.1 实测：watchlist.py 顶层 `import akshare as ak` 把 pandas/numpy/bs4/requests
     整窝拖入启动路径，单 akshare 占 watchlist 加载成本 85%（热启动 229ms / 冷启动约 8s）。
