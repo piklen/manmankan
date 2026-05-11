@@ -10,6 +10,7 @@
 
 from __future__ import annotations
 
+import contextlib
 import json
 import subprocess
 import sys
@@ -106,10 +107,9 @@ def check_for_updates(force: bool = False) -> UpdateInfo:
 
     cfg["last_check_date"] = today
     cfg["latest_seen_version"] = latest
-    try:
+    # cache 写失败不影响检查结果
+    with contextlib.suppress(OSError):
         config.save(cfg)
-    except OSError:
-        pass  # cache 写失败不影响检查结果
 
     return UpdateInfo(
         current=current,

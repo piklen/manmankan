@@ -5,6 +5,8 @@
   2. 非 TTY 静默（pipe / CI 场景不弹 prompt）
   3. 失败不重试（避免每次启动都 retry 失败的网络 / shell 检测）
 """
+import contextlib
+
 import typer
 
 from kan.cli_helpers import _VALID_SHELLS, _detect_shell_fallback
@@ -140,10 +142,8 @@ def _check_updates_atexit() -> None:
                     f"跑 [bold]kan update[/bold] 升级 (本提示每周一次)[/dim]"
                 )
                 cfg["last_hint_date"] = date.today().isoformat()
-                try:
+                with contextlib.suppress(OSError):
                     config.save(cfg)
-                except OSError:
-                    pass
             return
 
         # 场景 A: 首次发现新版 (auto_update is None) · 阻塞 prompt
@@ -162,10 +162,8 @@ def _check_updates_atexit() -> None:
 
         if choice in ("y", "yes"):
             cfg["auto_update"] = True
-            try:
+            with contextlib.suppress(OSError):
                 config.save(cfg)
-            except OSError:
-                pass
             console.print("[green]✅ 偏好已保存 · 立即升级中...[/green]")
             status, msg = updater.run_upgrade()
             if status == "success":
@@ -179,10 +177,8 @@ def _check_updates_atexit() -> None:
                 console.print(f"[dim]{msg}[/dim]")
         elif choice in ("n", "no"):
             cfg["auto_update"] = False
-            try:
+            with contextlib.suppress(OSError):
                 config.save(cfg)
-            except OSError:
-                pass
             console.print(
                 "[dim]✅ 偏好已保存 · 不再自动升级 · "
                 "以后跑 [bold]kan update[/bold] 手动升级[/dim]"
