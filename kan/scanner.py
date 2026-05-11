@@ -4,8 +4,10 @@ from __future__ import annotations
 
 import json
 from datetime import date
+from typing import TYPE_CHECKING
 
-import pandas as pd
+if TYPE_CHECKING:
+    import pandas as pd  # v0.0.4.4: lazy import · 避免 top-level pandas 触发 cold-start cost
 
 from kan.models import PeriodResult, StockScanResult
 from kan.paths import SNAPSHOT_PATH
@@ -56,6 +58,8 @@ def scan_stock(
     periods: list[int] | None = None,
 ) -> StockScanResult:
     """对单只股票计算多周期位置 + 趋势。"""
+    import pandas as pd  # v0.0.4.4: lazy · 函数体内 import 用于 pd.Timestamp 类型转换
+
     if periods is None:
         periods = PERIODS
 
