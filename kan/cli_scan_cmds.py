@@ -1,0 +1,356 @@
+"""位置扫描 / 数据拉取相关命令：fetch / scan / low / high / info。
+
+共同特征：触及 K 线数据 · 大多走 _auto_fetch_stale 自动补缺 · 输出 rich.Table 表格。
+"""
+from typing import Annotated
+
+import typer
+
+from kan.app import app
+from kan.cli_helpers import (
+    _auto_fetch_stale,
+    _get_watchlist_pairs,
+    _print_err,
+    _safe_error_msg,
+)
+
+
+@app.command()
+def fetch(
+    symbols: Annotated[list[str] | None, typer.Argument(help="股票代码（留空则拉取全部自选）")] = None,
+    force: Annotated[bool, typer.Option("--force", "-f", help="强制刷新（忽略缓存）")] = False,
+) -> None:
+    """拉取股票历史 K 线数据"""
+    from kan.fetcher import fetch_kline, is_fresh
+
+    if not symbols:
+        from kan.watchlist import load_watchlist
+        wl = load_watchlist()
+        if not wl.stocks:
+            typer.echo("自选列表为空 · 请先 `kan add <代码>` 添加", err=True)
+            raise typer.Exit(1)
+        symbols = [s.symbol for s in wl.stocks]
+
+    success = 0
+    for sym in symbols:
+        if not force and is_fresh(sym):
+            typer.echo(f"  {sym} 已是最新（今日已拉取）")
+            success += 1
+            continue
+        try:
+            df = fetch_kline(sym, force=force)
+            typer.echo(f"  ✅ {sym} 拉取成功（{len(df)} 条 K 线）")
+            success += 1
+        except Exception as e:
+            typer.echo(f"  ❌ {sym} 拉取失败：{_safe_error_msg(e)}", err=True)
+
+
+@app.command()
+def scan(
+    high: Annotated[bool, typer.Option("--high", help="高点模式（默认低点模式）")] = False,
+    signal: Annotated[bool, typer.Option("--signal", "-S", "-s", help="仅显示有共振信号的股票")] = False,
+    diff: Annotated[bool, typer.Option("--diff", "-d", help="增量模式：显示与上次扫描的变化")] = False,
+    exclude_st: Annotated[bool, typer.Option("--exclude-st", help="排除 ST/*ST 股票")] = False,
+) -> None:
+    """扫描自选股多周期位置（10 周期全景模式）"""
+    from rich.console import Console
+    from rich.table import Table
+    from rich.text import Text
+
+    from kan.fetcher import cache_age
+    from kan.render import DISCLAIMER, format_pct, responsive_periods
+    from kan.scanner import (
+        PERIODS,
+        compute_diff,
+        load_snapshot,
+        save_snapshot,
+        scan_batch,
+    )
+
+    console = Console()
+    watchlist_pairs = _get_watchlist_pairs()
+    _auto_fetch_stale(watchlist_pairs)
+    mode = "high" if high else "low"
+
+    prev_snapshot = load_snapshot() if diff else None
+
+    # P1-8: 单次 scan_batch · 后续 filter / diff / snapshot 都用 all_results · 避免重复调用
+    all_results = scan_batch(watchlist_pairs, mode=mode)
+
+    if not all_results:
+        _print_err("无缓存数据 · 请先 `kan fetch` 拉取数据")
+        raise typer.Exit(1)
+
+    results = all_results
+    if exclude_st:
+        results = [r for r in results if not r.is_st]
+
+    if signal:
+        if mode == "high":
+            results = [r for r in results if r.high_resonance > 0]
+        else:
+            results = [r for r in results if r.low_resonance > 0]
+        if not results:
+            console.print("没有股票触及极值区 · 无共振信号")
+            save_snapshot(all_results)
+            return
+
+    from datetime import date as date_cls
+    latest_time = None
+    data_is_today = True
+    for r in results:
+        t = cache_age(r.symbol)
+        if t:
+            latest_time = t
+            if not t.startswith(str(date_cls.today())):
+                data_is_today = False
+
+    title = f"慢慢看 · 自选股位置扫描 · {'高点' if high else '低点'}模式"
+    if signal:
+        title += " · 仅信号"
+    if latest_time:
+        title += f" · {latest_time} 更新"
+
+    display_periods = responsive_periods(console.width)
+    is_compact = len(display_periods) < len(PERIODS)
+
+    table = Table(title=title, show_lines=False, pad_edge=False, padding=(0, 1))
+    table.add_column("股票", style="white", no_wrap=True)
+    table.add_column("现价", justify="right", style="white", min_width=8)
+    for p in display_periods:
+        table.add_column(f"{p}日", justify="right", min_width=6)
+    table.add_column("共振", justify="center")
+
+    for r in results:
+        row: list[str | Text] = []
+        name_short = r.name.replace(" ", "")
+        tag = ""
+        if r.limit_up:
+            tag = " 涨停"
+        elif r.limit_down:
+            tag = " 跌停"
+        row.append(f"{name_short} {r.symbol}{tag}")
+        row.append(f"{r.current_price:.2f}")
+
+        for p in display_periods:
+            pr = next((x for x in r.periods if x.period == p), None)
+            if pr is None:
+                row.append(Text("-", style="dim"))
+            else:
+                row.append(format_pct(pr, high_mode=high))
+
+        resonance = r.high_resonance if high else r.low_resonance
+        if resonance >= 3:
+            row.append(Text(f"×{resonance}", style="bold yellow"))
+        elif resonance > 0:
+            row.append(Text(f"×{resonance}", style="yellow"))
+        else:
+            row.append("")
+
+        table.add_row(*row)
+
+    console.print(table)
+
+    if is_compact:
+        shown = "/".join(str(p) for p in display_periods)
+        n = len(display_periods)
+        console.print(
+            f"\n  [dim]窄屏模式 · 显示 {n}/10 周期"
+            f"（{shown}日）· 加宽终端可见全部[/dim]"
+        )
+
+    if not data_is_today:
+        console.print("\n  [bold yellow]⚠️ 数据非今日，建议 kan fetch --force 更新[/bold yellow]")
+
+    # 增量对比 · 用上面 cache 的 all_results · 避免重复 scan (P1-8)
+    if diff and prev_snapshot:
+        changes = compute_diff(all_results, prev_snapshot)
+        if changes:
+            console.print()
+            console.print("[bold]与上次扫描的变化：[/bold]")
+            for sym, name, _, desc in changes:
+                name_short = name.replace(" ", "")
+                console.print(f"  {name_short} {sym} · {desc}")
+        else:
+            if data_is_today:
+                console.print("\n  [dim]与上次扫描无变化（同日数据，次日再对比可见变化）[/dim]")
+            else:
+                console.print("\n  与上次扫描无变化")
+    elif diff and not prev_snapshot:
+        console.print("\n  [dim]首次扫描，无历史对比（下次 --diff 将显示变化）[/dim]")
+
+    # 保存快照供下次 diff 用 · 始终保存 all_results 全量 (P1-8: 避免重复 scan)
+    save_snapshot(all_results)
+
+    console.print()
+    if high:
+        console.print("[dim]  \\[x%] = 触及高点(≥95%) · 100%=区间最高 · 越高=越接近 N 日最高价[/dim]")
+    else:
+        console.print("[dim]  \\[x%] = 触及低点(≤5%) · 0%=区间最低 · 越低=越接近 N 日最低价[/dim]")
+    console.print(DISCLAIMER, style="dim")
+
+
+def _filter_extreme_cmd(periods: list[int], mode: str) -> None:
+    """low/high 共享实现"""
+    from rich.console import Console
+    from rich.table import Table
+    from rich.text import Text
+
+    from kan.fetcher import cache_age
+    from kan.render import DISCLAIMER
+    from kan.scanner import filter_extreme
+
+    console = Console()
+    for p in periods:
+        if p < 2 or p > 360:
+            _print_err(f"❌ 周期 {p} 无效（范围 2-360）")
+            raise typer.Exit(1)
+
+    label = "低点" if mode == "low" else "高点"
+    signal_style = "bold green" if mode == "low" else "bold yellow"
+
+    watchlist_pairs = _get_watchlist_pairs()
+    _auto_fetch_stale(watchlist_pairs)
+    results_by_period = filter_extreme(watchlist_pairs, periods, mode=mode)
+
+    if not results_by_period:
+        console.print(f"自选股中没有触及 {'/'.join(map(str, periods))} 日{label}的股票")
+        return
+
+    latest_time = None
+
+    for n, hits in results_by_period.items():
+        for r, _ in hits:
+            t = cache_age(r.symbol)
+            if t:
+                latest_time = t
+
+        title = f"慢慢看 · {n} 日{label} · {len(hits)} 只触及"
+        if latest_time:
+            title += f" · {latest_time} 更新"
+
+        table = Table(title=title, show_lines=False, pad_edge=False, padding=(0, 1))
+        table.add_column("股票", style="white", no_wrap=True)
+        table.add_column("现价", justify="right", style="white", min_width=8)
+        table.add_column(f"{n}日最低", justify="right", style="dim", min_width=8)
+        table.add_column(f"{n}日最高", justify="right", style="dim", min_width=8)
+        table.add_column("位置", justify="right", min_width=8)
+
+        for result, pr in hits:
+            name_short = result.name.replace(" ", "")
+            table.add_row(
+                f"{name_short} {result.symbol}",
+                f"{result.current_price:.2f}",
+                f"{pr.n_low:.2f}",
+                f"{pr.n_high:.2f}",
+                Text(f"[{pr.position_pct:.1f}%]", style=signal_style),
+            )
+
+        console.print(table)
+        console.print()
+
+    console.print(DISCLAIMER, style="dim")
+
+
+@app.command()
+def low(
+    periods: Annotated[list[int], typer.Argument(help="周期天数（2-360 · 支持多个：30 60 120）")],
+) -> None:
+    """筛选 N 日低点的自选股（支持多周期）"""
+    _filter_extreme_cmd(periods, mode="low")
+
+
+@app.command()
+def high(
+    periods: Annotated[list[int], typer.Argument(help="周期天数（2-360 · 支持多个：30 60 120）")],
+) -> None:
+    """筛选 N 日高点的自选股（支持多周期）"""
+    _filter_extreme_cmd(periods, mode="high")
+
+
+@app.command()
+def info(
+    symbol: Annotated[str, typer.Argument(help="股票代码（如 600519）")],
+) -> None:
+    """单只股票详情（全周期位置 + 涨跌信息）"""
+    from rich.console import Console
+    from rich.table import Table
+    from rich.text import Text
+
+    from kan.fetcher import cache_age, fetch_kline, get_cached, is_fresh
+    from kan.render import DISCLAIMER, format_pct
+    from kan.scanner import calc_trend, scan_stock
+    from kan.watchlist import _lookup_name, _normalize_symbol
+
+    console = Console()
+
+    try:
+        symbol = _normalize_symbol(symbol)
+    except ValueError as e:
+        _print_err(f"❌ {e}")
+        raise typer.Exit(1) from e
+
+    try:
+        name = _lookup_name(symbol)
+    except ValueError as e:
+        _print_err(f"❌ {e}")
+        raise typer.Exit(1) from e
+
+    if not is_fresh(symbol):
+        console.print(f"正在拉取 {name} ({symbol}) 数据...")
+        try:
+            fetch_kline(symbol, force=True)
+        except Exception as e:
+            from rich.console import Console as _ErrConsole
+            _ErrConsole(stderr=True).print(f"❌ 拉取失败：{_safe_error_msg(e)}")
+            raise typer.Exit(1) from e
+
+    df = get_cached(symbol)
+    if df is None:
+        _print_err("无数据")
+        raise typer.Exit(1)
+
+    result = scan_stock(df, symbol, name)
+    trend_result = calc_trend(df, symbol, name)
+    name_short = name.replace(" ", "")
+
+    latest_time = cache_age(symbol) or ""
+    title = f"慢慢看 · {name_short} {symbol}"
+    if latest_time:
+        title += f" · {latest_time} 更新"
+
+    # 基本信息
+    tag = ""
+    if result.is_st:
+        tag = " [bold red]ST[/bold red]"
+    if result.limit_up:
+        tag += " [bold red]涨停[/bold red]"
+    elif result.limit_down:
+        tag += " [bold green]跌停[/bold green]"
+
+    console.print(f"\n[bold]{title}[/bold]{tag}")
+    console.print(f"  现价 {result.current_price:.2f} · {trend_result.direction} · 累计 {abs(trend_result.streak_pct):.2f}%")
+    console.print()
+
+    # 全周期位置表
+    table = Table(show_lines=False, pad_edge=False, padding=(0, 1))
+    table.add_column("周期", justify="right", style="cyan")
+    table.add_column("最低", justify="right", style="dim", min_width=8)
+    table.add_column("最高", justify="right", style="dim", min_width=8)
+    table.add_column("位置", justify="right", min_width=8)
+
+    for pr in result.periods:
+        if pr.insufficient:
+            table.add_row(f"{pr.period}日", "-", "-", Text("-", style="dim"))
+            continue
+
+        table.add_row(
+            f"{pr.period}日",
+            f"{pr.n_low:.2f}",
+            f"{pr.n_high:.2f}",
+            format_pct(pr),
+        )
+
+    console.print(table)
+    console.print(f"\n  低点共振 ×{result.low_resonance} · 高点共振 ×{result.high_resonance}")
+    console.print(DISCLAIMER, style="dim")
