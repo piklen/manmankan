@@ -79,6 +79,9 @@ def update(
             f"[green]✅ 已升级到 v{info.latest}[/green] "
             f"[dim](方式: {msg} · 下次跑 kan 命令生效)[/dim]"
         )
+        console.print(
+            "[dim]   建议开新终端窗口跑下次命令 · 当前终端有旧进程缓存[/dim]"
+        )
     else:
         _print_err("[red]❌ 升级失败[/red]")
         _print_err(f"[dim]{msg}[/dim]")
