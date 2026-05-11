@@ -1,6 +1,6 @@
 [project]
 name = "manmankan"
-version = "0.0.4.2"
+version = "0.0.4.3"
 description = "A 股自选股位置感 CLI 工具 · 多周期位置扫描 + 共振信号 + 连续涨跌看板"
 requires-python = ">=3.11"
 license = { text = "MIT" }
