@@ -167,6 +167,13 @@ def add(
             parts.append(f"失败 {fail}")
         time_part = f" · 用时 {add_elapsed:.1f}s" if add_elapsed >= 0.5 else ""
         typer.echo(f"  添加完成 · {' · '.join(parts)}{time_part}")
+    elif failures:
+        # v0.0.4.4: 单只模式下错误必须打 + exit 1
+        # 修复 v0.0.4.3 用户报告："kan add 999999" / "kan add 不存在的名字" / "kan add 科技"(多匹配)
+        # 三种错误输入全静默 + Exit 0 · 用户认为工具坏了
+        for f in failures:
+            typer.echo(f"  ❌ {f}", err=True)
+        raise typer.Exit(1)
 
 
 @app.command()
