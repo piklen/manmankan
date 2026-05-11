@@ -11,7 +11,9 @@
 
 慢慢看是一个**纯命令行**的 A 股自选股位置感工具。它把电商「慢慢买」的「先看历史价位再决策」迁移到股市:把你 30 只自选股在 3、5、7、10、15、30、60、90、120、180 日窗口内的位置百分位**一屏显示**,把「同时触及多个低点」标成共振信号,然后**闭嘴**——剩下的判断,你自己做。
 
-> 📦 **当前版本 v0.0.4.2**(Alpha · CLI 启动可见反馈修复) · `pip install manmankan` 即装即用 · API 在 1.0 前可能调整。
+> 📦 **当前版本 v0.0.4.4**(Alpha · 装机修复 + 7 角色总部 review) · `pip install manmankan` 即装即用 · API 在 1.0 前可能调整。
+>
+> ⚠️ **v0.0.4.3 已从 PyPI yank**(用户端***REMOVED***) · 老用户请 `uv tool install manmankan --reinstall` 升 v0.0.4.4。
 >
 > 🔒 **100% 本地** · 不要登录 · 不上传自选 · 不推送 · 不广告 · 数据存 `~/.local/share/kan/`(XDG 规范)。
 >
@@ -35,6 +37,7 @@
 - [风险与法律免责](#风险与法律免责)
 - [路线图](#路线图)
 - [文档导航](#文档导航)
+- [故障排查 FAQ](#故障排查-faq)
 - [开发](#开发)
 - [许可证](#许可证)
 
@@ -55,11 +58,16 @@
 
 ## 30 秒上手
 
+> 💡 **没装 uv?** 一行装好: `curl -LsSf https://astral.sh/uv/install.sh | sh` ([uv 官方文档](https://docs.astral.sh/uv/getting-started/installation/))
+
 ```bash
 uv tool install manmankan          # 一行装好(推荐)
 kan add 600519 茅台 601318          # 名称 / 代码混搭
 kan scan                            # 一屏看完位置 + 共振信号
 ```
+
+> 装坏了? 跑 `uv tool install manmankan --reinstall` (或 `pipx install manmankan --force`) ·
+> 详见 [§故障排查 FAQ](#故障排查-faq)
 
 第一次跑会有两次「看起来卡住」的时刻,**这是正常的**:
 
@@ -471,6 +479,56 @@ ST 涨跌停切换日 2026-07-06 来自沪深北交易所 2026-04 公告,代码�
 | [`CONTRIBUTING.md`](CONTRIBUTING.md) | 开发环境 / 代码风格 / 公开输出语言规范 / Commit 规范 |
 | [`SECURITY.md`](SECURITY.md) | 漏洞报告(Private Vulnerability Reporting) |
 | [`AUTHORS.md`](AUTHORS.md) | 贡献者列表 |
+
+---
+
+## 故障排查 FAQ
+
+### kan 装完跑不起来 / `kan scan` 抛一堆 ImportError
+
+通常发生在 `kan update` 升级中途被打断 · 或上游 deps 版本错位。**统一修复**: 强制重装。
+
+```bash
+# 你装 kan 用的是哪种工具? 选对应命令:
+uv tool install manmankan --reinstall      # uv tool 装的
+pipx install manmankan --force             # pipx 装的
+pip install --force-reinstall manmankan    # pip 装的
+```
+
+如果还不行 · 先彻底卸载再装:
+
+```bash
+uv tool uninstall manmankan && uv tool install manmankan
+```
+
+### `kan update` 显示已升级但下次还崩
+
+v0.0.4.3 已知问题 · v0.0.4.4 已修复(升级后自动 import smoke test 验证)。如果你还在 v0.0.4.3 · 用上面的命令强制升 v0.0.4.4。
+
+### `kan` 命令找不到 (command not found)
+
+- **uv tool 装的**: 检查 `~/.local/bin` 在 PATH 里
+- **pipx 装的**: 跑 `pipx ensurepath` · 重启终端
+- **pip --user 装的**: 检查 `python -m site --user-base`/bin 在 PATH 里
+- **macOS Homebrew Python**: 可能装到了系统 Python · 改用 uv tool
+
+### 网络 / 数据源连不上
+
+manmankan 主用 baostock · 失败自动 fallback 到 akshare。**两个都失败**通常是网络代理问题:
+
+```bash
+unset HTTP_PROXY HTTPS_PROXY all_proxy ALL_PROXY  # 临时去代理试
+kan add 600519                                    # 重试
+```
+
+### 想完全卸载 + 删除数据
+
+```bash
+uv tool uninstall manmankan       # 卸载程序
+rm -rf ~/.local/share/kan         # 删除数据(自选股 + K 线缓存)
+```
+
+更多问题请提 [GitHub Issues](https://github.com/piklen/manmankan/issues)。
 
 ---
 
