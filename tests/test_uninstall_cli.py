@@ -12,7 +12,8 @@ from unittest.mock import patch
 import pytest
 from typer.testing import CliRunner
 
-from kan.cli import _detect_install_method, _human_size, app
+from kan.cli import app
+from kan.cli_helpers import _detect_install_method, _human_size
 
 
 @pytest.fixture

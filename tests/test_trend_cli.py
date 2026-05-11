@@ -23,7 +23,8 @@ from unittest.mock import patch
 import pytest
 from typer.testing import CliRunner
 
-from kan.cli import _normalize_streak_args, app
+from kan.cli import app
+from kan.cli_helpers import _normalize_streak_args
 from kan.scanner import TrendResult
 
 # --- sys.argv 预处理纯函数测试 ---
@@ -94,11 +95,13 @@ def _fake_trend_batch(*_args, **_kwargs) -> list[TrendResult]:
 @pytest.fixture
 def runner(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> CliRunner:
     """隔离 watchlist + cache_age + fetcher · 让 trend 走 mock 数据。"""
+    # cli.py 拆分后 trend 命令在 kan.cli_trend_cmds · from-import 把 helper 引用 bound
+    # 到 cli_trend_cmds 的 namespace · monkeypatch 必须改这里才能拦截
     monkeypatch.setattr(
-        "kan.cli._get_watchlist_pairs",
+        "kan.cli_trend_cmds._get_watchlist_pairs",
         lambda: [("600519", "测试跌5"), ("000001", "测试涨3"), ("002001", "测试平")],
     )
-    monkeypatch.setattr("kan.cli._auto_fetch_stale", lambda _pairs: None)
+    monkeypatch.setattr("kan.cli_trend_cmds._auto_fetch_stale", lambda _pairs: None)
     monkeypatch.setattr("kan.scanner.trend_batch", _fake_trend_batch)
     monkeypatch.setattr("kan.fetcher.cache_age", lambda _sym: "2026-05-08 12:00")
     monkeypatch.setattr("kan.scanner.get_limit_threshold", lambda *a, **k: 10.0)
