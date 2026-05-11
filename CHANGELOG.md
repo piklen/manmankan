@@ -7,6 +7,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.0.4.2] - 2026-05-12
+
+### Changed · 阶段反馈
+
+- 数据命令启动阶段拆成明确提示：`⏳ 加载数据模块...` →
+  `⏳ 检查缓存...` → `⏳ 拉取数据...`
+- `kan fetch` / `kan info` 的单只拉取也进入 stderr spinner，网络等待期间不再空屏。
+- 批量自动更新进度条文案改为 `⏳ 拉取数据 · 最近: <名称>`，让长 watchlist
+  的等待阶段更可见。
+
+### Fixed · fallback 可见化
+
+- A 股代码表主源 baostock 失败时，显式提示正在切换 akshare 备用源，避免首次
+  `kan add` 因 fallback 变慢而看起来无解释。
+
+### Docs
+
+- 新增 `docs/reviews/v0.0.4.md` 记录修复后 PTY SLO 实测。
+
 ## [0.0.4.1] - 2026-05-12
 
 ### Fixed · 覆盖剩余命令
@@ -164,7 +183,8 @@ pandas / numpy / bs4 / requests 整窝拖入启动路径。单个 akshare import
 - 所有数据本地存储 · 不上传任何用户数据
 - `CONTRIBUTING.md` + `SECURITY.md` + 公开输出语言纪律
 
-[Unreleased]: https://github.com/piklen/manmankan/compare/v0.0.4.1...HEAD
+[Unreleased]: https://github.com/piklen/manmankan/compare/v0.0.4.2...HEAD
+[0.0.4.2]: https://github.com/piklen/manmankan/compare/v0.0.4.1...v0.0.4.2
 [0.0.4.1]: https://github.com/piklen/manmankan/compare/v0.0.4.0...v0.0.4.1
 [0.0.4.0]: https://github.com/piklen/manmankan/compare/v0.0.3...v0.0.4.0
 [0.0.3]: https://github.com/piklen/manmankan/compare/v0.0.2...v0.0.3

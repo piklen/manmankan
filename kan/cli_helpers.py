@@ -136,13 +136,14 @@ def _auto_fetch_stale(pairs: list[tuple[str, str]]) -> None:
         TimeElapsedColumn,
     )
 
-    from kan.fetcher import fetch_batch, is_fresh
+    console = Console(stderr=True)
+    with console.status("[yellow]⏳ 检查缓存...[/yellow]", spinner="dots"):
+        from kan.fetcher import fetch_batch, is_fresh
 
-    stale = [(sym, name) for sym, name in pairs if not is_fresh(sym)]
+        stale = [(sym, name) for sym, name in pairs if not is_fresh(sym)]
     if not stale:
         return
 
-    console = Console()
     n = len(stale)
 
     # 大量股票时给出明确预期 · 避免用户以为卡死
@@ -167,11 +168,11 @@ def _auto_fetch_stale(pairs: list[tuple[str, str]]) -> None:
         TimeElapsedColumn(),
         console=console,
     ) as progress:
-        task_id = progress.add_task("更新中", total=n)
+        task_id = progress.add_task("⏳ 拉取数据...", total=n)
 
         def _on_done(symbol: str, ok: bool, _err_msg: str | None) -> None:
             name = name_map.get(symbol, symbol).replace(" ", "")
-            desc = f"更新中 · 最近: {name}" if ok else f"更新中 · 失败: {name}"
+            desc = f"⏳ 拉取数据 · 最近: {name}" if ok else f"⏳ 拉取数据 · 失败: {name}"
             progress.update(task_id, advance=1, description=desc)
 
         try:

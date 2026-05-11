@@ -43,7 +43,11 @@ def fetch(
             success += 1
             continue
         try:
-            df = fetch_kline(sym, force=force)
+            with status_console.status(
+                f"[yellow]⏳ 拉取数据... {sym}[/yellow]",
+                spinner="dots",
+            ):
+                df = fetch_kline(sym, force=force)
             typer.echo(f"  ✅ {sym} 拉取成功（{len(df)} 条 K 线）")
             success += 1
         except Exception as e:
@@ -311,9 +315,12 @@ def info(
         raise typer.Exit(1) from e
 
     if not is_fresh(symbol):
-        console.print(f"正在拉取 {name} ({symbol}) 数据...")
         try:
-            fetch_kline(symbol, force=True)
+            with status_console.status(
+                f"[yellow]⏳ 拉取数据... {name.replace(' ', '')} ({symbol})[/yellow]",
+                spinner="dots",
+            ):
+                fetch_kline(symbol, force=True)
         except Exception as e:
             from rich.console import Console as _ErrConsole
             _ErrConsole(stderr=True).print(f"❌ 拉取失败：{_safe_error_msg(e)}")
