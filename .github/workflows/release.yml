@@ -4,6 +4,10 @@ on:
   push:
     tags: ['v*']
 
+# v0.0.4.4: 显式声明最小权限 · build-and-publish job 内部再细化
+permissions:
+  contents: read
+
 jobs:
   build-and-publish:
     name: Build and publish to PyPI
@@ -22,3 +26,46 @@ jobs:
         uses: pypa/gh-action-pypi-publish@cef221092ed1bacb1cc03d23a2d87d1d172e277b  # release/v1 (pinned 2026-02-18)
         with:
           packages-dir: dist/
+
+  # v0.0.4.4 架构师 Finding ***REMOVED*** + 代码 CR Finding ***REMOVED*** (P0):
+  # 发版前 CI 测试 != 装回来跑命令 · v0.0.4.3 ***REMOVED***根因之一
+  # 这个 job 模拟用户视角: PyPI clean install → 跑 kan 核心命令 → 验证 import chain
+  post-publish-smoke:
+    name: Smoke test from PyPI (clean install)
+    needs: build-and-publish
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+        manager: [uv, pip]
+        python: ['3.11', '3.12']
+    steps:
+      - name: Wait for PyPI CDN propagation
+        run: sleep 60  # PyPI index 同步需要 30-60s
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python }}
+      - name: Install manmankan from PyPI (${{ matrix.manager }})
+        run: |
+          # ref_name 形如 v0.0.4.4 → manmankan==0.0.4.4
+          VERSION="${GITHUB_REF_NAME#v}"
+          case "${{ matrix.manager }}" in
+            uv)
+              pip install uv
+              uv tool install "manmankan==${VERSION}" --reinstall
+              ;;
+            pip)
+              python -m venv /tmp/smoke-venv
+              /tmp/smoke-venv/bin/pip install "manmankan==${VERSION}"
+              echo "/tmp/smoke-venv/bin" >> "$GITHUB_PATH"
+              ;;
+          esac
+      - name: Verify kan entry point
+        run: |
+          kan --version
+          KAN_NO_UPDATE_CHECK=1 kan --help
+          KAN_NO_UPDATE_CHECK=1 kan scan --help
+          KAN_NO_UPDATE_CHECK=1 kan trend --help
+          KAN_NO_UPDATE_CHECK=1 kan info --help
