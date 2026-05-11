@@ -8,7 +8,7 @@
 实际命令实现拆到 cli_*_cmds.py · 共享 helper 在 cli_helpers.py · atexit hook 在 cli_atexit.py。
 拆分蓝图详见 docs/v0.0.3-cli-refactor-plan.md。
 """
-from kan.app import app  # noqa: F401  · re-export
+from kan.app import app
 
 
 def cli_main() -> None:

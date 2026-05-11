@@ -8,7 +8,7 @@ from typing import Annotated
 import typer
 
 from kan.app import app
-from kan.cli_helpers import _NoopContext, _load_names_with_optional_spinner
+from kan.cli_helpers import _load_names_with_optional_spinner, _NoopContext
 
 
 @app.command(name="help")
