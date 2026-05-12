@@ -1,12 +1,12 @@
 """fetcher 测试 · 缓存逻辑 + AKShare mock + 多源 fallback"""
 
-from datetime import datetime, timedelta
+from datetime import date, datetime, timedelta
 from unittest.mock import MagicMock, patch
 
 import pandas as pd
 import pytest
 
-from kan import fetcher
+from kan import fetcher, trading_calendar
 
 
 @pytest.fixture
@@ -69,7 +69,18 @@ def test_is_fresh_no_cache(temp_data_dir):
     assert not fetcher.is_fresh("600519")
 
 
-def test_is_fresh_today_cache(temp_data_dir, force_eastmoney_path, fake_akshare_df):
+def test_is_fresh_today_cache(temp_data_dir, force_eastmoney_path, fake_akshare_df, monkeypatch):
+    """v0.0.4.5: is_fresh 改为对比 K 线 date ≥ latest_trade_date()。
+
+    fake_akshare_df 最后一行 = 2026-04-30 · mock latest_trade_date 同日返回，
+    避免触发 akshare 网络请求 + 让测试与系统时间解耦。
+    """
+    monkeypatch.setattr(
+        trading_calendar, "latest_trade_date",
+        lambda *a, **kw: date(2026, 4, 30),
+    )
+    trading_calendar.clear_memo()
+
     with patch("akshare.stock_zh_a_hist", return_value=fake_akshare_df):
         fetcher.fetch_kline("600519", force=True)
     assert fetcher.is_fresh("600519")

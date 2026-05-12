@@ -69,7 +69,7 @@ def scan(
         from rich.table import Table
         from rich.text import Text
 
-        from kan.fetcher import cache_age
+        from kan.fetcher import cache_age, data_cutoff_date
         from kan.render import DISCLAIMER, format_pct, responsive_periods
         from kan.scanner import (
             PERIODS,
@@ -77,6 +77,11 @@ def scan(
             load_snapshot,
             save_snapshot,
             scan_batch,
+        )
+        from kan.trading_calendar import (
+            PHASE_INTRADAY,
+            latest_trade_date,
+            market_phase,
         )
 
     console = Console()
@@ -107,21 +112,29 @@ def scan(
             save_snapshot(all_results)
             return
 
-    from datetime import date as date_cls
-    latest_time = None
-    data_is_today = True
+    # v0.0.4.5: 数据截止日 (K 线 date 列) 与 拉取时间 (文件 mtime) 严格分离展示
+    # 修复 v0.0.4.4 凌晨 02:55 拉昨日数据后 scan 整天显示"今日更新"实为昨日数据的 bug
+    data_cutoff = None
+    fetched_at = None
     for r in results:
+        d = data_cutoff_date(r.symbol)
+        if d is not None and (data_cutoff is None or d > data_cutoff):
+            data_cutoff = d
         t = cache_age(r.symbol)
         if t:
-            latest_time = t
-            if not t.startswith(str(date_cls.today())):
-                data_is_today = False
+            fetched_at = t
+
+    expected_cutoff = latest_trade_date()
+    is_stale = data_cutoff is None or data_cutoff < expected_cutoff
+    phase = market_phase()
 
     title = f"慢慢看 · 自选股位置扫描 · {'高点' if high else '低点'}模式"
     if signal:
         title += " · 仅信号"
-    if latest_time:
-        title += f" · {latest_time} 更新"
+    if data_cutoff:
+        title += f" · 数据截止 {data_cutoff.isoformat()} 收盘"
+    if fetched_at:
+        title += f" · {fetched_at} 拉取"
 
     display_periods = responsive_periods(console.width)
     is_compact = len(display_periods) < len(PERIODS)
@@ -171,8 +184,18 @@ def scan(
             f"（{shown}日）· 加宽终端可见全部[/dim]"
         )
 
-    if not data_is_today:
-        console.print("\n  [bold yellow]⚠️ 数据非今日，建议 kan fetch --force 更新[/bold yellow]")
+    if is_stale:
+        cutoff_str = data_cutoff.isoformat() if data_cutoff else "无缓存"
+        console.print(
+            f"\n  [bold yellow]⚠️ 数据截止 {cutoff_str} · "
+            f"应有最近交易日 {expected_cutoff.isoformat()} · "
+            f"建议 `kan fetch --force` 更新[/bold yellow]"
+        )
+    if phase == PHASE_INTRADAY:
+        console.print(
+            "\n  [bold yellow]⚠️ 当前盘中 · "
+            "数据持续变动 · 涨跌停标记可能瞬时反转[/bold yellow]"
+        )
 
     # 增量对比 · 用上面 cache 的 all_results · 避免重复 scan (P1-8)
     if diff and prev_snapshot:
@@ -184,7 +207,7 @@ def scan(
                 name_short = name.replace(" ", "")
                 console.print(f"  {name_short} {sym} · {desc}")
         else:
-            if data_is_today:
+            if not is_stale:
                 console.print("\n  [dim]与上次扫描无变化（同日数据，次日再对比可见变化）[/dim]")
             else:
                 console.print("\n  与上次扫描无变化")
@@ -211,7 +234,7 @@ def _filter_extreme_cmd(periods: list[int], mode: str) -> None:
         from rich.table import Table
         from rich.text import Text
 
-        from kan.fetcher import cache_age
+        from kan.fetcher import cache_age, data_cutoff_date
         from kan.render import DISCLAIMER
         from kan.scanner import filter_extreme
 
@@ -232,17 +255,24 @@ def _filter_extreme_cmd(periods: list[int], mode: str) -> None:
         console.print(f"自选股中没有触及 {'/'.join(map(str, periods))} 日{label}的股票")
         return
 
-    latest_time = None
+    # v0.0.4.5: 数据截止 / 拉取时间分离展示（与 scan 一致）
+    data_cutoff = None
+    fetched_at = None
 
     for n, hits in results_by_period.items():
         for r, _ in hits:
+            d = data_cutoff_date(r.symbol)
+            if d is not None and (data_cutoff is None or d > data_cutoff):
+                data_cutoff = d
             t = cache_age(r.symbol)
             if t:
-                latest_time = t
+                fetched_at = t
 
         title = f"慢慢看 · {n} 日{label} · {len(hits)} 只触及"
-        if latest_time:
-            title += f" · {latest_time} 更新"
+        if data_cutoff:
+            title += f" · 数据截止 {data_cutoff.isoformat()} 收盘"
+        if fetched_at:
+            title += f" · {fetched_at} 拉取"
 
         table = Table(title=title, show_lines=False, pad_edge=False, padding=(0, 1))
         table.add_column("股票", style="white", no_wrap=True)
@@ -295,7 +325,7 @@ def info(
         from rich.table import Table
         from rich.text import Text
 
-        from kan.fetcher import cache_age, fetch_kline, get_cached, is_fresh
+        from kan.fetcher import cache_age, data_cutoff_date, fetch_kline, get_cached, is_fresh
         from kan.render import DISCLAIMER, format_pct
         from kan.scanner import calc_trend, scan_stock
         from kan.watchlist import _lookup_name, _normalize_symbol
@@ -335,10 +365,14 @@ def info(
     trend_result = calc_trend(df, symbol, name)
     name_short = name.replace(" ", "")
 
-    latest_time = cache_age(symbol) or ""
+    # v0.0.4.5: 数据截止 / 拉取时间分离展示
+    cutoff = data_cutoff_date(symbol)
+    fetched_at = cache_age(symbol) or ""
     title = f"慢慢看 · {name_short} {symbol}"
-    if latest_time:
-        title += f" · {latest_time} 更新"
+    if cutoff:
+        title += f" · 数据截止 {cutoff.isoformat()} 收盘"
+    if fetched_at:
+        title += f" · {fetched_at} 拉取"
 
     # 基本信息
     tag = ""
