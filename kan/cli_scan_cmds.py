@@ -114,6 +114,7 @@ def scan(
 
     # v0.0.4.5: 数据截止日 (K 线 date 列) 与 拉取时间 (文件 mtime) 严格分离展示
     # 修复 v0.0.4.4 凌晨 02:55 拉昨日数据后 scan 整天显示"今日更新"实为昨日数据的 bug
+    # CR-2: fetched_at 取 max(cache_age) 而非循环最后一个 · 字符串 lex 排序 = 时间排序
     data_cutoff = None
     fetched_at = None
     for r in results:
@@ -121,7 +122,7 @@ def scan(
         if d is not None and (data_cutoff is None or d > data_cutoff):
             data_cutoff = d
         t = cache_age(r.symbol)
-        if t:
+        if t and (fetched_at is None or t > fetched_at):
             fetched_at = t
 
     expected_cutoff = latest_trade_date()
@@ -256,6 +257,7 @@ def _filter_extreme_cmd(periods: list[int], mode: str) -> None:
         return
 
     # v0.0.4.5: 数据截止 / 拉取时间分离展示（与 scan 一致）
+    # CR-2: fetched_at 取 max(cache_age) · 字符串 lex 排序 = 时间排序
     data_cutoff = None
     fetched_at = None
 
@@ -265,7 +267,7 @@ def _filter_extreme_cmd(periods: list[int], mode: str) -> None:
             if d is not None and (data_cutoff is None or d > data_cutoff):
                 data_cutoff = d
             t = cache_age(r.symbol)
-            if t:
+            if t and (fetched_at is None or t > fetched_at):
                 fetched_at = t
 
         title = f"慢慢看 · {n} 日{label} · {len(hits)} 只触及"
