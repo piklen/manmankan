@@ -7,6 +7,53 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.0.4.6] - 2026-05-13
+
+### Fixed · zsh/bash 命令补全报错 hotfix
+
+**主诉 case**：用户输入 `kan upd<Tab>` 触发 zsh 命令补全时报错：
+```
+_arguments:comparguments:327: invalid argument: 是否启用「以后自动升级」
+```
+
+**根因**：v0.0.4.5 发布后，已升级用户 config 中 `auto_update` 仍是 `None`（默认值，
+从未选过偏好）。zsh 补全调用 `kan` 子进程拿候选项时触发 `_check_updates_atexit` hook：
+
+1. typer 注入的补全脚本调用：
+   `eval $(env _TYPER_COMPLETE_ARGS="kan upd" _KAN_COMPLETE=complete_zsh kan)`
+2. 该 `kan` 子进程的 stdout 被 zsh `eval $(...)` 捕获，当 `_arguments` spec 解析
+3. Python 退出时跑 atexit，检测到新版本 + `auto_update is None` → 进入"首次询问"
+   分支，调 `typer.prompt(...)`
+4. prompt 文本「是否启用「以后自动升级」 [y/n/skip]:」默认写到 stdout → 被 zsh
+   `eval` 抓走 → `_arguments` 把这串中文当 spec 解析 → 报错
+
+**第二道护栏失效**：旧 isatty 判定用 `or`（`stdout.isatty() or stderr.isatty()`），
+补全场景 stdout 被 pipe（非 tty）但 stderr 仍是 tty，hook 错误判为"还是可交互"没跳过。
+
+**修复方案**（双护栏冗余）：
+- **新增 `_is_shell_completion_run()`**：检测 `_KAN_COMPLETE` / `_TYPER_COMPLETE_ARGS`
+  任一被设置 → 两个 atexit hook 立即 return，不输出任何字符。
+- **isatty 判定从 `or` 改为 `and`**：抽象为 `_is_interactive_session()`，stdout 和
+  stderr 都是 tty 才算可交互；pipe 场景（包括 `kan info | grep`）也不弹 prompt。
+- **`_auto_install_completion` 同步加 completion 护栏**：补全子调用绝不允许写
+  shell rc 文件（用户没主动 `kan completion install`）。
+
+**影响范围**：
+- v0.0.4.5 用户升级后第一次 Tab 补全必复现（auto_update 偏好未保存）
+- v0.0.4.6 完全静默补全调用，主流程 prompt 行为不变（交互式终端仍可询问）
+- 测试：新增 `tests/test_atexit_completion_isolation.py` 7 个回归测试 + 全量 248 绿
+
+**自查 / 复测命令**：
+```bash
+# 升级前复现（v0.0.4.5）：
+kan upd<Tab>
+# → _arguments:comparguments:327: invalid argument: 是否启用「以后自动升级」
+
+# 升级后（v0.0.4.6）：
+kan upd<Tab>
+# → 干净显示候选项 update · 无报错
+```
+
 ## [0.0.4.5] - 2026-05-13
 
 ### Fixed · 数据时效性核心修复（v0.0.4.4 及之前用户必装）
