@@ -7,6 +7,103 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.0.4.6] - 2026-05-13
+
+### Fixed · zsh/bash 命令补全报错 hotfix
+
+**主诉 case**：用户输入 `kan upd<Tab>` 触发 zsh 命令补全时报错：
+```
+_arguments:comparguments:327: invalid argument: 是否启用「以后自动升级」
+```
+
+**根因**：v0.0.4.5 发布后，已升级用户 config 中 `auto_update` 仍是 `None`（默认值，
+从未选过偏好）。zsh 补全调用 `kan` 子进程拿候选项时触发 `_check_updates_atexit` hook：
+
+1. typer 注入的补全脚本调用：
+   `eval $(env _TYPER_COMPLETE_ARGS="kan upd" _KAN_COMPLETE=complete_zsh kan)`
+2. 该 `kan` 子进程的 stdout 被 zsh `eval $(...)` 捕获，当 `_arguments` spec 解析
+3. Python 退出时跑 atexit，检测到新版本 + `auto_update is None` → 进入"首次询问"
+   分支，调 `typer.prompt(...)`
+4. prompt 文本「是否启用「以后自动升级」 [y/n/skip]:」默认写到 stdout → 被 zsh
+   `eval` 抓走 → `_arguments` 把这串中文当 spec 解析 → 报错
+
+**第二道护栏失效**：旧 isatty 判定用 `or`（`stdout.isatty() or stderr.isatty()`），
+补全场景 stdout 被 pipe（非 tty）但 stderr 仍是 tty，hook 错误判为"还是可交互"没跳过。
+
+**修复方案**（双护栏冗余）：
+- **新增 `_is_shell_completion_run()`**：检测 `_KAN_COMPLETE` / `_TYPER_COMPLETE_ARGS`
+  任一被设置 → 两个 atexit hook 立即 return，不输出任何字符。
+- **isatty 判定从 `or` 改为 `and`**：抽象为 `_is_interactive_session()`，stdout 和
+  stderr 都是 tty 才算可交互；pipe 场景（包括 `kan info | grep`）也不弹 prompt。
+- **`_auto_install_completion` 同步加 completion 护栏**：补全子调用绝不允许写
+  shell rc 文件（用户没主动 `kan completion install`）。
+
+**影响范围**：
+- v0.0.4.5 用户升级后第一次 Tab 补全必复现（auto_update 偏好未保存）
+- v0.0.4.6 完全静默补全调用，主流程 prompt 行为不变（交互式终端仍可询问）
+- 测试：新增 `tests/test_atexit_completion_isolation.py` 7 个回归测试 + 全量 248 绿
+
+**自查 / 复测命令**：
+```bash
+# 升级前复现（v0.0.4.5）：
+kan upd<Tab>
+# → _arguments:comparguments:327: invalid argument: 是否启用「以后自动升级」
+
+# 升级后（v0.0.4.6）：
+kan upd<Tab>
+# → 干净显示候选项 update · 无报错
+```
+
+## [0.0.4.5] - 2026-05-13
+
+### Fixed · 数据时效性核心修复（v0.0.4.4 及之前用户必装）
+
+**主诉 case**：用户跑 `kan scan` 看到大族激光 002008 / 长电科技 / 风华高科等股票显示
+"涨停"标签 · 但实际今天这些股票并未涨停。
+
+**根因**：凌晨 02:55 跑过一次 `kan fetch` 后，缓存文件 `mtime` 日期已经是"今天"，
+但 K 线数据实际只到"昨天"（A 股 15:00 才收盘）。旧的 `_is_cache_fresh()` 判定
+`mtime_date == today()` 为 True · 整天不再触发刷新 · `scan` 显示的"涨停"是昨日
+真实涨停名单 + UI 标题错配为"今日更新"。
+
+**修复方案**：
+- **缓存新鲜度判据从 mtime → K 线 date 列**：`_is_cache_fresh` 改为读 parquet
+  最后一行 `date` 列 · 对比"应有最近交易日"（基于 A 股交易日历 + 收盘时段）。
+- **新增 `kan/trading_calendar.py` 模块**：封装 akshare 交易日历（7 天本地缓存）+
+  市场相位判定（pre/intraday/post/closed_day）+ `latest_trade_date(now)` 工具函数。
+- **标题分离展示"数据截止 X 收盘 · Y 拉取"**：scan / info / low / high / trend 全部
+  改为双字段展示 —— "数据截止"是 K 线 cutoff 日期 · "拉取"是文件 mtime · 严格分离
+  语义，用户一眼分辨数据时效性。
+- **盘中相位警告**：盘中（9:30-15:00）跑 scan 时显示 "⚠️ 当前盘中 · 数据持续变动 ·
+  涨跌停标记可能瞬时反转"，防止用户基于实时变动数据做决策。
+- **stale 警告升级**：缓存数据 cutoff 落后应有交易日时显示 "⚠️ 数据截止 X · 应有
+  最近交易日 Y · 建议 `kan fetch --force` 更新"。
+
+### Changed · 升级体验
+
+- **首次升级到 v0.0.4.5 时第一次 scan 会全量刷新缓存**（30-60s · 一次性）· 因为旧
+  缓存按新判据全部判 stale · `_auto_fetch_stale` 自动触发。之后每天只补 1-2 只
+  增量。这是预期行为 · 不是性能回退。
+- **CHANGELOG 措辞延续 v0.0.4.4 用户视角风格**：避免内部话语 · 避免工程术语 ·
+  让散户用户能读懂"为什么这次升级对我有意义"。
+
+### Tests
+
+- 新增 `tests/test_data_freshness.py` · 17 个 case 覆盖 5 类场景：
+  - 凌晨 02:55 反模式 smoking gun（mtime 今天 + K 线昨天 → 必须判 stale）
+  - 盘后 16:00 / 盘中 14:00 / 盘前 09:00 三相位
+  - 周六周日 → 期望周五
+  - 长假后第一天 → 期望节前最后交易日
+  - 15:30 阈值边界（前后 1 分钟）
+- 全套 241 测试通过 · 0.7s · ruff clean。
+
+### Internal · 7 角色 release-review v1.0 第二次实施
+
+- 6 sub-agent 并行 review（PM / 架构师 / UE-UX / 代码 CR / 第一体验用户 / 安全审计）+ 合伙人主会话扮演
+- 第一体验用户 cache parquet 端到端验证：大族激光 5-12 close 134.66 vs 5-11 134.27 = +0.29% **NOT 涨停**
+- 32 项 findings · 12 P0 中 10 项独家发现（83%）
+- 详见 `projects/manmankan/reviews/v0.0.4.5/`（总部 review）
+
 ## [0.0.4.4] - 2026-05-12
 
 ### Fixed · 装机崩溃修复（升级用户必装）

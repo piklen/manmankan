@@ -31,9 +31,14 @@ def trend(
         from rich.table import Table
         from rich.text import Text
 
-        from kan.fetcher import cache_age
+        from kan.fetcher import cache_age, data_cutoff_date
         from kan.render import DISCLAIMER, max_trend_dates
         from kan.scanner import trend_batch
+        from kan.trading_calendar import (
+            PHASE_INTRADAY,
+            latest_trade_date,
+            market_phase,
+        )
 
     console = Console()
     watchlist_pairs = _get_watchlist_pairs()
@@ -67,16 +72,28 @@ def trend(
             console.print(f"没有连续涨 {up} 天以上的股票")
             return
 
-    latest_time = None
+    # v0.0.4.5: 数据截止 / 拉取时间分离展示 · 与 scan/info/low/high 一致
+    # 修复架-1 finding（cli_trend_cmds.py 在 v0.0.4.5 commit 04923ea 中遗漏调用面）
+    data_cutoff = None
+    fetched_at = None
     for r in results:
+        d = data_cutoff_date(r.symbol)
+        if d is not None and (data_cutoff is None or d > data_cutoff):
+            data_cutoff = d
         t = cache_age(r.symbol)
-        if t:
-            latest_time = t
+        if t and (fetched_at is None or t > fetched_at):
+            fetched_at = t
+
+    expected_cutoff = latest_trade_date()
+    is_stale = data_cutoff is None or data_cutoff < expected_cutoff
+    phase = market_phase()
 
     mode_label = "阳线阴线口径" if candle else "收盘价口径"
     title = f"慢慢看 · 连续涨跌看板 · {mode_label}{filter_label}"
-    if latest_time:
-        title += f" · {latest_time} 更新"
+    if data_cutoff:
+        title += f" · 数据截止 {data_cutoff.isoformat()} 收盘"
+    if fetched_at:
+        title += f" · {fetched_at} 拉取"
 
     table = Table(title=title, show_lines=False, pad_edge=False, padding=(0, 1))
     table.add_column("股票", style="white", no_wrap=True)
@@ -145,6 +162,19 @@ def trend(
         console.print(
             f"\n  [dim]窄屏模式 · 显示近 {actual_latest}/{latest} 天"
             " · 加宽终端可见全部[/dim]"
+        )
+
+    if is_stale:
+        cutoff_str = data_cutoff.isoformat() if data_cutoff else "无缓存"
+        console.print(
+            f"\n  [bold yellow]⚠️ 数据截止 {cutoff_str} · "
+            f"应有最近交易日 {expected_cutoff.isoformat()} · "
+            f"建议 `kan fetch --force` 更新[/bold yellow]"
+        )
+    if phase == PHASE_INTRADAY:
+        console.print(
+            "\n  [bold yellow]⚠️ 当前盘中 · "
+            "数据持续变动 · 涨跌停标记可能瞬时反转[/bold yellow]"
         )
 
     console.print()
