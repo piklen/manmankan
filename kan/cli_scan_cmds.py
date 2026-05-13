@@ -13,6 +13,8 @@ from kan.cli_helpers import (
     _print_err,
     _safe_error_msg,
     _with_heavy_imports_spinner,
+    format_date_compact,
+    format_fetched_at_compact,
 )
 
 
@@ -133,9 +135,9 @@ def scan(
     if signal:
         title += " · 仅信号"
     if data_cutoff:
-        title += f" · 数据截止 {data_cutoff.isoformat()} 收盘"
+        title += f" · 数据截止 {format_date_compact(data_cutoff)} 收盘"
     if fetched_at:
-        title += f" · {fetched_at} 拉取"
+        title += f" · {format_fetched_at_compact(fetched_at)} 拉取"
 
     display_periods = responsive_periods(console.width)
     is_compact = len(display_periods) < len(PERIODS)
@@ -185,17 +187,23 @@ def scan(
             f"（{shown}日）· 加宽终端可见全部[/dim]"
         )
 
+    # ***REMOVED***: 双警告互斥渲染 (if/elif 替代 if/if)
+    # 理由: stale 状态下用户首动作就是 fetch · fetch 后会重新 scan · 那时再判 intraday
     if is_stale:
-        cutoff_str = data_cutoff.isoformat() if data_cutoff else "无缓存"
+        # ***REMOVED*** + U-5: 散户语言 · "缓存到 X 收盘 · 最近交易日是 Y · 数据滞后 N 天"
+        cutoff_str = format_date_compact(data_cutoff) if data_cutoff else "无缓存"
+        expected_str = format_date_compact(expected_cutoff)
+        days_behind = (expected_cutoff - data_cutoff).days if data_cutoff else "?"
         console.print(
-            f"\n  [bold yellow]⚠️ 数据截止 {cutoff_str} · "
-            f"应有最近交易日 {expected_cutoff.isoformat()} · "
-            f"建议 `kan fetch --force` 更新[/bold yellow]"
+            f"\n  [bold yellow]⚠️ 当前缓存到 {cutoff_str} 收盘 · "
+            f"最近交易日是 {expected_str} · 数据滞后 {days_behind} 天\n"
+            "   运行 `kan fetch --force` 拉取最新数据[/bold yellow]"
         )
-    if phase == PHASE_INTRADAY:
+    elif phase == PHASE_INTRADAY:
+        # ***REMOVED*** (v0.0.4.7 P0 cleanup ***REMOVED*** + ***REMOVED***): 状态描述而非走势预测 · 守 AGENTS.md §6 红线
         console.print(
-            "\n  [bold yellow]⚠️ 当前盘中 · "
-            "数据持续变动 · 涨跌停标记可能瞬时反转[/bold yellow]"
+            "\n  [bold yellow]⚠️ 当前盘中 · 涨跌停状态仍可能变化\n"
+            "   建议盘后 15:30 后看 final 数据[/bold yellow]"
         )
 
     # 增量对比 · 用上面 cache 的 all_results · 避免重复 scan (P1-8)
@@ -272,9 +280,9 @@ def _filter_extreme_cmd(periods: list[int], mode: str) -> None:
 
         title = f"慢慢看 · {n} 日{label} · {len(hits)} 只触及"
         if data_cutoff:
-            title += f" · 数据截止 {data_cutoff.isoformat()} 收盘"
+            title += f" · 数据截止 {format_date_compact(data_cutoff)} 收盘"
         if fetched_at:
-            title += f" · {fetched_at} 拉取"
+            title += f" · {format_fetched_at_compact(fetched_at)} 拉取"
 
         table = Table(title=title, show_lines=False, pad_edge=False, padding=(0, 1))
         table.add_column("股票", style="white", no_wrap=True)
@@ -372,9 +380,9 @@ def info(
     fetched_at = cache_age(symbol) or ""
     title = f"慢慢看 · {name_short} {symbol}"
     if cutoff:
-        title += f" · 数据截止 {cutoff.isoformat()} 收盘"
+        title += f" · 数据截止 {format_date_compact(cutoff)} 收盘"
     if fetched_at:
-        title += f" · {fetched_at} 拉取"
+        title += f" · {format_fetched_at_compact(fetched_at)} 拉取"
 
     # 基本信息
     tag = ""
@@ -418,4 +426,26 @@ def info(
 
     console.print(table)
     console.print(f"\n  低点共振 ×{result.low_resonance} · 高点共振 ×{result.high_resonance}")
+
+    # ***REMOVED*** (v0.0.4.7 P0): kan info 加 stale/intraday 警告 · 与 scan/trend 一致
+    # 单只详情诱导决策性比 scan 更强 · 缺警告是 dead-end 风险
+    from kan.trading_calendar import PHASE_INTRADAY, latest_trade_date, market_phase
+    expected_cutoff = latest_trade_date()
+    is_stale = cutoff is None or cutoff < expected_cutoff
+    phase = market_phase()
+    if is_stale:
+        cutoff_str = format_date_compact(cutoff) if cutoff else "无缓存"
+        expected_str = format_date_compact(expected_cutoff)
+        days_behind = (expected_cutoff - cutoff).days if cutoff else "?"
+        console.print(
+            f"\n  [bold yellow]⚠️ 当前缓存到 {cutoff_str} 收盘 · "
+            f"最近交易日是 {expected_str} · 数据滞后 {days_behind} 天\n"
+            "   运行 `kan fetch --force` 拉取最新数据[/bold yellow]"
+        )
+    elif phase == PHASE_INTRADAY:
+        console.print(
+            "\n  [bold yellow]⚠️ 当前盘中 · 涨跌停状态仍可能变化\n"
+            "   建议盘后 15:30 后看 final 数据[/bold yellow]"
+        )
+
     console.print(DISCLAIMER, style="dim")

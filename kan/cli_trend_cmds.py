@@ -13,6 +13,8 @@ from kan.cli_helpers import (
     _get_watchlist_pairs,
     _print_err,
     _with_heavy_imports_spinner,
+    format_date_compact,
+    format_fetched_at_compact,
 )
 
 
@@ -91,9 +93,9 @@ def trend(
     mode_label = "阳线阴线口径" if candle else "收盘价口径"
     title = f"慢慢看 · 连续涨跌看板 · {mode_label}{filter_label}"
     if data_cutoff:
-        title += f" · 数据截止 {data_cutoff.isoformat()} 收盘"
+        title += f" · 数据截止 {format_date_compact(data_cutoff)} 收盘"
     if fetched_at:
-        title += f" · {fetched_at} 拉取"
+        title += f" · {format_fetched_at_compact(fetched_at)} 拉取"
 
     table = Table(title=title, show_lines=False, pad_edge=False, padding=(0, 1))
     table.add_column("股票", style="white", no_wrap=True)
@@ -164,17 +166,22 @@ def trend(
             " · 加宽终端可见全部[/dim]"
         )
 
+    # ***REMOVED***: 双警告互斥渲染 (if/elif 替代 if/if · 与 scan 一致)
     if is_stale:
-        cutoff_str = data_cutoff.isoformat() if data_cutoff else "无缓存"
+        # ***REMOVED*** + U-5: 散户语言
+        cutoff_str = format_date_compact(data_cutoff) if data_cutoff else "无缓存"
+        expected_str = format_date_compact(expected_cutoff)
+        days_behind = (expected_cutoff - data_cutoff).days if data_cutoff else "?"
         console.print(
-            f"\n  [bold yellow]⚠️ 数据截止 {cutoff_str} · "
-            f"应有最近交易日 {expected_cutoff.isoformat()} · "
-            f"建议 `kan fetch --force` 更新[/bold yellow]"
+            f"\n  [bold yellow]⚠️ 当前缓存到 {cutoff_str} 收盘 · "
+            f"最近交易日是 {expected_str} · 数据滞后 {days_behind} 天\n"
+            "   运行 `kan fetch --force` 拉取最新数据[/bold yellow]"
         )
-    if phase == PHASE_INTRADAY:
+    elif phase == PHASE_INTRADAY:
+        # ***REMOVED*** (v0.0.4.7 P0 cleanup): 状态描述而非走势预测 (***REMOVED*** + ***REMOVED***)
         console.print(
-            "\n  [bold yellow]⚠️ 当前盘中 · "
-            "数据持续变动 · 涨跌停标记可能瞬时反转[/bold yellow]"
+            "\n  [bold yellow]⚠️ 当前盘中 · 涨跌停状态仍可能变化\n"
+            "   建议盘后 15:30 后看 final 数据[/bold yellow]"
         )
 
     console.print()

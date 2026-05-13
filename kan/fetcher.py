@@ -82,6 +82,9 @@ def _read_cutoff_from_parquet(path: Path) -> date | None:
     """从 parquet 缓存读 K 线最后一行 date（数据真实截止日）· 失败返回 None。
 
     只读 date 列降低 IO（pyarrow 列式存储天然友好）。
+
+    ***REMOVED*** (v0.0.4.7): 异常路径加 debug logging · 默认不输出 (用户开 KAN_DEBUG=1 才显示) ·
+    诊断时不再"吞 None 后调用方无信息"。
     """
     try:
         import pandas as pd
@@ -92,7 +95,12 @@ def _read_cutoff_from_parquet(path: Path) -> date | None:
         if isinstance(last, date) and not isinstance(last, datetime):
             return last
         return pd.Timestamp(last).date()
-    except Exception:
+    except Exception as e:
+        import logging
+        logging.getLogger(__name__).debug(
+            "_read_cutoff_from_parquet(%s): %s: %s",
+            path.name, type(e).__name__, e,
+        )
         return None
 
 
@@ -319,15 +327,51 @@ def fetch_kline(symbol: str, days: int = 180, force: bool = False) -> pd.DataFra
     return df
 
 
+def resolve_max_workers() -> int:
+    """D-2 (v0.0.4.7): 启发式 max_workers · 不再硬编码 5.
+
+    akshare 是 I/O bound (HTTP 拉取 · 不是 CPU 计算) · cpu_count*2 比 cpu-1 更合理.
+    上限 cap 12 防 akshare 限流 (弱网下 ≥ 12 反而变慢).
+
+    Examples:
+    - 4 核 Mac mini: cpu_count=4 → workers=8 (5 → 8 提升 60%)
+    - 8 核 MacBook: cpu_count=8 → workers=12 (cap)
+    - 16 核 Mac Studio: cpu_count=16 → workers=12 (cap · 防限流)
+    - Docker / cgroup 返宿主机核数: cap 12 天然缓解
+
+    KAN_WORKERS env var 可显式 override (整数 · 1-50 范围 · 越界回退默认).
+    """
+    import os
+    raw = os.environ.get("KAN_WORKERS")
+    if raw:
+        try:
+            n = int(raw)
+            # ***REMOVED*** (v0.0.4.7 P0): 上限从 50 收紧到 20 · 防 KAN_WORKERS=50 反射 DoS akshare
+            # akshare 限流阈值实测约 10-15 req/s · 20 并发已超 · 50 必触发限流
+            if 1 <= n <= 20:
+                return n
+        except ValueError:
+            pass
+    return min((os.cpu_count() or 4) * 2, 12)
+
+
 def fetch_batch(
     symbols: list[str],
     days: int = 180,
     force: bool = False,
-    max_workers: int = 5,
+    max_workers: int | None = None,
     on_progress: Callable | None = None,
 ) -> tuple[dict[str, pd.DataFrame], dict[str, str]]:
-    """批量拉取 · ThreadPoolExecutor 并发 + 可选 progress callback。"""
+    """批量拉取 · ThreadPoolExecutor 并发 + 可选 progress callback.
+
+    D-2 (v0.0.4.7): max_workers=None → resolve_max_workers() 启发式 (cpu_count*2 cap 12).
+    """
     from concurrent.futures import ThreadPoolExecutor, as_completed
+
+    # ***REMOVED*** (v0.0.4.7 P0): max_workers None / 0 / 负数 都退化到 resolve_max_workers
+    # 防御 ThreadPoolExecutor(max_workers=0) 抛 ValueError 的边界
+    if max_workers is None or max_workers < 1:
+        max_workers = resolve_max_workers()
 
     results: dict[str, pd.DataFrame] = {}
     errors: dict[str, str] = {}
