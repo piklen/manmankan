@@ -200,11 +200,10 @@ def scan(
             "   运行 `kan fetch --force` 拉取最新数据[/bold yellow]"
         )
     elif phase == PHASE_INTRADAY:
-        # UX-3: 散户语言 · 强调"现在涨停可能下一秒打开" + 建议盘后 15:30 后
+        # UX-3 (v0.0.4.7 P0 cleanup PM-1 + 合-2): 状态描述而非走势预测 · 守 AGENTS.md §6 红线
         console.print(
-            "\n  [bold yellow]⚠️ 当前盘中 · 数据每秒变动 · "
-            "现在标的『涨停』可能下一秒打开\n"
-            "   建议盘后 15:30 后再看(数据 final)[/bold yellow]"
+            "\n  [bold yellow]⚠️ 当前盘中 · 涨跌停状态仍可能变化\n"
+            "   建议盘后 15:30 后看 final 数据[/bold yellow]"
         )
 
     # 增量对比 · 用上面 cache 的 all_results · 避免重复 scan (P1-8)
@@ -427,4 +426,26 @@ def info(
 
     console.print(table)
     console.print(f"\n  低点共振 ×{result.low_resonance} · 高点共振 ×{result.high_resonance}")
+
+    # UX-1 (v0.0.4.7 P0): kan info 加 stale/intraday 警告 · 与 scan/trend 一致
+    # 单只详情诱导决策性比 scan 更强 · 缺警告是 dead-end 风险
+    from kan.trading_calendar import PHASE_INTRADAY, latest_trade_date, market_phase
+    expected_cutoff = latest_trade_date()
+    is_stale = cutoff is None or cutoff < expected_cutoff
+    phase = market_phase()
+    if is_stale:
+        cutoff_str = format_date_compact(cutoff) if cutoff else "无缓存"
+        expected_str = format_date_compact(expected_cutoff)
+        days_behind = (expected_cutoff - cutoff).days if cutoff else "?"
+        console.print(
+            f"\n  [bold yellow]⚠️ 当前缓存到 {cutoff_str} 收盘 · "
+            f"最近交易日是 {expected_str} · 数据滞后 {days_behind} 天\n"
+            "   运行 `kan fetch --force` 拉取最新数据[/bold yellow]"
+        )
+    elif phase == PHASE_INTRADAY:
+        console.print(
+            "\n  [bold yellow]⚠️ 当前盘中 · 涨跌停状态仍可能变化\n"
+            "   建议盘后 15:30 后看 final 数据[/bold yellow]"
+        )
+
     console.print(DISCLAIMER, style="dim")
