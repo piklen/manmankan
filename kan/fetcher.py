@@ -82,6 +82,9 @@ def _read_cutoff_from_parquet(path: Path) -> date | None:
     """从 parquet 缓存读 K 线最后一行 date（数据真实截止日）· 失败返回 None。
 
     只读 date 列降低 IO（pyarrow 列式存储天然友好）。
+
+    CR-1 (v0.0.4.7): 异常路径加 debug logging · 默认不输出 (用户开 KAN_DEBUG=1 才显示) ·
+    诊断时不再"吞 None 后调用方无信息"。
     """
     try:
         import pandas as pd
@@ -92,7 +95,12 @@ def _read_cutoff_from_parquet(path: Path) -> date | None:
         if isinstance(last, date) and not isinstance(last, datetime):
             return last
         return pd.Timestamp(last).date()
-    except Exception:
+    except Exception as e:
+        import logging
+        logging.getLogger(__name__).debug(
+            "_read_cutoff_from_parquet(%s): %s: %s",
+            path.name, type(e).__name__, e,
+        )
         return None
 
 
