@@ -24,6 +24,7 @@
 ## 目录
 
 - [这是给谁用的](#这是给谁用的)
+- [🌱 新手专区（第一次用命令行？）](#新手专区)
 - [30 秒上手](#30-秒上手)
 - [真实输出](#真实输出)
 - [三个「同时」差异化](#三个同时差异化)
@@ -52,7 +53,69 @@
 | **隐私敏感 / 不愿登录 broker app 的人** | 完全本地 · 没账号 · 没推送 · 没广告 · `kan uninstall` 一键彻底清 |
 | **量化 / 自动化爱好者** | CLI + parquet 缓存可直读 · JSON 快照按日归档 · 脚本能调 |
 
-**这工具不适合**:T+0 短线投机者(数据延时,日 K)、不会用终端的小白(先得装 Python)、期待 AI 选股结论的人(合规红线说不)、港股 / 美股 / 期货用户(仅 A 股)。
+**这工具不适合**：T+0 短线投机者（数据延时，日 K）、彻底拒绝命令行学习的人（虽然有 [🌱 新手专区](#新手专区) 把装机降到 2 步，但日常使用还是要打 `kan` 命令）、期待 AI 选股结论的人（合规红线说不）、港股 / 美股 / 期货用户（仅 A 股）。
+
+---
+
+## 新手专区
+
+> **第一次用命令行工具？看这里 👇**（老用户请直接跳到 [30 秒上手](#30-秒上手)）
+
+<details>
+<summary><b>🌱 从没用过终端怎么装（mac / Windows 各 2 步）</b></summary>
+
+### Mac / Linux 用户
+
+1. 按 `Cmd + 空格` 搜「终端」(Terminal) 打开
+2. 复制下面这一行 · 粘贴进终端 · 回车：
+
+```bash
+curl -LsSf https://raw.githubusercontent.com/piklen/manmankan/main/scripts/install.sh | bash
+```
+
+脚本会自动：① 装 uv (Python 工具管理器) ② 装 manmankan ③ 验证成功 · 中间任何输出**都是正常的** · 看到 ✅ 全绿就好。
+
+### Windows 用户
+
+1. 按 `Win 键` 搜「PowerShell」打开（注意是 PowerShell · 不是黑色的 cmd）
+2. 复制下面这一行 · 粘贴进去 · 回车：
+
+```powershell
+powershell -c "irm https://raw.githubusercontent.com/piklen/manmankan/main/scripts/install.ps1 | iex"
+```
+
+> 如果被拦报「无法加载脚本」· 先跑一次：
+> ```powershell
+> Set-ExecutionPolicy -Scope CurrentUser RemoteSigned
+> ```
+> 输入 `Y` 回车 · 然后重新跑安装命令。
+
+### 装好后做什么
+
+打开**新**的终端窗口（PATH 才生效）· 试试：
+
+```bash
+kan add 600519 茅台 601318     # 加 3 只自选股
+kan scan                        # 看一屏位置 + 共振信号
+```
+
+### 卡住了 · 不知道怎么办
+
+- 看 [§故障排查 FAQ](#故障排查-faq)
+- 来 [GitHub Issues](https://github.com/piklen/manmankan/issues) 提问 · 标题写清楚你哪一步卡住了
+
+### 不放心一键脚本？想自己看完再装？
+
+完全合理。脚本是开源的 · 你可以先下载下来看:
+
+```bash
+# mac / Linux
+curl -L https://raw.githubusercontent.com/piklen/manmankan/main/scripts/install.sh > /tmp/install.sh
+less /tmp/install.sh    # 自己看完
+bash /tmp/install.sh    # 看完再装
+```
+
+</details>
 
 ---
 
