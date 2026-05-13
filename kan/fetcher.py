@@ -327,15 +327,47 @@ def fetch_kline(symbol: str, days: int = 180, force: bool = False) -> pd.DataFra
     return df
 
 
+def _auto_max_workers() -> int:
+    """D-2 (v0.0.4.7): 启发式 max_workers · 不再硬编码 5.
+
+    akshare 是 I/O bound (HTTP 拉取 · 不是 CPU 计算) · cpu_count*2 比 cpu-1 更合理.
+    上限 cap 12 防 akshare 限流 (弱网下 ≥ 12 反而变慢).
+
+    Examples:
+    - 4 核 Mac mini: cpu_count=4 → workers=8 (5 → 8 提升 60%)
+    - 8 核 MacBook: cpu_count=8 → workers=12 (cap)
+    - 16 核 Mac Studio: cpu_count=16 → workers=12 (cap · 防限流)
+    - Docker / cgroup 返宿主机核数: cap 12 天然缓解
+
+    KAN_WORKERS env var 可显式 override (整数 · 1-50 范围 · 越界回退默认).
+    """
+    import os
+    raw = os.environ.get("KAN_WORKERS")
+    if raw:
+        try:
+            n = int(raw)
+            if 1 <= n <= 50:
+                return n
+        except ValueError:
+            pass
+    return min((os.cpu_count() or 4) * 2, 12)
+
+
 def fetch_batch(
     symbols: list[str],
     days: int = 180,
     force: bool = False,
-    max_workers: int = 5,
+    max_workers: int | None = None,
     on_progress: Callable | None = None,
 ) -> tuple[dict[str, pd.DataFrame], dict[str, str]]:
-    """批量拉取 · ThreadPoolExecutor 并发 + 可选 progress callback。"""
+    """批量拉取 · ThreadPoolExecutor 并发 + 可选 progress callback.
+
+    D-2 (v0.0.4.7): max_workers=None → _auto_max_workers() 启发式 (cpu_count*2 cap 12).
+    """
     from concurrent.futures import ThreadPoolExecutor, as_completed
+
+    if max_workers is None:
+        max_workers = _auto_max_workers()
 
     results: dict[str, pd.DataFrame] = {}
     errors: dict[str, str] = {}

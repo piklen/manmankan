@@ -203,6 +203,38 @@ class TestSanityCheck:
         assert "最新日期" in capsys.readouterr().err
 
 
+# ─────────────── ***REMOVED***: env var KAN_DATA_AVAIL_OFFSET_MIN override ───────────────
+class TestDataAvailableEnvVar:
+    """***REMOVED*** v0.0.4.7: 跨时区用户自救 · env var 偏移 DATA_AVAILABLE_AFTER."""
+
+    def test_default_is_15_30(self, monkeypatch):
+        from datetime import time
+        monkeypatch.delenv("KAN_DATA_AVAIL_OFFSET_MIN", raising=False)
+        assert tc._resolve_data_available_after() == time(15, 30)
+
+    def test_offset_60_pushes_to_16_00(self, monkeypatch):
+        from datetime import time
+        monkeypatch.setenv("KAN_DATA_AVAIL_OFFSET_MIN", "60")
+        assert tc._resolve_data_available_after() == time(16, 0)
+
+    def test_offset_510_pushes_to_23_30_wsl2_utc(self, monkeypatch):
+        """WSL2 UTC 场景: 中国 23:30 北京时间 = UTC 15:30 · 用户设 +510 min."""
+        from datetime import time
+        monkeypatch.setenv("KAN_DATA_AVAIL_OFFSET_MIN", "510")
+        assert tc._resolve_data_available_after() == time(23, 30)
+
+    def test_invalid_value_falls_back_to_default(self, monkeypatch):
+        from datetime import time
+        monkeypatch.setenv("KAN_DATA_AVAIL_OFFSET_MIN", "not-a-number")
+        assert tc._resolve_data_available_after() == time(15, 30)
+
+    def test_out_of_range_value_falls_back(self, monkeypatch):
+        """24h 越界 (e.g. 2000 min) 应 fallback."""
+        from datetime import time
+        monkeypatch.setenv("KAN_DATA_AVAIL_OFFSET_MIN", "2000")
+        assert tc._resolve_data_available_after() == time(15, 30)
+
+
 # ─────────────── 加分: ***REMOVED*** double-checked locking 行为 ───────────────
 def test_memo_thread_safety_under_concurrent_first_call(tmp_cache, monkeypatch):
     """***REMOVED***: get_trade_dates 多线程并发首调 · _fetch_from_akshare 只 fire 一次."""
