@@ -4,12 +4,45 @@
   1. 不影响主命令 exit code（任何异常都吞掉）
   2. 非 TTY 静默（pipe / CI 场景不弹 prompt）
   3. 失败不重试（避免每次启动都 retry 失败的网络 / shell 检测）
+  4. shell completion 调用静默（typer 注入的脚本设置 _KAN_COMPLETE 时调
+     kan 子进程拿候选项 · 任何 stdout 写入会被 zsh `eval $(...)` 抓走当
+     _arguments spec 解析 · v0.0.4.5 报 `comparguments:327: invalid argument`）
 """
 import contextlib
+import os
+import sys
 
 import typer
 
 from kan.cli_helpers import _VALID_SHELLS, _detect_shell_fallback
+
+
+def _is_shell_completion_run() -> bool:
+    """当前进程是不是被 typer/click shell completion 触发的子调用。
+
+    typer 注入到 shell rc 的脚本固定设置两个环境变量：
+      - `_KAN_COMPLETE` = "complete_zsh" / "complete_bash" / "complete_fish" / ...
+      - `_TYPER_COMPLETE_ARGS` = 用户当前已输入的命令片段
+
+    任一存在即表明这次是 completion 调用，atexit hook 必须保持完全静默
+    （包括 stdout 和 stderr · zsh `eval $(...)` 抓 stdout，但 stderr 在
+    某些场景也会被前端工具解析）。检测两个 env var 是冗余护栏，覆盖未来
+    typer 上游可能的命名变更。
+    """
+    return bool(
+        os.environ.get("_KAN_COMPLETE")
+        or os.environ.get("_TYPER_COMPLETE_ARGS")
+    )
+
+
+def _is_interactive_session() -> bool:
+    """stdout 和 stderr 都是 tty 才算可交互。
+
+    旧实现用 `stdout.isatty() or stderr.isatty()` —— 太宽松：completion 时
+    stdout 被 pipe 抓走但 stderr 仍是 tty，导致 hook 误判为可交互、把 prompt
+    文本灌进 stdout 污染上游捕获流。改成 AND 后只要任一被重定向就跳过。
+    """
+    return sys.stdout.isatty() and sys.stderr.isatty()
 
 
 def _auto_install_completion() -> None:
@@ -26,14 +59,15 @@ def _auto_install_completion() -> None:
 
     第一次成功（或检测失败）后写标记文件 · 之后启动只 stat 一次（~ms）。
     """
-    import os
-    import sys
+    # shell completion 子调用绝不能写 shell rc 文件（用户没主动跑 install）
+    if _is_shell_completion_run():
+        return
 
     if os.environ.get("KAN_NO_COMPLETION_AUTOINSTALL") == "1":
         return
 
     # 非 TTY (pipe / CI) 不自动改 shell rc 文件
-    if not (sys.stdout.isatty() or sys.stderr.isatty()):
+    if not _is_interactive_session():
         return
 
     try:
@@ -86,8 +120,10 @@ def _check_updates_atexit() -> None:
 
     所有异常都吞掉 · atexit hook 不能让主命令 exit code 改变。
     """
-    import os
-    import sys
+    # shell completion 子调用必须完全静默 · 防 typer.prompt 污染 zsh eval 抓取流
+    # (v0.0.4.5 报 `_arguments:comparguments:327: invalid argument`)
+    if _is_shell_completion_run():
+        return
 
     if os.environ.get("KAN_NO_UPDATE_CHECK") == "1":
         return
@@ -95,7 +131,7 @@ def _check_updates_atexit() -> None:
     if len(sys.argv) >= 2 and sys.argv[1] == "update":
         return
     # 非 TTY (pipe / CI) 不弹 prompt 不打扰
-    if not (sys.stdout.isatty() or sys.stderr.isatty()):
+    if not _is_interactive_session():
         return
 
     try:

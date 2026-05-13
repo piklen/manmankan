@@ -150,6 +150,11 @@ def _auto_fetch_stale(pairs: list[tuple[str, str]]) -> None:
     if n >= 30:
         est_low = max(1, n // 60)
         est_high = max(2, n // 20)
+        # v0.0.4.5: 升级用户首次 scan 会全量刷新（新 cache 判据 K 线 date vs 旧 mtime）
+        console.print(
+            "[dim]v0.0.4.5 起首次刷新会全量补数据 · "
+            "之后每天只补 1-2 只[/dim]"
+        )
         console.print(
             f"[yellow]需更新 {n} 只股票数据 · 并发 5 · "
             f"预计 {est_low}-{est_high} 分钟[/yellow]"

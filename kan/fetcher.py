@@ -78,11 +78,38 @@ def _cache_path(symbol: str) -> Path:
     return DATA_DIR / f"{symbol}.parquet"
 
 
+def _read_cutoff_from_parquet(path: Path) -> date | None:
+    """从 parquet 缓存读 K 线最后一行 date（数据真实截止日）· 失败返回 None。
+
+    只读 date 列降低 IO（pyarrow 列式存储天然友好）。
+    """
+    try:
+        import pandas as pd
+        df = pd.read_parquet(path, columns=["date"])
+        if df.empty:
+            return None
+        last = df["date"].iloc[-1]
+        if isinstance(last, date) and not isinstance(last, datetime):
+            return last
+        return pd.Timestamp(last).date()
+    except Exception:
+        return None
+
+
 def _is_cache_fresh(path: Path) -> bool:
+    """缓存是否已包含"应有最近交易日"数据。
+
+    v0.0.4.5 起判据：K 线最后一行 date ≥ latest_trade_date()。
+    旧实现 mtime_date == today 已废 · 凌晨 02:55 拉到昨日数据后会被
+    误判为"今日数据齐了"整天不刷新 · scan 显示昨日涨停名单。
+    """
     if not path.exists():
         return False
-    mtime_date = datetime.fromtimestamp(path.stat().st_mtime).date()
-    return mtime_date == date.today()
+    last_date = _read_cutoff_from_parquet(path)
+    if last_date is None:
+        return False
+    from kan.trading_calendar import latest_trade_date
+    return last_date >= latest_trade_date()
 
 
 def _market_prefix(symbol: str, sep: str = "") -> str:
@@ -362,8 +389,29 @@ def get_cached(symbol: str) -> pd.DataFrame | None:
 
 
 def cache_age(symbol: str) -> str | None:
+    """缓存文件 mtime · 语义 = "上次拉取时间"（v0.0.4.5 起不再当作"数据日期"使用）。
+
+    历史教训：v0.0.4.4 及之前把 mtime 当作"数据日期"显示在 scan 标题（"X 更新"），
+    凌晨 02:55 拉数据后 mtime 日期 = 今天，但 K 线最后一行还是昨日，
+    用户看到"今天更新"以为是今日数据，实际还是昨日（涨停标签错位）。
+    现在 scan 标题分离展示"数据截止 X 收盘 · Y 拉取"（见 data_cutoff_date）。
+    """
     cache = _cache_path(symbol)
     if not cache.exists():
         return None
     mtime = datetime.fromtimestamp(cache.stat().st_mtime)
     return mtime.strftime("%Y-%m-%d %H:%M")
+
+
+def data_cutoff_date(symbol: str) -> date | None:
+    """缓存 K 线最后一行的真实 date（数据截止日期 · 而非文件 mtime）。
+
+    用于 scan / info / low / high 标题展示"数据截止 YYYY-MM-DD 收盘"。
+    与 cache_age() 严格分离：
+    - data_cutoff_date = "数据涵盖到哪一天"（K 线 date 列 · 真相）
+    - cache_age        = "文件何时被写入"（文件 mtime · 仅供"上次拉取"显示）
+    """
+    cache = _cache_path(symbol)
+    if not cache.exists():
+        return None
+    return _read_cutoff_from_parquet(cache)
