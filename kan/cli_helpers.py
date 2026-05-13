@@ -159,7 +159,8 @@ def _get_watchlist_pairs() -> list[tuple[str, str]]:
 def _auto_fetch_stale(pairs: list[tuple[str, str]]) -> None:
     """自动拉取缺失或过期（非今天）的自选股数据。
 
-    并发 5 + rich.Progress 进度条 + 网络异常友好提示。
+    并发自适应 (D-2 v0.0.4.7): _auto_max_workers() · cpu_count*2 cap 12.
+    rich.Progress 进度条 + 网络异常友好提示.
     避免串行 172 只可能阻塞 ≥ 9 分钟无反馈的体验问题。
     """
     from rich.console import Console
@@ -182,16 +183,15 @@ def _auto_fetch_stale(pairs: list[tuple[str, str]]) -> None:
     n = len(stale)
 
     # 大量股票时给出明确预期 · 避免用户以为卡死
+    # D-1 (v0.0.4.7): 删除 v0.0.4.5 一次性迁移文案 (对老用户冗余)
     if n >= 30:
         est_low = max(1, n // 60)
         est_high = max(2, n // 20)
-        # v0.0.4.5: 升级用户首次 scan 会全量刷新（新 cache 判据 K 线 date vs 旧 mtime）
+        # D-2 (v0.0.4.7): 并发不再硬编码 5 · auto_max_workers 启发式 (cpu_count*2 cap 12)
+        from kan.fetcher import _auto_max_workers
+        workers = _auto_max_workers()
         console.print(
-            "[dim]v0.0.4.5 起首次刷新会全量补数据 · "
-            "之后每天只补 1-2 只[/dim]"
-        )
-        console.print(
-            f"[yellow]需更新 {n} 只股票数据 · 并发 5 · "
+            f"[yellow]需更新 {n} 只股票数据 · 并发 {workers} · "
             f"预计 {est_low}-{est_high} 分钟[/yellow]"
         )
     elif n > 5:
@@ -211,15 +211,19 @@ def _auto_fetch_stale(pairs: list[tuple[str, str]]) -> None:
         task_id = progress.add_task("⏳ 拉取数据...", total=n)
 
         def _on_done(symbol: str, ok: bool, _err_msg: str | None) -> None:
+            # D-1 (v0.0.4.7): spinner 加 stale 总数 · 解释"为什么这么多只在拉"
             name = name_map.get(symbol, symbol).replace(" ", "")
-            desc = f"⏳ 拉取数据 · 最近: {name}" if ok else f"⏳ 拉取数据 · 失败: {name}"
+            desc = (
+                f"⏳ 补数据 · {n} 只 stale · 最近: {name}" if ok
+                else f"⏳ 补数据 · {n} 只 stale · 失败: {name}"
+            )
             progress.update(task_id, advance=1, description=desc)
 
         try:
+            # D-2 (v0.0.4.7): max_workers 不再硬编码 · 由 fetch_batch 内部 _auto_max_workers() 启发式
             results, errors = fetch_batch(
                 [s for s, _ in stale],
                 force=True,
-                max_workers=5,
                 on_progress=_on_done,
             )
         except KeyboardInterrupt:
