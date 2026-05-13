@@ -7,6 +7,103 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.0.4.7] - 2026-05-14
+
+### Added · 分发资产 + 防御纵深 + 散户友好
+
+**面向「社区来的真小白」一次性升级（用户 2026-05-14 反馈触发）**：
+
+- **🌱 新手专区 + 一键安装脚本**（B.14）：mac / Windows 真小白复制粘贴 2 步装好
+  - `scripts/install.sh`（mac/Linux）：检测 / 装 uv → 装 manmankan → smoke verify · 全程中文 + emoji · idempotent · 失败给 fallback
+  - `scripts/install.ps1`（Windows）：同等流程 + PowerShell ExecutionPolicy 友好提示
+  - README 顶部 `<details>` 折叠"新手专区"（不打扰老用户）· 含 mac/Win 各 2 步 + 装好后示例 + FAQ
+  - 用户调用：`curl -LsSf https://raw.githubusercontent.com/piklen/manmankan/main/scripts/install.sh | bash`
+
+### Added · 防御纵深 + 故障可观察
+
+- **`KAN_DATA_AVAIL_OFFSET_MIN` env var**（架-4）：跨时区 / WSL2 UTC / Docker 容器用户自救
+  - 默认 15:30 北京时间 · 设 `KAN_DATA_AVAIL_OFFSET_MIN=510` → WSL2 UTC 也能识别盘后
+- **`KAN_WORKERS` env var**（B.7 D-2）：弱网 / 限流时手动降并发
+  - 默认 `min(cpu_count*2, 12)` · 设 `KAN_WORKERS=3` → 强制 3 并发
+- **故障 debug 日志**（CR-1）：`_read_cutoff_from_parquet` 异常路径加 debug logging · 用户开 `KAN_DEBUG=1` 才显示
+
+### Changed · UX 散户化（v0.0.4.5 deferred · v0.0.4.7 完成）
+
+- **日期格式压缩**（UX-1）：scan / trend / info / low / high 5 处 title
+  - 同年隐藏 year：`数据截止 05-12 收盘`（旧 `2026-05-12`）
+  - 当天 fetched_at 只显示时间：`16:35 拉取`（旧 `2026-05-13 16:35`）
+  - 节省 ~16 char title 长度 · 80 列窄屏不溢出
+- **stale 警告改散户语言**（UX-2 + U-5）：
+  - 旧：`数据截止 X · 应有最近交易日 Y · 建议 kan fetch --force 更新`
+  - 新：`当前缓存到 X 收盘 · 最近交易日是 Y · 数据滞后 N 天 / 运行 kan fetch --force 拉取最新数据`
+  - 关键升级：显式算"滞后 N 天" · 散户秒懂
+- **盘中警告改散户语言**（UX-3）：
+  - 旧：`当前盘中 · 数据持续变动 · 涨跌停标记可能瞬时反转`
+  - 新：`当前盘中 · 数据每秒变动 · 现在标的『涨停』可能下一秒打开 / 建议盘后 15:30 后再看(数据 final)`
+- **双警告互斥渲染**（UX-4）：`if/if` → `if/elif` · stale 状态下 fetch 后会重判 intraday · 减少噪音
+- **数据补全 UX 改善**（B.7 D-1 · 用户 5-13 反馈）：
+  - 移除 v0.0.4.5 一次性迁移文案（对老用户冗余）
+  - spinner description 加 stale 总数：`⏳ 补数据 · 169 只 stale · 最近: 寒武纪`
+  - 用户看到"169 只"立刻明白为什么这么多只在拉
+- **并发数自适应**（B.7 D-2）：max_workers 硬编码 5 → `min(cpu_count*2, 12)` 启发式
+  - 8 核 Mac：5 → 12 并发（首次补全 169 只时间减半）
+  - 16 核 Mac Studio：cap 12 防 akshare 限流
+  - akshare 是 I/O bound · cpu_count\*2 比 cpu-1 更合理（教育性更正）
+
+### Fixed · 交易日历防御纵深（B.1 全套 · v0.0.4.7 P0 核心）
+
+- **`latest_trade_date()` 不再抛 RuntimeError**（架-2）：akshare 失败 + cache 损坏双失败时退化 weekday 启发式 + stderr warning
+- **缓存内容 sanity check**（安-1）：三 invariant（count > 5000 · year < 2010 · max date > today-30）· 失败 cache miss
+- **`chmod 0o600` 真校验**（安-2）：不再静默 `contextlib.suppress(OSError)` · 失败 stderr warn + 显示实际 mode
+- **akshare 返回值校验**（安-3）：DataFrame 空 / 缺列 / count 过少都触发 sanity 失败
+- **`_read_cache` except 缩窄**（安-6）：`except Exception` → `except (JSONDecodeError, ValueError, OSError)` + stderr warn
+- **`_trade_dates_memo` 加锁**（CR-3）：threading.Lock + double-checked locking · 防 fetch_batch 多 worker 并发首调
+
+### Tests
+
+- `tests/test_trading_calendar.py` · 17 case（6 production 故障 + 5 sanity 边界 + 5 env var override + 1 thread-safety）
+- `tests/test_cli_helpers_format.py` · 11 case（compact helpers + 文案 grep + if/elif）
+- `tests/test_auto_workers.py` · 12 case（auto cpu_count + KAN_WORKERS env + D-1 文案 grep）
+- `tests/test_cr4_coverage.py` · 2 case（lex sort）
+- **全套 290 passed**（260 baseline + 30 新 · 0 regression）
+- ruff check kan/ tests/ · All checks passed
+
+### Deferred to v0.0.4.8
+
+不阻塞本版发布 · 已记录在 `actions-v0.0.4.6.md`：
+
+- 安-4：RuntimeError 信息拆"用户可读 / 诊断细节"（scope 大不清）
+- 架-3：`.version_marker` 文件 跨版本首次 scan 提示（复杂度高）
+- 合-1：status.md hook 自动检查（已欠 2 版 · 需 careful design）
+- 21 处 `except Exception` 整体改造（CR-1 broader scope · 本版只解决 critical `_read_cutoff_from_parquet`）
+- B.7 CR-4 子项：`test_future_date_treated_as_fresh_with_warning` + CliRunner-based title 真测
+
+### Migration
+
+升级方式：
+```bash
+uv tool install --upgrade manmankan   # uv 用户
+pipx upgrade manmankan                 # pipx 用户
+pip install -U manmankan               # pip 用户
+```
+
+或者用一键脚本 (mac / Linux):
+```bash
+curl -LsSf https://raw.githubusercontent.com/piklen/manmankan/main/scripts/install.sh | bash
+```
+
+跨时区用户:
+```bash
+export KAN_DATA_AVAIL_OFFSET_MIN=510   # WSL2 UTC 系统 (中国 23:30 = UTC 15:30)
+```
+
+弱网或自定并发:
+```bash
+export KAN_WORKERS=3   # 手动降到 3 并发
+```
+
+升级后无需任何手动操作 · 自动生效。
+
 ## [0.0.4.6] - 2026-05-13
 
 ### Fixed · zsh/bash 命令补全报错 hotfix

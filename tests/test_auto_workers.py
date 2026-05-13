@@ -1,10 +1,10 @@
-"""D-2 + D-3 (v0.0.4.7 · 鼠鼠 5-13 反馈): _auto_max_workers 启发式测试.
+"""D-2 + D-3 (v0.0.4.7 · 用户 5-13 反馈): _auto_max_workers 启发式测试.
 
 D-2 改动: max_workers 硬编码 5 → min(cpu_count*2, 12) 启发式.
 - akshare 是 I/O bound 不是 CPU bound · cpu_count*2 比 cpu-1 更合理
 - 上限 cap 12 防 akshare 限流
 
-教育性 (鼠鼠 5-13 反馈"并发可以根据系统的核数-1来自动适配"):
+教育性 (用户 5-13 反馈"并发可以根据系统的核数-1来自动适配"):
 - 老观点: cpu-1 (CPU bound 经典启发式 · 留 1 核给主线程)
 - 修正: I/O bound 程序 thread 大多在等 syscall 阻塞 · cpu*2~5 都合理 · 关键是上限 cap
 """
