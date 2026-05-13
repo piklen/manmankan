@@ -1,21 +1,28 @@
-"""A 股交易日历 + 市场相位判定 · 数据时效性的真相源。
+"""A 股交易日历 + 市场相位判定 · 数据时效性的真相源 + 防御纵深 v0.0.4.7。
 
-为什么需要本模块：
-v0.0.4.4 前缓存新鲜度只看 mtime ·凌晨 02:55 拉了昨日数据后 mtime 日期 = 今天，
-被误判为"今日数据齐了"整天不刷新，scan 结果停留在昨日（包括错误涨停标签）。
-本模块提供"应有最近交易日"作为缓存判定的真相基准（替代 mtime）。
+为什么需要本模块:
+v0.0.4.4 前缓存新鲜度只看 mtime · 凌晨 02:55 拉了昨日数据后 mtime 日期 = 今天,
+被误判为"今日数据齐了"整天不刷新, scan 结果停留在昨日(包括错误涨停标签)。
+本模块提供"应有最近交易日"作为缓存判定的真相基准(替代 mtime)。
 
-设计要点：
-- 交易日列表：akshare ak.tool_trade_date_hist_sina() · 本地 JSON 缓存 7 天
-- 市场相位：本地时间判 pre / intraday / post / closed_day
-- "应有最近交易日"：盘后 ≥ 15:30 当日已 final；否则回退到最近交易日
-- 不引入 pytz / zoneinfo · 假设系统时区为本地（Asia/Shanghai 用户主体）
-- 跨时区用户可通过 TZ 环境变量影响 datetime.now()
+设计要点:
+- 交易日列表: akshare ak.tool_trade_date_hist_sina() · 本地 JSON 缓存 7 天
+- 市场相位: 本地时间判 pre / intraday / post / closed_day
+- "应有最近交易日": 盘后 ≥ 15:30 当日已 final; 否则回退到最近交易日
+- 不引入 pytz / zoneinfo · 假设系统时区为本地(Asia/Shanghai 用户主体)
+- 跨时区用户可通过 TZ 环境变量影响 datetime.now() · 或设 KAN_DATA_AVAIL_OFFSET_MIN (***REMOVED***)
+
+v0.0.4.7 防御纵深 (***REMOVED*** + ***REMOVED***/2/3 + ***REMOVED***):
+- akshare 失败 / 返脏 / cache 损坏 → 不抛 RuntimeError · 退化 weekday 启发式 + stderr warning
+- 缓存内容三 invariant sanity check (count > 5000 · min year < 2010 · max date > today-30)
+- chmod 0o600 后真校验 · 失败 stderr warn (不再静默 suppress)
+- _trade_dates_memo 加锁 (double-checked) · 防多线程并发首调 akshare
 """
 from __future__ import annotations
 
-import contextlib
 import json
+import sys
+import threading
 from datetime import date, datetime, time, timedelta
 
 from kan.paths import BASE_DIR
@@ -36,87 +43,228 @@ PHASE_CLOSED_DAY = "closed"
 TRADE_DATES_CACHE = BASE_DIR / "trade_dates.json"
 TRADE_DATES_TTL_DAYS = 7
 
-# 模块级 memo · 单 CLI 进程内只解析一次 · 测试用 clear_memo() 重置
+# Sanity check 阈值 (***REMOVED*** + ***REMOVED***)
+SANITY_MIN_COUNT = 5000             # akshare 至少给 5000+ trade_dates(历史 2000-2027 约 6500 天)
+SANITY_MAX_YEAR_MIN = 2010          # 最早 date.year 必须 < 2010(确保有历史回溯)
+SANITY_MAX_DAYS_OLD = 30            # 最大 date 至少在 today - 30 之内(确保近期数据)
+
+# 模块级 memo + 锁 (***REMOVED*** double-checked locking)
 _trade_dates_memo: set[date] | None = None
+_memo_lock = threading.Lock()
+
+
+def _sanity_check_dates(dates: set[date], context: str = "") -> bool:
+    """三 invariant sanity check.
+
+    任一 fail → return False · 触发 cache miss / 重拉。
+    用于 (***REMOVED***) cache 内容校验 + (***REMOVED***) akshare 返回值校验。
+    """
+    if not dates or len(dates) < SANITY_MIN_COUNT:
+        print(
+            f"[kan] ⚠️  {context} sanity 失败 · count={len(dates) if dates else 0} 太少",
+            file=sys.stderr,
+        )
+        return False
+    min_d = min(dates)
+    if min_d.year >= SANITY_MAX_YEAR_MIN:
+        print(
+            f"[kan] ⚠️  {context} sanity 失败 · 最早日期 {min_d} 太新(应早于 {SANITY_MAX_YEAR_MIN})",
+            file=sys.stderr,
+        )
+        return False
+    today = datetime.now().date()
+    max_d = max(dates)
+    if max_d < today - timedelta(days=SANITY_MAX_DAYS_OLD):
+        print(
+            f"[kan] ⚠️  {context} sanity 失败 · 最新日期 {max_d} 距今 {(today - max_d).days} 天 "
+            f"(超 {SANITY_MAX_DAYS_OLD})",
+            file=sys.stderr,
+        )
+        return False
+    return True
 
 
 def _read_cache() -> set[date] | None:
+    """读 trade_dates.json 缓存 · TTL + sanity check 全通过才返回。
+
+    ***REMOVED***: 加 sanity check 三 invariant · 失败返 None 触发重拉。
+    ***REMOVED***: except 缩窄到 (JSONDecodeError | ValueError | OSError) + stderr warn。
+    """
     if not TRADE_DATES_CACHE.exists():
         return None
-    mtime = datetime.fromtimestamp(TRADE_DATES_CACHE.stat().st_mtime)
-    if (datetime.now() - mtime).days >= TRADE_DATES_TTL_DAYS:
-        return None
     try:
+        mtime = datetime.fromtimestamp(TRADE_DATES_CACHE.stat().st_mtime)
+        if (datetime.now() - mtime).days >= TRADE_DATES_TTL_DAYS:
+            return None
         data = json.loads(TRADE_DATES_CACHE.read_text(encoding="utf-8"))
-        return {date.fromisoformat(d) for d in data}
-    except Exception:
+        dates = {date.fromisoformat(d) for d in data}
+        if not _sanity_check_dates(dates, context="trade_dates.json cache"):
+            return None
+        return dates
+    except (json.JSONDecodeError, ValueError, OSError) as e:
+        # ***REMOVED***: 缩 except 范围 + stderr warn
+        print(
+            f"[kan] ⚠️  trade_dates.json 读取失败 ({type(e).__name__}: {e}) · 重新拉取",
+            file=sys.stderr,
+        )
         return None
 
 
 def _write_cache(dates: set[date]) -> None:
+    """写 trade_dates.json + chmod 0600 真校验。
+
+    ***REMOVED***: chmod 失败不再静默 contextlib.suppress · 改 stderr warn。
+    """
     from kan.paths import ensure_dirs
     ensure_dirs()
     payload = sorted(d.isoformat() for d in dates)
     TRADE_DATES_CACHE.write_text(
         json.dumps(payload, ensure_ascii=False), encoding="utf-8"
     )
-    # 沿用 paths.ensure_dirs 的 0o700 权限策略 · 文件级也保险
-    # 某些 FS (SMB / 容器 mount) 不支持 chmod · 静默忽略
-    with contextlib.suppress(OSError):
+    # ***REMOVED***: chmod 0o600 后真校验 · 失败 stderr warn
+    try:
         TRADE_DATES_CACHE.chmod(0o600)
+        actual_mode = TRADE_DATES_CACHE.stat().st_mode & 0o777
+        if actual_mode != 0o600:
+            print(
+                f"[kan] ⚠️  trade_dates.json 权限设置失败 "
+                f"(目标 0o600 · 实际 0o{actual_mode:o}) · "
+                "可能跨 FS (SMB / 容器 mount) 不支持精确 chmod",
+                file=sys.stderr,
+            )
+    except OSError as e:
+        print(
+            f"[kan] ⚠️  chmod 失败 ({e}) · trade_dates.json 权限可能开放",
+            file=sys.stderr,
+        )
 
 
 def _fetch_from_akshare() -> set[date]:
-    """从 akshare 拉全部 A 股交易日历（历史 + 当年 + 次年早期）。
+    """从 akshare 拉全部 A 股交易日历 · 包 try/except + sanity check。
+
+    ***REMOVED***: 失败抛 RuntimeError (由 get_trade_dates 兜底降级 weekday 启发式)。
+    ***REMOVED***: akshare 返回值零校验 sanity check (与 _read_cache 同结构)。
 
     数据 ~10000 行 · 序列化后 JSON ~100KB · in-memory set ~1MB。
     """
-    import akshare as ak
-    import pandas as pd
+    try:
+        import akshare as ak
+        import pandas as pd
+    except ImportError as e:
+        raise RuntimeError(f"akshare/pandas 导入失败: {e}") from e
 
-    df = ak.tool_trade_date_hist_sina()
-    col = df["trade_date"]
-    return {pd.to_datetime(v).date() for v in col}
+    try:
+        df = ak.tool_trade_date_hist_sina()
+        if df is None or df.empty:
+            raise RuntimeError("akshare 返回空 DataFrame")
+        if "trade_date" not in df.columns:
+            raise RuntimeError(f"akshare DataFrame 缺 trade_date 列 (有 {list(df.columns)})")
+        col = df["trade_date"]
+        dates = {pd.to_datetime(v).date() for v in col}
+        # ***REMOVED***: sanity check akshare 返回值
+        if not _sanity_check_dates(dates, context="akshare tool_trade_date_hist_sina"):
+            raise RuntimeError(f"akshare 返回值 sanity 失败 (count={len(dates)})")
+        return dates
+    except RuntimeError:
+        raise  # 不二次包装 RuntimeError
+    except (KeyError, ValueError, AttributeError) as e:
+        raise RuntimeError(f"akshare 拉取失败 ({type(e).__name__}: {e})") from e
+    except Exception as e:
+        # 兜底: akshare/pandas 上游可能抛 unexpected · 转 RuntimeError 进入 fail-soft
+        raise RuntimeError(f"akshare 未知错误 ({type(e).__name__}: {e})") from e
+
+
+def _weekday_heuristic(as_of: datetime) -> date:
+    """退化路径: 周一-周五视为交易日 (不识别节假日)。
+
+    ***REMOVED*** fail-soft fallback · 不抛 RuntimeError。
+    """
+    today = as_of.date()
+    if today.weekday() < 5 and as_of.time() >= DATA_AVAILABLE_AFTER:
+        return today
+    # 回退到最近 weekday
+    cursor = today
+    for _ in range(7):
+        cursor = cursor - timedelta(days=1)
+        if cursor.weekday() < 5:
+            return cursor
+    return today  # 防御性退出 (理论不可达)
 
 
 def get_trade_dates() -> set[date]:
-    """返回交易日集合 · 7 天 TTL 缓存 · 进程内 memo。"""
+    """返回交易日集合 · 7 天 TTL 缓存 · 进程内 memo · 多线程安全。
+
+    ***REMOVED***: double-checked locking 防 fetch_batch 多线程并发首调 akshare。
+    ***REMOVED***: akshare fail → 返回空 set · 调用方走 weekday 启发式 path · 不抛 RuntimeError。
+    """
     global _trade_dates_memo
+    # 第一次 check (无锁 · 命中路径快)
     if _trade_dates_memo is not None:
         return _trade_dates_memo
-    cached = _read_cache()
-    if cached is not None:
-        _trade_dates_memo = cached
-        return cached
-    dates = _fetch_from_akshare()
-    _write_cache(dates)
-    _trade_dates_memo = dates
-    return dates
+
+    with _memo_lock:
+        # 第二次 check (锁内 · 防其他 thread 已写入)
+        if _trade_dates_memo is not None:
+            return _trade_dates_memo
+
+        cached = _read_cache()
+        if cached is not None:
+            _trade_dates_memo = cached
+            return cached
+
+        # akshare 拉取 · 失败降级
+        try:
+            dates = _fetch_from_akshare()
+            _write_cache(dates)
+            _trade_dates_memo = dates
+            return dates
+        except RuntimeError as e:
+            # ***REMOVED***: 降级 · 不抛 · 返回空 set · 调用方走 weekday 启发式
+            print(
+                f"[kan] ⚠️  交易日历不可用 ({e}) · 降级到 weekday 启发式 "
+                "(周一-周五视为交易日 · 不识别节假日 · 长假后可能误判)",
+                file=sys.stderr,
+            )
+            _trade_dates_memo = set()  # 空集合 marker · is_trading_day / latest_trade_date 走降级
+            return _trade_dates_memo
 
 
 def is_trading_day(d: date) -> bool:
-    return d in get_trade_dates()
+    """判断指定日期是否为交易日。
+
+    ***REMOVED*** fail-soft: get_trade_dates() 空集合时退化 weekday 启发式。
+    """
+    dates = get_trade_dates()
+    if not dates:
+        return d.weekday() < 5  # 周一-周五 (不识别节假日)
+    return d in dates
 
 
 def latest_trade_date(as_of: datetime | None = None) -> date:
-    """返回截至 as_of 时刻 "应有" 数据的最近交易日（已 final 收盘）。
+    """返回截至 as_of 时刻 "应有" 数据的最近交易日 (已 final 收盘)。
 
-    判定规则：
+    判定规则:
     - as_of 是交易日 且 时间 ≥ DATA_AVAILABLE_AFTER(15:30) → 当日
-    - 否则向前回找最近交易日（最多 14 天保护）
+    - 否则向前回找最近交易日 (最多 14 天保护)
 
-    示例（假设系统 TZ=Asia/Shanghai）：
-    - 周一 16:00       → 周一
-    - 周二 10:00 (盘中) → 周一
-    - 周二 09:00 (盘前) → 周一
-    - 周六任何时间      → 周五
-    - 长假后第一天 09:00 → 节前最后一个交易日
+    示例 (假设系统 TZ=Asia/Shanghai):
+    - 周一 16:00          → 周一
+    - 周二 10:00 (盘中)    → 周一
+    - 周二 09:00 (盘前)    → 周一
+    - 周六任何时间         → 周五
+    - 长假后第一天 09:00   → 节前最后一个交易日
+
+    ***REMOVED*** fail-soft: 交易日历不可用时退化 weekday 启发式 · 不抛 RuntimeError。
     """
     if as_of is None:
         as_of = datetime.now()
 
     trade_days = get_trade_dates()
     today = as_of.date()
+
+    # ***REMOVED*** 退化路径: trade_days 为空 (akshare + cache 双失败)
+    if not trade_days:
+        return _weekday_heuristic(as_of)
 
     if today in trade_days and as_of.time() >= DATA_AVAILABLE_AFTER:
         return today
@@ -126,24 +274,37 @@ def latest_trade_date(as_of: datetime | None = None) -> date:
         cursor = cursor - timedelta(days=1)
         if cursor in trade_days:
             return cursor
-    raise RuntimeError(
-        f"找不到 {today} 之前 14 天内的交易日 · "
-        "可能交易日历缓存损坏 · 试 `kan fetch --force`"
+
+    # ***REMOVED***: 14 天保护失败也降级 · 不抛 RuntimeError
+    print(
+        f"[kan] ⚠️  找不到 {today} 之前 14 天内的交易日 · "
+        "用 weekday 启发式 · 试 `kan fetch --force`",
+        file=sys.stderr,
     )
+    return _weekday_heuristic(as_of)
 
 
 def market_phase(as_of: datetime | None = None) -> str:
     """返回当前市场相位 · 返回值 = PHASE_* 之一。
 
     PHASE_PRE        非交易日前 / 交易日 < 9:30
-    PHASE_INTRADAY   交易日 9:30 ≤ t < 15:00（实时变动 · 涨跌停可能瞬时反转）
-    PHASE_POST       交易日 ≥ 15:00（含数据延迟未 final 的 15:00-15:30 窗口）
-    PHASE_CLOSED_DAY 非交易日（周末 / 节假日）
+    PHASE_INTRADAY   交易日 9:30 ≤ t < 15:00 (实时变动 · 涨跌停可能瞬时反转)
+    PHASE_POST       交易日 ≥ 15:00 (含数据延迟未 final 的 15:00-15:30 窗口)
+    PHASE_CLOSED_DAY 非交易日 (周末 / 节假日)
+
+    ***REMOVED*** fail-soft: trade_days 为空时用 weekday 启发式判 trading_day。
     """
     if as_of is None:
         as_of = datetime.now()
-    if as_of.date() not in get_trade_dates():
+
+    trade_days = get_trade_dates()
+    if not trade_days:
+        # 退化: weekday 启发式 (不识别节假日)
+        if as_of.date().weekday() >= 5:
+            return PHASE_CLOSED_DAY
+    elif as_of.date() not in trade_days:
         return PHASE_CLOSED_DAY
+
     t = as_of.time()
     if t < MARKET_OPEN:
         return PHASE_PRE
@@ -153,6 +314,7 @@ def market_phase(as_of: datetime | None = None) -> str:
 
 
 def clear_memo() -> None:
-    """测试用：清除 module-level memo 让 monkeypatch 生效。"""
+    """测试用: 清除 module-level memo 让 monkeypatch 生效 · 多线程安全。"""
     global _trade_dates_memo
-    _trade_dates_memo = None
+    with _memo_lock:
+        _trade_dates_memo = None
