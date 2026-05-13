@@ -13,6 +13,7 @@ lazy import 模式保留 · 顶层只 import 极轻的 stdlib + typer · rich/ak
 import os
 import re as _re
 from contextlib import contextmanager
+from datetime import date, datetime
 
 import typer
 
@@ -49,6 +50,40 @@ class _NoopContext:
 
     def __exit__(self, *exc_info):
         return False
+
+
+# ── 日期格式化 helpers (UX-1 · 散户友好压缩 · 同年隐藏年份) ────────────────
+def format_date_compact(d: date) -> str:
+    """同年时省 year (`05-12`) · 跨年才显示完整 ISO (`2025-12-31`)。
+
+    UX-1 (v0.0.4.7): 80 列窄屏 title 不溢出 + 散户阅读减负。
+    """
+    today = datetime.now().date()
+    if d.year == today.year:
+        return d.strftime("%m-%d")
+    return d.isoformat()
+
+
+def format_fetched_at_compact(fetched_str: str) -> str:
+    """从 ISO datetime string 提取最 compact 表示。
+
+    - 当天: `16:05` (省日期 · 因为 user 知道今天)
+    - 同年不同天: `05-12 16:05`
+    - 跨年: `2025-12-31 16:05`
+    - 不可解析: 原样返回
+
+    UX-1 (v0.0.4.7): scan title 末尾 fetched_at 压缩 · 80 列不溢出。
+    """
+    try:
+        dt = datetime.fromisoformat(fetched_str)
+    except (ValueError, TypeError):
+        return fetched_str
+    today = datetime.now().date()
+    if dt.date() == today:
+        return dt.strftime("%H:%M")
+    if dt.year == today.year:
+        return dt.strftime("%m-%d %H:%M")
+    return dt.strftime("%Y-%m-%d %H:%M")
 
 
 _NETWORK_ERR_KEYWORDS = (

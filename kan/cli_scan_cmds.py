@@ -13,6 +13,8 @@ from kan.cli_helpers import (
     _print_err,
     _safe_error_msg,
     _with_heavy_imports_spinner,
+    format_date_compact,
+    format_fetched_at_compact,
 )
 
 
@@ -133,9 +135,9 @@ def scan(
     if signal:
         title += " · 仅信号"
     if data_cutoff:
-        title += f" · 数据截止 {data_cutoff.isoformat()} 收盘"
+        title += f" · 数据截止 {format_date_compact(data_cutoff)} 收盘"
     if fetched_at:
-        title += f" · {fetched_at} 拉取"
+        title += f" · {format_fetched_at_compact(fetched_at)} 拉取"
 
     display_periods = responsive_periods(console.width)
     is_compact = len(display_periods) < len(PERIODS)
@@ -185,17 +187,24 @@ def scan(
             f"（{shown}日）· 加宽终端可见全部[/dim]"
         )
 
+    # UX-4: 双警告互斥渲染 (if/elif 替代 if/if)
+    # 理由: stale 状态下用户首动作就是 fetch · fetch 后会重新 scan · 那时再判 intraday
     if is_stale:
-        cutoff_str = data_cutoff.isoformat() if data_cutoff else "无缓存"
+        # UX-2 + U-5: 散户语言 · "缓存到 X 收盘 · 最近交易日是 Y · 数据滞后 N 天"
+        cutoff_str = format_date_compact(data_cutoff) if data_cutoff else "无缓存"
+        expected_str = format_date_compact(expected_cutoff)
+        days_behind = (expected_cutoff - data_cutoff).days if data_cutoff else "?"
         console.print(
-            f"\n  [bold yellow]⚠️ 数据截止 {cutoff_str} · "
-            f"应有最近交易日 {expected_cutoff.isoformat()} · "
-            f"建议 `kan fetch --force` 更新[/bold yellow]"
+            f"\n  [bold yellow]⚠️ 当前缓存到 {cutoff_str} 收盘 · "
+            f"最近交易日是 {expected_str} · 数据滞后 {days_behind} 天\n"
+            "   运行 `kan fetch --force` 拉取最新数据[/bold yellow]"
         )
-    if phase == PHASE_INTRADAY:
+    elif phase == PHASE_INTRADAY:
+        # UX-3: 散户语言 · 强调"现在涨停可能下一秒打开" + 建议盘后 15:30 后
         console.print(
-            "\n  [bold yellow]⚠️ 当前盘中 · "
-            "数据持续变动 · 涨跌停标记可能瞬时反转[/bold yellow]"
+            "\n  [bold yellow]⚠️ 当前盘中 · 数据每秒变动 · "
+            "现在标的『涨停』可能下一秒打开\n"
+            "   建议盘后 15:30 后再看(数据 final)[/bold yellow]"
         )
 
     # 增量对比 · 用上面 cache 的 all_results · 避免重复 scan (P1-8)
@@ -272,9 +281,9 @@ def _filter_extreme_cmd(periods: list[int], mode: str) -> None:
 
         title = f"慢慢看 · {n} 日{label} · {len(hits)} 只触及"
         if data_cutoff:
-            title += f" · 数据截止 {data_cutoff.isoformat()} 收盘"
+            title += f" · 数据截止 {format_date_compact(data_cutoff)} 收盘"
         if fetched_at:
-            title += f" · {fetched_at} 拉取"
+            title += f" · {format_fetched_at_compact(fetched_at)} 拉取"
 
         table = Table(title=title, show_lines=False, pad_edge=False, padding=(0, 1))
         table.add_column("股票", style="white", no_wrap=True)
@@ -372,9 +381,9 @@ def info(
     fetched_at = cache_age(symbol) or ""
     title = f"慢慢看 · {name_short} {symbol}"
     if cutoff:
-        title += f" · 数据截止 {cutoff.isoformat()} 收盘"
+        title += f" · 数据截止 {format_date_compact(cutoff)} 收盘"
     if fetched_at:
-        title += f" · {fetched_at} 拉取"
+        title += f" · {format_fetched_at_compact(fetched_at)} 拉取"
 
     # 基本信息
     tag = ""
