@@ -327,7 +327,7 @@ def fetch_kline(symbol: str, days: int = 180, force: bool = False) -> pd.DataFra
     return df
 
 
-def _auto_max_workers() -> int:
+def resolve_max_workers() -> int:
     """D-2 (v0.0.4.7): 启发式 max_workers · 不再硬编码 5.
 
     akshare 是 I/O bound (HTTP 拉取 · 不是 CPU 计算) · cpu_count*2 比 cpu-1 更合理.
@@ -346,7 +346,9 @@ def _auto_max_workers() -> int:
     if raw:
         try:
             n = int(raw)
-            if 1 <= n <= 50:
+            # 安-4 (v0.0.4.7 P0): 上限从 50 收紧到 20 · 防 KAN_WORKERS=50 反射 DoS akshare
+            # akshare 限流阈值实测约 10-15 req/s · 20 并发已超 · 50 必触发限流
+            if 1 <= n <= 20:
                 return n
         except ValueError:
             pass
@@ -362,12 +364,14 @@ def fetch_batch(
 ) -> tuple[dict[str, pd.DataFrame], dict[str, str]]:
     """批量拉取 · ThreadPoolExecutor 并发 + 可选 progress callback.
 
-    D-2 (v0.0.4.7): max_workers=None → _auto_max_workers() 启发式 (cpu_count*2 cap 12).
+    D-2 (v0.0.4.7): max_workers=None → resolve_max_workers() 启发式 (cpu_count*2 cap 12).
     """
     from concurrent.futures import ThreadPoolExecutor, as_completed
 
-    if max_workers is None:
-        max_workers = _auto_max_workers()
+    # 架-3 (v0.0.4.7 P0): max_workers None / 0 / 负数 都退化到 resolve_max_workers
+    # 防御 ThreadPoolExecutor(max_workers=0) 抛 ValueError 的边界
+    if max_workers is None or max_workers < 1:
+        max_workers = resolve_max_workers()
 
     results: dict[str, pd.DataFrame] = {}
     errors: dict[str, str] = {}

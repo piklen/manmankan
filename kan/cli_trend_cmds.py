@@ -178,11 +178,10 @@ def trend(
             "   运行 `kan fetch --force` 拉取最新数据[/bold yellow]"
         )
     elif phase == PHASE_INTRADAY:
-        # UX-3: 散户语言
+        # UX-3 (v0.0.4.7 P0 cleanup): 状态描述而非走势预测 (PM-1 + 合-2)
         console.print(
-            "\n  [bold yellow]⚠️ 当前盘中 · 数据每秒变动 · "
-            "现在标的『涨停』可能下一秒打开\n"
-            "   建议盘后 15:30 后再看(数据 final)[/bold yellow]"
+            "\n  [bold yellow]⚠️ 当前盘中 · 涨跌停状态仍可能变化\n"
+            "   建议盘后 15:30 后看 final 数据[/bold yellow]"
         )
 
     console.print()

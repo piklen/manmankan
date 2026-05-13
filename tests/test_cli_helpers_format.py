@@ -84,15 +84,27 @@ class TestNoLegacyTextInWarnings:
             assert "当前缓存到" in src, f"{name}: 新文案 '当前缓存到' 应出现 (UX-2)"
             assert "数据滞后" in src, f"{name}: 新文案 '数据滞后' 应出现 (UX-2)"
 
-    def test_intraday_warning_uses_new_phrasing(self):
-        """UX-3: 盘中警告改为'每秒变动 · 涨停可能下一秒打开'."""
+    def test_intraday_warning_uses_compliant_phrasing(self):
+        """UX-3 (P0 cleanup v0.0.4.7): 盘中警告改为状态描述 · 不再含预测性"下一秒打开".
+
+        历史: 早期 commit (8ab951c) 引入"现在涨停可能下一秒打开" 触碰 AGENTS.md §6 不预测涨跌红线
+        修复 (PM-1 + 合-2): 改成"涨跌停状态仍可能变化 / 建议盘后 15:30 后看 final 数据"
+        """
         from pathlib import Path
         scan_src = Path("kan/cli_scan_cmds.py").read_text(encoding="utf-8")
         trend_src = Path("kan/cli_trend_cmds.py").read_text(encoding="utf-8")
         for src, name in [(scan_src, "scan"), (trend_src, "trend")]:
-            assert "数据每秒变动" in src, f"{name}: 新文案 '数据每秒变动' 应出现 (UX-3)"
-            assert "可能下一秒打开" in src, f"{name}: 新文案 '可能下一秒打开' 应出现 (UX-3)"
-            assert "建议盘后 15:30" in src, f"{name}: 新文案 '建议盘后 15:30' 应出现 (UX-3)"
+            # 新文案: 状态描述
+            assert "涨跌停状态仍可能变化" in src, (
+                f"{name}: 新文案 '涨跌停状态仍可能变化' 应出现 (UX-3 + PM-1)"
+            )
+            assert "建议盘后 15:30" in src, (
+                f"{name}: 新文案 '建议盘后 15:30 后看 final 数据' 应出现"
+            )
+            # 红线: 旧预测性词不应残留
+            assert "下一秒打开" not in src, (
+                f"{name}: 预测性词 '下一秒打开' 应删除 (AGENTS.md §6 红线 · PM-1)"
+            )
 
     def test_warnings_use_elif_not_if_if(self):
         """UX-4: 双警告应 if/elif 互斥 · 不再 if/if."""
