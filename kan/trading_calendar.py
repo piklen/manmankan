@@ -30,8 +30,39 @@ from kan.paths import BASE_DIR
 # 北京时间 A 股交易时段
 MARKET_OPEN = time(9, 30)
 MARKET_CLOSE = time(15, 0)
-# 留 30min 给收盘清算 · 保守 · 避免 15:00:01 就判 final 但接口尚未推数据
-DATA_AVAILABLE_AFTER = time(15, 30)
+
+
+def _resolve_data_available_after() -> time:
+    """计算 DATA_AVAILABLE_AFTER · 支持 env var KAN_DATA_AVAIL_OFFSET_MIN 覆盖.
+
+    架-4 (v0.0.4.7): 跨时区 / WSL2 默认 UTC / Docker 容器用户能自救.
+
+    默认 15:30 北京时间 (= 15:00 收盘 + 30min 数据延迟 final).
+    Override: KAN_DATA_AVAIL_OFFSET_MIN=N (整数 minutes) · 变为 15:00 + N min.
+
+    场景示例:
+    - WSL2 系统时区 UTC: 设 KAN_DATA_AVAIL_OFFSET_MIN=510 (中国 23:30 = UTC 15:30)
+    - 美东 (UTC-5): KAN_DATA_AVAIL_OFFSET_MIN=-270 (东 8 区比美东早 13 小时 → 02:30 美东)
+    - 严格盘后 (16:00 才算 final): KAN_DATA_AVAIL_OFFSET_MIN=60
+
+    解析失败 (非整数 / 越界) → 静默回退默认 15:30 · 不抛.
+    """
+    import os
+    raw = os.environ.get("KAN_DATA_AVAIL_OFFSET_MIN")
+    if raw:
+        try:
+            n = int(raw)
+            # 从 15:00 base + n min
+            base_minutes = 15 * 60 + n
+            if 0 <= base_minutes < 24 * 60:
+                return time(base_minutes // 60, base_minutes % 60)
+        except ValueError:
+            pass
+    # 留 30min 给收盘清算 · 保守 · 避免 15:00:01 就判 final 但接口尚未推数据
+    return time(15, 30)
+
+
+DATA_AVAILABLE_AFTER = _resolve_data_available_after()
 
 # 相位常量
 PHASE_PRE = "pre"
