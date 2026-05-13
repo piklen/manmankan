@@ -44,7 +44,7 @@ jobs:
       - name: Wait for PyPI CDN propagation
         run: sleep 60  # PyPI index 同步需要 30-60s
       - name: Setup Python
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@v6
         with:
           python-version: ${{ matrix.python }}
       - name: Install manmankan from PyPI (${{ matrix.manager }})
