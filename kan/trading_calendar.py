@@ -164,8 +164,9 @@ def _write_cache(dates: set[date]) -> None:
                 file=sys.stderr,
             )
     except OSError as e:
+        # ***REMOVED*** (v0.0.4.7 P0): 不暴露 errno 原文 · 仅给类型 · 防容器逃逸侦察辅助
         print(
-            f"[kan] ⚠️  chmod 失败 ({e}) · trade_dates.json 权限可能开放",
+            f"[kan] ⚠️  chmod 失败 (errno {e.errno}) · trade_dates.json 权限可能开放",
             file=sys.stderr,
         )
 

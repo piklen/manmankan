@@ -159,7 +159,7 @@ def _get_watchlist_pairs() -> list[tuple[str, str]]:
 def _auto_fetch_stale(pairs: list[tuple[str, str]]) -> None:
     """自动拉取缺失或过期（非今天）的自选股数据。
 
-    并发自适应 (D-2 v0.0.4.7): _auto_max_workers() · cpu_count*2 cap 12.
+    并发自适应 (D-2 v0.0.4.7): resolve_max_workers() · cpu_count*2 cap 12.
     rich.Progress 进度条 + 网络异常友好提示.
     避免串行 172 只可能阻塞 ≥ 9 分钟无反馈的体验问题。
     """
@@ -188,8 +188,8 @@ def _auto_fetch_stale(pairs: list[tuple[str, str]]) -> None:
         est_low = max(1, n // 60)
         est_high = max(2, n // 20)
         # D-2 (v0.0.4.7): 并发不再硬编码 5 · auto_max_workers 启发式 (cpu_count*2 cap 12)
-        from kan.fetcher import _auto_max_workers
-        workers = _auto_max_workers()
+        from kan.fetcher import resolve_max_workers
+        workers = resolve_max_workers()
         console.print(
             f"[yellow]需更新 {n} 只股票数据 · 并发 {workers} · "
             f"预计 {est_low}-{est_high} 分钟[/yellow]"
@@ -220,7 +220,7 @@ def _auto_fetch_stale(pairs: list[tuple[str, str]]) -> None:
             progress.update(task_id, advance=1, description=desc)
 
         try:
-            # D-2 (v0.0.4.7): max_workers 不再硬编码 · 由 fetch_batch 内部 _auto_max_workers() 启发式
+            # D-2 (v0.0.4.7): max_workers 不再硬编码 · 由 fetch_batch 内部 resolve_max_workers() 启发式
             results, errors = fetch_batch(
                 [s for s, _ in stale],
                 force=True,
