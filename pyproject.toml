@@ -63,6 +63,11 @@ ignore = [
     "RUF003",  # comment 全角标点 — 同上
 ]
 
+[tool.ruff.lint.per-file-ignores]
+# test 函数名含 env var 名 (e.g., _KAN_COMPLETE / _TYPER_COMPLETE_ARGS) 是有意大写
+# 保留 env var 字面量在函数名里 · 比改成 lowercase 更可读
+"tests/test_atexit_completion_isolation.py" = ["N802"]
+
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 markers = [
