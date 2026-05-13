@@ -142,9 +142,16 @@ def add(
                     failures.append(f"未找到包含「{sym}」的股票")
                     fail += 1
                 else:
-                    # 多匹配也累积末尾 · 不打断 spinner
+                    # U-1 (v0.0.4.7 P0): 多匹配列出候选 · 与 kan remove 一致
+                    # 旧: 只说"匹配到 N 只 · 请用更精确名称或代码" → dead-end
+                    # 新: 列出全部候选 · 用户能直接 copy 代码再 add
+                    matches_preview = "; ".join(
+                        f"{code} {name.replace(' ', '')}" for code, name in matches[:8]
+                    )
+                    if len(matches) > 8:
+                        matches_preview += f"; …等 {len(matches)} 只"
                     failures.append(
-                        f"「{sym}」匹配到 {len(matches)} 只 · 请用更精确名称或代码"
+                        f"「{sym}」匹配到 {len(matches)} 只 · 候选: {matches_preview} · 请用代码精确添加"
                     )
                     fail += 1
 
