@@ -1,6 +1,8 @@
 # 慢慢看 · manmankan
 
 > A 股自选股「位置感」CLI · **不告诉你买什么，只告诉你它现在站在哪**
+>
+> *A "where does it stand" CLI for China A-share watchlists — it tells you the coordinates, not the decision.*
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![Python 3.11+](https://img.shields.io/badge/python-3.11+-blue.svg)](https://www.python.org/downloads/)
@@ -8,6 +10,16 @@
 [![PyPI downloads](https://img.shields.io/pypi/dm/manmankan.svg)](https://pypi.org/project/manmankan/)
 [![Tests](https://github.com/piklen/manmankan/actions/workflows/test.yml/badge.svg)](https://github.com/piklen/manmankan/actions/workflows/test.yml)
 [![Status: Alpha](https://img.shields.io/badge/status-alpha-orange.svg)](https://github.com/piklen/manmankan/releases)
+
+<details>
+<summary><b>🌐 English summary</b></summary>
+
+**manmankan** (慢慢看) is a pure command-line tool for China A-share investors who track their own watchlists. It shows where each stock currently sits within its 3 / 5 / 7 / 10 / 15 / 30 / 60 / 90 / 120 / 180-day price range — a "position percentile" — and flags stocks that simultaneously touch lows (or highs) across multiple timeframes as resonance signals (`×N`).
+
+It deliberately stops there: **no buy/sell advice, no ratings, no price targets, no "AI stock picking."** Just objective price-position data, fully local — no login, no account, no telemetry. Data is delayed end-of-day K-line from the AKShare ecosystem (baostock primary).
+
+`pip install manmankan` · Python 3.11+ · MIT · A-share only (no HK / US / futures).
+</details>
 
 慢慢看是一个**纯命令行**的 A 股自选股位置感工具。它把电商「慢慢买」的「先看历史价位再决策」迁移到股市:把你 30 只自选股在 3、5、7、10、15、30、60、90、120、180 日窗口内的位置百分位**一屏显示**,把「同时触及多个低点」标成共振信号,然后**闭嘴**——剩下的判断,你自己做。
 
