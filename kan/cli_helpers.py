@@ -10,6 +10,7 @@
 
 lazy import 模式保留 · 顶层只 import 极轻的 stdlib + typer · rich/akshare 等重模块函数体内 lazy。
 """
+import contextlib
 import os
 import re as _re
 from contextlib import contextmanager
@@ -173,10 +174,43 @@ def _auto_fetch_stale(pairs: list[tuple[str, str]]) -> None:
     )
 
     console = Console(stderr=True)
-    with console.status("[yellow]⏳ 检查缓存...[/yellow]", spinner="dots"):
+    n_total = len(pairs)
+
+    # v0.0.4.7.1 hotfix: "检查缓存" 3 阶段 spinner (B+C 组合 · 真用户反馈触发)
+    # 旧: 单句 "⏳ 检查缓存..." · 169 只 + akshare 冷启动可能 5-30s 沉默 · 真小白误判卡死
+    # 新: import → trade_dates warm → ticking 数字进度 · 用户每秒看到工具在动
+    with console.status(
+        "[yellow]⏳ 加载数据模块...[/yellow]",
+        spinner="dots",
+    ) as status:
         from kan.fetcher import fetch_batch, is_fresh
 
-        stale = [(sym, name) for sym, name in pairs if not is_fresh(sym)]
+        # Stage 2: explicit pre-warm trade_dates · 避免 ticking 阶段第 1 只时
+        # latent 触发 akshare 5-15s 拉取 (用户看到 spinner 停在 1/169 会困惑)
+        status.update(
+            f"[yellow]⏳ 加载交易日历 · {n_total} 只自选股待检查...[/yellow]"
+        )
+        from kan.trading_calendar import latest_trade_date
+        # latest_trade_date 现已 fail-soft (v0.0.4.7 ***REMOVED***) · 不抛 RuntimeError ·
+        # 但保险 contextlib.suppress · 任何 upstream regression 不应 break 检查缓存
+        with contextlib.suppress(Exception):
+            _ = latest_trade_date()
+
+        # Stage 3: ticking 数字进度 (B+C · 每 5% update 一次 · 防闪烁)
+        status.update(
+            f"[yellow]⏳ 检查缓存 · 0/{n_total} 只 · "
+            f"首次稍慢 · 后续秒级[/yellow]"
+        )
+        stale: list[tuple[str, str]] = []
+        update_every = max(1, n_total // 20)
+        for i, (sym, name) in enumerate(pairs):
+            if not is_fresh(sym):
+                stale.append((sym, name))
+            if (i + 1) % update_every == 0 or i + 1 == n_total:
+                status.update(
+                    f"[yellow]⏳ 检查缓存 · {i + 1}/{n_total} 只 · "
+                    f"已发现 {len(stale)} 只 stale[/yellow]"
+                )
     if not stale:
         return
 
