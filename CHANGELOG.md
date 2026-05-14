@@ -5,6 +5,45 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.0.4.7.1] - 2026-05-14
+
+### Fixed · "检查缓存" spinner 进度可见 hotfix (真用户反馈触发)
+
+**主诉 case**：用户升级 v0.0.4.7 后跑 `kan scan` · 169 只自选股 + 冷启动 · `⏳ 检查缓存 ...` spinner 5-30s 沉默无任何子进度 · 真小白误判工具卡死。
+
+**根因**：v0.0.4.7 之前的 `_auto_fetch_stale` 第一个 spinner 是单句"检查缓存..." · 内部干 3 件事(lazy import akshare/pandas · 遍历 169 只调 is_fresh · 首次 latest_trade_date 可能拉 akshare)但全在同一 spinner 文字下 · 用户看不到任何 sub-progress。
+
+**修复方案**（B+C 组合 · 3 阶段 spinner）：
+
+- **Stage 1** `⏳ 加载数据模块...` (akshare/pandas import 阶段 · 1-3s)
+- **Stage 2** `⏳ 加载交易日历 · 169 只自选股待检查...` (explicit pre-warm `latest_trade_date()` · 防 ticking 阶段第 1 只时 latent 触发 akshare 5-15s 拉取)
+- **Stage 3** `⏳ 检查缓存 · 80/169 只 · 已发现 N 只 stale` (数字 ticking + 已发现 stale 数 · 每 5% update 一次 spinner · 防闪烁)
+
+不给精确 ETA (精度差容易让用户失望) · 用 "首次稍慢 · 后续秒级" 诚实表达 · 首次扫描会刷新全市场交易日历是一次性。
+
+**影响范围**：
+
+- 所有 v0.0.4.7 升级用户首次 `kan scan` / `kan trend` / `kan low` / `kan high` 都会受益(任何走 `_auto_fetch_stale` 的命令)
+- 30 只自选股第一次 scan 约 5-10s 看到 ticking · 169 只约 10-30s · 千只约 30-60s
+- 第二次起 ticking 极快(akshare 已 warm + trade_dates 已 cached)
+- ⚠️ 注:首次 scan 仍有总 30-60s 等待 · 但用户看得见进度 · 不再误判卡死
+
+**升级**：
+
+```bash
+uv tool install --upgrade manmankan
+```
+
+无需手动操作 · 自动生效。
+
+**测试**：
+
+- 新增 `tests/test_spinner_check_cache_progress.py` 3 case (覆盖 1 只 / 169 只 / 0 只边界)
+- 全套 292 passed (291 + 1 新)
+- ruff clean · privacy clean
+
+**Hotfix 自审**：v0.0.4.6 同款 hotfix-note lightweight 模式(spinner UX 同主题 patch 第 2 次 · 未达 "推荐 7 角色 review" 触发线 3 次)
+
 ## [0.0.4.7] - 2026-05-14
 
 ### Added · 分发资产 + 防御纵深 + 散户友好
