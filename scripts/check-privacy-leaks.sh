@@ -98,12 +98,6 @@ EXCLUDES=(
 SELF_EXCLUDES=(
   "scripts/check-privacy-leaks.sh"
   "CONTRIBUTING.md"
-  # v0.0.4.4: docs/reviews/ 历史归档允许保留内部话语 (***REMOVED*** / round N / SLO 等术语)
-  # 这些 review 文档是工程笔记 · 非 PyPI 首屏可见 · 历史价值 > 防泄漏需求
-  "docs/reviews/v0.0.1.md"
-  "docs/reviews/v0.0.2.md"
-  "docs/reviews/v0.0.3.md"
-  "docs/reviews/v0.0.4.md"
 )
 
 echo "🔍 manmankan 公开档案隐私泄漏自检 ..."
@@ -140,7 +134,8 @@ fi
 
 # ===========================================================
 # 版本号一致性检查 (堵文档与发版号撕裂的盲区)
-# 允许位置: CHANGELOG.md / docs/reviews/ (历史回顾允许多版本号)
+# 允许位置: CHANGELOG.md / docs/reviews/ (历史回顾允许多版本号) ·
+#           CODE_OF_CONDUCT.md (引用 Contributor Covenant 外部标准版本号)
 # 其他文件出现 v0.[1-9].x 或 v[1-9].x 字样视为撕裂
 # ===========================================================
 echo ""
@@ -153,10 +148,11 @@ VERSION_LEAKS=$(grep -rEn "$VERSION_PATTERN" \
   . 2>/dev/null \
   | grep -v '^\./CHANGELOG\.md:' \
   | grep -v '^\./docs/reviews/' \
+  | grep -v '^\./CODE_OF_CONDUCT\.md:' \
   || true)
 
 if [ -n "$VERSION_LEAKS" ]; then
-  echo "❌ 发现非当前版本号引用 (允许位置: CHANGELOG.md · docs/reviews/):"
+  echo "❌ 发现非当前版本号引用 (允许位置: CHANGELOG.md · docs/reviews/ · CODE_OF_CONDUCT.md):"
   echo "$VERSION_LEAKS" | sed 's/^/   /'
   echo ""
   echo "═══════════════════════════════════════════════════════════"
