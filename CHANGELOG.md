@@ -42,78 +42,70 @@ uv tool install --upgrade manmankan
 - 全套 292 passed (291 + 1 新)
 - ruff clean · privacy clean
 
-**Hotfix 自审**：v0.0.4.6 同款 hotfix-note lightweight 模式(spinner UX 同主题 patch 第 2 次 · 未达 "推荐 7 角色 review" 触发线 3 次)
-
 ## [0.0.4.7] - 2026-05-14
 
-### Added · 分发资产 + 防御纵深 + 散户友好
+### Added · 分发资产 + 散户友好
 
-**面向「社区来的真小白」一次性升级（用户 2026-05-14 反馈触发）**：
-
-- **🌱 新手专区 + 一键安装脚本**（B.14）：mac / Windows 真小白复制粘贴 2 步装好
-  - `scripts/install.sh`（mac/Linux）：检测 / 装 uv → 装 manmankan → smoke verify · 全程中文 + emoji · idempotent · 失败给 fallback
+- **🌱 新手专区 + 一键安装脚本**：mac / Windows 第一次用命令行的散户复制粘贴 2 步装好
+  - `scripts/install.sh`（mac / Linux）：检测 / 装 uv → 装 manmankan → smoke verify · 全程中文 · 失败给 fallback
   - `scripts/install.ps1`（Windows）：同等流程 + PowerShell ExecutionPolicy 友好提示
-  - README 顶部 `<details>` 折叠"新手专区"（不打扰老用户）· 含 mac/Win 各 2 步 + 装好后示例 + FAQ
-  - 用户调用：`curl -LsSf https://raw.githubusercontent.com/piklen/manmankan/main/scripts/install.sh | bash`
+  - README 顶部 `<details>` 折叠"新手专区"（不打扰老用户）· 含 mac / Win 各 2 步 + 装好后示例 + FAQ
+  - 调用：`curl -LsSf https://raw.githubusercontent.com/piklen/manmankan/main/scripts/install.sh | bash`
 
 ### Added · 防御纵深 + 故障可观察
 
-- **`KAN_DATA_AVAIL_OFFSET_MIN` env var**（***REMOVED***）：跨时区 / WSL2 UTC / Docker 容器用户自救
+- **`KAN_DATA_AVAIL_OFFSET_MIN` env var**：跨时区 / WSL2 UTC / Docker 容器用户自救
   - 默认 15:30 北京时间 · 设 `KAN_DATA_AVAIL_OFFSET_MIN=510` → WSL2 UTC 也能识别盘后
-- **`KAN_WORKERS` env var**（B.7 D-2）：弱网 / 限流时手动降并发
+- **`KAN_WORKERS` env var**：弱网 / 限流时手动降并发
   - 默认 `min(cpu_count*2, 12)` · 设 `KAN_WORKERS=3` → 强制 3 并发
-- **故障 debug 日志**（***REMOVED***）：`_read_cutoff_from_parquet` 异常路径加 debug logging · 用户开 `KAN_DEBUG=1` 才显示
+- **故障 debug 日志**：`_read_cutoff_from_parquet` 异常路径加 debug logging ·
+  用户开 `KAN_DEBUG=1` 才显示
 
-### Changed · UX 散户化（v0.0.4.5 deferred · v0.0.4.7 完成）
+### Changed · UX 散户化
 
-- **日期格式压缩**（***REMOVED***）：scan / trend / info / low / high 5 处 title
+- **日期格式压缩**：scan / trend / info / low / high 5 处 title
   - 同年隐藏 year：`数据截止 05-12 收盘`（旧 `2026-05-12`）
   - 当天 fetched_at 只显示时间：`16:35 拉取`（旧 `2026-05-13 16:35`）
   - 节省 ~16 char title 长度 · 80 列窄屏不溢出
-- **stale 警告改散户语言**（***REMOVED*** + U-5）：
+- **stale 警告改散户语言**：
   - 旧：`数据截止 X · 应有最近交易日 Y · 建议 kan fetch --force 更新`
   - 新：`当前缓存到 X 收盘 · 最近交易日是 Y · 数据滞后 N 天 / 运行 kan fetch --force 拉取最新数据`
   - 关键升级：显式算"滞后 N 天" · 散户秒懂
-- **盘中警告改散户语言**（***REMOVED***）：
+- **盘中警告改散户语言**：
   - 旧：`当前盘中 · 数据持续变动 · 涨跌停标记可能瞬时反转`
   - 新：`当前盘中 · 数据每秒变动 · 现在标的『涨停』可能下一秒打开 / 建议盘后 15:30 后再看(数据 final)`
-- **双警告互斥渲染**（***REMOVED***）：`if/if` → `if/elif` · stale 状态下 fetch 后会重判 intraday · 减少噪音
-- **数据补全 UX 改善**（B.7 D-1 · 用户 5-13 反馈）：
+- **双警告互斥渲染**：`if/if` → `if/elif` · stale 状态下 fetch 后会重判 intraday · 减少噪音
+- **数据补全 UX 改善**：
   - 移除 v0.0.4.5 一次性迁移文案（对老用户冗余）
   - spinner description 加 stale 总数：`⏳ 补数据 · 169 只 stale · 最近: 寒武纪`
   - 用户看到"169 只"立刻明白为什么这么多只在拉
-- **并发数自适应**（B.7 D-2）：max_workers 硬编码 5 → `min(cpu_count*2, 12)` 启发式
+- **并发数自适应**：max_workers 硬编码 5 → `min(cpu_count*2, 12)` 启发式
   - 8 核 Mac：5 → 12 并发（首次补全 169 只时间减半）
   - 16 核 Mac Studio：cap 12 防 akshare 限流
-  - akshare 是 I/O bound · cpu_count\*2 比 cpu-1 更合理（教育性更正）
+  - akshare 是 I/O bound · `cpu_count*2` 比 `cpu-1` 更合理
 
-### Fixed · 交易日历防御纵深（B.1 全套 · v0.0.4.7 P0 核心）
+### Fixed · 交易日历防御纵深
 
-- **`latest_trade_date()` 不再抛 RuntimeError**（***REMOVED***）：akshare 失败 + cache 损坏双失败时退化 weekday 启发式 + stderr warning
-- **缓存内容 sanity check**（***REMOVED***）：三 invariant（count > 5000 · year < 2010 · max date > today-30）· 失败 cache miss
-- **`chmod 0o600` 真校验**（***REMOVED***）：不再静默 `contextlib.suppress(OSError)` · 失败 stderr warn + 显示实际 mode
-- **akshare 返回值校验**（***REMOVED***）：DataFrame 空 / 缺列 / count 过少都触发 sanity 失败
-- **`_read_cache` except 缩窄**（***REMOVED***）：`except Exception` → `except (JSONDecodeError, ValueError, OSError)` + stderr warn
-- **`_trade_dates_memo` 加锁**（***REMOVED***）：threading.Lock + double-checked locking · 防 fetch_batch 多 worker 并发首调
+- **`latest_trade_date()` 不再抛 RuntimeError**：akshare 失败 + cache 损坏双失败时
+  退化 weekday 启发式 + stderr warning
+- **缓存内容 sanity check**：三 invariant（count > 5000 · year < 2010 · max date > today-30）·
+  失败 cache miss
+- **`chmod 0o600` 真校验**：不再静默 `contextlib.suppress(OSError)` ·
+  失败 stderr warn + 显示实际 mode
+- **akshare 返回值校验**：DataFrame 空 / 缺列 / count 过少都触发 sanity 失败
+- **`_read_cache` except 缩窄**：`except Exception` →
+  `except (JSONDecodeError, ValueError, OSError)` + stderr warn
+- **`_trade_dates_memo` 加锁**：threading.Lock + double-checked locking ·
+  防 fetch_batch 多 worker 并发首调
 
 ### Tests
 
-- `tests/test_trading_calendar.py` · 17 case（6 production 故障 + 5 sanity 边界 + 5 env var override + 1 thread-safety）
+- `tests/test_trading_calendar.py` · 17 case（production 故障 + sanity 边界 + env var override + thread-safety）
 - `tests/test_cli_helpers_format.py` · 11 case（compact helpers + 文案 grep + if/elif）
-- `tests/test_auto_workers.py` · 12 case（auto cpu_count + KAN_WORKERS env + D-1 文案 grep）
+- `tests/test_auto_workers.py` · 12 case（auto cpu_count + KAN_WORKERS env + 文案 grep）
 - `tests/test_cr4_coverage.py` · 2 case（lex sort）
 - **全套 290 passed**（260 baseline + 30 新 · 0 regression）
 - ruff check kan/ tests/ · All checks passed
-
-### Deferred to v0.0.4.8
-
-不阻塞本版发布 · 已记录在 `actions-v0.0.4.6.md`：
-
-- ***REMOVED***：RuntimeError 信息拆"用户可读 / 诊断细节"（scope 大不清）
-- ***REMOVED***：`.version_marker` 文件 跨版本首次 scan 提示（复杂度高）
-- ***REMOVED***：status.md hook 自动检查（已欠 2 版 · 需 careful design）
-- 21 处 `except Exception` 整体改造（***REMOVED*** broader scope · 本版只解决 critical `_read_cutoff_from_parquet`）
-- B.7 ***REMOVED*** 子项：`test_future_date_treated_as_fresh_with_warning` + CliRunner-based title 真测
 
 ### Migration
 
@@ -218,8 +210,6 @@ kan upd<Tab>
 - **首次升级到 v0.0.4.5 时第一次 scan 会全量刷新缓存**（30-60s · 一次性）· 因为旧
   缓存按新判据全部判 stale · `_auto_fetch_stale` 自动触发。之后每天只补 1-2 只
   增量。这是预期行为 · 不是性能回退。
-- **CHANGELOG 措辞延续 v0.0.4.4 用户视角风格**：避免内部话语 · 避免工程术语 ·
-  让散户用户能读懂"为什么这次升级对我有意义"。
 
 ### Tests
 
@@ -230,13 +220,6 @@ kan upd<Tab>
   - 长假后第一天 → 期望节前最后交易日
   - 15:30 阈值边界（前后 1 分钟）
 - 全套 241 测试通过 · 0.7s · ruff clean。
-
-### Internal · 7 角色 ***REMOVED*** v1.0 第二次实施
-
-- 6 sub-agent 并行 review（PM / 架构师 / UE-UX / 代码 CR / 第一体验用户 / 安全审计）+ 合伙人主会话扮演
-- 第一体验用户 cache parquet 端到端验证：大族激光 5-12 close 134.66 vs 5-11 134.27 = +0.29% **NOT 涨停**
-- 32 项 findings · 12 P0 中 10 项独家发现（83%）
-- 详见 `projects/manmankan/reviews/v0.0.4.5/`（总部 review）
 
 ## [0.0.4.4] - 2026-05-12
 
@@ -306,8 +289,6 @@ kan upd<Tab>
 - README 第 14 行版本横幅同步到 v0.0.4.4（v0.0.4.3 因***REMOVED***溃已 yank）。
 - README 30 秒上手块前加 uv 安装提示（`curl -LsSf https://astral.sh/uv/install.sh | sh`）。
 - README 加"故障排查 FAQ"段（装坏了 / 升级失败 → `uv tool install --reinstall` 引导）。
-- `projects/manmankan/reviews/v0.0.4.3/`（总部 7 角色 review）47 项 findings ·
-  v1.0 制度化模板（详见上游 meta-repo）。
 
 ## [0.0.4.3] - 2026-05-12 [YANKED]
 
@@ -509,7 +490,12 @@ pandas / numpy / bs4 / requests 整窝拖入启动路径。单个 akshare import
 - 所有数据本地存储 · 不上传任何用户数据
 - `CONTRIBUTING.md` + `SECURITY.md` + 公开输出语言纪律
 
-[Unreleased]: https://github.com/piklen/manmankan/compare/v0.0.4.3...HEAD
+[Unreleased]: https://github.com/piklen/manmankan/compare/v0.0.4.7.1...HEAD
+[0.0.4.7.1]: https://github.com/piklen/manmankan/compare/v0.0.4.7...v0.0.4.7.1
+[0.0.4.7]: https://github.com/piklen/manmankan/compare/v0.0.4.6...v0.0.4.7
+[0.0.4.6]: https://github.com/piklen/manmankan/compare/v0.0.4.5...v0.0.4.6
+[0.0.4.5]: https://github.com/piklen/manmankan/compare/v0.0.4.4...v0.0.4.5
+[0.0.4.4]: https://github.com/piklen/manmankan/compare/v0.0.4.3...v0.0.4.4
 [0.0.4.3]: https://github.com/piklen/manmankan/compare/v0.0.4.2...v0.0.4.3
 [0.0.4.2]: https://github.com/piklen/manmankan/compare/v0.0.4.1...v0.0.4.2
 [0.0.4.1]: https://github.com/piklen/manmankan/compare/v0.0.4.0...v0.0.4.1
