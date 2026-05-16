@@ -294,9 +294,12 @@ def test_scan_intraday_warning_compliant_phrasing(scan_runner, monkeypatch):
     result = scan_runner.invoke(app, ["scan"])
     assert result.exit_code == 0
     output = result.output
-    assert "涨跌停状态仍可能变化" in output, f"scan intraday 新文案应出现 · output: {output[-500:]}"
+    # v0.0.4.8 UX-1+PM-4: 纯状态描述 · 移除预测性 "可能回落/可能回升/都是正常波动"
+    assert "涨跌停标签反映当前时刻" in output, f"scan intraday 新文案应出现 · output: {output[-500:]}"
     assert "建议盘后 15:30" in output
     assert "下一秒打开" not in output, "scan 不应残留预测性词 (AGENTS.md §6)"
+    assert "都是正常波动" not in output, "v0.0.4.8 UX-1: 应删除"
+    assert "可能回落" not in output, "v0.0.4.8 UX-1: 应删除"
 
 
 def test_scan_warnings_mutex_stale_wins(scan_runner, monkeypatch):
@@ -318,7 +321,7 @@ def test_scan_warnings_mutex_stale_wins(scan_runner, monkeypatch):
     output = result.output
     assert "当前缓存到" in output, "scan stale 警告应显示"
     assert "数据滞后" in output
-    assert "涨跌停状态仍可能变化" not in output, (
+    assert "涨跌停标签反映当前时刻" not in output, (
         "scan stale=True 时不应同时显示 intraday 警告 (UX-4 if/elif 互斥)"
     )
 

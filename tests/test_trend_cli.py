@@ -239,15 +239,15 @@ def test_trend_intraday_warning_compliant_phrasing(
     result = runner.invoke(app, ["trend"])
     assert result.exit_code == 0
     output = result.output
-    # 新文案: 状态描述
-    assert "涨跌停状态仍可能变化" in output, (
-        f"新文案 '涨跌停状态仍可能变化' 应出现 · 实际 output: {output[-500:]}"
+    # 新文案 v0.0.4.8 (UX-1+PM-4 cross-validated): 纯状态描述 · 移除 "可能回落/可能回升/都是正常波动" 预测性词
+    assert "涨跌停标签反映当前时刻" in output, (
+        f"v0.0.4.8 新文案 '涨跌停标签反映当前时刻' 应出现 · 实际 output: {output[-500:]}"
     )
     assert "建议盘后 15:30" in output, "新文案应含 '建议盘后 15:30'"
-    # 红线: 旧预测性词不应残留 (AGENTS.md §6)
-    assert "下一秒打开" not in output, (
-        "预测性词 '下一秒打开' 应删除 (PM-1 + 合-2)"
-    )
+    # 红线: 旧预测性词不应残留 (AGENTS.md §6 不预测涨跌)
+    assert "下一秒打开" not in output, "预测性词 '下一秒打开' 应删除 (PM-1 + 合-2 v0.0.4.7)"
+    assert "都是正常波动" not in output, "v0.0.4.8 UX-1: '都是正常波动' 含预测语义 · 应删除"
+    assert "可能回落" not in output, "v0.0.4.8 UX-1: '可能回落' 含方向词 · 应删除"
 
 
 def test_trend_warnings_mutex_stale_wins(
@@ -278,6 +278,6 @@ def test_trend_warnings_mutex_stale_wins(
     assert "当前缓存到" in output, "stale 警告应显示"
     assert "数据滞后" in output, "stale 警告应含'数据滞后'"
     # intraday 警告不应同时显示 (if/elif 互斥)
-    assert "涨跌停状态仍可能变化" not in output, (
+    assert "涨跌停标签反映当前时刻" not in output, (
         "stale=True 时不应同时显示 intraday 警告 (UX-4 互斥 · 用户首动作 fetch)"
     )
