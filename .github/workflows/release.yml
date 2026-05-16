@@ -22,6 +22,13 @@ jobs:
           python-version: '3.12'
       - name: Build
         run: uv build
+      - name: Compute install.sh / install.ps1 SHA256 (v0.0.4.8 ***REMOVED***)
+        run: |
+          echo "## install scripts SHA256 (for Verify before bash · 用户校验用)" >> "$GITHUB_STEP_SUMMARY"
+          echo '```' >> "$GITHUB_STEP_SUMMARY"
+          shasum -a 256 scripts/install.sh >> "$GITHUB_STEP_SUMMARY"
+          shasum -a 256 scripts/install.ps1 >> "$GITHUB_STEP_SUMMARY"
+          echo '```' >> "$GITHUB_STEP_SUMMARY"
       - name: Publish to PyPI
         uses: pypa/gh-action-pypi-publish@cef221092ed1bacb1cc03d23a2d87d1d172e277b  # release/v1 (pinned 2026-02-18)
         with:

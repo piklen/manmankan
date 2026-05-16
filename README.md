@@ -118,20 +118,25 @@ kan scan                        # 看一屏位置 + 共振信号
 - 看 [§故障排查 FAQ](#故障排查-faq)
 - 来 [GitHub Issues](https://github.com/piklen/manmankan/issues) 提问 · 标题写清楚你哪一步卡住了
 
-### 🔒 不放心一键脚本？先看脚本再装(Verify before bash)
+<details>
+<summary><b>🔒 不放心一键脚本？先看脚本再装(Verify before bash · 可选 · 安全敏感用户)</b></summary>
 
 完全合理。**永远不要盲跑 `curl ... | bash`** —— 哪怕是知名工具的官方脚本，也最好下载看一眼。
 
-脚本是开源的 · 你可以先下载下来看:
+脚本是开源的 · 你可以先下载下来看 + 校验 SHA256:
 
 ```bash
 # mac / Linux
 curl -L https://raw.githubusercontent.com/piklen/manmankan/main/scripts/install.sh > /tmp/install.sh
+shasum -a 256 /tmp/install.sh
+# 期望 SHA256: 见 https://github.com/piklen/manmankan/releases (每版 release notes 公布)
 less /tmp/install.sh    # 自己看完(151 行 · 核心就是 uv tool install · 没奇怪命令)
-bash /tmp/install.sh    # 看完再装
+bash /tmp/install.sh    # SHA256 对得上 + 看完再装
 ```
 
-> 💡 当前 alpha 阶段脚本未签名。后续会加 sigstore 签名让 `cosign verify-blob` 机械验证未篡改。
+> 💡 当前 alpha 阶段脚本未做 sigstore 签名 · SHA256 公布是文化层防御 · v0.0.5.0 后加 PEP 740 attestation + `cosign verify-blob` 机械验证。
+
+</details>
 
 </details>
 
