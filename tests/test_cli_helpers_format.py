@@ -70,6 +70,65 @@ class TestFormatFetchedAtCompact:
         # empty 走 except (ValueError) · 返原样
         assert result == ""
 
+    # ── ***REMOVED*** (v0.0.4.8): 凌晨日界提示 ────────────────────────────
+    def test_today_pre_dawn_shows_jinchen(self):
+        """***REMOVED***: 当天 00:00-04:59 → '今晨' 前缀防深夜误判"""
+        with patch("kan.cli_helpers.datetime") as mock_dt:
+            mock_dt.now.return_value = datetime(2026, 5, 14, 2, 30)
+            mock_dt.fromisoformat = datetime.fromisoformat
+            result = format_fetched_at_compact("2026-05-14 01:00")
+        assert result == "今晨 01:00"
+
+    def test_today_04_59_jinchen_upper_boundary(self):
+        """***REMOVED*** boundary: 04:59 仍是凌晨"""
+        with patch("kan.cli_helpers.datetime") as mock_dt:
+            mock_dt.now.return_value = datetime(2026, 5, 14, 10, 0)
+            mock_dt.fromisoformat = datetime.fromisoformat
+            result = format_fetched_at_compact("2026-05-14 04:59")
+        assert result == "今晨 04:59"
+
+    def test_today_05_00_no_jinchen_boundary(self):
+        """***REMOVED*** boundary: 05:00 不再是凌晨"""
+        with patch("kan.cli_helpers.datetime") as mock_dt:
+            mock_dt.now.return_value = datetime(2026, 5, 14, 10, 0)
+            mock_dt.fromisoformat = datetime.fromisoformat
+            result = format_fetched_at_compact("2026-05-14 05:00")
+        assert result == "05:00"
+
+    def test_today_normal_hours_no_prefix(self):
+        """***REMOVED***: 当天 05:00-21:59 → 不加前缀"""
+        with patch("kan.cli_helpers.datetime") as mock_dt:
+            mock_dt.now.return_value = datetime(2026, 5, 14, 17, 0)
+            mock_dt.fromisoformat = datetime.fromisoformat
+            for hour in [5, 9, 12, 17, 21]:
+                t = datetime(2026, 5, 14, hour, 0)
+                result = format_fetched_at_compact(t.isoformat())
+                assert result == t.strftime("%H:%M"), f"{hour}h 不应加前缀"
+
+    def test_yesterday_late_night_shows_zuowan(self):
+        """***REMOVED***: 昨天 22:00-23:59 → '昨晚' 前缀 (早上 scan 看到昨晚数据时防误判为今天)"""
+        with patch("kan.cli_helpers.datetime") as mock_dt:
+            mock_dt.now.return_value = datetime(2026, 5, 14, 8, 0)
+            mock_dt.fromisoformat = datetime.fromisoformat
+            result = format_fetched_at_compact("2026-05-13 23:50")
+        assert result == "昨晚 23:50"
+
+    def test_yesterday_22_00_zuowan_lower_boundary(self):
+        """***REMOVED*** boundary: 昨天 22:00 是 '昨晚'"""
+        with patch("kan.cli_helpers.datetime") as mock_dt:
+            mock_dt.now.return_value = datetime(2026, 5, 14, 8, 0)
+            mock_dt.fromisoformat = datetime.fromisoformat
+            result = format_fetched_at_compact("2026-05-13 22:00")
+        assert result == "昨晚 22:00"
+
+    def test_yesterday_21_59_no_zuowan(self):
+        """***REMOVED*** boundary: 昨天 21:59 不是 '昨晚' · fall through 到 md-hm"""
+        with patch("kan.cli_helpers.datetime") as mock_dt:
+            mock_dt.now.return_value = datetime(2026, 5, 14, 8, 0)
+            mock_dt.fromisoformat = datetime.fromisoformat
+            result = format_fetched_at_compact("2026-05-13 21:59")
+        assert result == "05-13 21:59"
+
 
 class TestNoLegacyTextInWarnings:
     """***REMOVED*** + U-5: 验证 stale 警告新文案 + 删除旧"应有最近交易日"."""
