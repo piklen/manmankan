@@ -252,13 +252,23 @@ def _auto_fetch_stale(pairs: list[tuple[str, str]]) -> None:
     ) as progress:
         task_id = progress.add_task("⏳ 拉取数据...", total=n)
 
+        # ***REMOVED*** (v0.0.4.8): 累计失败 symbol · GIL 保护 list.append 原生 thread-safe
+        # 避免 nonlocal int += 的 read-modify-write race condition
+        fails: list[str] = []
+
         def _on_done(symbol: str, ok: bool, _err_msg: str | None) -> None:
             # D-1 (v0.0.4.7): spinner 加 stale 总数 · 解释"为什么这么多只在拉"
+            # ***REMOVED*** (v0.0.4.8): 加 ✅/❌ emoji + 累计失败数 · 用户立刻看到"成功/失败"语义
             name = name_map.get(symbol, symbol).replace(" ", "")
-            desc = (
-                f"⏳ 补数据 · {n} 只 stale · 最近: {name}" if ok
-                else f"⏳ 补数据 · {n} 只 stale · 失败: {name}"
-            )
+            if not ok:
+                fails.append(symbol)
+            current_fail = len(fails)
+            if ok:
+                desc = f"⏳ 补数据 · {n} 只 stale · ✅ 最近: {name}"
+            else:
+                desc = f"⏳ 补数据 · {n} 只 stale · ❌ 失败: {name}"
+            if current_fail > 0:
+                desc += f" · 失败 {current_fail}"
             progress.update(task_id, advance=1, description=desc)
 
         try:
