@@ -366,8 +366,10 @@ def _detect_shell_fallback() -> str | None:
         name, _path = shellingham.detect_shell()
         if name in _VALID_SHELLS:
             return name
-    except Exception:
-        pass
+    except Exception as e:
+        # CR-4 (v0.0.4.8): shellingham 第三方 · debug log 让 maintainer 知道何时走 fallback
+        from kan._log import debug_log
+        debug_log(__name__, "shellingham detect_shell fallback", e)
 
     # 2) $SHELL env (mac/linux 通用)
     shell_path = os.environ.get("SHELL", "")

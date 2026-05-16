@@ -20,6 +20,7 @@ from datetime import date
 from typing import Literal, NamedTuple
 
 from kan import __version__, config
+from kan._log import debug_log
 
 PYPI_URL = "https://pypi.org/pypi/manmankan/json"
 USER_AGENT = f"manmankan/{__version__}"
@@ -53,10 +54,14 @@ def fetch_latest_version_from_pypi() -> str | None:
         )
         with urllib.request.urlopen(req, timeout=NETWORK_TIMEOUT) as resp:
             data = json.load(resp)
-    except (urllib.error.URLError, OSError, json.JSONDecodeError, TimeoutError):
+    except (urllib.error.URLError, OSError, json.JSONDecodeError, TimeoutError) as e:
+        # CR-4 (v0.0.4.8): 网络/解析失败 · debug log
+        debug_log(__name__, "PyPI version fetch (specific exception)", e)
         return None
-    except Exception:
-        return None  # 兜底 · 不让任何异常逃出
+    except Exception as e:
+        # 兜底 · 不让任何异常逃出 · 仍加 debug log 供排查
+        debug_log(__name__, "PyPI version fetch (unexpected)", e)
+        return None
     if not isinstance(data, dict):
         return None
     info = data.get("info")
@@ -71,7 +76,10 @@ def is_newer(latest: str, current: str) -> bool:
     try:
         from packaging.version import Version
         return Version(latest) > Version(current)
-    except Exception:
+    except Exception as e:
+        # CR-4 (v0.0.4.8): packaging.Version parse 失败 (罕见 · e.g. 非 PEP 440 版本)
+        # fallback 到 tuple 比较 · debug log 让 maintainer 知道何时走 fallback
+        debug_log(__name__, f"Version parse fallback (latest={latest!r}, current={current!r})", e)
         try:
             a = tuple(int(x) for x in latest.split(".") if x.isdigit())
             b = tuple(int(x) for x in current.split(".") if x.isdigit())
