@@ -261,16 +261,21 @@ def _auto_fetch_stale(pairs: list[tuple[str, str]]) -> None:
         fails: list[str] = []
 
         def _on_done(symbol: str, ok: bool, _err_msg: str | None) -> None:
-            # D-1 (v0.0.4.7): spinner 加 stale 总数 · 解释"为什么这么多只在拉"
-            # ***REMOVED*** (v0.0.4.8): 加 ✅/❌ emoji + 累计失败数 · 用户立刻看到"成功/失败"语义
-            name = name_map.get(symbol, symbol).replace(" ", "")
+            # D-1 (v0.0.4.7): spinner 加 stale 总数
+            # ***REMOVED*** (v0.0.4.8): ✅/❌ emoji + 累计失败数
+            # ***REMOVED*** (v0.0.4.8 finalize · P0-5): truncate name to 4 char + 紧凑 desc · 80 列不折行
+            #   旧 "⏳ 补数据 · 169 只 stale · ❌ 失败: 中国铝业 · 失败 3" ≈ 99 列 (折行)
+            #   新 "⏳ 补数据 169 只 · ❌ 中国铝… · 失败 3" ≈ 64 列 (80 列 OK)
+            full_name = name_map.get(symbol, symbol).replace(" ", "")
+            # truncate 到 4 char 防长名占用视觉宽 (e.g. "中国神华" / "贵州茅台" 都 4 char OK)
+            name = full_name if len(full_name) <= 4 else full_name[:3] + "…"
             if not ok:
                 fails.append(symbol)
             current_fail = len(fails)
             if ok:
-                desc = f"⏳ 补数据 · {n} 只 stale · ✅ 最近: {name}"
+                desc = f"⏳ 补数据 {n} 只 · ✅ {name}"
             else:
-                desc = f"⏳ 补数据 · {n} 只 stale · ❌ 失败: {name}"
+                desc = f"⏳ 补数据 {n} 只 · ❌ {name}"
             if current_fail > 0:
                 desc += f" · 失败 {current_fail}"
             progress.update(task_id, advance=1, description=desc)
