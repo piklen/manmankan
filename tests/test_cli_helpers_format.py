@@ -130,53 +130,9 @@ class TestFormatFetchedAtCompact:
         assert result == "05-13 21:59"
 
 
-class TestNoLegacyTextInWarnings:
-    """***REMOVED*** + U-5: 验证 stale 警告新文案 + 删除旧"应有最近交易日"."""
-
-    def test_stale_warning_uses_new_phrasing(self):
-        """scan/trend stale 警告应含"缓存到 X 收盘" + "数据滞后 N 天" · 不再含"应有最近交易日"."""
-        from pathlib import Path
-        scan_src = Path("kan/cli_scan_cmds.py").read_text(encoding="utf-8")
-        trend_src = Path("kan/cli_trend_cmds.py").read_text(encoding="utf-8")
-        for src, name in [(scan_src, "scan"), (trend_src, "trend")]:
-            assert "应有最近交易日" not in src, f"{name}: 旧术语 '应有最近交易日' 应删除 (***REMOVED***)"
-            assert "当前缓存到" in src, f"{name}: 新文案 '当前缓存到' 应出现 (***REMOVED***)"
-            assert "数据滞后" in src, f"{name}: 新文案 '数据滞后' 应出现 (***REMOVED***)"
-
-    def test_intraday_warning_uses_compliant_phrasing(self):
-        """***REMOVED*** (P0 cleanup v0.0.4.7): 盘中警告改为状态描述 · 不再含预测性"下一秒打开".
-
-        历史: 早期 commit (8ab951c) 引入"现在涨停可能下一秒打开" 触碰 AGENTS.md §6 不预测涨跌红线
-        修复 (***REMOVED*** + ***REMOVED***): 改成"涨跌停状态仍可能变化 / 建议盘后 15:30 后看 final 数据"
-        """
-        from pathlib import Path
-        scan_src = Path("kan/cli_scan_cmds.py").read_text(encoding="utf-8")
-        trend_src = Path("kan/cli_trend_cmds.py").read_text(encoding="utf-8")
-        for src, name in [(scan_src, "scan"), (trend_src, "trend")]:
-            # 新文案: 状态描述
-            assert "涨跌停状态仍可能变化" in src, (
-                f"{name}: 新文案 '涨跌停状态仍可能变化' 应出现 (***REMOVED*** + ***REMOVED***)"
-            )
-            assert "建议盘后 15:30" in src, (
-                f"{name}: 新文案 '建议盘后 15:30 后看 final 数据' 应出现"
-            )
-            # 红线: 旧预测性词不应残留
-            assert "下一秒打开" not in src, (
-                f"{name}: 预测性词 '下一秒打开' 应删除 (AGENTS.md §6 红线 · ***REMOVED***)"
-            )
-
-    def test_warnings_use_elif_not_if_if(self):
-        """***REMOVED***: 双警告应 if/elif 互斥 · 不再 if/if."""
-        from pathlib import Path
-        for fp in ["kan/cli_scan_cmds.py", "kan/cli_trend_cmds.py"]:
-            src = Path(fp).read_text(encoding="utf-8")
-            # 找 "if is_stale" 后紧跟的 "elif phase == PHASE_INTRADAY"
-            assert "if is_stale:" in src
-            assert "elif phase == PHASE_INTRADAY:" in src, (
-                f"{fp}: 双警告应改为 if/elif 互斥 (***REMOVED***)"
-            )
-            # 反例: "if phase == PHASE_INTRADAY:" 独立 if (不接 elif) 应消失
-            # 注: 用 "    if phase ==" (前 4 空格 · 表 stale 之外的独立 if) 检测
-            assert "\n    if phase == PHASE_INTRADAY:" not in src, (
-                f"{fp}: 残留独立 'if phase == INTRADAY' (应改 elif · ***REMOVED***)"
-            )
+# TestNoLegacyTextInWarnings 已删除 (***REMOVED*** v0.0.4.8 改造)
+# 原 3 个 grep-source 作弊 test 已被替换为 CliRunner runtime 真测:
+# - test_trend_cli.py::test_trend_stale_warning_uses_new_phrasing
+# - test_trend_cli.py::test_trend_intraday_warning_compliant_phrasing
+# - test_trend_cli.py::test_trend_warnings_mutex_stale_wins
+# scan/trend warning template 同源 · trend 真测覆盖 template 内容 · scan 命令完整 CliRunner coverage 推 ***REMOVED***.
