@@ -202,8 +202,8 @@ def scan(
     elif phase == PHASE_INTRADAY:
         # ***REMOVED*** (v0.0.4.7 P0 cleanup ***REMOVED*** + ***REMOVED***): 状态描述而非走势预测 · 守 AGENTS.md §6 红线
         console.print(
-            "\n  [bold yellow]⚠️ 当前盘中 · 涨跌停状态仍可能变化\n"
-            "   (盘中涨停股可能回落到非涨停 · 跌停股可能回升 · 都是正常波动)\n"
+            "\n  [bold yellow]⚠️ 当前盘中 · 涨跌停标签反映当前时刻 · 非收盘 final\n"
+            "   (盘中价格仍在变动 · 涨停/跌停状态可能与收盘不同)\n"
             "   建议盘后 15:30 后看 final 数据[/bold yellow]"
         )
 
@@ -445,8 +445,8 @@ def info(
         )
     elif phase == PHASE_INTRADAY:
         console.print(
-            "\n  [bold yellow]⚠️ 当前盘中 · 涨跌停状态仍可能变化\n"
-            "   (盘中涨停股可能回落到非涨停 · 跌停股可能回升 · 都是正常波动)\n"
+            "\n  [bold yellow]⚠️ 当前盘中 · 涨跌停标签反映当前时刻 · 非收盘 final\n"
+            "   (盘中价格仍在变动 · 涨停/跌停状态可能与收盘不同)\n"
             "   建议盘后 15:30 后看 final 数据[/bold yellow]"
         )
 
