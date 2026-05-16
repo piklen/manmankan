@@ -14,7 +14,7 @@ import contextlib
 import os
 import re as _re
 from contextlib import contextmanager
-from datetime import date, datetime
+from datetime import date, datetime, timedelta
 
 import typer
 
@@ -68,12 +68,14 @@ def format_date_compact(d: date) -> str:
 def format_fetched_at_compact(fetched_str: str) -> str:
     """从 ISO datetime string 提取最 compact 表示。
 
-    - 当天: `16:05` (省日期 · 因为 user 知道今天)
+    - 当天一般 (05:00-21:59): `16:05` (省日期 · 因为 user 知道今天)
+    - 当天凌晨 (00:00-04:59): `今晨 01:00` (UX-3 · 防深夜跑 scan 时误判为下午)
+    - 昨天傍晚 (22:00-23:59): `昨晚 23:50` (对称提示 · 防早上 scan 时误判为今天)
     - 同年不同天: `05-12 16:05`
     - 跨年: `2025-12-31 16:05`
     - 不可解析: 原样返回
 
-    UX-1 (v0.0.4.7): scan title 末尾 fetched_at 压缩 · 80 列不溢出。
+    UX-3 (v0.0.4.8): 凌晨日界提示防误判;UX-1 (v0.0.4.7): 80 列窄屏不溢出。
     """
     try:
         dt = datetime.fromisoformat(fetched_str)
@@ -81,7 +83,13 @@ def format_fetched_at_compact(fetched_str: str) -> str:
         return fetched_str
     today = datetime.now().date()
     if dt.date() == today:
-        return dt.strftime("%H:%M")
+        hour = dt.hour
+        time_str = dt.strftime("%H:%M")
+        if 0 <= hour < 5:
+            return f"今晨 {time_str}"
+        return time_str
+    if dt.date() == today - timedelta(days=1) and dt.hour >= 22:
+        return f"昨晚 {dt.strftime('%H:%M')}"
     if dt.year == today.year:
         return dt.strftime("%m-%d %H:%M")
     return dt.strftime("%Y-%m-%d %H:%M")
