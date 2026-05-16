@@ -8,6 +8,7 @@ from datetime import date, datetime, timedelta
 from pathlib import Path
 from typing import TYPE_CHECKING
 
+from kan._log import debug_log
 from kan.paths import DATA_DIR
 
 if TYPE_CHECKING:
@@ -96,11 +97,8 @@ def _read_cutoff_from_parquet(path: Path) -> date | None:
             return last
         return pd.Timestamp(last).date()
     except Exception as e:
-        import logging
-        logging.getLogger(__name__).debug(
-            "_read_cutoff_from_parquet(%s): %s: %s",
-            path.name, type(e).__name__, e,
-        )
+        # CR-4 (v0.0.4.8): normalize 到 _log.debug_log helper (KAN_DEBUG=1 可见)
+        debug_log(__name__, f"_read_cutoff_from_parquet({path.name})", e)
         return None
 
 
@@ -146,7 +144,10 @@ def _fetch_eastmoney(symbol: str, start: str) -> pd.DataFrame | None:
             return None
         _eastmoney_ok = True
         return raw.rename(columns=_EM_COLUMN_MAP)
-    except Exception:
+    except Exception as e:
+        # CR-4 (v0.0.4.8): broad catch 是 legitimate (akshare 第三方不保 exception type) ·
+        # 但加 debug log · 用户开 KAN_DEBUG=1 可见诊断 · 排查 fallback 触发原因
+        debug_log(__name__, "fetch eastmoney", e)
         _eastmoney_ok = False
         return None
 
@@ -199,7 +200,9 @@ def _fetch_baostock(symbol: str, start: str) -> pd.DataFrame | None:
             rows = []
             while rs.next():
                 rows.append(rs.get_row_data())
-        except Exception:
+        except Exception as e:
+            # CR-4 (v0.0.4.8): baostock 第三方 · broad catch + debug log
+            debug_log(__name__, "fetch baostock", e)
             return None
 
     if not rows:
@@ -236,7 +239,9 @@ def _fetch_sina(symbol: str, start: str) -> pd.DataFrame | None:
             end_date=end,
             adjust="qfq",
         )
-    except Exception:
+    except Exception as e:
+        # CR-4 (v0.0.4.8): 新浪 akshare · broad catch + debug log
+        debug_log(__name__, "fetch sina", e)
         return None
     finally:
         sys.stderr = _real_stderr
@@ -273,7 +278,9 @@ def _fetch_tencent(symbol: str, start: str) -> pd.DataFrame | None:
             adjust="qfq",
             timeout=15,
         )
-    except Exception:
+    except Exception as e:
+        # CR-4 (v0.0.4.8): 腾讯 akshare · broad catch + debug log
+        debug_log(__name__, "fetch tencent", e)
         return None
     finally:
         sys.stderr = _real_stderr
@@ -384,6 +391,8 @@ def fetch_batch(
                 df = fetch_kline(symbol, days=days, force=force)
                 return symbol, df, None
             except Exception as e:
+                # CR-4 (v0.0.4.8): fetch_batch retry path · 加 debug log
+                debug_log(__name__, f"fetch_batch retry {attempt}", e)
                 if attempt == 0:
                     time.sleep(1)
                     continue

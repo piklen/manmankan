@@ -178,3 +178,106 @@ def test_trend_streak_option_removed(runner: CliRunner) -> None:
     """--streak 参数不提供 · 传 --streak 应当 typer 报错"""
     result = runner.invoke(app, ["trend", "--streak", "5"])
     assert result.exit_code != 0
+
+
+# ════════════════════════════════════════════════════════════════
+# UX-2 + UX-3 + UX-4 stale/intraday warning runtime 真测
+# (CR-1 v0.0.4.8 改造自 test_cli_helpers_format.py TestNoLegacyTextInWarnings grep-source 作弊)
+# ════════════════════════════════════════════════════════════════
+def test_trend_stale_warning_uses_new_phrasing(
+    runner: CliRunner, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """UX-2 + U-5 真测: stale 警告应含'当前缓存到 X 收盘' + '数据滞后 N 天' · 不再'应有最近交易日'.
+
+    CR-1 v0.0.4.8: 旧 grep-source 作弊改 CliRunner 真测 ·
+    模拟 data_cutoff < expected_cutoff → is_stale=True 触发 stale 警告分支.
+    """
+    from datetime import date
+
+    # data_cutoff_date 是 cli_trend_cmds.trend() 内 lazy import from kan.fetcher · patch 原 module
+    monkeypatch.setattr(
+        "kan.fetcher.data_cutoff_date", lambda _sym: date(2026, 5, 1)
+    )
+    monkeypatch.setattr(
+        "kan.trading_calendar.latest_trade_date", lambda: date(2026, 5, 14)
+    )
+    monkeypatch.setattr("kan.trading_calendar.market_phase", lambda: "PRE_OPEN")
+
+    result = runner.invoke(app, ["trend"])
+    assert result.exit_code == 0, f"trend 退出失败 · stderr: {result.stderr if hasattr(result, 'stderr') else ''}"
+    output = result.output
+    # 新文案三件套
+    assert "当前缓存到" in output, f"新文案 '当前缓存到' 应出现 · 实际 output: {output[:500]}"
+    assert "数据滞后" in output, "新文案 '数据滞后 N 天' 应出现"
+    assert "kan fetch --force" in output, "新文案应含行动建议 'kan fetch --force'"
+    # 旧文案应删
+    assert "应有最近交易日" not in output, "旧术语 '应有最近交易日' 应删除"
+
+
+def test_trend_intraday_warning_compliant_phrasing(
+    runner: CliRunner, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """UX-3 + PM-1 真测: 盘中警告应是状态描述 · 不含预测性'下一秒打开' AGENTS.md §6 红线词.
+
+    CR-1 v0.0.4.8: 旧 grep-source 改 CliRunner 真测 ·
+    模拟 fresh data + phase=INTRADAY → 触发 intraday 警告分支.
+    """
+    from datetime import date
+
+    # 让 data_cutoff = expected_cutoff → is_stale=False · 不触发 stale 分支
+    monkeypatch.setattr(
+        "kan.fetcher.data_cutoff_date", lambda _sym: date(2026, 5, 14)
+    )
+    monkeypatch.setattr(
+        "kan.trading_calendar.latest_trade_date", lambda: date(2026, 5, 14)
+    )
+    # phase=INTRADAY 触发 elif intraday 分支
+    monkeypatch.setattr(
+        "kan.trading_calendar.market_phase", lambda: "in"
+    )
+
+    result = runner.invoke(app, ["trend"])
+    assert result.exit_code == 0
+    output = result.output
+    # 新文案 v0.0.4.8 (UX-1+PM-4 cross-validated): 纯状态描述 · 移除 "可能回落/可能回升/都是正常波动" 预测性词
+    assert "涨跌停标签反映当前时刻" in output, (
+        f"v0.0.4.8 新文案 '涨跌停标签反映当前时刻' 应出现 · 实际 output: {output[-500:]}"
+    )
+    assert "建议盘后 15:30" in output, "新文案应含 '建议盘后 15:30'"
+    # 红线: 旧预测性词不应残留 (AGENTS.md §6 不预测涨跌)
+    assert "下一秒打开" not in output, "预测性词 '下一秒打开' 应删除 (PM-1 + 合-2 v0.0.4.7)"
+    assert "都是正常波动" not in output, "v0.0.4.8 UX-1: '都是正常波动' 含预测语义 · 应删除"
+    assert "可能回落" not in output, "v0.0.4.8 UX-1: '可能回落' 含方向词 · 应删除"
+
+
+def test_trend_warnings_mutex_stale_wins(
+    runner: CliRunner, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """UX-4 真测: stale+intraday 同时为 True 时只显示 stale · intraday 不显示 (if/elif 互斥).
+
+    CR-1 v0.0.4.8: 旧 grep-source 作弊改 CliRunner 真测 ·
+    场景: 用户跑 scan 时盘中数据 stale (数据中断 + 行情仍在跑) → stale 优先(用户最先动作就是 fetch).
+    """
+    from datetime import date
+
+    # stale=True + phase=INTRADAY
+    monkeypatch.setattr(
+        "kan.fetcher.data_cutoff_date", lambda _sym: date(2026, 5, 1)
+    )
+    monkeypatch.setattr(
+        "kan.trading_calendar.latest_trade_date", lambda: date(2026, 5, 14)
+    )
+    monkeypatch.setattr(
+        "kan.trading_calendar.market_phase", lambda: "in"
+    )
+
+    result = runner.invoke(app, ["trend"])
+    assert result.exit_code == 0
+    output = result.output
+    # stale 警告应显示
+    assert "当前缓存到" in output, "stale 警告应显示"
+    assert "数据滞后" in output, "stale 警告应含'数据滞后'"
+    # intraday 警告不应同时显示 (if/elif 互斥)
+    assert "涨跌停标签反映当前时刻" not in output, (
+        "stale=True 时不应同时显示 intraday 警告 (UX-4 互斥 · 用户首动作 fetch)"
+    )

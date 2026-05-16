@@ -23,9 +23,9 @@ It deliberately stops there: **no buy/sell advice, no ratings, no price targets,
 
 慢慢看是一个**纯命令行**的 A 股自选股位置感工具。它把电商「慢慢买」的「先看历史价位再决策」迁移到股市:把你 30 只自选股在 3、5、7、10、15、30、60、90、120、180 日窗口内的位置百分位**一屏显示**,把「同时触及多个低点」标成共振信号,然后**闭嘴**——剩下的判断,你自己做。
 
-> 📦 **当前版本 v0.0.4.7.1**（Alpha · 防御纵深 + UX 散户化 + 并发自适应 + 一键安装脚本 + 检查缓存 spinner 进度可见）· `pip install manmankan` 即装即用 · API 在 1.0 前可能调整。
+> 📦 **当前版本 v0.0.4.8**（Alpha · CR-1/CR-2 测试改造完毕 + UX 散户化升级:凌晨日界 + spinner ✅❌ + kan add/remove/info 中文友好 + 错误消息加引导）· `pip install manmankan` 即装即用 · API 在 1.0 前可能调整。
 >
-> 🌱 **v0.0.4.7 新增 [新手专区](#新手专区)**：第一次用命令行的散户 mac / Windows 各 2 步装好。
+> 🌱 **[新手专区](#新手专区)**（默认展开 · v0.0.4.8 升级）：第一次用命令行的散户 mac / Windows 各 2 步装好。
 >
 > ⚠️ **v0.0.4.4 及之前**有"凌晨拉数据后 scan 整天显示昨日涨停名单"bug · v0.0.4.5 已修。建议升级到最新版：`uv tool install manmankan --upgrade`
 >
@@ -75,7 +75,7 @@ It deliberately stops there: **no buy/sell advice, no ratings, no price targets,
 
 > **第一次用命令行工具？看这里 👇**（老用户请直接跳到 [30 秒上手](#30-秒上手)）
 
-<details>
+<details open>
 <summary><b>🌱 从没用过终端怎么装（mac / Windows 各 2 步）</b></summary>
 
 ### Mac / Linux 用户
@@ -118,16 +118,25 @@ kan scan                        # 看一屏位置 + 共振信号
 - 看 [§故障排查 FAQ](#故障排查-faq)
 - 来 [GitHub Issues](https://github.com/piklen/manmankan/issues) 提问 · 标题写清楚你哪一步卡住了
 
-### 不放心一键脚本？想自己看完再装？
+<details>
+<summary><b>🔒 不放心一键脚本？先看脚本再装(Verify before bash · 可选 · 安全敏感用户)</b></summary>
 
-完全合理。脚本是开源的 · 你可以先下载下来看:
+完全合理。**永远不要盲跑 `curl ... | bash`** —— 哪怕是知名工具的官方脚本，也最好下载看一眼。
+
+脚本是开源的 · 你可以先下载下来看 + 校验 SHA256:
 
 ```bash
 # mac / Linux
 curl -L https://raw.githubusercontent.com/piklen/manmankan/main/scripts/install.sh > /tmp/install.sh
-less /tmp/install.sh    # 自己看完
-bash /tmp/install.sh    # 看完再装
+shasum -a 256 /tmp/install.sh
+# 期望 SHA256: 见 https://github.com/piklen/manmankan/releases (每版 release notes 公布)
+less /tmp/install.sh    # 自己看完(151 行 · 核心就是 uv tool install · 没奇怪命令)
+bash /tmp/install.sh    # SHA256 对得上 + 看完再装
 ```
+
+> 💡 当前 alpha 阶段脚本未做 sigstore 签名 · SHA256 公布是文化层防御 · v0.0.5.0 后加 PEP 740 attestation + `cosign verify-blob` 机械验证。
+
+</details>
 
 </details>
 

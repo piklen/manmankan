@@ -202,7 +202,8 @@ def scan(
     elif phase == PHASE_INTRADAY:
         # UX-3 (v0.0.4.7 P0 cleanup PM-1 + 合-2): 状态描述而非走势预测 · 守 AGENTS.md §6 红线
         console.print(
-            "\n  [bold yellow]⚠️ 当前盘中 · 涨跌停状态仍可能变化\n"
+            "\n  [bold yellow]⚠️ 当前盘中 · 涨跌停标签反映当前时刻 · 非收盘 final\n"
+            "   (盘中价格仍在变动 · 涨停/跌停状态可能与收盘不同)\n"
             "   建议盘后 15:30 后看 final 数据[/bold yellow]"
         )
 
@@ -325,9 +326,20 @@ def high(
 
 @app.command()
 def info(
-    symbol: Annotated[str, typer.Argument(help="股票代码（如 600519）")],
+    symbol: Annotated[
+        str | None,
+        typer.Argument(help="股票代码（如 600519）", show_default=False),
+    ] = None,
 ) -> None:
     """单只股票详情（全周期位置 + 涨跌信息）"""
+    # U-1 (v0.0.4.8 P0-6): 跟 kan add 同款散户中文 · 兑现 U-2 承诺到 info 命令
+    if not symbol:
+        typer.echo(
+            "请告诉我看哪只股票 · 例: kan info 600519 (代码或名称都行)",
+            err=True,
+        )
+        raise typer.Exit(2)
+
     from rich.console import Console
 
     status_console = Console(stderr=True)
@@ -444,7 +456,8 @@ def info(
         )
     elif phase == PHASE_INTRADAY:
         console.print(
-            "\n  [bold yellow]⚠️ 当前盘中 · 涨跌停状态仍可能变化\n"
+            "\n  [bold yellow]⚠️ 当前盘中 · 涨跌停标签反映当前时刻 · 非收盘 final\n"
+            "   (盘中价格仍在变动 · 涨停/跌停状态可能与收盘不同)\n"
             "   建议盘后 15:30 后看 final 数据[/bold yellow]"
         )
 

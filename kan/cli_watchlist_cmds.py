@@ -16,7 +16,10 @@ def help_cmd() -> None:
     """查看命令帮助"""
     from rich.console import Console
 
-    Console().print("""[bold]慢慢看 · 命令速记[/bold]
+    from kan import __version__
+
+    # UX-5 (U-5 v0.0.4.8): 速记表顶部加版本号 · issue 复现成本下降
+    Console().print(f"""[bold]慢慢看 · v{__version__} · 命令速记[/bold]
 
 [bold cyan]自选股管理[/bold cyan]
   kan add 600519 000858     添加自选股（代码）
@@ -66,10 +69,22 @@ def help_cmd() -> None:
 
 @app.command()
 def add(
-    symbols: Annotated[list[str], typer.Argument(help="股票代码或名称（如 600519 茅台）")],
+    symbols: Annotated[
+        list[str] | None,
+        typer.Argument(help="股票代码或名称（如 600519 茅台）", show_default=False),
+    ] = None,
 ) -> None:
     """添加自选股（支持代码或名称搜索）"""
     import time as _time
+
+    # U-2 (v0.0.4.8): 无参 Typer 默认英文 "Missing argument 'SYMBOLS...'"
+    # 改散户中文友好提示 + 例子 (replace argument-not-provided default)
+    if not symbols:
+        typer.echo(
+            "请告诉我要加哪只股票 · 例: kan add 600519 茅台 (代码或名称都行)",
+            err=True,
+        )
+        raise typer.Exit(2)
 
     batch = len(symbols) > 1
 
@@ -116,7 +131,11 @@ def add(
                     continue
                 name = names.get(cleaned)
                 if not name:
-                    failures.append(f"未找到股票: {cleaned}（不在 A 股代码表中）")
+                    # U-3 (v0.0.4.8): 加下一步引导 · 不留 dead-end
+                    failures.append(
+                        f"未找到股票: {cleaned}（不在 A 股代码表中）· "
+                        f"试 `kan list` 看自选 / 用名称搜索 `kan add 茅台`"
+                    )
                     fail += 1
                     continue
                 add_stock(wl, cleaned, name)
@@ -139,7 +158,11 @@ def add(
                             typer.echo(f"  ✅ 已添加 {_name.replace(' ', '')} ({code})")
                         success += 1
                 elif len(matches) == 0:
-                    failures.append(f"未找到包含「{sym}」的股票")
+                    # U-3 (v0.0.4.8): 加下一步引导
+                    failures.append(
+                        f"未找到包含「{sym}」的股票 · "
+                        f"试 `kan list` 看自选 / 用代码精确加 `kan add 600519`"
+                    )
                     fail += 1
                 else:
                     # U-1 (v0.0.4.7 P0): 多匹配列出候选 · 与 kan remove 一致
@@ -185,9 +208,20 @@ def add(
 
 @app.command()
 def remove(
-    symbols: Annotated[list[str], typer.Argument(help="股票代码或名称（支持多只）")],
+    symbols: Annotated[
+        list[str] | None,
+        typer.Argument(help="股票代码或名称（支持多只）", show_default=False),
+    ] = None,
 ) -> None:
     """移除自选股（支持代码或名称 · 多只批量删除）"""
+    # U-1 (v0.0.4.8 P0-6): 跟 kan add 同款散户中文 · 兑现 U-2 承诺到 remove 命令
+    if not symbols:
+        typer.echo(
+            "请告诉我要移除哪只股票 · 例: kan remove 600519 (代码或名称都行)",
+            err=True,
+        )
+        raise typer.Exit(2)
+
     from kan import watchlist as wl
 
     for sym in symbols:
