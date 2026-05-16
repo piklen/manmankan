@@ -18,6 +18,7 @@ from datetime import date, datetime, timedelta
 
 import typer
 
+from kan._log import debug_log
 from kan._time import today as _today
 
 # 错误消息脱敏 · 防 traceback 泄漏本地路径（home / 绝对路径）
@@ -376,8 +377,7 @@ def _detect_shell_fallback() -> str | None:
         if name in _VALID_SHELLS:
             return name
     except Exception as e:
-        # CR-4 (v0.0.4.8): shellingham 第三方 · debug log 让 maintainer 知道何时走 fallback
-        from kan._log import debug_log
+        # 架-3 (v0.0.4.8 finalize): lazy import 改顶层一致 (zero-cost stdlib wrapper)
         debug_log(__name__, "shellingham detect_shell fallback", e)
 
     # 2) $SHELL env (mac/linux 通用)
