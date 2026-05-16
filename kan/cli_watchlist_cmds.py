@@ -16,7 +16,10 @@ def help_cmd() -> None:
     """查看命令帮助"""
     from rich.console import Console
 
-    Console().print("""[bold]慢慢看 · 命令速记[/bold]
+    from kan import __version__
+
+    # UX-5 (U-5 v0.0.4.8): 速记表顶部加版本号 · issue 复现成本下降
+    Console().print(f"""[bold]慢慢看 · v{__version__} · 命令速记[/bold]
 
 [bold cyan]自选股管理[/bold cyan]
   kan add 600519 000858     添加自选股（代码）
