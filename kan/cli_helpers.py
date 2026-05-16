@@ -272,10 +272,10 @@ def _auto_fetch_stale(pairs: list[tuple[str, str]]) -> None:
             if not ok:
                 fails.append(symbol)
             current_fail = len(fails)
-            if ok:
-                desc = f"⏳ 补数据 {n} 只 · ✅ {name}"
-            else:
-                desc = f"⏳ 补数据 {n} 只 · ❌ {name}"
+            desc = (
+                f"⏳ 补数据 {n} 只 · ✅ {name}" if ok
+                else f"⏳ 补数据 {n} 只 · ❌ {name}"
+            )
             if current_fail > 0:
                 desc += f" · 失败 {current_fail}"
             progress.update(task_id, advance=1, description=desc)
