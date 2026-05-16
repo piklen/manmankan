@@ -81,32 +81,108 @@ class TestKanWorkersEnvVar:
             assert resolve_max_workers() == 8
 
 
-class TestD1MigrationTextRemoved:
-    """D-1: v0.0.4.5 一次性迁移文案应该被删除 (对老用户冗余)."""
+class TestD1RuntimeBehavior:
+    """D-1 + D-2 (v0.0.4.7): _auto_fetch_stale 运行时行为真测.
 
-    def test_no_v045_migration_text_in_cli_helpers(self):
-        from pathlib import Path
-        src = Path("kan/cli_helpers.py").read_text(encoding="utf-8")
-        assert "v0.0.4.5 起首次刷新会全量补数据" not in src, (
-            "v0.0.4.5 迁移文案应在 v0.0.4.7 移除 (D-1)"
+    CR-1 v0.0.4.8: 改造自旧 TestD1MigrationTextRemoved (grep-source 作弊 · 违反 LOCKED).
+    新设计: mock rich.Console / rich.Progress · capture 所有调用 · verify runtime 用户面输出.
+    """
+
+    @staticmethod
+    def _run_auto_fetch_stale(pairs, max_workers=8, errors=None):
+        """Helper: 跑 _auto_fetch_stale + mock 所有依赖 + 返回 (console_prints, status_updates).
+
+        mock 策略:
+        - Console / Progress 整体替换 MagicMock · 不渲染但记录调用
+        - is_fresh return False → 所有 pairs 都进 stale list
+        - fetch_batch 返回空 results · errors 可由调用方注入
+        - resolve_max_workers / latest_trade_date 也 mock 防真实 fetch
+        """
+        from unittest.mock import MagicMock, patch
+
+        from kan.cli_helpers import _auto_fetch_stale
+
+        fake_console = MagicMock()
+        fake_status = MagicMock()
+        fake_status.__enter__ = MagicMock(return_value=fake_status)
+        fake_status.__exit__ = MagicMock(return_value=None)
+        fake_console.status = MagicMock(return_value=fake_status)
+
+        fake_progress = MagicMock()
+        fake_progress.__enter__ = MagicMock(return_value=fake_progress)
+        fake_progress.__exit__ = MagicMock(return_value=None)
+        fake_progress.add_task = MagicMock(return_value=0)
+
+        with patch("rich.console.Console", return_value=fake_console), \
+             patch("rich.progress.Progress", return_value=fake_progress), \
+             patch("kan.fetcher.is_fresh", return_value=False), \
+             patch(
+                 "kan.fetcher.fetch_batch",
+                 return_value=({}, errors or {})
+             ), \
+             patch("kan.fetcher.resolve_max_workers", return_value=max_workers), \
+             patch("kan.trading_calendar.latest_trade_date", return_value=None):
+            _auto_fetch_stale(pairs)
+
+        # 提取所有 console.print 调用文本
+        prints = []
+        for call_obj in fake_console.print.call_args_list:
+            args = call_obj.args
+            if args:
+                prints.append(str(args[0]))
+
+        # 提取所有 status.update 调用文本
+        status_updates = []
+        for call_obj in fake_status.update.call_args_list:
+            args = call_obj.args
+            if args:
+                status_updates.append(str(args[0]))
+
+        # 提取所有 progress.update description
+        progress_descs = []
+        for call_obj in fake_progress.update.call_args_list:
+            desc = call_obj.kwargs.get("description", "")
+            if desc:
+                progress_descs.append(str(desc))
+
+        return {
+            "console_prints": prints,
+            "status_updates": status_updates,
+            "progress_descs": progress_descs,
+            "all_text": "\n".join(prints + status_updates + progress_descs),
+        }
+
+    def test_no_v045_migration_text_in_runtime_output(self):
+        """D-1: v0.0.4.5 一次性迁移文案不应出现在 _auto_fetch_stale 的任何 user-facing 输出中."""
+        pairs = [(f"60000{i:04d}", f"股{i}") for i in range(35)]
+        result = self._run_auto_fetch_stale(pairs)
+        assert "v0.0.4.5 起首次刷新会全量补数据" not in result["all_text"], (
+            f"旧迁移文案不应出现在用户面输出 · 实际全部输出: {result['all_text'][:500]}"
         )
 
-    def test_spinner_description_contains_stale_count(self):
-        """D-1: spinner description 应含 '{n} 只 stale' · 解释为什么这么多只在拉."""
-        from pathlib import Path
-        src = Path("kan/cli_helpers.py").read_text(encoding="utf-8")
-        # 新 spinner 文本应含 "只 stale" 字眼
-        assert "只 stale" in src, (
-            "spinner description 应含 '{n} 只 stale' (D-1)"
+    def test_status_spinner_shows_stale_count(self):
+        """D-1: status spinner 在 ticking 阶段应显示 'N 只 stale' 信息密度 ·
+
+        让用户理解"为什么这么多只在拉"(cache 全失效场景).
+        """
+        # 30 只 (> n_total // 20 = 1 · 触发 ticking update)
+        pairs = [(f"60000{i:04d}", f"股{i}") for i in range(30)]
+        result = self._run_auto_fetch_stale(pairs)
+        all_status = "\n".join(result["status_updates"])
+        assert "只 stale" in all_status, (
+            f"status spinner 应在 ticking 阶段显示 '只 stale' · 实际 status updates: "
+            f"{result['status_updates']}"
         )
 
-    def test_concurrency_message_uses_auto_workers_not_hardcoded_5(self):
-        """D-2: 并发数提示不再硬编码 '并发 5' · 应动态显示."""
-        from pathlib import Path
-        src = Path("kan/cli_helpers.py").read_text(encoding="utf-8")
-        assert "并发 5" not in src, (
-            "硬编码 '并发 5' 应替换为 resolve_max_workers() 动态值 (D-2)"
+    def test_concurrency_message_shows_dynamic_workers_not_hardcoded_5(self):
+        """D-2: 30+ stale 股票时 concurrency 提示应显示 resolve_max_workers 动态值 · 不硬编码 '并发 5'."""
+        pairs = [(f"60000{i:04d}", f"股{i}") for i in range(35)]
+        # max_workers=8 模拟 4 核 mac 的启发式结果
+        result = self._run_auto_fetch_stale(pairs, max_workers=8)
+        all_prints = "\n".join(result["console_prints"])
+        assert "并发 8" in all_prints, (
+            f"应显示动态 '并发 8' · 实际 console prints: {result['console_prints']}"
         )
-        assert "resolve_max_workers" in src, (
-            "应调用 resolve_max_workers 显示实际并发数 (D-2)"
+        assert "并发 5" not in all_prints, (
+            "不应硬编码 '并发 5' (D-2 v0.0.4.7 改造点)"
         )

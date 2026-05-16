@@ -211,3 +211,113 @@ class TestMaxTrendDates:
     def test_wider_allows_more_dates(self) -> None:
         from kan.render import max_trend_dates
         assert max_trend_dates(200) > max_trend_dates(80)
+
+
+# ════════════════════════════════════════════════════════════════
+# UX-2 + UX-3 + UX-4 stale/intraday warning runtime 真测 (scan 命令)
+# (CR-1 v0.0.4.8: 补 scan 完整 LOCKED 覆盖 · 跟 trend runtime test 对称)
+# ════════════════════════════════════════════════════════════════
+@pytest.fixture
+def scan_runner(monkeypatch):
+    """scan command CliRunner · 隔离 watchlist + fetcher + scanner · 让 scan 走 mock 数据."""
+    from datetime import date
+
+    from typer.testing import CliRunner
+
+    from kan.models import PeriodResult, StockScanResult
+
+    fake_result = StockScanResult(
+        symbol="600519",
+        name="测试",
+        current_price=100.0,
+        scan_date=date(2026, 5, 14),
+        periods=[
+            PeriodResult(
+                period=3, n_low=90.0, n_high=110.0, position_pct=50.0,
+                at_low=False, at_high=False,
+            ),
+        ],
+        low_resonance=0,
+        high_resonance=0,
+    )
+
+    monkeypatch.setattr(
+        "kan.cli_scan_cmds._get_watchlist_pairs",
+        lambda: [("600519", "测试")],
+    )
+    monkeypatch.setattr("kan.cli_scan_cmds._auto_fetch_stale", lambda _pairs: None)
+    monkeypatch.setattr(
+        "kan.scanner.scan_batch", lambda _pairs, mode="low": [fake_result]
+    )
+    monkeypatch.setattr("kan.fetcher.cache_age", lambda _sym: "2026-05-14 12:00")
+    monkeypatch.setattr("kan.scanner.get_limit_threshold", lambda *a, **k: 10.0)
+    return CliRunner()
+
+
+def test_scan_stale_warning_uses_new_phrasing(scan_runner, monkeypatch):
+    """UX-2 + U-5 真测: scan 命令的 stale 警告应含'当前缓存到 X 收盘' + '数据滞后 N 天'."""
+    from datetime import date
+
+    from kan.app import app
+
+    monkeypatch.setattr(
+        "kan.fetcher.data_cutoff_date", lambda _sym: date(2026, 5, 1)
+    )
+    monkeypatch.setattr(
+        "kan.trading_calendar.latest_trade_date", lambda: date(2026, 5, 14)
+    )
+    monkeypatch.setattr("kan.trading_calendar.market_phase", lambda: "pre")
+
+    result = scan_runner.invoke(app, ["scan"])
+    assert result.exit_code == 0, f"scan failed · output: {result.output[:500]}"
+    output = result.output
+    assert "当前缓存到" in output, f"scan 新文案 '当前缓存到' 应出现 · output: {output[:500]}"
+    assert "数据滞后" in output
+    assert "kan fetch --force" in output
+    assert "应有最近交易日" not in output
+
+
+def test_scan_intraday_warning_compliant_phrasing(scan_runner, monkeypatch):
+    """UX-3 + PM-1 真测: scan 盘中警告应是状态描述 · 不含'下一秒打开' 红线词."""
+    from datetime import date
+
+    from kan.app import app
+
+    monkeypatch.setattr(
+        "kan.fetcher.data_cutoff_date", lambda _sym: date(2026, 5, 14)
+    )
+    monkeypatch.setattr(
+        "kan.trading_calendar.latest_trade_date", lambda: date(2026, 5, 14)
+    )
+    monkeypatch.setattr("kan.trading_calendar.market_phase", lambda: "in")
+
+    result = scan_runner.invoke(app, ["scan"])
+    assert result.exit_code == 0
+    output = result.output
+    assert "涨跌停状态仍可能变化" in output, f"scan intraday 新文案应出现 · output: {output[-500:]}"
+    assert "建议盘后 15:30" in output
+    assert "下一秒打开" not in output, "scan 不应残留预测性词 (AGENTS.md §6)"
+
+
+def test_scan_warnings_mutex_stale_wins(scan_runner, monkeypatch):
+    """UX-4 真测: scan stale+intraday 同时为 True 时只显示 stale · 验证 if/elif 互斥."""
+    from datetime import date
+
+    from kan.app import app
+
+    monkeypatch.setattr(
+        "kan.fetcher.data_cutoff_date", lambda _sym: date(2026, 5, 1)
+    )
+    monkeypatch.setattr(
+        "kan.trading_calendar.latest_trade_date", lambda: date(2026, 5, 14)
+    )
+    monkeypatch.setattr("kan.trading_calendar.market_phase", lambda: "in")
+
+    result = scan_runner.invoke(app, ["scan"])
+    assert result.exit_code == 0
+    output = result.output
+    assert "当前缓存到" in output, "scan stale 警告应显示"
+    assert "数据滞后" in output
+    assert "涨跌停状态仍可能变化" not in output, (
+        "scan stale=True 时不应同时显示 intraday 警告 (UX-4 if/elif 互斥)"
+    )
