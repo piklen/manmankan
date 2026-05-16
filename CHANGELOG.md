@@ -5,6 +5,52 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.0.4.8] - 2026-05-16
+
+### Added
+
+- `kan/_log.py` 统一 debug_log helper · `KAN_DEBUG` env var 控制可见 · 21 处 broad except 加诊断 (***REMOVED***)
+- `kan/_time.py` `today()` SoT helper · 集中 `datetime.now().date()` 3 处避免漂移 (***REMOVED***)
+- fetched_at 凌晨/晚间日界提示 · 当天 00:00-04:59 显示 "今晨 01:00" · 昨天 22:00-23:59 显示 "昨晚 23:50" (***REMOVED***)
+- spinner ✅/❌ emoji + 累计失败数 · `⏳ 补数据 169 只 · ✅ 茅台` / `❌ 中铝… · 失败 3` 80 列不折行 (***REMOVED*** · 含 v0.0.4.8 finalize ***REMOVED*** 视觉宽收紧)
+- `kan add` 无参中文友好 · 不再 typer 英文 "Missing argument 'SYMBOLS...'" ***REMOVED***)
+- `kan remove` / `kan info` 同款散户中文 · 兑现 U-2 承诺到全命令组 ***REMOVED***)
+- 错误消息加"下一步引导" · `未找到... · 试 kan list 看自选 / 用代码精确加 kan add 600519` ***REMOVED***)
+- 命令速记表加版本号 · `慢慢看 · v0.0.4.8 · 命令速记` (***REMOVED***)
+- install.sh / install.ps1 SHA256 在 release notes 公布 (***REMOVED*** 短期 · 文化层防御)
+
+### Changed
+
+- 涨跌停状态警告改纯状态描述 · 删 "可能回落/可能回升/都是正常波动" 预测性词 (***REMOVED*** + ***REMOVED*** cross-validated AGENTS.md §6 红线)
+- README 新手专区 default open + Verify before bash 段套 `<details>` 折叠 · 真小白默认不见 Verify (B.4 + B.5 ***REMOVED***)
+- 21 处 `except Exception` 加 `debug_log` 调用 (15 silent path · 6 已 user-visible 不改)
+- 收紧 `pandas>=2.0,<3` 防 pandas 3.0 read_parquet schema 严格化破坏 (***REMOVED*** maintainer Option C)
+- `debug_log` best-effort redact `/Users/<user>` + `token=<redacted>` 防 issue 截图 PII leak (***REMOVED***)
+
+### Fixed
+
+- bootstrap-test 作弊 7 处 → CliRunner runtime 真测 (***REMOVED*** LOCKED 5-12)
+  - `tests/test_auto_workers.py` TestD1MigrationTextRemoved 3 case → TestD1RuntimeBehavior (mock rich.Console/Progress)
+  - `tests/test_cli_helpers_format.py` TestNoLegacyTextInWarnings 3 case 删除 → trend/scan runtime 共 6 case 替代
+  - `tests/test_cr4_coverage.py` docstring 更新
+- CLI 命令组覆盖率提升 (***REMOVED***)
+  - 新 `tests/test_watchlist_cli.py` · 11 case 覆盖 add/remove/list/clear (含 U-1 LOCKED 多匹配真测)
+  - 扩展 `tests/test_scan_cli.py` · 8 case 覆盖 scan/low/high/info + 3 warning runtime case
+- 296 → 345 tests passed (net +49 · 0 regression) · ruff clean
+
+### Governance (总部级 · 不影响 PyPI 包)
+
+- status.md auto-check hook 落地 (跨子项目治理 · ***REMOVED*** 欠 3 版上限触顶 hard gate)
+- v0.0.4.7 commit body 隐私 leak rebase reword (8 commits) + force-push main + retag v0.0.4.7 / v0.0.4.7.1 (***REMOVED*** LOCKED 闭环)
+- 7 角色 ***REMOVED*** v1.0 第 4 次实施 · 45 finding · 8 P0 (62% 单角色独家)
+- ***REMOVED***016 中性化 SELF_EXCLUDES 加 `projects/<name>/reviews/` (合法包含 finding 字面值)
+
+### Deferred to v0.0.4.9 / v0.0.5.0
+
+- v0.0.4.8.1 hotfix: install.sh / install.ps1 散户化文案 5 项 (***REMOVED*** LOCKED 分发资产独立 patch)
+- v0.0.4.9: 子命令 --help 信息密度提升 ***REMOVED*** sub-agent 自降级) + ***REMOVED*** pip-audit CI step + ***REMOVED*** rebase-note 内部审计
+- v0.0.5.0: `_log.py` + `_time.py` → `_util.py` 合并 · scan_runner fixture 参数化 · sigstore PEP 740 attestation + cosign sign
+
 ## [0.0.4.7.1] - 2026-05-14
 
 ### Fixed · "检查缓存" spinner 进度可见 hotfix (真用户反馈触发)
