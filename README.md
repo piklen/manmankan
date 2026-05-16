@@ -23,9 +23,9 @@ It deliberately stops there: **no buy/sell advice, no ratings, no price targets,
 
 慢慢看是一个**纯命令行**的 A 股自选股位置感工具。它把电商「慢慢买」的「先看历史价位再决策」迁移到股市:把你 30 只自选股在 3、5、7、10、15、30、60、90、120、180 日窗口内的位置百分位**一屏显示**,把「同时触及多个低点」标成共振信号,然后**闭嘴**——剩下的判断,你自己做。
 
-> 📦 **当前版本 v0.0.4.7.1**（Alpha · 防御纵深 + UX 散户化 + 并发自适应 + 一键安装脚本 + 检查缓存 spinner 进度可见）· `pip install manmankan` 即装即用 · API 在 1.0 前可能调整。
+> 📦 **当前版本 v0.0.4.8**（Alpha · CR-1/CR-2 测试改造完毕 + UX 散户化升级:凌晨日界 + spinner ✅❌ + kan add/remove/info 中文友好 + 错误消息加引导）· `pip install manmankan` 即装即用 · API 在 1.0 前可能调整。
 >
-> 🌱 **v0.0.4.7 新增 [新手专区](#新手专区)**：第一次用命令行的散户 mac / Windows 各 2 步装好。
+> 🌱 **[新手专区](#新手专区)**（默认展开 · v0.0.4.8 升级）：第一次用命令行的散户 mac / Windows 各 2 步装好。
 >
 > ⚠️ **v0.0.4.4 及之前**有"凌晨拉数据后 scan 整天显示昨日涨停名单"bug · v0.0.4.5 已修。建议升级到最新版：`uv tool install manmankan --upgrade`
 >
