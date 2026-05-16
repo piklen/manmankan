@@ -181,6 +181,7 @@ def trend(
         # UX-3 (v0.0.4.7 P0 cleanup): 状态描述而非走势预测 (PM-1 + 合-2)
         console.print(
             "\n  [bold yellow]⚠️ 当前盘中 · 涨跌停状态仍可能变化\n"
+            "   (盘中涨停股可能回落到非涨停 · 跌停股可能回升 · 都是正常波动)\n"
             "   建议盘后 15:30 后看 final 数据[/bold yellow]"
         )
 

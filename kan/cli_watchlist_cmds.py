@@ -66,10 +66,22 @@ def help_cmd() -> None:
 
 @app.command()
 def add(
-    symbols: Annotated[list[str], typer.Argument(help="股票代码或名称（如 600519 茅台）")],
+    symbols: Annotated[
+        list[str] | None,
+        typer.Argument(help="股票代码或名称（如 600519 茅台）", show_default=False),
+    ] = None,
 ) -> None:
     """添加自选股（支持代码或名称搜索）"""
     import time as _time
+
+    # U-2 (v0.0.4.8): 无参 Typer 默认英文 "Missing argument 'SYMBOLS...'"
+    # 改散户中文友好提示 + 例子 (replace argument-not-provided default)
+    if not symbols:
+        typer.echo(
+            "请告诉我要加哪只股票 · 例: kan add 600519 茅台 (代码或名称都行)",
+            err=True,
+        )
+        raise typer.Exit(2)
 
     batch = len(symbols) > 1
 
@@ -116,7 +128,11 @@ def add(
                     continue
                 name = names.get(cleaned)
                 if not name:
-                    failures.append(f"未找到股票: {cleaned}（不在 A 股代码表中）")
+                    # U-3 (v0.0.4.8): 加下一步引导 · 不留 dead-end
+                    failures.append(
+                        f"未找到股票: {cleaned}（不在 A 股代码表中）· "
+                        f"试 `kan list` 看自选 / 用名称搜索 `kan add 茅台`"
+                    )
                     fail += 1
                     continue
                 add_stock(wl, cleaned, name)
@@ -139,7 +155,11 @@ def add(
                             typer.echo(f"  ✅ 已添加 {_name.replace(' ', '')} ({code})")
                         success += 1
                 elif len(matches) == 0:
-                    failures.append(f"未找到包含「{sym}」的股票")
+                    # U-3 (v0.0.4.8): 加下一步引导
+                    failures.append(
+                        f"未找到包含「{sym}」的股票 · "
+                        f"试 `kan list` 看自选 / 用代码精确加 `kan add 600519`"
+                    )
                     fail += 1
                 else:
                     # U-1 (v0.0.4.7 P0): 多匹配列出候选 · 与 kan remove 一致

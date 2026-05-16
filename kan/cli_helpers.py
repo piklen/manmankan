@@ -18,6 +18,8 @@ from datetime import date, datetime, timedelta
 
 import typer
 
+from kan._time import today as _today
+
 # 错误消息脱敏 · 防 traceback 泄漏本地路径（home / 绝对路径）
 _HOME_PREFIX = os.path.expanduser("~")
 _ABS_PATH_PATTERN = _re.compile(r"/[\w/.\-]+/([\w.\-]+)")
@@ -54,12 +56,14 @@ class _NoopContext:
 
 
 # ── 日期格式化 helpers (UX-1 · 散户友好压缩 · 同年隐藏年份) ────────────────
+# CR-5 v0.0.4.8: 今天的日期 helper 移到 kan/_time.py (防 trading_calendar 反向 circular import)
+# 本 module 内通过 `_today()` local alias 调 `from kan._time import today as _today`
 def format_date_compact(d: date) -> str:
     """同年时省 year (`05-12`) · 跨年才显示完整 ISO (`2025-12-31`)。
 
     UX-1 (v0.0.4.7): 80 列窄屏 title 不溢出 + 散户阅读减负。
     """
-    today = datetime.now().date()
+    today = _today()
     if d.year == today.year:
         return d.strftime("%m-%d")
     return d.isoformat()
@@ -81,7 +85,7 @@ def format_fetched_at_compact(fetched_str: str) -> str:
         dt = datetime.fromisoformat(fetched_str)
     except (ValueError, TypeError):
         return fetched_str
-    today = datetime.now().date()
+    today = _today()
     if dt.date() == today:
         hour = dt.hour
         time_str = dt.strftime("%H:%M")
