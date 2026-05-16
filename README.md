@@ -75,7 +75,7 @@ It deliberately stops there: **no buy/sell advice, no ratings, no price targets,
 
 > **第一次用命令行工具？看这里 👇**（老用户请直接跳到 [30 秒上手](#30-秒上手)）
 
-<details>
+<details open>
 <summary><b>🌱 从没用过终端怎么装（mac / Windows 各 2 步）</b></summary>
 
 ### Mac / Linux 用户
