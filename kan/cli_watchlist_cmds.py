@@ -205,9 +205,20 @@ def add(
 
 @app.command()
 def remove(
-    symbols: Annotated[list[str], typer.Argument(help="股票代码或名称（支持多只）")],
+    symbols: Annotated[
+        list[str] | None,
+        typer.Argument(help="股票代码或名称（支持多只）", show_default=False),
+    ] = None,
 ) -> None:
     """移除自选股（支持代码或名称 · 多只批量删除）"""
+    # U-1 (v0.0.4.8 P0-6): 跟 kan add 同款散户中文 · 兑现 U-2 承诺到 remove 命令
+    if not symbols:
+        typer.echo(
+            "请告诉我要移除哪只股票 · 例: kan remove 600519 (代码或名称都行)",
+            err=True,
+        )
+        raise typer.Exit(2)
+
     from kan import watchlist as wl
 
     for sym in symbols:

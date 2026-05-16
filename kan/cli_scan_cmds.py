@@ -326,9 +326,20 @@ def high(
 
 @app.command()
 def info(
-    symbol: Annotated[str, typer.Argument(help="股票代码（如 600519）")],
+    symbol: Annotated[
+        str | None,
+        typer.Argument(help="股票代码（如 600519）", show_default=False),
+    ] = None,
 ) -> None:
     """单只股票详情（全周期位置 + 涨跌信息）"""
+    # U-1 (v0.0.4.8 P0-6): 跟 kan add 同款散户中文 · 兑现 U-2 承诺到 info 命令
+    if not symbol:
+        typer.echo(
+            "请告诉我看哪只股票 · 例: kan info 600519 (代码或名称都行)",
+            err=True,
+        )
+        raise typer.Exit(2)
+
     from rich.console import Console
 
     status_console = Console(stderr=True)
