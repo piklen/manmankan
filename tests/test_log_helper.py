@@ -108,3 +108,67 @@ class TestDebugLog:
         with caplog.at_level(logging.DEBUG, logger="test.module"):
             debug_log("test.module", "op", ValueError(long_msg))
         assert long_msg in caplog.records[0].getMessage()
+
+
+class TestRedact:
+    """***REMOVED*** (v0.0.4.8 finalize): debug_log path/token redact 防 issue 截图 PII leak"""
+
+    def test_redact_home_dir_unix(self, monkeypatch, caplog):
+        """mac/linux home dir 替换 · /Users/xiaobao → /Users/<user>"""
+        monkeypatch.setenv("KAN_DEBUG", "1")
+        with caplog.at_level(logging.DEBUG, logger="test.module"):
+            debug_log(
+                "test.module",
+                "read parquet",
+                FileNotFoundError("/Users/realname/.local/share/kan/test.parquet"),
+            )
+        msg = caplog.records[0].getMessage()
+        assert "/Users/<user>" in msg
+        assert "realname" not in msg, "真名应被 redact 掉"
+
+    def test_redact_home_dir_linux(self, monkeypatch, caplog):
+        """/home/user 替换"""
+        monkeypatch.setenv("KAN_DEBUG", "1")
+        with caplog.at_level(logging.DEBUG, logger="test.module"):
+            debug_log("test.module", "op", OSError("Error at /home/realuser/data.json"))
+        msg = caplog.records[0].getMessage()
+        assert "/home/<user>" in msg
+        assert "realuser" not in msg
+
+    def test_redact_token_in_url(self, monkeypatch, caplog):
+        """URL ?token=xxx 替换"""
+        monkeypatch.setenv("KAN_DEBUG", "1")
+        with caplog.at_level(logging.DEBUG, logger="test.module"):
+            debug_log(
+                "test.module",
+                "fetch api",
+                ValueError("URL: https://api.example.com/v1/data?token=secret123&user=x"),
+            )
+        msg = caplog.records[0].getMessage()
+        assert "token=<redacted>" in msg
+        assert "secret123" not in msg
+
+    def test_redact_windows_path(self, monkeypatch, caplog):
+        r"""Windows path C:\Users\realname → C:\Users\<user>"""
+        monkeypatch.setenv("KAN_DEBUG", "1")
+        with caplog.at_level(logging.DEBUG, logger="test.module"):
+            debug_log(
+                "test.module",
+                "win op",
+                OSError(r"Cannot access C:\Users\realname\AppData\file.json"),
+            )
+        msg = caplog.records[0].getMessage()
+        assert r"C:\Users\<user>" in msg
+        assert "realname" not in msg
+
+    def test_redact_no_pii_keeps_msg_intact(self, monkeypatch, caplog):
+        """无 PII 的 message 不被 redact · 完整保留"""
+        monkeypatch.setenv("KAN_DEBUG", "1")
+        with caplog.at_level(logging.DEBUG, logger="test.module"):
+            debug_log(
+                "test.module",
+                "no pii",
+                ValueError("simple error without paths or tokens"),
+            )
+        msg = caplog.records[0].getMessage()
+        assert "simple error without paths or tokens" in msg

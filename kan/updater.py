@@ -54,13 +54,10 @@ def fetch_latest_version_from_pypi() -> str | None:
         )
         with urllib.request.urlopen(req, timeout=NETWORK_TIMEOUT) as resp:
             data = json.load(resp)
-    except (urllib.error.URLError, OSError, json.JSONDecodeError, TimeoutError) as e:
-        # ***REMOVED*** (v0.0.4.8): 网络/解析失败 · debug log
-        debug_log(__name__, "PyPI version fetch (specific exception)", e)
-        return None
     except Exception as e:
-        # 兜底 · 不让任何异常逃出 · 仍加 debug log 供排查
-        debug_log(__name__, "PyPI version fetch (unexpected)", e)
+        # ***REMOVED*** (v0.0.4.8 finalize · ***REMOVED***): 合并双层 catch (specific + broad 行为 equivalent · 删 dead defensive code)
+        # 网络/解析/任何异常 → 静默返 None · debug log 供排查
+        debug_log(__name__, "PyPI version fetch", e)
         return None
     if not isinstance(data, dict):
         return None
