@@ -25,6 +25,7 @@ import sys
 import threading
 from datetime import date, datetime, time, timedelta
 
+from kan._time import today as _today
 from kan.paths import BASE_DIR
 
 # 北京时间 A 股交易时段
@@ -103,7 +104,7 @@ def _sanity_check_dates(dates: set[date], context: str = "") -> bool:
             file=sys.stderr,
         )
         return False
-    today = datetime.now().date()
+    today = _today()  # ***REMOVED*** v0.0.4.8: 用 kan._time.today() 集中 SoT
     max_d = max(dates)
     if max_d < today - timedelta(days=SANITY_MAX_DAYS_OLD):
         print(

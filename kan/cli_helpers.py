@@ -14,9 +14,12 @@ import contextlib
 import os
 import re as _re
 from contextlib import contextmanager
-from datetime import date, datetime
+from datetime import date, datetime, timedelta
 
 import typer
+
+from kan._log import debug_log
+from kan._time import today as _today
 
 # 错误消息脱敏 · 防 traceback 泄漏本地路径（home / 绝对路径）
 _HOME_PREFIX = os.path.expanduser("~")
@@ -54,12 +57,14 @@ class _NoopContext:
 
 
 # ── 日期格式化 helpers (***REMOVED*** · 散户友好压缩 · 同年隐藏年份) ────────────────
+# ***REMOVED*** v0.0.4.8: 今天的日期 helper 移到 kan/_time.py (防 trading_calendar 反向 circular import)
+# 本 module 内通过 `_today()` local alias 调 `from kan._time import today as _today`
 def format_date_compact(d: date) -> str:
     """同年时省 year (`05-12`) · 跨年才显示完整 ISO (`2025-12-31`)。
 
     ***REMOVED*** (v0.0.4.7): 80 列窄屏 title 不溢出 + 散户阅读减负。
     """
-    today = datetime.now().date()
+    today = _today()
     if d.year == today.year:
         return d.strftime("%m-%d")
     return d.isoformat()
@@ -68,20 +73,28 @@ def format_date_compact(d: date) -> str:
 def format_fetched_at_compact(fetched_str: str) -> str:
     """从 ISO datetime string 提取最 compact 表示。
 
-    - 当天: `16:05` (省日期 · 因为 user 知道今天)
+    - 当天一般 (05:00-21:59): `16:05` (省日期 · 因为 user 知道今天)
+    - 当天凌晨 (00:00-04:59): `今晨 01:00` (***REMOVED*** · 防深夜跑 scan 时误判为下午)
+    - 昨天傍晚 (22:00-23:59): `昨晚 23:50` (对称提示 · 防早上 scan 时误判为今天)
     - 同年不同天: `05-12 16:05`
     - 跨年: `2025-12-31 16:05`
     - 不可解析: 原样返回
 
-    ***REMOVED*** (v0.0.4.7): scan title 末尾 fetched_at 压缩 · 80 列不溢出。
+    ***REMOVED*** (v0.0.4.8): 凌晨日界提示防误判;***REMOVED*** (v0.0.4.7): 80 列窄屏不溢出。
     """
     try:
         dt = datetime.fromisoformat(fetched_str)
     except (ValueError, TypeError):
         return fetched_str
-    today = datetime.now().date()
+    today = _today()
     if dt.date() == today:
-        return dt.strftime("%H:%M")
+        hour = dt.hour
+        time_str = dt.strftime("%H:%M")
+        if 0 <= hour < 5:
+            return f"今晨 {time_str}"
+        return time_str
+    if dt.date() == today - timedelta(days=1) and dt.hour >= 22:
+        return f"昨晚 {dt.strftime('%H:%M')}"
     if dt.year == today.year:
         return dt.strftime("%m-%d %H:%M")
     return dt.strftime("%Y-%m-%d %H:%M")
@@ -244,13 +257,28 @@ def _auto_fetch_stale(pairs: list[tuple[str, str]]) -> None:
     ) as progress:
         task_id = progress.add_task("⏳ 拉取数据...", total=n)
 
+        # ***REMOVED*** (v0.0.4.8): 累计失败 symbol · GIL 保护 list.append 原生 thread-safe
+        # 避免 nonlocal int += 的 read-modify-write race condition
+        fails: list[str] = []
+
         def _on_done(symbol: str, ok: bool, _err_msg: str | None) -> None:
-            # D-1 (v0.0.4.7): spinner 加 stale 总数 · 解释"为什么这么多只在拉"
-            name = name_map.get(symbol, symbol).replace(" ", "")
+            # D-1 (v0.0.4.7): spinner 加 stale 总数
+            # ***REMOVED*** (v0.0.4.8): ✅/❌ emoji + 累计失败数
+            # ***REMOVED*** (v0.0.4.8 finalize · P0-5): truncate name to 4 char + 紧凑 desc · 80 列不折行
+            #   旧 "⏳ 补数据 · 169 只 stale · ❌ 失败: 中国铝业 · 失败 3" ≈ 99 列 (折行)
+            #   新 "⏳ 补数据 169 只 · ❌ 中国铝… · 失败 3" ≈ 64 列 (80 列 OK)
+            full_name = name_map.get(symbol, symbol).replace(" ", "")
+            # truncate 到 4 char 防长名占用视觉宽 (e.g. "中国神华" / "贵州茅台" 都 4 char OK)
+            name = full_name if len(full_name) <= 4 else full_name[:3] + "…"
+            if not ok:
+                fails.append(symbol)
+            current_fail = len(fails)
             desc = (
-                f"⏳ 补数据 · {n} 只 stale · 最近: {name}" if ok
-                else f"⏳ 补数据 · {n} 只 stale · 失败: {name}"
+                f"⏳ 补数据 {n} 只 · ✅ {name}" if ok
+                else f"⏳ 补数据 {n} 只 · ❌ {name}"
             )
+            if current_fail > 0:
+                desc += f" · 失败 {current_fail}"
             progress.update(task_id, advance=1, description=desc)
 
         try:
@@ -348,8 +376,9 @@ def _detect_shell_fallback() -> str | None:
         name, _path = shellingham.detect_shell()
         if name in _VALID_SHELLS:
             return name
-    except Exception:
-        pass
+    except Exception as e:
+        # ***REMOVED*** (v0.0.4.8 finalize): lazy import 改顶层一致 (zero-cost stdlib wrapper)
+        debug_log(__name__, "shellingham detect_shell fallback", e)
 
     # 2) $SHELL env (mac/linux 通用)
     shell_path = os.environ.get("SHELL", "")

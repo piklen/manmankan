@@ -39,25 +39,22 @@ class TestFormatDateCompact:
 class TestFormatFetchedAtCompact:
     """***REMOVED***: 当天只时间 · 同年 mm-dd HH:MM · 跨年完整."""
 
+    # ***REMOVED*** v0.0.4.8: 由于 cli_helpers 改用 _today() 集中 SoT (kan/_time.py) ·
+    # patch path 从 "kan.cli_helpers.datetime" → "kan.cli_helpers._today" (更直接)
+
     def test_today_returns_time_only(self):
-        # mock now() to fixed 2026-05-14 17:00
-        with patch("kan.cli_helpers.datetime") as mock_dt:
-            mock_dt.now.return_value = datetime(2026, 5, 14, 17, 0)
-            mock_dt.fromisoformat = datetime.fromisoformat
+        """mock today=2026-05-14 · fetched=同天 → 只显示 HH:MM"""
+        with patch("kan.cli_helpers._today", return_value=date(2026, 5, 14)):
             result = format_fetched_at_compact("2026-05-14 10:30")
         assert result == "10:30", "当天应只显示时间"
 
     def test_same_year_different_day_returns_md_hm(self):
-        with patch("kan.cli_helpers.datetime") as mock_dt:
-            mock_dt.now.return_value = datetime(2026, 5, 14, 17, 0)
-            mock_dt.fromisoformat = datetime.fromisoformat
+        with patch("kan.cli_helpers._today", return_value=date(2026, 5, 14)):
             result = format_fetched_at_compact("2026-03-10 09:15")
         assert result == "03-10 09:15"
 
     def test_different_year_returns_full(self):
-        with patch("kan.cli_helpers.datetime") as mock_dt:
-            mock_dt.now.return_value = datetime(2026, 5, 14, 17, 0)
-            mock_dt.fromisoformat = datetime.fromisoformat
+        with patch("kan.cli_helpers._today", return_value=date(2026, 5, 14)):
             result = format_fetched_at_compact("2025-12-31 23:59")
         assert result == "2025-12-31 23:59"
 
@@ -70,54 +67,55 @@ class TestFormatFetchedAtCompact:
         # empty 走 except (ValueError) · 返原样
         assert result == ""
 
+    # ── ***REMOVED*** (v0.0.4.8): 凌晨日界提示 ────────────────────────────
+    def test_today_pre_dawn_shows_jinchen(self):
+        """***REMOVED***: 当天 00:00-04:59 → '今晨' 前缀防深夜误判"""
+        with patch("kan.cli_helpers._today", return_value=date(2026, 5, 14)):
+            result = format_fetched_at_compact("2026-05-14 01:00")
+        assert result == "今晨 01:00"
 
-class TestNoLegacyTextInWarnings:
-    """***REMOVED*** + U-5: 验证 stale 警告新文案 + 删除旧"应有最近交易日"."""
+    def test_today_04_59_jinchen_upper_boundary(self):
+        """***REMOVED*** boundary: 04:59 仍是凌晨"""
+        with patch("kan.cli_helpers._today", return_value=date(2026, 5, 14)):
+            result = format_fetched_at_compact("2026-05-14 04:59")
+        assert result == "今晨 04:59"
 
-    def test_stale_warning_uses_new_phrasing(self):
-        """scan/trend stale 警告应含"缓存到 X 收盘" + "数据滞后 N 天" · 不再含"应有最近交易日"."""
-        from pathlib import Path
-        scan_src = Path("kan/cli_scan_cmds.py").read_text(encoding="utf-8")
-        trend_src = Path("kan/cli_trend_cmds.py").read_text(encoding="utf-8")
-        for src, name in [(scan_src, "scan"), (trend_src, "trend")]:
-            assert "应有最近交易日" not in src, f"{name}: 旧术语 '应有最近交易日' 应删除 (***REMOVED***)"
-            assert "当前缓存到" in src, f"{name}: 新文案 '当前缓存到' 应出现 (***REMOVED***)"
-            assert "数据滞后" in src, f"{name}: 新文案 '数据滞后' 应出现 (***REMOVED***)"
+    def test_today_05_00_no_jinchen_boundary(self):
+        """***REMOVED*** boundary: 05:00 不再是凌晨"""
+        with patch("kan.cli_helpers._today", return_value=date(2026, 5, 14)):
+            result = format_fetched_at_compact("2026-05-14 05:00")
+        assert result == "05:00"
 
-    def test_intraday_warning_uses_compliant_phrasing(self):
-        """***REMOVED*** (P0 cleanup v0.0.4.7): 盘中警告改为状态描述 · 不再含预测性"下一秒打开".
+    def test_today_normal_hours_no_prefix(self):
+        """***REMOVED***: 当天 05:00-21:59 → 不加前缀"""
+        with patch("kan.cli_helpers._today", return_value=date(2026, 5, 14)):
+            for hour in [5, 9, 12, 17, 21]:
+                t = datetime(2026, 5, 14, hour, 0)
+                result = format_fetched_at_compact(t.isoformat())
+                assert result == t.strftime("%H:%M"), f"{hour}h 不应加前缀"
 
-        历史: 早期 commit (8ab951c) 引入"现在涨停可能下一秒打开" 触碰 AGENTS.md §6 不预测涨跌红线
-        修复 (***REMOVED*** + ***REMOVED***): 改成"涨跌停状态仍可能变化 / 建议盘后 15:30 后看 final 数据"
-        """
-        from pathlib import Path
-        scan_src = Path("kan/cli_scan_cmds.py").read_text(encoding="utf-8")
-        trend_src = Path("kan/cli_trend_cmds.py").read_text(encoding="utf-8")
-        for src, name in [(scan_src, "scan"), (trend_src, "trend")]:
-            # 新文案: 状态描述
-            assert "涨跌停状态仍可能变化" in src, (
-                f"{name}: 新文案 '涨跌停状态仍可能变化' 应出现 (***REMOVED*** + ***REMOVED***)"
-            )
-            assert "建议盘后 15:30" in src, (
-                f"{name}: 新文案 '建议盘后 15:30 后看 final 数据' 应出现"
-            )
-            # 红线: 旧预测性词不应残留
-            assert "下一秒打开" not in src, (
-                f"{name}: 预测性词 '下一秒打开' 应删除 (AGENTS.md §6 红线 · ***REMOVED***)"
-            )
+    def test_yesterday_late_night_shows_zuowan(self):
+        """***REMOVED***: 昨天 22:00-23:59 → '昨晚' 前缀"""
+        with patch("kan.cli_helpers._today", return_value=date(2026, 5, 14)):
+            result = format_fetched_at_compact("2026-05-13 23:50")
+        assert result == "昨晚 23:50"
 
-    def test_warnings_use_elif_not_if_if(self):
-        """***REMOVED***: 双警告应 if/elif 互斥 · 不再 if/if."""
-        from pathlib import Path
-        for fp in ["kan/cli_scan_cmds.py", "kan/cli_trend_cmds.py"]:
-            src = Path(fp).read_text(encoding="utf-8")
-            # 找 "if is_stale" 后紧跟的 "elif phase == PHASE_INTRADAY"
-            assert "if is_stale:" in src
-            assert "elif phase == PHASE_INTRADAY:" in src, (
-                f"{fp}: 双警告应改为 if/elif 互斥 (***REMOVED***)"
-            )
-            # 反例: "if phase == PHASE_INTRADAY:" 独立 if (不接 elif) 应消失
-            # 注: 用 "    if phase ==" (前 4 空格 · 表 stale 之外的独立 if) 检测
-            assert "\n    if phase == PHASE_INTRADAY:" not in src, (
-                f"{fp}: 残留独立 'if phase == INTRADAY' (应改 elif · ***REMOVED***)"
-            )
+    def test_yesterday_22_00_zuowan_lower_boundary(self):
+        """***REMOVED*** boundary: 昨天 22:00 是 '昨晚'"""
+        with patch("kan.cli_helpers._today", return_value=date(2026, 5, 14)):
+            result = format_fetched_at_compact("2026-05-13 22:00")
+        assert result == "昨晚 22:00"
+
+    def test_yesterday_21_59_no_zuowan(self):
+        """***REMOVED*** boundary: 昨天 21:59 不是 '昨晚' · fall through 到 md-hm"""
+        with patch("kan.cli_helpers._today", return_value=date(2026, 5, 14)):
+            result = format_fetched_at_compact("2026-05-13 21:59")
+        assert result == "05-13 21:59"
+
+
+# TestNoLegacyTextInWarnings 已删除 (***REMOVED*** v0.0.4.8 改造)
+# 原 3 个 grep-source 作弊 test 已被替换为 CliRunner runtime 真测:
+# - test_trend_cli.py::test_trend_stale_warning_uses_new_phrasing
+# - test_trend_cli.py::test_trend_intraday_warning_compliant_phrasing
+# - test_trend_cli.py::test_trend_warnings_mutex_stale_wins
+# scan/trend warning template 同源 · trend 真测覆盖 template 内容 · scan 命令完整 CliRunner coverage 推 ***REMOVED***.
