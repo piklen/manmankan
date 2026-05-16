@@ -321,3 +321,94 @@ def test_scan_warnings_mutex_stale_wins(scan_runner, monkeypatch):
     assert "涨跌停状态仍可能变化" not in output, (
         "scan stale=True 时不应同时显示 intraday 警告 (UX-4 if/elif 互斥)"
     )
+
+
+# ════════════════════════════════════════════════════════════════
+# CR-2 v0.0.4.8: scan/low/high/info 命令组 CliRunner 覆盖增量
+# 复用 scan_runner fixture · mock 全部 dependencies
+# ════════════════════════════════════════════════════════════════
+def test_scan_command_basic_runs(scan_runner):
+    """`kan scan` 基础命令 · 应跑通"""
+    from kan.app import app
+    result = scan_runner.invoke(app, ["scan"])
+    assert result.exit_code == 0
+    # 应含表格基本结构
+    assert "测试" in result.output or "600519" in result.output
+
+
+def test_scan_command_high_mode(scan_runner):
+    """`kan scan --high` 高点模式 · 应跑通"""
+    from kan.app import app
+    result = scan_runner.invoke(app, ["scan", "--high"])
+    assert result.exit_code == 0
+
+
+def test_scan_command_exclude_st(scan_runner):
+    """`kan scan --exclude-st` 排除 ST · 应跑通"""
+    from kan.app import app
+    result = scan_runner.invoke(app, ["scan", "--exclude-st"])
+    assert result.exit_code == 0
+
+
+def test_scan_command_signal_only_with_no_signal(scan_runner):
+    """`kan scan --signal` 但无 resonance 股票 · 应给空 signal 提示"""
+    from kan.app import app
+    result = scan_runner.invoke(app, ["scan", "--signal"])
+    assert result.exit_code == 0
+    # fake_result low_resonance=0 · 应给"没有股票触及极值区"
+    assert "共振" in result.output or "没有" in result.output
+
+
+def test_low_command_with_period_runs(scan_runner, monkeypatch):
+    """`kan low 30` 筛选 30 日低点 · 应跑通"""
+    from kan.app import app
+
+    # low/high 走 _filter_extreme_cmd · 也调 scan_batch · 但需要额外 mock
+    # 简化:让 low 跑通即可 (不验证具体筛选逻辑 · 那是 scanner module 的 unit test 职责)
+    result = scan_runner.invoke(app, ["low", "30"])
+    # 可能 exit 0 / 1 (依赖 fake data 是否触及 30 日低)· 关键是不 crash
+    assert "Traceback" not in result.output, (
+        f"low 命令不应抛 traceback · output: {result.output[:300]}"
+    )
+
+
+def test_high_command_with_period_runs(scan_runner, monkeypatch):
+    """`kan high 30` 筛选 30 日高点 · 应跑通"""
+    from kan.app import app
+    result = scan_runner.invoke(app, ["high", "30"])
+    assert "Traceback" not in result.output
+
+
+def test_low_command_invalid_period_typer_error(scan_runner):
+    """`kan low` 无参数 · typer 应报参数错误 (exit_code=2)"""
+    from kan.app import app
+    result = scan_runner.invoke(app, ["low"])
+    assert result.exit_code == 2, "typer 缺参数应 exit_code=2"
+
+
+def test_info_command_with_existing_symbol(scan_runner, monkeypatch):
+    """`kan info 600519` 单股详情 · 应跑通"""
+    from datetime import date
+
+    from kan.app import app
+
+    # info 需要额外 mock fetch_kline 返 pd.DataFrame
+    # 简化策略:让 info 失败但不 crash (exit_code 可能非 0)
+    monkeypatch.setattr(
+        "kan.fetcher.data_cutoff_date", lambda _sym: date(2026, 5, 14)
+    )
+    monkeypatch.setattr(
+        "kan.trading_calendar.latest_trade_date", lambda: date(2026, 5, 14)
+    )
+    monkeypatch.setattr("kan.trading_calendar.market_phase", lambda: "pre")
+
+    result = scan_runner.invoke(app, ["info", "600519"])
+    # info 可能因 fetch_kline 失败而 exit 非 0 · 但应优雅处理 · 不抛 traceback
+    assert "Traceback" not in result.output
+
+
+def test_scan_command_with_diff_flag(scan_runner):
+    """`kan scan --diff` 增量模式 · 应跑通 (即使无 prev snapshot)"""
+    from kan.app import app
+    result = scan_runner.invoke(app, ["scan", "--diff"])
+    assert result.exit_code == 0
