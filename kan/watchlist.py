@@ -13,6 +13,7 @@ from typing import Any
 
 import typer
 
+from kan._log import debug_log
 from kan.models import Stock
 from kan.paths import (
     NAMES_CACHE_MAX_AGE_DAYS,
@@ -134,7 +135,9 @@ def _fetch_names_baostock() -> dict[str, str] | None:
                 mapping[short_code] = name
 
         return mapping if mapping else None
-    except Exception:
+    except Exception as e:
+        # ***REMOVED*** (v0.0.4.8): baostock fallback · user-facing warn + debug log
+        debug_log(__name__, "baostock stock name fetch", e)
         from rich.console import Console
 
         Console(stderr=True).print(
@@ -163,7 +166,9 @@ def _fetch_names_akshare() -> dict[str, str] | None:
     try:
         df = ak.stock_info_a_code_name()
         return dict(zip(df["code"], df["name"], strict=True))
-    except Exception:
+    except Exception as e:
+        # ***REMOVED*** (v0.0.4.8): akshare fallback · 静默返 None · debug log 供排查
+        debug_log(__name__, "akshare stock_info_a_code_name fallback", e)
         return None
     finally:
         sys.stderr = _real_stderr

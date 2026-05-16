@@ -14,6 +14,7 @@ import sys
 
 import typer
 
+from kan._log import debug_log
 from kan.cli_helpers import _VALID_SHELLS, _detect_shell_fallback
 
 
@@ -73,7 +74,9 @@ def _auto_install_completion() -> None:
     try:
         from kan.paths import BASE_DIR
         flag_path = BASE_DIR / ".completion_installed"
-    except Exception:
+    except Exception as e:
+        # ***REMOVED*** (v0.0.4.8): paths import 极罕见 (e.g. test monkey-patch) · debug log
+        debug_log(__name__, "import BASE_DIR for completion flag", e)
         return
 
     if flag_path.exists():
@@ -83,7 +86,9 @@ def _auto_install_completion() -> None:
     try:
         flag_path.parent.mkdir(parents=True, exist_ok=True)
         flag_path.touch()
-    except Exception:
+    except Exception as e:
+        # ***REMOVED*** (v0.0.4.8): file IO 失败 (e.g. read-only fs) · debug log
+        debug_log(__name__, "create completion flag", e)
         return
 
     shell = _detect_shell_fallback()
@@ -93,7 +98,9 @@ def _auto_install_completion() -> None:
     try:
         from typer.completion import install
         installed_shell, _path = install(shell=shell, prog_name="kan")
-    except Exception:
+    except Exception as e:
+        # ***REMOVED*** (v0.0.4.8): typer/click 第三方 · broad catch + debug log
+        debug_log(__name__, f"typer completion install shell={shell}", e)
         return
 
     # 通知用户（小字 stderr · 不打扰主流程）
@@ -104,8 +111,9 @@ def _auto_install_completion() -> None:
             f"重启终端后 [bold]kan s[/bold] + Tab 即生效 · "
             f"不需要可设 KAN_NO_COMPLETION_AUTOINSTALL=1[/dim]"
         )
-    except Exception:
-        pass
+    except Exception as e:
+        # ***REMOVED*** (v0.0.4.8): console IO 罕见失败 · atexit 路径加 debug log 不能 crash 主流程
+        debug_log(__name__, "completion install notice print", e)
 
 
 def _check_updates_atexit() -> None:
@@ -230,6 +238,7 @@ def _check_updates_atexit() -> None:
             console.print(
                 "[dim]跳过 · 跑 [bold]kan update[/bold] 升级 · 下次启动时再询问偏好[/dim]"
             )
-    except Exception:
+    except Exception as e:
         # atexit hook 不能让主命令受影响 · 任何异常都吞掉
-        pass
+        # ***REMOVED*** (v0.0.4.8): 加 debug log 防完全无诊断
+        debug_log(__name__, "update check atexit handler", e)
