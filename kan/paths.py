@@ -54,6 +54,18 @@ def ensure_dirs() -> None:
     SNAPSHOTS_DIR.mkdir(mode=0o700, parents=True, exist_ok=True)
 
 
+def atomic_write_parquet(df, path: Path) -> None:
+    """atomic 写入 parquet · 防中断损坏旧文件。
+
+    实现：写 path.tmp 再 os.replace(tmp, path) · POSIX + Windows atomic
+    guarantee (Python 3.3+)。所有 parquet 写入统一走此 helper · 保持
+    paths.py 轻量 (df 不加 pd.DataFrame 注解 · 不顶层 import pandas)。
+    """
+    tmp = path.with_suffix(path.suffix + ".tmp")
+    df.to_parquet(tmp, index=False)
+    os.replace(tmp, path)
+
+
 def migrate_legacy() -> None:
     """从 ~/.kan/ 自动迁移到 XDG 路径 · 仅首次运行时触发。"""
     if not _LEGACY_DIR.exists():
