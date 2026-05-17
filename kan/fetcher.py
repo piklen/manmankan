@@ -21,7 +21,7 @@ if TYPE_CHECKING:
 # 新增列只需追加到 KLINE_OPTIONAL · 下游按列名读取 · 不受影响。
 
 KLINE_REQUIRED = ["date", "open", "high", "low", "close"]
-KLINE_OPTIONAL = ["volume", "amount"]
+KLINE_OPTIONAL = ["volume", "amount", "_source"]
 KLINE_COLUMNS = KLINE_REQUIRED + KLINE_OPTIONAL
 
 # 东方财富中文列名 → 标准列名
@@ -39,8 +39,12 @@ _EM_COLUMN_MAP = {
 _SYMBOL_PATTERN = re.compile(r"^\d{6}$")
 
 
-def _normalize_kline(df: pd.DataFrame) -> pd.DataFrame:
-    """统一归一化：类型转换 + 补缺失列 + 排序 + 去 NaN。所有数据源的出口。"""
+def _normalize_kline(df: pd.DataFrame, source: str = "unknown") -> pd.DataFrame:
+    """统一归一化：类型转换 + 补缺失列 + 排序 + 去 NaN。所有数据源的出口。
+
+    source: 数据来源标记 (baostock / sina / eastmoney / tencent / unknown).
+            写入 `_source` 列 · 支持跨源单位差异回查 · 缓存来源可追溯。
+    """
     import pandas as pd
 
     for col in KLINE_REQUIRED:
@@ -49,12 +53,14 @@ def _normalize_kline(df: pd.DataFrame) -> pd.DataFrame:
 
     for col in KLINE_OPTIONAL:
         if col not in df.columns:
-            df[col] = float("nan")
+            df[col] = float("nan") if col != "_source" else source
 
     df = df[KLINE_COLUMNS].copy()
     df["date"] = pd.to_datetime(df["date"], errors="coerce").dt.date
-    for col in KLINE_COLUMNS[1:]:
+    # _source 是 str 列 · 不进数值转换
+    for col in ["open", "high", "low", "close", "volume", "amount"]:
         df[col] = pd.to_numeric(df[col], errors="coerce")
+    df["_source"] = source
 
     df = df.sort_values("date").reset_index(drop=True)
     df = df.dropna(subset=["date", "close"])
@@ -100,6 +106,25 @@ def _read_cutoff_from_parquet(path: Path) -> date | None:
         # CR-4 (v0.0.4.8): normalize 到 _log.debug_log helper (KAN_DEBUG=1 可见)
         debug_log(__name__, f"_read_cutoff_from_parquet({path.name})", e)
         return None
+
+
+def _load_with_migration(path: Path) -> pd.DataFrame:
+    """读 parquet · 旧 schema 缺 `_source` 列自动加 'unknown' · atomic write back.
+
+    集中 migration 入口 · fetch_kline cache 命中 + get_cached 两处调用 ·
+    防散布式 migration 漂移。`_read_cutoff_from_parquet` 不调 (只读 date 列 ·
+    与 _source 无关 · 也不触发 atomic write back 防止 mtime 漂移)。
+    """
+    import pandas as pd
+
+    from kan.paths import atomic_write_parquet
+
+    df = pd.read_parquet(path)
+    if "_source" not in df.columns:
+        df["_source"] = "unknown"
+        atomic_write_parquet(df, path)
+        debug_log(__name__, f"_load_with_migration({path.name})", "legacy → _source=unknown")
+    return df
 
 
 def _is_cache_fresh(path: Path) -> bool:
@@ -312,25 +337,29 @@ def fetch_kline(symbol: str, days: int = 180, force: bool = False) -> pd.DataFra
     cache = _cache_path(symbol)
 
     if not force and _is_cache_fresh(cache):
-        import pandas as pd
-
-        return pd.read_parquet(cache)
+        return _load_with_migration(cache)
 
     start = (datetime.now() - timedelta(days=int(days * 1.8))).strftime("%Y%m%d")
 
     raw = _fetch_baostock(symbol, start)
+    source = "baostock"
     if raw is None:
         raw = _fetch_sina(symbol, start)
+        source = "sina"
     if raw is None:
         raw = _fetch_eastmoney(symbol, start)
+        source = "eastmoney"
     if raw is None:
         raw = _fetch_tencent(symbol, start)
+        source = "tencent"
 
     if raw is None or raw.empty:
         raise ValueError(f"无效股票代码或无数据: {symbol}")
 
-    df = _normalize_kline(raw)
-    df.to_parquet(cache, index=False)
+    from kan.paths import atomic_write_parquet
+
+    df = _normalize_kline(raw, source=source)
+    atomic_write_parquet(df, cache)
     return df
 
 
@@ -432,10 +461,9 @@ def get_cached(symbol: str) -> pd.DataFrame | None:
     cache = _cache_path(symbol)
     if not cache.exists():
         return None
-    import pandas as pd
-
-    df = pd.read_parquet(cache)
-    for col in KLINE_OPTIONAL:
+    df = _load_with_migration(cache)
+    # 兜底：手工写入的 parquet 可能缺 volume/amount (非 _source · migration 已处理)
+    for col in ["volume", "amount"]:
         if col not in df.columns:
             df[col] = float("nan")
     return df

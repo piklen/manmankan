@@ -7,6 +7,7 @@ v0.0.2 冷启动延迟修复）。本测试守护：mtime 三个边界条件 + �
 import os
 from datetime import datetime, timedelta
 
+import pandas as pd
 import pytest
 
 from kan import paths
@@ -48,3 +49,40 @@ def test_cache_at_boundary_returns_true(temp_cache_path):
     ).timestamp()
     os.utime(temp_cache_path, (boundary_ts, boundary_ts))
     assert paths.is_stock_names_cache_fresh() is True
+
+
+# ── atomic_write_parquet · crash-safe parquet persistence ──────────────
+
+
+def test_atomic_write_parquet_basic(tmp_path):
+    df = pd.DataFrame({"a": [1, 2], "b": [3, 4]})
+    target = tmp_path / "test.parquet"
+    paths.atomic_write_parquet(df, target)
+    assert target.exists()
+    loaded = pd.read_parquet(target)
+    assert len(loaded) == 2
+    assert list(loaded["a"]) == [1, 2]
+
+
+def test_atomic_write_parquet_overwrites_existing(tmp_path):
+    target = tmp_path / "test.parquet"
+    pd.DataFrame({"a": [1]}).to_parquet(target)
+    paths.atomic_write_parquet(pd.DataFrame({"a": [99]}), target)
+    assert pd.read_parquet(target)["a"].iloc[0] == 99
+
+
+def test_atomic_write_parquet_interrupt_keeps_old(tmp_path, monkeypatch):
+    """mock os.replace 抛异常 · 旧文件保留 · tmp 残留可接受 (下次写覆盖)."""
+    target = tmp_path / "test.parquet"
+    pd.DataFrame({"a": [1]}).to_parquet(target)
+    original = pd.read_parquet(target)["a"].iloc[0]
+
+    def boom(*a, **kw):
+        raise OSError("simulated interrupt")
+
+    monkeypatch.setattr("os.replace", boom)
+
+    with pytest.raises(OSError, match="simulated"):
+        paths.atomic_write_parquet(pd.DataFrame({"a": [99]}), target)
+
+    assert pd.read_parquet(target)["a"].iloc[0] == original
