@@ -74,25 +74,16 @@ DENY_TERMS=(
   "***REMOVED***"
 )
 
-# 排除路径 (build artifacts + 私有目录)
-EXCLUDES=(
-  "--exclude-dir=.git"
-  "--exclude-dir=.venv"
-  "--exclude-dir=venv"
-  "--exclude-dir=node_modules"
-  "--exclude-dir=dist"
-  "--exclude-dir=build"
-  "--exclude-dir=.pytest_cache"
-  "--exclude-dir=.ruff_cache"
-  "--exclude-dir=.mypy_cache"
-  "--exclude-dir=__pycache__"
-  "--exclude-dir=htmlcov"
-  "--exclude=*.parquet"
-  "--exclude=*.pyc"
-  "--exclude=uv.lock"
-  "--exclude=poetry.lock"
-  "--exclude=*.egg-info"
-)
+# 扫描范围委托给 git: ls-files --cached --others --exclude-standard
+# 自动 respect .gitignore + .git/info/exclude + global gitignore
+# (旧 EXCLUDES 数组已删 · 不再手动维护两套排除规则 · 防 .coverage 等 ignored 文件误报)
+#
+# 注: 用函数包装而非变量缓存 —— bash $(...) command substitution 会 strip NUL
+# bytes (POSIX shell 限制 · 不可 work around)。函数 + pipe 避开此坑 · 同时
+# git ls-files 本地极快 (几 ms · 多次调用无性能问题)。
+scan_files_z() {
+  git ls-files -z --cached --others --exclude-standard
+}
 
 # 自身排除 (规范文件引用禁令字面值是合法用途 · 否则规范无法描述禁令)
 SELF_EXCLUDES=(
@@ -107,12 +98,12 @@ LEAKS=0
 HITS_FOUND=""
 
 for term in "${DENY_TERMS[@]}"; do
-  # 用 grep -F 固定字符串匹配避免正则误伤
-  matches=$(grep -rnF "$term" "${EXCLUDES[@]}" . 2>/dev/null || true)
+  # grep -F 固定字符串避免正则误伤 · -H 强制显示文件名前缀
+  matches=$(scan_files_z | xargs -0 grep -nHF "$term" 2>/dev/null || true)
 
-  # 过滤自身
+  # 过滤自身 (git ls-files 输出不带 ./ 前缀)
   for self in "${SELF_EXCLUDES[@]}"; do
-    matches=$(echo "$matches" | grep -v "^./${self}:" || true)
+    matches=$(echo "$matches" | grep -v "^${self}:" || true)
   done
 
   if [ -n "$matches" ]; then
@@ -142,13 +133,11 @@ echo ""
 echo "🔍 版本号一致性检查 ..."
 
 VERSION_PATTERN='v0\.[123456789]|v[1-9]\.[0-9]'
-VERSION_LEAKS=$(grep -rEn "$VERSION_PATTERN" \
-  "${EXCLUDES[@]}" \
-  --exclude=check-privacy-leaks.sh \
-  . 2>/dev/null \
-  | grep -v '^\./CHANGELOG\.md:' \
-  | grep -v '^\./docs/reviews/' \
-  | grep -v '^\./CODE_OF_CONDUCT\.md:' \
+VERSION_LEAKS=$(scan_files_z | xargs -0 grep -nEH "$VERSION_PATTERN" 2>/dev/null \
+  | grep -v '^scripts/check-privacy-leaks\.sh:' \
+  | grep -v '^CHANGELOG\.md:' \
+  | grep -v '^docs/reviews/' \
+  | grep -v '^CODE_OF_CONDUCT\.md:' \
   || true)
 
 if [ -n "$VERSION_LEAKS" ]; then
