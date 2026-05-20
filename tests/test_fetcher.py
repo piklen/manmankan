@@ -1,5 +1,6 @@
 """fetcher 测试 · 缓存逻辑 + AKShare mock + 多源 fallback"""
 
+import logging
 from datetime import date, datetime, timedelta
 from unittest.mock import MagicMock, patch
 
@@ -199,6 +200,63 @@ class TestNormalizeKline:
         df = fetcher._normalize_kline(raw)
         dates = list(df["date"])
         assert dates == sorted(dates)
+
+    def test_clean_data_emits_no_warning(self, caplog):
+        raw = pd.DataFrame({
+            "date": ["2026-05-08"], "open": ["100"], "high": ["101"],
+            "low": ["99"], "close": ["100.5"], "volume": ["10000"], "amount": ["1e6"],
+        })
+        with caplog.at_level(logging.WARNING, logger="kan.fetcher"):
+            fetcher._normalize_kline(raw, source="baostock")
+        assert caplog.records == []
+
+    def test_unparseable_value_warns_with_source_and_column(self, caplog):
+        raw = pd.DataFrame({
+            "date": ["2026-05-07", "2026-05-08"],
+            "open": ["100", "101"], "high": ["101", "102"], "low": ["99", "100"],
+            "close": ["100.5", "N/A"],
+        })
+        with caplog.at_level(logging.WARNING, logger="kan.fetcher"):
+            df = fetcher._normalize_kline(raw, source="baostock")
+        assert len(caplog.records) == 1
+        msg = caplog.records[0].getMessage()
+        assert "baostock" in msg
+        assert "close" in msg
+        assert len(df) == 1  # 垃圾 close 行被 dropna 丢掉
+
+    def test_preexisting_nan_does_not_warn(self, caplog):
+        raw = pd.DataFrame({
+            "date": ["2026-05-07", "2026-05-08"],
+            "open": ["100", "101"], "high": ["101", "102"], "low": ["99", "100"],
+            "close": ["100.5", "101.5"], "volume": ["10000", None],
+        })
+        with caplog.at_level(logging.WARNING, logger="kan.fetcher"):
+            fetcher._normalize_kline(raw, source="sina")
+        assert caplog.records == []
+
+    def test_multiple_bad_columns_single_warning(self, caplog):
+        raw = pd.DataFrame({
+            "date": ["2026-05-08"],
+            "open": ["bad"], "high": ["101"], "low": ["99"],
+            "close": ["100.5"], "volume": ["oops"], "amount": ["1e6"],
+        })
+        with caplog.at_level(logging.WARNING, logger="kan.fetcher"):
+            fetcher._normalize_kline(raw, source="baostock")
+        assert len(caplog.records) == 1
+        msg = caplog.records[0].getMessage()
+        assert "open×1" in msg
+        assert "volume×1" in msg
+
+    @pytest.mark.parametrize("source", ["sina", "eastmoney", "tencent"])
+    def test_warning_carries_source_name(self, caplog, source):
+        raw = pd.DataFrame({
+            "date": ["2026-05-08"], "open": ["100"], "high": ["101"],
+            "low": ["99"], "close": ["junk"],
+        })
+        with caplog.at_level(logging.WARNING, logger="kan.fetcher"):
+            fetcher._normalize_kline(raw, source=source)
+        assert len(caplog.records) == 1
+        assert source in caplog.records[0].getMessage()
 
 
 # --- _fetch_baostock mock ---

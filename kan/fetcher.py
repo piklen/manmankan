@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import logging
 import re
 import threading
 from datetime import date, datetime, timedelta
@@ -9,6 +10,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING
 
 from kan._log import debug_log
+from kan._numeric import to_numeric_checked
 from kan.paths import DATA_DIR
 
 if TYPE_CHECKING:
@@ -58,8 +60,16 @@ def _normalize_kline(df: pd.DataFrame, source: str = "unknown") -> pd.DataFrame:
     df = df[KLINE_COLUMNS].copy()
     df["date"] = pd.to_datetime(df["date"], errors="coerce").dt.date
     # _source 是 str 列 · 不进数值转换
+    bad_cols: list[tuple[str, int]] = []
     for col in ["open", "high", "low", "close", "volume", "amount"]:
-        df[col] = pd.to_numeric(df[col], errors="coerce")
+        df[col], bad_count = to_numeric_checked(df[col])
+        if bad_count:
+            bad_cols.append((col, bad_count))
+    if bad_cols:
+        detail = ", ".join(f"{c}×{n}" for c, n in bad_cols)
+        logging.getLogger(__name__).warning(
+            "数据源 %s K线含无法解析的数值 · 已置 NaN: %s", source, detail
+        )
     df["_source"] = source
 
     df = df.sort_values("date").reset_index(drop=True)
