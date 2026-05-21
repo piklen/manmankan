@@ -415,3 +415,25 @@ def test_scan_command_with_diff_flag(scan_runner):
     from kan.app import app
     result = scan_runner.invoke(app, ["scan", "--diff"])
     assert result.exit_code == 0
+
+
+def test_scan_format_json(scan_runner):
+    """`kan scan --format json` · 输出合法 JSON · 含结构化结果"""
+    import json as _json
+
+    from kan.app import app
+    result = scan_runner.invoke(app, ["scan", "--format", "json"])
+    assert result.exit_code == 0, f"output: {result.output[:500]}"
+    out = result.output
+    data = _json.loads(out[out.index("{"):])
+    assert data["command"] == "scan"
+    assert data["results"][0]["symbol"] == "600519"
+
+
+def test_scan_format_md(scan_runner):
+    """`kan scan --format md` · 输出 markdown 表格"""
+    from kan.app import app
+    result = scan_runner.invoke(app, ["scan", "--format", "md"])
+    assert result.exit_code == 0
+    assert "| 股票 |" in result.output
+    assert "600519" in result.output

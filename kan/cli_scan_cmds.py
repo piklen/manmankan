@@ -6,6 +6,7 @@ from typing import Annotated
 
 import typer
 
+from kan import export
 from kan.app import app
 from kan.cli_helpers import (
     _auto_fetch_stale,
@@ -62,6 +63,10 @@ def scan(
     signal: Annotated[bool, typer.Option("--signal", "-S", "-s", help="仅显示有共振信号的股票")] = False,
     diff: Annotated[bool, typer.Option("--diff", "-d", help="增量模式：显示与上次扫描的变化")] = False,
     exclude_st: Annotated[bool, typer.Option("--exclude-st", help="排除 ST/*ST 股票")] = False,
+    fmt: Annotated[
+        export.OutputFormat,
+        typer.Option("--format", help="输出格式：terminal（默认）/ md / json"),
+    ] = export.OutputFormat.terminal,
 ) -> None:
     """扫描自选股多周期位置（10 周期全景模式）"""
     from rich.console import Console
@@ -109,7 +114,7 @@ def scan(
             results = [r for r in results if r.high_resonance > 0]
         else:
             results = [r for r in results if r.low_resonance > 0]
-        if not results:
+        if not results and fmt is export.OutputFormat.terminal:
             console.print("没有股票触及极值区 · 无共振信号")
             save_snapshot(all_results)
             return
@@ -138,6 +143,20 @@ def scan(
         title += f" · 数据截止 {format_date_compact(data_cutoff)} 收盘"
     if fetched_at:
         title += f" · {format_fetched_at_compact(fetched_at)} 拉取"
+
+    if fmt is export.OutputFormat.json:
+        typer.echo(export.to_json(export.scan_payload(
+            results, mode=mode, data_cutoff=data_cutoff,
+            fetched_at=fetched_at, stale=is_stale,
+        )))
+        save_snapshot(all_results)
+        return
+    if fmt is export.OutputFormat.md:
+        typer.echo(export.scan_markdown(
+            results, periods=list(PERIODS), mode=mode, title=title,
+        ))
+        save_snapshot(all_results)
+        return
 
     display_periods = responsive_periods(console.width)
     is_compact = len(display_periods) < len(PERIODS)
