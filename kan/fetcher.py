@@ -1,4 +1,4 @@
-"""K 线数据拉取层 · 多源 fallback（baostock → 新浪 → 东财 → 腾讯）"""
+"""K 线数据拉取层 · 多源 fallback（baostock → 东财/新浪并发 → 腾讯）"""
 
 from __future__ import annotations
 
@@ -328,19 +328,60 @@ def _fetch_tencent(symbol: str, start: str) -> pd.DataFrame | None:
     return raw
 
 
+# ── akshare 双源并发（东财 + 新浪 · race · baostock 挂掉后第二档） ──────
+
+def _fetch_via_akshare(symbol: str, start: str) -> tuple[pd.DataFrame, str] | None:
+    """东财 + 新浪 两个 akshare 源并发拉取 · 谁先返回有效数据用谁。
+
+    串行试时慢/挂的源会拖累总延迟；并发跑 + as_completed 取第一个成功的，
+    失败的被淘汰。中标源名随 (df, source) 返回，经 _normalize_kline 落到
+    _source 列可回查。两源都失败返回 None，由调用方降级下一档。
+
+    不用 `with ThreadPoolExecutor`：其 __exit__ 的 shutdown(wait=True) 会
+    阻塞等所有线程，某源 hang 时整个调用挂死。改 shutdown(wait=False)，
+    拿到结果即返回，慢/hang 的线程后台自生自灭，不阻塞调用方。
+    """
+    from concurrent.futures import ThreadPoolExecutor, as_completed
+
+    candidates = {"sina": _fetch_sina, "eastmoney": _fetch_eastmoney}
+    executor = ThreadPoolExecutor(max_workers=2)
+    try:
+        future_to_source = {
+            executor.submit(fn, symbol, start): name
+            for name, fn in candidates.items()
+        }
+        try:
+            for future in as_completed(future_to_source, timeout=15):
+                name = future_to_source[future]
+                try:
+                    df = future.result()
+                except Exception as e:
+                    # 与各 _fetch_* 一致：第三方源不保异常类型 · broad catch + debug log
+                    debug_log(__name__, f"fetch via akshare {name}", e)
+                    continue
+                if df is not None:
+                    return df, name
+        except TimeoutError:
+            # as_completed 超时 · 双源都没及时返回 · 降级下一档
+            pass
+        return None
+    finally:
+        executor.shutdown(wait=False, cancel_futures=True)
+
+
 # ── 公开 API ─────────────────────────────────────────────────────────
 
 def fetch_kline(symbol: str, days: int = 180, force: bool = False) -> pd.DataFrame:
-    """拉取单只股票前复权日 K 线（baostock → 新浪 → 东财 → 腾讯）。
+    """拉取单只股票前复权日 K 线（baostock → 东财/新浪并发 → 腾讯）。
 
     返回 DataFrame · 标准列：date, open, high, low, close, volume, amount
 
-    fallback 顺序设计依据（2026-05-10 实测）：
-    1. baostock 独立服务器最稳 · 免熔断 · 数值精度全 A 股板块对齐
-    2. 新浪源（akshare stock_zh_a_daily）· 免登录 · 精度跟 baostock 一致 · akshare 官方推荐 fallback
-    3. 东财（akshare stock_zh_a_hist）· push2his.eastmoney.com 对部分 IP 段持续封禁
-       （akshare GitHub Issue #6092/#6148/#7011/#6214）· 偶尔可用降到第三
-    4. 腾讯（akshare stock_zh_a_hist_tx）· 仅价格可信 · amount 字段板块语义不一致已 drop
+    fallback 设计：
+    1. baostock 独立服务器最稳 · 数值精度全 A 股板块对齐 · 主路径
+    2. 东财 + 新浪 两个 akshare 源并发 race（_fetch_via_akshare）· 谁先成功用谁 ·
+       任一源慢/挂不拖累另一个 · 东财 push2his 对部分 IP 段持续封禁时新浪兜底
+       （akshare GitHub Issue #6092/#6148/#7011/#6214）
+    3. 腾讯（akshare stock_zh_a_hist_tx）· 仅价格可信 · amount 字段板块语义不一致已 drop
     """
     symbol = _validate_symbol(symbol)
     _ensure_data_dir()
@@ -354,11 +395,9 @@ def fetch_kline(symbol: str, days: int = 180, force: bool = False) -> pd.DataFra
     raw = _fetch_baostock(symbol, start)
     source = "baostock"
     if raw is None:
-        raw = _fetch_sina(symbol, start)
-        source = "sina"
-    if raw is None:
-        raw = _fetch_eastmoney(symbol, start)
-        source = "eastmoney"
+        akshare_result = _fetch_via_akshare(symbol, start)
+        if akshare_result is not None:
+            raw, source = akshare_result
     if raw is None:
         raw = _fetch_tencent(symbol, start)
         source = "tencent"

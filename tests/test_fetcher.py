@@ -18,11 +18,11 @@ def temp_data_dir(tmp_path, monkeypatch):
 
 @pytest.fixture
 def force_eastmoney_path(monkeypatch):
-    """绕过新的 baostock/sina 主路径 · 让 fetch_kline 走到东财 mock。
+    """绕过 baostock / 新浪 · 让 fetch_kline 走到东财 mock。
 
-    fallback 顺序 2026-05-10 改为 baostock → 新浪 → 东财 → 腾讯。
-    旧测试 mock 的是 akshare.stock_zh_a_hist (东财)，需要先把前两个源 mock None
-    才能让流程走到东财。新测试应该直接 mock 主路径。
+    fallback：baostock → _fetch_via_akshare(东财+新浪并发) → 腾讯。
+    把 baostock 和新浪 mock 成 None，并发档里只剩东财能中标，
+    流程落到 akshare.stock_zh_a_hist (东财) mock。
     """
     monkeypatch.setattr(fetcher, "_fetch_baostock", lambda *a, **kw: None)
     monkeypatch.setattr(fetcher, "_fetch_sina", lambda *a, **kw: None)
@@ -344,10 +344,12 @@ def raw_kline_df():
     ("tencent", "_fetch_tencent"),
 ])
 def test_fetch_kline_stamps_source(temp_data_dir, raw_kline_df, source, mock_target, monkeypatch):
-    """4 源 fallback 各自标记正确 source · 关掉前置源让目标源生效."""
-    order = ["_fetch_baostock", "_fetch_sina", "_fetch_eastmoney", "_fetch_tencent"]
-    idx = order.index(mock_target)
-    for f in order[:idx]:
+    """各源 fallback 标记正确 source · 其它源全 mock None 让目标源生效.
+
+    东财/新浪经 _fetch_via_akshare 并发档 · 关掉非目标源使结果确定（不受 race 影响）.
+    """
+    all_sources = ["_fetch_baostock", "_fetch_sina", "_fetch_eastmoney", "_fetch_tencent"]
+    for f in all_sources:
         monkeypatch.setattr(fetcher, f, lambda *a, **kw: None)
     monkeypatch.setattr(fetcher, mock_target, lambda *a, **kw: raw_kline_df)
 
