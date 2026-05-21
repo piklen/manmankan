@@ -2,8 +2,19 @@
 
 import json
 from datetime import date
+from types import SimpleNamespace
 
-from kan.export import OutputFormat, md_table, scan_markdown, scan_payload, to_json
+from kan.export import (
+    OutputFormat,
+    extreme_markdown,
+    extreme_payload,
+    info_markdown,
+    info_payload,
+    md_table,
+    scan_markdown,
+    scan_payload,
+    to_json,
+)
 from kan.models import PeriodResult, StockScanResult
 
 
@@ -93,3 +104,44 @@ def test_scan_markdown_limit_up_tag():
         [_result(limit_up=True)], periods=[3], mode="low", title="t",
     )
     assert "涨停" in md
+
+
+def _fake_trend(**kw):
+    defaults = {"streak": -2, "streak_pct": 1.5, "direction": "跌2天"}
+    defaults.update(kw)
+    return SimpleNamespace(**defaults)
+
+
+def test_extreme_payload_shape():
+    rbp = {30: [(_result(), _result().periods[1])]}
+    payload = extreme_payload(rbp, mode="low")
+    assert payload["command"] == "low"
+    assert "30" in payload["results_by_period"]
+    assert payload["results_by_period"]["30"][0]["symbol"] == "600519"
+
+
+def test_extreme_markdown_per_period_sections():
+    rbp = {30: [(_result(), _result().periods[1])]}
+    md = extreme_markdown(rbp, mode="low")
+    assert "## 30 日低点" in md
+    assert "| 股票 | 现价 | 30日最低 | 30日最高 | 位置 |" in md
+    assert "[3.0%]" in md  # extreme 用 .1f
+
+
+def test_info_payload_shape():
+    payload = info_payload(
+        _result(), _fake_trend(), data_cutoff=date(2026, 5, 21),
+        fetched_at="2026-05-21 23:00", stale=False,
+    )
+    assert payload["command"] == "info"
+    assert payload["symbol"] == "600519"
+    assert payload["trend"]["direction"] == "跌2天"
+    assert payload["result"]["low_resonance"] == 1
+
+
+def test_info_markdown_structure():
+    md = info_markdown(_result(), _fake_trend(), title="测试详情")
+    assert md.startswith("# 测试详情")
+    assert "| 周期 | 最低 | 最高 | 位置 |" in md
+    assert "跌2天" in md
+    assert "低点共振 ×1" in md

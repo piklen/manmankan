@@ -437,3 +437,16 @@ def test_scan_format_md(scan_runner):
     assert result.exit_code == 0
     assert "| 股票 |" in result.output
     assert "600519" in result.output
+
+
+def test_low_format_json(scan_runner):
+    """`kan low 30 --format json` · 不 crash · 输出合法 JSON"""
+    import json as _json
+
+    from kan.app import app
+    result = scan_runner.invoke(app, ["low", "30", "--format", "json"])
+    assert result.exit_code == 0, f"output: {result.output[:400]}"
+    out = result.output
+    data = _json.loads(out[out.index("{"):])
+    assert data["command"] == "low"
+    assert "results_by_period" in data

@@ -15,6 +15,7 @@ if TYPE_CHECKING:
     from datetime import date
 
     from kan.models import PeriodResult, StockScanResult
+    from kan.scanner import TrendResult
 
 
 class OutputFormat(StrEnum):
@@ -97,3 +98,98 @@ def scan_markdown(
         cells.append(f"×{resonance}" if resonance else "")
         rows.append(cells)
     return f"# {title}\n\n{md_table(headers, rows)}\n\n{_disclaimer_quote()}"
+
+
+# ── low / high ────────────────────────────────────────────────────────
+
+def extreme_payload(results_by_period: dict[int, list], *, mode: str) -> dict:
+    """kan low / high --format json 的结构化 payload。"""
+    return {
+        "command": mode,  # "low" / "high"
+        "results_by_period": {
+            str(n): [r.model_dump(mode="json") for r, _ in hits]
+            for n, hits in results_by_period.items()
+        },
+    }
+
+
+def extreme_markdown(results_by_period: dict[int, list], *, mode: str) -> str:
+    """kan low / high --format md · 每周期一张表。"""
+    label = "低点" if mode == "low" else "高点"
+    parts = [f"# 慢慢看 · {label}筛选"]
+    for n, hits in results_by_period.items():
+        headers = ["股票", "现价", f"{n}日最低", f"{n}日最高", "位置"]
+        rows = [
+            [
+                f"{r.name.replace(' ', '')} {r.symbol}",
+                f"{r.current_price:.2f}",
+                f"{pr.n_low:.2f}",
+                f"{pr.n_high:.2f}",
+                f"[{pr.position_pct:.1f}%]",
+            ]
+            for r, pr in hits
+        ]
+        parts.append(
+            f"## {n} 日{label} · {len(hits)} 只触及\n\n{md_table(headers, rows)}"
+        )
+    parts.append(_disclaimer_quote())
+    return "\n\n".join(parts)
+
+
+# ── info ──────────────────────────────────────────────────────────────
+
+def info_payload(
+    result: StockScanResult,
+    trend: TrendResult,
+    *,
+    data_cutoff: date | None,
+    fetched_at: str | None,
+    stale: bool,
+) -> dict:
+    """kan info --format json 的结构化 payload。"""
+    return {
+        "command": "info",
+        "symbol": result.symbol,
+        "name": result.name,
+        "data_cutoff": data_cutoff.isoformat() if data_cutoff else None,
+        "fetched_at": fetched_at or None,
+        "stale": stale,
+        "result": result.model_dump(mode="json"),
+        "trend": {
+            "streak": trend.streak,
+            "streak_pct": trend.streak_pct,
+            "direction": trend.direction,
+        },
+    }
+
+
+def info_markdown(result: StockScanResult, trend: TrendResult, *, title: str) -> str:
+    """kan info --format md · 标题 + 全周期位置表。"""
+    tags = []
+    if result.is_st:
+        tags.append("ST")
+    if result.limit_up:
+        tags.append("涨停")
+    elif result.limit_down:
+        tags.append("跌停")
+    tag_str = (" · " + " ".join(tags)) if tags else ""
+    headers = ["周期", "最低", "最高", "位置"]
+    rows: list[list[str]] = []
+    for pr in result.periods:
+        if pr.insufficient:
+            rows.append([f"{pr.period}日", "-", "-", "-"])
+        else:
+            rows.append([
+                f"{pr.period}日",
+                f"{pr.n_low:.2f}",
+                f"{pr.n_high:.2f}",
+                _pct_cell(pr),
+            ])
+    return "\n\n".join([
+        f"# {title}{tag_str}",
+        f"现价 {result.current_price:.2f} · {trend.direction} · "
+        f"累计 {abs(trend.streak_pct):.2f}%",
+        md_table(headers, rows),
+        f"低点共振 ×{result.low_resonance} · 高点共振 ×{result.high_resonance}",
+        _disclaimer_quote(),
+    ])
