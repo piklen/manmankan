@@ -600,11 +600,19 @@ v0.0.4.3 已知问题 · v0.0.4.4 已修复(升级后自动 import smoke test �
 
 ### 网络 / 数据源连不上
 
-manmankan 主用 baostock · 失败自动 fallback 到 akshare。**两个都失败**通常是网络代理问题:
+manmankan 主用 baostock · 失败自动 fallback 到 akshare 多源。数据源域名默认并入 `no_proxy`,绕过本机配置的代理直连——代理挂掉或劫持流量时仍能拉到数据。
+
+**所有源都失败**多半是网络问题,可临时去代理重试:
 
 ```bash
 unset HTTP_PROXY HTTPS_PROXY all_proxy ALL_PROXY  # 临时去代理试
 kan add 600519                                    # 重试
+```
+
+若你的网络**必须走代理才能出网**,自动绕过反而会连不上数据源,用 `KAN_KEEP_PROXY=1` 关掉它:
+
+```bash
+export KAN_KEEP_PROXY=1   # 保留代理设置 · manmankan 不再自动绕过
 ```
 
 ### 想完全卸载 + 删除数据
