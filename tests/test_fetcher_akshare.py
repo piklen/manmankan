@@ -1,4 +1,6 @@
-"""akshare 双源并发 fallback 测试 · _fetch_via_akshare"""
+"""akshare 双源并发 fallback + no_proxy 代理隔离测试"""
+
+import os
 
 import pandas as pd
 import pytest
@@ -75,3 +77,56 @@ def test_via_akshare_source_exception_skipped(raw_df, monkeypatch):
     assert result is not None
     _, source = result
     assert source == "sina"
+
+
+# ── _ensure_no_proxy ──────────────────────────────────────────────────
+
+
+@pytest.fixture
+def reset_no_proxy(monkeypatch):
+    """复位模块 flag + 清空相关 env · monkeypatch 测试结束自动还原."""
+    monkeypatch.setattr(fetcher, "_no_proxy_configured", False)
+    monkeypatch.delenv("no_proxy", raising=False)
+    monkeypatch.delenv("NO_PROXY", raising=False)
+    monkeypatch.delenv("KAN_KEEP_PROXY", raising=False)
+
+
+def test_ensure_no_proxy_appends_data_source_domains(reset_no_proxy):
+    """数据源域名全部并入 no_proxy."""
+    fetcher._ensure_no_proxy()
+    no_proxy = os.environ.get("no_proxy", "")
+    for domain in fetcher._DATA_SOURCE_DOMAINS:
+        assert domain in no_proxy
+
+
+def test_ensure_no_proxy_preserves_user_value(reset_no_proxy, monkeypatch):
+    """不 clobber 用户已设的 no_proxy · 取并集."""
+    monkeypatch.setenv("no_proxy", "internal.corp")
+    fetcher._ensure_no_proxy()
+    no_proxy = os.environ.get("no_proxy", "")
+    assert "internal.corp" in no_proxy
+    assert "eastmoney.com" in no_proxy
+
+
+def test_ensure_no_proxy_skips_when_keep_proxy_set(reset_no_proxy, monkeypatch):
+    """KAN_KEEP_PROXY 置位 · 整体跳过 · 不动 no_proxy."""
+    monkeypatch.setenv("KAN_KEEP_PROXY", "1")
+    fetcher._ensure_no_proxy()
+    assert os.environ.get("no_proxy", "") == ""
+
+
+def test_ensure_no_proxy_no_duplicate_when_domain_preset(reset_no_proxy, monkeypatch):
+    """env 已含某数据源域名 · 不重复 append."""
+    monkeypatch.setenv("no_proxy", "eastmoney.com")
+    fetcher._ensure_no_proxy()
+    no_proxy = os.environ.get("no_proxy", "")
+    assert no_proxy.count("eastmoney.com") == 1
+    assert "sina.com.cn" in no_proxy
+
+
+def test_ensure_no_proxy_idempotent(reset_no_proxy):
+    """重复调用安全 · 模块 flag 守一次性."""
+    fetcher._ensure_no_proxy()
+    first = os.environ.get("no_proxy", "")
+    fetcher._ensure_no_proxy()
+    assert os.environ.get("no_proxy", "") == first

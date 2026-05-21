@@ -159,6 +159,48 @@ def _market_prefix(symbol: str, sep: str = "") -> str:
     return f"{prefix}{sep}{symbol}"
 
 
+# 数据源 apex 域名 · 用 apex 而非具体 host · 抗 akshare 端点漂移
+_DATA_SOURCE_DOMAINS = (
+    "eastmoney.com",
+    "sina.com.cn",
+    "sinajs.cn",
+    "gtimg.cn",
+    "baostock.com",
+)
+
+_no_proxy_configured = False
+
+
+def _ensure_no_proxy() -> None:
+    """把数据源域名并入 no_proxy · 使其绕过用户配置的（可能失效的）代理。
+
+    场景：用户设了 HTTP(S)_PROXY / ALL_PROXY，代理却挂了、或会劫持/封禁本工具
+    流量——数据请求被带偏。把数据源域名加进 no_proxy 让这些请求直连。
+
+    幂等（模块 flag 守一次性）· 不 clobber 用户已设的 no_proxy（取并集）·
+    KAN_KEEP_PROXY 置位时整体跳过——给"必须走代理才能出网"的用户的逃生口。
+    """
+    global _no_proxy_configured
+    if _no_proxy_configured:
+        return
+    import os
+
+    if os.environ.get("KAN_KEEP_PROXY"):
+        _no_proxy_configured = True
+        return
+
+    # requests / akshare 同时认 no_proxy 与 NO_PROXY · 合并已有值取并集
+    existing = os.environ.get("no_proxy", "") or os.environ.get("NO_PROXY", "")
+    entries = [e.strip() for e in existing.split(",") if e.strip()]
+    for domain in _DATA_SOURCE_DOMAINS:
+        if domain not in entries:
+            entries.append(domain)
+    merged = ",".join(entries)
+    os.environ["no_proxy"] = merged
+    os.environ["NO_PROXY"] = merged
+    _no_proxy_configured = True
+
+
 # ── 数据源 1: 东方财富（最快 · 单次 HTTP · 带熔断） ──────────────────
 
 _eastmoney_ok: bool | None = None
@@ -390,6 +432,7 @@ def fetch_kline(symbol: str, days: int = 180, force: bool = False) -> pd.DataFra
     if not force and _is_cache_fresh(cache):
         return _load_with_migration(cache)
 
+    _ensure_no_proxy()
     start = (datetime.now() - timedelta(days=int(days * 1.8))).strftime("%Y%m%d")
 
     raw = _fetch_baostock(symbol, start)
