@@ -6,6 +6,8 @@ from types import SimpleNamespace
 
 from kan.export import (
     OutputFormat,
+    compare_markdown,
+    compare_payload,
     extreme_markdown,
     extreme_payload,
     info_markdown,
@@ -185,3 +187,24 @@ def test_trend_markdown_with_latest_date_columns():
     assert "05-08" in md      # 日期列头
     assert "+2.50%" in md
     assert "-1.00%" in md
+
+
+def test_compare_payload_shape():
+    payload = compare_payload(
+        [_result(), _result(symbol="000858", name="五粮液")], periods=[30],
+    )
+    assert payload["command"] == "compare"
+    assert payload["periods"] == [30]
+    assert len(payload["results"]) == 2
+    assert payload["results"][1]["symbol"] == "000858"
+
+
+def test_compare_markdown_transposed():
+    md = compare_markdown(
+        [_result(), _result(symbol="000858", name="五粮液")], periods=[3],
+    )
+    assert "# 慢慢看 · 多股对比" in md
+    assert "| 指标 | 600519 贵州茅台 | 000858 五粮液 |" in md
+    assert "| 现价 | 100.00 | 100.00 |" in md
+    assert "| 3日位置 |" in md
+    assert "数据截止" in md

@@ -450,3 +450,18 @@ def test_low_format_json(scan_runner):
     data = _json.loads(out[out.index("{"):])
     assert data["command"] == "low"
     assert "results_by_period" in data
+
+
+def test_compare_too_few_symbols(scan_runner):
+    """`kan compare 600519` 单只 · 报至少 2 只 · exit 2"""
+    from kan.app import app
+    result = scan_runner.invoke(app, ["compare", "600519"])
+    assert result.exit_code == 2
+
+
+def test_compare_too_many_symbols(scan_runner):
+    """`kan compare` 9 只 · 超上限 8 · exit 2"""
+    from kan.app import app
+    nine = [f"60000{i}" for i in range(9)]
+    result = scan_runner.invoke(app, ["compare", *nine])
+    assert result.exit_code == 2

@@ -257,3 +257,38 @@ def trend_markdown(
                 cells.append("-")
         rows.append(cells)
     return f"# {title}\n\n{md_table(headers, rows)}\n\n{_disclaimer_quote()}"
+
+
+# ── compare ───────────────────────────────────────────────────────────
+
+def compare_payload(results: list[StockScanResult], *, periods: list[int]) -> dict:
+    """kan compare --format json 的结构化 payload。"""
+    return {
+        "command": "compare",
+        "periods": periods,
+        "results": [r.model_dump(mode="json") for r in results],
+    }
+
+
+def compare_markdown(results: list[StockScanResult], *, periods: list[int]) -> str:
+    """kan compare --format md · 转置表(指标为行 · 个股为列)。"""
+    headers = ["指标", *[f"{r.symbol} {r.name.replace(' ', '')}" for r in results]]
+    rows: list[list[str]] = [["现价", *[f"{r.current_price:.2f}" for r in results]]]
+    for p in periods:
+        cells = [f"{p}日位置"]
+        for r in results:
+            pr = next((x for x in r.periods if x.period == p), None)
+            cells.append("-" if pr is None else _pct_cell(pr))
+        rows.append(cells)
+    rows.append(["低点共振", *[f"×{r.low_resonance}" for r in results]])
+    rows.append(["高点共振", *[f"×{r.high_resonance}" for r in results]])
+    rows.append(["ST", *["是" if r.is_st else "—" for r in results]])
+    rows.append([
+        "涨跌停",
+        *[
+            "涨停" if r.limit_up else ("跌停" if r.limit_down else "—")
+            for r in results
+        ],
+    ])
+    rows.append(["数据截止", *[r.scan_date.isoformat() for r in results]])
+    return f"# 慢慢看 · 多股对比\n\n{md_table(headers, rows)}\n\n{_disclaimer_quote()}"

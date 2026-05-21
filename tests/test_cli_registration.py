@@ -15,9 +15,9 @@ from __future__ import annotations
 
 from kan.cli import app
 
-# v0.0.3 拆分时锁定 · 12 个命令分布：
+# 命令分布（加新命令时同步更新此 canary）：
 # - cli_watchlist_cmds (6): help / add / remove / list / import / clear
-# - cli_scan_cmds (5):      fetch / scan / low / high / info
+# - cli_scan_cmds (6):      fetch / scan / low / high / info / compare
 # - cli_trend_cmds (1):     trend
 # - cli_meta_cmds (3):      update / uninstall / completion
 _EXPECTED_COMMANDS = {
@@ -32,6 +32,7 @@ _EXPECTED_COMMANDS = {
     "low",
     "high",
     "info",
+    "compare",
     "trend",
     "update",
     "uninstall",
