@@ -26,6 +26,7 @@ WATCHLIST_PATH = BASE_DIR / "watchlist.json"
 STOCK_NAMES_CACHE = BASE_DIR / "stock_names.json"
 SNAPSHOT_PATH = BASE_DIR / "last_scan.json"
 SNAPSHOTS_DIR = BASE_DIR / "snapshots"
+CIRCUIT_PATH = BASE_DIR / "circuit.json"
 
 NAMES_CACHE_MAX_AGE_DAYS = 7
 
