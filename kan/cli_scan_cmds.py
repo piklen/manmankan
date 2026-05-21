@@ -391,7 +391,7 @@ def info(
 
         from kan.fetcher import cache_age, data_cutoff_date, fetch_kline, get_cached, is_fresh
         from kan.render import DISCLAIMER, format_pct
-        from kan.scanner import calc_trend, scan_stock
+        from kan.scanner import calc_trend, calc_volume_state, scan_stock
         from kan.watchlist import _lookup_name, _normalize_symbol
 
     console = Console()
@@ -427,6 +427,7 @@ def info(
 
     result = scan_stock(df, symbol, name)
     trend_result = calc_trend(df, symbol, name)
+    volume_state = calc_volume_state(df)
     name_short = name.replace(" ", "")
 
     # v0.0.4.5: 数据截止 / 拉取时间分离展示
@@ -443,11 +444,13 @@ def info(
         is_stale = cutoff is None or cutoff < latest_trade_date()
         if fmt is export.OutputFormat.json:
             typer.echo(export.to_json(export.info_payload(
-                result, trend_result, data_cutoff=cutoff,
+                result, trend_result, volume=volume_state, data_cutoff=cutoff,
                 fetched_at=fetched_at or None, stale=is_stale,
             )))
         else:
-            typer.echo(export.info_markdown(result, trend_result, title=title))
+            typer.echo(export.info_markdown(
+                result, trend_result, volume=volume_state, title=title,
+            ))
         return
 
     # 基本信息
@@ -492,6 +495,11 @@ def info(
 
     console.print(table)
     console.print(f"\n  低点共振 ×{result.low_resonance} · 高点共振 ×{result.high_resonance}")
+    if volume_state is not None:
+        console.print(
+            f"  成交量 · 今日是近 {volume_state.window} 日均量的 "
+            f"{volume_state.ratio} 倍 · {volume_state.label}"
+        )
 
     # UX-1 (v0.0.4.7 P0): kan info 加 stale/intraday 警告 · 与 scan/trend 一致
     # 单只详情诱导决策性比 scan 更强 · 缺警告是 dead-end 风险

@@ -14,7 +14,7 @@ from typing import TYPE_CHECKING
 if TYPE_CHECKING:
     from datetime import date
 
-    from kan.models import PeriodResult, StockScanResult
+    from kan.models import PeriodResult, StockScanResult, VolumeState
     from kan.scanner import TrendResult
 
 
@@ -142,6 +142,7 @@ def info_payload(
     result: StockScanResult,
     trend: TrendResult,
     *,
+    volume: VolumeState | None,
     data_cutoff: date | None,
     fetched_at: str | None,
     stale: bool,
@@ -160,11 +161,18 @@ def info_payload(
             "streak_pct": trend.streak_pct,
             "direction": trend.direction,
         },
+        "volume": volume.model_dump() if volume else None,
     }
 
 
-def info_markdown(result: StockScanResult, trend: TrendResult, *, title: str) -> str:
-    """kan info --format md · 标题 + 全周期位置表。"""
+def info_markdown(
+    result: StockScanResult,
+    trend: TrendResult,
+    *,
+    volume: VolumeState | None,
+    title: str,
+) -> str:
+    """kan info --format md · 标题 + 全周期位置表 + 成交量状态。"""
     tags = []
     if result.is_st:
         tags.append("ST")
@@ -185,14 +193,20 @@ def info_markdown(result: StockScanResult, trend: TrendResult, *, title: str) ->
                 f"{pr.n_high:.2f}",
                 _pct_cell(pr),
             ])
-    return "\n\n".join([
+    sections = [
         f"# {title}{tag_str}",
         f"现价 {result.current_price:.2f} · {trend.direction} · "
         f"累计 {abs(trend.streak_pct):.2f}%",
         md_table(headers, rows),
         f"低点共振 ×{result.low_resonance} · 高点共振 ×{result.high_resonance}",
-        _disclaimer_quote(),
-    ])
+    ]
+    if volume is not None:
+        sections.append(
+            f"成交量 · 今日是近 {volume.window} 日均量的 "
+            f"{volume.ratio} 倍 · {volume.label}"
+        )
+    sections.append(_disclaimer_quote())
+    return "\n\n".join(sections)
 
 
 # ── trend ─────────────────────────────────────────────────────────────
