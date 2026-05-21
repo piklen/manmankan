@@ -7,6 +7,7 @@ from typing import Annotated
 
 import typer
 
+from kan import export
 from kan.app import app
 from kan.cli_helpers import (
     _auto_fetch_stale,
@@ -24,6 +25,10 @@ def trend(
     down: Annotated[int | None, typer.Option("--down", help="只看连跌≥N天（不带 N 默认 3）")] = None,
     up: Annotated[int | None, typer.Option("--up", help="只看连涨≥N天（不带 N 默认 3）")] = None,
     candle: Annotated[bool, typer.Option("--candle", "-c", help="阳线阴线口径（默认收盘价口径）")] = False,
+    fmt: Annotated[
+        export.OutputFormat,
+        typer.Option("--format", help="输出格式：terminal（默认）/ md / json"),
+    ] = export.OutputFormat.terminal,
 ) -> None:
     """连续涨跌看板"""
     from rich.console import Console
@@ -64,13 +69,13 @@ def trend(
     if down is not None:
         results = [r for r in results if r.streak <= -down]
         filter_label = f" · 连跌≥{down}天"
-        if not results:
+        if not results and fmt is export.OutputFormat.terminal:
             console.print(f"没有连续跌 {down} 天以上的股票")
             return
     elif up is not None:
         results = [r for r in results if r.streak >= up]
         filter_label = f" · 连涨≥{up}天"
-        if not results:
+        if not results and fmt is export.OutputFormat.terminal:
             console.print(f"没有连续涨 {up} 天以上的股票")
             return
 
@@ -96,6 +101,16 @@ def trend(
         title += f" · 数据截止 {format_date_compact(data_cutoff)} 收盘"
     if fetched_at:
         title += f" · {format_fetched_at_compact(fetched_at)} 拉取"
+
+    if fmt is not export.OutputFormat.terminal:
+        if fmt is export.OutputFormat.json:
+            typer.echo(export.to_json(export.trend_payload(
+                results, candle=candle, data_cutoff=data_cutoff,
+                fetched_at=fetched_at, stale=is_stale,
+            )))
+        else:
+            typer.echo(export.trend_markdown(results, title=title, latest=latest))
+        return
 
     table = Table(title=title, show_lines=False, pad_edge=False, padding=(0, 1))
     table.add_column("股票", style="white", no_wrap=True)

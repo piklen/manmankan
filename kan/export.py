@@ -193,3 +193,67 @@ def info_markdown(result: StockScanResult, trend: TrendResult, *, title: str) ->
         f"低点共振 ×{result.low_resonance} · 高点共振 ×{result.high_resonance}",
         _disclaimer_quote(),
     ])
+
+
+# ── trend ─────────────────────────────────────────────────────────────
+
+def _trend_dict(tr: TrendResult) -> dict:
+    return {
+        "symbol": tr.symbol,
+        "name": tr.name,
+        "current_price": tr.current_price,
+        "streak": tr.streak,
+        "streak_pct": tr.streak_pct,
+        "direction": tr.direction,
+        "daily_changes": [[d, c] for d, c in tr.daily_changes],
+    }
+
+
+def trend_payload(
+    results: list[TrendResult],
+    *,
+    candle: bool,
+    data_cutoff: date | None,
+    fetched_at: str | None,
+    stale: bool,
+) -> dict:
+    """kan trend --format json 的结构化 payload。"""
+    return {
+        "command": "trend",
+        "mode": "candle" if candle else "close",
+        "data_cutoff": data_cutoff.isoformat() if data_cutoff else None,
+        "fetched_at": fetched_at or None,
+        "stale": stale,
+        "results": [_trend_dict(r) for r in results],
+    }
+
+
+def trend_markdown(
+    results: list[TrendResult], *, title: str, latest: int | None,
+) -> str:
+    """kan trend --format md · 连续涨跌表 · --latest 时含日明细列。"""
+    headers = ["股票", "现价", "连续", "累计"]
+    n_dates = 0
+    if latest and results:
+        n_dates = min(latest, len(results[0].daily_changes))
+        headers += [d[-5:] for d, _ in results[0].daily_changes[:n_dates]]
+    rows: list[list[str]] = []
+    for r in results:
+        cells = [
+            f"{r.name.replace(' ', '')} {r.symbol}",
+            f"{r.current_price:.2f}",
+            r.direction,
+            f"{abs(r.streak_pct):.2f}%",
+        ]
+        if n_dates:
+            for _, chg in r.daily_changes[:n_dates]:
+                if chg > 0:
+                    cells.append(f"+{chg:.2f}%")
+                elif chg < 0:
+                    cells.append(f"{chg:.2f}%")
+                else:
+                    cells.append("—")
+            while len(cells) < len(headers):
+                cells.append("-")
+        rows.append(cells)
+    return f"# {title}\n\n{md_table(headers, rows)}\n\n{_disclaimer_quote()}"
