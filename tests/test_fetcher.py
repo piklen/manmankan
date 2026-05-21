@@ -294,30 +294,33 @@ def test_fetch_baostock_returns_none_on_error(temp_data_dir):
     assert df is None
 
 
-# --- 熔断器 ---
+# --- 熔断器集成 ---
 
 
-class TestCircuitBreaker:
-    def test_eastmoney_circuit_breaker_trips_on_failure(self, temp_data_dir, monkeypatch):
-        monkeypatch.setattr(fetcher, "_eastmoney_ok", None)
-        with patch("akshare.stock_zh_a_hist", side_effect=Exception("timeout")):
-            result = fetcher._fetch_eastmoney("600519", "20260501")
-        assert result is None
-        assert fetcher._eastmoney_ok is False
+def test_circuit_skips_breaker_down_source(temp_data_dir, raw_kline_df, isolated_breaker, monkeypatch):
+    """breaker 标记 baostock down → fetch_kline 跳过它 · 走 akshare 档."""
+    isolated_breaker.record("baostock", ok=False)
+    monkeypatch.setattr(fetcher, "_fetch_eastmoney", lambda *a, **kw: None)
+    monkeypatch.setattr(fetcher, "_fetch_sina", lambda *a, **kw: raw_kline_df)
 
-    def test_eastmoney_circuit_breaker_skips_after_trip(self, temp_data_dir, monkeypatch):
-        monkeypatch.setattr(fetcher, "_eastmoney_ok", False)
-        with patch("akshare.stock_zh_a_hist") as mock:
-            result = fetcher._fetch_eastmoney("600519", "20260501")
-        assert result is None
-        mock.assert_not_called()
+    df = fetcher.fetch_kline("600519", force=True)
+    assert (df["_source"] == "sina").all()
 
-    def test_eastmoney_circuit_breaker_resets_on_success(self, temp_data_dir, fake_akshare_df, monkeypatch):
-        monkeypatch.setattr(fetcher, "_eastmoney_ok", None)
-        with patch("akshare.stock_zh_a_hist", return_value=fake_akshare_df):
-            result = fetcher._fetch_eastmoney("600519", "20260501")
-        assert result is not None
-        assert fetcher._eastmoney_ok is True
+
+def test_circuit_records_down_on_source_exception(isolated_breaker):
+    """源抛异常 → 被记 down."""
+    with patch("akshare.stock_zh_a_hist", side_effect=Exception("timeout")):
+        result = fetcher._fetch_eastmoney("600519", "20260501")
+    assert result is None
+    assert isolated_breaker.is_down("eastmoney")
+
+
+def test_circuit_empty_result_not_recorded_down(isolated_breaker):
+    """源返回空数据（无效代码/无数据）≠ 源挂 · 不记 down."""
+    with patch("akshare.stock_zh_a_hist", return_value=pd.DataFrame()):
+        result = fetcher._fetch_eastmoney("999999", "20260501")
+    assert result is None
+    assert not isolated_breaker.is_down("eastmoney")
 
 
 # ── source stamping + migration · _source column ───────────────────────

@@ -9,6 +9,7 @@ from datetime import date, datetime, timedelta
 from pathlib import Path
 from typing import TYPE_CHECKING
 
+from kan import circuit_breaker
 from kan._log import debug_log
 from kan._numeric import to_numeric_checked
 from kan.paths import DATA_DIR
@@ -201,14 +202,11 @@ def _ensure_no_proxy() -> None:
     _no_proxy_configured = True
 
 
-# ── 数据源 1: 东方财富（最快 · 单次 HTTP · 带熔断） ──────────────────
-
-_eastmoney_ok: bool | None = None
-
+# ── 数据源 1: 东方财富（最快 · 单次 HTTP） ───────────────────────────
 
 def _fetch_eastmoney(symbol: str, start: str) -> pd.DataFrame | None:
-    global _eastmoney_ok
-    if _eastmoney_ok is False:
+    cb = circuit_breaker.get_breaker()
+    if cb.is_down("eastmoney"):
         return None
     try:
         import akshare as ak
@@ -217,15 +215,15 @@ def _fetch_eastmoney(symbol: str, start: str) -> pd.DataFrame | None:
             symbol=symbol, period="daily", adjust="qfq",
             start_date=start, timeout=5,
         )
+        cb.record("eastmoney", ok=True)
         if raw is None or raw.empty or "日期" not in raw.columns:
             return None
-        _eastmoney_ok = True
         return raw.rename(columns=_EM_COLUMN_MAP)
     except Exception as e:
         # CR-4 (v0.0.4.8): broad catch 是 legitimate (akshare 第三方不保 exception type) ·
         # 但加 debug log · 用户开 KAN_DEBUG=1 可见诊断 · 排查 fallback 触发原因
         debug_log(__name__, "fetch eastmoney", e)
-        _eastmoney_ok = False
+        cb.record("eastmoney", ok=False)
         return None
 
 
@@ -260,6 +258,10 @@ def _fetch_baostock(symbol: str, start: str) -> pd.DataFrame | None:
     except ImportError:
         return None
 
+    cb = circuit_breaker.get_breaker()
+    if cb.is_down("baostock"):
+        return None
+
     start_fmt = f"{start[:4]}-{start[4:6]}-{start[6:8]}"
 
     with _bs_lock:
@@ -273,6 +275,7 @@ def _fetch_baostock(symbol: str, start: str) -> pd.DataFrame | None:
                 adjustflag="2",
             )
             if rs.error_code != "0":
+                cb.record("baostock", ok=True)
                 return None
             rows = []
             while rs.next():
@@ -280,8 +283,10 @@ def _fetch_baostock(symbol: str, start: str) -> pd.DataFrame | None:
         except Exception as e:
             # CR-4 (v0.0.4.8): baostock 第三方 · broad catch + debug log
             debug_log(__name__, "fetch baostock", e)
+            cb.record("baostock", ok=False)
             return None
 
+    cb.record("baostock", ok=True)
     if not rows:
         return None
 
@@ -297,12 +302,16 @@ def _fetch_sina(symbol: str, start: str) -> pd.DataFrame | None:
 
     返回 schema: date/open/high/low/close/volume/amount/outstanding_share/turnover
     其中 volume 单位「股」、amount 单位「元」，跟 baostock 完全对齐（实测）。
-    免登录、不熔断；东财 push2his 被 ban 时最稳的路径之一。
+    免登录；东财 push2his 被 ban 时最稳的路径之一。
     """
     import io
     import sys
 
     import akshare as ak
+
+    cb = circuit_breaker.get_breaker()
+    if cb.is_down("sina"):
+        return None
 
     prefix = "sh" if symbol.startswith(("6", "9")) else "sz"
     end = (datetime.now() + timedelta(days=1)).strftime("%Y%m%d")
@@ -319,10 +328,12 @@ def _fetch_sina(symbol: str, start: str) -> pd.DataFrame | None:
     except Exception as e:
         # CR-4 (v0.0.4.8): 新浪 akshare · broad catch + debug log
         debug_log(__name__, "fetch sina", e)
+        cb.record("sina", ok=False)
         return None
     finally:
         sys.stderr = _real_stderr
 
+    cb.record("sina", ok=True)
     if raw is None or raw.empty:
         return None
     return raw
@@ -346,6 +357,10 @@ def _fetch_tencent(symbol: str, start: str) -> pd.DataFrame | None:
 
     import akshare as ak
 
+    cb = circuit_breaker.get_breaker()
+    if cb.is_down("tencent"):
+        return None
+
     _real_stderr = sys.stderr
     sys.stderr = io.StringIO()
     try:
@@ -358,10 +373,12 @@ def _fetch_tencent(symbol: str, start: str) -> pd.DataFrame | None:
     except Exception as e:
         # CR-4 (v0.0.4.8): 腾讯 akshare · broad catch + debug log
         debug_log(__name__, "fetch tencent", e)
+        cb.record("tencent", ok=False)
         return None
     finally:
         sys.stderr = _real_stderr
 
+    cb.record("tencent", ok=True)
     if raw is None or raw.empty:
         return None
 
