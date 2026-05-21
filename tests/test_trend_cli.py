@@ -154,6 +154,19 @@ def test_trend_down_up_mutex(runner: CliRunner) -> None:
     assert "不能同时使用" in combined
 
 
+def test_trend_format_json(runner: CliRunner) -> None:
+    """`kan trend --format json` · 输出合法 JSON · 含 3 只结果"""
+    import json as _json
+
+    result = runner.invoke(app, ["trend", "--format", "json"])
+    assert result.exit_code == 0, f"output: {result.stdout[:400]}"
+    out = result.stdout
+    data = _json.loads(out[out.index("{"):])
+    assert data["command"] == "trend"
+    assert len(data["results"]) == 3
+    assert data["results"][0]["symbol"] == "600519"
+
+
 def test_trend_down_below_min(runner: CliRunner) -> None:
     """--down 1 · 越界 · typer 报错"""
     result = runner.invoke(app, ["trend", "--down", "1"])
