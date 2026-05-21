@@ -19,7 +19,7 @@ from kan.export import (
     trend_markdown,
     trend_payload,
 )
-from kan.models import PeriodResult, StockScanResult
+from kan.models import PeriodResult, StockScanResult, VolumeState
 
 
 def _result(symbol="600519", name="贵州茅台", **kw):
@@ -134,21 +134,41 @@ def test_extreme_markdown_per_period_sections():
 
 def test_info_payload_shape():
     payload = info_payload(
-        _result(), _fake_trend(), data_cutoff=date(2026, 5, 21),
+        _result(), _fake_trend(), volume=None, data_cutoff=date(2026, 5, 21),
         fetched_at="2026-05-21 23:00", stale=False,
     )
     assert payload["command"] == "info"
     assert payload["symbol"] == "600519"
     assert payload["trend"]["direction"] == "跌2天"
     assert payload["result"]["low_resonance"] == 1
+    assert payload["volume"] is None
+
+
+def test_info_payload_with_volume():
+    payload = info_payload(
+        _result(), _fake_trend(),
+        volume=VolumeState(ratio=2.3, label="明显放大", window=5),
+        data_cutoff=None, fetched_at=None, stale=True,
+    )
+    assert payload["volume"]["ratio"] == 2.3
+    assert payload["volume"]["label"] == "明显放大"
 
 
 def test_info_markdown_structure():
-    md = info_markdown(_result(), _fake_trend(), title="测试详情")
+    md = info_markdown(_result(), _fake_trend(), volume=None, title="测试详情")
     assert md.startswith("# 测试详情")
     assert "| 周期 | 最低 | 最高 | 位置 |" in md
     assert "跌2天" in md
     assert "低点共振 ×1" in md
+
+
+def test_info_markdown_with_volume():
+    md = info_markdown(
+        _result(), _fake_trend(),
+        volume=VolumeState(ratio=2.3, label="明显放大", window=5),
+        title="t",
+    )
+    assert "成交量 · 今日是近 5 日均量的 2.3 倍 · 明显放大" in md
 
 
 def test_trend_payload_shape():
