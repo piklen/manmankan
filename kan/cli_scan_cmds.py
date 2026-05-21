@@ -254,7 +254,9 @@ def scan(
     console.print(DISCLAIMER, style="dim")
 
 
-def _filter_extreme_cmd(periods: list[int], mode: str) -> None:
+def _filter_extreme_cmd(
+    periods: list[int], mode: str, fmt: export.OutputFormat,
+) -> None:
     """low/high 共享实现"""
     from rich.console import Console
 
@@ -279,6 +281,15 @@ def _filter_extreme_cmd(periods: list[int], mode: str) -> None:
     watchlist_pairs = _get_watchlist_pairs()
     _auto_fetch_stale(watchlist_pairs)
     results_by_period = filter_extreme(watchlist_pairs, periods, mode=mode)
+
+    if fmt is not export.OutputFormat.terminal:
+        if fmt is export.OutputFormat.json:
+            typer.echo(export.to_json(
+                export.extreme_payload(results_by_period, mode=mode)
+            ))
+        else:
+            typer.echo(export.extreme_markdown(results_by_period, mode=mode))
+        return
 
     if not results_by_period:
         console.print(f"自选股中没有触及 {'/'.join(map(str, periods))} 日{label}的股票")
@@ -330,17 +341,25 @@ def _filter_extreme_cmd(periods: list[int], mode: str) -> None:
 @app.command()
 def low(
     periods: Annotated[list[int], typer.Argument(help="周期天数（2-360 · 支持多个：30 60 120）")],
+    fmt: Annotated[
+        export.OutputFormat,
+        typer.Option("--format", help="输出格式：terminal（默认）/ md / json"),
+    ] = export.OutputFormat.terminal,
 ) -> None:
     """筛选 N 日低点的自选股（支持多周期）"""
-    _filter_extreme_cmd(periods, mode="low")
+    _filter_extreme_cmd(periods, mode="low", fmt=fmt)
 
 
 @app.command()
 def high(
     periods: Annotated[list[int], typer.Argument(help="周期天数（2-360 · 支持多个：30 60 120）")],
+    fmt: Annotated[
+        export.OutputFormat,
+        typer.Option("--format", help="输出格式：terminal（默认）/ md / json"),
+    ] = export.OutputFormat.terminal,
 ) -> None:
     """筛选 N 日高点的自选股（支持多周期）"""
-    _filter_extreme_cmd(periods, mode="high")
+    _filter_extreme_cmd(periods, mode="high", fmt=fmt)
 
 
 @app.command()
@@ -349,6 +368,10 @@ def info(
         str | None,
         typer.Argument(help="股票代码（如 600519）", show_default=False),
     ] = None,
+    fmt: Annotated[
+        export.OutputFormat,
+        typer.Option("--format", help="输出格式：terminal（默认）/ md / json"),
+    ] = export.OutputFormat.terminal,
 ) -> None:
     """单只股票详情（全周期位置 + 涨跌信息）"""
     # U-1 (v0.0.4.8 P0-6): 跟 kan add 同款散户中文 · 兑现 U-2 承诺到 info 命令
@@ -414,6 +437,18 @@ def info(
         title += f" · 数据截止 {format_date_compact(cutoff)} 收盘"
     if fetched_at:
         title += f" · {format_fetched_at_compact(fetched_at)} 拉取"
+
+    if fmt is not export.OutputFormat.terminal:
+        from kan.trading_calendar import latest_trade_date
+        is_stale = cutoff is None or cutoff < latest_trade_date()
+        if fmt is export.OutputFormat.json:
+            typer.echo(export.to_json(export.info_payload(
+                result, trend_result, data_cutoff=cutoff,
+                fetched_at=fetched_at or None, stale=is_stale,
+            )))
+        else:
+            typer.echo(export.info_markdown(result, trend_result, title=title))
+        return
 
     # 基本信息
     tag = ""
