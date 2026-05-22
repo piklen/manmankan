@@ -138,3 +138,64 @@ def get_industry_constituents(
     ]
     cache.write_text(json.dumps(pairs, ensure_ascii=False), encoding="utf-8")
     return pairs
+
+
+# ── 板块指数 K 线 ─────────────────────────────────────────────────────
+
+_SW_KLINE_RENAME = {
+    "日期": "date", "开盘": "open", "最高": "high",
+    "最低": "low", "收盘": "close", "成交量": "volume", "成交额": "amount",
+}
+_KLINE_COLUMNS = ["date", "open", "high", "low", "close", "volume", "amount"]
+
+
+def _kline_cache_fresh(path) -> bool:
+    """板块 K 线 cache 是否含最近交易日(复用个股的 freshness 判据)。"""
+    if not path.exists():
+        return False
+    try:
+        import pandas as pd
+
+        last = pd.read_parquet(path, columns=["date"])["date"].iloc[-1]
+        last_d = last if hasattr(last, "isoformat") else pd.Timestamp(last).date()
+        from kan.trading_calendar import latest_trade_date
+
+        return last_d >= latest_trade_date()
+    except Exception:
+        return False
+
+
+def fetch_industry_kline(board: Board, force: bool = False) -> pd.DataFrame:
+    """板块指数 K 线 · 归一化到与个股 K 线同 schema · parquet cache。
+
+    akshare: index_hist_sw(symbol=board.code, period="day")。
+    """
+    import pandas as pd
+
+    from kan.paths import atomic_write_parquet
+
+    ensure_dirs()
+    cache = BOARDS_DIR / f"kline_{board.code}.parquet"
+    if not force and _kline_cache_fresh(cache):
+        return pd.read_parquet(cache)
+    import akshare as ak
+
+    try:
+        raw = ak.index_hist_sw(symbol=board.code, period="day")
+    except Exception as e:
+        raise BoardDataUnavailable(f"申万指数K线拉取失败 {board.code}: {e}") from e
+    if raw is None or raw.empty:
+        raise BoardDataUnavailable(f"申万指数K线为空: {board.code}")
+    df = raw.rename(columns=_SW_KLINE_RENAME)
+    for col in _KLINE_COLUMNS:
+        if col not in df.columns:
+            df[col] = float("nan")
+    df = df[_KLINE_COLUMNS].copy()
+    df["date"] = pd.to_datetime(df["date"], errors="coerce").dt.date
+    df = (
+        df.sort_values("date")
+        .dropna(subset=["date", "close"])
+        .reset_index(drop=True)
+    )
+    atomic_write_parquet(df, cache)
+    return df
