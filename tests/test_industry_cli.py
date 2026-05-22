@@ -106,3 +106,24 @@ def test_only_watchlist_needs_industry(industry_runner):
     result = industry_runner.invoke(app, ["scan", "--only-watchlist"])
     assert result.exit_code == 1
     assert "--only-watchlist" in result.output
+
+
+def test_low_industry_runs(industry_runner, monkeypatch):
+    from kan.app import app
+    monkeypatch.setattr(
+        "kan.scanner.filter_extreme",
+        lambda pairs, periods, mode="low": {},
+    )
+    result = industry_runner.invoke(app, ["low", "30", "--industry=食品饮料"])
+    assert result.exit_code == 0
+    assert "Traceback" not in result.output
+
+
+def test_high_industry_runs(industry_runner, monkeypatch):
+    from kan.app import app
+    monkeypatch.setattr(
+        "kan.scanner.filter_extreme",
+        lambda pairs, periods, mode="low": {},
+    )
+    result = industry_runner.invoke(app, ["high", "30", "--industry=食品饮料"])
+    assert result.exit_code == 0

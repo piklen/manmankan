@@ -312,6 +312,7 @@ def scan(
 
 def _filter_extreme_cmd(
     periods: list[int], mode: str, fmt: export.OutputFormat,
+    industry: str | None = None, only_watchlist: bool = False,
 ) -> None:
     """low/high 共享实现"""
     from rich.console import Console
@@ -335,8 +336,24 @@ def _filter_extreme_cmd(
     signal_style = "bold green" if mode == "low" else "bold yellow"
 
     watchlist_pairs = _get_watchlist_pairs()
-    _auto_fetch_stale(watchlist_pairs)
-    results_by_period = filter_extreme(watchlist_pairs, periods, mode=mode)
+    if only_watchlist and industry is None:
+        _print_err("❌ --only-watchlist 需配合 --industry 使用")
+        raise typer.Exit(1)
+    from kan._scan_targets import resolve_scan_targets
+    from kan.boards import BoardDataUnavailableError, BoardNotFoundError
+    try:
+        targets, board_meta = resolve_scan_targets(
+            industry, only_watchlist, watchlist_pairs,
+        )
+    except BoardNotFoundError:
+        _print_err(f"❌ 未找到行业「{industry}」· 可试更短关键词")
+        raise typer.Exit(1) from None
+    except BoardDataUnavailableError:
+        _print_err("❌ 行业数据源暂时不可用,稍后再试")
+        raise typer.Exit(1) from None
+    highlight = board_meta.highlight if board_meta else set()
+    _auto_fetch_stale(targets)
+    results_by_period = filter_extreme(targets, periods, mode=mode)
 
     if fmt is not export.OutputFormat.terminal:
         if fmt is export.OutputFormat.json:
@@ -380,8 +397,9 @@ def _filter_extreme_cmd(
 
         for result, pr in hits:
             name_short = result.name.replace(" ", "")
+            star = "⭐ " if result.symbol in highlight else ""
             table.add_row(
-                f"{name_short} {result.symbol}",
+                f"{star}{name_short} {result.symbol}",
                 f"{result.current_price:.2f}",
                 f"{pr.n_low:.2f}",
                 f"{pr.n_high:.2f}",
@@ -401,9 +419,20 @@ def low(
         export.OutputFormat,
         typer.Option("--format", help="输出格式：terminal（默认）/ md / json"),
     ] = export.OutputFormat.terminal,
+    industry: Annotated[
+        str | None,
+        typer.Option("--industry", help="扫指定申万行业全部成分股 · 自选股 ⭐ 高亮"),
+    ] = None,
+    only_watchlist: Annotated[
+        bool,
+        typer.Option("--only-watchlist", help="仅显示自选 ∩ 行业(需配合 --industry)"),
+    ] = False,
 ) -> None:
     """筛选 N 日低点的自选股（支持多周期）"""
-    _filter_extreme_cmd(periods, mode="low", fmt=fmt)
+    _filter_extreme_cmd(
+        periods, mode="low", fmt=fmt,
+        industry=industry, only_watchlist=only_watchlist,
+    )
 
 
 @app.command()
@@ -413,9 +442,20 @@ def high(
         export.OutputFormat,
         typer.Option("--format", help="输出格式：terminal（默认）/ md / json"),
     ] = export.OutputFormat.terminal,
+    industry: Annotated[
+        str | None,
+        typer.Option("--industry", help="扫指定申万行业全部成分股 · 自选股 ⭐ 高亮"),
+    ] = None,
+    only_watchlist: Annotated[
+        bool,
+        typer.Option("--only-watchlist", help="仅显示自选 ∩ 行业(需配合 --industry)"),
+    ] = False,
 ) -> None:
     """筛选 N 日高点的自选股（支持多周期）"""
-    _filter_extreme_cmd(periods, mode="high", fmt=fmt)
+    _filter_extreme_cmd(
+        periods, mode="high", fmt=fmt,
+        industry=industry, only_watchlist=only_watchlist,
+    )
 
 
 @app.command()
