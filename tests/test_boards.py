@@ -72,8 +72,23 @@ def test_search_industry_exact_and_fuzzy(monkeypatch):
 
 
 def test_search_industry_not_found(monkeypatch):
+    monkeypatch.setattr(
+        "akshare.sw_index_first_info",
+        lambda: _fake_sw_df([["801080.SI", "电子", 300]]),
+    )
+    monkeypatch.setattr(
+        "akshare.sw_index_second_info",
+        lambda: _fake_sw_df([["801081.SI", "半导体", 131]]),
+    )
+    monkeypatch.setattr("akshare.sw_index_third_info", lambda: _fake_sw_df([]))
+    boards.load_industry_catalog(force=True)
+    with pytest.raises(boards.BoardNotFound):
+        boards.search_industry("不存在的行业")
+
+
+def test_catalog_all_empty_raises_unavailable(monkeypatch):
     monkeypatch.setattr("akshare.sw_index_first_info", lambda: _fake_sw_df([]))
     monkeypatch.setattr("akshare.sw_index_second_info", lambda: _fake_sw_df([]))
     monkeypatch.setattr("akshare.sw_index_third_info", lambda: _fake_sw_df([]))
-    with pytest.raises(boards.BoardNotFound):
-        boards.search_industry("不存在的行业")
+    with pytest.raises(boards.BoardDataUnavailable):
+        boards.load_industry_catalog(force=True)
