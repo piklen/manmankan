@@ -79,6 +79,8 @@ def _fetch_catalog() -> list[Board]:
                 level=level,
                 size=int(row["成份个数"]),
             ))
+    if not boards_list:
+        raise BoardDataUnavailable("申万行业 catalog 三级全部拉取失败")
     return boards_list
 
 
