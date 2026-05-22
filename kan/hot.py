@@ -100,8 +100,13 @@ def fetch_hot_list(which: HotList, force: bool = False) -> list[HotEntry]:
         if code is None:
             skipped += 1
             continue
+        try:
+            rank = int(row["当前排名"])
+        except (ValueError, TypeError):
+            skipped += 1
+            continue
         entries.append(HotEntry(
-            rank=int(row["当前排名"]),
+            rank=rank,
             symbol=code,
             name=str(row["股票名称"]).strip(),
         ))
