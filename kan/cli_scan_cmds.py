@@ -18,6 +18,7 @@ from kan.cli_helpers import (
     format_date_compact,
     format_fetched_at_compact,
 )
+from kan.hot import HotList
 
 
 @app.command()
@@ -96,9 +97,13 @@ def scan(
         str | None,
         typer.Option("--industry", help="扫指定申万行业全部成分股 · 自选股 ⭐ 高亮"),
     ] = None,
+    hot: Annotated[
+        HotList | None,
+        typer.Option("--hot", help="扫东财热榜 · rank=人气榜 / surge=飙升榜 · 自选股 ⭐ 高亮"),
+    ] = None,
     only_watchlist: Annotated[
         bool,
-        typer.Option("--only-watchlist", help="仅显示自选 ∩ 行业(需配合 --industry)"),
+        typer.Option("--only-watchlist", help="仅显示自选 ∩ 行业/热榜(需配合 --industry 或 --hot)"),
     ] = False,
     fmt: Annotated[
         export.OutputFormat,
@@ -129,17 +134,22 @@ def scan(
         )
 
     console = Console()
+    if industry is not None and hot is not None:
+        _print_err("❌ --industry 与 --hot 不能同时使用")
+        raise typer.Exit(2)
+    source_mode = industry is not None or hot is not None
     watchlist_pairs = (
-        _load_watchlist_pairs() if industry is not None else _get_watchlist_pairs()
+        _load_watchlist_pairs() if source_mode else _get_watchlist_pairs()
     )
-    if only_watchlist and industry is None:
-        _print_err("❌ --only-watchlist 需配合 --industry 使用")
+    if only_watchlist and not source_mode:
+        _print_err("❌ --only-watchlist 需配合 --industry 或 --hot 使用")
         raise typer.Exit(1)
-    from kan._scan_targets import resolve_scan_targets
+    from kan._scan_targets import BoardMeta, HotMeta, resolve_scan_targets
     from kan.boards import BoardDataUnavailableError, BoardNotFoundError
+    from kan.hot import HotListUnavailableError
     try:
         targets, board_meta = resolve_scan_targets(
-            industry, only_watchlist, watchlist_pairs,
+            industry, only_watchlist, watchlist_pairs, hot=hot,
         )
     except BoardNotFoundError:
         _print_err(
@@ -149,16 +159,19 @@ def scan(
     except BoardDataUnavailableError:
         _print_err("❌ 行业数据源暂时不可用,稍后再试")
         raise typer.Exit(1) from None
+    except HotListUnavailableError:
+        _print_err("❌ 热榜数据源暂时不可用,稍后再试")
+        raise typer.Exit(1) from None
     _auto_fetch_stale(targets)
     mode = "high" if high else "low"
 
-    prev_snapshot = load_snapshot() if (diff and industry is None) else None
+    prev_snapshot = load_snapshot() if (diff and board_meta is None) else None
 
     # P1-8: 单次 scan_batch · 后续 filter / diff / snapshot 都用 all_results · 避免重复调用
     all_results = scan_batch(targets, mode=mode)
 
     board_index_result = None
-    if board_meta is not None:
+    if isinstance(board_meta, BoardMeta):
         from kan.scanner import scan_stock
         board_index_result = scan_stock(
             board_meta.index_kline, board_meta.board.code, board_meta.board.name,
@@ -179,13 +192,11 @@ def scan(
             results = [r for r in results if r.low_resonance > 0]
         if not results and fmt is export.OutputFormat.terminal:
             console.print("没有股票触及极值区 · 无共振信号")
-            if industry is None:
+            if board_meta is None:
                 save_snapshot(all_results)
             return
 
     # v0.0.4.5: 数据截止日 (K 线 date 列) 与 拉取时间 (文件 mtime) 严格分离展示
-    # 修复 v0.0.4.4 凌晨 02:55 拉昨日数据后 scan 整天显示"今日更新"实为昨日数据的 bug
-    # CR-2: fetched_at 取 max(cache_age) 而非循环最后一个 · 字符串 lex 排序 = 时间排序
     data_cutoff = None
     fetched_at = None
     for r in results:
@@ -207,9 +218,14 @@ def scan(
         title += f" · 数据截止 {format_date_compact(data_cutoff)} 收盘"
     if fetched_at:
         title += f" · {format_fetched_at_compact(fetched_at)} 拉取"
-    if board_meta is not None:
+    if isinstance(board_meta, BoardMeta):
         title = (
             f"慢慢看 · {board_meta.board.name} 行业位置扫描"
+            f" · {'高点' if high else '低点'}模式"
+        )
+    elif isinstance(board_meta, HotMeta):
+        title = (
+            f"慢慢看 · {board_meta.list_name} 位置扫描"
             f" · {'高点' if high else '低点'}模式"
         )
 
@@ -218,21 +234,24 @@ def scan(
             results, mode=mode, data_cutoff=data_cutoff,
             fetched_at=fetched_at, stale=is_stale,
         )))
-        if industry is None:
+        if board_meta is None:
             save_snapshot(all_results)
         return
     if fmt is export.OutputFormat.md:
         typer.echo(export.scan_markdown(
             results, periods=list(PERIODS), mode=mode, title=title,
         ))
-        if industry is None:
+        if board_meta is None:
             save_snapshot(all_results)
         return
 
     display_periods = responsive_periods(console.width)
     is_compact = len(display_periods) < len(PERIODS)
 
+    is_hot = isinstance(board_meta, HotMeta)
     table = Table(title=title, show_lines=False, pad_edge=False, padding=(0, 1))
+    if is_hot:
+        table.add_column("榜", justify="right", style="cyan", min_width=3)
     table.add_column("股票", style="white", no_wrap=True)
     table.add_column("现价", justify="right", style="white", min_width=8)
     for p in display_periods:
@@ -255,6 +274,9 @@ def scan(
 
     for r in results:
         row: list[str | Text] = []
+        if is_hot:
+            rank = board_meta.rank_map.get(r.symbol)
+            row.append(str(rank) if rank is not None else "-")
         name_short = r.name.replace(" ", "")
         tag = ""
         if r.limit_up:
@@ -293,9 +315,7 @@ def scan(
         )
 
     # UX-4: 双警告互斥渲染 (if/elif 替代 if/if)
-    # 理由: stale 状态下用户首动作就是 fetch · fetch 后会重新 scan · 那时再判 intraday
     if is_stale:
-        # UX-2 + U-5: 散户语言 · "缓存到 X 收盘 · 最近交易日是 Y · 数据滞后 N 天"
         cutoff_str = format_date_compact(data_cutoff) if data_cutoff else "无缓存"
         expected_str = format_date_compact(expected_cutoff)
         days_behind = (expected_cutoff - data_cutoff).days if data_cutoff else "?"
@@ -305,15 +325,14 @@ def scan(
             "   运行 `kan fetch --force` 拉取最新数据[/bold yellow]"
         )
     elif phase == PHASE_INTRADAY:
-        # UX-3 (v0.0.4.7 P0 cleanup PM-1 + 合-2): 状态描述而非走势预测 · 守 AGENTS.md §6 红线
         console.print(
             "\n  [bold yellow]⚠️ 当前盘中 · 涨跌停标签反映当前时刻 · 非收盘 final\n"
             "   (盘中价格仍在变动 · 涨停/跌停状态可能与收盘不同)\n"
             "   建议盘后 15:30 后看 final 数据[/bold yellow]"
         )
 
-    # 增量对比 · 用上面 cache 的 all_results · 避免重复 scan (P1-8)
-    if industry is None and diff and prev_snapshot:
+    # 增量对比 · 仅自选模式 (board_meta is None) · industry/hot 模式不做 diff/snapshot
+    if board_meta is None and diff and prev_snapshot:
         changes = compute_diff(all_results, prev_snapshot)
         if changes:
             console.print()
@@ -329,8 +348,8 @@ def scan(
     elif diff and not prev_snapshot:
         console.print("\n  [dim]首次扫描，无历史对比（下次 --diff 将显示变化）[/dim]")
 
-    # 保存快照供下次 diff 用 · 始终保存 all_results 全量 (P1-8: 避免重复 scan)
-    if industry is None:
+    # 保存快照供下次 diff 用 · 仅自选模式
+    if board_meta is None:
         save_snapshot(all_results)
 
     console.print()
@@ -338,6 +357,10 @@ def scan(
         console.print("[dim]  \\[x%] = 触及高点(≥95%) · 100%=区间最高 · 越高=越接近 N 日最高价[/dim]")
     else:
         console.print("[dim]  \\[x%] = 触及低点(≤5%) · 0%=区间最低 · 越低=越接近 N 日最低价[/dim]")
+    if is_hot:
+        console.print(
+            "[dim]  榜 = 东方财富热榜实时名次 · 非慢慢看观点 · 热榜为实时榜单[/dim]"
+        )
     console.print(DISCLAIMER, style="dim")
 
 
