@@ -8,7 +8,12 @@ from typing import Annotated
 import typer
 
 from kan.app import app
-from kan.cli_helpers import _load_names_with_optional_spinner, _NoopContext
+from kan.cli_helpers import (
+    _load_names_with_optional_spinner,
+    _NoopContext,
+    _print_err,
+    confirm_destructive,
+)
 
 
 @app.command(name="help")
@@ -67,14 +72,73 @@ def help_cmd() -> None:
 """)
 
 
+def _add_by_industry(industry: str, yes: bool) -> None:
+    """按申万行业批量添加成分股进自选 · 二次确认 + 影响摘要。"""
+    from kan import boards
+    from kan.watchlist import add_stock, load_watchlist, save_watchlist
+
+    try:
+        board = boards.search_industry(industry)
+        cons = boards.get_industry_constituents(board)
+    except boards.BoardNotFoundError:
+        _print_err(f"❌ 未找到行业「{industry}」· 可试更短关键词")
+        raise typer.Exit(1) from None
+    except boards.BoardDataUnavailableError:
+        _print_err("❌ 行业数据源暂时不可用,稍后再试")
+        raise typer.Exit(1) from None
+
+    wl = load_watchlist()
+    existing = {s.symbol for s in wl.stocks}
+    new = [(c, n) for c, n in cons if c not in existing]
+    already = len(cons) - len(new)
+    old_total = len(wl.stocks)
+
+    if not new:
+        typer.echo(f"「{board.name}」全部 {len(cons)} 只成分股已在自选 · 无需添加")
+        return
+
+    summary = (
+        f"⚠️ 将加 {len(cons)} 只{board.name}股进自选\n"
+        f"   其中 {already} 只已在自选 · 实际新增 {len(new)} 只\n"
+        f"   自选股 {old_total} → {old_total + len(new)} 只\n"
+        f"   kan scan 耗时会明显变长"
+    )
+    if not confirm_destructive(summary, yes=yes):
+        typer.echo("已取消")
+        return
+
+    for code, name in new:
+        add_stock(wl, code, name)
+    save_watchlist(wl)
+    typer.echo(
+        f"✅ 已加 {len(new)} 只{board.name}股 · "
+        f"自选股 {old_total} → {len(wl.stocks)} 只"
+    )
+
+
 @app.command()
 def add(
     symbols: Annotated[
         list[str] | None,
         typer.Argument(help="股票代码或名称（如 600519 茅台）", show_default=False),
     ] = None,
+    industry: Annotated[
+        str | None,
+        typer.Option("--industry", help="按申万行业批量添加该行业全部成分股"),
+    ] = None,
+    yes: Annotated[
+        bool,
+        typer.Option("--yes", help="跳过二次确认 · 慎用"),
+    ] = False,
 ) -> None:
-    """添加自选股（支持代码或名称搜索）"""
+    """添加自选股（支持代码或名称搜索 · --industry 按行业批量加）"""
+    if industry is not None and symbols:
+        _print_err("不能同时指定股票代码和 --industry · 二选一")
+        raise typer.Exit(2)
+    if industry is not None:
+        _add_by_industry(industry, yes)
+        return
+
     import time as _time
 
     # U-2 (v0.0.4.8): 无参 Typer 默认英文 "Missing argument 'SYMBOLS...'"
@@ -206,14 +270,71 @@ def add(
         raise typer.Exit(1)
 
 
+def _remove_by_industry(industry: str, yes: bool) -> None:
+    """按申万行业批量移除自选里属于该行业的股票 · 二次确认。"""
+    from kan import boards
+    from kan.watchlist import load_watchlist, save_watchlist
+
+    try:
+        board = boards.search_industry(industry)
+        cons = boards.get_industry_constituents(board)
+    except boards.BoardNotFoundError:
+        _print_err(f"❌ 未找到行业「{industry}」· 可试更短关键词")
+        raise typer.Exit(1) from None
+    except boards.BoardDataUnavailableError:
+        _print_err("❌ 行业数据源暂时不可用,稍后再试")
+        raise typer.Exit(1) from None
+
+    cons_codes = {c for c, _ in cons}
+    wl = load_watchlist()
+    old_total = len(wl.stocks)
+    to_remove = [s for s in wl.stocks if s.symbol in cons_codes]
+
+    if not to_remove:
+        typer.echo(f"你的自选里没有「{board.name}」行业的股票")
+        return
+
+    summary = (
+        f"⚠️ 将从自选删除 {len(to_remove)} 只{board.name}股"
+        f"（你的自选 ∩ {board.name}成分）\n"
+        f"   自选股 {old_total} → {old_total - len(to_remove)} 只\n"
+        f"   删除不可恢复（除非重新 kan add）"
+    )
+    if not confirm_destructive(summary, yes=yes):
+        typer.echo("已取消")
+        return
+
+    wl.stocks = [s for s in wl.stocks if s.symbol not in cons_codes]
+    save_watchlist(wl)
+    typer.echo(
+        f"✅ 已从自选删除 {len(to_remove)} 只{board.name}股 · "
+        f"自选股 {old_total} → {len(wl.stocks)} 只"
+    )
+
+
 @app.command()
 def remove(
     symbols: Annotated[
         list[str] | None,
         typer.Argument(help="股票代码或名称（支持多只）", show_default=False),
     ] = None,
+    industry: Annotated[
+        str | None,
+        typer.Option("--industry", help="按申万行业批量移除自选里属于该行业的股票"),
+    ] = None,
+    yes: Annotated[
+        bool,
+        typer.Option("--yes", help="跳过二次确认 · 慎用"),
+    ] = False,
 ) -> None:
-    """移除自选股（支持代码或名称 · 多只批量删除）"""
+    """移除自选股（支持代码或名称 · 多只批量删除 · --industry 按行业批量移除）"""
+    if industry is not None and symbols:
+        _print_err("不能同时指定股票代码和 --industry · 二选一")
+        raise typer.Exit(2)
+    if industry is not None:
+        _remove_by_industry(industry, yes)
+        return
+
     # U-1 (v0.0.4.8 P0-6): 跟 kan add 同款散户中文 · 兑现 U-2 承诺到 remove 命令
     if not symbols:
         typer.echo(
