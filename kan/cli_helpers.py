@@ -46,6 +46,17 @@ def _print_err(msg: str) -> None:
     Console(stderr=True).print(msg)
 
 
+def confirm_destructive(summary: str, *, yes: bool) -> bool:
+    """破坏性批量操作二次确认 · 打印影响摘要 · yes=True 跳过 · 返回是否继续。
+
+    用于按行业批量增删自选股 —— 不可逆操作前让用户看清影响范围再决定。
+    """
+    typer.echo(summary)
+    if yes:
+        return True
+    return typer.confirm("继续?")
+
+
 class _NoopContext:
     """No-op context manager · 跟 console.status 接口对齐 · 用于小量场景跳过 spinner。"""
 
