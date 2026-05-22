@@ -86,3 +86,15 @@ def test_atomic_write_parquet_interrupt_keeps_old(tmp_path, monkeypatch):
         paths.atomic_write_parquet(pd.DataFrame({"a": [99]}), target)
 
     assert pd.read_parquet(target)["a"].iloc[0] == original
+
+
+def test_boards_dir_under_base(monkeypatch, tmp_path):
+    monkeypatch.setenv("XDG_DATA_HOME", str(tmp_path))
+    import importlib
+
+    from kan import paths
+    importlib.reload(paths)
+    assert paths.BOARDS_DIR == tmp_path / "kan" / "boards"
+    paths.ensure_dirs()
+    assert paths.BOARDS_DIR.is_dir()
+    importlib.reload(paths)  # 复位 · 防污染其它测试
