@@ -1,5 +1,7 @@
 """kan/hot.py 单元测试 · mock akshare · 不走真网络。"""
 import json
+import os
+import time
 
 import pandas as pd
 import pytest
@@ -103,3 +105,21 @@ def test_surge_uses_stock_hot_up_em(monkeypatch):
 def test_hot_list_name():
     assert hot.hot_list_name(HotList.RANK) == "东财人气榜"
     assert hot.hot_list_name(HotList.SURGE) == "东财飙升榜"
+
+
+def test_fetch_hot_list_stale_cache_refetches(monkeypatch, _isolate_hot_dir):
+    """cache 存在但超 1h TTL → 重新拉 akshare,不返回旧数据。"""
+    cache = _isolate_hot_dir / "hot_rank.json"
+    cache.write_text(
+        json.dumps([{"rank": 1, "symbol": "000001", "name": "旧数据"}]),
+        encoding="utf-8",
+    )
+    old = time.time() - 7200  # 2h 前 · 超过 1h TTL
+    os.utime(cache, (old, old))
+
+    monkeypatch.setattr(
+        "akshare.stock_hot_rank_em",
+        lambda: _fake_rank_df([[1, "SZ000725", "京东方Ａ"]]),
+    )
+    entries = hot.fetch_hot_list(HotList.RANK)  # force=False · cache 已 stale
+    assert entries[0].name == "京东方Ａ"   # 新数据,不是 "旧数据"
