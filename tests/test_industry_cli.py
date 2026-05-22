@@ -50,6 +50,10 @@ def industry_runner(monkeypatch):
     )
     monkeypatch.setattr("kan.cli_scan_cmds._auto_fetch_stale", lambda _p: None)
     monkeypatch.setattr(
+        "kan.cli_trend_cmds._get_watchlist_pairs", lambda: [("600519", "贵州茅台")]
+    )
+    monkeypatch.setattr("kan.cli_trend_cmds._auto_fetch_stale", lambda _p: None)
+    monkeypatch.setattr(
         "kan.scanner.scan_batch",
         lambda pairs, mode="low": [_fake_scan_result(s, n) for s, n in pairs],
     )
@@ -127,3 +131,23 @@ def test_high_industry_runs(industry_runner, monkeypatch):
     )
     result = industry_runner.invoke(app, ["high", "30", "--industry=食品饮料"])
     assert result.exit_code == 0
+
+
+def test_trend_industry_runs(industry_runner, monkeypatch):
+    from kan.app import app
+
+    class _Tr:
+        def __init__(self, sym, name):
+            self.symbol, self.name = sym, name
+            self.current_price, self.streak, self.streak_pct = 100.0, 0, 0.0
+            self.daily_changes = []
+            self.direction = "平"
+
+    monkeypatch.setattr(
+        "kan.scanner.trend_batch",
+        lambda pairs, candle=False: [_Tr(s, n) for s, n in pairs],
+    )
+    result = industry_runner.invoke(app, ["trend", "--industry=食品饮料"])
+    assert result.exit_code == 0
+    assert "Traceback" not in result.output
+    assert "⭐" in result.output  # 茅台在自选

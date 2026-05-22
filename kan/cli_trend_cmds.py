@@ -25,6 +25,14 @@ def trend(
     down: Annotated[int | None, typer.Option("--down", help="只看连跌≥N天（不带 N 默认 3）")] = None,
     up: Annotated[int | None, typer.Option("--up", help="只看连涨≥N天（不带 N 默认 3）")] = None,
     candle: Annotated[bool, typer.Option("--candle", "-c", help="阳线阴线口径（默认收盘价口径）")] = False,
+    industry: Annotated[
+        str | None,
+        typer.Option("--industry", help="扫指定申万行业全部成分股 · 自选股 ⭐ 高亮"),
+    ] = None,
+    only_watchlist: Annotated[
+        bool,
+        typer.Option("--only-watchlist", help="仅显示自选 ∩ 行业(需配合 --industry)"),
+    ] = False,
     fmt: Annotated[
         export.OutputFormat,
         typer.Option("--format", help="输出格式：terminal（默认）/ md / json"),
@@ -49,7 +57,22 @@ def trend(
 
     console = Console()
     watchlist_pairs = _get_watchlist_pairs()
-    _auto_fetch_stale(watchlist_pairs)
+    if only_watchlist and industry is None:
+        _print_err("❌ --only-watchlist 需配合 --industry 使用")
+        raise typer.Exit(1)
+    from kan._scan_targets import resolve_scan_targets
+    from kan.boards import BoardDataUnavailableError, BoardNotFoundError
+    try:
+        targets, board_meta = resolve_scan_targets(
+            industry, only_watchlist, watchlist_pairs,
+        )
+    except BoardNotFoundError:
+        _print_err(f"❌ 未找到行业「{industry}」· 可试更短关键词")
+        raise typer.Exit(1) from None
+    except BoardDataUnavailableError:
+        _print_err("❌ 行业数据源暂时不可用,稍后再试")
+        raise typer.Exit(1) from None
+    _auto_fetch_stale(targets)
     if down is not None and up is not None:
         _print_err("❌ --down 和 --up 不能同时使用")
         raise typer.Exit(1)
@@ -58,7 +81,7 @@ def trend(
             _print_err(f"❌ {name} 的值必须在 2-30 之间（当前：{val}）")
             raise typer.Exit(1)
 
-    results = trend_batch(watchlist_pairs, candle=candle)
+    results = trend_batch(targets, candle=candle)
 
     if not results:
         _print_err("无缓存数据 · 请先 `kan fetch` 拉取数据")
@@ -101,6 +124,8 @@ def trend(
         title += f" · 数据截止 {format_date_compact(data_cutoff)} 收盘"
     if fetched_at:
         title += f" · {format_fetched_at_compact(fetched_at)} 拉取"
+    if board_meta is not None:
+        title = f"慢慢看 · {board_meta.board.name} 行业连续涨跌 · {mode_label}{filter_label}"
 
     if fmt is not export.OutputFormat.terminal:
         if fmt is export.OutputFormat.json:
@@ -130,6 +155,7 @@ def trend(
             date_headers.append(short)
             table.add_column(short, justify="right", min_width=7)
 
+    highlight = board_meta.highlight if board_meta else set()
     for r in results:
         name_short = r.name.replace(" ", "")
 
@@ -143,8 +169,9 @@ def trend(
             streak_text = Text("平", style="dim")
             cum_text = Text("0%", style="dim")
 
+        star = "⭐ " if r.symbol in highlight else ""
         row: list[str | Text] = [
-            f"{name_short} {r.symbol}",
+            f"{star}{name_short} {r.symbol}",
             f"{r.current_price:.2f}",
             streak_text,
             cum_text,
