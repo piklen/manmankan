@@ -67,6 +67,7 @@ def test_scan_hot_rank_runs(hot_runner):
     assert "京东方" in result.output         # 热榜成员
     assert "东财人气榜" in result.output      # 标题
     assert "⭐" in result.output             # 茅台在自选 · 高亮
+    assert "非慢慢看观点" in result.output    # 热榜 caption · 证明走了 hot 渲染路径(榜列)
 
 
 def test_scan_hot_conflicts_with_industry(hot_runner):
