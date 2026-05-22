@@ -168,3 +168,30 @@ def test_info_industry_conflicts_with_symbol(industry_runner):
         app, ["info", "600519", "--industry=食品饮料"]
     )
     assert result.exit_code != 0
+
+
+def test_list_industry_filters_watchlist(monkeypatch):
+    from datetime import date
+
+    import kan.cli_watchlist_cmds  # noqa: F401 — registers `list` command on app
+    from kan import boards
+    from kan.app import app
+    from kan.models import Board, Stock
+
+    board = Board(code="801016", name="食品饮料", level=2, size=2)
+    monkeypatch.setattr(boards, "search_industry", lambda q: board)
+    monkeypatch.setattr(
+        boards, "get_industry_constituents",
+        lambda b, force=False: [("600519", "贵州茅台"), ("000998", "隆平高科")],
+    )
+    monkeypatch.setattr(
+        "kan.watchlist.list_all",
+        lambda: [
+            Stock(symbol="600519", name="贵州茅台", added_at=date(2026, 5, 1)),
+            Stock(symbol="000001", name="平安银行", added_at=date(2026, 5, 1)),
+        ],
+    )
+    result = CliRunner().invoke(app, ["list", "--industry=食品饮料"])
+    assert result.exit_code == 0, result.output
+    assert "600519" in result.output       # 茅台属食品饮料 · 在自选
+    assert "000001" not in result.output   # 平安银行不属该行业
