@@ -367,6 +367,7 @@ def scan(
 def _filter_extreme_cmd(
     periods: list[int], mode: str, fmt: export.OutputFormat,
     industry: str | None = None, only_watchlist: bool = False,
+    hot: HotList | None = None,
 ) -> None:
     """low/high 共享实现"""
     from rich.console import Console
@@ -389,17 +390,22 @@ def _filter_extreme_cmd(
     label = "低点" if mode == "low" else "高点"
     signal_style = "bold green" if mode == "low" else "bold yellow"
 
+    if industry is not None and hot is not None:
+        _print_err("❌ --industry 与 --hot 不能同时使用")
+        raise typer.Exit(2)
+    source_mode = industry is not None or hot is not None
     watchlist_pairs = (
-        _load_watchlist_pairs() if industry is not None else _get_watchlist_pairs()
+        _load_watchlist_pairs() if source_mode else _get_watchlist_pairs()
     )
-    if only_watchlist and industry is None:
-        _print_err("❌ --only-watchlist 需配合 --industry 使用")
+    if only_watchlist and not source_mode:
+        _print_err("❌ --only-watchlist 需配合 --industry 或 --hot 使用")
         raise typer.Exit(1)
-    from kan._scan_targets import resolve_scan_targets
+    from kan._scan_targets import BoardMeta, HotMeta, resolve_scan_targets
     from kan.boards import BoardDataUnavailableError, BoardNotFoundError
+    from kan.hot import HotListUnavailableError
     try:
         targets, board_meta = resolve_scan_targets(
-            industry, only_watchlist, watchlist_pairs,
+            industry, only_watchlist, watchlist_pairs, hot=hot,
         )
     except BoardNotFoundError:
         _print_err(f"❌ 未找到行业「{industry}」· 可试更短关键词")
@@ -407,7 +413,12 @@ def _filter_extreme_cmd(
     except BoardDataUnavailableError:
         _print_err("❌ 行业数据源暂时不可用,稍后再试")
         raise typer.Exit(1) from None
+    except HotListUnavailableError:
+        _print_err("❌ 热榜数据源暂时不可用,稍后再试")
+        raise typer.Exit(1) from None
     highlight = board_meta.highlight if board_meta else set()
+    is_hot = isinstance(board_meta, HotMeta)
+    rank_map = board_meta.rank_map if is_hot else {}
     _auto_fetch_stale(targets)
     results_by_period = filter_extreme(targets, periods, mode=mode)
 
@@ -421,12 +432,16 @@ def _filter_extreme_cmd(
         return
 
     if not results_by_period:
-        where = f"{board_meta.board.name} 行业成分股" if board_meta else "自选股"
+        if isinstance(board_meta, BoardMeta):
+            where = f"{board_meta.board.name} 行业成分股"
+        elif isinstance(board_meta, HotMeta):
+            where = board_meta.list_name
+        else:
+            where = "自选股"
         console.print(f"{where}中没有触及 {'/'.join(map(str, periods))} 日{label}的股票")
         return
 
     # v0.0.4.5: 数据截止 / 拉取时间分离展示（与 scan 一致）
-    # CR-2: fetched_at 取 max(cache_age) · 字符串 lex 排序 = 时间排序
     data_cutoff = None
     fetched_at = None
 
@@ -446,6 +461,8 @@ def _filter_extreme_cmd(
             title += f" · {format_fetched_at_compact(fetched_at)} 拉取"
 
         table = Table(title=title, show_lines=False, pad_edge=False, padding=(0, 1))
+        if is_hot:
+            table.add_column("榜", justify="right", style="cyan", min_width=3)
         table.add_column("股票", style="white", no_wrap=True)
         table.add_column("现价", justify="right", style="white", min_width=8)
         table.add_column(f"{n}日最低", justify="right", style="dim", min_width=8)
@@ -455,17 +472,24 @@ def _filter_extreme_cmd(
         for result, pr in hits:
             name_short = result.name.replace(" ", "")
             star = "⭐ " if result.symbol in highlight else ""
-            table.add_row(
-                f"{star}{name_short} {result.symbol}",
-                f"{result.current_price:.2f}",
-                f"{pr.n_low:.2f}",
-                f"{pr.n_high:.2f}",
-                Text(f"[{pr.position_pct:.1f}%]", style=signal_style),
-            )
+            row: list[str | Text] = []
+            if is_hot:
+                rank = rank_map.get(result.symbol)
+                row.append(str(rank) if rank is not None else "-")
+            row.append(f"{star}{name_short} {result.symbol}")
+            row.append(f"{result.current_price:.2f}")
+            row.append(f"{pr.n_low:.2f}")
+            row.append(f"{pr.n_high:.2f}")
+            row.append(Text(f"[{pr.position_pct:.1f}%]", style=signal_style))
+            table.add_row(*row)
 
         console.print(table)
         console.print()
 
+    if is_hot:
+        console.print(
+            "[dim]  榜 = 东方财富热榜实时名次 · 非慢慢看观点 · 热榜为实时榜单[/dim]"
+        )
     console.print(DISCLAIMER, style="dim")
 
 
@@ -480,15 +504,19 @@ def low(
         str | None,
         typer.Option("--industry", help="扫指定申万行业全部成分股 · 自选股 ⭐ 高亮"),
     ] = None,
+    hot: Annotated[
+        HotList | None,
+        typer.Option("--hot", help="扫东财热榜 · rank=人气榜 / surge=飙升榜 · 自选股 ⭐ 高亮"),
+    ] = None,
     only_watchlist: Annotated[
         bool,
-        typer.Option("--only-watchlist", help="仅显示自选 ∩ 行业(需配合 --industry)"),
+        typer.Option("--only-watchlist", help="仅显示自选 ∩ 行业/热榜(需配合 --industry 或 --hot)"),
     ] = False,
 ) -> None:
     """筛选 N 日低点的自选股（支持多周期）"""
     _filter_extreme_cmd(
         periods, mode="low", fmt=fmt,
-        industry=industry, only_watchlist=only_watchlist,
+        industry=industry, only_watchlist=only_watchlist, hot=hot,
     )
 
 
@@ -503,15 +531,19 @@ def high(
         str | None,
         typer.Option("--industry", help="扫指定申万行业全部成分股 · 自选股 ⭐ 高亮"),
     ] = None,
+    hot: Annotated[
+        HotList | None,
+        typer.Option("--hot", help="扫东财热榜 · rank=人气榜 / surge=飙升榜 · 自选股 ⭐ 高亮"),
+    ] = None,
     only_watchlist: Annotated[
         bool,
-        typer.Option("--only-watchlist", help="仅显示自选 ∩ 行业(需配合 --industry)"),
+        typer.Option("--only-watchlist", help="仅显示自选 ∩ 行业/热榜(需配合 --industry 或 --hot)"),
     ] = False,
 ) -> None:
     """筛选 N 日高点的自选股（支持多周期）"""
     _filter_extreme_cmd(
         periods, mode="high", fmt=fmt,
-        industry=industry, only_watchlist=only_watchlist,
+        industry=industry, only_watchlist=only_watchlist, hot=hot,
     )
 
 
