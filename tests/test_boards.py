@@ -115,3 +115,40 @@ def test_get_constituents_uses_cache(monkeypatch, _isolate_boards_dir):
     monkeypatch.setattr("akshare.index_component_sw", _boom)
     board = Board(code="801016", name="种植业", level=2, size=20)
     assert boards.get_industry_constituents(board) == [("600519", "贵州茅台")]
+
+
+def test_fetch_industry_kline_normalizes_schema(monkeypatch):
+    raw = pd.DataFrame(
+        {
+            "代码": ["801016", "801016"],
+            "日期": ["2026-05-20", "2026-05-21"],
+            "收盘": [1300.0, 1320.0],
+            "开盘": [1290.0, 1305.0],
+            "最高": [1325.0, 1330.0],
+            "最低": [1288.0, 1300.0],
+            "成交量": [1.0e8, 1.1e8],
+            "成交额": [2.0e11, 2.1e11],
+        }
+    )
+    monkeypatch.setattr(
+        "akshare.index_hist_sw", lambda symbol, period="day": raw
+    )
+    board = Board(code="801016", name="种植业", level=2, size=20)
+    df = boards.fetch_industry_kline(board, force=True)
+    assert list(df.columns) == [
+        "date", "open", "high", "low", "close", "volume", "amount",
+    ]
+    assert len(df) == 2
+    # scan_stock 能直接吃:有 date/close/low/high
+    from kan.scanner import scan_stock
+    result = scan_stock(df, board.code, board.name)
+    assert result.symbol == "801016"
+
+
+def test_fetch_industry_kline_empty_raises(monkeypatch):
+    monkeypatch.setattr(
+        "akshare.index_hist_sw", lambda symbol, period="day": pd.DataFrame()
+    )
+    board = Board(code="801016", name="种植业", level=2, size=20)
+    with pytest.raises(boards.BoardDataUnavailable):
+        boards.fetch_industry_kline(board, force=True)
