@@ -50,9 +50,15 @@ def industry_runner(monkeypatch):
     )
     monkeypatch.setattr("kan.cli_scan_cmds._auto_fetch_stale", lambda _p: None)
     monkeypatch.setattr(
+        "kan.cli_scan_cmds._load_watchlist_pairs", lambda: [("600519", "贵州茅台")]
+    )
+    monkeypatch.setattr(
         "kan.cli_trend_cmds._get_watchlist_pairs", lambda: [("600519", "贵州茅台")]
     )
     monkeypatch.setattr("kan.cli_trend_cmds._auto_fetch_stale", lambda _p: None)
+    monkeypatch.setattr(
+        "kan.cli_trend_cmds._load_watchlist_pairs", lambda: [("600519", "贵州茅台")]
+    )
     monkeypatch.setattr(
         "kan.scanner.scan_batch",
         lambda pairs, mode="low": [_fake_scan_result(s, n) for s, n in pairs],
@@ -208,3 +214,48 @@ def test_fetch_industry_runs(industry_runner, monkeypatch):
     result = industry_runner.invoke(app, ["fetch", "--industry=食品饮料"])
     assert result.exit_code == 0, result.output
     assert "600519" in fetched and "000998" in fetched   # 两只成分股都拉了
+
+
+def test_scan_industry_empty_watchlist_ok(industry_runner, monkeypatch):
+    """空自选股时 scan --industry 仍正常扫描(只是没有 ⭐ 高亮)。"""
+    from kan.app import app
+    monkeypatch.setattr("kan.cli_scan_cmds._load_watchlist_pairs", lambda: [])
+    result = industry_runner.invoke(app, ["scan", "--industry=食品饮料"])
+    assert result.exit_code == 0, result.output
+    assert "🏛️" in result.output
+    assert "贵州茅台" in result.output
+    assert "⭐" not in result.output
+    assert "自选列表为空" not in result.output
+
+
+def test_low_industry_empty_watchlist_ok(industry_runner, monkeypatch):
+    """空自选股时 low --industry 仍正常。"""
+    from kan.app import app
+    monkeypatch.setattr("kan.cli_scan_cmds._load_watchlist_pairs", lambda: [])
+    monkeypatch.setattr(
+        "kan.scanner.filter_extreme", lambda pairs, periods, mode="low": {}
+    )
+    result = industry_runner.invoke(app, ["low", "30", "--industry=食品饮料"])
+    assert result.exit_code == 0
+    assert "自选列表为空" not in result.output
+
+
+def test_trend_industry_empty_watchlist_ok(industry_runner, monkeypatch):
+    """空自选股时 trend --industry 仍正常。"""
+    from kan.app import app
+
+    class _Tr:
+        def __init__(self, sym, name):
+            self.symbol, self.name = sym, name
+            self.current_price, self.streak, self.streak_pct = 100.0, 0, 0.0
+            self.daily_changes = []
+            self.direction = "平"
+
+    monkeypatch.setattr("kan.cli_trend_cmds._load_watchlist_pairs", lambda: [])
+    monkeypatch.setattr(
+        "kan.scanner.trend_batch",
+        lambda pairs, candle=False: [_Tr(s, n) for s, n in pairs],
+    )
+    result = industry_runner.invoke(app, ["trend", "--industry=食品饮料"])
+    assert result.exit_code == 0
+    assert "自选列表为空" not in result.output

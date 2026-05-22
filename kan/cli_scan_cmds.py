@@ -11,6 +11,7 @@ from kan.app import app
 from kan.cli_helpers import (
     _auto_fetch_stale,
     _get_watchlist_pairs,
+    _load_watchlist_pairs,
     _print_err,
     _safe_error_msg,
     _with_heavy_imports_spinner,
@@ -128,7 +129,9 @@ def scan(
         )
 
     console = Console()
-    watchlist_pairs = _get_watchlist_pairs()
+    watchlist_pairs = (
+        _load_watchlist_pairs() if industry is not None else _get_watchlist_pairs()
+    )
     if only_watchlist and industry is None:
         _print_err("❌ --only-watchlist 需配合 --industry 使用")
         raise typer.Exit(1)
@@ -363,7 +366,9 @@ def _filter_extreme_cmd(
     label = "低点" if mode == "low" else "高点"
     signal_style = "bold green" if mode == "low" else "bold yellow"
 
-    watchlist_pairs = _get_watchlist_pairs()
+    watchlist_pairs = (
+        _load_watchlist_pairs() if industry is not None else _get_watchlist_pairs()
+    )
     if only_watchlist and industry is None:
         _print_err("❌ --only-watchlist 需配合 --industry 使用")
         raise typer.Exit(1)
@@ -393,7 +398,8 @@ def _filter_extreme_cmd(
         return
 
     if not results_by_period:
-        console.print(f"自选股中没有触及 {'/'.join(map(str, periods))} 日{label}的股票")
+        where = f"{board_meta.board.name} 行业成分股" if board_meta else "自选股"
+        console.print(f"{where}中没有触及 {'/'.join(map(str, periods))} 日{label}的股票")
         return
 
     # v0.0.4.5: 数据截止 / 拉取时间分离展示（与 scan 一致）
