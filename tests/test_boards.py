@@ -82,7 +82,7 @@ def test_search_industry_not_found(monkeypatch):
     )
     monkeypatch.setattr("akshare.sw_index_third_info", lambda: _fake_sw_df([]))
     boards.load_industry_catalog(force=True)
-    with pytest.raises(boards.BoardNotFound):
+    with pytest.raises(boards.BoardNotFoundError):
         boards.search_industry("不存在的行业")
 
 
@@ -90,7 +90,7 @@ def test_catalog_all_empty_raises_unavailable(monkeypatch):
     monkeypatch.setattr("akshare.sw_index_first_info", lambda: _fake_sw_df([]))
     monkeypatch.setattr("akshare.sw_index_second_info", lambda: _fake_sw_df([]))
     monkeypatch.setattr("akshare.sw_index_third_info", lambda: _fake_sw_df([]))
-    with pytest.raises(boards.BoardDataUnavailable):
+    with pytest.raises(boards.BoardDataUnavailableError):
         boards.load_industry_catalog(force=True)
 
 
@@ -150,5 +150,5 @@ def test_fetch_industry_kline_empty_raises(monkeypatch):
         "akshare.index_hist_sw", lambda symbol, period="day": pd.DataFrame()
     )
     board = Board(code="801016", name="种植业", level=2, size=20)
-    with pytest.raises(boards.BoardDataUnavailable):
+    with pytest.raises(boards.BoardDataUnavailableError):
         boards.fetch_industry_kline(board, force=True)

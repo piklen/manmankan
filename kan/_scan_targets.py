@@ -35,15 +35,15 @@ def resolve_scan_targets(
     - industry is None → (watchlist_pairs, None) · 现有行为完全不变
     - industry 给定 → 拉成分股 + 板块指数 K,组 BoardMeta
         - only_watchlist=True → targets 取成分股 ∩ 自选
-    - 行业未找到 → 透传 boards.BoardNotFound
-    - 数据源失败 → 透传 boards.BoardDataUnavailable
+    - 行业未找到 → 透传 boards.BoardNotFoundError
+    - 数据源失败 → 透传 boards.BoardDataUnavailableError
     """
     if industry is None:
         return watchlist_pairs, None
 
     from kan import boards
 
-    board = boards.search_industry(industry)            # raises BoardNotFound
+    board = boards.search_industry(industry)            # raises BoardNotFoundError
     constituents = boards.get_industry_constituents(board)
     index_kline = boards.fetch_industry_kline(board)
     watch_codes = {code for code, _ in watchlist_pairs}
