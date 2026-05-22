@@ -106,3 +106,26 @@ def test_only_watchlist_needs_source(hot_runner):
     result = hot_runner.invoke(app, ["scan", "--only-watchlist"])
     assert result.exit_code == 1
     assert "--only-watchlist" in result.output
+
+
+def test_low_hot_runs(hot_runner, monkeypatch):
+    from kan.app import app
+    monkeypatch.setattr(
+        "kan.scanner.filter_extreme",
+        lambda pairs, periods, mode="low": {},
+    )
+    result = hot_runner.invoke(app, ["low", "30", "--hot", "surge"])
+    assert result.exit_code == 0, result.output
+    assert "Traceback" not in result.output
+    assert "东财飙升榜" in result.output
+
+
+def test_high_hot_runs(hot_runner, monkeypatch):
+    from kan.app import app
+    monkeypatch.setattr(
+        "kan.scanner.filter_extreme",
+        lambda pairs, periods, mode="low": {},
+    )
+    result = hot_runner.invoke(app, ["high", "30", "--hot", "rank"])
+    assert result.exit_code == 0
+    assert "Traceback" not in result.output
