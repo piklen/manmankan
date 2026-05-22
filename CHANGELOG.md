@@ -5,6 +5,14 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.0.5.0] - 2026-05-23
+
+### Added
+
+- `--hot rank|surge` 东方财富热榜扫描 · 人气榜 / 飙升榜作"临时自选股"标的来源 · 加到 scan/low/high/trend/fetch
+- `kan/hot.py` 东财热榜数据子系统 · JSON cache 1h TTL · 代码归一化 · 单源不建假 fallback
+- 热榜模式表格新增"榜"列(实时名次)· `--only-watchlist` 支持自选 ∩ 热榜
+
 ## [0.0.4.8] - 2026-05-16
 
 ### Added
