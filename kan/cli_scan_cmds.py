@@ -35,7 +35,7 @@ def fetch(
     ] = None,
     only_watchlist: Annotated[
         bool,
-        typer.Option("--only-watchlist", help="仅拉自选 ∩ 行业(需配合 --industry)"),
+        typer.Option("--only-watchlist", help="仅拉自选 ∩ 行业/热榜(需配合 --industry 或 --hot)"),
     ] = False,
 ) -> None:
     """拉取股票历史 K 线数据"""
