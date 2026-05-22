@@ -129,3 +129,24 @@ def test_high_hot_runs(hot_runner, monkeypatch):
     result = hot_runner.invoke(app, ["high", "30", "--hot", "rank"])
     assert result.exit_code == 0
     assert "Traceback" not in result.output
+
+
+def test_trend_hot_runs(hot_runner, monkeypatch):
+    from kan.app import app
+
+    class _Tr:
+        def __init__(self, sym, name):
+            self.symbol, self.name = sym, name
+            self.current_price, self.streak, self.streak_pct = 100.0, 0, 0.0
+            self.daily_changes = []
+            self.direction = "平"
+
+    monkeypatch.setattr(
+        "kan.scanner.trend_batch",
+        lambda pairs, candle=False: [_Tr(s, n) for s, n in pairs],
+    )
+    result = hot_runner.invoke(app, ["trend", "--hot", "rank"])
+    assert result.exit_code == 0, result.output
+    assert "Traceback" not in result.output
+    assert "东财人气榜" in result.output
+    assert "⭐" in result.output
