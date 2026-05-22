@@ -164,3 +164,29 @@ def test_fetch_hot_runs(hot_runner, monkeypatch):
     result = hot_runner.invoke(app, ["fetch", "--hot", "rank"])
     assert result.exit_code == 0, result.output
     assert "000725" in fetched and "600519" in fetched
+
+
+def test_trend_hot_latest_uneven_daily_changes(hot_runner, monkeypatch):
+    """trend --hot --latest · 各股 daily_changes 长度不一时,榜列 + 日期列不错位。"""
+    from kan.app import app
+
+    class _Tr:
+        def __init__(self, sym, name, days):
+            self.symbol, self.name = sym, name
+            self.current_price, self.streak, self.streak_pct = 100.0, 0, 0.0
+            self.daily_changes = days
+            self.direction = "平"
+
+    # 第 1 只 3 天、第 2 只 1 天 —— 行宽不齐,验证 base_cols=5(含榜列)补齐逻辑
+    rows = {
+        "000725": [("2026-05-21", 1.5), ("2026-05-20", -2.0), ("2026-05-19", 0.3)],
+        "600519": [("2026-05-21", 0.8)],
+    }
+    monkeypatch.setattr(
+        "kan.scanner.trend_batch",
+        lambda pairs, candle=False: [_Tr(s, n, rows[s]) for s, n in pairs],
+    )
+    result = hot_runner.invoke(app, ["trend", "--hot", "rank", "--latest", "3"])
+    assert result.exit_code == 0, result.output
+    assert "Traceback" not in result.output
+    assert "东财人气榜" in result.output
