@@ -63,6 +63,14 @@ def scan(
     signal: Annotated[bool, typer.Option("--signal", "-S", "-s", help="仅显示有共振信号的股票")] = False,
     diff: Annotated[bool, typer.Option("--diff", "-d", help="增量模式：显示与上次扫描的变化")] = False,
     exclude_st: Annotated[bool, typer.Option("--exclude-st", help="排除 ST/*ST 股票")] = False,
+    industry: Annotated[
+        str | None,
+        typer.Option("--industry", help="扫指定申万行业全部成分股 · 自选股 ⭐ 高亮"),
+    ] = None,
+    only_watchlist: Annotated[
+        bool,
+        typer.Option("--only-watchlist", help="仅显示自选 ∩ 行业(需配合 --industry)"),
+    ] = False,
     fmt: Annotated[
         export.OutputFormat,
         typer.Option("--format", help="输出格式：terminal（默认）/ md / json"),
@@ -93,13 +101,37 @@ def scan(
 
     console = Console()
     watchlist_pairs = _get_watchlist_pairs()
-    _auto_fetch_stale(watchlist_pairs)
+    if only_watchlist and industry is None:
+        _print_err("❌ --only-watchlist 需配合 --industry 使用")
+        raise typer.Exit(1)
+    from kan._scan_targets import resolve_scan_targets
+    from kan.boards import BoardDataUnavailableError, BoardNotFoundError
+    try:
+        targets, board_meta = resolve_scan_targets(
+            industry, only_watchlist, watchlist_pairs,
+        )
+    except BoardNotFoundError:
+        _print_err(
+            f"❌ 未找到行业「{industry}」· 可试更短关键词(如「半导体」「白酒」)"
+        )
+        raise typer.Exit(1) from None
+    except BoardDataUnavailableError:
+        _print_err("❌ 行业数据源暂时不可用,稍后再试")
+        raise typer.Exit(1) from None
+    _auto_fetch_stale(targets)
     mode = "high" if high else "low"
 
-    prev_snapshot = load_snapshot() if diff else None
+    prev_snapshot = load_snapshot() if (diff and industry is None) else None
 
     # P1-8: 单次 scan_batch · 后续 filter / diff / snapshot 都用 all_results · 避免重复调用
-    all_results = scan_batch(watchlist_pairs, mode=mode)
+    all_results = scan_batch(targets, mode=mode)
+
+    board_index_result = None
+    if board_meta is not None:
+        from kan.scanner import scan_stock
+        board_index_result = scan_stock(
+            board_meta.index_kline, board_meta.board.code, board_meta.board.name,
+        )
 
     if not all_results:
         _print_err("无缓存数据 · 请先 `kan fetch` 拉取数据")
@@ -116,7 +148,8 @@ def scan(
             results = [r for r in results if r.low_resonance > 0]
         if not results and fmt is export.OutputFormat.terminal:
             console.print("没有股票触及极值区 · 无共振信号")
-            save_snapshot(all_results)
+            if industry is None:
+                save_snapshot(all_results)
             return
 
     # v0.0.4.5: 数据截止日 (K 线 date 列) 与 拉取时间 (文件 mtime) 严格分离展示
@@ -143,19 +176,26 @@ def scan(
         title += f" · 数据截止 {format_date_compact(data_cutoff)} 收盘"
     if fetched_at:
         title += f" · {format_fetched_at_compact(fetched_at)} 拉取"
+    if board_meta is not None:
+        title = (
+            f"慢慢看 · {board_meta.board.name} 行业位置扫描"
+            f" · {'高点' if high else '低点'}模式"
+        )
 
     if fmt is export.OutputFormat.json:
         typer.echo(export.to_json(export.scan_payload(
             results, mode=mode, data_cutoff=data_cutoff,
             fetched_at=fetched_at, stale=is_stale,
         )))
-        save_snapshot(all_results)
+        if industry is None:
+            save_snapshot(all_results)
         return
     if fmt is export.OutputFormat.md:
         typer.echo(export.scan_markdown(
             results, periods=list(PERIODS), mode=mode, title=title,
         ))
-        save_snapshot(all_results)
+        if industry is None:
+            save_snapshot(all_results)
         return
 
     display_periods = responsive_periods(console.width)
@@ -168,6 +208,20 @@ def scan(
         table.add_column(f"{p}日", justify="right", min_width=6)
     table.add_column("共振", justify="center")
 
+    highlight = board_meta.highlight if board_meta else set()
+    if board_index_result is not None:
+        brow: list[str | Text] = [f"🏛️ {board_index_result.name} 板块指数"]
+        brow.append(f"{board_index_result.current_price:.2f}")
+        for p in display_periods:
+            pr = next(
+                (x for x in board_index_result.periods if x.period == p), None
+            )
+            brow.append(Text("-", style="dim") if pr is None
+                        else format_pct(pr, high_mode=high))
+        brow.append("")
+        table.add_row(*brow)
+        table.add_section()
+
     for r in results:
         row: list[str | Text] = []
         name_short = r.name.replace(" ", "")
@@ -176,7 +230,8 @@ def scan(
             tag = " 涨停"
         elif r.limit_down:
             tag = " 跌停"
-        row.append(f"{name_short} {r.symbol}{tag}")
+        star = "⭐ " if r.symbol in highlight else ""
+        row.append(f"{star}{name_short} {r.symbol}{tag}")
         row.append(f"{r.current_price:.2f}")
 
         for p in display_periods:
@@ -227,7 +282,7 @@ def scan(
         )
 
     # 增量对比 · 用上面 cache 的 all_results · 避免重复 scan (P1-8)
-    if diff and prev_snapshot:
+    if industry is None and diff and prev_snapshot:
         changes = compute_diff(all_results, prev_snapshot)
         if changes:
             console.print()
@@ -244,7 +299,8 @@ def scan(
         console.print("\n  [dim]首次扫描，无历史对比（下次 --diff 将显示变化）[/dim]")
 
     # 保存快照供下次 diff 用 · 始终保存 all_results 全量 (P1-8: 避免重复 scan)
-    save_snapshot(all_results)
+    if industry is None:
+        save_snapshot(all_results)
 
     console.print()
     if high:
