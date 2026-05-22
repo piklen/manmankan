@@ -27,6 +27,7 @@ STOCK_NAMES_CACHE = BASE_DIR / "stock_names.json"
 SNAPSHOT_PATH = BASE_DIR / "last_scan.json"
 SNAPSHOTS_DIR = BASE_DIR / "snapshots"
 CIRCUIT_PATH = BASE_DIR / "circuit.json"
+BOARDS_DIR = BASE_DIR / "boards"
 
 NAMES_CACHE_MAX_AGE_DAYS = 7
 
@@ -53,6 +54,7 @@ def ensure_dirs() -> None:
     BASE_DIR.mkdir(mode=0o700, parents=True, exist_ok=True)
     DATA_DIR.mkdir(mode=0o700, parents=True, exist_ok=True)
     SNAPSHOTS_DIR.mkdir(mode=0o700, parents=True, exist_ok=True)
+    BOARDS_DIR.mkdir(mode=0o700, parents=True, exist_ok=True)
 
 
 def atomic_write_parquet(df, path: Path) -> None:
