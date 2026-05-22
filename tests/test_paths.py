@@ -94,7 +94,7 @@ def test_boards_dir_under_base(monkeypatch, tmp_path):
 
     from kan import paths
     importlib.reload(paths)
-    assert paths.BOARDS_DIR == tmp_path / "kan" / "boards"
+    assert tmp_path / "kan" / "boards" == paths.BOARDS_DIR
     paths.ensure_dirs()
     assert paths.BOARDS_DIR.is_dir()
     importlib.reload(paths)  # 复位 · 防污染其它测试

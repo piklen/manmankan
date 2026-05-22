@@ -1,7 +1,7 @@
 """申万行业板块数据子系统 · catalog / 模糊搜索 / 成分股 / 板块指数 K 线。
 
 数据源:申万(akshare)单源。同花顺无成分股接口、东财被反爬封 —— 不建假 fallback,
-申万失败直接抛 BoardDataUnavailable。
+申万失败直接抛 BoardDataUnavailableError。
 冷启动规则:akshare / pandas 一律函数内延迟 import。
 """
 from __future__ import annotations
@@ -26,11 +26,11 @@ _SW_LEVEL_FUNCS = {
 }
 
 
-class BoardNotFound(Exception):
+class BoardNotFoundError(Exception):
     """search_industry 未命中任何行业。"""
 
 
-class BoardDataUnavailable(Exception):
+class BoardDataUnavailableError(Exception):
     """申万数据源不可用(网络/接口失败/空数据)。"""
 
 
@@ -80,12 +80,12 @@ def _fetch_catalog() -> list[Board]:
                 size=int(row["成份个数"]),
             ))
     if not boards_list:
-        raise BoardDataUnavailable("申万行业 catalog 三级全部拉取失败")
+        raise BoardDataUnavailableError("申万行业 catalog 三级全部拉取失败")
     return boards_list
 
 
 def search_industry(query: str) -> Board:
-    """模糊匹配行业名或代码 → Board。未命中抛 BoardNotFound。
+    """模糊匹配行业名或代码 → Board。未命中抛 BoardNotFoundError。
 
     优先级:精确代码 > 精确名 > 含匹配(二级 > 一级 > 三级)。
     """
@@ -102,7 +102,7 @@ def search_industry(query: str) -> Board:
         for b in catalog:
             if b.level == lvl and q in b.name:
                 return b
-    raise BoardNotFound(query)
+    raise BoardNotFoundError(query)
 
 
 # ── 成分股 ────────────────────────────────────────────────────────────
@@ -129,9 +129,9 @@ def get_industry_constituents(
     try:
         df = ak.index_component_sw(symbol=board.code)
     except Exception as e:
-        raise BoardDataUnavailable(f"申万成分股拉取失败 {board.code}: {e}") from e
+        raise BoardDataUnavailableError(f"申万成分股拉取失败 {board.code}: {e}") from e
     if df is None or df.empty:
-        raise BoardDataUnavailable(f"申万成分股为空: {board.code}")
+        raise BoardDataUnavailableError(f"申万成分股为空: {board.code}")
     pairs = [
         (str(row["证券代码"]).strip(), str(row["证券名称"]).strip())
         for _, row in df.iterrows()
@@ -183,9 +183,9 @@ def fetch_industry_kline(board: Board, force: bool = False) -> pd.DataFrame:
     try:
         raw = ak.index_hist_sw(symbol=board.code, period="day")
     except Exception as e:
-        raise BoardDataUnavailable(f"申万指数K线拉取失败 {board.code}: {e}") from e
+        raise BoardDataUnavailableError(f"申万指数K线拉取失败 {board.code}: {e}") from e
     if raw is None or raw.empty:
-        raise BoardDataUnavailable(f"申万指数K线为空: {board.code}")
+        raise BoardDataUnavailableError(f"申万指数K线为空: {board.code}")
     df = raw.rename(columns=_SW_KLINE_RENAME)
     for col in _KLINE_COLUMNS:
         if col not in df.columns:
