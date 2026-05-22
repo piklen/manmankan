@@ -18,6 +18,7 @@ from kan.cli_helpers import (
     format_date_compact,
     format_fetched_at_compact,
 )
+from kan.hot import HotList
 
 
 @app.command()
@@ -30,9 +31,13 @@ def trend(
         str | None,
         typer.Option("--industry", help="扫指定申万行业全部成分股 · 自选股 ⭐ 高亮"),
     ] = None,
+    hot: Annotated[
+        HotList | None,
+        typer.Option("--hot", help="扫东财热榜 · rank=人气榜 / surge=飙升榜 · 自选股 ⭐ 高亮"),
+    ] = None,
     only_watchlist: Annotated[
         bool,
-        typer.Option("--only-watchlist", help="仅显示自选 ∩ 行业(需配合 --industry)"),
+        typer.Option("--only-watchlist", help="仅显示自选 ∩ 行业/热榜(需配合 --industry 或 --hot)"),
     ] = False,
     fmt: Annotated[
         export.OutputFormat,
@@ -57,23 +62,31 @@ def trend(
         )
 
     console = Console()
+    if industry is not None and hot is not None:
+        _print_err("❌ --industry 与 --hot 不能同时使用")
+        raise typer.Exit(2)
+    source_mode = industry is not None or hot is not None
     watchlist_pairs = (
-        _load_watchlist_pairs() if industry is not None else _get_watchlist_pairs()
+        _load_watchlist_pairs() if source_mode else _get_watchlist_pairs()
     )
-    if only_watchlist and industry is None:
-        _print_err("❌ --only-watchlist 需配合 --industry 使用")
+    if only_watchlist and not source_mode:
+        _print_err("❌ --only-watchlist 需配合 --industry 或 --hot 使用")
         raise typer.Exit(1)
-    from kan._scan_targets import resolve_scan_targets
+    from kan._scan_targets import BoardMeta, HotMeta, resolve_scan_targets
     from kan.boards import BoardDataUnavailableError, BoardNotFoundError
+    from kan.hot import HotListUnavailableError
     try:
         targets, board_meta = resolve_scan_targets(
-            industry, only_watchlist, watchlist_pairs,
+            industry, only_watchlist, watchlist_pairs, hot=hot,
         )
     except BoardNotFoundError:
         _print_err(f"❌ 未找到行业「{industry}」· 可试更短关键词")
         raise typer.Exit(1) from None
     except BoardDataUnavailableError:
         _print_err("❌ 行业数据源暂时不可用,稍后再试")
+        raise typer.Exit(1) from None
+    except HotListUnavailableError:
+        _print_err("❌ 热榜数据源暂时不可用,稍后再试")
         raise typer.Exit(1) from None
     _auto_fetch_stale(targets)
     if down is not None and up is not None:
@@ -105,8 +118,7 @@ def trend(
             console.print(f"没有连续涨 {up} 天以上的股票")
             return
 
-    # v0.0.4.5: 数据截止 / 拉取时间分离展示 · 与 scan/info/low/high 一致
-    # 修复***REMOVED*** finding（cli_trend_cmds.py 在 v0.0.4.5 commit 04923ea 中遗漏调用面）
+    # v0.0.4.5: 数据截止 / 拉取时间分离展示
     data_cutoff = None
     fetched_at = None
     for r in results:
@@ -127,8 +139,10 @@ def trend(
         title += f" · 数据截止 {format_date_compact(data_cutoff)} 收盘"
     if fetched_at:
         title += f" · {format_fetched_at_compact(fetched_at)} 拉取"
-    if board_meta is not None:
+    if isinstance(board_meta, BoardMeta):
         title = f"慢慢看 · {board_meta.board.name} 行业连续涨跌 · {mode_label}{filter_label}"
+    elif isinstance(board_meta, HotMeta):
+        title = f"慢慢看 · {board_meta.list_name} 连续涨跌 · {mode_label}{filter_label}"
 
     if fmt is not export.OutputFormat.terminal:
         if fmt is export.OutputFormat.json:
@@ -140,7 +154,13 @@ def trend(
             typer.echo(export.trend_markdown(results, title=title, latest=latest))
         return
 
+    is_hot = isinstance(board_meta, HotMeta)
+    rank_map = board_meta.rank_map if is_hot else {}
+    base_cols = 5 if is_hot else 4
+
     table = Table(title=title, show_lines=False, pad_edge=False, padding=(0, 1))
+    if is_hot:
+        table.add_column("榜", justify="right", style="cyan", min_width=3)
     table.add_column("股票", style="white", no_wrap=True)
     table.add_column("现价", justify="right", style="white")
     table.add_column("连续", justify="center")
@@ -173,7 +193,11 @@ def trend(
             cum_text = Text("0%", style="dim")
 
         star = "⭐ " if r.symbol in highlight else ""
-        row: list[str | Text] = [
+        row: list[str | Text] = []
+        if is_hot:
+            rank = rank_map.get(r.symbol)
+            row.append(str(rank) if rank is not None else "-")
+        row += [
             f"{star}{name_short} {r.symbol}",
             f"{r.current_price:.2f}",
             streak_text,
@@ -197,8 +221,8 @@ def trend(
                     row.append(Text(f"▼{abs_chg:.2f}%", style="green"))
                 else:
                     row.append(Text("—", style="dim"))
-            # 补齐列数（某些股票交易日可能少）
-            while len(row) < 4 + len(date_headers):
+            # 补齐列数（某些股票交易日可能少）· base_cols 含热榜名次列
+            while len(row) < base_cols + len(date_headers):
                 row.append(Text("-", style="dim"))
 
         table.add_row(*row)
@@ -213,7 +237,6 @@ def trend(
 
     # ***REMOVED***: 双警告互斥渲染 (if/elif 替代 if/if · 与 scan 一致)
     if is_stale:
-        # ***REMOVED*** + U-5: 散户语言
         cutoff_str = format_date_compact(data_cutoff) if data_cutoff else "无缓存"
         expected_str = format_date_compact(expected_cutoff)
         days_behind = (expected_cutoff - data_cutoff).days if data_cutoff else "?"
@@ -223,7 +246,6 @@ def trend(
             "   运行 `kan fetch --force` 拉取最新数据[/bold yellow]"
         )
     elif phase == PHASE_INTRADAY:
-        # ***REMOVED*** (v0.0.4.7 P0 cleanup): 状态描述而非走势预测 (***REMOVED*** + ***REMOVED***)
         console.print(
             "\n  [bold yellow]⚠️ 当前盘中 · 涨跌停标签反映当前时刻 · 非收盘 final\n"
             "   (盘中价格仍在变动 · 涨停/跌停状态可能与收盘不同)\n"
@@ -235,4 +257,8 @@ def trend(
         console.print("[dim]  阳线阴线口径：收盘 > 开盘 = ▲ · 收盘 < 开盘 = ▼ · 平盘不断连续[/dim]")
     else:
         console.print("[dim]  收盘价口径：今日收盘 > 昨日收盘 = ▲ · 今日收盘 < 昨日收盘 = ▼ · 平盘不断连续[/dim]")
+    if is_hot:
+        console.print(
+            "[dim]  榜 = 东方财富热榜实时名次 · 非慢慢看观点 · 热榜为实时榜单[/dim]"
+        )
     console.print(DISCLAIMER, style="dim")
