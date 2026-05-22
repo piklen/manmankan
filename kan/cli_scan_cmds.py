@@ -29,6 +29,10 @@ def fetch(
         str | None,
         typer.Option("--industry", help="预拉某申万行业全部成分股 + 板块指数"),
     ] = None,
+    hot: Annotated[
+        HotList | None,
+        typer.Option("--hot", help="预拉东财热榜全部股票 · rank=人气榜 / surge=飙升榜"),
+    ] = None,
     only_watchlist: Annotated[
         bool,
         typer.Option("--only-watchlist", help="仅拉自选 ∩ 行业(需配合 --industry)"),
@@ -41,23 +45,32 @@ def fetch(
     with _with_heavy_imports_spinner(status_console, "⏳ 加载数据模块..."):
         from kan.fetcher import fetch_kline, is_fresh
 
-    if industry is not None:
+    if industry is not None and hot is not None:
+        typer.echo("--industry 与 --hot 不能同时使用", err=True)
+        raise typer.Exit(2)
+    if industry is not None or hot is not None:
         if symbols:
-            typer.echo("--industry 与股票代码不能同时使用", err=True)
+            typer.echo("--industry / --hot 与股票代码不能同时使用", err=True)
             raise typer.Exit(2)
         from kan._scan_targets import resolve_scan_targets
         from kan.boards import BoardDataUnavailableError, BoardNotFoundError
+        from kan.hot import HotListUnavailableError
         wl_pairs = []
         if only_watchlist:
             from kan.watchlist import load_watchlist
             wl_pairs = [(s.symbol, s.name) for s in load_watchlist().stocks]
         try:
-            targets, _meta = resolve_scan_targets(industry, only_watchlist, wl_pairs)
+            targets, _meta = resolve_scan_targets(
+                industry, only_watchlist, wl_pairs, hot=hot,
+            )
         except BoardNotFoundError:
             typer.echo(f"未找到行业「{industry}」· 可试更短关键词", err=True)
             raise typer.Exit(1) from None
         except BoardDataUnavailableError:
             typer.echo("行业数据源暂时不可用,稍后再试", err=True)
+            raise typer.Exit(1) from None
+        except HotListUnavailableError:
+            typer.echo("热榜数据源暂时不可用,稍后再试", err=True)
             raise typer.Exit(1) from None
         symbols = [s for s, _ in targets]
 

@@ -3,6 +3,7 @@ from __future__ import annotations
 
 from datetime import date
 
+import pandas as pd
 import pytest
 from typer.testing import CliRunner
 
@@ -150,3 +151,16 @@ def test_trend_hot_runs(hot_runner, monkeypatch):
     assert "Traceback" not in result.output
     assert "东财人气榜" in result.output
     assert "⭐" in result.output
+
+
+def test_fetch_hot_runs(hot_runner, monkeypatch):
+    from kan.app import app
+    fetched: list[str] = []
+    monkeypatch.setattr(
+        "kan.fetcher.fetch_kline",
+        lambda sym, force=False: fetched.append(sym) or pd.DataFrame(),
+    )
+    monkeypatch.setattr("kan.fetcher.is_fresh", lambda sym: False)
+    result = hot_runner.invoke(app, ["fetch", "--hot", "rank"])
+    assert result.exit_code == 0, result.output
+    assert "000725" in fetched and "600519" in fetched
