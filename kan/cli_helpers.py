@@ -161,13 +161,23 @@ def _with_heavy_imports_spinner(console, message: str):
         yield status
 
 
-def _get_watchlist_pairs() -> list[tuple[str, str]]:
+def _load_watchlist_pairs() -> list[tuple[str, str]]:
+    """自选股 (代码, 名称) 列表;自选为空时返回 [] · 不报错。
+
+    用于 --industry 模式 —— 扫的是板块成分股,自选股仅用于 ⭐ 高亮,
+    自选为空只意味着没有高亮,不应阻止扫描。
+    """
     from kan.watchlist import load_watchlist
-    wl = load_watchlist()
-    if not wl.stocks:
+    return [(s.symbol, s.name) for s in load_watchlist().stocks]
+
+
+def _get_watchlist_pairs() -> list[tuple[str, str]]:
+    """自选股 (代码, 名称) 列表;自选为空时友好报错 + 退出(自选模式命令用)。"""
+    pairs = _load_watchlist_pairs()
+    if not pairs:
         typer.echo("自选列表为空 · 请先 `kan add <代码>` 添加", err=True)
         raise typer.Exit(1)
-    return [(s.symbol, s.name) for s in wl.stocks]
+    return pairs
 
 
 def _auto_fetch_stale(pairs: list[tuple[str, str]]) -> None:

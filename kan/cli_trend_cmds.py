@@ -12,6 +12,7 @@ from kan.app import app
 from kan.cli_helpers import (
     _auto_fetch_stale,
     _get_watchlist_pairs,
+    _load_watchlist_pairs,
     _print_err,
     _with_heavy_imports_spinner,
     format_date_compact,
@@ -56,7 +57,9 @@ def trend(
         )
 
     console = Console()
-    watchlist_pairs = _get_watchlist_pairs()
+    watchlist_pairs = (
+        _load_watchlist_pairs() if industry is not None else _get_watchlist_pairs()
+    )
     if only_watchlist and industry is None:
         _print_err("❌ --only-watchlist 需配合 --industry 使用")
         raise typer.Exit(1)
