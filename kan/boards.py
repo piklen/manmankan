@@ -103,3 +103,38 @@ def search_industry(query: str) -> Board:
             if b.level == lvl and q in b.name:
                 return b
     raise BoardNotFound(query)
+
+
+# ── 成分股 ────────────────────────────────────────────────────────────
+
+def get_industry_constituents(
+    board: Board, force: bool = False,
+) -> list[tuple[str, str]]:
+    """行业成分股 (代码, 名称) 列表 · JSON cache 24h TTL。
+
+    akshare: index_component_sw(symbol=board.code) → 证券代码 / 证券名称。
+    """
+    ensure_dirs()
+    cache = BOARDS_DIR / f"cons_{board.code}.json"
+    if not force and _cache_fresh(cache, _CONS_TTL):
+        try:
+            return [
+                (str(c), str(n))
+                for c, n in json.loads(cache.read_text(encoding="utf-8"))
+            ]
+        except Exception:
+            pass
+    import akshare as ak
+
+    try:
+        df = ak.index_component_sw(symbol=board.code)
+    except Exception as e:
+        raise BoardDataUnavailable(f"申万成分股拉取失败 {board.code}: {e}") from e
+    if df is None or df.empty:
+        raise BoardDataUnavailable(f"申万成分股为空: {board.code}")
+    pairs = [
+        (str(row["证券代码"]).strip(), str(row["证券名称"]).strip())
+        for _, row in df.iterrows()
+    ]
+    cache.write_text(json.dumps(pairs, ensure_ascii=False), encoding="utf-8")
+    return pairs

@@ -92,3 +92,26 @@ def test_catalog_all_empty_raises_unavailable(monkeypatch):
     monkeypatch.setattr("akshare.sw_index_third_info", lambda: _fake_sw_df([]))
     with pytest.raises(boards.BoardDataUnavailable):
         boards.load_industry_catalog(force=True)
+
+
+def test_get_constituents_returns_pairs(monkeypatch):
+    cons_df = pd.DataFrame(
+        [["1", "000998", "隆平高科"], ["2", "002041", "登海种业"]],
+        columns=["序号", "证券代码", "证券名称"],
+    )
+    monkeypatch.setattr("akshare.index_component_sw", lambda symbol: cons_df)
+    board = Board(code="801016", name="种植业", level=2, size=20)
+    pairs = boards.get_industry_constituents(board, force=True)
+    assert pairs == [("000998", "隆平高科"), ("002041", "登海种业")]
+
+
+def test_get_constituents_uses_cache(monkeypatch, _isolate_boards_dir):
+    cache = _isolate_boards_dir / "cons_801016.json"
+    cache.write_text(json.dumps([["600519", "贵州茅台"]]), encoding="utf-8")
+
+    def _boom(symbol):
+        raise AssertionError("应命中 cache")
+
+    monkeypatch.setattr("akshare.index_component_sw", _boom)
+    board = Board(code="801016", name="种植业", level=2, size=20)
+    assert boards.get_industry_constituents(board) == [("600519", "贵州茅台")]
