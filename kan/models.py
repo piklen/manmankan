@@ -41,3 +41,12 @@ class VolumeState(BaseModel):
     ratio: float   # 今日成交量 / 近 window 日均量
     label: str     # 明显放大 / 明显萎缩 / 量能平稳
     window: int    # 比较窗口(交易日数)
+
+
+class Board(BaseModel):
+    """申万行业板块 · catalog 条目。"""
+
+    code: str    # 申万代码 · 规范化无后缀 · 如 "801080"
+    name: str    # 如 "半导体"
+    level: int   # 1 | 2 | 3 (申万一/二/三级)
+    size: int    # 成份个数
