@@ -195,3 +195,16 @@ def test_list_industry_filters_watchlist(monkeypatch):
     assert result.exit_code == 0, result.output
     assert "600519" in result.output       # 茅台属食品饮料 · 在自选
     assert "000001" not in result.output   # 平安银行不属该行业
+
+
+def test_fetch_industry_runs(industry_runner, monkeypatch):
+    from kan.app import app
+    fetched: list[str] = []
+    monkeypatch.setattr(
+        "kan.fetcher.fetch_kline",
+        lambda sym, force=False: fetched.append(sym) or __import__("pandas").DataFrame(),
+    )
+    monkeypatch.setattr("kan.fetcher.is_fresh", lambda sym: False)
+    result = industry_runner.invoke(app, ["fetch", "--industry=食品饮料"])
+    assert result.exit_code == 0, result.output
+    assert "600519" in fetched and "000998" in fetched   # 两只成分股都拉了

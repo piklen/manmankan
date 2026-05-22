@@ -23,6 +23,14 @@ from kan.cli_helpers import (
 def fetch(
     symbols: Annotated[list[str] | None, typer.Argument(help="股票代码（留空则拉取全部自选）")] = None,
     force: Annotated[bool, typer.Option("--force", "-f", help="强制刷新（忽略缓存）")] = False,
+    industry: Annotated[
+        str | None,
+        typer.Option("--industry", help="预拉某申万行业全部成分股 + 板块指数"),
+    ] = None,
+    only_watchlist: Annotated[
+        bool,
+        typer.Option("--only-watchlist", help="仅拉自选 ∩ 行业(需配合 --industry)"),
+    ] = False,
 ) -> None:
     """拉取股票历史 K 线数据"""
     from rich.console import Console
@@ -30,6 +38,26 @@ def fetch(
     status_console = Console(stderr=True)
     with _with_heavy_imports_spinner(status_console, "⏳ 加载数据模块..."):
         from kan.fetcher import fetch_kline, is_fresh
+
+    if industry is not None:
+        if symbols:
+            typer.echo("--industry 与股票代码不能同时使用", err=True)
+            raise typer.Exit(2)
+        from kan._scan_targets import resolve_scan_targets
+        from kan.boards import BoardDataUnavailableError, BoardNotFoundError
+        wl_pairs = []
+        if only_watchlist:
+            from kan.watchlist import load_watchlist
+            wl_pairs = [(s.symbol, s.name) for s in load_watchlist().stocks]
+        try:
+            targets, _meta = resolve_scan_targets(industry, only_watchlist, wl_pairs)
+        except BoardNotFoundError:
+            typer.echo(f"未找到行业「{industry}」· 可试更短关键词", err=True)
+            raise typer.Exit(1) from None
+        except BoardDataUnavailableError:
+            typer.echo("行业数据源暂时不可用,稍后再试", err=True)
+            raise typer.Exit(1) from None
+        symbols = [s for s, _ in targets]
 
     if not symbols:
         from kan.watchlist import load_watchlist
