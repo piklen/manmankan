@@ -151,3 +151,20 @@ def test_trend_industry_runs(industry_runner, monkeypatch):
     assert result.exit_code == 0
     assert "Traceback" not in result.output
     assert "⭐" in result.output  # 茅台在自选
+
+
+def test_info_industry_shows_board_card(industry_runner):
+    from kan.app import app
+    result = industry_runner.invoke(app, ["info", "--industry=食品饮料"])
+    assert result.exit_code == 0, result.output
+    assert "食品饮料" in result.output
+    assert "成分股" in result.output       # 成分股数那一行
+    assert "Traceback" not in result.output
+
+
+def test_info_industry_conflicts_with_symbol(industry_runner):
+    from kan.app import app
+    result = industry_runner.invoke(
+        app, ["info", "600519", "--industry=食品饮料"]
+    )
+    assert result.exit_code != 0

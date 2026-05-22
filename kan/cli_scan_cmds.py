@@ -458,11 +458,80 @@ def high(
     )
 
 
+def _info_industry(industry: str, fmt: export.OutputFormat) -> None:
+    """kan info --industry · 簡版板块档案。"""
+    from rich.console import Console
+
+    status_console = Console(stderr=True)
+    with _with_heavy_imports_spinner(status_console, "⏳ 加载数据模块..."):
+        from rich.table import Table
+
+        from kan._scan_targets import resolve_scan_targets
+        from kan.boards import BoardDataUnavailableError, BoardNotFoundError
+        from kan.render import DISCLAIMER, format_pct
+        from kan.scanner import scan_stock
+
+    console = Console()
+    try:
+        _targets, meta = resolve_scan_targets(
+            industry, only_watchlist=False, watchlist_pairs=[],
+        )
+    except BoardNotFoundError:
+        _print_err(f"❌ 未找到行业「{industry}」· 可试更短关键词")
+        raise typer.Exit(1) from None
+    except BoardDataUnavailableError:
+        _print_err("❌ 行业数据源暂时不可用,稍后再试")
+        raise typer.Exit(1) from None
+
+    assert meta is not None
+    board_result = scan_stock(meta.index_kline, meta.board.code, meta.board.name)
+
+    if fmt is not export.OutputFormat.terminal:
+        if fmt is export.OutputFormat.json:
+            typer.echo(export.to_json(export.scan_payload(
+                [board_result], mode="low", data_cutoff=board_result.scan_date,
+                fetched_at=None, stale=False,
+            )))
+        else:
+            typer.echo(export.scan_markdown(
+                [board_result], periods=[p.period for p in board_result.periods],
+                mode="low", title=f"慢慢看 · {meta.board.name} 板块档案",
+            ))
+        return
+
+    lvl_name = {1: "申万一级", 2: "申万二级", 3: "申万三级"}[meta.board.level]
+    console.print(
+        f"\n[bold]🏛️ {meta.board.name} · {lvl_name} · {meta.board.code}[/bold]"
+    )
+    console.print(f"  成分股 {len(meta.constituents)} 只 · 板块指数多周期位置:")
+    console.print()
+
+    table = Table(show_lines=False, pad_edge=False, padding=(0, 1))
+    table.add_column("周期", justify="right", style="cyan")
+    table.add_column("最低", justify="right", style="dim", min_width=8)
+    table.add_column("最高", justify="right", style="dim", min_width=8)
+    table.add_column("位置", justify="right", min_width=8)
+    for pr in board_result.periods:
+        if pr.insufficient:
+            table.add_row(f"{pr.period}日", "-", "-", "-")
+        else:
+            table.add_row(
+                f"{pr.period}日", f"{pr.n_low:.2f}",
+                f"{pr.n_high:.2f}", format_pct(pr),
+            )
+    console.print(table)
+    console.print(DISCLAIMER, style="dim")
+
+
 @app.command()
 def info(
     symbol: Annotated[
         str | None,
         typer.Argument(help="股票代码（如 600519）", show_default=False),
+    ] = None,
+    industry: Annotated[
+        str | None,
+        typer.Option("--industry", help="查看某申万行业的板块档案"),
     ] = None,
     fmt: Annotated[
         export.OutputFormat,
@@ -470,6 +539,12 @@ def info(
     ] = export.OutputFormat.terminal,
 ) -> None:
     """单只股票详情（全周期位置 + 涨跌信息）"""
+    if industry is not None:
+        if symbol is not None:
+            _print_err("❌ --industry 与股票代码不能同时使用")
+            raise typer.Exit(2)
+        _info_industry(industry, fmt)
+        return
     # U-1 (v0.0.4.8 P0-6): 跟 kan add 同款散户中文 · 兑现 U-2 承诺到 info 命令
     if not symbol:
         typer.echo(
