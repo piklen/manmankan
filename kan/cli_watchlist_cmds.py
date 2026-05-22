@@ -249,11 +249,17 @@ def remove(
 
 
 @app.command(name="list")
-def list_stocks() -> None:
-    """查看自选列表"""
+def list_stocks(
+    industry: Annotated[
+        str | None,
+        typer.Option("--industry", help="只列自选里属于该申万行业的股票"),
+    ] = None,
+) -> None:
+    """查看自选列表(--industry 只看某行业的)"""
     from rich.console import Console
     from rich.table import Table
 
+    from kan.cli_helpers import _print_err
     from kan.watchlist import list_all
 
     stocks = list_all()
@@ -261,14 +267,30 @@ def list_stocks() -> None:
         typer.echo("自选列表为空 · 请先 `kan add <代码>` 添加")
         return
 
-    table = Table(title=f"自选股列表 · 共 {len(stocks)} 只")
+    title = f"自选股列表 · 共 {len(stocks)} 只"
+    if industry is not None:
+        from kan import boards
+        try:
+            board = boards.search_industry(industry)
+            cons_codes = {c for c, _ in boards.get_industry_constituents(board)}
+        except boards.BoardNotFoundError:
+            _print_err(f"❌ 未找到行业「{industry}」· 可试更短关键词")
+            raise typer.Exit(1) from None
+        except boards.BoardDataUnavailableError:
+            _print_err("❌ 行业数据源暂时不可用,稍后再试")
+            raise typer.Exit(1) from None
+        stocks = [s for s in stocks if s.symbol in cons_codes]
+        if not stocks:
+            typer.echo(f"自选股里没有属于「{board.name}」行业的")
+            return
+        title = f"自选股 · {board.name} 行业 · {len(stocks)} 只"
+
+    table = Table(title=title)
     table.add_column("代码", style="cyan")
     table.add_column("名称", style="white")
     table.add_column("添加日期", style="dim")
-
     for s in stocks:
         table.add_row(s.symbol, s.name.replace(" ", ""), str(s.added_at))
-
     Console().print(table)
 
 
