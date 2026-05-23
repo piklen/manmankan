@@ -7,8 +7,8 @@ import pandas as pd
 import pytest
 from typer.testing import CliRunner
 
-from kan import boards
-from kan.models import Board, PeriodResult, StockScanResult
+from kan.core.models import Board, PeriodResult, StockScanResult
+from kan.data import boards
 
 
 def _fake_kline():
@@ -46,42 +46,42 @@ def industry_runner(monkeypatch):
         boards, "fetch_industry_kline", lambda b, force=False: _fake_kline()
     )
     monkeypatch.setattr(
-        "kan.cli_scan_cmds._get_watchlist_pairs", lambda: [("600519", "贵州茅台")]
+        "kan.cli.scan_cmds._get_watchlist_pairs", lambda: [("600519", "贵州茅台")]
     )
-    monkeypatch.setattr("kan.cli_scan_cmds._auto_fetch_stale", lambda _p: None)
+    monkeypatch.setattr("kan.cli.scan_cmds._auto_fetch_stale", lambda _p: None)
     monkeypatch.setattr(
-        "kan.cli_scan_cmds._load_watchlist_pairs", lambda: [("600519", "贵州茅台")]
-    )
-    monkeypatch.setattr(
-        "kan.cli_trend_cmds._get_watchlist_pairs", lambda: [("600519", "贵州茅台")]
-    )
-    monkeypatch.setattr("kan.cli_trend_cmds._auto_fetch_stale", lambda _p: None)
-    monkeypatch.setattr(
-        "kan.cli_trend_cmds._load_watchlist_pairs", lambda: [("600519", "贵州茅台")]
+        "kan.cli.scan_cmds._load_watchlist_pairs", lambda: [("600519", "贵州茅台")]
     )
     monkeypatch.setattr(
-        "kan.cli_extreme_cmds._get_watchlist_pairs", lambda: [("600519", "贵州茅台")]
+        "kan.cli.trend_cmds._get_watchlist_pairs", lambda: [("600519", "贵州茅台")]
     )
-    monkeypatch.setattr("kan.cli_extreme_cmds._auto_fetch_stale", lambda _p: None)
+    monkeypatch.setattr("kan.cli.trend_cmds._auto_fetch_stale", lambda _p: None)
     monkeypatch.setattr(
-        "kan.cli_extreme_cmds._load_watchlist_pairs", lambda: [("600519", "贵州茅台")]
+        "kan.cli.trend_cmds._load_watchlist_pairs", lambda: [("600519", "贵州茅台")]
     )
     monkeypatch.setattr(
-        "kan.scanner.scan_batch",
+        "kan.cli.extreme_cmds._get_watchlist_pairs", lambda: [("600519", "贵州茅台")]
+    )
+    monkeypatch.setattr("kan.cli.extreme_cmds._auto_fetch_stale", lambda _p: None)
+    monkeypatch.setattr(
+        "kan.cli.extreme_cmds._load_watchlist_pairs", lambda: [("600519", "贵州茅台")]
+    )
+    monkeypatch.setattr(
+        "kan.core.scanner.scan_batch",
         lambda pairs, mode="low": [_fake_scan_result(s, n) for s, n in pairs],
     )
     monkeypatch.setattr(
-        "kan.scanner.scan_stock",
+        "kan.core.scanner.scan_stock",
         lambda df, sym, name, periods=None: _fake_scan_result(sym, name),
     )
-    monkeypatch.setattr("kan.fetcher.cache_age", lambda _s: "2026-05-21 12:00")
+    monkeypatch.setattr("kan.data.fetcher.cache_age", lambda _s: "2026-05-21 12:00")
     monkeypatch.setattr(
-        "kan.fetcher.data_cutoff_date", lambda _s: date(2026, 5, 21)
+        "kan.data.fetcher.data_cutoff_date", lambda _s: date(2026, 5, 21)
     )
     monkeypatch.setattr(
-        "kan.trading_calendar.latest_trade_date", lambda: date(2026, 5, 21)
+        "kan.core.trading_calendar.latest_trade_date", lambda: date(2026, 5, 21)
     )
-    monkeypatch.setattr("kan.trading_calendar.market_phase", lambda: "pre")
+    monkeypatch.setattr("kan.core.trading_calendar.market_phase", lambda: "pre")
     return CliRunner()
 
 
@@ -128,7 +128,7 @@ def test_only_watchlist_needs_industry(industry_runner):
 def test_low_industry_runs(industry_runner, monkeypatch):
     from kan.app import app
     monkeypatch.setattr(
-        "kan.scanner.filter_extreme",
+        "kan.core.scanner.filter_extreme",
         lambda pairs, periods, mode="low": {},
     )
     result = industry_runner.invoke(app, ["low", "30", "--industry=食品饮料"])
@@ -139,7 +139,7 @@ def test_low_industry_runs(industry_runner, monkeypatch):
 def test_high_industry_runs(industry_runner, monkeypatch):
     from kan.app import app
     monkeypatch.setattr(
-        "kan.scanner.filter_extreme",
+        "kan.core.scanner.filter_extreme",
         lambda pairs, periods, mode="low": {},
     )
     result = industry_runner.invoke(app, ["high", "30", "--industry=食品饮料"])
@@ -157,7 +157,7 @@ def test_trend_industry_runs(industry_runner, monkeypatch):
             self.direction = "平"
 
     monkeypatch.setattr(
-        "kan.scanner.trend_batch",
+        "kan.core.scanner.trend_batch",
         lambda pairs, candle=False: [_Tr(s, n) for s, n in pairs],
     )
     result = industry_runner.invoke(app, ["trend", "--industry=食品饮料"])
@@ -186,10 +186,10 @@ def test_info_industry_conflicts_with_symbol(industry_runner):
 def test_list_industry_filters_watchlist(monkeypatch):
     from datetime import date
 
-    import kan.cli_watchlist_cmds  # noqa: F401 — registers `list` command on app
-    from kan import boards
+    import kan.cli.watchlist_cmds  # noqa: F401 — registers `list` command on app
     from kan.app import app
-    from kan.models import Board, Stock
+    from kan.core.models import Board, Stock
+    from kan.data import boards
 
     board = Board(code="801016", name="食品饮料", level=2, size=2)
     monkeypatch.setattr(boards, "search_industry", lambda q: board)
@@ -198,7 +198,7 @@ def test_list_industry_filters_watchlist(monkeypatch):
         lambda b, force=False: [("600519", "贵州茅台"), ("000998", "隆平高科")],
     )
     monkeypatch.setattr(
-        "kan.watchlist.list_all",
+        "kan.storage.watchlist.list_all",
         lambda: [
             Stock(symbol="600519", name="贵州茅台", added_at=date(2026, 5, 1)),
             Stock(symbol="000001", name="平安银行", added_at=date(2026, 5, 1)),
@@ -214,10 +214,10 @@ def test_fetch_industry_runs(industry_runner, monkeypatch):
     from kan.app import app
     fetched: list[str] = []
     monkeypatch.setattr(
-        "kan.fetcher.fetch_kline",
+        "kan.data.fetcher.fetch_kline",
         lambda sym, force=False: fetched.append(sym) or __import__("pandas").DataFrame(),
     )
-    monkeypatch.setattr("kan.fetcher.is_fresh", lambda sym: False)
+    monkeypatch.setattr("kan.data.fetcher.is_fresh", lambda sym: False)
     result = industry_runner.invoke(app, ["fetch", "--industry=食品饮料"])
     assert result.exit_code == 0, result.output
     assert "600519" in fetched and "000998" in fetched   # 两只成分股都拉了
@@ -226,7 +226,7 @@ def test_fetch_industry_runs(industry_runner, monkeypatch):
 def test_scan_industry_empty_watchlist_ok(industry_runner, monkeypatch):
     """空自选股时 scan --industry 仍正常扫描(只是没有 ⭐ 高亮)。"""
     from kan.app import app
-    monkeypatch.setattr("kan.cli_scan_cmds._load_watchlist_pairs", lambda: [])
+    monkeypatch.setattr("kan.cli.scan_cmds._load_watchlist_pairs", lambda: [])
     result = industry_runner.invoke(app, ["scan", "--industry=食品饮料"])
     assert result.exit_code == 0, result.output
     assert "🏛️" in result.output
@@ -238,10 +238,10 @@ def test_scan_industry_empty_watchlist_ok(industry_runner, monkeypatch):
 def test_low_industry_empty_watchlist_ok(industry_runner, monkeypatch):
     """空自选股时 low --industry 仍正常。"""
     from kan.app import app
-    monkeypatch.setattr("kan.cli_scan_cmds._load_watchlist_pairs", lambda: [])
-    monkeypatch.setattr("kan.cli_extreme_cmds._load_watchlist_pairs", lambda: [])
+    monkeypatch.setattr("kan.cli.scan_cmds._load_watchlist_pairs", lambda: [])
+    monkeypatch.setattr("kan.cli.extreme_cmds._load_watchlist_pairs", lambda: [])
     monkeypatch.setattr(
-        "kan.scanner.filter_extreme", lambda pairs, periods, mode="low": {}
+        "kan.core.scanner.filter_extreme", lambda pairs, periods, mode="low": {}
     )
     result = industry_runner.invoke(app, ["low", "30", "--industry=食品饮料"])
     assert result.exit_code == 0
@@ -259,9 +259,9 @@ def test_trend_industry_empty_watchlist_ok(industry_runner, monkeypatch):
             self.daily_changes = []
             self.direction = "平"
 
-    monkeypatch.setattr("kan.cli_trend_cmds._load_watchlist_pairs", lambda: [])
+    monkeypatch.setattr("kan.cli.trend_cmds._load_watchlist_pairs", lambda: [])
     monkeypatch.setattr(
-        "kan.scanner.trend_batch",
+        "kan.core.scanner.trend_batch",
         lambda pairs, candle=False: [_Tr(s, n) for s, n in pairs],
     )
     result = industry_runner.invoke(app, ["trend", "--industry=食品饮料"])

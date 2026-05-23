@@ -11,7 +11,7 @@ import json
 
 import pytest
 
-from kan import config, paths
+from kan.storage import config, paths
 
 
 @pytest.fixture

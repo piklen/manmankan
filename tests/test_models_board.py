@@ -1,4 +1,4 @@
-from kan.models import Board
+from kan.core.models import Board
 
 
 def test_board_fields():

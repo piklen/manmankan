@@ -1,6 +1,6 @@
 """akshare 双源并发 fallback + no_proxy 代理隔离测试
 
-v0.0.5.0 起 `_fetch_*` 搬到 kan.data_sources · monkeypatch 走 data_sources namespace
+v0.0.5.0 起 `_fetch_*` 搬到 kan.data.sources · monkeypatch 走 sources namespace
 (`_fetch_via_akshare` 通过 module globals 查名字 · patch source location 才生效)。
 """
 
@@ -9,7 +9,7 @@ import os
 import pandas as pd
 import pytest
 
-from kan import data_sources, fetcher
+from kan.data import fetcher, sources
 
 
 @pytest.fixture
@@ -28,10 +28,10 @@ def raw_df():
 
 def test_via_akshare_eastmoney_wins_when_sina_none(raw_df, monkeypatch):
     """新浪返 None · 东财出数 · 结果标 eastmoney."""
-    monkeypatch.setattr(data_sources, "_fetch_sina", lambda *a, **kw: None)
-    monkeypatch.setattr(data_sources, "_fetch_eastmoney", lambda *a, **kw: raw_df)
+    monkeypatch.setattr(sources, "_fetch_sina", lambda *a, **kw: None)
+    monkeypatch.setattr(sources, "_fetch_eastmoney", lambda *a, **kw: raw_df)
 
-    result = data_sources._fetch_via_akshare("600519", "20260101")
+    result = sources._fetch_via_akshare("600519", "20260101")
     assert result is not None
     df, source = result
     assert source == "eastmoney"
@@ -40,10 +40,10 @@ def test_via_akshare_eastmoney_wins_when_sina_none(raw_df, monkeypatch):
 
 def test_via_akshare_sina_wins_when_eastmoney_none(raw_df, monkeypatch):
     """东财返 None · 新浪出数 · 结果标 sina."""
-    monkeypatch.setattr(data_sources, "_fetch_eastmoney", lambda *a, **kw: None)
-    monkeypatch.setattr(data_sources, "_fetch_sina", lambda *a, **kw: raw_df)
+    monkeypatch.setattr(sources, "_fetch_eastmoney", lambda *a, **kw: None)
+    monkeypatch.setattr(sources, "_fetch_sina", lambda *a, **kw: raw_df)
 
-    result = data_sources._fetch_via_akshare("600519", "20260101")
+    result = sources._fetch_via_akshare("600519", "20260101")
     assert result is not None
     _, source = result
     assert source == "sina"
@@ -51,18 +51,18 @@ def test_via_akshare_sina_wins_when_eastmoney_none(raw_df, monkeypatch):
 
 def test_via_akshare_both_fail_returns_none(monkeypatch):
     """双源都返 None · _fetch_via_akshare 返 None（上层降级腾讯）."""
-    monkeypatch.setattr(data_sources, "_fetch_sina", lambda *a, **kw: None)
-    monkeypatch.setattr(data_sources, "_fetch_eastmoney", lambda *a, **kw: None)
+    monkeypatch.setattr(sources, "_fetch_sina", lambda *a, **kw: None)
+    monkeypatch.setattr(sources, "_fetch_eastmoney", lambda *a, **kw: None)
 
-    assert data_sources._fetch_via_akshare("600519", "20260101") is None
+    assert sources._fetch_via_akshare("600519", "20260101") is None
 
 
 def test_via_akshare_both_succeed_returns_one(raw_df, monkeypatch):
     """双源都出数 · 返回其一（race · 非确定）· source 合法."""
-    monkeypatch.setattr(data_sources, "_fetch_sina", lambda *a, **kw: raw_df)
-    monkeypatch.setattr(data_sources, "_fetch_eastmoney", lambda *a, **kw: raw_df)
+    monkeypatch.setattr(sources, "_fetch_sina", lambda *a, **kw: raw_df)
+    monkeypatch.setattr(sources, "_fetch_eastmoney", lambda *a, **kw: raw_df)
 
-    result = data_sources._fetch_via_akshare("600519", "20260101")
+    result = sources._fetch_via_akshare("600519", "20260101")
     assert result is not None
     df, source = result
     assert source in ("sina", "eastmoney")
@@ -74,10 +74,10 @@ def test_via_akshare_source_exception_skipped(raw_df, monkeypatch):
     def boom(*a, **kw):
         raise RuntimeError("source blew up")
 
-    monkeypatch.setattr(data_sources, "_fetch_eastmoney", boom)
-    monkeypatch.setattr(data_sources, "_fetch_sina", lambda *a, **kw: raw_df)
+    monkeypatch.setattr(sources, "_fetch_eastmoney", boom)
+    monkeypatch.setattr(sources, "_fetch_sina", lambda *a, **kw: raw_df)
 
-    result = data_sources._fetch_via_akshare("600519", "20260101")
+    result = sources._fetch_via_akshare("600519", "20260101")
     assert result is not None
     _, source = result
     assert source == "sina"

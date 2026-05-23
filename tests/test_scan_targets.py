@@ -1,8 +1,8 @@
 import pandas as pd
 
-from kan import boards
-from kan._scan_targets import resolve_scan_targets
-from kan.models import Board
+from kan.core.models import Board
+from kan.core.scan_targets import resolve_scan_targets
+from kan.data import boards
 
 
 def test_no_industry_returns_watchlist_unchanged():

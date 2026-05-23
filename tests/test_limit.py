@@ -4,7 +4,7 @@ from datetime import date, timedelta
 
 import pandas as pd
 
-from kan.scanner import (
+from kan.core.scanner import (
     ST_LIMIT_CHANGE_DATE,
     get_limit_threshold,
     scan_stock,

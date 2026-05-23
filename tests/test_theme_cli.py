@@ -6,7 +6,7 @@ import pytest
 from typer.testing import CliRunner
 
 from kan.cli import app
-from kan.models import Theme
+from kan.core.models import Theme
 
 
 @pytest.fixture(autouse=True)
@@ -18,12 +18,12 @@ def _mock_adata(monkeypatch):
 
 @pytest.fixture(autouse=True)
 def _isolate(tmp_path, monkeypatch):
-    from kan import boards
+    from kan.data import boards
     bdir = tmp_path / "boards"
     bdir.mkdir()
     monkeypatch.setattr(boards, "BOARDS_DIR", bdir)
-    monkeypatch.setattr("kan.paths.BOARDS_DIR", bdir)
-    monkeypatch.setattr("kan.paths.ensure_dirs", lambda: None)
+    monkeypatch.setattr("kan.storage.paths.BOARDS_DIR", bdir)
+    monkeypatch.setattr("kan.storage.paths.ensure_dirs", lambda: None)
     return tmp_path
 
 
@@ -36,7 +36,7 @@ def _stub_catalog(monkeypatch, themes=None):
             Theme(code="886058", name="华为昇腾", source="ths"),
             Theme(code="886109", name="同花顺", source="ths"),
         ]
-    monkeypatch.setattr("kan.boards.load_theme_catalog", lambda force=False: themes)
+    monkeypatch.setattr("kan.data.boards.load_theme_catalog", lambda force=False: themes)
 
 
 def test_theme_list_default(monkeypatch, _isolate):

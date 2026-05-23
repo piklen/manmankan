@@ -19,7 +19,7 @@ from unittest.mock import MagicMock
 import pandas as pd
 import pytest
 
-from kan import trading_calendar as tc
+from kan.core import trading_calendar as tc
 
 
 @pytest.fixture(autouse=True)

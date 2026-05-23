@@ -137,56 +137,56 @@ class TestResponsivePeriods:
     """responsive_periods 根据终端宽度选择周期子集"""
 
     def test_wide_returns_all_10(self) -> None:
-        from kan.render import responsive_periods
+        from kan.render.base import responsive_periods
         result = responsive_periods(200)
         assert len(result) == 10
 
     def test_130_returns_all_10(self) -> None:
-        from kan.render import responsive_periods
+        from kan.render.base import responsive_periods
         result = responsive_periods(130)
         assert len(result) == 10
 
     def test_100_returns_6_short_dense(self) -> None:
-        from kan.render import responsive_periods
+        from kan.render.base import responsive_periods
         result = responsive_periods(100)
         assert len(result) == 6
         assert result[:3] == [3, 5, 10]
         assert 180 in result
 
     def test_90_returns_5(self) -> None:
-        from kan.render import responsive_periods
+        from kan.render.base import responsive_periods
         result = responsive_periods(90)
         assert len(result) == 5
         assert 5 in result and 10 in result
         assert 180 in result
 
     def test_80_returns_4_with_5_10(self) -> None:
-        from kan.render import responsive_periods
+        from kan.render.base import responsive_periods
         result = responsive_periods(80)
         assert len(result) == 4
         assert result == [5, 10, 30, 180]
 
     def test_70_returns_3(self) -> None:
-        from kan.render import responsive_periods
+        from kan.render.base import responsive_periods
         result = responsive_periods(70)
         assert len(result) == 3
         assert 180 in result
 
     def test_60_returns_2(self) -> None:
-        from kan.render import responsive_periods
+        from kan.render.base import responsive_periods
         result = responsive_periods(60)
         assert len(result) == 2
         assert 180 in result
 
     def test_always_sorted_ascending(self) -> None:
-        from kan.render import responsive_periods
+        from kan.render.base import responsive_periods
         for width in [60, 70, 80, 90, 100, 130, 200]:
             result = responsive_periods(width)
             assert result == sorted(result), f"width={width}: {result} not sorted"
 
     def test_resonance_visible_at_80(self) -> None:
         """80 列下 scan 表共振列不被截断"""
-        from kan.render import responsive_periods
+        from kan.render.base import responsive_periods
         periods = responsive_periods(80)
 
         table = Table(show_lines=False, pad_edge=False, padding=(0, 1))
@@ -205,11 +205,11 @@ class TestMaxTrendDates:
     """max_trend_dates 根据终端宽度限制日期列数"""
 
     def test_80_cols_at_least_1(self) -> None:
-        from kan.render import max_trend_dates
+        from kan.render.base import max_trend_dates
         assert max_trend_dates(80) >= 1
 
     def test_wider_allows_more_dates(self) -> None:
-        from kan.render import max_trend_dates
+        from kan.render.base import max_trend_dates
         assert max_trend_dates(200) > max_trend_dates(80)
 
 
@@ -224,7 +224,7 @@ def scan_runner(monkeypatch):
 
     from typer.testing import CliRunner
 
-    from kan.models import PeriodResult, StockScanResult
+    from kan.core.models import PeriodResult, StockScanResult
 
     fake_result = StockScanResult(
         symbol="600519",
@@ -242,15 +242,15 @@ def scan_runner(monkeypatch):
     )
 
     monkeypatch.setattr(
-        "kan.cli_scan_cmds._get_watchlist_pairs",
+        "kan.cli.scan_cmds._get_watchlist_pairs",
         lambda: [("600519", "测试")],
     )
-    monkeypatch.setattr("kan.cli_scan_cmds._auto_fetch_stale", lambda _pairs: None)
+    monkeypatch.setattr("kan.cli.scan_cmds._auto_fetch_stale", lambda _pairs: None)
     monkeypatch.setattr(
-        "kan.scanner.scan_batch", lambda _pairs, mode="low": [fake_result]
+        "kan.core.scanner.scan_batch", lambda _pairs, mode="low": [fake_result]
     )
-    monkeypatch.setattr("kan.fetcher.cache_age", lambda _sym: "2026-05-14 12:00")
-    monkeypatch.setattr("kan.scanner.get_limit_threshold", lambda *a, **k: 10.0)
+    monkeypatch.setattr("kan.data.fetcher.cache_age", lambda _sym: "2026-05-14 12:00")
+    monkeypatch.setattr("kan.core.scanner.get_limit_threshold", lambda *a, **k: 10.0)
     return CliRunner()
 
 
@@ -261,12 +261,12 @@ def test_scan_stale_warning_uses_new_phrasing(scan_runner, monkeypatch):
     from kan.app import app
 
     monkeypatch.setattr(
-        "kan.fetcher.data_cutoff_date", lambda _sym: date(2026, 5, 1)
+        "kan.data.fetcher.data_cutoff_date", lambda _sym: date(2026, 5, 1)
     )
     monkeypatch.setattr(
-        "kan.trading_calendar.latest_trade_date", lambda: date(2026, 5, 14)
+        "kan.core.trading_calendar.latest_trade_date", lambda: date(2026, 5, 14)
     )
-    monkeypatch.setattr("kan.trading_calendar.market_phase", lambda: "pre")
+    monkeypatch.setattr("kan.core.trading_calendar.market_phase", lambda: "pre")
 
     result = scan_runner.invoke(app, ["scan"])
     assert result.exit_code == 0, f"scan failed · output: {result.output[:500]}"
@@ -284,12 +284,12 @@ def test_scan_intraday_warning_compliant_phrasing(scan_runner, monkeypatch):
     from kan.app import app
 
     monkeypatch.setattr(
-        "kan.fetcher.data_cutoff_date", lambda _sym: date(2026, 5, 14)
+        "kan.data.fetcher.data_cutoff_date", lambda _sym: date(2026, 5, 14)
     )
     monkeypatch.setattr(
-        "kan.trading_calendar.latest_trade_date", lambda: date(2026, 5, 14)
+        "kan.core.trading_calendar.latest_trade_date", lambda: date(2026, 5, 14)
     )
-    monkeypatch.setattr("kan.trading_calendar.market_phase", lambda: "in")
+    monkeypatch.setattr("kan.core.trading_calendar.market_phase", lambda: "in")
 
     result = scan_runner.invoke(app, ["scan"])
     assert result.exit_code == 0
@@ -309,12 +309,12 @@ def test_scan_warnings_mutex_stale_wins(scan_runner, monkeypatch):
     from kan.app import app
 
     monkeypatch.setattr(
-        "kan.fetcher.data_cutoff_date", lambda _sym: date(2026, 5, 1)
+        "kan.data.fetcher.data_cutoff_date", lambda _sym: date(2026, 5, 1)
     )
     monkeypatch.setattr(
-        "kan.trading_calendar.latest_trade_date", lambda: date(2026, 5, 14)
+        "kan.core.trading_calendar.latest_trade_date", lambda: date(2026, 5, 14)
     )
-    monkeypatch.setattr("kan.trading_calendar.market_phase", lambda: "in")
+    monkeypatch.setattr("kan.core.trading_calendar.market_phase", lambda: "in")
 
     result = scan_runner.invoke(app, ["scan"])
     assert result.exit_code == 0
@@ -384,15 +384,15 @@ def test_high_command_with_period_runs(scan_runner, monkeypatch):
 
 def test_low_command_no_args_uses_default_periods(scan_runner, monkeypatch):
     """U-3: `kan low` 无参 · 用默认 periods [30, 60, 120] 跑(不报错)"""
-    from kan import cli_extreme_cmds
     from kan.app import app
+    from kan.cli import extreme_cmds
 
     # 拦下 _filter_extreme_cmd 不真跑 · 只看 periods 默认值传对
     captured = {}
     def _fake_filter(periods, **kwargs):
         captured["periods"] = periods
 
-    monkeypatch.setattr(cli_extreme_cmds, "_filter_extreme_cmd", _fake_filter)
+    monkeypatch.setattr(extreme_cmds, "_filter_extreme_cmd", _fake_filter)
     result = scan_runner.invoke(app, ["low"])
     assert result.exit_code == 0, f"无参应跑默认 periods · stderr: {result.output}"
     assert captured["periods"] == [30, 60, 120]
@@ -407,12 +407,12 @@ def test_info_command_with_existing_symbol(scan_runner, monkeypatch):
     # info 需要额外 mock fetch_kline 返 pd.DataFrame
     # 简化策略:让 info 失败但不 crash (exit_code 可能非 0)
     monkeypatch.setattr(
-        "kan.fetcher.data_cutoff_date", lambda _sym: date(2026, 5, 14)
+        "kan.data.fetcher.data_cutoff_date", lambda _sym: date(2026, 5, 14)
     )
     monkeypatch.setattr(
-        "kan.trading_calendar.latest_trade_date", lambda: date(2026, 5, 14)
+        "kan.core.trading_calendar.latest_trade_date", lambda: date(2026, 5, 14)
     )
-    monkeypatch.setattr("kan.trading_calendar.market_phase", lambda: "pre")
+    monkeypatch.setattr("kan.core.trading_calendar.market_phase", lambda: "pre")
 
     result = scan_runner.invoke(app, ["info", "600519"])
     # info 可能因 fetch_kline 失败而 exit 非 0 · 但应优雅处理 · 不抛 traceback

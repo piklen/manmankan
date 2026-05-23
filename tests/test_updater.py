@@ -16,7 +16,8 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from kan import config, paths, updater
+from kan.data import updater
+from kan.storage import config, paths
 
 
 class _FakeUrlResponse:
@@ -47,7 +48,7 @@ class TestFetchPypi:
     def test_success_returns_version(self):
         body = json.dumps({"info": {"version": "0.0.5"}}).encode()
         with patch(
-            "kan.updater.urllib.request.urlopen",
+            "kan.data.updater.urllib.request.urlopen",
             return_value=_FakeUrlResponse(body),
         ):
             assert updater.fetch_latest_version_from_pypi() == "0.0.5"
@@ -55,14 +56,14 @@ class TestFetchPypi:
     def test_url_error_returns_none(self):
         import urllib.error
         with patch(
-            "kan.updater.urllib.request.urlopen",
+            "kan.data.updater.urllib.request.urlopen",
             side_effect=urllib.error.URLError("connection refused"),
         ):
             assert updater.fetch_latest_version_from_pypi() is None
 
     def test_timeout_returns_none(self):
         with patch(
-            "kan.updater.urllib.request.urlopen",
+            "kan.data.updater.urllib.request.urlopen",
             side_effect=TimeoutError("timeout"),
         ):
             assert updater.fetch_latest_version_from_pypi() is None
@@ -70,7 +71,7 @@ class TestFetchPypi:
     def test_oserror_returns_none(self):
         """DNS / 路由 / socket 错误 → None"""
         with patch(
-            "kan.updater.urllib.request.urlopen",
+            "kan.data.updater.urllib.request.urlopen",
             side_effect=OSError("network unreachable"),
         ):
             assert updater.fetch_latest_version_from_pypi() is None
@@ -78,7 +79,7 @@ class TestFetchPypi:
     def test_non_dict_response_returns_none(self):
         body = json.dumps([1, 2, 3]).encode()
         with patch(
-            "kan.updater.urllib.request.urlopen",
+            "kan.data.updater.urllib.request.urlopen",
             return_value=_FakeUrlResponse(body),
         ):
             assert updater.fetch_latest_version_from_pypi() is None
@@ -86,7 +87,7 @@ class TestFetchPypi:
     def test_missing_info_returns_none(self):
         body = json.dumps({"other": {}}).encode()
         with patch(
-            "kan.updater.urllib.request.urlopen",
+            "kan.data.updater.urllib.request.urlopen",
             return_value=_FakeUrlResponse(body),
         ):
             assert updater.fetch_latest_version_from_pypi() is None
@@ -94,7 +95,7 @@ class TestFetchPypi:
     def test_missing_version_returns_none(self):
         body = json.dumps({"info": {"name": "manmankan"}}).encode()
         with patch(
-            "kan.updater.urllib.request.urlopen",
+            "kan.data.updater.urllib.request.urlopen",
             return_value=_FakeUrlResponse(body),
         ):
             assert updater.fetch_latest_version_from_pypi() is None
@@ -102,7 +103,7 @@ class TestFetchPypi:
     def test_invalid_json_returns_none(self):
         body = b"not valid json at all"
         with patch(
-            "kan.updater.urllib.request.urlopen",
+            "kan.data.updater.urllib.request.urlopen",
             return_value=_FakeUrlResponse(body),
         ):
             assert updater.fetch_latest_version_from_pypi() is None
@@ -253,7 +254,7 @@ class TestRunUpgrade:
             "/Users/x/.local/share/uv/tools/manmankan/bin/python",
         )
         with patch(
-            "kan.updater.subprocess.run",
+            "kan.data.updater.subprocess.run",
             return_value=self._make_completed(0, "Upgraded successfully"),
         ):
             status, msg = updater.run_upgrade()
@@ -266,7 +267,7 @@ class TestRunUpgrade:
             "/Users/x/.local/share/uv/tools/manmankan/bin/python",
         )
         with patch(
-            "kan.updater.subprocess.run",
+            "kan.data.updater.subprocess.run",
             return_value=self._make_completed(1, "", "Permission denied"),
         ):
             status, msg = updater.run_upgrade()
@@ -279,7 +280,7 @@ class TestRunUpgrade:
             "/Users/x/.local/share/uv/tools/manmankan/bin/python",
         )
         with patch(
-            "kan.updater.subprocess.run",
+            "kan.data.updater.subprocess.run",
             side_effect=subprocess.TimeoutExpired(cmd="uv", timeout=120),
         ):
             status, msg = updater.run_upgrade()
@@ -292,7 +293,7 @@ class TestRunUpgrade:
             "/Users/x/.local/share/uv/tools/manmankan/bin/python",
         )
         with patch(
-            "kan.updater.subprocess.run",
+            "kan.data.updater.subprocess.run",
             side_effect=FileNotFoundError("uv not found"),
         ):
             status, msg = updater.run_upgrade()
@@ -306,7 +307,7 @@ class TestRunUpgrade:
             "/Users/x/.local/share/uv/tools/manmankan/bin/python",
         )
         with patch(
-            "kan.updater.subprocess.run",
+            "kan.data.updater.subprocess.run",
             side_effect=RuntimeError("unexpected"),
         ):
             status, _msg = updater.run_upgrade()
@@ -344,7 +345,7 @@ class TestRunUpgradeSpinner:
         fake_console.status.return_value.__exit__ = MagicMock(return_value=False)
 
         with patch(
-            "kan.updater.subprocess.run",
+            "kan.data.updater.subprocess.run",
             return_value=self._make_completed(0),
         ):
             status, _msg = updater.run_upgrade(console=fake_console)
@@ -368,7 +369,7 @@ class TestRunUpgradeSpinner:
         fake_console.status.return_value.__exit__ = MagicMock(return_value=False)
 
         with patch(
-            "kan.updater.subprocess.run",
+            "kan.data.updater.subprocess.run",
             return_value=self._make_completed(1, "", "boom"),
         ):
             status, _msg = updater.run_upgrade(console=fake_console)
@@ -387,7 +388,7 @@ class TestRunUpgradeSpinner:
             "/Users/x/.local/share/uv/tools/manmankan/bin/python",
         )
         with patch(
-            "kan.updater.subprocess.run",
+            "kan.data.updater.subprocess.run",
             return_value=self._make_completed(0),
         ):
             status, msg = updater.run_upgrade()  # 不传 console

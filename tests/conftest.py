@@ -5,7 +5,7 @@ from types import ModuleType
 
 import pytest
 
-from kan import circuit_breaker
+from kan.infra import circuit_breaker
 
 
 def _akshare_test_double() -> ModuleType:

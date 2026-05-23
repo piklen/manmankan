@@ -10,7 +10,7 @@ from datetime import datetime, timedelta
 import pandas as pd
 import pytest
 
-from kan import paths
+from kan.storage import paths
 
 
 @pytest.fixture
@@ -92,7 +92,7 @@ def test_boards_dir_under_base(monkeypatch, tmp_path):
     monkeypatch.setenv("XDG_DATA_HOME", str(tmp_path))
     import importlib
 
-    from kan import paths
+    from kan.storage import paths
     importlib.reload(paths)
     assert tmp_path / "kan" / "boards" == paths.BOARDS_DIR
     paths.ensure_dirs()

@@ -13,7 +13,7 @@ import pytest
 from typer.testing import CliRunner
 
 from kan.cli import app
-from kan.cli_helpers import _detect_install_method, _human_size
+from kan.cli.helpers import _detect_install_method, _human_size
 
 
 @pytest.fixture
@@ -35,7 +35,7 @@ def mock_kan_data(tmp_path, monkeypatch):
     legacy.mkdir()
     (legacy / "watchlist.json").write_text(json.dumps({"stocks": []}))
 
-    monkeypatch.setattr("kan.paths.BASE_DIR", xdg)
+    monkeypatch.setattr("kan.storage.paths.BASE_DIR", xdg)
     # uninstall 内部用 Path.home() / ".kan" · mock home 让 ~/.kan = legacy
     monkeypatch.setattr("pathlib.Path.home", lambda: tmp_path)
 
@@ -131,7 +131,7 @@ def test_uninstall_yes_deletes_data(mock_kan_data, runner):
 
 def test_uninstall_no_data_still_shows_pkg_cmd(tmp_path, monkeypatch, runner):
     """没数据时也输出包卸载提示 · 不报错"""
-    monkeypatch.setattr("kan.paths.BASE_DIR", tmp_path / "non-existent-kan")
+    monkeypatch.setattr("kan.storage.paths.BASE_DIR", tmp_path / "non-existent-kan")
     monkeypatch.setattr("pathlib.Path.home", lambda: tmp_path)
 
     result = runner.invoke(app, ["uninstall", "--yes"])

@@ -10,7 +10,7 @@
 
 import pandas as pd
 
-from kan.scanner import VOLUME_WINDOW, calc_volume_state
+from kan.core.scanner import VOLUME_WINDOW, calc_volume_state
 
 
 def _df(volumes):

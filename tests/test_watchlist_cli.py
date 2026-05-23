@@ -15,9 +15,10 @@ from pathlib import Path
 import pytest
 from typer.testing import CliRunner
 
-from kan import boards, paths, watchlist
 from kan.app import app
-from kan.models import Board, Stock
+from kan.core.models import Board, Stock
+from kan.data import boards
+from kan.storage import paths, watchlist
 
 
 @pytest.fixture
@@ -54,7 +55,7 @@ def fake_names() -> dict[str, str]:
 def cli_runner(temp_kan_dir, fake_names, monkeypatch: pytest.MonkeyPatch) -> CliRunner:
     """watchlist CLI CliRunner · mock 全部 name lookup 走 fake_names."""
     monkeypatch.setattr(
-        "kan.cli_watchlist_cmds._load_names_with_optional_spinner",
+        "kan.cli.watchlist_cmds._load_names_with_optional_spinner",
         lambda _console: fake_names,
     )
     return CliRunner()

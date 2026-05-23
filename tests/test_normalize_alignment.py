@@ -18,9 +18,9 @@ from __future__ import annotations
 import pandas as pd
 import pytest
 
-from kan import fetcher
-from kan.data_sources import _EM_COLUMN_MAP
-from kan.fetcher import KLINE_COLUMNS, _normalize_kline
+from kan.data import fetcher
+from kan.data.fetcher import KLINE_COLUMNS, _normalize_kline
+from kan.data.sources import _EM_COLUMN_MAP
 
 # ── Fixture：同一交易日同一只股票 (600519 · 2026-05-08) ─────────────────
 # 三份 raw 来自三个源各自的 schema · 进 _normalize_kline 前形态各异
