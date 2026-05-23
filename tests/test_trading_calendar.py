@@ -1,4 +1,4 @@
-"""trading_calendar.py 6 case production 故障模式覆盖 (架-5 + 架-2 + 安-1/2/3/6 + CR-3).
+"""trading_calendar.py 6 case production 故障模式覆盖.
 
 之前 test_data_freshness.py 用 fixture monkeypatch _fetch_from_akshare 直接返
 准备好的 dataset · 跳过 production fail path (_fetch_from_akshare 0 覆盖率 +
@@ -51,9 +51,9 @@ def _make_valid_dates(start_year: int = 2000) -> set[date]:
     return dates
 
 
-# ─────────────── Case 1: akshare raise (架-2 fail-soft) ───────────────
+# ─────────────── Case 1: akshare raise (fail-soft) ───────────────
 def test_akshare_raise_falls_back_to_empty_set(tmp_cache, capsys, monkeypatch):
-    """架-2: akshare 抛 RuntimeError → get_trade_dates 返空 set · 不再 raise."""
+    """akshare 抛 RuntimeError → get_trade_dates 返空 set · 不再 raise."""
     monkeypatch.setattr(
         tc, "_fetch_from_akshare",
         MagicMock(side_effect=RuntimeError("akshare 拉取失败: HTTPError 503")),
@@ -70,7 +70,7 @@ def test_akshare_raise_falls_back_to_empty_set(tmp_cache, capsys, monkeypatch):
 def test_latest_trade_date_uses_weekday_heuristic_when_empty(
     tmp_cache, capsys, monkeypatch
 ):
-    """架-2: trade_days 空时 latest_trade_date 退化 weekday 启发式 · 不抛 RuntimeError."""
+    """trade_days 空时 latest_trade_date 退化 weekday 启发式 · 不抛 RuntimeError."""
     monkeypatch.setattr(
         tc, "_fetch_from_akshare",
         MagicMock(side_effect=RuntimeError("network down")),
@@ -82,9 +82,9 @@ def test_latest_trade_date_uses_weekday_heuristic_when_empty(
     assert result == date(2026, 5, 12), "工作日盘后应返今日 (weekday 启发式)"
 
 
-# ─────────────── Case 2: akshare 返空 DataFrame (安-3) ───────────────
+# ─────────────── Case 2: akshare 返空 DataFrame ───────────────
 def test_akshare_returns_empty_dataframe_triggers_failure(monkeypatch):
-    """安-3: akshare 返空 DataFrame 应被 _fetch_from_akshare 转 RuntimeError."""
+    """akshare 返空 DataFrame 应被 _fetch_from_akshare 转 RuntimeError."""
     empty_df = pd.DataFrame()
     mock_ak = MagicMock()
     mock_ak.tool_trade_date_hist_sina.return_value = empty_df
@@ -94,9 +94,9 @@ def test_akshare_returns_empty_dataframe_triggers_failure(monkeypatch):
         tc._fetch_from_akshare()
 
 
-# ─────────────── Case 3: akshare 返脏 (sanity 失败 · 安-3) ───────────────
+# ─────────────── Case 3: akshare 返脏 (sanity 失败) ───────────────
 def test_akshare_returns_dirty_data_triggers_sanity_failure(monkeypatch, capsys):
-    """安-3: akshare 返回值 count 过少 (5 个 dates) 应触发 sanity check 失败."""
+    """akshare 返回值 count 过少 (5 个 dates) 应触发 sanity check 失败."""
     dirty_df = pd.DataFrame({
         "trade_date": [
             "2026-05-01", "2026-05-02", "2026-05-03",
@@ -115,9 +115,9 @@ def test_akshare_returns_dirty_data_triggers_sanity_failure(monkeypatch, capsys)
     assert "太少" in captured.err
 
 
-# ─────────────── Case 4: cache 损坏 (JSONDecodeError · 安-6) ───────────────
+# ─────────────── Case 4: cache 损坏 (JSONDecodeError) ───────────────
 def test_corrupt_cache_triggers_refetch(tmp_cache, capsys):
-    """安-6: cache JSONDecodeError 应被缩 except 范围 + stderr warn + 返 None."""
+    """cache JSONDecodeError 应被缩 except 范围 + stderr warn + 返 None."""
     tmp_cache.write_text("{not valid json", encoding="utf-8")
 
     result = tc._read_cache()
@@ -143,9 +143,9 @@ def test_expired_cache_returns_none(tmp_cache):
     assert result is None, "TTL 过期应返 None 触发重拉"
 
 
-# ─────────────── Case 6: chmod 失败 → stderr warn (安-2) ───────────────
+# ─────────────── Case 6: chmod 失败 → stderr warn ───────────────
 def test_chmod_failure_warns_but_does_not_crash(tmp_cache, capsys, monkeypatch):
-    """安-2: chmod 0o600 失败不再静默 · stderr warn + 继续 (不抛)."""
+    """chmod 0o600 失败不再静默 · stderr warn + 继续 (不抛)."""
     valid_dates = _make_valid_dates()
 
     real_chmod = Path.chmod
@@ -153,7 +153,7 @@ def test_chmod_failure_warns_but_does_not_crash(tmp_cache, capsys, monkeypatch):
     def mock_chmod(self, mode):
         # 仅 TRADE_DATES_CACHE 这个 file 才抛 · ensure_dirs() 的 dir chmod 不受影响
         if self.name == "trade_dates.json":
-            raise OSError("Operation not permitted (mock for 安-2 test)")
+            raise OSError("Operation not permitted (mock for chmod test)")
         return real_chmod(self, mode)
 
     monkeypatch.setattr(Path, "chmod", mock_chmod)
@@ -167,7 +167,7 @@ def test_chmod_failure_warns_but_does_not_crash(tmp_cache, capsys, monkeypatch):
 
 # ─────────────── 加分: sanity check 三 invariant 独立测试 ───────────────
 class TestSanityCheck:
-    """安-1 三 invariant 边界 case · 不依赖 akshare / file."""
+    """sanity check 三 invariant 边界 case · 不依赖 akshare / file."""
 
     def test_passes_with_valid_dates(self, capsys):
         valid = _make_valid_dates()
@@ -203,9 +203,9 @@ class TestSanityCheck:
         assert "最新日期" in capsys.readouterr().err
 
 
-# ─────────────── 架-4: env var KAN_DATA_AVAIL_OFFSET_MIN override ───────────────
+# ─────────────── env var KAN_DATA_AVAIL_OFFSET_MIN override ───────────────
 class TestDataAvailableEnvVar:
-    """架-4 v0.0.4.7: 跨时区用户自救 · env var 偏移 DATA_AVAILABLE_AFTER."""
+    """v0.0.4.7: 跨时区用户自救 · env var 偏移 DATA_AVAILABLE_AFTER."""
 
     def test_default_is_15_30(self, monkeypatch):
         from datetime import time
@@ -235,9 +235,9 @@ class TestDataAvailableEnvVar:
         assert tc._resolve_data_available_after() == time(15, 30)
 
 
-# ─────────────── 加分: CR-3 double-checked locking 行为 ───────────────
+# ─────────────── 加分: double-checked locking 行为 ───────────────
 def test_memo_thread_safety_under_concurrent_first_call(tmp_cache, monkeypatch):
-    """CR-3: get_trade_dates 多线程并发首调 · _fetch_from_akshare 只 fire 一次."""
+    """get_trade_dates 多线程并发首调 · _fetch_from_akshare 只 fire 一次."""
     valid = _make_valid_dates()
     call_count = {"n": 0}
 
