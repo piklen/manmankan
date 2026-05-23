@@ -15,15 +15,15 @@ from datetime import date, datetime, timedelta
 from pathlib import Path
 from typing import TYPE_CHECKING
 
-from kan.infra.log import debug_log
-from kan.infra.numeric import to_numeric_checked
 from kan.data.sources import (
     _fetch_baostock,
     _fetch_tencent,
     _fetch_via_akshare,
 )
-from kan.storage.paths import DATA_DIR
 from kan.data.tushare import _fetch_tushare
+from kan.infra.log import debug_log
+from kan.infra.numeric import to_numeric_checked
+from kan.storage.paths import DATA_DIR
 
 if TYPE_CHECKING:
     from collections.abc import Callable
