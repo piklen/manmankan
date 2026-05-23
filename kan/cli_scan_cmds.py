@@ -412,6 +412,7 @@ def _filter_extreme_cmd(
     periods: list[int], mode: str, fmt: export.OutputFormat,
     industry: str | None = None, only_watchlist: bool = False,
     hot: HotList | None = None,
+    theme: str | None = None,
 ) -> None:
     """low/high 共享实现"""
     from rich.console import Console
@@ -434,22 +435,27 @@ def _filter_extreme_cmd(
     label = "低点" if mode == "low" else "高点"
     signal_style = "bold green" if mode == "low" else "bold yellow"
 
-    if industry is not None and hot is not None:
-        _print_err("❌ --industry 与 --hot 不能同时使用")
+    if sum(1 for x in (industry, hot, theme) if x is not None) > 1:
+        _print_err("❌ --industry / --hot / --theme 三者互斥 · 同时只能用一个")
         raise typer.Exit(2)
-    source_mode = industry is not None or hot is not None
+    source_mode = industry is not None or hot is not None or theme is not None
     watchlist_pairs = (
         _load_watchlist_pairs() if source_mode else _get_watchlist_pairs()
     )
     if only_watchlist and not source_mode:
-        _print_err("❌ --only-watchlist 需配合 --industry 或 --hot 使用")
+        _print_err("❌ --only-watchlist 需配合 --industry / --hot / --theme 使用")
         raise typer.Exit(1)
-    from kan._scan_targets import BoardMeta, HotMeta, resolve_scan_targets
-    from kan.boards import BoardDataUnavailableError, BoardNotFoundError
+    from kan._scan_targets import BoardMeta, HotMeta, ThemeMeta, resolve_scan_targets
+    from kan.boards import (
+        BoardDataUnavailableError,
+        BoardNotFoundError,
+        ThemeDataUnavailableError,
+        ThemeNotFoundError,
+    )
     from kan.hot import HotListUnavailableError
     try:
         targets, board_meta = resolve_scan_targets(
-            industry, only_watchlist, watchlist_pairs, hot=hot,
+            industry, only_watchlist, watchlist_pairs, hot=hot, theme=theme,
         )
     except BoardNotFoundError:
         _print_err(f"❌ 未找到行业「{industry}」· 可试更短关键词")
@@ -459,6 +465,14 @@ def _filter_extreme_cmd(
         raise typer.Exit(1) from None
     except HotListUnavailableError:
         _print_err("❌ 热榜数据源暂时不可用,稍后再试")
+        raise typer.Exit(1) from None
+    except ThemeNotFoundError:
+        _print_err(
+            f"❌ 未找到题材「{theme}」· 试更短关键词 · 或跑 kan theme search 看候选"
+        )
+        raise typer.Exit(2) from None
+    except ThemeDataUnavailableError:
+        _print_err("❌ 题材数据源暂时不可用 · 稍后再试 · 行业扫描可用(--industry)")
         raise typer.Exit(1) from None
     highlight = board_meta.highlight if board_meta else set()
     is_hot = isinstance(board_meta, HotMeta)
@@ -480,6 +494,8 @@ def _filter_extreme_cmd(
             where = f"{board_meta.board.name} 行业成分股"
         elif isinstance(board_meta, HotMeta):
             where = board_meta.list_name
+        elif isinstance(board_meta, ThemeMeta):
+            where = f"{board_meta.theme.name} 题材成分股"
         else:
             where = "自选股"
         console.print(f"{where}中没有触及 {'/'.join(map(str, periods))} 日{label}的股票")
@@ -534,7 +550,11 @@ def _filter_extreme_cmd(
         console.print(
             "[dim]  榜 = 东方财富热榜实时名次 · 非慢慢看观点 · 热榜为实时榜单[/dim]"
         )
-    console.print(DISCLAIMER, style="dim")
+    if isinstance(board_meta, ThemeMeta):
+        from kan.render_theme import render_theme_disclaimer
+        render_theme_disclaimer()
+    else:
+        console.print(DISCLAIMER, style="dim")
 
 
 @app.command()
@@ -552,15 +572,19 @@ def low(
         HotList | None,
         typer.Option("--hot", help="扫东财热榜 · rank=人气榜 / surge=飙升榜 · 自选股 ⭐ 高亮"),
     ] = None,
+    theme: Annotated[
+        str | None,
+        typer.Option("--theme", help="扫指定题材全成分股 · 自选 ⭐ 高亮"),
+    ] = None,
     only_watchlist: Annotated[
         bool,
-        typer.Option("--only-watchlist", help="仅显示自选 ∩ 行业/热榜(需配合 --industry 或 --hot)"),
+        typer.Option("--only-watchlist", help="仅显示自选 ∩ 行业/热榜/题材(需配合 --industry / --hot / --theme)"),
     ] = False,
 ) -> None:
     """筛选 N 日低点的自选股（支持多周期）"""
     _filter_extreme_cmd(
         periods, mode="low", fmt=fmt,
-        industry=industry, only_watchlist=only_watchlist, hot=hot,
+        industry=industry, only_watchlist=only_watchlist, hot=hot, theme=theme,
     )
 
 
@@ -579,15 +603,19 @@ def high(
         HotList | None,
         typer.Option("--hot", help="扫东财热榜 · rank=人气榜 / surge=飙升榜 · 自选股 ⭐ 高亮"),
     ] = None,
+    theme: Annotated[
+        str | None,
+        typer.Option("--theme", help="扫指定题材全成分股 · 自选 ⭐ 高亮"),
+    ] = None,
     only_watchlist: Annotated[
         bool,
-        typer.Option("--only-watchlist", help="仅显示自选 ∩ 行业/热榜(需配合 --industry 或 --hot)"),
+        typer.Option("--only-watchlist", help="仅显示自选 ∩ 行业/热榜/题材(需配合 --industry / --hot / --theme)"),
     ] = False,
 ) -> None:
     """筛选 N 日高点的自选股（支持多周期）"""
     _filter_extreme_cmd(
         periods, mode="high", fmt=fmt,
-        industry=industry, only_watchlist=only_watchlist, hot=hot,
+        industry=industry, only_watchlist=only_watchlist, hot=hot, theme=theme,
     )
 
 
