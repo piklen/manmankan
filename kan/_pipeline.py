@@ -147,10 +147,10 @@ def freshness_of(symbols: Iterable[str]) -> Freshness:
 
 
 def render_freshness_warning(freshness: Freshness, console: Any) -> None:
-    """在终端打 stale / 盘中 互斥警告 · 跟 v0.0.4.7 UX-4 行为完全一致。
+    """在终端打 stale / 盘中 互斥警告。
 
     优先级互斥:if is_stale → 缓存滞后警告 · elif 盘中 → 实时状态警告 · else 静默。
-    理由(v0.0.4.7 UX-4):stale 状态下用户首动作是 fetch · fetch 后会重 scan · 再判 intraday。
+    理由:stale 状态下用户首动作是 fetch · fetch 后会重 scan · 再判 intraday。
 
     无 cutoff 时显「无缓存」+ days_behind 显「?」(罕见但需兜底)。
 

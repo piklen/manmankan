@@ -55,7 +55,7 @@ def fetch_latest_version_from_pypi() -> str | None:
         with urllib.request.urlopen(req, timeout=NETWORK_TIMEOUT) as resp:
             data = json.load(resp)
     except Exception as e:
-        # CR-4 (v0.0.4.8 finalize · 架-4): 合并双层 catch (specific + broad 行为 equivalent · 删 dead defensive code)
+        # 合并双层 catch (specific + broad 行为 equivalent · 删 dead defensive code)
         # 网络/解析/任何异常 → 静默返 None · debug log 供排查
         debug_log(__name__, "PyPI version fetch", e)
         return None
@@ -74,7 +74,7 @@ def is_newer(latest: str, current: str) -> bool:
         from packaging.version import Version
         return Version(latest) > Version(current)
     except Exception as e:
-        # CR-4 (v0.0.4.8): packaging.Version parse 失败 (罕见 · e.g. 非 PEP 440 版本)
+        # packaging.Version parse 失败 (罕见 · e.g. 非 PEP 440 版本)
         # fallback 到 tuple 比较 · debug log 让 maintainer 知道何时走 fallback
         debug_log(__name__, f"Version parse fallback (latest={latest!r}, current={current!r})", e)
         try:
