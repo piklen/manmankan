@@ -286,7 +286,7 @@ def compare_payload(results: list[StockScanResult], *, periods: list[int]) -> di
 
 def compare_markdown(results: list[StockScanResult], *, periods: list[int]) -> str:
     """kan compare --format md · 转置表(指标为行 · 个股为列)。"""
-    headers = ["指标", *[f"{r.symbol} {r.name.replace(' ', '')}" for r in results]]
+    headers = ["指标", *[f"{r.name.replace(' ', '')} {r.symbol}" for r in results]]
     rows: list[list[str]] = [["现价", *[f"{r.current_price:.2f}" for r in results]]]
     for p in periods:
         cells = [f"{p}日位置"]
