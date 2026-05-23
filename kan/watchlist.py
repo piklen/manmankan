@@ -307,7 +307,7 @@ def import_csv(path: str | Path) -> tuple[int, int, list[str]]:
         reader = csv.reader(f)
         rows = list(reader)
 
-    # F10/***REMOVED***: CSV header 自动 detect 跳过
+    # CSV header 自动 detect 跳过
     # 第一行第一列不是 6 位数字 → 当成 header skip
     # (典型 header: symbol,name / code,name / 代码,名称)
     start_idx = 0
