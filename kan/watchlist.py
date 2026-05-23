@@ -136,7 +136,7 @@ def _fetch_names_baostock() -> dict[str, str] | None:
 
         return mapping if mapping else None
     except Exception as e:
-        # ***REMOVED*** (v0.0.4.8): baostock fallback · user-facing warn + debug log
+        # baostock fallback · user-facing warn + debug log
         debug_log(__name__, "baostock stock name fetch", e)
         from rich.console import Console
 
@@ -167,7 +167,7 @@ def _fetch_names_akshare() -> dict[str, str] | None:
         df = ak.stock_info_a_code_name()
         return dict(zip(df["code"], df["name"], strict=True))
     except Exception as e:
-        # ***REMOVED*** (v0.0.4.8): akshare fallback · 静默返 None · debug log 供排查
+        # akshare fallback · 静默返 None · debug log 供排查
         debug_log(__name__, "akshare stock_info_a_code_name fallback", e)
         return None
     finally:

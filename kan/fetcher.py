@@ -102,7 +102,7 @@ def _read_cutoff_from_parquet(path: Path) -> date | None:
 
     只读 date 列降低 IO（pyarrow 列式存储天然友好）。
 
-    ***REMOVED*** (v0.0.4.7): 异常路径加 debug logging · 默认不输出 (用户开 KAN_DEBUG=1 才显示) ·
+    异常路径加 debug logging · 默认不输出 (用户开 KAN_DEBUG=1 才显示) ·
     诊断时不再"吞 None 后调用方无信息"。
     """
     try:
@@ -115,7 +115,7 @@ def _read_cutoff_from_parquet(path: Path) -> date | None:
             return last
         return pd.Timestamp(last).date()
     except Exception as e:
-        # ***REMOVED*** (v0.0.4.8): normalize 到 _log.debug_log helper (KAN_DEBUG=1 可见)
+        # normalize 到 _log.debug_log helper (KAN_DEBUG=1 可见)
         debug_log(__name__, f"_read_cutoff_from_parquet({path.name})", e)
         return None
 
@@ -221,7 +221,7 @@ def _fetch_eastmoney(symbol: str, start: str) -> pd.DataFrame | None:
             return None
         return raw.rename(columns=_EM_COLUMN_MAP)
     except Exception as e:
-        # ***REMOVED*** (v0.0.4.8): broad catch 是 legitimate (akshare 第三方不保 exception type) ·
+        # broad catch 是 legitimate (akshare 第三方不保 exception type) ·
         # 但加 debug log · 用户开 KAN_DEBUG=1 可见诊断 · 排查 fallback 触发原因
         debug_log(__name__, "fetch eastmoney", e)
         cb.record("eastmoney", ok=False)
@@ -282,7 +282,7 @@ def _fetch_baostock(symbol: str, start: str) -> pd.DataFrame | None:
             while rs.next():
                 rows.append(rs.get_row_data())
         except Exception as e:
-            # ***REMOVED*** (v0.0.4.8): baostock 第三方 · broad catch + debug log
+            # baostock 第三方 · broad catch + debug log
             debug_log(__name__, "fetch baostock", e)
             cb.record("baostock", ok=False)
             return None
@@ -327,7 +327,7 @@ def _fetch_sina(symbol: str, start: str) -> pd.DataFrame | None:
             adjust="qfq",
         )
     except Exception as e:
-        # ***REMOVED*** (v0.0.4.8): 新浪 akshare · broad catch + debug log
+        # 新浪 akshare · broad catch + debug log
         debug_log(__name__, "fetch sina", e)
         cb.record("sina", ok=False)
         return None
@@ -372,7 +372,7 @@ def _fetch_tencent(symbol: str, start: str) -> pd.DataFrame | None:
             timeout=15,
         )
     except Exception as e:
-        # ***REMOVED*** (v0.0.4.8): 腾讯 akshare · broad catch + debug log
+        # 腾讯 akshare · broad catch + debug log
         debug_log(__name__, "fetch tencent", e)
         cb.record("tencent", ok=False)
         return None
@@ -479,7 +479,7 @@ def fetch_kline(symbol: str, days: int = 180, force: bool = False) -> pd.DataFra
 
 
 def resolve_max_workers() -> int:
-    """D-2 (v0.0.4.7): 启发式 max_workers · 不再硬编码 5.
+    """启发式 max_workers · 不再硬编码 5.
 
     akshare 是 I/O bound (HTTP 拉取 · 不是 CPU 计算) · cpu_count*2 比 cpu-1 更合理.
     上限 cap 12 防 akshare 限流 (弱网下 ≥ 12 反而变慢).
@@ -497,7 +497,7 @@ def resolve_max_workers() -> int:
     if raw:
         try:
             n = int(raw)
-            # ***REMOVED*** (v0.0.4.7 P0): 上限从 50 收紧到 20 · 防 KAN_WORKERS=50 反射 DoS akshare
+            # 上限从 50 收紧到 20 · 防 KAN_WORKERS=50 反射 DoS akshare
             # akshare 限流阈值实测约 10-15 req/s · 20 并发已超 · 50 必触发限流
             if 1 <= n <= 20:
                 return n
@@ -515,11 +515,11 @@ def fetch_batch(
 ) -> tuple[dict[str, pd.DataFrame], dict[str, str]]:
     """批量拉取 · ThreadPoolExecutor 并发 + 可选 progress callback.
 
-    D-2 (v0.0.4.7): max_workers=None → resolve_max_workers() 启发式 (cpu_count*2 cap 12).
+    max_workers=None → resolve_max_workers() 启发式 (cpu_count*2 cap 12).
     """
     from concurrent.futures import ThreadPoolExecutor, as_completed
 
-    # ***REMOVED*** (v0.0.4.7 P0): max_workers None / 0 / 负数 都退化到 resolve_max_workers
+    # max_workers None / 0 / 负数 都退化到 resolve_max_workers
     # 防御 ThreadPoolExecutor(max_workers=0) 抛 ValueError 的边界
     if max_workers is None or max_workers < 1:
         max_workers = resolve_max_workers()
@@ -535,7 +535,7 @@ def fetch_batch(
                 df = fetch_kline(symbol, days=days, force=force)
                 return symbol, df, None
             except Exception as e:
-                # ***REMOVED*** (v0.0.4.8): fetch_batch retry path · 加 debug log
+                # fetch_batch retry path · 加 debug log
                 debug_log(__name__, f"fetch_batch retry {attempt}", e)
                 if attempt == 0:
                     time.sleep(1)
