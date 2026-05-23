@@ -80,8 +80,9 @@ def _stub_fetch_kline(monkeypatch):
     monkeypatch.setattr("kan.fetcher.data_cutoff_date", lambda symbol: None)
     # scan_batch · 让它走真路径但底层 fetch 被 mock
     # 直接 mock scan_batch 返回 stubs · 更稳
-    from kan.models import PeriodResult, StockScanResult
     from datetime import date
+
+    from kan.models import PeriodResult, StockScanResult
     def fake_scan_batch(targets, mode):
         return [
             StockScanResult(
