@@ -5,6 +5,43 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Added (Python API · OOP 视角)
+
+- **`kan.core.stock_set` · 股票集合抽象** · 把"一组股票"抽象成对象,让 verb 统一处理
+  - `StockSet` Protocol(`runtime_checkable` · 鸭子类型 · 不强制继承)
+  - 4 个具体实现:`WatchlistSet`(自选)/ `HotRankSet`(热榜 rank/surge)/ `ThemeSet`(题材)/ `IndustrySet`(行业)
+  - `from_flags(industry=, hot=, theme=)` factory · 三者互斥校验 + 默认走 `WatchlistSet`
+  - 用户可扩展自定义集合(SectorSet / ETFBasket / 等),直接被 verbs 接受
+- **`kan.core.verbs` · 统一 verb 入口** · 接受任何 StockSet
+  - `verbs.scan(set, mode="low")` / `verbs.low(set, periods=)` / `verbs.high(set, periods=)` / `verbs.trend(set, candle=)` / `verbs.fetch(set, days=)`
+  - 例:
+    ```python
+    from kan.core.stock_set import WatchlistSet, ThemeSet, HotRankSet
+    from kan.core import verbs
+    verbs.low(WatchlistSet())                  # 自选股筛低位
+    verbs.scan(ThemeSet("新能源"), mode="high")  # 新能源题材高位
+    verbs.trend(HotRankSet(mode="surge"))      # 飙升榜连续涨跌
+    ```
+  - Python 脚本化 / cron / 出 markdown 报告等场景的入口
+- 49 个新单元测试覆盖 stock_set + verbs(Protocol 契约 / 4 实现 lazy resolution / factory 互斥 / verbs facade 路由)
+
+### Changed (内部架构)
+
+- **`kan/` 平铺 38 文件 → 6 子包**:`cli/`(14)/ `core/`(7)/ `data/`(6)/ `render/`(3)/ `storage/`(4)/ `infra/`(5)
+  - 入口契约不变(pyproject `kan = "kan.cli:cli_main"` 通过 `kan/cli/__init__.py` re-export 保留 · CLI 用户零感知)
+  - typer 单例 `kan/app.py` 位置不变
+  - 内部 imports / 测试 imports 全更新到子包路径(`from kan.data.fetcher` 取代 `from kan.fetcher`)
+  - 测试基线 651 passed → 682 passed(新增 31 stock_set + 18 verbs · 零 functional regression)
+  - CLI 层仍走 `resolve_scan_targets` + `run_data_pipeline` 编排(成熟稳定 · 不打破) · OOP 层是为渐进迁移打地基
+
+### Removed (公开 docs 精简)
+
+- 公开 `docs/` 从 11 → 6 文件(-45%) · maintainer 内部 SOP / 历史设计稿迁回总部私有归档
+- 保留 `docs/{roadmap, compliance, reviews/, README}.md`(用户可见 / 合规必读 / 版本回顾)
+- 极简原则:开源用户用 root README + CHANGELOG 就能用 · maintainer SOP 不需要 expose
+
 ## [0.0.5.1] - 2026-05-24
 
 ### Fixed (UX)
