@@ -38,35 +38,79 @@ def _mask_token(token: str) -> str:
     return f"***{token[-4:]}"
 
 
-@config_app.command("get")
-def get_cmd() -> None:
-    """显示当前配置(token 自动 mask · env 覆盖时标注 · 未配置时给散户引导)。"""
-    cfg = config.load()
-
+def _print_token(cfg: dict, *, raw: bool = False) -> None:
     env_tok = os.environ.get("TUSHARE_TOKEN")
     cfg_tok = cfg.get("tushare_token")
     effective_tok = env_tok if env_tok else cfg_tok
     if effective_tok and isinstance(effective_tok, str) and effective_tok.strip():
-        masked = _mask_token(effective_tok.strip())
+        cleaned = effective_tok.strip()
+        if raw:
+            # 单 key 查 · 给原值 · 适合 token=$(kan config get tushare-token) 脚本场景
+            typer.echo(cleaned)
+            return
+        masked = _mask_token(cleaned)
         if env_tok:
-            typer.echo(f"tushare_token: {masked}   (set via TUSHARE_TOKEN env, overriding config)")
+            typer.echo(
+                f"tushare_token: {masked}   "
+                f"(set via TUSHARE_TOKEN env, overriding config)"
+            )
         else:
             typer.echo(f"tushare_token: {masked}   (set via config)")
     else:
         # 未配置时给散户引导***REMOVED***)· 而不是无声跳过该行
         typer.echo(
-            "tushare_token: 未配置 · 用 `kan config set tushare-token <你的_token>` "
+            "tushare_token: 未配置 · "
+            "用 `kan config set tushare-token <你的_token>` "
             "启用 TuShare Pro 数据源(可选 · 不配也能跑)"
         )
 
+
+def _print_endpoint(cfg: dict, *, raw: bool = False) -> None:
     env_ep = os.environ.get("TUSHARE_ENDPOINT")
     cfg_ep = cfg.get("tushare_endpoint")
+    effective = env_ep or cfg_ep or DEFAULT_ENDPOINT
+    if raw:
+        typer.echo(effective)
+        return
     if env_ep:
-        typer.echo(f"tushare_endpoint: {env_ep}   (set via TUSHARE_ENDPOINT env, overriding config)")
+        typer.echo(
+            f"tushare_endpoint: {env_ep}   "
+            f"(set via TUSHARE_ENDPOINT env, overriding config)"
+        )
     elif cfg_ep:
         typer.echo(f"tushare_endpoint: {cfg_ep}   (set via config)")
     else:
         typer.echo(f"tushare_endpoint: {DEFAULT_ENDPOINT} (默认)")
+
+
+@config_app.command("get")
+def get_cmd(
+    key: str | None = typer.Argument(
+        None,
+        help="可选 · 单 key 查询(tushare-token / tushare-endpoint)· "
+             "未指定显示全部 · 单 key 模式输出原值(token 仍 mask)"
+    ),
+) -> None:
+    """显示当前配置(token 自动 mask · env 覆盖时标注 · 未配置时给散户引导)。"""
+    cfg = config.load()
+
+    if key is not None:
+        if key not in _KEY_MAP:
+            typer.echo(
+                f"❌ 未知配置项: {key}\n"
+                f"   支持: {' / '.join(_KEY_MAP)}\n"
+                f"   例: kan config get tushare-token",
+                err=True,
+            )
+            raise typer.Exit(code=2)
+        if _KEY_MAP[key] == "tushare_token":
+            _print_token(cfg)
+        else:
+            _print_endpoint(cfg)
+        return
+
+    _print_token(cfg)
+    _print_endpoint(cfg)
 
 
 @config_app.command("set")
