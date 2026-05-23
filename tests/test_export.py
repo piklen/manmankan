@@ -224,7 +224,7 @@ def test_compare_markdown_transposed():
         [_result(), _result(symbol="000858", name="五粮液")], periods=[3],
     )
     assert "# 慢慢看 · 多股对比" in md
-    assert "| 指标 | 600519 贵州茅台 | 000858 五粮液 |" in md
+    assert "| 指标 | 贵州茅台 600519 | 五粮液 000858 |" in md
     assert "| 现价 | 100.00 | 100.00 |" in md
     assert "| 3日位置 |" in md
     assert "数据截止" in md
