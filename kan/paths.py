@@ -6,6 +6,7 @@
 
 from __future__ import annotations
 
+import contextlib
 import os
 import shutil
 from pathlib import Path
@@ -73,10 +74,9 @@ def atomic_write_parquet(df, path: Path) -> None:
     tmp = path.with_suffix(path.suffix + ".tmp")
     df.to_parquet(tmp, index=False)
     os.replace(tmp, path)
-    try:
+    # Windows / 异常 FS chmod 失败容错(不致命)
+    with contextlib.suppress(OSError):
         os.chmod(path, 0o600)
-    except OSError:
-        pass  # Windows / 异常 FS 容错 · 不致命
 
 
 def atomic_write_json(path: Path, data: object, **dumps_kw) -> None:
@@ -96,10 +96,9 @@ def atomic_write_json(path: Path, data: object, **dumps_kw) -> None:
     tmp = path.with_suffix(path.suffix + ".tmp")
     tmp.write_text(json.dumps(data, **dumps_kw), encoding="utf-8")
     os.replace(tmp, path)
-    try:
+    # Windows / 异常 FS chmod 失败容错(不致命)
+    with contextlib.suppress(OSError):
         os.chmod(path, 0o600)
-    except OSError:
-        pass  # Windows / 异常 FS 容错
 
 
 def migrate_legacy() -> None:

@@ -10,6 +10,14 @@ DOWN_TTL 窗口内被跳过，过期后自动重新探测。
   熔断器是优化层，绝不让 fetch 比"没有熔断器"更糟。
 - 原子写（写 .tmp + os.replace）· 不上文件锁：并发写丢更新对
   熔断器无害（顶多某源多探一次），os.replace 跨平台 atomic。
+
+并发首调 race 行为(CR-5 · 文档化 · 实施优化推 v0.0.6):
+- fetch_batch 用 ThreadPoolExecutor 并发(默认上限 12)
+- 12 个 worker 同步进 _fetch_<source>(N) · is_down("X") 同时返 False
+- 12 个 HTTP 全发出 · 其中 1 个 fail record 后 · 剩余 11 个仍 in-flight
+- 结果:首次失败 cooldown 触发前 · 顶多 N 倍探测(N = 并发上限)
+- 当前 fail-open 设计可接受 · 进入 cooldown 后 5min 内单 worker fast-fail
+- v0.0.6 优化候选:in-flight set 收 thundering herd
 """
 
 from __future__ import annotations

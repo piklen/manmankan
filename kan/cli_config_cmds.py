@@ -77,7 +77,9 @@ def set_cmd(
     """设置一项配置（原子写入 ~/.local/share/kan/config.json）。"""
     if key not in _KEY_MAP:
         typer.echo(
-            f"❌ 未知配置项: {key}\n支持的字段: {', '.join(_KEY_MAP)}",
+            f"❌ 未知配置项: {key}\n"
+            f"   支持: {' / '.join(_KEY_MAP)}\n"
+            f"   例: kan config set tushare-token <你的_token>",
         )
         raise typer.Exit(code=2)
 
@@ -85,10 +87,13 @@ def set_cmd(
     cleaned = value.strip()
 
     if internal_key == "tushare_token" and not cleaned:
-        typer.echo("❌ token 不能为空")
+        typer.echo("❌ token 不能为空 · 例: kan config set tushare-token abc123def456")
         raise typer.Exit(code=2)
     if internal_key == "tushare_endpoint" and not cleaned.startswith(("http://", "https://")):
-        typer.echo("❌ 端点需以 http:// 或 https:// 开头")
+        typer.echo(
+            "❌ 端点需以 http:// 或 https:// 开头\n"
+            "   例: kan config set tushare-endpoint https://api.tushare.pro",
+        )
         raise typer.Exit(code=2)
 
     cfg = config.load()
