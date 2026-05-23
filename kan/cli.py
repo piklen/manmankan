@@ -77,6 +77,7 @@ def cli_main() -> None:
 # 触发子模块装饰器执行 · MUST be at module top-level (不能在 cli_main 函数体内)
 # 让 `from kan.cli import app` / `import kan.cli` 拿到完整命令列表 · 测试也依赖这点
 from kan import (  # noqa: E402, F401
+    cli_config_cmds,
     cli_meta_cmds,
     cli_scan_cmds,
     cli_trend_cmds,
