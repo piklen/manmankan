@@ -4,14 +4,16 @@
   - resolve_targets_or_exit:把 resolve_scan_targets 的 5 类 source 错误统一收成
     typer.Exit。
   - Freshness + freshness_of:跨 symbols 聚合 max data_cutoff 与 max cache_age,
-    一并推导 is_stale / phase,各命令的标题与警告复用同一份结果。
+    一并推导 is_stale / phase。
+  - render_freshness_warning:在终端打 stale / 盘中 互斥警告(各命令复用同一份
+    措辞,告别 3 处逐字 markup 复制)。
 
 后续会在此基础上扩成完整数据流水线 orchestrator(注入 compute、统一格式分发等)。
 """
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 import typer
 
@@ -139,3 +141,42 @@ def freshness_of(symbols: Iterable[str]) -> Freshness:
         is_stale=is_stale,
         phase=market_phase(),
     )
+
+
+# ── 新鲜度警告渲染 ───────────────────────────────────────────────────
+
+
+def render_freshness_warning(freshness: Freshness, console: Any) -> None:
+    """在终端打 stale / 盘中 互斥警告 · 跟 v0.0.4.7 UX-4 行为完全一致。
+
+    优先级互斥:if is_stale → 缓存滞后警告 · elif 盘中 → 实时状态警告 · else 静默。
+    理由(v0.0.4.7 UX-4):stale 状态下用户首动作是 fetch · fetch 后会重 scan · 再判 intraday。
+
+    无 cutoff 时显「无缓存」+ days_behind 显「?」(罕见但需兜底)。
+
+    console 参数 duck-typed · 任何有 .print(str) 方法的对象都接受(rich.Console / Mock 等)。
+    """
+    from kan.cli_helpers import format_date_compact
+    from kan.trading_calendar import PHASE_INTRADAY
+
+    if freshness.is_stale:
+        cutoff_str = (
+            format_date_compact(freshness.data_cutoff)
+            if freshness.data_cutoff else "无缓存"
+        )
+        expected_str = format_date_compact(freshness.expected_cutoff)
+        days_behind = (
+            (freshness.expected_cutoff - freshness.data_cutoff).days
+            if freshness.data_cutoff else "?"
+        )
+        console.print(
+            f"\n  [bold yellow]⚠️ 当前缓存到 {cutoff_str} 收盘 · "
+            f"最近交易日是 {expected_str} · 数据滞后 {days_behind} 天\n"
+            "   运行 `kan fetch --force` 拉取最新数据[/bold yellow]"
+        )
+    elif freshness.phase == PHASE_INTRADAY:
+        console.print(
+            "\n  [bold yellow]⚠️ 当前盘中 · 涨跌停标签反映当前时刻 · 非收盘 final\n"
+            "   (盘中价格仍在变动 · 涨停/跌停状态可能与收盘不同)\n"
+            "   建议盘后 15:30 后看 final 数据[/bold yellow]"
+        )

@@ -2,11 +2,13 @@
 from __future__ import annotations
 
 from datetime import date
+from unittest.mock import Mock
 
 import pytest
 import typer
 
 from kan import _pipeline
+from kan._pipeline import Freshness
 from kan.boards import (
     BoardDataUnavailableError,
     BoardNotFoundError,
@@ -14,6 +16,7 @@ from kan.boards import (
     ThemeNotFoundError,
 )
 from kan.hot import HotListUnavailableError
+from kan.trading_calendar import PHASE_INTRADAY
 
 
 def _make_raiser(exc: Exception):
@@ -252,24 +255,24 @@ def test_freshness_of_multi_symbol_takes_max(monkeypatch):
         },
         ages={
             "600519": "2026-05-20T10:00:00",
-            "000858": "2026-05-22T16:00:00",  # max(字符串字典序 == 时间序)
+            "000858": "2026-05-22T16:00:00",  # max(字典序 = 时间序)
             "300750": "2026-05-19T09:00:00",
         },
     )
     f = _pipeline.freshness_of(["600519", "000858", "300750"])
     assert f.data_cutoff == date(2026, 5, 22)
     assert f.fetched_at == "2026-05-22T16:00:00"
-    assert f.is_stale is True  # max cutoff 仍 < expected 2026-05-23
+    assert f.is_stale is True
 
 
 def test_freshness_of_skips_none_cutoff(monkeypatch):
-    """某 symbol 无 cutoff(data_cutoff_date 返回 None)→ 跳过 · 不影响其他 symbol。"""
+    """某 symbol 无 cutoff → 跳过 · 不影响其他 symbol。"""
     _patch_calendar(monkeypatch, expected_date=date(2026, 5, 23))
     _patch_fetcher(
         monkeypatch,
         cutoffs={
             "600519": date(2026, 5, 22),
-            "NEW01": None,  # 新进自选但还没拉数据
+            "NEW01": None,
         },
         ages={"600519": "2026-05-22T16:00:00"},
     )
@@ -279,12 +282,12 @@ def test_freshness_of_skips_none_cutoff(monkeypatch):
 
 
 def test_freshness_of_skips_falsy_cache_age(monkeypatch):
-    """cache_age 返回 None / 空串 → 跳过(沿用现状的 `if t and ...` 判定)。"""
+    """cache_age 返回 None / 空串 → 跳过(沿用现状 `if t and ...` 判定)。"""
     _patch_calendar(monkeypatch, expected_date=date(2026, 5, 23))
     _patch_fetcher(
         monkeypatch,
         cutoffs={"600519": date(2026, 5, 22), "000858": date(2026, 5, 22)},
-        ages={"600519": "", "000858": "2026-05-22T16:00:00"},  # 空串被跳过
+        ages={"600519": "", "000858": "2026-05-22T16:00:00"},
     )
     f = _pipeline.freshness_of(["600519", "000858"])
     assert f.fetched_at == "2026-05-22T16:00:00"
@@ -308,7 +311,7 @@ def test_freshness_of_accepts_generator(monkeypatch):
     )
     f = _pipeline.freshness_of(sym for sym in ["600519", "000858"])
     assert f.data_cutoff == date(2026, 5, 22)
-    assert f.fetched_at == "y"  # max("x", "y") = "y"
+    assert f.fetched_at == "y"
 
 
 def test_freshness_returns_frozen_dataclass(monkeypatch):
@@ -316,5 +319,100 @@ def test_freshness_returns_frozen_dataclass(monkeypatch):
     _patch_calendar(monkeypatch)
     _patch_fetcher(monkeypatch, cutoffs={}, ages={})
     f = _pipeline.freshness_of([])
-    with pytest.raises((AttributeError, Exception)):  # FrozenInstanceError
+    with pytest.raises((AttributeError, Exception)):
         f.is_stale = False  # type: ignore[misc]
+
+
+# ═══ render_freshness_warning ═══════════════════════════════════════════
+
+
+def _make_freshness(
+    *,
+    data_cutoff=date(2026, 5, 22),
+    fetched_at="2026-05-22T16:00:00",
+    expected_cutoff=date(2026, 5, 23),
+    is_stale=True,
+    phase="post",
+) -> Freshness:
+    """Freshness fixture · 默认 stale 状态。"""
+    return Freshness(
+        data_cutoff=data_cutoff,
+        fetched_at=fetched_at,
+        expected_cutoff=expected_cutoff,
+        is_stale=is_stale,
+        phase=phase,
+    )
+
+
+def test_render_freshness_warning_stale_prints_cache_lag():
+    """is_stale=True · 有 data_cutoff → 「当前缓存到 X 收盘」警告。"""
+    console = Mock()
+    f = _make_freshness(
+        data_cutoff=date(2026, 5, 20),
+        expected_cutoff=date(2026, 5, 23),
+        is_stale=True,
+    )
+    _pipeline.render_freshness_warning(f, console)
+    console.print.assert_called_once()
+    msg = console.print.call_args.args[0]
+    assert "当前缓存到" in msg
+    assert "05-20" in msg
+    assert "05-23" in msg
+    assert "3 天" in msg
+    assert "kan fetch --force" in msg
+
+
+def test_render_freshness_warning_stale_no_cutoff_shows_placeholder():
+    """is_stale=True 但 data_cutoff=None → 「无缓存」+ days_behind 显「?」。"""
+    console = Mock()
+    f = _make_freshness(
+        data_cutoff=None,
+        expected_cutoff=date(2026, 5, 23),
+        is_stale=True,
+    )
+    _pipeline.render_freshness_warning(f, console)
+    msg = console.print.call_args.args[0]
+    assert "无缓存" in msg
+    assert "? 天" in msg
+
+
+def test_render_freshness_warning_intraday_prints_intraday_warning():
+    """is_stale=False + phase=intraday → 「当前盘中」警告。"""
+    console = Mock()
+    f = _make_freshness(
+        is_stale=False,
+        phase=PHASE_INTRADAY,
+    )
+    _pipeline.render_freshness_warning(f, console)
+    console.print.assert_called_once()
+    msg = console.print.call_args.args[0]
+    assert "当前盘中" in msg
+    assert "涨跌停标签反映当前时刻" in msg
+    assert "15:30" in msg
+
+
+def test_render_freshness_warning_fresh_and_post_silent():
+    """is_stale=False + phase=post → 不打任何内容。"""
+    console = Mock()
+    f = _make_freshness(
+        is_stale=False,
+        phase="post",
+    )
+    _pipeline.render_freshness_warning(f, console)
+    console.print.assert_not_called()
+
+
+def test_render_freshness_warning_stale_supersedes_intraday():
+    """is_stale=True 即使 phase=intraday · 仍走 stale 分支(互斥优先级)。
+
+    Why(v0.0.4.7 UX-4 行为):stale 状态下用户首动作是 fetch → fetch 后会重 scan → 那时再判 intraday。
+    """
+    console = Mock()
+    f = _make_freshness(
+        is_stale=True,
+        phase=PHASE_INTRADAY,
+    )
+    _pipeline.render_freshness_warning(f, console)
+    msg = console.print.call_args.args[0]
+    assert "当前缓存到" in msg  # stale 分支
+    assert "盘中" not in msg  # 没走 intraday 分支
