@@ -10,10 +10,25 @@ from __future__ import annotations
 
 import os
 import re
+from typing import TYPE_CHECKING
+
+import requests
+
+from kan._log import debug_log
+
+if TYPE_CHECKING:
+    import pandas as pd
 
 _SYMBOL_PATTERN = re.compile(r"^\d{6}$")
 
 DEFAULT_ENDPOINT = "http://api.tushare.pro"
+
+_TIMEOUT_SECONDS = 30
+
+_FIELD_MAP = {
+    "trade_date": "date",
+    "vol": "volume",
+}
 
 
 def _normalize_symbol_to_ts(symbol: str) -> str:
@@ -62,3 +77,58 @@ def _resolve_config() -> tuple[str | None, str]:
         endpoint = DEFAULT_ENDPOINT
 
     return token, endpoint
+
+
+def _post_tushare_api(
+    endpoint: str,
+    token: str,
+    api_name: str,
+    params: dict,
+    fields: str,
+) -> dict | None:
+    """POST JSON 到 TuShare Pro API · 返回 data 块或 None。
+
+    错误兜底（一律返回 None，由调用方 fallback）：
+    - 网络异常 / DNS / 超时
+    - HTTP 非 2xx
+    - 业务 code != 0（token 无效、积分不足、限流）
+
+    关键不变量：token 永不进入 logs / exceptions。
+    """
+    payload = {
+        "api_name": api_name,
+        "token": token,
+        "params": params,
+        "fields": fields,
+    }
+    try:
+        resp = requests.post(endpoint, json=payload, timeout=_TIMEOUT_SECONDS)
+    except Exception as e:
+        # 不传 e.args 给 debug_log · 仅 type 名 · 防意外泄漏
+        debug_log(__name__, f"tushare POST {endpoint}", type(e).__name__)
+        return None
+    if resp.status_code != 200:
+        debug_log(__name__, f"tushare HTTP {resp.status_code}", endpoint)
+        return None
+    try:
+        body = resp.json()
+    except ValueError:
+        return None
+    if body.get("code", -1) != 0:
+        debug_log(__name__, "tushare api code", body.get("msg", ""))
+        return None
+    return body.get("data")
+
+
+def _to_kline_df(data: dict | None) -> "pd.DataFrame | None":
+    """TuShare data 块 → DataFrame，列名映射到 manmankan KLINE 标准。"""
+    import pandas as pd
+    if not data:
+        return None
+    fields = data.get("fields") or []
+    items = data.get("items") or []
+    if not items:
+        return None
+    df = pd.DataFrame(items, columns=fields)
+    df = df.rename(columns=_FIELD_MAP)
+    return df
