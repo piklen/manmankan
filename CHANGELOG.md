@@ -12,6 +12,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `--hot rank|surge` 东方财富热榜扫描 · 人气榜 / 飙升榜作"临时自选股"标的来源 · 加到 scan/low/high/trend/fetch
 - `kan/hot.py` 东财热榜数据子系统 · JSON cache 1h TTL · 代码归一化 · 单源不建假 fallback
 - 热榜模式表格新增"榜"列(实时名次)· `--only-watchlist` 支持自选 ∩ 热榜
+- **TuShare Pro 数据源接入**（设计：[docs/design-tushare-pro.md](docs/design-tushare-pro.md)）
+  - 新增 `kan config` 子命令组：`kan config get/set/unset` 管理用户配置
+  - 支持 `tushare-token` 配置（必填，未配则跳过 TuShare 分支）
+  - 支持 `tushare-endpoint` 配置（可选，默认 `http://api.tushare.pro`；可填自部署镜像 / 反代）
+  - 环境变量 `TUSHARE_TOKEN` / `TUSHARE_ENDPOINT` 在运行时覆盖 config.json
+  - 配 token 后 TuShare Pro 顶替 baostock 作 `fetch_kline` 主路径；未配 token 行为零变化
+  - `kan config get` 自动 mask token（仅显示末 4 位）；token 永不出现在 logs / exceptions
+  - 自写 ~80 行 HTTP client，不依赖官方 `tushare` SDK（SDK 端点硬编码无法替换）
 
 ## [0.0.4.8] - 2026-05-16
 

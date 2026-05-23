@@ -1,8 +1,11 @@
 """kan/tushare_pro.py · TuShare Pro 数据源接入测试"""
 
+from typing import ClassVar
+from unittest.mock import MagicMock
+
 import pytest
 
-from kan import tushare_pro
+from kan import config, tushare_pro
 
 
 class TestNormalizeSymbolToTs:
@@ -31,9 +34,6 @@ class TestNormalizeSymbolToTs:
             tushare_pro._normalize_symbol_to_ts("abc")
         with pytest.raises(ValueError, match="6 位"):
             tushare_pro._normalize_symbol_to_ts("12345")
-
-
-from kan import config
 
 
 class TestResolveConfig:
@@ -88,13 +88,10 @@ class TestResolveConfig:
         assert endpoint == self.DEFAULT_ENDPOINT
 
 
-from unittest.mock import MagicMock
-
-
 class TestPostTushareApi:
     """POST JSON 协议 · 字段映射 · 错误码处理"""
 
-    SAMPLE_RESPONSE = {
+    SAMPLE_RESPONSE: ClassVar[dict] = {
         "code": 0,
         "msg": "",
         "data": {
