@@ -38,6 +38,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - 题材线 disclaimer 比 `--industry` 强一档:加 "题材跟风风险高于行业 · 题材分类各家口径不同"
 - baseline 测试 525 → 585(+60 新 F11 case · 网络 5 跳过)
 
+### Known Issues (F11)
+
+- **题材成分股数据源动态故障**:adata THS 4 个路径(index_code/name/concept_code/EM push2)受上游限流 / 反爬 / 端点变化影响,可能阶段性不可用 · 触发时用户看到友好提示"题材数据源暂不可用 · 行业扫描可用(--industry)"。Spec §14 已记录,T6 熔断器(5min cooldown)+ 24h cache 保证间歇性可用。
+- **Apple Silicon arm64 + adata `py_mini_racer` 依赖**:THS `concept_code` 路径 + THS K 线接口在 arm64 上 dylib symbol 不匹配会抛 `AttributeError: mr_eval_context`。F11 实施已绕开(catalog/成分股 走 `index_code` · K 线 走 EM datacenter)· 但 adata 内部可能仍调到 V8 路径 · 用户日志会有 noise。建议:M1+ Mac 用户出错时跑 `--industry` 替代。
+
 ## [0.0.4.8] - 2026-05-16
 
 ### Added

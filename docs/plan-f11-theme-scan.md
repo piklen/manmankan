@@ -11,7 +11,7 @@
 **前置:**
 - 工作分支 `feat/v0.0.5-f11-theme`(已 worktree 隔离 · base = `feat/v0.0.5.0` @ `3b2cf0d` · tushare-pro 合入后 baseline = 525 passed)。
 - 设计依据 `docs/design-f11-theme-scan.md`(391 行 · 5 节 brainstorming approved)。
-- 所有 `pytest` / `ruff` / `uv` 命令在 worktree 根目录运行(`/Library/Code/AI/youzi/manmankan/.worktrees/feat-v0.0.5-f11-theme`)。
+- 所有 `pytest` / `ruff` / `uv` 命令在 worktree 根目录运行(`.worktrees/feat-v0.0.5-f11-theme`)。
 - `adata` 数据源选择依据 `.dev-thinking/manmankan-v0.0.5/v0.0.5.0/F11-data-source-findings-2026-05-22.md` + `/tmp/adata-spike/spike{1..4}.py`(2026-05-23 真网络 spike 4 轮)。
 - 接口可用性分层 LOCKED:catalog/成分股 = THS · K 线/反查 = EM datacenter · EM 成分股 = fallback + T6 熔断。
 
@@ -3018,10 +3018,10 @@ git commit -m "docs(theme): F11 题材位置扫描 · CHANGELOG v0.0.5.0 entry"
 git push -u origin feat/v0.0.5-f11-theme
 ```
 
-预期:推送成功 · GitHub 显示 PR-ready 状态。鼠鼠后续:
+预期:推送成功 · GitHub 显示 PR-ready 状态。维护者后续:
 
 1. 开 PR 把 `feat/v0.0.5-f11-theme` → `feat/v0.0.5.0`(扩 PR #18 或开新 PR)
-2. 触发 7 角色 release-review v1.0 第 5 次实施(主会话 + 6 sub-agent)
+2. 触发 7 角色 release-review 流程(主会话 + 6 sub-agent)
 3. P0 修完 → merge → tag → PyPI
 
 ---
@@ -3029,16 +3029,16 @@ git push -u origin feat/v0.0.5-f11-theme
 ## 实施完成后
 
 - ✅ F11 全 11 命令矩阵 + `kan theme list/search` 上线
-- ✅ adata 各取所长数据源(catalog/成分股 THS · K线/反查 EM datacenter · EM 成分股 fallback)
+- ✅ adata 按接口分发数据源(catalog/成分股 THS · K线/反查 EM datacenter · EM 成分股 fallback)
 - ✅ 测试 baseline 525 → 585+
 - ✅ AGENTS.md §6 合规 disclaimer 比 `--industry` 多一档
 - ✅ 红线词自动 audit 防回归
 - ✅ 真网络冒烟 6 case `@pytest.mark.network` 标签 · daily cron 跑
 - ✅ Spec § 17 LOCKED:F11 数据源永远走 adata · 不走 Tushare(即使 tushare-pro 已合入)
 
-**完成后清理**(plan 实施完毕后,鼠鼠定):
+**完成后清理**(plan 实施完毕后,维护者定):
 
-- `.dev-thinking/manmankan-v0.0.5/v0.0.5.0/F11-theme-scan.md`(v3 LOCKED 设计稿 · § 4 已被 supersede)→ 鼠鼠定保留 / 移到 archive / 删
+- `.dev-thinking/manmankan-v0.0.5/v0.0.5.0/F11-theme-scan.md`(v3 LOCKED 设计稿 · § 4 已被 supersede)→ 维护者定保留 / 移到 archive / 删
 - `.dev-thinking/manmankan-v0.0.5/v0.0.5.0/F11-data-source-findings-2026-05-22.md`(数据源调研 · § "正式开发起步" 已 supersede)→ 同上
 - `/tmp/adata-spike/spike{1..4}.py`(本地 spike 临时文件 · 已无价值)→ session 结束自动清
 
