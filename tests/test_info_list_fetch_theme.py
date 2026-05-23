@@ -71,10 +71,17 @@ def test_info_theme_industry_mutually_exclusive(_isolate_all):
 
 def test_list_theme_shows_intersection(monkeypatch, _isolate_all):
     """list --theme=AI应用 · 自选 [002230, 600000] · 题材 [002230, 300033] → 只 002230。"""
-    (_isolate_all / "wl.json").write_text(
-        '{"stocks": [{"symbol": "002230", "name": "科大讯飞", "added_at": "2026-05-01"},'
-        ' {"symbol": "600000", "name": "浦发银行", "added_at": "2026-05-01"}]}',
-        encoding="utf-8",
+    from datetime import date
+
+    from kan.models import Stock
+
+    # mock list_all 返回固定股票 · 不依赖真 wl.json 文件格式
+    monkeypatch.setattr(
+        "kan.watchlist.list_all",
+        lambda: [
+            Stock(symbol="002230", name="科大讯飞", added_at=date(2026, 5, 1)),
+            Stock(symbol="600000", name="浦发银行", added_at=date(2026, 5, 1)),
+        ],
     )
     _stub(monkeypatch)
     runner = CliRunner()
