@@ -1,4 +1,4 @@
-"""cli_helpers 日期格式化 helper 测试 (UX-1 · 散户友好压缩 · v0.0.4.7).
+"""cli_helpers 日期格式化 helper 测试(散户友好压缩 · v0.0.4.7).
 
 覆盖:
 - format_date_compact: 同年省 year · 跨年完整 ISO
@@ -14,7 +14,7 @@ from kan.cli_helpers import format_date_compact, format_fetched_at_compact
 
 
 class TestFormatDateCompact:
-    """UX-1: 同年 date 省 year."""
+    """同年 date 省 year."""
 
     def test_same_year_omits_year(self):
         today = datetime.now().date()
@@ -37,9 +37,9 @@ class TestFormatDateCompact:
 
 
 class TestFormatFetchedAtCompact:
-    """UX-1: 当天只时间 · 同年 mm-dd HH:MM · 跨年完整."""
+    """当天只时间 · 同年 mm-dd HH:MM · 跨年完整."""
 
-    # CR-5 v0.0.4.8: 由于 cli_helpers 改用 _today() 集中 SoT (kan/_time.py) ·
+    # v0.0.4.8: 由于 cli_helpers 改用 _today()(kan/_time.py · 单一来源)·
     # patch path 从 "kan.cli_helpers.datetime" → "kan.cli_helpers._today" (更直接)
 
     def test_today_returns_time_only(self):
@@ -67,27 +67,27 @@ class TestFormatFetchedAtCompact:
         # empty 走 except (ValueError) · 返原样
         assert result == ""
 
-    # ── UX-3 (v0.0.4.8): 凌晨日界提示 ────────────────────────────
+    # ── v0.0.4.8 凌晨日界提示 ────────────────────────────
     def test_today_pre_dawn_shows_jinchen(self):
-        """UX-3: 当天 00:00-04:59 → '今晨' 前缀防深夜误判"""
+        """当天 00:00-04:59 → '今晨' 前缀防深夜误判"""
         with patch("kan.cli_helpers._today", return_value=date(2026, 5, 14)):
             result = format_fetched_at_compact("2026-05-14 01:00")
         assert result == "今晨 01:00"
 
     def test_today_04_59_jinchen_upper_boundary(self):
-        """UX-3 boundary: 04:59 仍是凌晨"""
+        """boundary: 04:59 仍是凌晨"""
         with patch("kan.cli_helpers._today", return_value=date(2026, 5, 14)):
             result = format_fetched_at_compact("2026-05-14 04:59")
         assert result == "今晨 04:59"
 
     def test_today_05_00_no_jinchen_boundary(self):
-        """UX-3 boundary: 05:00 不再是凌晨"""
+        """boundary: 05:00 不再是凌晨"""
         with patch("kan.cli_helpers._today", return_value=date(2026, 5, 14)):
             result = format_fetched_at_compact("2026-05-14 05:00")
         assert result == "05:00"
 
     def test_today_normal_hours_no_prefix(self):
-        """UX-3: 当天 05:00-21:59 → 不加前缀"""
+        """当天 05:00-21:59 → 不加前缀"""
         with patch("kan.cli_helpers._today", return_value=date(2026, 5, 14)):
             for hour in [5, 9, 12, 17, 21]:
                 t = datetime(2026, 5, 14, hour, 0)
@@ -95,27 +95,27 @@ class TestFormatFetchedAtCompact:
                 assert result == t.strftime("%H:%M"), f"{hour}h 不应加前缀"
 
     def test_yesterday_late_night_shows_zuowan(self):
-        """UX-3: 昨天 22:00-23:59 → '昨晚' 前缀"""
+        """昨天 22:00-23:59 → '昨晚' 前缀"""
         with patch("kan.cli_helpers._today", return_value=date(2026, 5, 14)):
             result = format_fetched_at_compact("2026-05-13 23:50")
         assert result == "昨晚 23:50"
 
     def test_yesterday_22_00_zuowan_lower_boundary(self):
-        """UX-3 boundary: 昨天 22:00 是 '昨晚'"""
+        """boundary: 昨天 22:00 是 '昨晚'"""
         with patch("kan.cli_helpers._today", return_value=date(2026, 5, 14)):
             result = format_fetched_at_compact("2026-05-13 22:00")
         assert result == "昨晚 22:00"
 
     def test_yesterday_21_59_no_zuowan(self):
-        """UX-3 boundary: 昨天 21:59 不是 '昨晚' · fall through 到 md-hm"""
+        """boundary: 昨天 21:59 不是 '昨晚' · fall through 到 md-hm"""
         with patch("kan.cli_helpers._today", return_value=date(2026, 5, 14)):
             result = format_fetched_at_compact("2026-05-13 21:59")
         assert result == "05-13 21:59"
 
 
-# TestNoLegacyTextInWarnings 已删除 (CR-1 v0.0.4.8 改造)
+# TestNoLegacyTextInWarnings 已删除 (v0.0.4.8 改造)
 # 原 3 个 grep-source 作弊 test 已被替换为 CliRunner runtime 真测:
 # - test_trend_cli.py::test_trend_stale_warning_uses_new_phrasing
 # - test_trend_cli.py::test_trend_intraday_warning_compliant_phrasing
 # - test_trend_cli.py::test_trend_warnings_mutex_stale_wins
-# scan/trend warning template 同源 · trend 真测覆盖 template 内容 · scan 命令完整 CliRunner coverage 推 CR-2.
+# scan/trend warning template 同源 · trend 真测覆盖 template 内容 · scan 命令完整 CliRunner coverage 后续推进.

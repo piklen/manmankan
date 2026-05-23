@@ -1,15 +1,15 @@
-"""CR-4 v0.0.4.7 · 补测试覆盖盲区.
+"""ISO timestamp lex 排序 == 时间排序 invariant 防回归(v0.0.4.7 补的覆盖盲区).
 
-部分 finding (CR-4 全套 3 类) 已被其他 test 覆盖:
-- warning / title runtime 行为 → tests/test_trend_cli.py CliRunner 真测 (CR-1 v0.0.4.8 改造完成)
+部分 finding 已被其他 test 覆盖:
+- warning / title runtime 行为 → tests/test_trend_cli.py CliRunner 真测(v0.0.4.8 改造完成)
 - data_cutoff / is_fresh / future date 边界 → tests/test_data_freshness.py 19 case
 
 本 file 补 1 项:
-- test_fetched_at_lex_sort_equals_time_sort (验"取最新" lex 排序语义 ·
-  CR-2 v0.0.4.5 的 main-session fix 配套 · 防回归)
+- test_fetched_at_lex_sort_equals_time_sort(验"取最新" lex 排序语义 ·
+  v0.0.4.5 的 main-session fix 配套 · 防回归)
 
-CR-4 其他 2 项 (future_date with warning · scan/info 命令组完整覆盖)
-推 v0.0.4.8 CR-2 (CLI 命令组覆盖率 6% → 60%+).
+其他 2 项(future_date with warning · scan/info 命令组完整覆盖)推 v0.0.4.8
+(CLI 命令组覆盖率 6% → 60%+)。
 """
 from __future__ import annotations
 
@@ -19,7 +19,7 @@ from datetime import datetime
 def test_fetched_at_lex_sort_equals_time_sort():
     """fetched_at 取 max() 用 lex 排序 · 等同时间排序.
 
-    CR-2 v0.0.4.5 fix: `if t and (fetched_at is None or t > fetched_at): fetched_at = t`
+    v0.0.4.5 fix: `if t and (fetched_at is None or t > fetched_at): fetched_at = t`
     依赖 ISO timestamp 字符串的 lex 排序 = 时间排序属性.
     本 test 防止未来格式变更 (e.g. "5月13日 16:35") 破坏此 invariant.
     """

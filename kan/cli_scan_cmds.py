@@ -1,59 +1,22 @@
-"""位置扫描 / 数据拉取相关命令：fetch / scan / low / high / info。
+"""scan · 自选股多周期位置扫描（10 周期全景 · --diff / --signal / --exclude-st）。
 
-共同特征：触及 K 线数据 · 大多走 _auto_fetch_stale 自动补缺 · 输出 rich.Table 表格。
+本版后此文件只装 scan 命令本身;fetch / low / high / info / compare 各自拆到
+cli_fetch_cmds / cli_extreme_cmds / cli_info_cmds / cli_compare_cmds。
 """
 from typing import Annotated
 
 import typer
 
+from kan import export
 from kan.app import app
 from kan.cli_helpers import (
-    _auto_fetch_stale,
+    _auto_fetch_stale,  # noqa: F401 · 保留兼容测试 monkeypatch · 实际调用由 _pipeline.run_data_pipeline 内部完成
     _get_watchlist_pairs,
+    _load_watchlist_pairs,
     _print_err,
-    _safe_error_msg,
     _with_heavy_imports_spinner,
-    format_date_compact,
-    format_fetched_at_compact,
 )
-
-
-@app.command()
-def fetch(
-    symbols: Annotated[list[str] | None, typer.Argument(help="股票代码（留空则拉取全部自选）")] = None,
-    force: Annotated[bool, typer.Option("--force", "-f", help="强制刷新（忽略缓存）")] = False,
-) -> None:
-    """拉取股票历史 K 线数据"""
-    from rich.console import Console
-
-    status_console = Console(stderr=True)
-    with _with_heavy_imports_spinner(status_console, "⏳ 加载数据模块..."):
-        from kan.fetcher import fetch_kline, is_fresh
-
-    if not symbols:
-        from kan.watchlist import load_watchlist
-        wl = load_watchlist()
-        if not wl.stocks:
-            typer.echo("自选列表为空 · 请先 `kan add <代码>` 添加", err=True)
-            raise typer.Exit(1)
-        symbols = [s.symbol for s in wl.stocks]
-
-    success = 0
-    for sym in symbols:
-        if not force and is_fresh(sym):
-            typer.echo(f"  {sym} 已是最新（今日已拉取）")
-            success += 1
-            continue
-        try:
-            with status_console.status(
-                f"[yellow]⏳ 拉取数据... {sym}[/yellow]",
-                spinner="dots",
-            ):
-                df = fetch_kline(sym, force=force)
-            typer.echo(f"  ✅ {sym} 拉取成功（{len(df)} 条 K 线）")
-            success += 1
-        except Exception as e:
-            typer.echo(f"  ❌ {sym} 拉取失败：{_safe_error_msg(e)}", err=True)
+from kan.hot import HotList
 
 
 @app.command()
@@ -62,17 +25,35 @@ def scan(
     signal: Annotated[bool, typer.Option("--signal", "-S", "-s", help="仅显示有共振信号的股票")] = False,
     diff: Annotated[bool, typer.Option("--diff", "-d", help="增量模式：显示与上次扫描的变化")] = False,
     exclude_st: Annotated[bool, typer.Option("--exclude-st", help="排除 ST/*ST 股票")] = False,
+    industry: Annotated[
+        str | None,
+        typer.Option("--industry", help="扫指定申万行业全部成分股 · 自选股 ⭐ 高亮"),
+    ] = None,
+    hot: Annotated[
+        HotList | None,
+        typer.Option("--hot", help="扫东财热榜 · rank=人气榜 / surge=飙升榜 · 自选股 ⭐ 高亮"),
+    ] = None,
+    theme: Annotated[
+        str | None,
+        typer.Option("--theme", help="扫指定题材全成分股 · 自选 ⭐ 高亮 · 题材 ≠ 行业,一股归多个"),
+    ] = None,
+    only_watchlist: Annotated[
+        bool,
+        typer.Option("--only-watchlist", help="仅显示自选 ∩ 行业/热榜/题材(需配合 --industry / --hot / --theme)"),
+    ] = False,
+    fmt: Annotated[
+        export.OutputFormat,
+        typer.Option("--format", help="输出格式：terminal（默认）/ md / json"),
+    ] = export.OutputFormat.terminal,
 ) -> None:
     """扫描自选股多周期位置（10 周期全景模式）"""
     from rich.console import Console
 
     status_console = Console(stderr=True)
     with _with_heavy_imports_spinner(status_console, "⏳ 加载数据模块..."):
-        from rich.table import Table
-        from rich.text import Text
-
-        from kan.fetcher import cache_age, data_cutoff_date
-        from kan.render import DISCLAIMER, format_pct, responsive_periods
+        from kan import render_terminal
+        from kan._pipeline import render_freshness_warning
+        from kan.render import DISCLAIMER, responsive_periods
         from kan.scanner import (
             PERIODS,
             compute_diff,
@@ -80,21 +61,46 @@ def scan(
             save_snapshot,
             scan_batch,
         )
-        from kan.trading_calendar import (
-            PHASE_INTRADAY,
-            latest_trade_date,
-            market_phase,
-        )
 
     console = Console()
-    watchlist_pairs = _get_watchlist_pairs()
-    _auto_fetch_stale(watchlist_pairs)
+    if sum(1 for x in (industry, hot, theme) if x is not None) > 1:
+        _print_err("❌ --industry / --hot / --theme 三者互斥 · 同时只能用一个")
+        raise typer.Exit(2)
+    source_mode = industry is not None or hot is not None or theme is not None
+    watchlist_pairs = (
+        _load_watchlist_pairs() if source_mode else _get_watchlist_pairs()
+    )
+    if only_watchlist and not source_mode:
+        _print_err("❌ --only-watchlist 需配合 --industry / --hot / --theme 使用")
+        raise typer.Exit(1)
+    from kan._pipeline import run_data_pipeline
+    from kan._scan_targets import BoardMeta, HotMeta, ThemeMeta
     mode = "high" if high else "low"
+    ctx = run_data_pipeline(
+        industry, only_watchlist, watchlist_pairs,
+        hot=hot, theme=theme,
+        compute=scan_batch, mode=mode,
+    )
+    all_results = ctx.results
+    board_meta = ctx.meta
+    data_cutoff = ctx.freshness.data_cutoff
+    fetched_at = ctx.freshness.fetched_at
+    is_stale = ctx.freshness.is_stale  # JSON/MD payload + --diff 分支仍引用
+    freshness = ctx.freshness  # 给 render_freshness_warning 用
 
-    prev_snapshot = load_snapshot() if diff else None
+    prev_snapshot = load_snapshot() if (diff and board_meta is None) else None
 
-    # P1-8: 单次 scan_batch · 后续 filter / diff / snapshot 都用 all_results · 避免重复调用
-    all_results = scan_batch(watchlist_pairs, mode=mode)
+    board_index_result = None
+    if isinstance(board_meta, BoardMeta):
+        from kan.scanner import scan_stock
+        board_index_result = scan_stock(
+            board_meta.index_kline, board_meta.board.code, board_meta.board.name,
+        )
+    elif isinstance(board_meta, ThemeMeta) and not board_meta.index_kline.empty:
+        from kan.scanner import scan_stock
+        board_index_result = scan_stock(
+            board_meta.index_kline, board_meta.theme.code, board_meta.theme.name,
+        )
 
     if not all_results:
         _print_err("无缓存数据 · 请先 `kan fetch` 拉取数据")
@@ -109,74 +115,41 @@ def scan(
             results = [r for r in results if r.high_resonance > 0]
         else:
             results = [r for r in results if r.low_resonance > 0]
-        if not results:
+        if not results and fmt is export.OutputFormat.terminal:
             console.print("没有股票触及极值区 · 无共振信号")
-            save_snapshot(all_results)
+            if board_meta is None:
+                save_snapshot(all_results)
             return
 
-    # v0.0.4.5: 数据截止日 (K 线 date 列) 与 拉取时间 (文件 mtime) 严格分离展示
-    # 修复 v0.0.4.4 凌晨 02:55 拉昨日数据后 scan 整天显示"今日更新"实为昨日数据的 bug
-    # CR-2: fetched_at 取 max(cache_age) 而非循环最后一个 · 字符串 lex 排序 = 时间排序
-    data_cutoff = None
-    fetched_at = None
-    for r in results:
-        d = data_cutoff_date(r.symbol)
-        if d is not None and (data_cutoff is None or d > data_cutoff):
-            data_cutoff = d
-        t = cache_age(r.symbol)
-        if t and (fetched_at is None or t > fetched_at):
-            fetched_at = t
+    title = render_terminal.scan_title(ctx, high_mode=high, signal_only=signal)
 
-    expected_cutoff = latest_trade_date()
-    is_stale = data_cutoff is None or data_cutoff < expected_cutoff
-    phase = market_phase()
-
-    title = f"慢慢看 · 自选股位置扫描 · {'高点' if high else '低点'}模式"
-    if signal:
-        title += " · 仅信号"
-    if data_cutoff:
-        title += f" · 数据截止 {format_date_compact(data_cutoff)} 收盘"
-    if fetched_at:
-        title += f" · {format_fetched_at_compact(fetched_at)} 拉取"
+    if fmt is export.OutputFormat.json:
+        typer.echo(export.to_json(export.scan_payload(
+            results, mode=mode, data_cutoff=data_cutoff,
+            fetched_at=fetched_at, stale=is_stale,
+        )))
+        if board_meta is None:
+            save_snapshot(all_results)
+        return
+    if fmt is export.OutputFormat.md:
+        typer.echo(export.scan_markdown(
+            results, periods=list(PERIODS), mode=mode, title=title,
+        ))
+        if board_meta is None:
+            save_snapshot(all_results)
+        return
 
     display_periods = responsive_periods(console.width)
     is_compact = len(display_periods) < len(PERIODS)
 
-    table = Table(title=title, show_lines=False, pad_edge=False, padding=(0, 1))
-    table.add_column("股票", style="white", no_wrap=True)
-    table.add_column("现价", justify="right", style="white", min_width=8)
-    for p in display_periods:
-        table.add_column(f"{p}日", justify="right", min_width=6)
-    table.add_column("共振", justify="center")
-
-    for r in results:
-        row: list[str | Text] = []
-        name_short = r.name.replace(" ", "")
-        tag = ""
-        if r.limit_up:
-            tag = " 涨停"
-        elif r.limit_down:
-            tag = " 跌停"
-        row.append(f"{name_short} {r.symbol}{tag}")
-        row.append(f"{r.current_price:.2f}")
-
-        for p in display_periods:
-            pr = next((x for x in r.periods if x.period == p), None)
-            if pr is None:
-                row.append(Text("-", style="dim"))
-            else:
-                row.append(format_pct(pr, high_mode=high))
-
-        resonance = r.high_resonance if high else r.low_resonance
-        if resonance >= 3:
-            row.append(Text(f"×{resonance}", style="bold yellow"))
-        elif resonance > 0:
-            row.append(Text(f"×{resonance}", style="yellow"))
-        else:
-            row.append("")
-
-        table.add_row(*row)
-
+    is_hot = isinstance(board_meta, HotMeta)
+    table = render_terminal.scan_table(
+        ctx, results,
+        display_periods=display_periods,
+        high_mode=high,
+        signal_only=signal,
+        board_index_result=board_index_result,
+    )
     console.print(table)
 
     if is_compact:
@@ -187,28 +160,10 @@ def scan(
             f"（{shown}日）· 加宽终端可见全部[/dim]"
         )
 
-    # UX-4: 双警告互斥渲染 (if/elif 替代 if/if)
-    # 理由: stale 状态下用户首动作就是 fetch · fetch 后会重新 scan · 那时再判 intraday
-    if is_stale:
-        # UX-2 + U-5: 散户语言 · "缓存到 X 收盘 · 最近交易日是 Y · 数据滞后 N 天"
-        cutoff_str = format_date_compact(data_cutoff) if data_cutoff else "无缓存"
-        expected_str = format_date_compact(expected_cutoff)
-        days_behind = (expected_cutoff - data_cutoff).days if data_cutoff else "?"
-        console.print(
-            f"\n  [bold yellow]⚠️ 当前缓存到 {cutoff_str} 收盘 · "
-            f"最近交易日是 {expected_str} · 数据滞后 {days_behind} 天\n"
-            "   运行 `kan fetch --force` 拉取最新数据[/bold yellow]"
-        )
-    elif phase == PHASE_INTRADAY:
-        # UX-3 (v0.0.4.7 P0 cleanup PM-1 + 合-2): 状态描述而非走势预测 · 守 AGENTS.md §6 红线
-        console.print(
-            "\n  [bold yellow]⚠️ 当前盘中 · 涨跌停标签反映当前时刻 · 非收盘 final\n"
-            "   (盘中价格仍在变动 · 涨停/跌停状态可能与收盘不同)\n"
-            "   建议盘后 15:30 后看 final 数据[/bold yellow]"
-        )
+    render_freshness_warning(freshness, console)
 
-    # 增量对比 · 用上面 cache 的 all_results · 避免重复 scan (P1-8)
-    if diff and prev_snapshot:
+    # 增量对比 · 仅自选模式 (board_meta is None) · industry/hot 模式不做 diff/snapshot
+    if board_meta is None and diff and prev_snapshot:
         changes = compute_diff(all_results, prev_snapshot)
         if changes:
             console.print()
@@ -224,241 +179,21 @@ def scan(
     elif diff and not prev_snapshot:
         console.print("\n  [dim]首次扫描，无历史对比（下次 --diff 将显示变化）[/dim]")
 
-    # 保存快照供下次 diff 用 · 始终保存 all_results 全量 (P1-8: 避免重复 scan)
-    save_snapshot(all_results)
+    # 保存快照供下次 diff 用 · 仅自选模式
+    if board_meta is None:
+        save_snapshot(all_results)
 
     console.print()
     if high:
         console.print("[dim]  \\[x%] = 触及高点(≥95%) · 100%=区间最高 · 越高=越接近 N 日最高价[/dim]")
     else:
         console.print("[dim]  \\[x%] = 触及低点(≤5%) · 0%=区间最低 · 越低=越接近 N 日最低价[/dim]")
-    console.print(DISCLAIMER, style="dim")
-
-
-def _filter_extreme_cmd(periods: list[int], mode: str) -> None:
-    """low/high 共享实现"""
-    from rich.console import Console
-
-    status_console = Console(stderr=True)
-    with _with_heavy_imports_spinner(status_console, "⏳ 加载数据模块..."):
-        from rich.table import Table
-        from rich.text import Text
-
-        from kan.fetcher import cache_age, data_cutoff_date
-        from kan.render import DISCLAIMER
-        from kan.scanner import filter_extreme
-
-    console = Console()
-    for p in periods:
-        if p < 2 or p > 360:
-            _print_err(f"❌ 周期 {p} 无效（范围 2-360）")
-            raise typer.Exit(1)
-
-    label = "低点" if mode == "low" else "高点"
-    signal_style = "bold green" if mode == "low" else "bold yellow"
-
-    watchlist_pairs = _get_watchlist_pairs()
-    _auto_fetch_stale(watchlist_pairs)
-    results_by_period = filter_extreme(watchlist_pairs, periods, mode=mode)
-
-    if not results_by_period:
-        console.print(f"自选股中没有触及 {'/'.join(map(str, periods))} 日{label}的股票")
-        return
-
-    # v0.0.4.5: 数据截止 / 拉取时间分离展示（与 scan 一致）
-    # CR-2: fetched_at 取 max(cache_age) · 字符串 lex 排序 = 时间排序
-    data_cutoff = None
-    fetched_at = None
-
-    for n, hits in results_by_period.items():
-        for r, _ in hits:
-            d = data_cutoff_date(r.symbol)
-            if d is not None and (data_cutoff is None or d > data_cutoff):
-                data_cutoff = d
-            t = cache_age(r.symbol)
-            if t and (fetched_at is None or t > fetched_at):
-                fetched_at = t
-
-        title = f"慢慢看 · {n} 日{label} · {len(hits)} 只触及"
-        if data_cutoff:
-            title += f" · 数据截止 {format_date_compact(data_cutoff)} 收盘"
-        if fetched_at:
-            title += f" · {format_fetched_at_compact(fetched_at)} 拉取"
-
-        table = Table(title=title, show_lines=False, pad_edge=False, padding=(0, 1))
-        table.add_column("股票", style="white", no_wrap=True)
-        table.add_column("现价", justify="right", style="white", min_width=8)
-        table.add_column(f"{n}日最低", justify="right", style="dim", min_width=8)
-        table.add_column(f"{n}日最高", justify="right", style="dim", min_width=8)
-        table.add_column("位置", justify="right", min_width=8)
-
-        for result, pr in hits:
-            name_short = result.name.replace(" ", "")
-            table.add_row(
-                f"{name_short} {result.symbol}",
-                f"{result.current_price:.2f}",
-                f"{pr.n_low:.2f}",
-                f"{pr.n_high:.2f}",
-                Text(f"[{pr.position_pct:.1f}%]", style=signal_style),
-            )
-
-        console.print(table)
-        console.print()
-
-    console.print(DISCLAIMER, style="dim")
-
-
-@app.command()
-def low(
-    periods: Annotated[list[int], typer.Argument(help="周期天数（2-360 · 支持多个：30 60 120）")],
-) -> None:
-    """筛选 N 日低点的自选股（支持多周期）"""
-    _filter_extreme_cmd(periods, mode="low")
-
-
-@app.command()
-def high(
-    periods: Annotated[list[int], typer.Argument(help="周期天数（2-360 · 支持多个：30 60 120）")],
-) -> None:
-    """筛选 N 日高点的自选股（支持多周期）"""
-    _filter_extreme_cmd(periods, mode="high")
-
-
-@app.command()
-def info(
-    symbol: Annotated[
-        str | None,
-        typer.Argument(help="股票代码（如 600519）", show_default=False),
-    ] = None,
-) -> None:
-    """单只股票详情（全周期位置 + 涨跌信息）"""
-    # U-1 (v0.0.4.8 P0-6): 跟 kan add 同款散户中文 · 兑现 U-2 承诺到 info 命令
-    if not symbol:
-        typer.echo(
-            "请告诉我看哪只股票 · 例: kan info 600519 (代码或名称都行)",
-            err=True,
+    if is_hot:
+        console.print(
+            "[dim]  榜 = 东方财富热榜实时名次 · 非慢慢看观点 · 热榜为实时榜单[/dim]"
         )
-        raise typer.Exit(2)
-
-    from rich.console import Console
-
-    status_console = Console(stderr=True)
-    with _with_heavy_imports_spinner(status_console, "⏳ 加载数据模块..."):
-        from rich.table import Table
-        from rich.text import Text
-
-        from kan.fetcher import cache_age, data_cutoff_date, fetch_kline, get_cached, is_fresh
-        from kan.render import DISCLAIMER, format_pct
-        from kan.scanner import calc_trend, scan_stock
-        from kan.watchlist import _lookup_name, _normalize_symbol
-
-    console = Console()
-
-    try:
-        symbol = _normalize_symbol(symbol)
-    except ValueError as e:
-        _print_err(f"❌ {e}")
-        raise typer.Exit(1) from e
-
-    try:
-        name = _lookup_name(symbol)
-    except ValueError as e:
-        _print_err(f"❌ {e}")
-        raise typer.Exit(1) from e
-
-    if not is_fresh(symbol):
-        try:
-            with status_console.status(
-                f"[yellow]⏳ 拉取数据... {name.replace(' ', '')} ({symbol})[/yellow]",
-                spinner="dots",
-            ):
-                fetch_kline(symbol, force=True)
-        except Exception as e:
-            from rich.console import Console as _ErrConsole
-            _ErrConsole(stderr=True).print(f"❌ 拉取失败：{_safe_error_msg(e)}")
-            raise typer.Exit(1) from e
-
-    df = get_cached(symbol)
-    if df is None:
-        _print_err("无数据")
-        raise typer.Exit(1)
-
-    result = scan_stock(df, symbol, name)
-    trend_result = calc_trend(df, symbol, name)
-    name_short = name.replace(" ", "")
-
-    # v0.0.4.5: 数据截止 / 拉取时间分离展示
-    cutoff = data_cutoff_date(symbol)
-    fetched_at = cache_age(symbol) or ""
-    title = f"慢慢看 · {name_short} {symbol}"
-    if cutoff:
-        title += f" · 数据截止 {format_date_compact(cutoff)} 收盘"
-    if fetched_at:
-        title += f" · {format_fetched_at_compact(fetched_at)} 拉取"
-
-    # 基本信息
-    tag = ""
-    if result.is_st:
-        tag = " [bold red]ST[/bold red]"
-    if result.limit_up:
-        tag += " [bold red]涨停[/bold red]"
-    elif result.limit_down:
-        tag += " [bold green]跌停[/bold green]"
-
-    console.print(f"\n[bold]{title}[/bold]{tag}")
-    # v0.0.4.4: 累计涨跌加 ▲/▼ 符号 + 红涨绿跌颜色 · 与 trend 命令详情列对齐
-    # 修复 v0.0.4.3 用户报告："跌1天 · 累计 0.85%" 让人困惑（正数+负方向语义冲突）
-    if trend_result.streak > 0:
-        cum_str = f"[red]▲{abs(trend_result.streak_pct):.2f}%[/red]"
-    elif trend_result.streak < 0:
-        cum_str = f"[green]▼{abs(trend_result.streak_pct):.2f}%[/green]"
+    if isinstance(board_meta, ThemeMeta):
+        from kan.render_theme import render_theme_disclaimer
+        render_theme_disclaimer()
     else:
-        cum_str = f"{abs(trend_result.streak_pct):.2f}%"
-    console.print(f"  现价 {result.current_price:.2f} · {trend_result.direction} · 累计 {cum_str}")
-    console.print()
-
-    # 全周期位置表
-    table = Table(show_lines=False, pad_edge=False, padding=(0, 1))
-    table.add_column("周期", justify="right", style="cyan")
-    table.add_column("最低", justify="right", style="dim", min_width=8)
-    table.add_column("最高", justify="right", style="dim", min_width=8)
-    table.add_column("位置", justify="right", min_width=8)
-
-    for pr in result.periods:
-        if pr.insufficient:
-            table.add_row(f"{pr.period}日", "-", "-", Text("-", style="dim"))
-            continue
-
-        table.add_row(
-            f"{pr.period}日",
-            f"{pr.n_low:.2f}",
-            f"{pr.n_high:.2f}",
-            format_pct(pr),
-        )
-
-    console.print(table)
-    console.print(f"\n  低点共振 ×{result.low_resonance} · 高点共振 ×{result.high_resonance}")
-
-    # UX-1 (v0.0.4.7 P0): kan info 加 stale/intraday 警告 · 与 scan/trend 一致
-    # 单只详情诱导决策性比 scan 更强 · 缺警告是 dead-end 风险
-    from kan.trading_calendar import PHASE_INTRADAY, latest_trade_date, market_phase
-    expected_cutoff = latest_trade_date()
-    is_stale = cutoff is None or cutoff < expected_cutoff
-    phase = market_phase()
-    if is_stale:
-        cutoff_str = format_date_compact(cutoff) if cutoff else "无缓存"
-        expected_str = format_date_compact(expected_cutoff)
-        days_behind = (expected_cutoff - cutoff).days if cutoff else "?"
-        console.print(
-            f"\n  [bold yellow]⚠️ 当前缓存到 {cutoff_str} 收盘 · "
-            f"最近交易日是 {expected_str} · 数据滞后 {days_behind} 天\n"
-            "   运行 `kan fetch --force` 拉取最新数据[/bold yellow]"
-        )
-    elif phase == PHASE_INTRADAY:
-        console.print(
-            "\n  [bold yellow]⚠️ 当前盘中 · 涨跌停标签反映当前时刻 · 非收盘 final\n"
-            "   (盘中价格仍在变动 · 涨停/跌停状态可能与收盘不同)\n"
-            "   建议盘后 15:30 后看 final 数据[/bold yellow]"
-        )
-
-    console.print(DISCLAIMER, style="dim")
+        console.print(DISCLAIMER, style="dim")

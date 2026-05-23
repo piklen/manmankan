@@ -141,17 +141,30 @@ def test_trend_up_3(runner: CliRunner) -> None:
 
 
 def test_trend_down_up_mutex(runner: CliRunner) -> None:
-    """--down 与 --up 互斥 · 错误信号走 stderr (P1-9)"""
+    """--down 与 --up 互斥 · 错误信号走 stderr"""
     import contextlib
 
     result = runner.invoke(app, ["trend", "--down", "3", "--up", "3"])
     assert result.exit_code == 1
-    # P1-9: 错误信号走 stderr · 兼容 CliRunner mix_stderr=True/False 两种情况
+    # 错误信号走 stderr · 兼容 CliRunner mix_stderr=True/False 两种情况
     combined = result.stdout
     with contextlib.suppress(ValueError):
         # mix_stderr=True 时 result.stderr 抛 ValueError · 此时 stderr 已合并到 stdout
         combined = combined + (result.stderr or "")
     assert "不能同时使用" in combined
+
+
+def test_trend_format_json(runner: CliRunner) -> None:
+    """`kan trend --format json` · 输出合法 JSON · 含 3 只结果"""
+    import json as _json
+
+    result = runner.invoke(app, ["trend", "--format", "json"])
+    assert result.exit_code == 0, f"output: {result.stdout[:400]}"
+    out = result.stdout
+    data = _json.loads(out[out.index("{"):])
+    assert data["command"] == "trend"
+    assert len(data["results"]) == 3
+    assert data["results"][0]["symbol"] == "600519"
 
 
 def test_trend_down_below_min(runner: CliRunner) -> None:
@@ -181,15 +194,15 @@ def test_trend_streak_option_removed(runner: CliRunner) -> None:
 
 
 # ════════════════════════════════════════════════════════════════
-# UX-2 + UX-3 + UX-4 stale/intraday warning runtime 真测
-# (CR-1 v0.0.4.8 改造自 test_cli_helpers_format.py TestNoLegacyTextInWarnings grep-source 作弊)
+# stale/intraday warning runtime 真测
+# (v0.0.4.8 改造自 test_cli_helpers_format.py TestNoLegacyTextInWarnings grep-source 作弊)
 # ════════════════════════════════════════════════════════════════
 def test_trend_stale_warning_uses_new_phrasing(
     runner: CliRunner, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    """UX-2 + U-5 真测: stale 警告应含'当前缓存到 X 收盘' + '数据滞后 N 天' · 不再'应有最近交易日'.
+    """stale 警告应含'当前缓存到 X 收盘' + '数据滞后 N 天' · 不再'应有最近交易日'.
 
-    CR-1 v0.0.4.8: 旧 grep-source 作弊改 CliRunner 真测 ·
+    v0.0.4.8: 旧 grep-source 作弊改 CliRunner 真测 ·
     模拟 data_cutoff < expected_cutoff → is_stale=True 触发 stale 警告分支.
     """
     from datetime import date
@@ -217,9 +230,9 @@ def test_trend_stale_warning_uses_new_phrasing(
 def test_trend_intraday_warning_compliant_phrasing(
     runner: CliRunner, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    """UX-3 + PM-1 真测: 盘中警告应是状态描述 · 不含预测性'下一秒打开' AGENTS.md §6 红线词.
+    """盘中警告应是状态描述 · 不含预测性'下一秒打开' AGENTS.md §6 红线词.
 
-    CR-1 v0.0.4.8: 旧 grep-source 改 CliRunner 真测 ·
+    v0.0.4.8: 旧 grep-source 改 CliRunner 真测 ·
     模拟 fresh data + phase=INTRADAY → 触发 intraday 警告分支.
     """
     from datetime import date
@@ -239,23 +252,23 @@ def test_trend_intraday_warning_compliant_phrasing(
     result = runner.invoke(app, ["trend"])
     assert result.exit_code == 0
     output = result.output
-    # 新文案 v0.0.4.8 (UX-1+PM-4 cross-validated): 纯状态描述 · 移除 "可能回落/可能回升/都是正常波动" 预测性词
+    # 新文案 v0.0.4.8 cross-validated: 纯状态描述 · 移除 "可能回落/可能回升/都是正常波动" 预测性词
     assert "涨跌停标签反映当前时刻" in output, (
         f"v0.0.4.8 新文案 '涨跌停标签反映当前时刻' 应出现 · 实际 output: {output[-500:]}"
     )
     assert "建议盘后 15:30" in output, "新文案应含 '建议盘后 15:30'"
     # 红线: 旧预测性词不应残留 (AGENTS.md §6 不预测涨跌)
-    assert "下一秒打开" not in output, "预测性词 '下一秒打开' 应删除 (PM-1 + 合-2 v0.0.4.7)"
-    assert "都是正常波动" not in output, "v0.0.4.8 UX-1: '都是正常波动' 含预测语义 · 应删除"
-    assert "可能回落" not in output, "v0.0.4.8 UX-1: '可能回落' 含方向词 · 应删除"
+    assert "下一秒打开" not in output, "预测性词 '下一秒打开' 应删除 (v0.0.4.7)"
+    assert "都是正常波动" not in output, "v0.0.4.8: '都是正常波动' 含预测语义 · 应删除"
+    assert "可能回落" not in output, "v0.0.4.8: '可能回落' 含方向词 · 应删除"
 
 
 def test_trend_warnings_mutex_stale_wins(
     runner: CliRunner, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    """UX-4 真测: stale+intraday 同时为 True 时只显示 stale · intraday 不显示 (if/elif 互斥).
+    """stale+intraday 同时为 True 时只显示 stale · intraday 不显示 (if/elif 互斥).
 
-    CR-1 v0.0.4.8: 旧 grep-source 作弊改 CliRunner 真测 ·
+    v0.0.4.8: 旧 grep-source 作弊改 CliRunner 真测 ·
     场景: 用户跑 scan 时盘中数据 stale (数据中断 + 行情仍在跑) → stale 优先(用户最先动作就是 fetch).
     """
     from datetime import date
@@ -279,5 +292,5 @@ def test_trend_warnings_mutex_stale_wins(
     assert "数据滞后" in output, "stale 警告应含'数据滞后'"
     # intraday 警告不应同时显示 (if/elif 互斥)
     assert "涨跌停标签反映当前时刻" not in output, (
-        "stale=True 时不应同时显示 intraday 警告 (UX-4 互斥 · 用户首动作 fetch)"
+        "stale=True 时不应同时显示 intraday 警告 (互斥 · 用户首动作 fetch)"
     )

@@ -1,4 +1,4 @@
-"""时间 SoT helper (CR-5 v0.0.4.8: 集中 datetime.now().date()).
+"""时间单点入口 helper · v0.0.4.8 集中 datetime.now().date().
 
 放在独立 module 防 circular import:
 - cli_helpers (上层) + trading_calendar (下层) 都需要 `今天的日期`

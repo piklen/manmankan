@@ -1,15 +1,19 @@
-"""K 线数据拉取层 · 多源 fallback（baostock → 新浪 → 东财 → 腾讯）"""
+"""K 线数据拉取层 · 多源 fallback（baostock → 东财/新浪并发 → 腾讯）"""
 
 from __future__ import annotations
 
+import logging
 import re
 import threading
 from datetime import date, datetime, timedelta
 from pathlib import Path
 from typing import TYPE_CHECKING
 
+from kan import circuit_breaker
 from kan._log import debug_log
+from kan._numeric import to_numeric_checked
 from kan.paths import DATA_DIR
+from kan.tushare_pro import _fetch_tushare
 
 if TYPE_CHECKING:
     from collections.abc import Callable
@@ -58,8 +62,16 @@ def _normalize_kline(df: pd.DataFrame, source: str = "unknown") -> pd.DataFrame:
     df = df[KLINE_COLUMNS].copy()
     df["date"] = pd.to_datetime(df["date"], errors="coerce").dt.date
     # _source 是 str 列 · 不进数值转换
+    bad_cols: list[tuple[str, int]] = []
     for col in ["open", "high", "low", "close", "volume", "amount"]:
-        df[col] = pd.to_numeric(df[col], errors="coerce")
+        df[col], bad_count = to_numeric_checked(df[col])
+        if bad_count:
+            bad_cols.append((col, bad_count))
+    if bad_cols:
+        detail = ", ".join(f"{c}×{n}" for c, n in bad_cols)
+        logging.getLogger(__name__).warning(
+            "数据源 %s K线含无法解析的数值 · 已置 NaN: %s", source, detail
+        )
     df["_source"] = source
 
     df = df.sort_values("date").reset_index(drop=True)
@@ -90,7 +102,7 @@ def _read_cutoff_from_parquet(path: Path) -> date | None:
 
     只读 date 列降低 IO（pyarrow 列式存储天然友好）。
 
-    CR-1 (v0.0.4.7): 异常路径加 debug logging · 默认不输出 (用户开 KAN_DEBUG=1 才显示) ·
+    异常路径加 debug logging · 默认不输出 (用户开 KAN_DEBUG=1 才显示) ·
     诊断时不再"吞 None 后调用方无信息"。
     """
     try:
@@ -103,7 +115,7 @@ def _read_cutoff_from_parquet(path: Path) -> date | None:
             return last
         return pd.Timestamp(last).date()
     except Exception as e:
-        # CR-4 (v0.0.4.8): normalize 到 _log.debug_log helper (KAN_DEBUG=1 可见)
+        # normalize 到 _log.debug_log helper (KAN_DEBUG=1 可见)
         debug_log(__name__, f"_read_cutoff_from_parquet({path.name})", e)
         return None
 
@@ -149,14 +161,53 @@ def _market_prefix(symbol: str, sep: str = "") -> str:
     return f"{prefix}{sep}{symbol}"
 
 
-# ── 数据源 1: 东方财富（最快 · 单次 HTTP · 带熔断） ──────────────────
+# 数据源 apex 域名 · 用 apex 而非具体 host · 抗 akshare 端点漂移
+_DATA_SOURCE_DOMAINS = (
+    "eastmoney.com",
+    "sina.com.cn",
+    "sinajs.cn",
+    "gtimg.cn",
+    "baostock.com",
+)
 
-_eastmoney_ok: bool | None = None
+_no_proxy_configured = False
 
+
+def _ensure_no_proxy() -> None:
+    """把数据源域名并入 no_proxy · 使其绕过用户配置的（可能失效的）代理。
+
+    场景：用户设了 HTTP(S)_PROXY / ALL_PROXY，代理却挂了、或会劫持/封禁本工具
+    流量——数据请求被带偏。把数据源域名加进 no_proxy 让这些请求直连。
+
+    幂等（模块 flag 守一次性）· 不 clobber 用户已设的 no_proxy（取并集）·
+    KAN_KEEP_PROXY 置位时整体跳过——给"必须走代理才能出网"的用户的逃生口。
+    """
+    global _no_proxy_configured
+    if _no_proxy_configured:
+        return
+    import os
+
+    if os.environ.get("KAN_KEEP_PROXY"):
+        _no_proxy_configured = True
+        return
+
+    # requests / akshare 同时认 no_proxy 与 NO_PROXY · 合并已有值取并集
+    existing = os.environ.get("no_proxy", "") or os.environ.get("NO_PROXY", "")
+    entries = [e.strip() for e in existing.split(",") if e.strip()]
+    for domain in _DATA_SOURCE_DOMAINS:
+        if domain not in entries:
+            entries.append(domain)
+    merged = ",".join(entries)
+    os.environ["no_proxy"] = merged
+    os.environ["NO_PROXY"] = merged
+    _no_proxy_configured = True
+
+
+# ── 数据源 1: 东方财富（最快 · 单次 HTTP） ───────────────────────────
 
 def _fetch_eastmoney(symbol: str, start: str) -> pd.DataFrame | None:
-    global _eastmoney_ok
-    if _eastmoney_ok is False:
+    cb = circuit_breaker.get_breaker()
+    if cb.is_down("eastmoney"):
         return None
     try:
         import akshare as ak
@@ -165,15 +216,15 @@ def _fetch_eastmoney(symbol: str, start: str) -> pd.DataFrame | None:
             symbol=symbol, period="daily", adjust="qfq",
             start_date=start, timeout=5,
         )
+        cb.record("eastmoney", ok=True)
         if raw is None or raw.empty or "日期" not in raw.columns:
             return None
-        _eastmoney_ok = True
         return raw.rename(columns=_EM_COLUMN_MAP)
     except Exception as e:
-        # CR-4 (v0.0.4.8): broad catch 是 legitimate (akshare 第三方不保 exception type) ·
+        # broad catch 是 legitimate (akshare 第三方不保 exception type) ·
         # 但加 debug log · 用户开 KAN_DEBUG=1 可见诊断 · 排查 fallback 触发原因
         debug_log(__name__, "fetch eastmoney", e)
-        _eastmoney_ok = False
+        cb.record("eastmoney", ok=False)
         return None
 
 
@@ -208,6 +259,10 @@ def _fetch_baostock(symbol: str, start: str) -> pd.DataFrame | None:
     except ImportError:
         return None
 
+    cb = circuit_breaker.get_breaker()
+    if cb.is_down("baostock"):
+        return None
+
     start_fmt = f"{start[:4]}-{start[4:6]}-{start[6:8]}"
 
     with _bs_lock:
@@ -221,15 +276,18 @@ def _fetch_baostock(symbol: str, start: str) -> pd.DataFrame | None:
                 adjustflag="2",
             )
             if rs.error_code != "0":
+                cb.record("baostock", ok=True)
                 return None
             rows = []
             while rs.next():
                 rows.append(rs.get_row_data())
         except Exception as e:
-            # CR-4 (v0.0.4.8): baostock 第三方 · broad catch + debug log
+            # baostock 第三方 · broad catch + debug log
             debug_log(__name__, "fetch baostock", e)
+            cb.record("baostock", ok=False)
             return None
 
+    cb.record("baostock", ok=True)
     if not rows:
         return None
 
@@ -245,12 +303,16 @@ def _fetch_sina(symbol: str, start: str) -> pd.DataFrame | None:
 
     返回 schema: date/open/high/low/close/volume/amount/outstanding_share/turnover
     其中 volume 单位「股」、amount 单位「元」，跟 baostock 完全对齐（实测）。
-    免登录、不熔断；东财 push2his 被 ban 时最稳的路径之一。
+    免登录；东财 push2his 被 ban 时最稳的路径之一。
     """
     import io
     import sys
 
     import akshare as ak
+
+    cb = circuit_breaker.get_breaker()
+    if cb.is_down("sina"):
+        return None
 
     prefix = "sh" if symbol.startswith(("6", "9")) else "sz"
     end = (datetime.now() + timedelta(days=1)).strftime("%Y%m%d")
@@ -265,12 +327,14 @@ def _fetch_sina(symbol: str, start: str) -> pd.DataFrame | None:
             adjust="qfq",
         )
     except Exception as e:
-        # CR-4 (v0.0.4.8): 新浪 akshare · broad catch + debug log
+        # 新浪 akshare · broad catch + debug log
         debug_log(__name__, "fetch sina", e)
+        cb.record("sina", ok=False)
         return None
     finally:
         sys.stderr = _real_stderr
 
+    cb.record("sina", ok=True)
     if raw is None or raw.empty:
         return None
     return raw
@@ -294,6 +358,10 @@ def _fetch_tencent(symbol: str, start: str) -> pd.DataFrame | None:
 
     import akshare as ak
 
+    cb = circuit_breaker.get_breaker()
+    if cb.is_down("tencent"):
+        return None
+
     _real_stderr = sys.stderr
     sys.stderr = io.StringIO()
     try:
@@ -304,12 +372,14 @@ def _fetch_tencent(symbol: str, start: str) -> pd.DataFrame | None:
             timeout=15,
         )
     except Exception as e:
-        # CR-4 (v0.0.4.8): 腾讯 akshare · broad catch + debug log
+        # 腾讯 akshare · broad catch + debug log
         debug_log(__name__, "fetch tencent", e)
+        cb.record("tencent", ok=False)
         return None
     finally:
         sys.stderr = _real_stderr
 
+    cb.record("tencent", ok=True)
     if raw is None or raw.empty:
         return None
 
@@ -318,19 +388,61 @@ def _fetch_tencent(symbol: str, start: str) -> pd.DataFrame | None:
     return raw
 
 
+# ── akshare 双源并发（东财 + 新浪 · race · baostock 挂掉后第二档） ──────
+
+def _fetch_via_akshare(symbol: str, start: str) -> tuple[pd.DataFrame, str] | None:
+    """东财 + 新浪 两个 akshare 源并发拉取 · 谁先返回有效数据用谁。
+
+    串行试时慢/挂的源会拖累总延迟；并发跑 + as_completed 取第一个成功的，
+    失败的被淘汰。中标源名随 (df, source) 返回，经 _normalize_kline 落到
+    _source 列可回查。两源都失败返回 None，由调用方降级下一档。
+
+    不用 `with ThreadPoolExecutor`：其 __exit__ 的 shutdown(wait=True) 会
+    阻塞等所有线程，某源 hang 时整个调用挂死。改 shutdown(wait=False)，
+    拿到结果即返回，慢/hang 的线程后台自生自灭，不阻塞调用方。
+    """
+    from concurrent.futures import ThreadPoolExecutor, as_completed
+
+    candidates = {"sina": _fetch_sina, "eastmoney": _fetch_eastmoney}
+    executor = ThreadPoolExecutor(max_workers=2)
+    try:
+        future_to_source = {
+            executor.submit(fn, symbol, start): name
+            for name, fn in candidates.items()
+        }
+        try:
+            for future in as_completed(future_to_source, timeout=15):
+                name = future_to_source[future]
+                try:
+                    df = future.result()
+                except Exception as e:
+                    # 与各 _fetch_* 一致：第三方源不保异常类型 · broad catch + debug log
+                    debug_log(__name__, f"fetch via akshare {name}", e)
+                    continue
+                if df is not None:
+                    return df, name
+        except TimeoutError:
+            # as_completed 超时 · 双源都没及时返回 · 降级下一档
+            pass
+        return None
+    finally:
+        executor.shutdown(wait=False, cancel_futures=True)
+
+
 # ── 公开 API ─────────────────────────────────────────────────────────
 
 def fetch_kline(symbol: str, days: int = 180, force: bool = False) -> pd.DataFrame:
-    """拉取单只股票前复权日 K 线（baostock → 新浪 → 东财 → 腾讯）。
+    """拉取单只股票前复权日 K 线（tushare 配 token 时优先 → baostock → 东财/新浪并发 → 腾讯）。
 
     返回 DataFrame · 标准列：date, open, high, low, close, volume, amount
 
-    fallback 顺序设计依据（2026-05-10 实测）：
-    1. baostock 独立服务器最稳 · 免熔断 · 数值精度全 A 股板块对齐
-    2. 新浪源（akshare stock_zh_a_daily）· 免登录 · 精度跟 baostock 一致 · akshare 官方推荐 fallback
-    3. 东财（akshare stock_zh_a_hist）· push2his.eastmoney.com 对部分 IP 段持续封禁
-       （akshare GitHub Issue #6092/#6148/#7011/#6214）· 偶尔可用降到第三
-    4. 腾讯（akshare stock_zh_a_hist_tx）· 仅价格可信 · amount 字段板块语义不一致已 drop
+    fallback 设计：
+    0. TuShare Pro（仅当 tushare_token 配置时）· 顶优先 · 付费源 / 自部署镜像
+    1. baostock 独立服务器最稳 · 数值精度全 A 股板块对齐 · 主路径
+    2. 东财 + 新浪 两个 akshare 源并发 race（_fetch_via_akshare）· 谁先成功用谁 ·
+       任一源慢/挂不拖累另一个 · 东财 push2his 对部分 IP 段持续封禁时新浪兜底
+       （akshare GitHub Issue #6092/#6148/#7011/#6214）
+    3. 腾讯（akshare stock_zh_a_hist_tx）· 仅价格可信 · amount 字段板块语义不一致已 drop
     """
     symbol = _validate_symbol(symbol)
     _ensure_data_dir()
@@ -339,16 +451,19 @@ def fetch_kline(symbol: str, days: int = 180, force: bool = False) -> pd.DataFra
     if not force and _is_cache_fresh(cache):
         return _load_with_migration(cache)
 
+    _ensure_no_proxy()
     start = (datetime.now() - timedelta(days=int(days * 1.8))).strftime("%Y%m%d")
 
-    raw = _fetch_baostock(symbol, start)
-    source = "baostock"
+    # v0.0.5: TuShare Pro 优先（配 token 时）→ baostock → akshare 并发 → 腾讯
+    raw = _fetch_tushare(symbol, start)
+    source = "tushare"
     if raw is None:
-        raw = _fetch_sina(symbol, start)
-        source = "sina"
+        raw = _fetch_baostock(symbol, start)
+        source = "baostock"
     if raw is None:
-        raw = _fetch_eastmoney(symbol, start)
-        source = "eastmoney"
+        akshare_result = _fetch_via_akshare(symbol, start)
+        if akshare_result is not None:
+            raw, source = akshare_result
     if raw is None:
         raw = _fetch_tencent(symbol, start)
         source = "tencent"
@@ -364,7 +479,7 @@ def fetch_kline(symbol: str, days: int = 180, force: bool = False) -> pd.DataFra
 
 
 def resolve_max_workers() -> int:
-    """D-2 (v0.0.4.7): 启发式 max_workers · 不再硬编码 5.
+    """启发式 max_workers · 不再硬编码 5.
 
     akshare 是 I/O bound (HTTP 拉取 · 不是 CPU 计算) · cpu_count*2 比 cpu-1 更合理.
     上限 cap 12 防 akshare 限流 (弱网下 ≥ 12 反而变慢).
@@ -382,7 +497,7 @@ def resolve_max_workers() -> int:
     if raw:
         try:
             n = int(raw)
-            # 安-4 (v0.0.4.7 P0): 上限从 50 收紧到 20 · 防 KAN_WORKERS=50 反射 DoS akshare
+            # 上限从 50 收紧到 20 · 防 KAN_WORKERS=50 反射 DoS akshare
             # akshare 限流阈值实测约 10-15 req/s · 20 并发已超 · 50 必触发限流
             if 1 <= n <= 20:
                 return n
@@ -400,11 +515,11 @@ def fetch_batch(
 ) -> tuple[dict[str, pd.DataFrame], dict[str, str]]:
     """批量拉取 · ThreadPoolExecutor 并发 + 可选 progress callback.
 
-    D-2 (v0.0.4.7): max_workers=None → resolve_max_workers() 启发式 (cpu_count*2 cap 12).
+    max_workers=None → resolve_max_workers() 启发式 (cpu_count*2 cap 12).
     """
     from concurrent.futures import ThreadPoolExecutor, as_completed
 
-    # 架-3 (v0.0.4.7 P0): max_workers None / 0 / 负数 都退化到 resolve_max_workers
+    # max_workers None / 0 / 负数 都退化到 resolve_max_workers
     # 防御 ThreadPoolExecutor(max_workers=0) 抛 ValueError 的边界
     if max_workers is None or max_workers < 1:
         max_workers = resolve_max_workers()
@@ -420,7 +535,7 @@ def fetch_batch(
                 df = fetch_kline(symbol, days=days, force=force)
                 return symbol, df, None
             except Exception as e:
-                # CR-4 (v0.0.4.8): fetch_batch retry path · 加 debug log
+                # fetch_batch retry path · 加 debug log
                 debug_log(__name__, f"fetch_batch retry {attempt}", e)
                 if attempt == 0:
                     time.sleep(1)

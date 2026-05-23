@@ -19,6 +19,16 @@ echo ""
 echo "═══ pre-commit 自检 ═══"
 echo ""
 
+# 0. branch 守门(防 main / master 直接 commit · CONVENTIONS §3.5)
+CURRENT_BRANCH="$(git symbolic-ref --short HEAD 2>/dev/null || echo 'DETACHED')"
+if [ "$CURRENT_BRANCH" = "main" ] || [ "$CURRENT_BRANCH" = "master" ]; then
+  echo "❌ pre-commit 阻断(branch · 当前在 $CURRENT_BRANCH)"
+  echo "💡 不能在 main 直接 commit · 必须开新分支"
+  echo "💡 一键开分支: git checkout -b feat/<slug>"
+  echo "💡 紧急跳过(不推荐): git commit --no-verify"
+  exit 1
+fi
+
 # 1. 隐私泄漏自检
 echo "[1/2] 公开档案隐私自检 ..."
 if ! bash scripts/check-privacy-leaks.sh; then

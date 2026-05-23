@@ -7,44 +7,88 @@ from typing import Annotated
 
 import typer
 
+from kan import export
 from kan.app import app
 from kan.cli_helpers import (
-    _auto_fetch_stale,
+    _auto_fetch_stale,  # noqa: F401 · 保留兼容测试 monkeypatch · 实际调用由 _pipeline.run_data_pipeline 内部完成
     _get_watchlist_pairs,
+    _load_watchlist_pairs,
     _print_err,
     _with_heavy_imports_spinner,
-    format_date_compact,
-    format_fetched_at_compact,
 )
+from kan.hot import HotList
 
 
 @app.command()
 def trend(
+    extra_args: Annotated[
+        list[str] | None,
+        typer.Argument(metavar="", show_default=False, help="(内部:防 trend 600519 dead-end · 引导到 kan info)"),
+    ] = None,
     latest: Annotated[int | None, typer.Option("--latest", "-l", help="展示近 N 天走势详情（1-180）", min=1, max=180)] = None,
     down: Annotated[int | None, typer.Option("--down", help="只看连跌≥N天（不带 N 默认 3）")] = None,
     up: Annotated[int | None, typer.Option("--up", help="只看连涨≥N天（不带 N 默认 3）")] = None,
     candle: Annotated[bool, typer.Option("--candle", "-c", help="阳线阴线口径（默认收盘价口径）")] = False,
+    industry: Annotated[
+        str | None,
+        typer.Option("--industry", help="扫指定申万行业全部成分股 · 自选股 ⭐ 高亮"),
+    ] = None,
+    hot: Annotated[
+        HotList | None,
+        typer.Option("--hot", help="扫东财热榜 · rank=人气榜 / surge=飙升榜 · 自选股 ⭐ 高亮"),
+    ] = None,
+    theme: Annotated[
+        str | None,
+        typer.Option("--theme", help="扫指定题材全成分股 · 自选 ⭐ 高亮"),
+    ] = None,
+    only_watchlist: Annotated[
+        bool,
+        typer.Option("--only-watchlist", help="仅显示自选 ∩ 行业/热榜/题材(需配合 --industry / --hot / --theme)"),
+    ] = False,
+    fmt: Annotated[
+        export.OutputFormat,
+        typer.Option("--format", help="输出格式：terminal（默认）/ md / json"),
+    ] = export.OutputFormat.terminal,
 ) -> None:
     """连续涨跌看板"""
+    # 处理 trend <ticker> 误用 · 散户最直觉的"看茅台趋势 kan trend 600519"会进 extra_args
+    # 引导到 `kan info <ticker>` · 接口升级到收 ticker 是 v0.0.6 计划
+    if extra_args:
+        first = extra_args[0]
+        # 判断:6 位数字 → 像股票代码 · isalpha 含非 ASCII(中文) / ASCII(英文)→ 像股票名
+        # 用 .isdigit / .isalpha / .isascii 避开 unicode 字符范围正则
+        looks_like_code = first.isdigit() and len(first) == 6
+        looks_like_name = first.isalpha()  # 中文 / 英文都返 True
+        if looks_like_code or looks_like_name:
+            _print_err(
+                f"💡 看单只趋势用 `kan info {first}` · "
+                f"`kan trend` 是看全板涨跌(无 ticker 参数 · 用 --down / --up / --latest)"
+            )
+        else:
+            _print_err(f"❌ 不识别的参数: {first}")
+        raise typer.Exit(2)
+
     from rich.console import Console
 
     status_console = Console(stderr=True)
     with _with_heavy_imports_spinner(status_console, "⏳ 加载数据模块..."):
-        from rich.table import Table
-        from rich.text import Text
-
-        from kan.fetcher import cache_age, data_cutoff_date
+        from kan import render_terminal
+        from kan._pipeline import render_freshness_warning
         from kan.render import DISCLAIMER, max_trend_dates
         from kan.scanner import trend_batch
-        from kan.trading_calendar import (
-            PHASE_INTRADAY,
-            latest_trade_date,
-            market_phase,
-        )
 
     console = Console()
-    watchlist_pairs = _get_watchlist_pairs()
-    _auto_fetch_stale(watchlist_pairs)
+    if sum(1 for x in (industry, hot, theme) if x is not None) > 1:
+        _print_err("❌ --industry / --hot / --theme 三者互斥 · 同时只能用一个")
+        raise typer.Exit(2)
+    source_mode = industry is not None or hot is not None or theme is not None
+    watchlist_pairs = (
+        _load_watchlist_pairs() if source_mode else _get_watchlist_pairs()
+    )
+    if only_watchlist and not source_mode:
+        _print_err("❌ --only-watchlist 需配合 --industry / --hot / --theme 使用")
+        raise typer.Exit(1)
+    # fail-fast:参数校验前置 · 不让 invalid args 触发网络 fetch
     if down is not None and up is not None:
         _print_err("❌ --down 和 --up 不能同时使用")
         raise typer.Exit(1)
@@ -53,7 +97,19 @@ def trend(
             _print_err(f"❌ {name} 的值必须在 2-30 之间（当前：{val}）")
             raise typer.Exit(1)
 
-    results = trend_batch(watchlist_pairs, candle=candle)
+    from kan._pipeline import run_data_pipeline
+    from kan._scan_targets import ThemeMeta
+    ctx = run_data_pipeline(
+        industry, only_watchlist, watchlist_pairs,
+        hot=hot, theme=theme,
+        compute=trend_batch, candle=candle,
+    )
+    results = ctx.results
+    board_meta = ctx.meta
+    data_cutoff = ctx.freshness.data_cutoff
+    fetched_at = ctx.freshness.fetched_at
+    is_stale = ctx.freshness.is_stale  # JSON/MD payload 仍引用
+    freshness = ctx.freshness  # 给 render_freshness_warning 用
 
     if not results:
         _print_err("无缓存数据 · 请先 `kan fetch` 拉取数据")
@@ -64,130 +120,62 @@ def trend(
     if down is not None:
         results = [r for r in results if r.streak <= -down]
         filter_label = f" · 连跌≥{down}天"
-        if not results:
+        if not results and fmt is export.OutputFormat.terminal:
             console.print(f"没有连续跌 {down} 天以上的股票")
             return
     elif up is not None:
         results = [r for r in results if r.streak >= up]
         filter_label = f" · 连涨≥{up}天"
-        if not results:
+        if not results and fmt is export.OutputFormat.terminal:
             console.print(f"没有连续涨 {up} 天以上的股票")
             return
 
-    # v0.0.4.5: 数据截止 / 拉取时间分离展示 · 与 scan/info/low/high 一致
-    # 修复架-1 finding（cli_trend_cmds.py 在 v0.0.4.5 commit 04923ea 中遗漏调用面）
-    data_cutoff = None
-    fetched_at = None
-    for r in results:
-        d = data_cutoff_date(r.symbol)
-        if d is not None and (data_cutoff is None or d > data_cutoff):
-            data_cutoff = d
-        t = cache_age(r.symbol)
-        if t and (fetched_at is None or t > fetched_at):
-            fetched_at = t
+    title = render_terminal.trend_title(
+        ctx, candle=candle, filter_label=filter_label,
+    )
 
-    expected_cutoff = latest_trade_date()
-    is_stale = data_cutoff is None or data_cutoff < expected_cutoff
-    phase = market_phase()
-
-    mode_label = "阳线阴线口径" if candle else "收盘价口径"
-    title = f"慢慢看 · 连续涨跌看板 · {mode_label}{filter_label}"
-    if data_cutoff:
-        title += f" · 数据截止 {format_date_compact(data_cutoff)} 收盘"
-    if fetched_at:
-        title += f" · {format_fetched_at_compact(fetched_at)} 拉取"
-
-    table = Table(title=title, show_lines=False, pad_edge=False, padding=(0, 1))
-    table.add_column("股票", style="white", no_wrap=True)
-    table.add_column("现价", justify="right", style="white")
-    table.add_column("连续", justify="center")
-    table.add_column("累计", justify="right")
-
-    # 有 --latest 时加日期列头（新→旧，最近日期在左）
-    date_headers: list[str] = []
-    if latest and results:
-        max_dates = max_trend_dates(console.width)
-        actual_latest = min(latest, max_dates)
-        ref = results[0]
-        days = ref.daily_changes[:actual_latest]
-        for date_str, _ in days:
-            short = date_str[-5:]  # MM-DD
-            date_headers.append(short)
-            table.add_column(short, justify="right", min_width=7)
-
-    for r in results:
-        name_short = r.name.replace(" ", "")
-
-        if r.streak < 0:
-            streak_text = Text(r.direction, style="bold green")
-            cum_text = Text(f"{abs(r.streak_pct):.2f}%", style="green")
-        elif r.streak > 0:
-            streak_text = Text(r.direction, style="bold red")
-            cum_text = Text(f"{abs(r.streak_pct):.2f}%", style="red")
+    if fmt is not export.OutputFormat.terminal:
+        if fmt is export.OutputFormat.json:
+            typer.echo(export.to_json(export.trend_payload(
+                results, candle=candle, data_cutoff=data_cutoff,
+                fetched_at=fetched_at, stale=is_stale,
+            )))
         else:
-            streak_text = Text("平", style="dim")
-            cum_text = Text("0%", style="dim")
+            typer.echo(export.trend_markdown(results, title=title, latest=latest))
+        return
 
-        row: list[str | Text] = [
-            f"{name_short} {r.symbol}",
-            f"{r.current_price:.2f}",
-            streak_text,
-            cum_text,
-        ]
+    from kan._scan_targets import HotMeta
+    is_hot = isinstance(board_meta, HotMeta)
 
-        if latest:
-            from kan.scanner import get_limit_threshold
-            limit = get_limit_threshold(r.symbol, r.name)
+    actual_latest: int | None = None
+    if latest and results:
+        actual_latest = min(latest, max_trend_dates(console.width))
 
-            days_data = r.daily_changes[:actual_latest]  # 新→旧 · 按终端宽度截取
-            for _, chg in days_data:
-                abs_chg = abs(chg)
-                if chg > 0 and abs_chg >= limit - 0.1:
-                    row.append(Text("涨停", style="bold red"))
-                elif chg < 0 and abs_chg >= limit - 0.1:
-                    row.append(Text("跌停", style="bold green"))
-                elif chg > 0:
-                    row.append(Text(f"▲{abs_chg:.2f}%", style="red"))
-                elif chg < 0:
-                    row.append(Text(f"▼{abs_chg:.2f}%", style="green"))
-                else:
-                    row.append(Text("—", style="dim"))
-            # 补齐列数（某些股票交易日可能少）
-            while len(row) < 4 + len(date_headers):
-                row.append(Text("-", style="dim"))
-
-        table.add_row(*row)
-
+    table = render_terminal.trend_table(
+        ctx, results,
+        latest=actual_latest, candle=candle, filter_label=filter_label,
+    )
     console.print(table)
 
-    if latest and actual_latest < latest:
+    if latest and actual_latest is not None and actual_latest < latest:
         console.print(
             f"\n  [dim]窄屏模式 · 显示近 {actual_latest}/{latest} 天"
             " · 加宽终端可见全部[/dim]"
         )
 
-    # UX-4: 双警告互斥渲染 (if/elif 替代 if/if · 与 scan 一致)
-    if is_stale:
-        # UX-2 + U-5: 散户语言
-        cutoff_str = format_date_compact(data_cutoff) if data_cutoff else "无缓存"
-        expected_str = format_date_compact(expected_cutoff)
-        days_behind = (expected_cutoff - data_cutoff).days if data_cutoff else "?"
-        console.print(
-            f"\n  [bold yellow]⚠️ 当前缓存到 {cutoff_str} 收盘 · "
-            f"最近交易日是 {expected_str} · 数据滞后 {days_behind} 天\n"
-            "   运行 `kan fetch --force` 拉取最新数据[/bold yellow]"
-        )
-    elif phase == PHASE_INTRADAY:
-        # UX-3 (v0.0.4.7 P0 cleanup): 状态描述而非走势预测 (PM-1 + 合-2)
-        console.print(
-            "\n  [bold yellow]⚠️ 当前盘中 · 涨跌停标签反映当前时刻 · 非收盘 final\n"
-            "   (盘中价格仍在变动 · 涨停/跌停状态可能与收盘不同)\n"
-            "   建议盘后 15:30 后看 final 数据[/bold yellow]"
-        )
+    render_freshness_warning(freshness, console)
 
     console.print()
     if candle:
         console.print("[dim]  阳线阴线口径：收盘 > 开盘 = ▲ · 收盘 < 开盘 = ▼ · 平盘不断连续[/dim]")
     else:
         console.print("[dim]  收盘价口径：今日收盘 > 昨日收盘 = ▲ · 今日收盘 < 昨日收盘 = ▼ · 平盘不断连续[/dim]")
-    console.print(DISCLAIMER, style="dim")
+    if is_hot:
+        console.print(
+            "[dim]  榜 = 东方财富热榜实时名次 · 非慢慢看观点 · 热榜为实时榜单[/dim]"
+        )
+    if isinstance(board_meta, ThemeMeta):
+        from kan.render_theme import render_theme_disclaimer
+        render_theme_disclaimer()
+    else:
+        console.print(DISCLAIMER, style="dim")
