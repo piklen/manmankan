@@ -99,6 +99,8 @@ def test_fetch_theme_pulls_constituents(monkeypatch, _isolate_all):
         call_count["n"] += 1
 
     monkeypatch.setattr("kan.fetcher.fetch_kline", counting)
+    # 强制每只股都走 fetch · 不让 is_fresh 短路
+    monkeypatch.setattr("kan.fetcher.is_fresh", lambda symbol: False)
     runner = CliRunner()
     result = runner.invoke(app, ["fetch", "--theme=AI应用"])
     assert result.exit_code == 0, result.output
