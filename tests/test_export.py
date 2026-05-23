@@ -4,7 +4,8 @@ import json
 from datetime import date
 from types import SimpleNamespace
 
-from kan.export import (
+from kan.core.models import PeriodResult, StockScanResult, VolumeState
+from kan.storage.export import (
     OutputFormat,
     compare_markdown,
     compare_payload,
@@ -19,7 +20,6 @@ from kan.export import (
     trend_markdown,
     trend_payload,
 )
-from kan.models import PeriodResult, StockScanResult, VolumeState
 
 
 def _result(symbol="600519", name="贵州茅台", **kw):

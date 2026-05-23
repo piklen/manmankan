@@ -1,4 +1,4 @@
-"""kan/_log.py debug_log helper 测试 (v0.0.4.8).
+"""kan/log.py debug_log helper 测试 (v0.0.4.8).
 
 设计要求:
 - KAN_DEBUG 不设 / 不是 truthy → no-op (默认静默 · 不打扰)
@@ -9,7 +9,7 @@ from __future__ import annotations
 
 import logging
 
-from kan._log import _debug_enabled, debug_log
+from kan.infra.log import _debug_enabled, debug_log
 
 
 class TestDebugEnabled:
@@ -92,14 +92,14 @@ class TestDebugLog:
     def test_logger_module_isolation(self, monkeypatch, caplog):
         """不同 module 名走不同 logger · 用户可按模块过滤"""
         monkeypatch.setenv("KAN_DEBUG", "1")
-        with caplog.at_level(logging.DEBUG, logger="kan.fetcher"):
-            debug_log("kan.fetcher", "fetch_baostock", ConnectionError("timeout"))
-        with caplog.at_level(logging.DEBUG, logger="kan.updater"):
-            debug_log("kan.updater", "check_version", TimeoutError("rate limit"))
+        with caplog.at_level(logging.DEBUG, logger="kan.data.fetcher"):
+            debug_log("kan.data.fetcher", "fetch_baostock", ConnectionError("timeout"))
+        with caplog.at_level(logging.DEBUG, logger="kan.data.updater"):
+            debug_log("kan.data.updater", "check_version", TimeoutError("rate limit"))
         # 两条 log 应该 isolated 到对应 logger name
         loggers = {r.name for r in caplog.records}
-        assert "kan.fetcher" in loggers
-        assert "kan.updater" in loggers
+        assert "kan.data.fetcher" in loggers
+        assert "kan.data.updater" in loggers
 
     def test_exception_message_preserved(self, monkeypatch, caplog):
         """exception 的 str 完整保留 · 不截断"""

@@ -16,7 +16,7 @@ from contextlib import contextmanager
 
 import pytest
 
-from kan import cli_helpers
+from kan.cli import helpers
 
 
 class _FakeStatus:
@@ -60,11 +60,11 @@ def captured_status_messages(monkeypatch):
 @pytest.fixture
 def patched_dependencies(monkeypatch):
     """所有股票 is_fresh=True → 无 stale · _auto_fetch_stale 走 early-return · 测前半段 spinner."""
-    monkeypatch.setattr("kan.fetcher.is_fresh", lambda sym: True)
-    monkeypatch.setattr("kan.trading_calendar.latest_trade_date", lambda: None)
+    monkeypatch.setattr("kan.data.fetcher.is_fresh", lambda sym: True)
+    monkeypatch.setattr("kan.core.trading_calendar.latest_trade_date", lambda: None)
     # 防 fetch_batch 走真网络 (即使 stale=0 不调 · 防御性 mock)
     monkeypatch.setattr(
-        "kan.fetcher.fetch_batch",
+        "kan.data.fetcher.fetch_batch",
         lambda symbols, **kw: ({}, {}),
     )
 
@@ -73,7 +73,7 @@ def test_3_stage_spinner_visible_169_stocks(captured_status_messages, patched_de
     """169 只 ≥ 3 阶段 spinner update · 用户能看到工具在动."""
     pairs = [(f"{600000 + i:06d}", f"测试股{i}") for i in range(169)]
 
-    cli_helpers._auto_fetch_stale(pairs)
+    helpers._auto_fetch_stale(pairs)
 
     msgs = captured_status_messages
     # 至少 3 个不同 stage 的 status 文字
@@ -97,16 +97,16 @@ def test_ticking_progress_shows_stale_count(captured_status_messages, monkeypatc
     # 让 odd index 股票 stale · even index fresh
     def fake_is_fresh(sym: str) -> bool:
         return int(sym) % 2 == 0
-    monkeypatch.setattr("kan.fetcher.is_fresh", fake_is_fresh)
-    monkeypatch.setattr("kan.trading_calendar.latest_trade_date", lambda: None)
+    monkeypatch.setattr("kan.data.fetcher.is_fresh", fake_is_fresh)
+    monkeypatch.setattr("kan.core.trading_calendar.latest_trade_date", lambda: None)
     # 防真网络:即使 50 只 stale · fetch_batch 返空 dict 不走 akshare
     monkeypatch.setattr(
-        "kan.fetcher.fetch_batch",
+        "kan.data.fetcher.fetch_batch",
         lambda symbols, **kw: ({}, {}),
     )
 
     pairs = [(f"{i:06d}", f"股{i}") for i in range(100)]
-    cli_helpers._auto_fetch_stale(pairs)
+    helpers._auto_fetch_stale(pairs)
 
     msgs = captured_status_messages
     stale_msgs = [m for m in msgs if "已发现" in m and "只 stale" in m]
@@ -122,7 +122,7 @@ def test_ticking_progress_shows_stale_count(captured_status_messages, monkeypatc
 def test_small_watchlist_3_stocks(captured_status_messages, patched_dependencies):
     """边界:3 只股票仍走 3 阶段 spinner · ticking 至少 1 次完成."""
     pairs = [("600519", "茅台"), ("000001", "平安"), ("600000", "浦发")]
-    cli_helpers._auto_fetch_stale(pairs)
+    helpers._auto_fetch_stale(pairs)
 
     msgs = captured_status_messages
     # 仍有 stage 1/2/3
@@ -134,7 +134,7 @@ def test_small_watchlist_3_stocks(captured_status_messages, patched_dependencies
 
 def test_empty_watchlist_no_crash(captured_status_messages, patched_dependencies):
     """边界:空 watchlist 不应 crash (n_total // 20 = 0 防除 0)."""
-    cli_helpers._auto_fetch_stale([])
+    helpers._auto_fetch_stale([])
     # 应至少有 stage 1/2 进入 · stage 3 ticking 0 次但不抛
     msgs = captured_status_messages
     assert len(msgs) >= 2, f"空 watchlist 至少 stage 1/2 · {msgs}"
@@ -144,12 +144,12 @@ def test_latest_trade_date_exception_does_not_crash(captured_status_messages, mo
     """fail-soft:latest_trade_date 抛异常时 spinner 不 crash."""
     def raise_for_pre_warm():
         raise RuntimeError("trade calendar unavailable (mock)")
-    monkeypatch.setattr("kan.trading_calendar.latest_trade_date", raise_for_pre_warm)
-    monkeypatch.setattr("kan.fetcher.is_fresh", lambda sym: True)
+    monkeypatch.setattr("kan.core.trading_calendar.latest_trade_date", raise_for_pre_warm)
+    monkeypatch.setattr("kan.data.fetcher.is_fresh", lambda sym: True)
 
     pairs = [("600519", "茅台")]
     # 不应 raise
-    cli_helpers._auto_fetch_stale(pairs)
+    helpers._auto_fetch_stale(pairs)
 
     msgs = captured_status_messages
     # Stage 1/3 仍跑 (Stage 2 抛被 catch · 但 spinner 文字已发出)

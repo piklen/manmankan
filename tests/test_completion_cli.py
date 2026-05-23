@@ -6,7 +6,7 @@ import pytest
 from typer.testing import CliRunner
 
 from kan.cli import app
-from kan.cli_helpers import _detect_shell_fallback
+from kan.cli.helpers import _detect_shell_fallback
 
 
 @pytest.fixture

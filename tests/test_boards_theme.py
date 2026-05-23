@@ -6,9 +6,9 @@ from unittest.mock import MagicMock
 import pandas as pd
 import pytest
 
-from kan import boards
-from kan.boards import ThemeDataUnavailableError, ThemeNotFoundError
-from kan.models import Theme
+from kan.core.models import Theme
+from kan.data import boards
+from kan.data.boards import ThemeDataUnavailableError, ThemeNotFoundError
 
 
 @pytest.fixture(autouse=True)
@@ -31,8 +31,8 @@ def _isolate_boards_dir(tmp_path, monkeypatch):
     bdir = tmp_path / "boards"
     bdir.mkdir()
     monkeypatch.setattr(boards, "BOARDS_DIR", bdir)
-    monkeypatch.setattr("kan.paths.BOARDS_DIR", bdir)
-    monkeypatch.setattr("kan.paths.ensure_dirs", lambda: None)
+    monkeypatch.setattr("kan.storage.paths.BOARDS_DIR", bdir)
+    monkeypatch.setattr("kan.storage.paths.ensure_dirs", lambda: None)
     return bdir
 
 
@@ -137,8 +137,8 @@ def test_load_theme_catalog_falls_back_to_stale_cache_on_failure(monkeypatch, _i
     def capture_debug_log(module, op, err):
         log_calls.append((module, op, err))
 
-    # patch 在使用处(kan.boards 顶部 from kan._log import debug_log 后 name 绑到 boards module)
-    monkeypatch.setattr("kan.boards.debug_log", capture_debug_log)
+    # patch 在使用处(kan.data.boards 顶部 from kan.infra.log import debug_log 后 name 绑到 boards module)
+    monkeypatch.setattr("kan.data.boards.debug_log", capture_debug_log)
 
     themes = boards.load_theme_catalog()
     assert len(themes) == 1
@@ -271,7 +271,7 @@ def test_get_theme_constituents_falls_back_to_em(monkeypatch, _isolate_boards_di
         lambda concept_code: _em_cons_df(),
     )
     # 确保熔断器 EM 未 down
-    from kan.circuit_breaker import get_breaker
+    from kan.infra.circuit_breaker import get_breaker
     get_breaker().record("em_push2_concept", ok=True)
 
     theme = Theme(code="886108", name="AI应用", source="ths")
@@ -287,7 +287,7 @@ def test_get_theme_constituents_em_circuit_break(monkeypatch, _isolate_boards_di
 
     monkeypatch.setattr("adata.stock.info.concept_constituent_ths", ths_raise)
     # 标记 EM 已 down
-    from kan.circuit_breaker import get_breaker
+    from kan.infra.circuit_breaker import get_breaker
     get_breaker().record("em_push2_concept", ok=False)
 
     theme = Theme(code="886108", name="AI应用", source="ths")
@@ -303,7 +303,7 @@ def test_get_theme_constituents_em_fail_marks_down(monkeypatch, _isolate_boards_
 
     monkeypatch.setattr("adata.stock.info.concept_constituent_ths", lambda index_code: raise_())
     monkeypatch.setattr("adata.stock.info.concept_constituent_east", lambda concept_code: raise_())
-    from kan.circuit_breaker import get_breaker
+    from kan.infra.circuit_breaker import get_breaker
     get_breaker().record("em_push2_concept", ok=True)
 
     theme = Theme(code="886108", name="AI应用", source="ths")

@@ -1,8 +1,8 @@
-"""kan/_numeric.py · to_numeric_checked 单元测试"""
+"""kan/numeric.py · to_numeric_checked 单元测试"""
 
 import pandas as pd
 
-from kan._numeric import to_numeric_checked
+from kan.infra.numeric import to_numeric_checked
 
 
 def test_clean_strings_no_bad():

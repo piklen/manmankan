@@ -1,4 +1,4 @@
-"""kan/_pipeline.py 单元测试 · mock 上游(resolve_scan_targets / fetcher / trading_calendar)。"""
+"""kan/pipeline.py 单元测试 · mock 上游(resolve_scan_targets / fetcher / trading_calendar)。"""
 from __future__ import annotations
 
 from datetime import date
@@ -7,16 +7,16 @@ from unittest.mock import Mock
 import pytest
 import typer
 
-from kan import _pipeline
-from kan._pipeline import Freshness
-from kan.boards import (
+from kan.core import pipeline
+from kan.core.pipeline import Freshness
+from kan.core.trading_calendar import PHASE_INTRADAY
+from kan.data.boards import (
     BoardDataUnavailableError,
     BoardNotFoundError,
     ThemeDataUnavailableError,
     ThemeNotFoundError,
 )
-from kan.hot import HotListUnavailableError
-from kan.trading_calendar import PHASE_INTRADAY
+from kan.data.hot import HotListUnavailableError
 
 
 def _make_raiser(exc: Exception):
@@ -32,7 +32,7 @@ def _make_raiser(exc: Exception):
 def test_resolve_targets_or_exit_no_source_returns_watchlist_pairs():
     """三源都 None → 真实 resolve_scan_targets 直接返回 (pairs, None)。"""
     pairs = [("600519", "贵州茅台"), ("000858", "五粮液")]
-    targets, meta = _pipeline.resolve_targets_or_exit(
+    targets, meta = pipeline.resolve_targets_or_exit(
         None, only_watchlist=False, watchlist_pairs=pairs,
     )
     assert targets is pairs
@@ -43,10 +43,10 @@ def test_resolve_targets_or_exit_passes_through_return(monkeypatch):
     """成功路径 · resolve_scan_targets 返回值原样返回,不做加工。"""
     expected_targets = [("600519", "贵州茅台")]
     monkeypatch.setattr(
-        "kan._pipeline.resolve_scan_targets",
+        "kan.core.pipeline.resolve_scan_targets",
         lambda *a, **kw: (expected_targets, None),
     )
-    targets, meta = _pipeline.resolve_targets_or_exit(
+    targets, meta = pipeline.resolve_targets_or_exit(
         None, only_watchlist=False, watchlist_pairs=expected_targets,
     )
     assert targets is expected_targets
@@ -67,8 +67,8 @@ def test_resolve_targets_or_exit_passes_kwargs_through(monkeypatch):
         )
         return ([], None)
 
-    monkeypatch.setattr("kan._pipeline.resolve_scan_targets", _capture)
-    _pipeline.resolve_targets_or_exit(
+    monkeypatch.setattr("kan.core.pipeline.resolve_scan_targets", _capture)
+    pipeline.resolve_targets_or_exit(
         "半导体",
         only_watchlist=True,
         watchlist_pairs=[("600519", "茅台")],
@@ -97,15 +97,15 @@ def test_resolve_targets_or_exit_source_errors(
     """5 类 source 错误统一转换为 _print_err + typer.Exit · exit 码与现状一致。"""
     err_calls: list[str] = []
     monkeypatch.setattr(
-        "kan._pipeline._print_err",
+        "kan.core.pipeline._print_err",
         lambda msg: err_calls.append(msg),
     )
     monkeypatch.setattr(
-        "kan._pipeline.resolve_scan_targets",
+        "kan.core.pipeline.resolve_scan_targets",
         _make_raiser(exc_cls("test")),
     )
     with pytest.raises(typer.Exit) as exc_info:
-        _pipeline.resolve_targets_or_exit(
+        pipeline.resolve_targets_or_exit(
             "test",
             only_watchlist=False,
             watchlist_pairs=[],
@@ -122,15 +122,15 @@ def test_resolve_targets_or_exit_board_not_found_includes_industry_and_examples(
     """BoardNotFound 错误消息引用 industry 参数名 + 散户化示例关键词。"""
     err_calls: list[str] = []
     monkeypatch.setattr(
-        "kan._pipeline._print_err",
+        "kan.core.pipeline._print_err",
         lambda msg: err_calls.append(msg),
     )
     monkeypatch.setattr(
-        "kan._pipeline.resolve_scan_targets",
+        "kan.core.pipeline.resolve_scan_targets",
         _make_raiser(BoardNotFoundError("我的行业")),
     )
     with pytest.raises(typer.Exit):
-        _pipeline.resolve_targets_or_exit(
+        pipeline.resolve_targets_or_exit(
             "我的行业", only_watchlist=False, watchlist_pairs=[],
         )
     msg = err_calls[0]
@@ -146,15 +146,15 @@ def test_resolve_targets_or_exit_theme_not_found_includes_theme_and_search_hint(
     """ThemeNotFound 错误消息引用 theme 参数名 + 提示 kan theme search。"""
     err_calls: list[str] = []
     monkeypatch.setattr(
-        "kan._pipeline._print_err",
+        "kan.core.pipeline._print_err",
         lambda msg: err_calls.append(msg),
     )
     monkeypatch.setattr(
-        "kan._pipeline.resolve_scan_targets",
+        "kan.core.pipeline.resolve_scan_targets",
         _make_raiser(ThemeNotFoundError("我的题材")),
     )
     with pytest.raises(typer.Exit):
-        _pipeline.resolve_targets_or_exit(
+        pipeline.resolve_targets_or_exit(
             None, only_watchlist=False, watchlist_pairs=[], theme="我的题材",
         )
     msg = err_calls[0]
@@ -167,15 +167,15 @@ def test_resolve_targets_or_exit_theme_data_unavailable_hints_industry(monkeypat
     """ThemeDataUnavailable 提示用户可以退化用 --industry(题材源死时的降级路径)。"""
     err_calls: list[str] = []
     monkeypatch.setattr(
-        "kan._pipeline._print_err",
+        "kan.core.pipeline._print_err",
         lambda msg: err_calls.append(msg),
     )
     monkeypatch.setattr(
-        "kan._pipeline.resolve_scan_targets",
+        "kan.core.pipeline.resolve_scan_targets",
         _make_raiser(ThemeDataUnavailableError("api down")),
     )
     with pytest.raises(typer.Exit):
-        _pipeline.resolve_targets_or_exit(
+        pipeline.resolve_targets_or_exit(
             None, only_watchlist=False, watchlist_pairs=[], theme="AI",
         )
     msg = err_calls[0]
@@ -189,18 +189,18 @@ def test_resolve_targets_or_exit_theme_data_unavailable_hints_industry(monkeypat
 def _patch_calendar(monkeypatch, expected_date=date(2026, 5, 23), phase="post"):
     """统一 patch latest_trade_date + market_phase。"""
     monkeypatch.setattr(
-        "kan.trading_calendar.latest_trade_date", lambda: expected_date,
+        "kan.core.trading_calendar.latest_trade_date", lambda: expected_date,
     )
-    monkeypatch.setattr("kan.trading_calendar.market_phase", lambda: phase)
+    monkeypatch.setattr("kan.core.trading_calendar.market_phase", lambda: phase)
 
 
 def _patch_fetcher(monkeypatch, cutoffs: dict, ages: dict):
     """patch data_cutoff_date 与 cache_age,字典 lookup,缺失返回 None。"""
     monkeypatch.setattr(
-        "kan.fetcher.data_cutoff_date", lambda sym: cutoffs.get(sym),
+        "kan.data.fetcher.data_cutoff_date", lambda sym: cutoffs.get(sym),
     )
     monkeypatch.setattr(
-        "kan.fetcher.cache_age", lambda sym: ages.get(sym),
+        "kan.data.fetcher.cache_age", lambda sym: ages.get(sym),
     )
 
 
@@ -208,7 +208,7 @@ def test_freshness_of_empty_symbols(monkeypatch):
     """空 symbols → data_cutoff=None · fetched_at=None · is_stale=True。"""
     _patch_calendar(monkeypatch)
     _patch_fetcher(monkeypatch, cutoffs={}, ages={})
-    f = _pipeline.freshness_of([])
+    f = pipeline.freshness_of([])
     assert f.data_cutoff is None
     assert f.fetched_at is None
     assert f.expected_cutoff == date(2026, 5, 23)
@@ -224,7 +224,7 @@ def test_freshness_of_single_symbol_fresh(monkeypatch):
         cutoffs={"600519": date(2026, 5, 23)},
         ages={"600519": "2026-05-23T16:00:00"},
     )
-    f = _pipeline.freshness_of(["600519"])
+    f = pipeline.freshness_of(["600519"])
     assert f.data_cutoff == date(2026, 5, 23)
     assert f.fetched_at == "2026-05-23T16:00:00"
     assert f.is_stale is False
@@ -238,7 +238,7 @@ def test_freshness_of_single_symbol_stale(monkeypatch):
         cutoffs={"600519": date(2026, 5, 20)},
         ages={"600519": "2026-05-20T16:00:00"},
     )
-    f = _pipeline.freshness_of(["600519"])
+    f = pipeline.freshness_of(["600519"])
     assert f.data_cutoff == date(2026, 5, 20)
     assert f.is_stale is True
 
@@ -259,7 +259,7 @@ def test_freshness_of_multi_symbol_takes_max(monkeypatch):
             "300750": "2026-05-19T09:00:00",
         },
     )
-    f = _pipeline.freshness_of(["600519", "000858", "300750"])
+    f = pipeline.freshness_of(["600519", "000858", "300750"])
     assert f.data_cutoff == date(2026, 5, 22)
     assert f.fetched_at == "2026-05-22T16:00:00"
     assert f.is_stale is True
@@ -276,7 +276,7 @@ def test_freshness_of_skips_none_cutoff(monkeypatch):
         },
         ages={"600519": "2026-05-22T16:00:00"},
     )
-    f = _pipeline.freshness_of(["600519", "NEW01"])
+    f = pipeline.freshness_of(["600519", "NEW01"])
     assert f.data_cutoff == date(2026, 5, 22)
     assert f.fetched_at == "2026-05-22T16:00:00"
 
@@ -289,7 +289,7 @@ def test_freshness_of_skips_falsy_cache_age(monkeypatch):
         cutoffs={"600519": date(2026, 5, 22), "000858": date(2026, 5, 22)},
         ages={"600519": "", "000858": "2026-05-22T16:00:00"},
     )
-    f = _pipeline.freshness_of(["600519", "000858"])
+    f = pipeline.freshness_of(["600519", "000858"])
     assert f.fetched_at == "2026-05-22T16:00:00"
 
 
@@ -297,7 +297,7 @@ def test_freshness_of_phase_passthrough(monkeypatch):
     """phase 直接来自 market_phase()。"""
     _patch_calendar(monkeypatch, phase="intraday")
     _patch_fetcher(monkeypatch, cutoffs={}, ages={})
-    f = _pipeline.freshness_of([])
+    f = pipeline.freshness_of([])
     assert f.phase == "intraday"
 
 
@@ -309,7 +309,7 @@ def test_freshness_of_accepts_generator(monkeypatch):
         cutoffs={"600519": date(2026, 5, 22), "000858": date(2026, 5, 21)},
         ages={"600519": "x", "000858": "y"},
     )
-    f = _pipeline.freshness_of(sym for sym in ["600519", "000858"])
+    f = pipeline.freshness_of(sym for sym in ["600519", "000858"])
     assert f.data_cutoff == date(2026, 5, 22)
     assert f.fetched_at == "y"
 
@@ -318,7 +318,7 @@ def test_freshness_returns_frozen_dataclass(monkeypatch):
     """Freshness 是 frozen=True · 不可变 · 防意外修改。"""
     _patch_calendar(monkeypatch)
     _patch_fetcher(monkeypatch, cutoffs={}, ages={})
-    f = _pipeline.freshness_of([])
+    f = pipeline.freshness_of([])
     with pytest.raises((AttributeError, Exception)):
         f.is_stale = False  # type: ignore[misc]
 
@@ -352,7 +352,7 @@ def test_render_freshness_warning_stale_prints_cache_lag():
         expected_cutoff=date(2026, 5, 23),
         is_stale=True,
     )
-    _pipeline.render_freshness_warning(f, console)
+    pipeline.render_freshness_warning(f, console)
     console.print.assert_called_once()
     msg = console.print.call_args.args[0]
     assert "当前缓存到" in msg
@@ -370,7 +370,7 @@ def test_render_freshness_warning_stale_no_cutoff_shows_placeholder():
         expected_cutoff=date(2026, 5, 23),
         is_stale=True,
     )
-    _pipeline.render_freshness_warning(f, console)
+    pipeline.render_freshness_warning(f, console)
     msg = console.print.call_args.args[0]
     assert "无缓存" in msg
     assert "? 天" in msg
@@ -383,7 +383,7 @@ def test_render_freshness_warning_intraday_prints_intraday_warning():
         is_stale=False,
         phase=PHASE_INTRADAY,
     )
-    _pipeline.render_freshness_warning(f, console)
+    pipeline.render_freshness_warning(f, console)
     console.print.assert_called_once()
     msg = console.print.call_args.args[0]
     assert "当前盘中" in msg
@@ -398,7 +398,7 @@ def test_render_freshness_warning_fresh_and_post_silent():
         is_stale=False,
         phase="post",
     )
-    _pipeline.render_freshness_warning(f, console)
+    pipeline.render_freshness_warning(f, console)
     console.print.assert_not_called()
 
 
@@ -412,7 +412,7 @@ def test_render_freshness_warning_stale_supersedes_intraday():
         is_stale=True,
         phase=PHASE_INTRADAY,
     )
-    _pipeline.render_freshness_warning(f, console)
+    pipeline.render_freshness_warning(f, console)
     msg = console.print.call_args.args[0]
     assert "当前缓存到" in msg  # stale 分支
     assert "盘中" not in msg  # 没走 intraday 分支
@@ -440,11 +440,11 @@ def _patch_pipeline_compose(
     fetched_targets: list = []
 
     monkeypatch.setattr(
-        "kan._pipeline.resolve_scan_targets",
+        "kan.core.pipeline.resolve_scan_targets",
         lambda *a, **kw: (targets, meta),
     )
     monkeypatch.setattr(
-        "kan.cli_helpers._auto_fetch_stale",
+        "kan.cli.helpers._auto_fetch_stale",
         lambda pairs: fetched_targets.append(pairs),
     )
     _patch_calendar(monkeypatch, expected_date=expected_date, phase=phase)
@@ -473,7 +473,7 @@ def test_run_data_pipeline_happy_path(monkeypatch):
         compute_calls.append((t, kw))
         return [_FakeResult("600519"), _FakeResult("000858")]
 
-    ctx = _pipeline.run_data_pipeline(
+    ctx = pipeline.run_data_pipeline(
         None, only_watchlist=False, watchlist_pairs=targets,
         compute=_compute,
     )
@@ -499,7 +499,7 @@ def test_run_data_pipeline_passes_meta_through(monkeypatch):
         cutoffs={"600519": date(2026, 5, 23)},
         ages={"600519": "2026-05-23T16:00:00"},
     )
-    ctx = _pipeline.run_data_pipeline(
+    ctx = pipeline.run_data_pipeline(
         "半导体", only_watchlist=False, watchlist_pairs=[],
         compute=lambda t, **kw: [_FakeResult("600519")],
     )
@@ -522,7 +522,7 @@ def test_run_data_pipeline_forwards_compute_kwargs(monkeypatch):
         captured["kwargs"] = kw
         return [_FakeResult("600519")]
 
-    _pipeline.run_data_pipeline(
+    pipeline.run_data_pipeline(
         None, only_watchlist=False, watchlist_pairs=targets,
         compute=_compute, mode="high", candle=True, extra=42,
     )
@@ -533,10 +533,10 @@ def test_run_data_pipeline_forwards_compute_kwargs(monkeypatch):
 def test_run_data_pipeline_source_error_exits_before_compute(monkeypatch):
     """resolve 抛 source 错误时 · helper 在第 1 步就 Exit · compute 不应被调到。"""
     monkeypatch.setattr(
-        "kan._pipeline._print_err", lambda msg: None,
+        "kan.core.pipeline._print_err", lambda msg: None,
     )
     monkeypatch.setattr(
-        "kan._pipeline.resolve_scan_targets",
+        "kan.core.pipeline.resolve_scan_targets",
         _make_raiser(BoardNotFoundError("ghost industry")),
     )
     compute_calls = []
@@ -546,7 +546,7 @@ def test_run_data_pipeline_source_error_exits_before_compute(monkeypatch):
         return []
 
     with pytest.raises(typer.Exit) as exc_info:
-        _pipeline.run_data_pipeline(
+        pipeline.run_data_pipeline(
             "ghost industry", only_watchlist=False, watchlist_pairs=[],
             compute=_compute,
         )
@@ -562,7 +562,7 @@ def test_run_data_pipeline_empty_results_yields_stale_freshness(monkeypatch):
         cutoffs={},
         ages={},
     )
-    ctx = _pipeline.run_data_pipeline(
+    ctx = pipeline.run_data_pipeline(
         None, only_watchlist=False, watchlist_pairs=[],
         compute=lambda t, **kw: [],
     )
@@ -586,7 +586,7 @@ def test_run_data_pipeline_calls_auto_fetch_with_resolved_targets(monkeypatch):
         cutoffs={"000001": date(2026, 5, 23), "000002": date(2026, 5, 23)},
         ages={"000001": "2026-05-23T16:00:00", "000002": "2026-05-23T16:00:00"},
     )
-    _pipeline.run_data_pipeline(
+    pipeline.run_data_pipeline(
         "银行", only_watchlist=False, watchlist_pairs=input_pairs,
         compute=lambda t, **kw: [_FakeResult(s) for s, _ in t],
     )

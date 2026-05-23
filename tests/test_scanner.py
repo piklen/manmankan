@@ -6,9 +6,9 @@ from datetime import date, timedelta
 import pandas as pd
 import pytest
 
-from kan import paths
-from kan.models import PeriodResult, StockScanResult
-from kan.scanner import save_snapshot, scan_stock
+from kan.core.models import PeriodResult, StockScanResult
+from kan.core.scanner import save_snapshot, scan_stock
+from kan.storage import paths
 
 
 def _make_df(
@@ -116,7 +116,7 @@ def temp_snapshot_dir(tmp_path, monkeypatch):
     monkeypatch.setattr(paths, "SNAPSHOTS_DIR", tmp_path / "snapshots")
     monkeypatch.setattr(paths, "SNAPSHOT_PATH", tmp_path / "last_scan.json")
 
-    import kan.scanner as scanner_mod
+    import kan.core.scanner as scanner_mod
     monkeypatch.setattr(scanner_mod, "SNAPSHOT_PATH", tmp_path / "last_scan.json")
     return tmp_path
 

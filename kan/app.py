@@ -36,6 +36,6 @@ def main(
     import sys
     if len(sys.argv) == 1:
         # lazy import 避免循环 · help_cmd 装饰在 app 上但位于 cli_help
-        from kan.cli_help import help_cmd
+        from kan.cli.help import help_cmd
         help_cmd()
         raise typer.Exit()

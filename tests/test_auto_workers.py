@@ -12,7 +12,7 @@ from __future__ import annotations
 
 from unittest.mock import patch
 
-from kan.fetcher import resolve_max_workers
+from kan.data.fetcher import resolve_max_workers
 
 
 class TestAutoMaxWorkers:
@@ -100,7 +100,7 @@ class TestD1RuntimeBehavior:
         """
         from unittest.mock import MagicMock, patch
 
-        from kan.cli_helpers import _auto_fetch_stale
+        from kan.cli.helpers import _auto_fetch_stale
 
         fake_console = MagicMock()
         fake_status = MagicMock()
@@ -115,13 +115,13 @@ class TestD1RuntimeBehavior:
 
         with patch("rich.console.Console", return_value=fake_console), \
              patch("rich.progress.Progress", return_value=fake_progress), \
-             patch("kan.fetcher.is_fresh", return_value=False), \
+             patch("kan.data.fetcher.is_fresh", return_value=False), \
              patch(
-                 "kan.fetcher.fetch_batch",
+                 "kan.data.fetcher.fetch_batch",
                  return_value=({}, errors or {})
              ), \
-             patch("kan.fetcher.resolve_max_workers", return_value=max_workers), \
-             patch("kan.trading_calendar.latest_trade_date", return_value=None):
+             patch("kan.data.fetcher.resolve_max_workers", return_value=max_workers), \
+             patch("kan.core.trading_calendar.latest_trade_date", return_value=None):
             _auto_fetch_stale(pairs)
 
         # 提取所有 console.print 调用文本

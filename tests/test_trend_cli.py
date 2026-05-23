@@ -24,8 +24,8 @@ import pytest
 from typer.testing import CliRunner
 
 from kan.cli import app
-from kan.cli_helpers import _normalize_streak_args
-from kan.scanner import TrendResult
+from kan.cli.helpers import _normalize_streak_args
+from kan.core.scanner import TrendResult
 
 # --- sys.argv 预处理纯函数测试 ---
 
@@ -95,16 +95,16 @@ def _fake_trend_batch(*_args, **_kwargs) -> list[TrendResult]:
 @pytest.fixture
 def runner(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> CliRunner:
     """隔离 watchlist + cache_age + fetcher · 让 trend 走 mock 数据。"""
-    # cli.py 拆分后 trend 命令在 kan.cli_trend_cmds · from-import 把 helper 引用 bound
+    # cli.py 拆分后 trend 命令在 kan.cli.trend_cmds · from-import 把 helper 引用 bound
     # 到 cli_trend_cmds 的 namespace · monkeypatch 必须改这里才能拦截
     monkeypatch.setattr(
-        "kan.cli_trend_cmds._get_watchlist_pairs",
+        "kan.cli.trend_cmds._get_watchlist_pairs",
         lambda: [("600519", "测试跌5"), ("000001", "测试涨3"), ("002001", "测试平")],
     )
-    monkeypatch.setattr("kan.cli_trend_cmds._auto_fetch_stale", lambda _pairs: None)
-    monkeypatch.setattr("kan.scanner.trend_batch", _fake_trend_batch)
-    monkeypatch.setattr("kan.fetcher.cache_age", lambda _sym: "2026-05-08 12:00")
-    monkeypatch.setattr("kan.scanner.get_limit_threshold", lambda *a, **k: 10.0)
+    monkeypatch.setattr("kan.cli.trend_cmds._auto_fetch_stale", lambda _pairs: None)
+    monkeypatch.setattr("kan.core.scanner.trend_batch", _fake_trend_batch)
+    monkeypatch.setattr("kan.data.fetcher.cache_age", lambda _sym: "2026-05-08 12:00")
+    monkeypatch.setattr("kan.core.scanner.get_limit_threshold", lambda *a, **k: 10.0)
     return CliRunner()
 
 
@@ -207,14 +207,14 @@ def test_trend_stale_warning_uses_new_phrasing(
     """
     from datetime import date
 
-    # data_cutoff_date 是 cli_trend_cmds.trend() 内 lazy import from kan.fetcher · patch 原 module
+    # data_cutoff_date 是 cli_trend_cmds.trend() 内 lazy import from kan.data.fetcher · patch 原 module
     monkeypatch.setattr(
-        "kan.fetcher.data_cutoff_date", lambda _sym: date(2026, 5, 1)
+        "kan.data.fetcher.data_cutoff_date", lambda _sym: date(2026, 5, 1)
     )
     monkeypatch.setattr(
-        "kan.trading_calendar.latest_trade_date", lambda: date(2026, 5, 14)
+        "kan.core.trading_calendar.latest_trade_date", lambda: date(2026, 5, 14)
     )
-    monkeypatch.setattr("kan.trading_calendar.market_phase", lambda: "PRE_OPEN")
+    monkeypatch.setattr("kan.core.trading_calendar.market_phase", lambda: "PRE_OPEN")
 
     result = runner.invoke(app, ["trend"])
     assert result.exit_code == 0, f"trend 退出失败 · stderr: {result.stderr if hasattr(result, 'stderr') else ''}"
@@ -239,14 +239,14 @@ def test_trend_intraday_warning_compliant_phrasing(
 
     # 让 data_cutoff = expected_cutoff → is_stale=False · 不触发 stale 分支
     monkeypatch.setattr(
-        "kan.fetcher.data_cutoff_date", lambda _sym: date(2026, 5, 14)
+        "kan.data.fetcher.data_cutoff_date", lambda _sym: date(2026, 5, 14)
     )
     monkeypatch.setattr(
-        "kan.trading_calendar.latest_trade_date", lambda: date(2026, 5, 14)
+        "kan.core.trading_calendar.latest_trade_date", lambda: date(2026, 5, 14)
     )
     # phase=INTRADAY 触发 elif intraday 分支
     monkeypatch.setattr(
-        "kan.trading_calendar.market_phase", lambda: "in"
+        "kan.core.trading_calendar.market_phase", lambda: "in"
     )
 
     result = runner.invoke(app, ["trend"])
@@ -275,13 +275,13 @@ def test_trend_warnings_mutex_stale_wins(
 
     # stale=True + phase=INTRADAY
     monkeypatch.setattr(
-        "kan.fetcher.data_cutoff_date", lambda _sym: date(2026, 5, 1)
+        "kan.data.fetcher.data_cutoff_date", lambda _sym: date(2026, 5, 1)
     )
     monkeypatch.setattr(
-        "kan.trading_calendar.latest_trade_date", lambda: date(2026, 5, 14)
+        "kan.core.trading_calendar.latest_trade_date", lambda: date(2026, 5, 14)
     )
     monkeypatch.setattr(
-        "kan.trading_calendar.market_phase", lambda: "in"
+        "kan.core.trading_calendar.market_phase", lambda: "in"
     )
 
     result = runner.invoke(app, ["trend"])

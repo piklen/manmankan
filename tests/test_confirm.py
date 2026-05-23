@@ -1,7 +1,7 @@
-"""kan/_confirm.py 单元测试 · 模拟 input · 不走真 stdin。"""
+"""kan/confirm.py 单元测试 · 模拟 input · 不走真 stdin。"""
 import io
 
-from kan._confirm import show_summary_and_confirm
+from kan.infra.confirm import show_summary_and_confirm
 
 
 def test_confirm_skip_returns_true():

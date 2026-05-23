@@ -6,8 +6,8 @@ import time
 import pandas as pd
 import pytest
 
-from kan import hot
-from kan.hot import HotEntry, HotList, HotListUnavailableError
+from kan.data import hot
+from kan.data.hot import HotEntry, HotList, HotListUnavailableError
 
 
 @pytest.fixture(autouse=True)

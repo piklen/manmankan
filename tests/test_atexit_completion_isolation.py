@@ -54,7 +54,7 @@ def completion_streams(monkeypatch):
 def block_network(monkeypatch):
     """禁止任何 PyPI / config 写入 · hermetic 测试。"""
     monkeypatch.setattr(
-        "kan.updater.fetch_latest_version_from_pypi",
+        "kan.data.updater.fetch_latest_version_from_pypi",
         lambda: pytest.fail("hook 不该在 completion 时打 PyPI"),
     )
 
@@ -65,21 +65,21 @@ def block_network(monkeypatch):
 def test_is_shell_completion_run_detects_KAN_COMPLETE(monkeypatch):
     monkeypatch.setenv("_KAN_COMPLETE", "complete_zsh")
     monkeypatch.delenv("_TYPER_COMPLETE_ARGS", raising=False)
-    from kan.cli_atexit import _is_shell_completion_run
+    from kan.cli.atexit import _is_shell_completion_run
     assert _is_shell_completion_run() is True
 
 
 def test_is_shell_completion_run_detects_TYPER_COMPLETE_ARGS(monkeypatch):
     monkeypatch.delenv("_KAN_COMPLETE", raising=False)
     monkeypatch.setenv("_TYPER_COMPLETE_ARGS", "kan upd")
-    from kan.cli_atexit import _is_shell_completion_run
+    from kan.cli.atexit import _is_shell_completion_run
     assert _is_shell_completion_run() is True
 
 
 def test_is_shell_completion_run_false_when_neither_set(monkeypatch):
     monkeypatch.delenv("_KAN_COMPLETE", raising=False)
     monkeypatch.delenv("_TYPER_COMPLETE_ARGS", raising=False)
-    from kan.cli_atexit import _is_shell_completion_run
+    from kan.cli.atexit import _is_shell_completion_run
     assert _is_shell_completion_run() is False
 
 
@@ -92,7 +92,7 @@ def test_check_updates_skipped_when_KAN_COMPLETE_set(
     """关键回归: zsh completion 触发时 hook 不得写任何字符到 stdout/stderr。"""
     monkeypatch.setenv("_KAN_COMPLETE", "complete_zsh")
     monkeypatch.setenv("_TYPER_COMPLETE_ARGS", "kan upd")
-    from kan.cli_atexit import _check_updates_atexit
+    from kan.cli.atexit import _check_updates_atexit
 
     _check_updates_atexit()
 
@@ -107,7 +107,7 @@ def test_check_updates_skipped_when_TYPER_COMPLETE_ARGS_only(
     """单独 _TYPER_COMPLETE_ARGS 也应跳过 (双护栏冗余)。"""
     monkeypatch.delenv("_KAN_COMPLETE", raising=False)
     monkeypatch.setenv("_TYPER_COMPLETE_ARGS", "kan upd")
-    from kan.cli_atexit import _check_updates_atexit
+    from kan.cli.atexit import _check_updates_atexit
 
     _check_updates_atexit()
 
@@ -126,7 +126,7 @@ def test_check_updates_skipped_when_stdout_piped(
     """
     monkeypatch.delenv("_KAN_COMPLETE", raising=False)
     monkeypatch.delenv("_TYPER_COMPLETE_ARGS", raising=False)
-    from kan.cli_atexit import _check_updates_atexit
+    from kan.cli.atexit import _check_updates_atexit
 
     _check_updates_atexit()
 
@@ -153,7 +153,7 @@ def test_auto_install_completion_skipped_when_KAN_COMPLETE_set(
 
     monkeypatch.setattr("typer.completion.install", fake_install)
 
-    from kan.cli_atexit import _auto_install_completion
+    from kan.cli.atexit import _auto_install_completion
     _auto_install_completion()
 
     out, err = completion_streams

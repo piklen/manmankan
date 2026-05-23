@@ -7,7 +7,7 @@ import pytest
 from typer.testing import CliRunner
 
 from kan.cli import app
-from kan.models import Theme
+from kan.core.models import Theme
 
 
 @pytest.fixture(autouse=True)
@@ -21,14 +21,14 @@ def _mock_adata(monkeypatch):
 
 @pytest.fixture(autouse=True)
 def _isolate_all(tmp_path, monkeypatch):
-    from kan import boards
+    from kan.data import boards
     bdir = tmp_path / "boards"
     bdir.mkdir()
     monkeypatch.setattr(boards, "BOARDS_DIR", bdir)
-    monkeypatch.setattr("kan.paths.BOARDS_DIR", bdir)
-    monkeypatch.setattr("kan.paths.ensure_dirs", lambda: None)
-    monkeypatch.setattr("kan.paths.WATCHLIST_PATH", tmp_path / "wl.json")
-    monkeypatch.setattr("kan.paths.DATA_DIR", tmp_path / "data")
+    monkeypatch.setattr("kan.storage.paths.BOARDS_DIR", bdir)
+    monkeypatch.setattr("kan.storage.paths.ensure_dirs", lambda: None)
+    monkeypatch.setattr("kan.storage.paths.WATCHLIST_PATH", tmp_path / "wl.json")
+    monkeypatch.setattr("kan.storage.paths.DATA_DIR", tmp_path / "data")
     (tmp_path / "data").mkdir(exist_ok=True)
     return tmp_path
 
@@ -36,11 +36,11 @@ def _isolate_all(tmp_path, monkeypatch):
 def _stub_theme_calls(monkeypatch):
     """scan --theme=AI应用 → 返回 2 行成分股 + 完整 K 线。"""
     monkeypatch.setattr(
-        "kan.boards.search_theme",
+        "kan.data.boards.search_theme",
         lambda q: Theme(code="886108", name="AI应用", source="ths"),
     )
     monkeypatch.setattr(
-        "kan.boards.get_theme_constituents",
+        "kan.data.boards.get_theme_constituents",
         lambda theme, force=False: [("002230", "科大讯飞"), ("300033", "同花顺")],
     )
     dates = pd.date_range("2026-01-01", periods=100, freq="B").date
@@ -55,7 +55,7 @@ def _stub_theme_calls(monkeypatch):
             "amount": [1e8] * 100,
         }
     )
-    monkeypatch.setattr("kan.boards.fetch_theme_kline", lambda theme, force=False: kline_df)
+    monkeypatch.setattr("kan.data.boards.fetch_theme_kline", lambda theme, force=False: kline_df)
 
 
 def _stub_fetch_kline(monkeypatch):
@@ -73,16 +73,16 @@ def _stub_fetch_kline(monkeypatch):
         }
     )
     # fetcher 接口名不确定 · 用宽 mock
-    monkeypatch.setattr("kan.fetcher.fetch_kline", lambda symbol, **kw: kline_df)
+    monkeypatch.setattr("kan.data.fetcher.fetch_kline", lambda symbol, **kw: kline_df)
     # 也 patch is_fresh / cache_age 等 helper · 防 scan 走真路径
-    monkeypatch.setattr("kan.fetcher.is_fresh", lambda symbol: True)
-    monkeypatch.setattr("kan.fetcher.cache_age", lambda symbol: None)
-    monkeypatch.setattr("kan.fetcher.data_cutoff_date", lambda symbol: None)
+    monkeypatch.setattr("kan.data.fetcher.is_fresh", lambda symbol: True)
+    monkeypatch.setattr("kan.data.fetcher.cache_age", lambda symbol: None)
+    monkeypatch.setattr("kan.data.fetcher.data_cutoff_date", lambda symbol: None)
     # scan_batch · 让它走真路径但底层 fetch 被 mock
     # 直接 mock scan_batch 返回 stubs · 更稳
     from datetime import date
 
-    from kan.models import PeriodResult, StockScanResult
+    from kan.core.models import PeriodResult, StockScanResult
     def fake_scan_batch(targets, mode):
         return [
             StockScanResult(
@@ -100,8 +100,8 @@ def _stub_fetch_kline(monkeypatch):
             )
             for code, name in targets
         ]
-    monkeypatch.setattr("kan.scanner.scan_batch", fake_scan_batch)
-    monkeypatch.setattr("kan.cli_scan_cmds._auto_fetch_stale", lambda targets: None)
+    monkeypatch.setattr("kan.core.scanner.scan_batch", fake_scan_batch)
+    monkeypatch.setattr("kan.cli.scan_cmds._auto_fetch_stale", lambda targets: None)
 
 
 def test_scan_theme_runs(monkeypatch, _isolate_all):
@@ -125,12 +125,12 @@ def test_scan_theme_industry_mutually_exclusive(_isolate_all):
 
 def test_scan_theme_not_found(monkeypatch, _isolate_all):
     """题材名找不到 → exit 2 + 友好提示。"""
-    from kan.boards import ThemeNotFoundError
+    from kan.data.boards import ThemeNotFoundError
 
     def raise_(q):
         raise ThemeNotFoundError(q)
 
-    monkeypatch.setattr("kan.boards.search_theme", raise_)
+    monkeypatch.setattr("kan.data.boards.search_theme", raise_)
     runner = CliRunner()
     result = runner.invoke(app, ["scan", "--theme=不存在题材xyz"])
     assert result.exit_code == 2

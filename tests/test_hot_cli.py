@@ -7,9 +7,9 @@ import pandas as pd
 import pytest
 from typer.testing import CliRunner
 
-from kan import hot
-from kan.hot import HotEntry, HotListUnavailableError
-from kan.models import PeriodResult, StockScanResult
+from kan.core.models import PeriodResult, StockScanResult
+from kan.data import hot
+from kan.data.hot import HotEntry, HotListUnavailableError
 
 
 def _fake_scan_result(symbol: str, name: str) -> StockScanResult:
@@ -33,38 +33,38 @@ def hot_runner(monkeypatch):
     ]
     monkeypatch.setattr(hot, "fetch_hot_list", lambda which, force=False: entries)
     monkeypatch.setattr(
-        "kan.cli_scan_cmds._get_watchlist_pairs", lambda: [("600519", "贵州茅台")]
+        "kan.cli.scan_cmds._get_watchlist_pairs", lambda: [("600519", "贵州茅台")]
     )
-    monkeypatch.setattr("kan.cli_scan_cmds._auto_fetch_stale", lambda _p: None)
+    monkeypatch.setattr("kan.cli.scan_cmds._auto_fetch_stale", lambda _p: None)
     monkeypatch.setattr(
-        "kan.cli_scan_cmds._load_watchlist_pairs", lambda: [("600519", "贵州茅台")]
-    )
-    monkeypatch.setattr(
-        "kan.cli_trend_cmds._get_watchlist_pairs", lambda: [("600519", "贵州茅台")]
-    )
-    monkeypatch.setattr("kan.cli_trend_cmds._auto_fetch_stale", lambda _p: None)
-    monkeypatch.setattr(
-        "kan.cli_trend_cmds._load_watchlist_pairs", lambda: [("600519", "贵州茅台")]
+        "kan.cli.scan_cmds._load_watchlist_pairs", lambda: [("600519", "贵州茅台")]
     )
     monkeypatch.setattr(
-        "kan.cli_extreme_cmds._get_watchlist_pairs", lambda: [("600519", "贵州茅台")]
+        "kan.cli.trend_cmds._get_watchlist_pairs", lambda: [("600519", "贵州茅台")]
     )
-    monkeypatch.setattr("kan.cli_extreme_cmds._auto_fetch_stale", lambda _p: None)
+    monkeypatch.setattr("kan.cli.trend_cmds._auto_fetch_stale", lambda _p: None)
     monkeypatch.setattr(
-        "kan.cli_extreme_cmds._load_watchlist_pairs", lambda: [("600519", "贵州茅台")]
+        "kan.cli.trend_cmds._load_watchlist_pairs", lambda: [("600519", "贵州茅台")]
     )
     monkeypatch.setattr(
-        "kan.scanner.scan_batch",
+        "kan.cli.extreme_cmds._get_watchlist_pairs", lambda: [("600519", "贵州茅台")]
+    )
+    monkeypatch.setattr("kan.cli.extreme_cmds._auto_fetch_stale", lambda _p: None)
+    monkeypatch.setattr(
+        "kan.cli.extreme_cmds._load_watchlist_pairs", lambda: [("600519", "贵州茅台")]
+    )
+    monkeypatch.setattr(
+        "kan.core.scanner.scan_batch",
         lambda pairs, mode="low": [_fake_scan_result(s, n) for s, n in pairs],
     )
-    monkeypatch.setattr("kan.fetcher.cache_age", lambda _s: "2026-05-21 12:00")
+    monkeypatch.setattr("kan.data.fetcher.cache_age", lambda _s: "2026-05-21 12:00")
     monkeypatch.setattr(
-        "kan.fetcher.data_cutoff_date", lambda _s: date(2026, 5, 21)
+        "kan.data.fetcher.data_cutoff_date", lambda _s: date(2026, 5, 21)
     )
     monkeypatch.setattr(
-        "kan.trading_calendar.latest_trade_date", lambda: date(2026, 5, 21)
+        "kan.core.trading_calendar.latest_trade_date", lambda: date(2026, 5, 21)
     )
-    monkeypatch.setattr("kan.trading_calendar.market_phase", lambda: "pre")
+    monkeypatch.setattr("kan.core.trading_calendar.market_phase", lambda: "pre")
     return CliRunner()
 
 
@@ -120,7 +120,7 @@ def test_only_watchlist_needs_source(hot_runner):
 def test_low_hot_runs(hot_runner, monkeypatch):
     from kan.app import app
     monkeypatch.setattr(
-        "kan.scanner.filter_extreme",
+        "kan.core.scanner.filter_extreme",
         lambda pairs, periods, mode="low": {},
     )
     result = hot_runner.invoke(app, ["low", "30", "--hot", "surge"])
@@ -132,7 +132,7 @@ def test_low_hot_runs(hot_runner, monkeypatch):
 def test_high_hot_runs(hot_runner, monkeypatch):
     from kan.app import app
     monkeypatch.setattr(
-        "kan.scanner.filter_extreme",
+        "kan.core.scanner.filter_extreme",
         lambda pairs, periods, mode="low": {},
     )
     result = hot_runner.invoke(app, ["high", "30", "--hot", "rank"])
@@ -151,7 +151,7 @@ def test_trend_hot_runs(hot_runner, monkeypatch):
             self.direction = "平"
 
     monkeypatch.setattr(
-        "kan.scanner.trend_batch",
+        "kan.core.scanner.trend_batch",
         lambda pairs, candle=False: [_Tr(s, n) for s, n in pairs],
     )
     result = hot_runner.invoke(app, ["trend", "--hot", "rank"])
@@ -165,10 +165,10 @@ def test_fetch_hot_runs(hot_runner, monkeypatch):
     from kan.app import app
     fetched: list[str] = []
     monkeypatch.setattr(
-        "kan.fetcher.fetch_kline",
+        "kan.data.fetcher.fetch_kline",
         lambda sym, force=False: fetched.append(sym) or pd.DataFrame(),
     )
-    monkeypatch.setattr("kan.fetcher.is_fresh", lambda sym: False)
+    monkeypatch.setattr("kan.data.fetcher.is_fresh", lambda sym: False)
     result = hot_runner.invoke(app, ["fetch", "--hot", "rank"])
     assert result.exit_code == 0, result.output
     assert "000725" in fetched and "600519" in fetched
@@ -191,7 +191,7 @@ def test_trend_hot_latest_uneven_daily_changes(hot_runner, monkeypatch):
         "600519": [("2026-05-21", 0.8)],
     }
     monkeypatch.setattr(
-        "kan.scanner.trend_batch",
+        "kan.core.scanner.trend_batch",
         lambda pairs, candle=False: [_Tr(s, n, rows[s]) for s, n in pairs],
     )
     result = hot_runner.invoke(app, ["trend", "--hot", "rank", "--latest", "3"])

@@ -3,8 +3,8 @@ import json
 import pandas as pd
 import pytest
 
-from kan import boards
-from kan.models import Board
+from kan.core.models import Board
+from kan.data import boards
 
 
 @pytest.fixture(autouse=True)
@@ -140,7 +140,7 @@ def test_fetch_industry_kline_normalizes_schema(monkeypatch):
     ]
     assert len(df) == 2
     # scan_stock 能直接吃:有 date/close/low/high
-    from kan.scanner import scan_stock
+    from kan.core.scanner import scan_stock
     result = scan_stock(df, board.code, board.name)
     assert result.symbol == "801016"
 

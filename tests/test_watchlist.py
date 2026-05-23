@@ -6,8 +6,8 @@ from unittest.mock import patch
 
 import pytest
 
-from kan import paths, watchlist
-from kan.models import Stock
+from kan.core.models import Stock
+from kan.storage import paths, watchlist
 
 
 @pytest.fixture
@@ -68,7 +68,7 @@ def test_save_and_load_watchlist(temp_kan_dir):
 
 
 def test_add_stock(temp_kan_dir):
-    with patch("kan.watchlist._lookup_name", return_value="贵州茅台"):
+    with patch("kan.storage.watchlist._lookup_name", return_value="贵州茅台"):
         ok, msg = watchlist.add("600519")
     assert ok
     assert "600519" in msg
@@ -76,7 +76,7 @@ def test_add_stock(temp_kan_dir):
 
 
 def test_add_duplicate(temp_kan_dir):
-    with patch("kan.watchlist._lookup_name", return_value="贵州茅台"):
+    with patch("kan.storage.watchlist._lookup_name", return_value="贵州茅台"):
         watchlist.add("600519")
         ok, msg = watchlist.add("600519")
     assert not ok
@@ -84,14 +84,14 @@ def test_add_duplicate(temp_kan_dir):
 
 
 def test_add_with_prefix_normalizes(temp_kan_dir):
-    with patch("kan.watchlist._lookup_name", return_value="贵州茅台"):
+    with patch("kan.storage.watchlist._lookup_name", return_value="贵州茅台"):
         watchlist.add("sh600519")
     stocks = watchlist.list_all()
     assert stocks[0].symbol == "600519"
 
 
 def test_remove_stock(temp_kan_dir):
-    with patch("kan.watchlist._lookup_name", return_value="贵州茅台"):
+    with patch("kan.storage.watchlist._lookup_name", return_value="贵州茅台"):
         watchlist.add("600519")
     ok, msg = watchlist.remove("600519")
     assert ok
@@ -106,7 +106,7 @@ def test_remove_nonexistent(temp_kan_dir):
 
 
 def test_clear_watchlist(temp_kan_dir):
-    with patch("kan.watchlist._lookup_name", return_value="贵州茅台"):
+    with patch("kan.storage.watchlist._lookup_name", return_value="贵州茅台"):
         watchlist.add("600519")
         watchlist.add("000858")
     count = watchlist.clear()
@@ -118,7 +118,7 @@ def test_import_csv(temp_kan_dir, tmp_path):
     csv_path = tmp_path / "stocks.csv"
     csv_path.write_text("600519\n000858\n")
 
-    with patch("kan.watchlist._lookup_name", return_value="测试股"):
+    with patch("kan.storage.watchlist._lookup_name", return_value="测试股"):
         success, skipped, errors = watchlist.import_csv(str(csv_path))
 
     assert success == 2
@@ -277,14 +277,14 @@ class TestStockGroups:
 
 
 class TestColdStartInvariants:
-    """守护 akshare 不在 kan.watchlist 顶层被 import · 防冷启动 启动反馈回归。
+    """守护 akshare 不在 kan.storage.watchlist 顶层被 import · 防冷启动 启动反馈回归。
 
     v0.0.1 实测：watchlist.py 顶层 `import akshare as ak` 把 pandas/numpy/bs4/requests
     整窝拖入启动路径，单 akshare 占 watchlist 加载成本 85%（热启动 229ms / 冷启动约 8s）。
     """
 
     def test_watchlist_top_level_does_not_load_akshare(self):
-        """import kan.watchlist 时 akshare 不应出现在 sys.modules（子进程隔离）。
+        """import kan.storage.watchlist 时 akshare 不应出现在 sys.modules（子进程隔离）。
 
         sys.modules 是 process-global · 单进程 pytest 内可能被其他测试污染，
         必须用 subprocess 隔离才能可靠检查"watchlist 自己有没有 import akshare"。
@@ -295,7 +295,7 @@ class TestColdStartInvariants:
         result = subprocess.run(
             [
                 sys.executable, "-c",
-                "import kan.watchlist as w; "
+                "import kan.storage.watchlist as w; "
                 "import sys; "
                 "leaked = [m for m in sys.modules if 'akshare' in m.lower()]; "
                 "assert not leaked, f'akshare leaked: {leaked}'",
@@ -303,12 +303,12 @@ class TestColdStartInvariants:
             capture_output=True, text=True
         )
         assert result.returncode == 0, (
-            f"akshare leaked into top-level imports of kan.watchlist\n"
+            f"akshare leaked into top-level imports of kan.storage.watchlist\n"
             f"stdout: {result.stdout}\nstderr: {result.stderr}"
         )
 
     def test_scanner_top_level_does_not_load_pandas(self):
-        """import kan.scanner 时 pandas/numpy 不应出现在 sys.modules（v0.0.4.4 加）。
+        """import kan.core.scanner 时 pandas/numpy 不应出现在 sys.modules（v0.0.4.4 加）。
 
         v0.0.4.3 ***REMOVED***根因之一：scanner.py:8 顶层 `import pandas as pd`
         触发 numpy C-extension load · macOS Gatekeeper 拒载老 .so cache。
@@ -320,7 +320,7 @@ class TestColdStartInvariants:
         result = subprocess.run(
             [
                 sys.executable, "-c",
-                "import kan.scanner as s; "
+                "import kan.core.scanner as s; "
                 "import sys; "
                 "leaked = [m for m in sys.modules if any(x in m.lower() for x in ('pandas', 'numpy'))]; "
                 "assert not leaked, f'pandas/numpy leaked: {leaked}'",
@@ -328,7 +328,7 @@ class TestColdStartInvariants:
             capture_output=True, text=True
         )
         assert result.returncode == 0, (
-            f"pandas/numpy leaked into top-level imports of kan.scanner\n"
+            f"pandas/numpy leaked into top-level imports of kan.core.scanner\n"
             f"stdout: {result.stdout}\nstderr: {result.stderr}"
         )
 

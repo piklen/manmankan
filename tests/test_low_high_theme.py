@@ -7,7 +7,7 @@ import pytest
 from typer.testing import CliRunner
 
 from kan.cli import app
-from kan.models import Theme
+from kan.core.models import Theme
 
 
 @pytest.fixture(autouse=True)
@@ -19,30 +19,30 @@ def _mock_adata(monkeypatch):
 
 @pytest.fixture(autouse=True)
 def _isolate_all(tmp_path, monkeypatch):
-    from kan import boards
+    from kan.data import boards
     bdir = tmp_path / "boards"
     bdir.mkdir()
     monkeypatch.setattr(boards, "BOARDS_DIR", bdir)
-    monkeypatch.setattr("kan.paths.BOARDS_DIR", bdir)
-    monkeypatch.setattr("kan.paths.ensure_dirs", lambda: None)
-    monkeypatch.setattr("kan.paths.WATCHLIST_PATH", tmp_path / "wl.json")
-    monkeypatch.setattr("kan.paths.DATA_DIR", tmp_path / "data")
+    monkeypatch.setattr("kan.storage.paths.BOARDS_DIR", bdir)
+    monkeypatch.setattr("kan.storage.paths.ensure_dirs", lambda: None)
+    monkeypatch.setattr("kan.storage.paths.WATCHLIST_PATH", tmp_path / "wl.json")
+    monkeypatch.setattr("kan.storage.paths.DATA_DIR", tmp_path / "data")
     (tmp_path / "data").mkdir(exist_ok=True)
     return tmp_path
 
 
 def _stub(monkeypatch):
     monkeypatch.setattr(
-        "kan.boards.search_theme",
+        "kan.data.boards.search_theme",
         lambda q: Theme(code="886108", name="AI应用", source="ths"),
     )
     monkeypatch.setattr(
-        "kan.boards.get_theme_constituents",
+        "kan.data.boards.get_theme_constituents",
         lambda theme, force=False: [("002230", "科大讯飞"), ("300033", "同花顺")],
     )
     dates = pd.date_range("2026-01-01", periods=100, freq="B").date
     monkeypatch.setattr(
-        "kan.boards.fetch_theme_kline",
+        "kan.data.boards.fetch_theme_kline",
         lambda theme, force=False: pd.DataFrame({
             "date": dates,
             "open": [100.0] * 100, "high": [105.0] * 100,
@@ -51,8 +51,8 @@ def _stub(monkeypatch):
         }),
     )
     # 让 filter_extreme 返回空(简化 · 只验命令能跑通 + 路径正确)
-    monkeypatch.setattr("kan.scanner.filter_extreme", lambda targets, periods, mode: {})
-    monkeypatch.setattr("kan.cli_extreme_cmds._auto_fetch_stale", lambda targets: None)
+    monkeypatch.setattr("kan.core.scanner.filter_extreme", lambda targets, periods, mode: {})
+    monkeypatch.setattr("kan.cli.extreme_cmds._auto_fetch_stale", lambda targets: None)
 
 
 def test_low_theme_runs(monkeypatch, _isolate_all):

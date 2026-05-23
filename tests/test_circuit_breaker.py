@@ -6,7 +6,7 @@ from datetime import datetime, timedelta
 
 import pytest
 
-from kan.circuit_breaker import DOWN_TTL, CircuitBreaker
+from kan.infra.circuit_breaker import DOWN_TTL, CircuitBreaker
 
 
 @pytest.fixture

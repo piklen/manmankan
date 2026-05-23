@@ -5,8 +5,8 @@ from unittest.mock import MagicMock
 import pandas as pd
 import pytest
 
-from kan._scan_targets import ThemeMeta, resolve_scan_targets
-from kan.models import Theme
+from kan.core.models import Theme
+from kan.core.scan_targets import ThemeMeta, resolve_scan_targets
 
 
 @pytest.fixture(autouse=True)
@@ -21,12 +21,12 @@ def _mock_adata(monkeypatch):
 
 @pytest.fixture(autouse=True)
 def _isolate_boards_dir(tmp_path, monkeypatch):
-    from kan import boards
+    from kan.data import boards
     bdir = tmp_path / "boards"
     bdir.mkdir()
     monkeypatch.setattr(boards, "BOARDS_DIR", bdir)
-    monkeypatch.setattr("kan.paths.BOARDS_DIR", bdir)
-    monkeypatch.setattr("kan.paths.ensure_dirs", lambda: None)
+    monkeypatch.setattr("kan.storage.paths.BOARDS_DIR", bdir)
+    monkeypatch.setattr("kan.storage.paths.ensure_dirs", lambda: None)
     return bdir
 
 
@@ -54,9 +54,9 @@ def _stub_fetch_kline(*args, **kwargs):
 
 def test_resolve_theme_returns_constituents_and_theme_meta(monkeypatch):
     """--theme=AI应用 + 自选 [(002230,科大讯飞)] → targets=成分股全 · ThemeMeta.highlight={'002230'}。"""
-    monkeypatch.setattr("kan.boards.search_theme", _stub_search_theme)
-    monkeypatch.setattr("kan.boards.get_theme_constituents", _stub_get_constituents)
-    monkeypatch.setattr("kan.boards.fetch_theme_kline", _stub_fetch_kline)
+    monkeypatch.setattr("kan.data.boards.search_theme", _stub_search_theme)
+    monkeypatch.setattr("kan.data.boards.get_theme_constituents", _stub_get_constituents)
+    monkeypatch.setattr("kan.data.boards.fetch_theme_kline", _stub_fetch_kline)
 
     watchlist = [("002230", "科大讯飞")]
     targets, meta = resolve_scan_targets(
@@ -70,9 +70,9 @@ def test_resolve_theme_returns_constituents_and_theme_meta(monkeypatch):
 
 def test_resolve_theme_only_watchlist_filters(monkeypatch):
     """--theme + --only-watchlist → targets = 成分股 ∩ 自选。"""
-    monkeypatch.setattr("kan.boards.search_theme", _stub_search_theme)
-    monkeypatch.setattr("kan.boards.get_theme_constituents", _stub_get_constituents)
-    monkeypatch.setattr("kan.boards.fetch_theme_kline", _stub_fetch_kline)
+    monkeypatch.setattr("kan.data.boards.search_theme", _stub_search_theme)
+    monkeypatch.setattr("kan.data.boards.get_theme_constituents", _stub_get_constituents)
+    monkeypatch.setattr("kan.data.boards.fetch_theme_kline", _stub_fetch_kline)
 
     watchlist = [("002230", "科大讯飞")]
     targets, meta = resolve_scan_targets(
@@ -92,7 +92,7 @@ def test_resolve_industry_theme_mutually_exclusive():
 
 def test_resolve_hot_theme_mutually_exclusive():
     """--hot + --theme 同时指定 → ValueError。"""
-    from kan.hot import HotList
+    from kan.data.hot import HotList
     with pytest.raises(ValueError, match=r"互斥|不能同时"):
         resolve_scan_targets(
             industry=None,
@@ -105,15 +105,15 @@ def test_resolve_hot_theme_mutually_exclusive():
 
 def test_resolve_theme_kline_failure_degrades(monkeypatch):
     """题材 K 线拉取失败 → ThemeMeta.index_kline 为空 DataFrame · 不阻塞 targets。"""
-    from kan.boards import ThemeDataUnavailableError
+    from kan.data.boards import ThemeDataUnavailableError
 
-    monkeypatch.setattr("kan.boards.search_theme", _stub_search_theme)
-    monkeypatch.setattr("kan.boards.get_theme_constituents", _stub_get_constituents)
+    monkeypatch.setattr("kan.data.boards.search_theme", _stub_search_theme)
+    monkeypatch.setattr("kan.data.boards.get_theme_constituents", _stub_get_constituents)
 
     def kline_fail(theme, force=False):
         raise ThemeDataUnavailableError("kline down")
 
-    monkeypatch.setattr("kan.boards.fetch_theme_kline", kline_fail)
+    monkeypatch.setattr("kan.data.boards.fetch_theme_kline", kline_fail)
     targets, meta = resolve_scan_targets(
         industry=None, only_watchlist=False, watchlist_pairs=[], theme="AI应用"
     )

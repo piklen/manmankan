@@ -15,7 +15,8 @@ from datetime import date, datetime, timedelta
 import pandas as pd
 import pytest
 
-from kan import fetcher, trading_calendar
+from kan.core import trading_calendar
+from kan.data import fetcher
 
 
 @pytest.fixture

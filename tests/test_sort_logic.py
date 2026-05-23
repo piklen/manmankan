@@ -17,8 +17,8 @@ import pytest
 from typer.testing import CliRunner
 
 from kan.cli import app
-from kan.models import PeriodResult, StockScanResult
-from kan.scanner import PERIODS, TrendResult, _period_pct_key
+from kan.core.models import PeriodResult, StockScanResult
+from kan.core.scanner import PERIODS, TrendResult, _period_pct_key
 
 # --- _period_pct_key 纯函数测试 ---
 
@@ -79,14 +79,14 @@ def test_period_pct_key_uses_sentinel_for_insufficient() -> None:
 
 def test_scan_low_resonance_priority(monkeypatch: pytest.MonkeyPatch) -> None:
     """低点模式：共振多的在前 · 不管 pct"""
-    from kan.scanner import scan_batch
+    from kan.core.scanner import scan_batch
 
     r_high_res = _make_result("HighRes", {3: 50.0, 5: 50.0, 7: 50.0}, low_resonance=5)
     r_low_pct = _make_result("LowPct", {3: 1.0, 5: 1.0, 7: 1.0}, low_resonance=2)
 
-    monkeypatch.setattr("kan.fetcher.get_cached", lambda _sym: object())
+    monkeypatch.setattr("kan.data.fetcher.get_cached", lambda _sym: object())
     monkeypatch.setattr(
-        "kan.scanner.scan_stock",
+        "kan.core.scanner.scan_stock",
         lambda _df, sym, name: r_high_res if name == "HighRes" else r_low_pct,
     )
     sorted_results = scan_batch([("HighRes", "HighRes"), ("LowPct", "LowPct")], mode="low")
@@ -96,15 +96,15 @@ def test_scan_low_resonance_priority(monkeypatch: pytest.MonkeyPatch) -> None:
 
 def test_scan_low_periods_lex_tie_break(monkeypatch: pytest.MonkeyPatch) -> None:
     """同共振下，3日 pct 最低的在前 · 同 3日则比 5日"""
-    from kan.scanner import scan_batch
+    from kan.core.scanner import scan_batch
 
     # 两只共振都为 1，A 的 3 日 10%，B 的 3 日 40% → A 在前
     a = _make_result("A", {3: 10.0, 5: 40.0, 7: 50.0}, low_resonance=1)
     b = _make_result("B", {3: 40.0, 5: 10.0, 7: 50.0}, low_resonance=1)
 
-    monkeypatch.setattr("kan.fetcher.get_cached", lambda _sym: object())
+    monkeypatch.setattr("kan.data.fetcher.get_cached", lambda _sym: object())
     monkeypatch.setattr(
-        "kan.scanner.scan_stock",
+        "kan.core.scanner.scan_stock",
         lambda _df, sym, name: a if name == "A" else b,
     )
     sorted_results = scan_batch([("A", "A"), ("B", "B")], mode="low")
@@ -113,14 +113,14 @@ def test_scan_low_periods_lex_tie_break(monkeypatch: pytest.MonkeyPatch) -> None
 
 def test_scan_low_secondary_break_by_5day(monkeypatch: pytest.MonkeyPatch) -> None:
     """3 日 pct 相同时按 5 日 pct 排"""
-    from kan.scanner import scan_batch
+    from kan.core.scanner import scan_batch
 
     a = _make_result("A", {3: 30.0, 5: 10.0, 7: 50.0}, low_resonance=0)
     b = _make_result("B", {3: 30.0, 5: 40.0, 7: 50.0}, low_resonance=0)
 
-    monkeypatch.setattr("kan.fetcher.get_cached", lambda _sym: object())
+    monkeypatch.setattr("kan.data.fetcher.get_cached", lambda _sym: object())
     monkeypatch.setattr(
-        "kan.scanner.scan_stock",
+        "kan.core.scanner.scan_stock",
         lambda _df, sym, name: a if name == "A" else b,
     )
     sorted_results = scan_batch([("A", "A"), ("B", "B")], mode="low")
@@ -129,14 +129,14 @@ def test_scan_low_secondary_break_by_5day(monkeypatch: pytest.MonkeyPatch) -> No
 
 def test_scan_high_resonance_priority(monkeypatch: pytest.MonkeyPatch) -> None:
     """高点模式：共振多的在前"""
-    from kan.scanner import scan_batch
+    from kan.core.scanner import scan_batch
 
     r1 = _make_result("HighRes", {3: 99.0, 5: 99.0, 7: 99.0}, high_resonance=10)
     r2 = _make_result("LowRes", {3: 99.5, 5: 99.5, 7: 99.5}, high_resonance=3)
 
-    monkeypatch.setattr("kan.fetcher.get_cached", lambda _sym: object())
+    monkeypatch.setattr("kan.data.fetcher.get_cached", lambda _sym: object())
     monkeypatch.setattr(
-        "kan.scanner.scan_stock",
+        "kan.core.scanner.scan_stock",
         lambda _df, sym, name: r1 if name == "HighRes" else r2,
     )
     sorted_results = scan_batch([("HighRes", "HighRes"), ("LowRes", "LowRes")], mode="high")
@@ -145,14 +145,14 @@ def test_scan_high_resonance_priority(monkeypatch: pytest.MonkeyPatch) -> None:
 
 def test_scan_high_periods_lex_tie_break(monkeypatch: pytest.MonkeyPatch) -> None:
     """高点模式：同共振下 3 日 pct 高的在前"""
-    from kan.scanner import scan_batch
+    from kan.core.scanner import scan_batch
 
     a = _make_result("A", {3: 100.0, 5: 60.0, 7: 50.0}, high_resonance=1)
     b = _make_result("B", {3: 60.0, 5: 100.0, 7: 50.0}, high_resonance=1)
 
-    monkeypatch.setattr("kan.fetcher.get_cached", lambda _sym: object())
+    monkeypatch.setattr("kan.data.fetcher.get_cached", lambda _sym: object())
     monkeypatch.setattr(
-        "kan.scanner.scan_stock",
+        "kan.core.scanner.scan_stock",
         lambda _df, sym, name: a if name == "A" else b,
     )
     sorted_results = scan_batch([("A", "A"), ("B", "B")], mode="high")
@@ -164,14 +164,14 @@ def test_scan_high_periods_lex_tie_break(monkeypatch: pytest.MonkeyPatch) -> Non
 
 def test_trend_streak_priority(monkeypatch: pytest.MonkeyPatch) -> None:
     """连跌天数多的在前（不论累计幅度）"""
-    from kan.scanner import trend_batch
+    from kan.core.scanner import trend_batch
 
     r6 = TrendResult("000001", "6天小跌", 10.0, streak=-6, streak_pct=-2.0, daily_changes=[])
     r5 = TrendResult("000002", "5天大跌", 10.0, streak=-5, streak_pct=-15.0, daily_changes=[])
 
-    monkeypatch.setattr("kan.fetcher.get_cached", lambda _sym: object())
+    monkeypatch.setattr("kan.data.fetcher.get_cached", lambda _sym: object())
     monkeypatch.setattr(
-        "kan.scanner.calc_trend",
+        "kan.core.scanner.calc_trend",
         lambda _df, sym, name, candle: r6 if "6天" in name else r5,
     )
     sorted_results = trend_batch([("000001", "6天小跌"), ("000002", "5天大跌")])
@@ -180,14 +180,14 @@ def test_trend_streak_priority(monkeypatch: pytest.MonkeyPatch) -> None:
 
 def test_trend_pct_tie_break(monkeypatch: pytest.MonkeyPatch) -> None:
     """同天数下累计幅度大的在前"""
-    from kan.scanner import trend_batch
+    from kan.core.scanner import trend_batch
 
     r_big = TrendResult("000001", "5天-15", 10.0, streak=-5, streak_pct=-15.0, daily_changes=[])
     r_small = TrendResult("000002", "5天-3", 10.0, streak=-5, streak_pct=-3.0, daily_changes=[])
 
-    monkeypatch.setattr("kan.fetcher.get_cached", lambda _sym: object())
+    monkeypatch.setattr("kan.data.fetcher.get_cached", lambda _sym: object())
     monkeypatch.setattr(
-        "kan.scanner.calc_trend",
+        "kan.core.scanner.calc_trend",
         lambda _df, sym, name, candle: r_big if "-15" in name else r_small,
     )
     sorted_results = trend_batch([("000001", "5天-15"), ("000002", "5天-3")])

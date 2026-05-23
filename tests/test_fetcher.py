@@ -7,7 +7,9 @@ from unittest.mock import MagicMock, patch
 import pandas as pd
 import pytest
 
-from kan import data_sources, fetcher, paths, trading_calendar
+from kan.core import trading_calendar
+from kan.data import fetcher, sources
+from kan.storage import paths
 
 
 @pytest.fixture
@@ -30,9 +32,9 @@ def force_eastmoney_path(monkeypatch):
     # _fetch_tushare 在 fetcher 内被 fetch_kline 直接调用 → patch fetcher.globals
     monkeypatch.setattr(fetcher, "_fetch_tushare", lambda *a, **kw: None)
     # _fetch_baostock 在 fetcher 内被 fetch_kline 直接调用 → patch fetcher.globals
-    # _fetch_sina 在 _fetch_via_akshare(data_sources) 内被调用 → patch data_sources.globals
+    # _fetch_sina 在 _fetch_via_akshare(sources) 内被调用 → patch sources.globals
     monkeypatch.setattr(fetcher, "_fetch_baostock", lambda *a, **kw: None)
-    monkeypatch.setattr(data_sources, "_fetch_sina", lambda *a, **kw: None)
+    monkeypatch.setattr(sources, "_fetch_sina", lambda *a, **kw: None)
 
 
 @pytest.fixture
@@ -213,7 +215,7 @@ class TestNormalizeKline:
             "date": ["2026-05-08"], "open": ["100"], "high": ["101"],
             "low": ["99"], "close": ["100.5"], "volume": ["10000"], "amount": ["1e6"],
         })
-        with caplog.at_level(logging.WARNING, logger="kan.fetcher"):
+        with caplog.at_level(logging.WARNING, logger="kan.data.fetcher"):
             fetcher._normalize_kline(raw, source="baostock")
         assert caplog.records == []
 
@@ -223,7 +225,7 @@ class TestNormalizeKline:
             "open": ["100", "101"], "high": ["101", "102"], "low": ["99", "100"],
             "close": ["100.5", "N/A"],
         })
-        with caplog.at_level(logging.WARNING, logger="kan.fetcher"):
+        with caplog.at_level(logging.WARNING, logger="kan.data.fetcher"):
             df = fetcher._normalize_kline(raw, source="baostock")
         assert len(caplog.records) == 1
         msg = caplog.records[0].getMessage()
@@ -237,7 +239,7 @@ class TestNormalizeKline:
             "open": ["100", "101"], "high": ["101", "102"], "low": ["99", "100"],
             "close": ["100.5", "101.5"], "volume": ["10000", None],
         })
-        with caplog.at_level(logging.WARNING, logger="kan.fetcher"):
+        with caplog.at_level(logging.WARNING, logger="kan.data.fetcher"):
             fetcher._normalize_kline(raw, source="sina")
         assert caplog.records == []
 
@@ -247,7 +249,7 @@ class TestNormalizeKline:
             "open": ["bad"], "high": ["101"], "low": ["99"],
             "close": ["100.5"], "volume": ["oops"], "amount": ["1e6"],
         })
-        with caplog.at_level(logging.WARNING, logger="kan.fetcher"):
+        with caplog.at_level(logging.WARNING, logger="kan.data.fetcher"):
             fetcher._normalize_kline(raw, source="baostock")
         assert len(caplog.records) == 1
         msg = caplog.records[0].getMessage()
@@ -260,7 +262,7 @@ class TestNormalizeKline:
             "date": ["2026-05-08"], "open": ["100"], "high": ["101"],
             "low": ["99"], "close": ["junk"],
         })
-        with caplog.at_level(logging.WARNING, logger="kan.fetcher"):
+        with caplog.at_level(logging.WARNING, logger="kan.data.fetcher"):
             fetcher._normalize_kline(raw, source=source)
         assert len(caplog.records) == 1
         assert source in caplog.records[0].getMessage()
@@ -280,8 +282,8 @@ def test_fetch_baostock_returns_dataframe(temp_data_dir):
 
     with patch("baostock.login"), \
          patch("baostock.query_history_k_data_plus", return_value=mock_rs):
-        data_sources._bs_logged_in = False
-        df = data_sources._fetch_baostock("600519", "20260501")
+        sources._bs_logged_in = False
+        df = sources._fetch_baostock("600519", "20260501")
 
     assert df is not None
     assert len(df) == 2
@@ -295,8 +297,8 @@ def test_fetch_baostock_returns_none_on_error(temp_data_dir):
 
     with patch("baostock.login"), \
          patch("baostock.query_history_k_data_plus", return_value=mock_rs):
-        data_sources._bs_logged_in = False
-        df = data_sources._fetch_baostock("999999", "20260501")
+        sources._bs_logged_in = False
+        df = sources._fetch_baostock("999999", "20260501")
 
     assert df is None
 
@@ -309,9 +311,9 @@ def test_circuit_skips_breaker_down_source(temp_data_dir, raw_kline_df, isolated
     # v0.0.5.0 加 tushare top priority · 必须 mock None
     monkeypatch.setattr(fetcher, "_fetch_tushare", lambda *a, **kw: None)
     isolated_breaker.record("baostock", ok=False)
-    # _fetch_via_akshare 在 data_sources 内查 _fetch_eastmoney/_fetch_sina · patch data_sources
-    monkeypatch.setattr(data_sources, "_fetch_eastmoney", lambda *a, **kw: None)
-    monkeypatch.setattr(data_sources, "_fetch_sina", lambda *a, **kw: raw_kline_df)
+    # _fetch_via_akshare 在 sources 内查 _fetch_eastmoney/_fetch_sina · patch sources
+    monkeypatch.setattr(sources, "_fetch_eastmoney", lambda *a, **kw: None)
+    monkeypatch.setattr(sources, "_fetch_sina", lambda *a, **kw: raw_kline_df)
 
     df = fetcher.fetch_kline("600519", force=True)
     assert (df["_source"] == "sina").all()
@@ -320,7 +322,7 @@ def test_circuit_skips_breaker_down_source(temp_data_dir, raw_kline_df, isolated
 def test_circuit_records_down_on_source_exception(isolated_breaker):
     """源抛异常 → 被记 down."""
     with patch("akshare.stock_zh_a_hist", side_effect=Exception("timeout")):
-        result = data_sources._fetch_eastmoney("600519", "20260501")
+        result = sources._fetch_eastmoney("600519", "20260501")
     assert result is None
     assert isolated_breaker.is_down("eastmoney")
 
@@ -328,7 +330,7 @@ def test_circuit_records_down_on_source_exception(isolated_breaker):
 def test_circuit_empty_result_not_recorded_down(isolated_breaker):
     """源返回空数据（无效代码/无数据）≠ 源挂 · 不记 down."""
     with patch("akshare.stock_zh_a_hist", return_value=pd.DataFrame()):
-        result = data_sources._fetch_eastmoney("999999", "20260501")
+        result = sources._fetch_eastmoney("999999", "20260501")
     assert result is None
     assert not isolated_breaker.is_down("eastmoney")
 
@@ -363,17 +365,17 @@ def test_fetch_kline_stamps_source(temp_data_dir, raw_kline_df, source, mock_tar
 
     v0.0.5.0:
     - _fetch_baostock / _fetch_tencent 在 fetcher.globals 被 fetch_kline 直接调 → patch fetcher
-    - _fetch_sina / _fetch_eastmoney 在 data_sources.globals 被 _fetch_via_akshare 调 → patch data_sources
+    - _fetch_sina / _fetch_eastmoney 在 sources.globals 被 _fetch_via_akshare 调 → patch sources
     """
     # v0.0.5.0 加 tushare top priority · 必须 mock None 让 fallback 流到目标源
     # 否则用户本地配 tushare_token 时 _fetch_tushare 返真实数据 · 测试失败
     monkeypatch.setattr(fetcher, "_fetch_tushare", lambda *a, **kw: None)
     monkeypatch.setattr(fetcher, "_fetch_baostock", lambda *a, **kw: None)
     monkeypatch.setattr(fetcher, "_fetch_tencent", lambda *a, **kw: None)
-    monkeypatch.setattr(data_sources, "_fetch_sina", lambda *a, **kw: None)
-    monkeypatch.setattr(data_sources, "_fetch_eastmoney", lambda *a, **kw: None)
+    monkeypatch.setattr(sources, "_fetch_sina", lambda *a, **kw: None)
+    monkeypatch.setattr(sources, "_fetch_eastmoney", lambda *a, **kw: None)
 
-    target_module = fetcher if mock_target in ("_fetch_baostock", "_fetch_tencent") else data_sources
+    target_module = fetcher if mock_target in ("_fetch_baostock", "_fetch_tencent") else sources
     monkeypatch.setattr(target_module, mock_target, lambda *a, **kw: raw_kline_df)
 
     df = fetcher.fetch_kline("600519", force=True)
@@ -413,7 +415,7 @@ def test_load_with_migration_writes_back_atomic(temp_data_dir, monkeypatch):
         calls.append(path)
         return original(df, path)
 
-    monkeypatch.setattr("kan.paths.atomic_write_parquet", spy)
+    monkeypatch.setattr("kan.storage.paths.atomic_write_parquet", spy)
 
     fetcher._load_with_migration(cache)
     assert len(calls) == 1
@@ -433,7 +435,7 @@ def test_load_with_migration_idempotent(temp_data_dir, monkeypatch):
 
     calls = []
     monkeypatch.setattr(
-        "kan.paths.atomic_write_parquet", lambda *a, **kw: calls.append(1)
+        "kan.storage.paths.atomic_write_parquet", lambda *a, **kw: calls.append(1)
     )
     df = fetcher._load_with_migration(cache)
     assert len(calls) == 0
@@ -480,7 +482,8 @@ class TestTushareProDispatch:
 
     @pytest.fixture
     def isolated_env(self, tmp_path, monkeypatch):
-        from kan import circuit_breaker, config
+        from kan.infra import circuit_breaker
+        from kan.storage import config
         monkeypatch.setattr(paths, "BASE_DIR", tmp_path)
         monkeypatch.setattr(paths, "CIRCUIT_PATH", tmp_path / "circuit.json")
         monkeypatch.setattr(config, "CONFIG_PATH", tmp_path / "config.json")
@@ -498,7 +501,7 @@ class TestTushareProDispatch:
             return None
         monkeypatch.setattr(fetcher, "_fetch_tushare", spy_tushare)
         monkeypatch.setattr(fetcher, "_fetch_baostock", lambda *a, **kw: None)
-        monkeypatch.setattr(data_sources, "_fetch_sina", lambda *a, **kw: None)
+        monkeypatch.setattr(sources, "_fetch_sina", lambda *a, **kw: None)
         with patch("akshare.stock_zh_a_hist", return_value=fake_akshare_df):
             df = fetcher.fetch_kline("600519", force=True)
         # spy 应被调用一次但返回 None
@@ -507,7 +510,7 @@ class TestTushareProDispatch:
 
     def test_with_token_uses_tushare_first(self, isolated_env, monkeypatch):
         """配 token → tushare 命中 → 不再 fallback baostock"""
-        from kan import config
+        from kan.storage import config
         config.save({**config.DEFAULT_CONFIG, "tushare_token": "tk"})
 
         sample = pd.DataFrame({
