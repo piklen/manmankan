@@ -21,7 +21,7 @@ if TYPE_CHECKING:
 
 _SYMBOL_PATTERN = re.compile(r"^\d{6}$")
 
-DEFAULT_ENDPOINT = "http://api.tushare.pro"
+DEFAULT_ENDPOINT = "https://api.tushare.pro"
 
 _TIMEOUT_SECONDS = 30
 
@@ -75,6 +75,14 @@ def _resolve_config() -> tuple[str | None, str]:
     endpoint = endpoint_raw.strip() if isinstance(endpoint_raw, str) else ""
     if not endpoint.startswith(("http://", "https://")):
         endpoint = DEFAULT_ENDPOINT
+    elif endpoint.startswith("http://"):
+        # 自部署镜像 / 内网测试走 http 是合法选择 · 但默认必须 https
+        # 这里 warn · 提醒用户明文传 token 风险(咖啡店 wifi / 透明代理 / ISP 镜像)
+        debug_log(
+            __name__,
+            "endpoint 走明文 HTTP · token 可能被中间节点截获 · 推荐改 https",
+            RuntimeWarning(endpoint),
+        )
 
     return token, endpoint
 
@@ -104,18 +112,28 @@ def _post_tushare_api(
     try:
         resp = requests.post(endpoint, json=payload, timeout=_TIMEOUT_SECONDS)
     except Exception as e:
-        # 不传 e.args 给 debug_log · 仅 type 名 · 防意外泄漏
-        debug_log(__name__, f"tushare POST {endpoint}", type(e).__name__)
+        # 传真 Exception · _log.py 的 _redact 会兜底处理 path / token 模式
+        debug_log(__name__, "tushare POST 失败", e)
         return None
     if resp.status_code != 200:
-        debug_log(__name__, f"tushare HTTP {resp.status_code}", endpoint)
+        debug_log(
+            __name__,
+            f"tushare HTTP {resp.status_code}",
+            RuntimeError(f"endpoint={endpoint}"),
+        )
         return None
     try:
         body = resp.json()
     except ValueError:
         return None
     if body.get("code", -1) != 0:
-        debug_log(__name__, "tushare api code", body.get("msg", ""))
+        # 不把 server msg 传日志 · TuShare 错误消息常含 token 字符串("token xxx invalid")
+        # 只记 code 数字 · _log.py REDACT 还会兜底处理 body 文本里的 token 模式
+        debug_log(
+            __name__,
+            f"tushare api non-zero code={body.get('code', '?')}",
+            RuntimeError("api refused"),
+        )
         return None
     return body.get("data")
 
@@ -178,6 +196,6 @@ def _fetch_tushare(symbol: str, start: str) -> pd.DataFrame | None:
         cb.record("tushare", ok=True)
         return df
     except Exception as e:
-        debug_log(__name__, "fetch tushare", type(e).__name__)
+        debug_log(__name__, "fetch tushare 失败", e)
         cb.record("tushare", ok=False)
         return None

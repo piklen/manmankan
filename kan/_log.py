@@ -31,6 +31,9 @@ _REDACT_PATTERNS = [
     (re.compile(r"([?&](?:token|key|api_key|secret|auth)=)[^&\s]+"), r"\1<redacted>"),
     # Windows path C:\Users\xiao → C:\Users\<user>
     (re.compile(r"([A-Z]:\\Users\\)[^\\\s]+"), r"\1<user>"),
+    # v0.0.5.0: body 文本里的裸 token 兜底
+    # 防 TuShare 服务端返回 msg 含 "token xxxxx invalid" 直接进日志
+    (re.compile(r"\btoken[\s=:]+[A-Za-z0-9_\-]{8,}", re.I), "token <redacted>"),
 ]
 
 
