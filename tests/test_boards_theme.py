@@ -310,3 +310,61 @@ def test_get_theme_constituents_em_fail_marks_down(monkeypatch, _isolate_boards_
         boards.get_theme_constituents(theme)
     # EM 应被标记 down
     assert get_breaker().is_down("em_push2_concept")
+
+
+# ── fetch_theme_kline · EM K 线(THS V8 arm64 不兼容 → 不用 THS K 线) ───
+
+def _em_kline_df():
+    """模拟 adata.stock.market.get_market_concept_east 真返回(2026-05-23 spike · 11 列)。"""
+    return pd.DataFrame(
+        [
+            {
+                "index_code": "BK1629",
+                "trade_time": "2026-05-23 15:00:00",
+                "trade_date": "2026-05-23",
+                "open": 989.9,
+                "high": 1001.16,
+                "low": 983.47,
+                "close": 986.76,
+                "volume": 64404573.0,
+                "amount": 148606766448.0,
+                "change": -13.24,
+                "change_pct": -1.32,
+            }
+        ]
+    )
+
+
+def test_fetch_theme_kline_returns_standard_schema(monkeypatch, _isolate_boards_dir):
+    """EM K 线 11 列 rename 为标准 7 列(date/open/high/low/close/volume/amount)。"""
+    monkeypatch.setattr(
+        "adata.stock.market.get_market_concept_east",
+        lambda index_code, k_type=1: _em_kline_df(),
+    )
+    theme = Theme(code="BK1629", name="AI应用", source="em")
+    df = boards.fetch_theme_kline(theme)
+    assert list(df.columns) == ["date", "open", "high", "low", "close", "volume", "amount"]
+    assert df["close"].iloc[0] == 986.76
+
+
+def test_fetch_theme_kline_writes_parquet(monkeypatch, _isolate_boards_dir):
+    """K 线 cache 为 parquet · 文件名带 EM 前缀。"""
+    monkeypatch.setattr(
+        "adata.stock.market.get_market_concept_east",
+        lambda index_code, k_type=1: _em_kline_df(),
+    )
+    theme = Theme(code="BK1629", name="AI应用", source="em")
+    boards.fetch_theme_kline(theme)
+    cache = _isolate_boards_dir / "kline_EMBK1629.parquet"
+    assert cache.exists()
+
+
+def test_fetch_theme_kline_raises_on_empty(monkeypatch, _isolate_boards_dir):
+    """EM 返回空 → 抛 ThemeDataUnavailableError(题材指数 K 不可用 · 上层应降级渲染)。"""
+    monkeypatch.setattr(
+        "adata.stock.market.get_market_concept_east",
+        lambda index_code, k_type=1: pd.DataFrame(),
+    )
+    theme = Theme(code="BK1629", name="AI应用", source="em")
+    with pytest.raises(ThemeDataUnavailableError):
+        boards.fetch_theme_kline(theme)
