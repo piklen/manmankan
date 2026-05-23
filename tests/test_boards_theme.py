@@ -368,3 +368,51 @@ def test_fetch_theme_kline_raises_on_empty(monkeypatch, _isolate_boards_dir):
     theme = Theme(code="BK1629", name="AI应用", source="em")
     with pytest.raises(ThemeDataUnavailableError):
         boards.fetch_theme_kline(theme)
+
+
+# ── get_themes_of_stock · EM datacenter 反查 ──────────────────────────
+
+def _em_reverse_df():
+    """模拟 adata.stock.info.get_concept_east(stock_code=) 真返回(2026-05-23 spike)。"""
+    return pd.DataFrame(
+        [
+            {"stock_code": "002230", "concept_code": "BK1629", "name": "AI应用", "source": "东方财富", "reason": "..."},
+            {"stock_code": "002230", "concept_code": "BK0612", "name": "智能语音", "source": "东方财富", "reason": "..."},
+        ]
+    )
+
+
+def test_get_themes_of_stock_returns_list_of_theme(monkeypatch, _isolate_boards_dir):
+    """002230 反查 → 多个 Theme(source='em')。"""
+    monkeypatch.setattr(
+        "adata.stock.info.get_concept_east",
+        lambda stock_code: _em_reverse_df(),
+    )
+    themes = boards.get_themes_of_stock("002230")
+    assert len(themes) == 2
+    assert all(t.source == "em" for t in themes)
+    assert themes[0].code == "BK1629"
+
+
+def test_get_themes_of_stock_caches(monkeypatch, _isolate_boards_dir):
+    """12h 内不重拉。"""
+    call_count = {"n": 0}
+
+    def counting(stock_code):
+        call_count["n"] += 1
+        return _em_reverse_df()
+
+    monkeypatch.setattr("adata.stock.info.get_concept_east", counting)
+    boards.get_themes_of_stock("002230")
+    boards.get_themes_of_stock("002230")
+    assert call_count["n"] == 1
+
+
+def test_get_themes_of_stock_empty_means_no_themes(monkeypatch, _isolate_boards_dir):
+    """股票无任何题材归属 → 空列表 · 不抛。"""
+    monkeypatch.setattr(
+        "adata.stock.info.get_concept_east",
+        lambda stock_code: pd.DataFrame(),
+    )
+    themes = boards.get_themes_of_stock("999999")
+    assert themes == []

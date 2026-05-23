@@ -438,3 +438,49 @@ def fetch_theme_kline(theme: Theme, force: bool = False) -> pd.DataFrame:
     )
     atomic_write_parquet(df, cache)
     return df
+
+
+def get_themes_of_stock(stock_code: str, force: bool = False) -> list[Theme]:
+    """股票反查所属题材 · EM datacenter HTTP(不在 push2 反爬名单 · 稳定) · 12h JSON cache。
+
+    adata.stock.info.get_concept_east(stock_code=) 返回 5 列:
+    stock_code / concept_code / name / source / reason → list[Theme(source='em')]。
+
+    返回空列表表示无任何题材归属(不抛)。
+    """
+    from kan.models import Theme
+
+    ensure_dirs()
+    cache = BOARDS_DIR / f"stock_themes_{stock_code}.json"
+    if not force and _cache_fresh(cache, _STOCK_THEMES_TTL):
+        try:
+            data = json.loads(cache.read_text(encoding="utf-8"))
+            return [Theme(**t) for t in data]
+        except Exception:
+            pass
+
+    import adata
+
+    try:
+        df = adata.stock.info.get_concept_east(stock_code=stock_code)
+    except Exception:
+        return []
+
+    if df is None or df.empty:
+        cache.write_text("[]", encoding="utf-8")
+        return []
+
+    themes = [
+        Theme(
+            code=str(row["concept_code"]).strip(),
+            name=str(row["name"]).strip(),
+            source="em",
+            size=None,
+        )
+        for _, row in df.iterrows()
+    ]
+    cache.write_text(
+        json.dumps([t.model_dump() for t in themes], ensure_ascii=False),
+        encoding="utf-8",
+    )
+    return themes
