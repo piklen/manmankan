@@ -129,7 +129,7 @@ def test_trend_down_no_match(runner: CliRunner) -> None:
     """--down 10 · 没匹配 · 友好提示"""
     result = runner.invoke(app, ["trend", "--down", "10"])
     assert result.exit_code == 0
-    assert "没有连续跌 10 天以上" in result.stdout
+    assert "没有连续跌 ≥10 天" in result.stdout
 
 
 def test_trend_up_3(runner: CliRunner) -> None:

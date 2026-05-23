@@ -17,8 +17,11 @@ def compare(
     symbols: Annotated[list[str], typer.Argument(help="股票代码或名称（2-8 只）")],
     periods: Annotated[
         str,
-        typer.Option("--periods", "-p", help="周期（默认 30 · 逗号分隔多个：7,30,90）"),
-    ] = "30",
+        typer.Option(
+            "--periods", "-p",
+            help="周期(默认 5,30,180 短中长 · 逗号分隔多个:7,30,90)"
+        ),
+    ] = "5,30,180",
     fmt: Annotated[
         export.OutputFormat,
         typer.Option("--format", help="输出格式：terminal（默认）/ md / json"),
