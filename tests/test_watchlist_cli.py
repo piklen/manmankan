@@ -1,4 +1,4 @@
-"""watchlist CLI 命令组 CliRunner 真测 (CR-2 v0.0.4.8: 行覆盖率 13% → 60%+)
+"""watchlist CLI 命令组 CliRunner 真测(v0.0.4.8:行覆盖率 13% → 60%+)
 
 测试策略:
 - 用 temp_kan_dir fixture 隔离 watchlist.json
@@ -89,7 +89,7 @@ def test_add_command_by_name_single_match_succeeds(cli_runner):
 
 
 def test_add_command_multi_match_lists_candidates(cli_runner):
-    """U-1 LOCKED 真测 (v0.0.4.7 P0): 多匹配应列出候选 · 不 dead-end.
+    """LOCKED 真测 (v0.0.4.7): 多匹配应列出候选 · 不 dead-end.
 
     `kan add 平安` 匹配 平安银行(000001) + 中国平安(601318) + 平安股份(002007).
     旧行为: "匹配到 N 只 · 请用更精确名称或代码" → dead-end.
@@ -98,7 +98,7 @@ def test_add_command_multi_match_lists_candidates(cli_runner):
     result = cli_runner.invoke(app, ["add", "平安"])
     # exit_code=1 因为 add 失败 (没添加任何股票 · multi match 需用户精确化)
     assert result.exit_code != 0 or result.output != ""
-    # 关键: 应列出全部 3 个候选 (U-1 LOCKED: 不 dead-end)
+    # 关键: 应列出全部 3 个候选 (LOCKED: 不 dead-end)
     assert "000001" in result.output
     assert "601318" in result.output
     assert "002007" in result.output
