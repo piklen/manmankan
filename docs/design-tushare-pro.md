@@ -16,11 +16,11 @@ baostock → akshare (东财+新浪并发) → 腾讯
 1. **稳定性**：baostock 周期性间歇不可用；akshare 三个分支均依赖第三方端点漂移（参 GitHub Issue #6092/#6148/#7011/#6214），整体可用性 ~99%。
 2. **数据深度**：现有源仅日 K，无法扩展财务/分钟/复权因子等。
 
-**TuShare Pro** 是付费 / 积分制 SaaS（[tushare.pro](https://tushare.pro)），***REMOVED***付费即得：高稳定性 API、覆盖更广的金融数据宇宙、可控延迟。本功能为接入第一步 —— **仅日 K**，对齐现有 fetcher 能力。
+**TuShare Pro** 是付费 / 积分制 SaaS（[tushare.pro](https://tushare.pro)），维护者付费即得：高稳定性 API、覆盖更广的金融数据宇宙、可控延迟。本功能为接入第一步 —— **仅日 K**，对齐现有 fetcher 能力。
 
 ### 目标
 
-- 允许***REMOVED***配置 **token + 端点** 两项后，让 TuShare Pro 顶替 baostock 作为 fetch_kline 主路径
+- 允许维护者配置 **token + 端点** 两项后，让 TuShare Pro 顶替 baostock 作为 fetch_kline 主路径
 - 未配 token 时 **零行为变化**（pure additive，零回归风险）
 - 端点支持替换为自部署镜像 / 反代（默认 `http://api.tushare.pro`），不绑定官方 host
 - 引入轻量配置子命令 `kan config`，未来其他配置项（如 `auto_update`）可平滑迁移
@@ -188,7 +188,7 @@ tushare_endpoint: <default: http://api.tushare.pro>
 - token 永不出现在：日志、异常 message、circuit_breaker 状态、parquet 缓存元数据
 - `kan config get` 是唯一 token 出口，必 mask
 - `config.json` 已 `chmod 0o600`（沿用现有 `_atomic_write_json` 机制）
-- HTTP 请求体里的 token 仅传给用户配置的 endpoint；自定义端点是用户自主选择，不做警告（***REMOVED***知道自己在干什么）
+- HTTP 请求体里的 token 仅传给用户配置的 endpoint；自定义端点是用户自主选择，不做警告（维护者知道自己在干什么）
 - 错误处理时记得过滤：若 _fetch_tushare 异常抛出，message 里不能含 token（即便用户配错也不要在 traceback 里泄漏）
 
 ## 9. 测试策略
@@ -213,7 +213,7 @@ tushare_endpoint: <default: http://api.tushare.pro>
 
 | 决策 | 选项 | 选了 | 理由 |
 |---|---|---|---|
-| 代理语义 | 端点替换 / HTTP proxy / 都做 | **端点替换** | ***REMOVED***原话"默认官方但可自定义"语义对齐端点；HTTP proxy 已经能通过系统 env var 实现 |
+| 代理语义 | 端点替换 / HTTP proxy / 都做 | **端点替换** | 维护者原话"默认官方但可自定义"语义对齐端点；HTTP proxy 已经能通过系统 env var 实现 |
 | Fallback 位置 | 顶优先 / baostock 后 / 最末 / 显式 --source | **配 token 即顶优先** | 付费用户期望付费源被使用；未配 token 时零变化保证安全 |
 | 配置 UX | `kan config` 子命令 / env-only / 手改 json | **`kan config` 子命令组** | 后续其他配置项可平滑迁移；env 仍可覆盖兼顾 CI |
 | HTTP client | 自写 / SDK + monkey-patch / SDK + 子类 | **自写 ~80 行** | SDK 端点硬编码；自写无 transitive deps；风格与 fetcher.py 现有源一致 |
