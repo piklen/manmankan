@@ -20,7 +20,7 @@ venv/
 # Database / Data
 *.db
 *.sqlite
-data/
+/data/  # repo-root data 缓存 · 不 ignore kan/data/ sub-package
 *.parquet
 
 # Testing
