@@ -33,9 +33,13 @@ def fetch(
         HotList | None,
         typer.Option("--hot", help="预拉东财热榜全部股票 · rank=人气榜 / surge=飙升榜"),
     ] = None,
+    theme: Annotated[
+        str | None,
+        typer.Option("--theme", help="预拉某题材全部成分股 K 线"),
+    ] = None,
     only_watchlist: Annotated[
         bool,
-        typer.Option("--only-watchlist", help="仅拉自选 ∩ 行业/热榜(需配合 --industry 或 --hot)"),
+        typer.Option("--only-watchlist", help="仅拉自选 ∩ 行业/热榜/题材"),
     ] = False,
 ) -> None:
     """拉取股票历史 K 线数据"""
@@ -45,15 +49,20 @@ def fetch(
     with _with_heavy_imports_spinner(status_console, "⏳ 加载数据模块..."):
         from kan.fetcher import fetch_kline, is_fresh
 
-    if industry is not None and hot is not None:
-        typer.echo("--industry 与 --hot 不能同时使用", err=True)
+    if sum(1 for x in (industry, hot, theme) if x is not None) > 1:
+        typer.echo("--industry / --hot / --theme 三者互斥 · 同时只能用一个", err=True)
         raise typer.Exit(2)
-    if industry is not None or hot is not None:
+    if industry is not None or hot is not None or theme is not None:
         if symbols:
-            typer.echo("--industry / --hot 与股票代码不能同时使用", err=True)
+            typer.echo("--industry / --hot / --theme 与股票代码不能同时使用", err=True)
             raise typer.Exit(2)
         from kan._scan_targets import resolve_scan_targets
-        from kan.boards import BoardDataUnavailableError, BoardNotFoundError
+        from kan.boards import (
+            BoardDataUnavailableError,
+            BoardNotFoundError,
+            ThemeDataUnavailableError,
+            ThemeNotFoundError,
+        )
         from kan.hot import HotListUnavailableError
         wl_pairs = []
         if only_watchlist:
@@ -61,7 +70,7 @@ def fetch(
             wl_pairs = [(s.symbol, s.name) for s in load_watchlist().stocks]
         try:
             targets, _meta = resolve_scan_targets(
-                industry, only_watchlist, wl_pairs, hot=hot,
+                industry, only_watchlist, wl_pairs, hot=hot, theme=theme,
             )
         except BoardNotFoundError:
             typer.echo(f"未找到行业「{industry}」· 可试更短关键词", err=True)
@@ -71,6 +80,12 @@ def fetch(
             raise typer.Exit(1) from None
         except HotListUnavailableError:
             typer.echo("热榜数据源暂时不可用,稍后再试", err=True)
+            raise typer.Exit(1) from None
+        except ThemeNotFoundError:
+            typer.echo(f"未找到题材「{theme}」· 试更短关键词 · 或跑 kan theme search", err=True)
+            raise typer.Exit(2) from None
+        except ThemeDataUnavailableError:
+            typer.echo("题材数据源暂时不可用,稍后再试", err=True)
             raise typer.Exit(1) from None
         symbols = [s for s, _ in targets]
 
@@ -114,9 +129,13 @@ def scan(
         HotList | None,
         typer.Option("--hot", help="扫东财热榜 · rank=人气榜 / surge=飙升榜 · 自选股 ⭐ 高亮"),
     ] = None,
+    theme: Annotated[
+        str | None,
+        typer.Option("--theme", help="扫指定题材全成分股 · 自选 ⭐ 高亮 · 题材 ≠ 行业,一股归多个"),
+    ] = None,
     only_watchlist: Annotated[
         bool,
-        typer.Option("--only-watchlist", help="仅显示自选 ∩ 行业/热榜(需配合 --industry 或 --hot)"),
+        typer.Option("--only-watchlist", help="仅显示自选 ∩ 行业/热榜/题材(需配合 --industry / --hot / --theme)"),
     ] = False,
     fmt: Annotated[
         export.OutputFormat,
@@ -147,22 +166,27 @@ def scan(
         )
 
     console = Console()
-    if industry is not None and hot is not None:
-        _print_err("❌ --industry 与 --hot 不能同时使用")
+    if sum(1 for x in (industry, hot, theme) if x is not None) > 1:
+        _print_err("❌ --industry / --hot / --theme 三者互斥 · 同时只能用一个")
         raise typer.Exit(2)
-    source_mode = industry is not None or hot is not None
+    source_mode = industry is not None or hot is not None or theme is not None
     watchlist_pairs = (
         _load_watchlist_pairs() if source_mode else _get_watchlist_pairs()
     )
     if only_watchlist and not source_mode:
-        _print_err("❌ --only-watchlist 需配合 --industry 或 --hot 使用")
+        _print_err("❌ --only-watchlist 需配合 --industry / --hot / --theme 使用")
         raise typer.Exit(1)
-    from kan._scan_targets import BoardMeta, HotMeta, resolve_scan_targets
-    from kan.boards import BoardDataUnavailableError, BoardNotFoundError
+    from kan._scan_targets import BoardMeta, HotMeta, ThemeMeta, resolve_scan_targets
+    from kan.boards import (
+        BoardDataUnavailableError,
+        BoardNotFoundError,
+        ThemeDataUnavailableError,
+        ThemeNotFoundError,
+    )
     from kan.hot import HotListUnavailableError
     try:
         targets, board_meta = resolve_scan_targets(
-            industry, only_watchlist, watchlist_pairs, hot=hot,
+            industry, only_watchlist, watchlist_pairs, hot=hot, theme=theme,
         )
     except BoardNotFoundError:
         _print_err(
@@ -174,6 +198,14 @@ def scan(
         raise typer.Exit(1) from None
     except HotListUnavailableError:
         _print_err("❌ 热榜数据源暂时不可用,稍后再试")
+        raise typer.Exit(1) from None
+    except ThemeNotFoundError:
+        _print_err(
+            f"❌ 未找到题材「{theme}」· 试更短关键词(如「AI」「华为」) · 或跑 kan theme search 看候选"
+        )
+        raise typer.Exit(2) from None
+    except ThemeDataUnavailableError:
+        _print_err("❌ 题材数据源暂时不可用 · 稍后再试 · 行业扫描可用(--industry)")
         raise typer.Exit(1) from None
     _auto_fetch_stale(targets)
     mode = "high" if high else "low"
@@ -188,6 +220,11 @@ def scan(
         from kan.scanner import scan_stock
         board_index_result = scan_stock(
             board_meta.index_kline, board_meta.board.code, board_meta.board.name,
+        )
+    elif isinstance(board_meta, ThemeMeta) and not board_meta.index_kline.empty:
+        from kan.scanner import scan_stock
+        board_index_result = scan_stock(
+            board_meta.index_kline, board_meta.theme.code, board_meta.theme.name,
         )
 
     if not all_results:
@@ -239,6 +276,11 @@ def scan(
     elif isinstance(board_meta, HotMeta):
         title = (
             f"慢慢看 · {board_meta.list_name} 位置扫描"
+            f" · {'高点' if high else '低点'}模式"
+        )
+    elif isinstance(board_meta, ThemeMeta):
+        title = (
+            f"慢慢看 · {board_meta.theme.name} 题材位置扫描"
             f" · {'高点' if high else '低点'}模式"
         )
 
@@ -374,13 +416,18 @@ def scan(
         console.print(
             "[dim]  榜 = 东方财富热榜实时名次 · 非慢慢看观点 · 热榜为实时榜单[/dim]"
         )
-    console.print(DISCLAIMER, style="dim")
+    if isinstance(board_meta, ThemeMeta):
+        from kan.render_theme import render_theme_disclaimer
+        render_theme_disclaimer()
+    else:
+        console.print(DISCLAIMER, style="dim")
 
 
 def _filter_extreme_cmd(
     periods: list[int], mode: str, fmt: export.OutputFormat,
     industry: str | None = None, only_watchlist: bool = False,
     hot: HotList | None = None,
+    theme: str | None = None,
 ) -> None:
     """low/high 共享实现"""
     from rich.console import Console
@@ -403,22 +450,27 @@ def _filter_extreme_cmd(
     label = "低点" if mode == "low" else "高点"
     signal_style = "bold green" if mode == "low" else "bold yellow"
 
-    if industry is not None and hot is not None:
-        _print_err("❌ --industry 与 --hot 不能同时使用")
+    if sum(1 for x in (industry, hot, theme) if x is not None) > 1:
+        _print_err("❌ --industry / --hot / --theme 三者互斥 · 同时只能用一个")
         raise typer.Exit(2)
-    source_mode = industry is not None or hot is not None
+    source_mode = industry is not None or hot is not None or theme is not None
     watchlist_pairs = (
         _load_watchlist_pairs() if source_mode else _get_watchlist_pairs()
     )
     if only_watchlist and not source_mode:
-        _print_err("❌ --only-watchlist 需配合 --industry 或 --hot 使用")
+        _print_err("❌ --only-watchlist 需配合 --industry / --hot / --theme 使用")
         raise typer.Exit(1)
-    from kan._scan_targets import BoardMeta, HotMeta, resolve_scan_targets
-    from kan.boards import BoardDataUnavailableError, BoardNotFoundError
+    from kan._scan_targets import BoardMeta, HotMeta, ThemeMeta, resolve_scan_targets
+    from kan.boards import (
+        BoardDataUnavailableError,
+        BoardNotFoundError,
+        ThemeDataUnavailableError,
+        ThemeNotFoundError,
+    )
     from kan.hot import HotListUnavailableError
     try:
         targets, board_meta = resolve_scan_targets(
-            industry, only_watchlist, watchlist_pairs, hot=hot,
+            industry, only_watchlist, watchlist_pairs, hot=hot, theme=theme,
         )
     except BoardNotFoundError:
         _print_err(f"❌ 未找到行业「{industry}」· 可试更短关键词")
@@ -428,6 +480,14 @@ def _filter_extreme_cmd(
         raise typer.Exit(1) from None
     except HotListUnavailableError:
         _print_err("❌ 热榜数据源暂时不可用,稍后再试")
+        raise typer.Exit(1) from None
+    except ThemeNotFoundError:
+        _print_err(
+            f"❌ 未找到题材「{theme}」· 试更短关键词 · 或跑 kan theme search 看候选"
+        )
+        raise typer.Exit(2) from None
+    except ThemeDataUnavailableError:
+        _print_err("❌ 题材数据源暂时不可用 · 稍后再试 · 行业扫描可用(--industry)")
         raise typer.Exit(1) from None
     highlight = board_meta.highlight if board_meta else set()
     is_hot = isinstance(board_meta, HotMeta)
@@ -449,6 +509,8 @@ def _filter_extreme_cmd(
             where = f"{board_meta.board.name} 行业成分股"
         elif isinstance(board_meta, HotMeta):
             where = board_meta.list_name
+        elif isinstance(board_meta, ThemeMeta):
+            where = f"{board_meta.theme.name} 题材成分股"
         else:
             where = "自选股"
         console.print(f"{where}中没有触及 {'/'.join(map(str, periods))} 日{label}的股票")
@@ -503,7 +565,11 @@ def _filter_extreme_cmd(
         console.print(
             "[dim]  榜 = 东方财富热榜实时名次 · 非慢慢看观点 · 热榜为实时榜单[/dim]"
         )
-    console.print(DISCLAIMER, style="dim")
+    if isinstance(board_meta, ThemeMeta):
+        from kan.render_theme import render_theme_disclaimer
+        render_theme_disclaimer()
+    else:
+        console.print(DISCLAIMER, style="dim")
 
 
 @app.command()
@@ -521,15 +587,19 @@ def low(
         HotList | None,
         typer.Option("--hot", help="扫东财热榜 · rank=人气榜 / surge=飙升榜 · 自选股 ⭐ 高亮"),
     ] = None,
+    theme: Annotated[
+        str | None,
+        typer.Option("--theme", help="扫指定题材全成分股 · 自选 ⭐ 高亮"),
+    ] = None,
     only_watchlist: Annotated[
         bool,
-        typer.Option("--only-watchlist", help="仅显示自选 ∩ 行业/热榜(需配合 --industry 或 --hot)"),
+        typer.Option("--only-watchlist", help="仅显示自选 ∩ 行业/热榜/题材(需配合 --industry / --hot / --theme)"),
     ] = False,
 ) -> None:
     """筛选 N 日低点的自选股（支持多周期）"""
     _filter_extreme_cmd(
         periods, mode="low", fmt=fmt,
-        industry=industry, only_watchlist=only_watchlist, hot=hot,
+        industry=industry, only_watchlist=only_watchlist, hot=hot, theme=theme,
     )
 
 
@@ -548,15 +618,19 @@ def high(
         HotList | None,
         typer.Option("--hot", help="扫东财热榜 · rank=人气榜 / surge=飙升榜 · 自选股 ⭐ 高亮"),
     ] = None,
+    theme: Annotated[
+        str | None,
+        typer.Option("--theme", help="扫指定题材全成分股 · 自选 ⭐ 高亮"),
+    ] = None,
     only_watchlist: Annotated[
         bool,
-        typer.Option("--only-watchlist", help="仅显示自选 ∩ 行业/热榜(需配合 --industry 或 --hot)"),
+        typer.Option("--only-watchlist", help="仅显示自选 ∩ 行业/热榜/题材(需配合 --industry / --hot / --theme)"),
     ] = False,
 ) -> None:
     """筛选 N 日高点的自选股（支持多周期）"""
     _filter_extreme_cmd(
         periods, mode="high", fmt=fmt,
-        industry=industry, only_watchlist=only_watchlist, hot=hot,
+        industry=industry, only_watchlist=only_watchlist, hot=hot, theme=theme,
     )
 
 
@@ -625,6 +699,77 @@ def _info_industry(industry: str, fmt: export.OutputFormat) -> None:
     console.print(DISCLAIMER, style="dim")
 
 
+def _info_theme(theme_query: str, fmt: export.OutputFormat) -> None:
+    """kan info --theme · 题材档案 · 类似 _info_industry。"""
+    from rich.console import Console
+
+    status_console = Console(stderr=True)
+    with _with_heavy_imports_spinner(status_console, "⏳ 加载数据模块..."):
+        from rich.table import Table
+
+        from kan._scan_targets import resolve_scan_targets
+        from kan.boards import ThemeDataUnavailableError, ThemeNotFoundError
+        from kan.render import format_pct
+        from kan.render_theme import render_theme_disclaimer
+        from kan.scanner import scan_stock
+
+    console = Console()
+    try:
+        _targets, meta = resolve_scan_targets(
+            industry=None, only_watchlist=False, watchlist_pairs=[],
+            theme=theme_query,
+        )
+    except ThemeNotFoundError:
+        _print_err(
+            f"❌ 未找到题材「{theme_query}」· 试更短关键词 · 或跑 kan theme search 看候选"
+        )
+        raise typer.Exit(2) from None
+    except ThemeDataUnavailableError:
+        _print_err("❌ 题材数据源暂时不可用,稍后再试")
+        raise typer.Exit(1) from None
+
+    assert meta is not None
+    if meta.index_kline.empty:
+        _print_err("❌ 题材指数 K 线暂不可用 · 无法生成档案")
+        raise typer.Exit(1)
+    theme_result = scan_stock(meta.index_kline, meta.theme.code, meta.theme.name)
+
+    if fmt is not export.OutputFormat.terminal:
+        if fmt is export.OutputFormat.json:
+            typer.echo(export.to_json(export.scan_payload(
+                [theme_result], mode="low", data_cutoff=theme_result.scan_date,
+                fetched_at=None, stale=False,
+            )))
+        else:
+            typer.echo(export.scan_markdown(
+                [theme_result], periods=[p.period for p in theme_result.periods],
+                mode="low", title=f"慢慢看 · {meta.theme.name} 题材档案",
+            ))
+        return
+
+    console.print(
+        f"\n[bold]🎯 {meta.theme.name} · 同花顺概念 · {meta.theme.code}[/bold]"
+    )
+    console.print(f"  成分股 {len(meta.constituents)} 只 · 题材指数多周期位置:")
+    console.print()
+
+    table = Table(show_lines=False, pad_edge=False, padding=(0, 1))
+    table.add_column("周期", justify="right", style="cyan")
+    table.add_column("最低", justify="right", style="dim", min_width=8)
+    table.add_column("最高", justify="right", style="dim", min_width=8)
+    table.add_column("位置", justify="right", min_width=8)
+    for pr in theme_result.periods:
+        if pr.insufficient:
+            table.add_row(f"{pr.period}日", "-", "-", "-")
+        else:
+            table.add_row(
+                f"{pr.period}日", f"{pr.n_low:.2f}",
+                f"{pr.n_high:.2f}", format_pct(pr),
+            )
+    console.print(table)
+    render_theme_disclaimer()
+
+
 @app.command()
 def info(
     symbol: Annotated[
@@ -635,17 +780,30 @@ def info(
         str | None,
         typer.Option("--industry", help="查看某申万行业的板块档案"),
     ] = None,
+    theme: Annotated[
+        str | None,
+        typer.Option("--theme", help="查看某题材的板块档案"),
+    ] = None,
     fmt: Annotated[
         export.OutputFormat,
         typer.Option("--format", help="输出格式：terminal（默认）/ md / json"),
     ] = export.OutputFormat.terminal,
 ) -> None:
     """单只股票详情（全周期位置 + 涨跌信息）"""
+    if sum(1 for x in (industry, theme) if x is not None) > 1:
+        _print_err("❌ --industry 与 --theme 不能同时使用")
+        raise typer.Exit(2)
     if industry is not None:
         if symbol is not None:
             _print_err("❌ --industry 与股票代码不能同时使用")
             raise typer.Exit(2)
         _info_industry(industry, fmt)
+        return
+    if theme is not None:
+        if symbol is not None:
+            _print_err("❌ --theme 与股票代码不能同时使用")
+            raise typer.Exit(2)
+        _info_theme(theme, fmt)
         return
     # U-1 (v0.0.4.8 P0-6): 跟 kan add 同款散户中文 · 兑现 U-2 承诺到 info 命令
     if not symbol:

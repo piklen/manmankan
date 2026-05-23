@@ -16,6 +16,8 @@ from kan.paths import BOARDS_DIR, ensure_dirs
 if TYPE_CHECKING:
     import pandas as pd
 
+    from kan.models import Theme
+
 _CATALOG_TTL = 24 * 3600  # 24h
 _CONS_TTL = 24 * 3600
 
@@ -32,6 +34,14 @@ class BoardNotFoundError(Exception):
 
 class BoardDataUnavailableError(Exception):
     """申万数据源不可用(网络/接口失败/空数据)。"""
+
+
+class ThemeNotFoundError(Exception):
+    """search_theme 未命中任何题材。"""
+
+
+class ThemeDataUnavailableError(Exception):
+    """adata THS+EM 题材数据全挂(双源都失败才抛)。"""
 
 
 def _cache_fresh(path, ttl: float) -> bool:
@@ -199,3 +209,278 @@ def fetch_industry_kline(board: Board, force: bool = False) -> pd.DataFrame:
     )
     atomic_write_parquet(df, cache)
     return df
+
+# ══════════════════════════════════════════════════════════════════
+# 题材(theme)数据子系统 · ***REMOVED*** · 见 docs/design-f11-theme-scan.md §5
+# ══════════════════════════════════════════════════════════════════
+
+_THEME_CATALOG_TTL = 24 * 3600
+_THEME_CONS_TTL = 24 * 3600
+_STOCK_THEMES_TTL = 12 * 3600  # 个股反查 TTL 更短(公司频繁变题材归属)
+
+
+def _load_themes_from_cache(cache) -> list[Theme] | None:
+    """题材 catalog 陈旧 cache 退化读取 · 失败返回 None(由调用方决定 raise 还是 raise from)。"""
+    from kan.models import Theme
+
+    if not cache.exists():
+        return None
+    try:
+        data = json.loads(cache.read_text(encoding="utf-8"))
+        return [Theme(**t) for t in data]
+    except Exception:
+        return None
+
+
+def load_theme_catalog(force: bool = False) -> list[Theme]:
+    """adata THS 题材 catalog · 24h JSON cache · 失败退化到陈旧 cache。
+
+    返回 list[Theme] · 391 个题材左右(2026-05-23 spike 实测)。
+    """
+    from kan.models import Theme
+
+    ensure_dirs()
+    cache = BOARDS_DIR / "catalog_concept_ths.json"
+    if not force and _cache_fresh(cache, _THEME_CATALOG_TTL):
+        try:
+            data = json.loads(cache.read_text(encoding="utf-8"))
+            return [Theme(**t) for t in data]
+        except Exception:
+            pass
+
+    import adata
+
+    try:
+        df = adata.stock.info.all_concept_code_ths()
+    except Exception as e:
+        # 失败时退化到陈旧 cache(若存在),否则抛
+        stale = _load_themes_from_cache(cache)
+        if stale is not None:
+            from kan._log import debug_log
+
+            debug_log(__name__, "load adata THS catalog", e)
+            return stale
+        raise ThemeDataUnavailableError(f"题材清单首次拉取失败: {e}") from e
+
+    if df is None or df.empty:
+        stale = _load_themes_from_cache(cache)
+        if stale is not None:
+            return stale
+        raise ThemeDataUnavailableError("adata THS catalog 返回空数据")
+
+    themes = [
+        Theme(
+            code=str(row["index_code"]).strip(),
+            name=str(row["name"]).strip(),
+            source="ths",
+            size=None,
+        )
+        for _, row in df.iterrows()
+    ]
+    cache.write_text(
+        json.dumps([t.model_dump() for t in themes], ensure_ascii=False),
+        encoding="utf-8",
+    )
+    return themes
+
+
+def normalize_theme_name(name: str) -> str:
+    """规范化题材名 · 去全角半角空格 · alias 表后续累积。
+
+    THS 'AI应用' / 'AI 应用' / 'AI　应用' → 'AI应用'。
+    EM 'AI应用' / THS 'AI应用' → 同字串(本期不做跨源 alias)。
+    """
+    return name.replace(" ", "").replace("　", "").strip()
+
+
+def search_theme(query: str) -> Theme:
+    """模糊匹配题材名或代码 → Theme · 未命中抛 ThemeNotFoundError。
+
+    优先级:精确代码 > 精确名(normalize) > 含匹配(normalize)。
+    """
+    q = query.strip()
+    q_norm = normalize_theme_name(q)
+    catalog = load_theme_catalog()
+    for t in catalog:
+        if t.code == q:
+            return t
+    for t in catalog:
+        if normalize_theme_name(t.name) == q_norm:
+            return t
+    for t in catalog:
+        if q_norm in normalize_theme_name(t.name):
+            return t
+    raise ThemeNotFoundError(query)
+
+
+def get_theme_constituents(theme, force: bool = False) -> list[tuple[str, str]]:
+    """题材成分股 (代码, 名称) 列表 · THS 优先 → EM fallback(走 ***REMOVED***) · JSON cache 24h。
+
+    THS adata.stock.info.concept_constituent_ths(index_code=) · 走 THS HTTP · 稳定。
+    EM  adata.stock.info.concept_constituent_east(concept_code=) · 走 push2 · 反爬触发熔断。
+
+    熔断器 source id `em_push2_concept` · 5min cooldown(沿 T6 LOCKED 默认 TTL)。
+    """
+    from kan._log import debug_log
+    from kan.circuit_breaker import get_breaker
+
+    ensure_dirs()
+    src_prefix = "THS" if theme.source == "ths" else "EM"
+    cache = BOARDS_DIR / f"cons_{src_prefix}{theme.code}.json"
+
+    if not force and _cache_fresh(cache, _THEME_CONS_TTL):
+        try:
+            return [
+                (str(c), str(n))
+                for c, n in json.loads(cache.read_text(encoding="utf-8"))
+            ]
+        except Exception:
+            pass
+
+    import adata
+
+    breaker = get_breaker()
+
+    # 1. THS 优先
+    try:
+        df = adata.stock.info.concept_constituent_ths(index_code=theme.code)
+        if df is not None and not df.empty:
+            pairs = [
+                (str(row["stock_code"]).strip(), str(row["short_name"]).strip())
+                for _, row in df.iterrows()
+            ]
+            cache.write_text(json.dumps(pairs, ensure_ascii=False), encoding="utf-8")
+            return pairs
+    except Exception as e:
+        debug_log(__name__, f"THS concept_constituent_ths({theme.code})", e)
+
+    # 2. EM fallback · 先检查熔断
+    if breaker.is_down("em_push2_concept"):
+        raise ThemeDataUnavailableError(
+            f"题材成分股 {theme.code} 不可用 · THS 失败 · EM push2 在 5min 熔断冷却中"
+        )
+
+    try:
+        df = adata.stock.info.concept_constituent_east(concept_code=theme.code)
+        if df is None or df.empty:
+            breaker.record("em_push2_concept", ok=False)
+            raise ThemeDataUnavailableError(
+                f"题材成分股 {theme.code} 不可用 · EM 返回空"
+            )
+        pairs = [
+            (str(row["stock_code"]).strip(), str(row["short_name"]).strip())
+            for _, row in df.iterrows()
+        ]
+        cache.write_text(json.dumps(pairs, ensure_ascii=False), encoding="utf-8")
+        breaker.record("em_push2_concept", ok=True)
+        return pairs
+    except ThemeDataUnavailableError:
+        raise
+    except Exception as e:
+        breaker.record("em_push2_concept", ok=False)
+        raise ThemeDataUnavailableError(
+            f"题材成分股 {theme.code} 不可用 · THS+EM 双源失败: {e}"
+        ) from e
+
+
+# ── 题材指数 K 线 ──────────────────────────────────────────────────────────
+
+_EM_KLINE_RENAME = {
+    "trade_date": "date",
+    "open": "open",
+    "high": "high",
+    "low": "low",
+    "close": "close",
+    "volume": "volume",
+    "amount": "amount",
+}
+
+
+def fetch_theme_kline(theme: Theme, force: bool = False) -> pd.DataFrame:
+    """题材指数 K 线 · EM 源(走 datacenter HTTP · 稳定 · 避开 THS V8 不兼容) · parquet cache。
+
+    adata.stock.market.get_market_concept_east(index_code=, k_type=1) 返回 11 列 →
+    rename 成 manmankan 标准 7 列(同个股 K · 同 _KLINE_COLUMNS)。
+
+    注:本函数不用 THS K 线接口(adata `get_market_concept_ths` 需 py_mini_racer V8 引擎,
+    Apple Silicon arm64 上 libmini_racer.dylib 缺失 RuntimeError)。
+    """
+    import pandas as pd
+
+    from kan.paths import atomic_write_parquet
+
+    ensure_dirs()
+    src_prefix = "EM"  # K 线统一走 EM(见 docstring)
+    cache = BOARDS_DIR / f"kline_{src_prefix}{theme.code}.parquet"
+    if not force and _kline_cache_fresh(cache):
+        return pd.read_parquet(cache)
+
+    import adata
+
+    try:
+        raw = adata.stock.market.get_market_concept_east(index_code=theme.code, k_type=1)
+    except Exception as e:
+        raise ThemeDataUnavailableError(f"题材指数 K 线拉取失败 {theme.code}: {e}") from e
+
+    if raw is None or raw.empty:
+        raise ThemeDataUnavailableError(f"题材指数 K 线为空: {theme.code}")
+
+    df = raw.rename(columns=_EM_KLINE_RENAME)
+    for col in _KLINE_COLUMNS:
+        if col not in df.columns:
+            df[col] = float("nan")
+    df = df[_KLINE_COLUMNS].copy()
+    df["date"] = pd.to_datetime(df["date"], errors="coerce").dt.date
+    df = (
+        df.sort_values("date")
+        .dropna(subset=["date", "close"])
+        .reset_index(drop=True)
+    )
+    atomic_write_parquet(df, cache)
+    return df
+
+
+def get_themes_of_stock(stock_code: str, force: bool = False) -> list[Theme]:
+    """股票反查所属题材 · EM datacenter HTTP(不在 push2 反爬名单 · 稳定) · 12h JSON cache。
+
+    adata.stock.info.get_concept_east(stock_code=) 返回 5 列:
+    stock_code / concept_code / name / source / reason → list[Theme(source='em')]。
+
+    返回空列表表示无任何题材归属(不抛)。
+    """
+    from kan.models import Theme
+
+    ensure_dirs()
+    cache = BOARDS_DIR / f"stock_themes_{stock_code}.json"
+    if not force and _cache_fresh(cache, _STOCK_THEMES_TTL):
+        try:
+            data = json.loads(cache.read_text(encoding="utf-8"))
+            return [Theme(**t) for t in data]
+        except Exception:
+            pass
+
+    import adata
+
+    try:
+        df = adata.stock.info.get_concept_east(stock_code=stock_code)
+    except Exception:
+        return []
+
+    if df is None or df.empty:
+        cache.write_text("[]", encoding="utf-8")
+        return []
+
+    themes = [
+        Theme(
+            code=str(row["concept_code"]).strip(),
+            name=str(row["name"]).strip(),
+            source="em",
+            size=None,
+        )
+        for _, row in df.iterrows()
+    ]
+    cache.write_text(
+        json.dumps([t.model_dump() for t in themes], ensure_ascii=False),
+        encoding="utf-8",
+    )
+    return themes

@@ -77,7 +77,7 @@ def test_scan_hot_conflicts_with_industry(hot_runner):
         app, ["scan", "--hot", "rank", "--industry=半导体"]
     )
     assert result.exit_code == 2
-    assert "不能同时使用" in result.output
+    assert "不能同时" in result.output or "互斥" in result.output
 
 
 def test_scan_hot_data_unavailable(hot_runner, monkeypatch):

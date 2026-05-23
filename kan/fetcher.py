@@ -13,7 +13,7 @@ from kan import circuit_breaker
 from kan._log import debug_log
 from kan._numeric import to_numeric_checked
 from kan.paths import DATA_DIR
-from kan.tushare_pro import _fetch_tushare  # noqa: F401 — re-export for monkeypatch/tests + dispatch use
+from kan.tushare_pro import _fetch_tushare
 
 if TYPE_CHECKING:
     from collections.abc import Callable
