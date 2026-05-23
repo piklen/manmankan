@@ -60,6 +60,13 @@ def industry_runner(monkeypatch):
         "kan.cli_trend_cmds._load_watchlist_pairs", lambda: [("600519", "贵州茅台")]
     )
     monkeypatch.setattr(
+        "kan.cli_extreme_cmds._get_watchlist_pairs", lambda: [("600519", "贵州茅台")]
+    )
+    monkeypatch.setattr("kan.cli_extreme_cmds._auto_fetch_stale", lambda _p: None)
+    monkeypatch.setattr(
+        "kan.cli_extreme_cmds._load_watchlist_pairs", lambda: [("600519", "贵州茅台")]
+    )
+    monkeypatch.setattr(
         "kan.scanner.scan_batch",
         lambda pairs, mode="low": [_fake_scan_result(s, n) for s, n in pairs],
     )
@@ -232,6 +239,7 @@ def test_low_industry_empty_watchlist_ok(industry_runner, monkeypatch):
     """空自选股时 low --industry 仍正常。"""
     from kan.app import app
     monkeypatch.setattr("kan.cli_scan_cmds._load_watchlist_pairs", lambda: [])
+    monkeypatch.setattr("kan.cli_extreme_cmds._load_watchlist_pairs", lambda: [])
     monkeypatch.setattr(
         "kan.scanner.filter_extreme", lambda pairs, periods, mode="low": {}
     )
