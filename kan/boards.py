@@ -381,3 +381,60 @@ def get_theme_constituents(theme, force: bool = False) -> list[tuple[str, str]]:
         raise ThemeDataUnavailableError(
             f"题材成分股 {theme.code} 不可用 · THS+EM 双源失败: {e}"
         ) from e
+
+
+# ── 题材指数 K 线 ──────────────────────────────────────────────────────────
+
+_EM_KLINE_RENAME = {
+    "trade_date": "date",
+    "open": "open",
+    "high": "high",
+    "low": "low",
+    "close": "close",
+    "volume": "volume",
+    "amount": "amount",
+}
+
+
+def fetch_theme_kline(theme: Theme, force: bool = False) -> pd.DataFrame:
+    """题材指数 K 线 · EM 源(走 datacenter HTTP · 稳定 · 避开 THS V8 不兼容) · parquet cache。
+
+    adata.stock.market.get_market_concept_east(index_code=, k_type=1) 返回 11 列 →
+    rename 成 manmankan 标准 7 列(同个股 K · 同 _KLINE_COLUMNS)。
+
+    注:本函数不用 THS K 线接口(adata `get_market_concept_ths` 需 py_mini_racer V8 引擎,
+    Apple Silicon arm64 上 libmini_racer.dylib 缺失 RuntimeError)。
+    """
+    import pandas as pd
+
+    from kan.paths import atomic_write_parquet
+
+    ensure_dirs()
+    src_prefix = "EM"  # K 线统一走 EM(见 docstring)
+    cache = BOARDS_DIR / f"kline_{src_prefix}{theme.code}.parquet"
+    if not force and _kline_cache_fresh(cache):
+        return pd.read_parquet(cache)
+
+    import adata
+
+    try:
+        raw = adata.stock.market.get_market_concept_east(index_code=theme.code, k_type=1)
+    except Exception as e:
+        raise ThemeDataUnavailableError(f"题材指数 K 线拉取失败 {theme.code}: {e}") from e
+
+    if raw is None or raw.empty:
+        raise ThemeDataUnavailableError(f"题材指数 K 线为空: {theme.code}")
+
+    df = raw.rename(columns=_EM_KLINE_RENAME)
+    for col in _KLINE_COLUMNS:
+        if col not in df.columns:
+            df[col] = float("nan")
+    df = df[_KLINE_COLUMNS].copy()
+    df["date"] = pd.to_datetime(df["date"], errors="coerce").dt.date
+    df = (
+        df.sort_values("date")
+        .dropna(subset=["date", "close"])
+        .reset_index(drop=True)
+    )
+    atomic_write_parquet(df, cache)
+    return df
