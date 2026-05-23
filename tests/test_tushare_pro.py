@@ -197,3 +197,73 @@ class TestToKlineDf:
     def test_missing_data_returns_none(self):
         assert tushare_pro._to_kline_df(None) is None
         assert tushare_pro._to_kline_df({}) is None
+
+
+class TestFetchTushare:
+    """_fetch_tushare 集成：resolver + circuit_breaker + client + DataFrame"""
+
+    @pytest.fixture
+    def temp_env(self, tmp_path, monkeypatch):
+        from kan import circuit_breaker, paths
+        monkeypatch.setattr(paths, "BASE_DIR", tmp_path)
+        monkeypatch.setattr(paths, "CIRCUIT_PATH", tmp_path / "circuit.json")
+        monkeypatch.setattr(config, "CONFIG_PATH", tmp_path / "config.json")
+        monkeypatch.setattr(circuit_breaker, "_default", None)
+        monkeypatch.delenv("TUSHARE_TOKEN", raising=False)
+        monkeypatch.delenv("TUSHARE_ENDPOINT", raising=False)
+        return tmp_path
+
+    def test_no_token_returns_none(self, temp_env):
+        """未配 token → 直接 None，不发请求"""
+        assert tushare_pro._fetch_tushare("600519", "20260101") is None
+
+    def test_with_token_returns_dataframe(self, temp_env, monkeypatch):
+        config.save({**config.DEFAULT_CONFIG, "tushare_token": "tk"})
+
+        sample = {
+            "code": 0,
+            "data": {
+                "fields": ["trade_date", "open", "high", "low", "close", "vol", "amount"],
+                "items": [["20260102", 1500.0, 1520.0, 1490.0, 1510.0, 100000.0, 150000000.0]],
+            },
+        }
+
+        def fake_post(url, json, timeout):
+            mock = MagicMock()
+            mock.status_code = 200
+            mock.json.return_value = sample
+            return mock
+
+        monkeypatch.setattr(tushare_pro.requests, "post", fake_post)
+        df = tushare_pro._fetch_tushare("600519", "20260101")
+        assert df is not None
+        assert "date" in df.columns
+        assert "volume" in df.columns
+        assert len(df) == 1
+
+    def test_circuit_breaker_skips_when_down(self, temp_env, monkeypatch):
+        from kan import circuit_breaker
+        config.save({**config.DEFAULT_CONFIG, "tushare_token": "tk"})
+        cb = circuit_breaker.get_breaker()
+        cb.record("tushare", ok=False)
+
+        called = {"hit": False}
+        def fake_post(*a, **kw):
+            called["hit"] = True
+            raise AssertionError("circuit breaker 没拦住")
+        monkeypatch.setattr(tushare_pro.requests, "post", fake_post)
+
+        assert tushare_pro._fetch_tushare("600519", "20260101") is None
+        assert not called["hit"]
+
+    def test_api_failure_records_breaker(self, temp_env, monkeypatch):
+        from kan import circuit_breaker
+        config.save({**config.DEFAULT_CONFIG, "tushare_token": "tk"})
+
+        def fake_post(*a, **kw):
+            raise tushare_pro.requests.exceptions.ConnectionError("boom")
+        monkeypatch.setattr(tushare_pro.requests, "post", fake_post)
+
+        tushare_pro._fetch_tushare("600519", "20260101")
+        cb = circuit_breaker.get_breaker()
+        assert cb.is_down("tushare")
