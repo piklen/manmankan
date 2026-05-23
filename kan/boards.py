@@ -311,3 +311,73 @@ def search_theme(query: str) -> Theme:
         if q_norm in normalize_theme_name(t.name):
             return t
     raise ThemeNotFoundError(query)
+
+
+def get_theme_constituents(theme, force: bool = False) -> list[tuple[str, str]]:
+    """题材成分股 (代码, 名称) 列表 · THS 优先 → EM fallback(走 ***REMOVED***) · JSON cache 24h。
+
+    THS adata.stock.info.concept_constituent_ths(index_code=) · 走 THS HTTP · 稳定。
+    EM  adata.stock.info.concept_constituent_east(concept_code=) · 走 push2 · 反爬触发熔断。
+
+    熔断器 source id `em_push2_concept` · 5min cooldown(沿 T6 LOCKED 默认 TTL)。
+    """
+    from kan._log import debug_log
+    from kan.circuit_breaker import get_breaker
+
+    ensure_dirs()
+    src_prefix = "THS" if theme.source == "ths" else "EM"
+    cache = BOARDS_DIR / f"cons_{src_prefix}{theme.code}.json"
+
+    if not force and _cache_fresh(cache, _THEME_CONS_TTL):
+        try:
+            return [
+                (str(c), str(n))
+                for c, n in json.loads(cache.read_text(encoding="utf-8"))
+            ]
+        except Exception:
+            pass
+
+    import adata
+
+    breaker = get_breaker()
+
+    # 1. THS 优先
+    try:
+        df = adata.stock.info.concept_constituent_ths(index_code=theme.code)
+        if df is not None and not df.empty:
+            pairs = [
+                (str(row["stock_code"]).strip(), str(row["short_name"]).strip())
+                for _, row in df.iterrows()
+            ]
+            cache.write_text(json.dumps(pairs, ensure_ascii=False), encoding="utf-8")
+            return pairs
+    except Exception as e:
+        debug_log(__name__, f"THS concept_constituent_ths({theme.code})", e)
+
+    # 2. EM fallback · 先检查熔断
+    if breaker.is_down("em_push2_concept"):
+        raise ThemeDataUnavailableError(
+            f"题材成分股 {theme.code} 不可用 · THS 失败 · EM push2 在 5min 熔断冷却中"
+        )
+
+    try:
+        df = adata.stock.info.concept_constituent_east(concept_code=theme.code)
+        if df is None or df.empty:
+            breaker.record("em_push2_concept", ok=False)
+            raise ThemeDataUnavailableError(
+                f"题材成分股 {theme.code} 不可用 · EM 返回空"
+            )
+        pairs = [
+            (str(row["stock_code"]).strip(), str(row["short_name"]).strip())
+            for _, row in df.iterrows()
+        ]
+        cache.write_text(json.dumps(pairs, ensure_ascii=False), encoding="utf-8")
+        breaker.record("em_push2_concept", ok=True)
+        return pairs
+    except ThemeDataUnavailableError:
+        raise
+    except Exception as e:
+        breaker.record("em_push2_concept", ok=False)
+        raise ThemeDataUnavailableError(
+            f"题材成分股 {theme.code} 不可用 · THS+EM 双源失败: {e}"
+        ) from e

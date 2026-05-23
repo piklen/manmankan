@@ -206,3 +206,107 @@ def test_search_theme_not_found(_isolate_boards_dir):
     _seed_catalog(_isolate_boards_dir)
     with pytest.raises(ThemeNotFoundError):
         boards.search_theme("不存在的题材xyz")
+
+
+# ── get_theme_constituents · THS 优先 + EM fallback + 熔断 ─────────────
+
+def _ths_cons_df():
+    """模拟 adata.stock.info.concept_constituent_ths(index_code=) 真返回(2026-05-23 spike)。"""
+    return pd.DataFrame(
+        [
+            {"stock_code": "002230", "short_name": "科大讯飞"},
+            {"stock_code": "300033", "short_name": "同花顺"},
+        ]
+    )
+
+
+def _em_cons_df():
+    """模拟 EM concept_constituent_east(concept_code=) 真返回。"""
+    return pd.DataFrame(
+        [
+            {"stock_code": "002230", "short_name": "科大讯飞"},
+            {"stock_code": "688108", "short_name": "赛诺医疗"},
+        ]
+    )
+
+
+def test_get_theme_constituents_ths_success(monkeypatch, _isolate_boards_dir):
+    """THS 成功 → 返回 list[(代码, 名称)] · 写 per-theme cache。"""
+    monkeypatch.setattr(
+        "adata.stock.info.concept_constituent_ths",
+        lambda index_code: _ths_cons_df(),
+    )
+    theme = Theme(code="886108", name="AI应用", source="ths")
+    pairs = boards.get_theme_constituents(theme)
+    assert pairs == [("002230", "科大讯飞"), ("300033", "同花顺")]
+    cache = _isolate_boards_dir / "cons_THS886108.json"
+    assert cache.exists()
+
+
+def test_get_theme_constituents_uses_cache(monkeypatch, _isolate_boards_dir):
+    """24h 内不重拉。"""
+    call_count = {"n": 0}
+
+    def counting(index_code):
+        call_count["n"] += 1
+        return _ths_cons_df()
+
+    monkeypatch.setattr("adata.stock.info.concept_constituent_ths", counting)
+    theme = Theme(code="886108", name="AI应用", source="ths")
+    boards.get_theme_constituents(theme)
+    boards.get_theme_constituents(theme)
+    assert call_count["n"] == 1
+
+
+def test_get_theme_constituents_falls_back_to_em(monkeypatch, _isolate_boards_dir):
+    """THS 抛错 + EM 未在熔断 → 走 EM · 返回 EM 数据。"""
+
+    def ths_raise(index_code):
+        raise ConnectionError("THS down")
+
+    monkeypatch.setattr("adata.stock.info.concept_constituent_ths", ths_raise)
+    monkeypatch.setattr(
+        "adata.stock.info.concept_constituent_east",
+        lambda concept_code: _em_cons_df(),
+    )
+    # 确保熔断器 EM 未 down
+    from kan.circuit_breaker import get_breaker
+    get_breaker().record("em_push2_concept", ok=True)
+
+    theme = Theme(code="886108", name="AI应用", source="ths")
+    pairs = boards.get_theme_constituents(theme)
+    assert ("688108", "赛诺医疗") in pairs
+
+
+def test_get_theme_constituents_em_circuit_break(monkeypatch, _isolate_boards_dir):
+    """THS 失败 + EM 在熔断 → 抛 ThemeDataUnavailableError(不试 EM)。"""
+
+    def ths_raise(index_code):
+        raise ConnectionError("THS down")
+
+    monkeypatch.setattr("adata.stock.info.concept_constituent_ths", ths_raise)
+    # 标记 EM 已 down
+    from kan.circuit_breaker import get_breaker
+    get_breaker().record("em_push2_concept", ok=False)
+
+    theme = Theme(code="886108", name="AI应用", source="ths")
+    with pytest.raises(ThemeDataUnavailableError):
+        boards.get_theme_constituents(theme)
+
+
+def test_get_theme_constituents_em_fail_marks_down(monkeypatch, _isolate_boards_dir):
+    """THS 失败 + EM 也失败 → EM 标记 down + 抛 ThemeDataUnavailableError。"""
+
+    def raise_(index_code=None, concept_code=None):
+        raise ConnectionError("both down")
+
+    monkeypatch.setattr("adata.stock.info.concept_constituent_ths", lambda index_code: raise_())
+    monkeypatch.setattr("adata.stock.info.concept_constituent_east", lambda concept_code: raise_())
+    from kan.circuit_breaker import get_breaker
+    get_breaker().record("em_push2_concept", ok=True)
+
+    theme = Theme(code="886108", name="AI应用", source="ths")
+    with pytest.raises(ThemeDataUnavailableError):
+        boards.get_theme_constituents(theme)
+    # EM 应被标记 down
+    assert get_breaker().is_down("em_push2_concept")
