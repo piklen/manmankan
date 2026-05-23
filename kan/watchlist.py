@@ -6,12 +6,9 @@ import csv
 import json
 import os
 import re
-import sys
 from datetime import date, datetime
 from pathlib import Path
 from typing import Any
-
-import typer
 
 from kan._log import debug_log
 from kan.models import Stock
@@ -215,6 +212,15 @@ def save_watchlist(wl: Watchlist) -> None:
     _save_watchlist(wl)
 
 
+class WatchlistCorruptError(Exception):
+    """自选股文件解析失败 · 由 caller (clear --yes / list / scan) 决定 fallback。
+
+    旧实现 sys.exit(1) 在 load 内部 · 剥夺 caller 处理能力 · 导致
+    `kan clear --yes` 损坏场景永远死循环 (clear 永远 load 失败 exit 1)。
+    改用 raise 让 cli_watchlist_cmds.clear --yes 能跳过 load 直接重置。
+    """
+
+
 def load_watchlist() -> Watchlist:
     if not WATCHLIST_PATH.exists():
         return Watchlist()
@@ -222,12 +228,10 @@ def load_watchlist() -> Watchlist:
         with open(WATCHLIST_PATH, encoding="utf-8") as f:
             data = json.load(f)
     except json.JSONDecodeError as e:
-        typer.echo(
+        raise WatchlistCorruptError(
             f"自选股文件损坏（{WATCHLIST_PATH.name}）· "
-            f"请备份后跑 `kan clear` 重置 · 错误: {e.msg} (行 {e.lineno} 列 {e.colno})",
-            err=True,
-        )
-        sys.exit(1)
+            f"错误: {e.msg} (行 {e.lineno} 列 {e.colno})"
+        ) from e
     stocks = [Stock(**s) for s in data.get("stocks", [])]
     return Watchlist(stocks)
 
@@ -301,18 +305,29 @@ def import_csv(path: str | Path) -> tuple[int, int, list[str]]:
 
     with open(p, newline="", encoding="utf-8-sig") as f:
         reader = csv.reader(f)
-        for row in reader:
-            if not row or not row[0].strip():
-                continue
-            raw = row[0].strip()
-            try:
-                ok, _msg = add(raw)
-                if ok:
-                    success += 1
-                else:
-                    skipped += 1
-            except ValueError as e:
-                errors.append(str(e))
+        rows = list(reader)
+
+    # F10/F11: CSV header 自动 detect 跳过
+    # 第一行第一列不是 6 位数字 → 当成 header skip
+    # (典型 header: symbol,name / code,name / 代码,名称)
+    start_idx = 0
+    if rows:
+        first_cell = rows[0][0].strip() if rows[0] and rows[0][0] else ""
+        if first_cell and not first_cell.isdigit():
+            start_idx = 1
+
+    for row in rows[start_idx:]:
+        if not row or not row[0].strip():
+            continue
+        raw = row[0].strip()
+        try:
+            ok, _msg = add(raw)
+            if ok:
+                success += 1
+            else:
+                skipped += 1
+        except ValueError as e:
+            errors.append(str(e))
 
     return success, skipped, errors
 

@@ -174,6 +174,7 @@ def add(
     changed = False
     success, skip, fail = 0, 0, 0
     failures: list[str] = []  # 失败累积到末尾打印 · 防止打断 spinner / 进度反馈
+    skips: list[str] = []     # 跳过明细 · batch 模式末尾打印 · 修 F6 "跳过 N 不知所云"
 
     # 大批量提示（≥ 20 只）· 单行 spinner 提示 · add 主循环本身极快（< 1s 处理 200 只）
     add_start = _time.monotonic()
@@ -189,11 +190,20 @@ def add(
 
     with spinner_ctx:
         for sym in symbols:
+            # F41: 空字符串 / 纯空白拒绝 · 不进入"匹配 5207 只"逻辑
+            if not sym or not sym.strip():
+                failures.append(
+                    "空字符串不是有效股票名 / 代码 · 例: kan add 600519 茅台"
+                )
+                fail += 1
+                continue
             cleaned = _re.sub(r"^(sh|sz|SH|SZ)", "", sym.strip())
             if _re.match(r"^\d{6}$", cleaned):
                 if wl.find(cleaned):
                     if not batch:
                         typer.echo(f"  {cleaned} 已在自选列表中")
+                    else:
+                        skips.append(f"{cleaned} → 跳过(已在自选)")
                     skip += 1
                     continue
                 name = names.get(cleaned)
@@ -201,7 +211,7 @@ def add(
                     # 加下一步引导 · 不留 dead-end
                     failures.append(
                         f"未找到股票: {cleaned}（不在 A 股代码表中）· "
-                        f"试 `kan list` 看自选 / 用名称搜索 `kan add 茅台`"
+                        f"试 `kan add 茅台` 用名称搜索"
                     )
                     fail += 1
                     continue
@@ -217,6 +227,10 @@ def add(
                     if wl.find(code):
                         if not batch:
                             typer.echo(f"  {code} 已在自选列表中")
+                        else:
+                            skips.append(
+                                f"「{sym}」→ 跳过(匹配 {code} {_name.replace(' ', '')} · 已在自选)"
+                            )
                         skip += 1
                     else:
                         add_stock(wl, code, _name)
@@ -228,7 +242,7 @@ def add(
                     # 加下一步引导
                     failures.append(
                         f"未找到包含「{sym}」的股票 · "
-                        f"试 `kan list` 看自选 / 用代码精确加 `kan add 600519`"
+                        f"试 `kan theme search` 找题材 / 用代码精确加 `kan add 600519`"
                     )
                     fail += 1
                 else:
@@ -250,8 +264,12 @@ def add(
     if changed:
         save_watchlist(wl)
 
-    # 末尾汇总：先打失败列表（如果有）· 再打统计
+    # 末尾汇总：先打跳过 + 失败明细 · 再打统计
     if batch:
+        # F6: batch 模式下逐条说明 skip 原因 · 防 "跳过 N" 不知所云
+        if skips:
+            for s in skips:
+                typer.echo(f"  ⚠️  {s}")
         if failures:
             for f in failures:
                 typer.echo(f"  ❌ {f}", err=True)
@@ -264,6 +282,9 @@ def add(
             parts.append(f"失败 {fail}")
         time_part = f" · 用时 {add_elapsed:.1f}s" if add_elapsed >= 0.5 else ""
         typer.echo(f"  添加完成 · {' · '.join(parts)}{time_part}")
+        # F7: batch 模式下 fail > 0 也要 exit 1 · 旧版只在单只模式 exit 1
+        if fail:
+            raise typer.Exit(1)
     elif failures:
         # v0.0.4.4: 单只模式下错误必须打 + exit 1
         # 修复 v0.0.4.3 用户报告："kan add 999999" / "kan add 不存在的名字" / "kan add 科技"(多匹配)
@@ -400,7 +421,16 @@ def remove(
 
     from kan import watchlist as wl
 
+    fail_count = 0
     for sym in symbols:
+        # F41: 空字符串拒绝(对齐 add)
+        if not sym or not sym.strip():
+            typer.echo(
+                "  ❌ 空字符串不是有效股票名 / 代码 · 例: kan remove 600519",
+                err=True,
+            )
+            fail_count += 1
+            continue
         cleaned = _re.sub(r"^(sh|sz|SH|SZ)", "", sym.strip())
         if _re.match(r"^\d{6}$", cleaned):
             try:
@@ -408,6 +438,7 @@ def remove(
                 typer.echo(f"  {msg}")
             except ValueError as e:
                 typer.echo(f"  ❌ {e}", err=True)
+                fail_count += 1
         else:
             current = wl.load_watchlist()
             matches = [(s.symbol, s.name) for s in current.stocks if sym in s.name.replace(" ", "")]
@@ -416,12 +447,21 @@ def remove(
                 _, msg = wl.remove(code)
                 typer.echo(f"  已移除 {name.replace(' ', '')} ({code})")
             elif len(matches) == 0:
-                typer.echo(f"  ❌ 自选列表中没有包含「{sym}」的股票", err=True)
+                typer.echo(
+                    f"  ❌ 自选列表中没有包含「{sym}」的股票",
+                    err=True,
+                )
+                fail_count += 1
             else:
-                typer.echo(f"  「{sym}」匹配到 {len(matches)} 只自选股：")
+                typer.echo(f"  「{sym}」匹配到 {len(matches)} 只自选股：", err=True)
                 for code, name in matches:
-                    typer.echo(f"    {code} {name.replace(' ', '')}")
-                typer.echo("    请用代码精确移除")
+                    typer.echo(f"    {code} {name.replace(' ', '')}", err=True)
+                typer.echo("    请用代码精确移除", err=True)
+                fail_count += 1
+
+    # F7: 任一只失败 → exit 1 · 对齐 add 行为
+    if fail_count:
+        raise typer.Exit(1)
 
 
 @app.command(name="list")
@@ -512,19 +552,46 @@ def import_csv(
 
 
 @app.command(name="clear")
-def clear_watchlist() -> None:
+def clear_watchlist(
+    yes: bool = typer.Option(
+        False, "--yes", "-y", help="跳过二次确认 · 用于脚本 / CI"
+    ),
+) -> None:
     """清空自选列表"""
-    from kan.watchlist import clear, load_watchlist
+    from kan.paths import WATCHLIST_PATH
+    from kan.watchlist import (
+        WatchlistCorruptError,
+        clear,
+        load_watchlist,
+    )
 
-    wl = load_watchlist()
+    try:
+        wl = load_watchlist()
+    except WatchlistCorruptError as e:
+        # 文件损坏 fallback · --yes 直接 unlink 重建 · 否则给清晰 hint
+        if not yes:
+            typer.echo(
+                f"❌ {e}\n"
+                f"   跑 `kan clear --yes` 强制重置(会丢全部自选 · 不可恢复)",
+                err=True,
+            )
+            raise typer.Exit(1) from None
+        # --yes 模式 · 直接 unlink 重建空文件 · 不再调 clear() (clear 会再读)
+        import contextlib
+        with contextlib.suppress(FileNotFoundError):
+            WATCHLIST_PATH.unlink()
+        typer.echo("⚠️  原 watchlist.json 已损坏 · 已删除并重置为空")
+        return
+
     if not wl.stocks:
         typer.echo("自选列表已经是空的")
         return
 
-    confirm = typer.confirm(f"确定要清空 {len(wl.stocks)} 只自选股吗？")
-    if not confirm:
-        typer.echo("已取消")
-        return
+    if not yes:
+        confirm = typer.confirm(f"确定要清空 {len(wl.stocks)} 只自选股吗？")
+        if not confirm:
+            typer.echo("已取消")
+            return
 
     count = clear()
     typer.echo(f"已清空 {count} 只自选股")
