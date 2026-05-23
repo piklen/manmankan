@@ -41,12 +41,12 @@ def test_normalize_symbol_uppercase_prefix():
 
 
 def test_normalize_symbol_invalid_format():
-    with pytest.raises(ValueError, match="无效股票代码格式"):
+    with pytest.raises(ValueError, match="不是 6 位股票代码"):
         watchlist._normalize_symbol("abc")
 
 
 def test_normalize_symbol_too_short():
-    with pytest.raises(ValueError, match="无效股票代码格式"):
+    with pytest.raises(ValueError, match="不是 6 位股票代码"):
         watchlist._normalize_symbol("12345")
 
 

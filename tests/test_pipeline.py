@@ -87,7 +87,7 @@ def test_resolve_targets_or_exit_passes_kwargs_through(monkeypatch):
 @pytest.mark.parametrize(("exc_cls", "expected_code", "msg_part"), [
     (BoardNotFoundError, 1, "未找到行业"),
     (BoardDataUnavailableError, 1, "行业数据源"),
-    (HotListUnavailableError, 1, "热榜数据源"),
+    (HotListUnavailableError, 1, "东财热榜源"),
     (ThemeNotFoundError, 2, "未找到题材"),
     (ThemeDataUnavailableError, 1, "题材数据源"),
 ])

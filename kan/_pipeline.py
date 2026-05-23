@@ -71,7 +71,10 @@ def resolve_targets_or_exit(
         _print_err("❌ 行业数据源暂时不可用,稍后再试")
         raise typer.Exit(1) from None
     except HotListUnavailableError:
-        _print_err("❌ 热榜数据源暂时不可用,稍后再试")
+        _print_err(
+            "❌ 东财热榜源暂时不可用 · 可能东财接口波动 / 限流 · "
+            "替代:`kan scan --industry <行业名>` 或 `kan scan --theme=<题材>`"
+        )
         raise typer.Exit(1) from None
     except ThemeNotFoundError:
         _print_err(

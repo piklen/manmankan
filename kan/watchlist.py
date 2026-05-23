@@ -64,10 +64,17 @@ class Watchlist:
 
 
 def _normalize_symbol(raw: str) -> str:
-    """统一为 6 位纯数字代码。支持 sh600519 / sz000858 / 600519 格式。"""
+    """统一为 6 位纯数字代码。支持 sh600519 / sz000858 / 600519 格式。
+
+    名称(中文)输入会 raise ValueError + 散户友好引导。
+    add 命令内部 catch 后走 fuzzy match · info/compare 显示该消息引导用户。
+    """
     cleaned = re.sub(r"^(sh|sz|SH|SZ)", "", raw.strip())
     if not re.match(r"^\d{6}$", cleaned):
-        raise ValueError(f"无效股票代码格式: {raw}")
+        raise ValueError(
+            f"「{raw}」不是 6 位股票代码 · "
+            f"试 `kan add {raw}` 搜名称查代码 · 或直接用代码如 `kan info 600519`"
+        )
     return cleaned
 
 
