@@ -18,12 +18,17 @@ def temp_data_dir(tmp_path, monkeypatch):
 
 @pytest.fixture
 def force_eastmoney_path(monkeypatch):
-    """绕过 baostock / 新浪 · 让 fetch_kline 走到东财 mock。
+    """绕过 tushare / baostock / 新浪 · 让 fetch_kline 走到东财 mock。
 
-    fallback：baostock → _fetch_via_akshare(东财+新浪并发) → 腾讯。
-    把 baostock 和新浪 mock 成 None，并发档里只剩东财能中标，
+    fallback：tushare → baostock → _fetch_via_akshare(东财+新浪并发) → 腾讯。
+    把 tushare / baostock / 新浪 mock 成 None,并发档里只剩东财能中标,
     流程落到 akshare.stock_zh_a_hist (东财) mock。
+
+    v0.0.5.0 加 tushare path · v0.0.5.1 fix: 用户本地 ~/.config/kan/config.json
+    若配 tushare_token · _fetch_tushare 返真实 213 行 · mock akshare 路径失效。
     """
+    # _fetch_tushare 在 fetcher 内被 fetch_kline 直接调用 → patch fetcher.globals
+    monkeypatch.setattr(fetcher, "_fetch_tushare", lambda *a, **kw: None)
     # _fetch_baostock 在 fetcher 内被 fetch_kline 直接调用 → patch fetcher.globals
     # _fetch_sina 在 _fetch_via_akshare(data_sources) 内被调用 → patch data_sources.globals
     monkeypatch.setattr(fetcher, "_fetch_baostock", lambda *a, **kw: None)
@@ -301,6 +306,8 @@ def test_fetch_baostock_returns_none_on_error(temp_data_dir):
 
 def test_circuit_skips_breaker_down_source(temp_data_dir, raw_kline_df, isolated_breaker, monkeypatch):
     """breaker 标记 baostock down → fetch_kline 跳过它 · 走 akshare 档."""
+    # v0.0.5.0 加 tushare top priority · 必须 mock None
+    monkeypatch.setattr(fetcher, "_fetch_tushare", lambda *a, **kw: None)
     isolated_breaker.record("baostock", ok=False)
     # _fetch_via_akshare 在 data_sources 内查 _fetch_eastmoney/_fetch_sina · patch data_sources
     monkeypatch.setattr(data_sources, "_fetch_eastmoney", lambda *a, **kw: None)
@@ -358,6 +365,9 @@ def test_fetch_kline_stamps_source(temp_data_dir, raw_kline_df, source, mock_tar
     - _fetch_baostock / _fetch_tencent 在 fetcher.globals 被 fetch_kline 直接调 → patch fetcher
     - _fetch_sina / _fetch_eastmoney 在 data_sources.globals 被 _fetch_via_akshare 调 → patch data_sources
     """
+    # v0.0.5.0 加 tushare top priority · 必须 mock None 让 fallback 流到目标源
+    # 否则用户本地配 tushare_token 时 _fetch_tushare 返真实数据 · 测试失败
+    monkeypatch.setattr(fetcher, "_fetch_tushare", lambda *a, **kw: None)
     monkeypatch.setattr(fetcher, "_fetch_baostock", lambda *a, **kw: None)
     monkeypatch.setattr(fetcher, "_fetch_tencent", lambda *a, **kw: None)
     monkeypatch.setattr(data_sources, "_fetch_sina", lambda *a, **kw: None)

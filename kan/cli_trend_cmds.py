@@ -121,13 +121,13 @@ def trend(
         results = [r for r in results if r.streak <= -down]
         filter_label = f" · 连跌≥{down}天"
         if not results and fmt is export.OutputFormat.terminal:
-            console.print(f"没有连续跌 {down} 天以上的股票")
+            console.print(f"没有连续跌 ≥{down} 天的股票")
             return
     elif up is not None:
         results = [r for r in results if r.streak >= up]
         filter_label = f" · 连涨≥{up}天"
         if not results and fmt is export.OutputFormat.terminal:
-            console.print(f"没有连续涨 {up} 天以上的股票")
+            console.print(f"没有连续涨 ≥{up} 天的股票")
             return
 
     title = render_terminal.trend_title(
@@ -172,7 +172,7 @@ def trend(
         console.print("[dim]  收盘价口径：今日收盘 > 昨日收盘 = ▲ · 今日收盘 < 昨日收盘 = ▼ · 平盘不断连续[/dim]")
     if is_hot:
         console.print(
-            "[dim]  榜 = 东方财富热榜实时名次 · 非慢慢看观点 · 热榜为实时榜单[/dim]"
+            "[dim]  榜 = 东方财富热榜实时名次 · 非慢慢看观点 · 热榜为实时榜单\n  💡 涨停 / 强势股天然在区间高位 · [100%] 是数学结果 不是 「过热信号」[/dim]"
         )
     if isinstance(board_meta, ThemeMeta):
         from kan.render_theme import render_theme_disclaimer

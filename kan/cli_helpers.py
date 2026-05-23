@@ -198,7 +198,7 @@ def _get_watchlist_pairs() -> list[tuple[str, str]]:
     """自选股 (代码, 名称) 列表;自选为空时友好报错 + 退出(自选模式命令用)。"""
     pairs = _load_watchlist_pairs()
     if not pairs:
-        typer.echo("自选列表为空 · 请先 `kan add <代码>` 添加", err=True)
+        typer.echo("自选列表为空 · 先加几只:`kan add 600519 茅台 000858` (代码或名称都行)", err=True)
         raise typer.Exit(1)
     return pairs
 

@@ -488,7 +488,7 @@ def list_stocks(
 
     stocks = list_all()
     if not stocks:
-        typer.echo("自选列表为空 · 请先 `kan add <代码>` 添加")
+        typer.echo("自选列表为空 · 先加几只:`kan add 600519 茅台 000858` (代码或名称都行)")
         return
 
     title = f"自选股列表 · 共 {len(stocks)} 只"

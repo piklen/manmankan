@@ -106,7 +106,7 @@ def _filter_extreme_cmd(
 
     if is_hot:
         console.print(
-            "[dim]  榜 = 东方财富热榜实时名次 · 非慢慢看观点 · 热榜为实时榜单[/dim]"
+            "[dim]  榜 = 东方财富热榜实时名次 · 非慢慢看观点 · 热榜为实时榜单\n  💡 涨停 / 强势股天然在区间高位 · [100%] 是数学结果 不是 「过热信号」[/dim]"
         )
     if isinstance(board_meta, ThemeMeta):
         from kan.render_theme import render_theme_disclaimer
