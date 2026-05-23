@@ -34,6 +34,14 @@ class BoardDataUnavailableError(Exception):
     """申万数据源不可用(网络/接口失败/空数据)。"""
 
 
+class ThemeNotFoundError(Exception):
+    """search_theme 未命中任何题材。"""
+
+
+class ThemeDataUnavailableError(Exception):
+    """adata THS+EM 题材数据全挂(双源都失败才抛)。"""
+
+
 def _cache_fresh(path, ttl: float) -> bool:
     if not path.exists():
         return False

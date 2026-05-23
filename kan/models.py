@@ -50,3 +50,15 @@ class Board(BaseModel):
     name: str    # 如 "半导体"
     level: int   # 1 | 2 | 3 (申万一/二/三级)
     size: int    # 成份个数
+
+
+class Theme(BaseModel):
+    """题材板块 · catalog 条目。
+
+    跟 Board 字段不重合(无 level · 有 source) · 不复用 Board · 见 design §5.1。
+    """
+
+    code: str          # THS index_code "886108" | EM concept_code "BK1629"
+    name: str          # "AI应用" / "白酒概念"
+    source: str        # "ths" | "em"
+    size: int | None = None  # 成分股数 · catalog 接口未必提供 · 可空
