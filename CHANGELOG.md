@@ -9,39 +9,50 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
-- `--hot rank|surge` 东方财富热榜扫描 · 人气榜 / 飙升榜作"临时自选股"标的来源 · 加到 scan/low/high/trend/fetch
-- `kan/hot.py` 东财热榜数据子系统 · JSON cache 1h TTL · 代码归一化 · 单源不建假 fallback
-- 热榜模式表格新增"榜"列(实时名次)· `--only-watchlist` 支持自选 ∩ 热榜
-- **TuShare Pro 数据源接入**（设计：[docs/design-tushare-pro.md](docs/design-tushare-pro.md)）
-  - 新增 `kan config` 子命令组：`kan config get/set/unset` 管理用户配置
-  - 支持 `tushare-token` 配置（必填，未配则跳过 TuShare 分支）
-  - 支持 `tushare-endpoint` 配置（可选，默认 `http://api.tushare.pro`；可填自部署镜像 / 反代）
+- **东方财富热榜扫描** · `--hot rank|surge` 把人气榜 / 飙升榜作"临时自选股"标的来源
+  - 加到 scan / low / high / trend / fetch 5 个命令
+  - 热榜模式表格新增"榜"列(实时名次)
+  - `--only-watchlist` 支持自选 ∩ 热榜(过滤出"你的自选里也在热榜上的股")
+  - JSON cache 1h TTL · 减少接口压力
+- **TuShare Pro 可选数据源**(不配 token 行为零变化)
+  - 新命令组 `kan config get/set/unset` 管理用户配置
+  - 配置 `tushare-token`(在 https://tushare.pro 申请)+ `tushare-endpoint`(可选 · 默认 https://api.tushare.pro · 可填自部署镜像)
   - 环境变量 `TUSHARE_TOKEN` / `TUSHARE_ENDPOINT` 在运行时覆盖 config.json
-  - 配 token 后 TuShare Pro 顶替 baostock 作 `fetch_kline` 主路径；未配 token 行为零变化
-  - `kan config get` 自动 mask token（仅显示末 4 位）；token 永不出现在 logs / exceptions
-  - 自写 ~80 行 HTTP client，不依赖官方 `tushare` SDK（SDK 端点硬编码无法替换）
-- **🎯 题材位置扫描（F11）** · 9 个用户命令支持 `--theme=<题材名>`（设计:[docs/design-f11-theme-scan.md](docs/design-f11-theme-scan.md)):
-  - 7 个只读/数据命令 `scan / low / high / trend / info / list / fetch` 支持 `--theme`;其中 `scan / low / high / trend / fetch` 支持 `--only-watchlist`
-  - 2 个破坏性命令 `add / remove` 支持 `--theme`,必经二次确认,`--yes` 跳过(慎用)
-  - 题材发现入口 `kan theme list [--all]` / `kan theme search 关键词`(参考 `kan config` 子命令树体例)
-- 🆕 数据源:`adata`(同花顺 catalog/成分股 + 东方财富 datacenter K 线/反查 + EM push2 fallback 走 T6 熔断 5min cooldown)· 零 token 零配置
-- 🆕 新模块 `kan/boards.py` 扩 6 个 theme 函数(load_theme_catalog / search_theme / normalize_theme_name / get_theme_constituents / fetch_theme_kline / get_themes_of_stock)
-- 🆕 新模块 `kan/_confirm.py`(破坏性 helper)+ `kan/cli_theme_cmds.py`(子命令树)+ `kan/render_theme.py`(4 行 disclaimer)
-- 🆕 cache schema:`boards/catalog_concept_ths.json`(24h)· `cons_THS{886xxx}.json` / `cons_EM{BK1xxx}.json`(per-theme 24h)· `kline_EM{BK1xxx}.parquet` · `stock_themes_<symbol>.json`(12h)
-- 🆕 deps:`adata>=2.9,<3` 主依赖(零 token · 多源融合)
-- 🆕 红线词自动 audit 测试(`test_theme_redline_audit.py`)· AGENTS.md §6 合规防回归
-- 🆕 真网络冒烟 marker `@pytest.mark.network`(默认跳 · daily cron 跑)
+  - 配 token 后 TuShare Pro 顶替 baostock 作 `fetch_kline` 主路径
+  - `kan config get` 自动 mask token(仅显示末 4 位)· token 永不进入 logs / exceptions
+- **题材位置扫描** · 9 个命令支持 `--theme=<题材名>`
+  - 7 个只读命令 `scan / low / high / trend / info / list / fetch` 支持 `--theme`(其中 5 个支持 `--only-watchlist`)
+  - 2 个破坏性命令 `add / remove` 支持 `--theme` · 必经二次确认 · `--yes` 跳过(慎用)
+  - 题材发现入口 `kan theme list [--all]` / `kan theme search 关键词`
+  - 数据源:同花顺 catalog/成分股 + 东方财富 K 线/反查 + 东财备份 fallback · 零 token 零配置
+  - 上游数据源限流时自动 5 分钟冷却 · 不重复打挂数据源
+- 新数据源 `adata>=2.9,<3` 主依赖(零 token · 多源融合)
 
-### Changed (F11)
+### Changed (用户可见)
 
-- `kan/_scan_targets.py::resolve_scan_targets` 从 3 模式扩为 **4 模式互斥**(industry / hot / theme / 默认自选)· 加 `theme` 参数 + `ThemeMeta` dataclass
-- 题材线 disclaimer 比 `--industry` 强一档:加 "题材跟风风险高于行业 · 题材分类各家口径不同"
-- baseline 测试 525 → 585(+60 新 F11 case · 网络 5 跳过)
+- **成交量异动标签从 2 档扩为 5 档对称**(scan 表 / `kan info` 详情)
+  - 明显放大(≥2.0x)/ 温和放大(1.5-2.0x)/ 量能平稳(0.67-1.5x)/ 温和萎缩(0.5-0.67x)/ 明显萎缩(<0.5x)
+  - 边界对数对称 · 修旧版"涨停日 1.73× 误标量能平稳"
+  - 阈值表见 `kan info --help`
+- **`kan --help` 速记表补齐 v0.0.5.0 全命令面**:compare / --format / --industry / --hot / --theme / kan theme / kan config
+- **`kan compare --format md` 表头统一为「名称 代码」** · 跟 terminal / scan / info / list 对齐(脚本 parse 用户注意)
+- 题材线 disclaimer 比 `--industry` 强一档:"题材跟风风险高于行业 · 题材分类各家口径不同"
 
-### Known Issues (F11)
+### Changed (内部架构 · 不影响用户行为)
 
-- **题材成分股数据源动态故障**:adata THS 4 个路径(index_code/name/concept_code/EM push2)受上游限流 / 反爬 / 端点变化影响,可能阶段性不可用 · 触发时用户看到友好提示"题材数据源暂不可用 · 行业扫描可用(--industry)"。Spec §14 已记录,T6 熔断器(5min cooldown)+ 24h cache 保证间歇性可用。
-- **Apple Silicon arm64 + adata `py_mini_racer` 依赖**:THS `concept_code` 路径 + THS K 线接口在 arm64 上 dylib symbol 不匹配会抛 `AttributeError: mr_eval_context`。F11 实施已绕开(catalog/成分股 走 `index_code` · K 线 走 EM datacenter)· 但 adata 内部可能仍调到 V8 路径 · 用户日志会有 noise。建议:M1+ Mac 用户出错时跑 `--industry` 替代。
+- 新模块 `kan/_pipeline.py` 编排器 · scan/trend 统一 resolve → fetch → compute → freshness 流水线
+- 新模块 `kan/render_terminal.py`(448 行)· 终端表格构建器统一 · scan/extreme/info/compare/trend 5 个 builder 复用
+- `cli_scan_cmds` 大文件拆为 5 个 per-command-group 文件(scan/extreme/info/compare/fetch · 单一职责)
+- 公开仓内部注释清扫 · 注释中性化(整库 zero 残留)
+
+### Tests
+
+- baseline 525 → 648+ passed(+120 新 case)· 网络冒烟用 `@pytest.mark.network` marker 默认 CI 跳
+
+### Known Issues
+
+- **题材成分股数据源动态不稳定**:同花顺 / 东方财富接口受上游限流 / 反爬 / 端点变化影响,可能阶段性不可用 · 触发时给友好提示"题材数据源暂不可用 · 行业扫描可用(`--industry`)"
+- **Apple Silicon arm64 + adata 间接依赖 `py_mini_racer`**:某些题材数据路径在 arm64 上 dylib 缺失会有 noise · 题材扫描已绕开主路径 · 影响仅在 debug log · M1+ Mac 用户题材出错时改用 `--industry` 替代
 
 ## [0.0.4.8] - 2026-05-16
 

@@ -23,7 +23,7 @@ It deliberately stops there: **no buy/sell advice, no ratings, no price targets,
 
 慢慢看是一个**纯命令行**的 A 股自选股位置感工具。它把电商「慢慢买」的「先看历史价位再决策」迁移到股市:把你 30 只自选股在 3、5、7、10、15、30、60、90、120、180 日窗口内的位置百分位**一屏显示**,把「同时触及多个低点」标成共振信号,然后**闭嘴**——剩下的判断,你自己做。
 
-> 📦 **当前版本 v0.0.5.0**（Alpha · 热榜 / 题材扫描 + TuShare Pro 可选数据源 + Markdown/JSON 导出）· `pip install manmankan` 即装即用 · API 在 1.0 前可能调整。
+> 📦 **当前版本 v0.0.5.0**（Alpha · 热榜 / 题材扫描 + TuShare Pro 可选数据源 + 5 档成交量识别）· `pip install manmankan` 即装即用 · API 在 1.0 前可能调整。
 >
 > 🌱 **[新手专区](#新手专区)**（默认展开）：第一次用命令行的散户 mac / Windows 各 2 步装好。
 >
@@ -111,6 +111,15 @@ powershell -c "irm https://raw.githubusercontent.com/piklen/manmankan/main/scrip
 ```bash
 kan add 600519 茅台 601318     # 加 3 只自选股
 kan scan                        # 看一屏位置 + 共振信号
+```
+
+**v0.0.5.0 新功能**(可选 · 不影响默认体验):
+
+```bash
+kan theme search AI             # 找你关心的题材
+kan scan --theme=AI应用         # 看 AI 板块谁在低位
+kan scan --hot rank             # 看东财人气榜(盘后跑反映今日散户讨论焦点)
+kan config set tushare-token <你的_token>   # 接 TuShare Pro 提速(可选)
 ```
 
 ### 卡住了 · 不知道怎么办

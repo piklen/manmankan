@@ -1,4 +1,4 @@
-"""F11 真网络冒烟 · 跑真 adata HTTP · 验证 spike 假设未回归。
+"""题材功能真网络冒烟 · 跑真 adata HTTP · 验证 spike 假设未回归。
 
 默认 CI 跳过(用 -m "not network")。
 本地开发 + daily cron 跑(用 -m network)。

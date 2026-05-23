@@ -1,15 +1,15 @@
-"""AGENTS.md §6 红线词 audit · grep F11 相关源码 · 防回归。"""
+"""AGENTS.md §6 红线词 audit · 题材功能源码防回归。"""
 from pathlib import Path
 
-# F11 新增的主体代码文件 · 红线词审查 scope
-F11_SOURCE_FILES = [
+# 题材功能新增的主体代码文件 · 红线词审查 scope
+THEME_SOURCE_FILES = [
     "kan/_scan_targets.py",
     "kan/_confirm.py",
     "kan/cli_theme_cmds.py",
     "kan/render_theme.py",
 ]
 
-# 硬红线词 · 不允许出现在 F11 任何主体代码中(spec §12.2)
+# 硬红线词 · 不允许出现在题材功能任何主体代码中
 REDLINE_WORDS = [
     "共振信号",
     "强势题材",
@@ -21,11 +21,11 @@ REDLINE_WORDS = [
 ]
 
 
-def test_no_redline_words_in_f11_source():
-    """硬红线词不应出现在 F11 主体代码中。"""
+def test_no_redline_words_in_theme_source():
+    """硬红线词不应出现在题材功能主体代码中。"""
     repo = Path(__file__).parent.parent
     violations = []
-    for relpath in F11_SOURCE_FILES:
+    for relpath in THEME_SOURCE_FILES:
         p = repo / relpath
         if not p.exists():
             continue
@@ -37,7 +37,7 @@ def test_no_redline_words_in_f11_source():
 
 
 def test_theme_disclaimer_4_lines_present():
-    """render_theme.py 必须含 spec §12.1 LOCKED 的 4 行 disclaimer 关键短语。"""
+    """render_theme.py 必须含 4 行 disclaimer 关键短语。"""
     p = Path(__file__).parent.parent / "kan/render_theme.py"
     content = p.read_text(encoding="utf-8")
     assert "位置 ≠ 买卖信号" in content
@@ -48,7 +48,7 @@ def test_theme_disclaimer_4_lines_present():
 
 
 def test_theme_cmds_have_education_disclaimer():
-    """cli_theme_cmds.py 必须含散户教育 disclaimer(spec §12.3)。"""
+    """cli_theme_cmds.py 必须含散户教育 disclaimer。"""
     p = Path(__file__).parent.parent / "kan/cli_theme_cmds.py"
     content = p.read_text(encoding="utf-8")
     assert "题材是标签" in content or "一只股可能在多个题材" in content
