@@ -214,8 +214,8 @@ class TestMaxTrendDates:
 
 
 # ════════════════════════════════════════════════════════════════
-# ***REMOVED*** + ***REMOVED*** + ***REMOVED*** stale/intraday warning runtime 真测 (scan 命令)
-# (***REMOVED*** v0.0.4.8: 补 scan 完整 LOCKED 覆盖 · 跟 trend runtime test 对称)
+# stale/intraday warning runtime 真测 (scan 命令)
+# (v0.0.4.8: 补 scan 完整覆盖 · 跟 trend runtime test 对称)
 # ════════════════════════════════════════════════════════════════
 @pytest.fixture
 def scan_runner(monkeypatch):
@@ -255,7 +255,7 @@ def scan_runner(monkeypatch):
 
 
 def test_scan_stale_warning_uses_new_phrasing(scan_runner, monkeypatch):
-    """***REMOVED*** + U-5 真测: scan 命令的 stale 警告应含'当前缓存到 X 收盘' + '数据滞后 N 天'."""
+    """真测: scan 命令的 stale 警告应含'当前缓存到 X 收盘' + '数据滞后 N 天'."""
     from datetime import date
 
     from kan.app import app
@@ -278,7 +278,7 @@ def test_scan_stale_warning_uses_new_phrasing(scan_runner, monkeypatch):
 
 
 def test_scan_intraday_warning_compliant_phrasing(scan_runner, monkeypatch):
-    """***REMOVED*** + ***REMOVED*** 真测: scan 盘中警告应是状态描述 · 不含'下一秒打开' 红线词."""
+    """真测: scan 盘中警告应是状态描述 · 不含'下一秒打开' 红线词."""
     from datetime import date
 
     from kan.app import app
@@ -294,7 +294,7 @@ def test_scan_intraday_warning_compliant_phrasing(scan_runner, monkeypatch):
     result = scan_runner.invoke(app, ["scan"])
     assert result.exit_code == 0
     output = result.output
-    # v0.0.4.8 ***REMOVED***+***REMOVED***: 纯状态描述 · 移除预测性 "可能回落/可能回升/都是正常波动"
+    # v0.0.4.8: 纯状态描述 · 移除预测性 "可能回落/可能回升/都是正常波动"
     assert "涨跌停标签反映当前时刻" in output, f"scan intraday 新文案应出现 · output: {output[-500:]}"
     assert "建议盘后 15:30" in output
     assert "下一秒打开" not in output, "scan 不应残留预测性词 (AGENTS.md §6)"
@@ -303,7 +303,7 @@ def test_scan_intraday_warning_compliant_phrasing(scan_runner, monkeypatch):
 
 
 def test_scan_warnings_mutex_stale_wins(scan_runner, monkeypatch):
-    """***REMOVED*** 真测: scan stale+intraday 同时为 True 时只显示 stale · 验证 if/elif 互斥."""
+    """真测: scan stale+intraday 同时为 True 时只显示 stale · 验证 if/elif 互斥."""
     from datetime import date
 
     from kan.app import app
@@ -327,7 +327,7 @@ def test_scan_warnings_mutex_stale_wins(scan_runner, monkeypatch):
 
 
 # ════════════════════════════════════════════════════════════════
-# ***REMOVED*** v0.0.4.8: scan/low/high/info 命令组 CliRunner 覆盖增量
+# v0.0.4.8: scan/low/high/info 命令组 CliRunner 覆盖增量
 # 复用 scan_runner fixture · mock 全部 dependencies
 # ════════════════════════════════════════════════════════════════
 def test_scan_command_basic_runs(scan_runner):
