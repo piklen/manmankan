@@ -80,8 +80,8 @@ def fetch_hot_list(which: HotList, force: bool = False) -> list[HotEntry]:
         try:
             data = json.loads(cache.read_text(encoding="utf-8"))
             return [HotEntry(**e) for e in data]
-        except Exception:
-            pass  # cache 损坏 → 重新拉
+        except Exception as e:
+            debug_log(__name__, f"hot cache {cache.name} 损坏 · 重新拉", e)
 
     fn_name, _label = _HOT_SPEC[which]
     import akshare as ak

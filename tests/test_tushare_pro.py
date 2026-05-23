@@ -39,7 +39,7 @@ class TestNormalizeSymbolToTs:
 class TestResolveConfig:
     """env > config > default 优先级"""
 
-    DEFAULT_ENDPOINT = "http://api.tushare.pro"
+    DEFAULT_ENDPOINT = "https://api.tushare.pro"
 
     @pytest.fixture
     def temp_config(self, tmp_path, monkeypatch):

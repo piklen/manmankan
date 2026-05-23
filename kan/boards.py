@@ -10,6 +10,7 @@ import json
 import time
 from typing import TYPE_CHECKING
 
+from kan._log import debug_log
 from kan.models import Board
 from kan.paths import BOARDS_DIR, ensure_dirs
 
@@ -60,8 +61,8 @@ def load_industry_catalog(force: bool = False) -> list[Board]:
         try:
             data = json.loads(cache.read_text(encoding="utf-8"))
             return [Board(**b) for b in data]
-        except Exception:
-            pass  # cache 损坏 → 重新拉
+        except Exception as e:
+            debug_log(__name__, f"industry catalog cache {cache.name} 损坏 · 重新拉", e)
     boards_list = _fetch_catalog()
     cache.write_text(
         json.dumps([b.model_dump() for b in boards_list], ensure_ascii=False),
@@ -77,7 +78,8 @@ def _fetch_catalog() -> list[Board]:
     for level, fn_name in _SW_LEVEL_FUNCS.items():
         try:
             df = getattr(ak, fn_name)()
-        except Exception:
+        except Exception as e:
+            debug_log(__name__, f"申万 {fn_name} 单级拉取失败 · 用其它级兜底", e)
             continue  # 单级失败不致命 · 用其它级
         if df is None or df.empty:
             continue
@@ -132,8 +134,8 @@ def get_industry_constituents(
                 (str(c), str(n))
                 for c, n in json.loads(cache.read_text(encoding="utf-8"))
             ]
-        except Exception:
-            pass
+        except Exception as e:
+            debug_log(__name__, f"industry constituents cache {cache.name} 损坏 · 重新拉", e)
     import akshare as ak
 
     try:
@@ -171,7 +173,8 @@ def _kline_cache_fresh(path) -> bool:
         from kan.trading_calendar import latest_trade_date
 
         return last_d >= latest_trade_date()
-    except Exception:
+    except Exception as e:
+        debug_log(__name__, "industry kline freshness check 失败 · 视为 stale", e)
         return False
 
 
@@ -228,7 +231,8 @@ def _load_themes_from_cache(cache) -> list[Theme] | None:
     try:
         data = json.loads(cache.read_text(encoding="utf-8"))
         return [Theme(**t) for t in data]
-    except Exception:
+    except Exception as e:
+        debug_log(__name__, f"theme cache {cache.name} 损坏 · 视为不存在", e)
         return None
 
 
@@ -245,8 +249,8 @@ def load_theme_catalog(force: bool = False) -> list[Theme]:
         try:
             data = json.loads(cache.read_text(encoding="utf-8"))
             return [Theme(**t) for t in data]
-        except Exception:
-            pass
+        except Exception as e:
+            debug_log(__name__, f"theme catalog cache {cache.name} 损坏 · 重新拉", e)
 
     import adata
 
@@ -334,8 +338,8 @@ def get_theme_constituents(theme, force: bool = False) -> list[tuple[str, str]]:
                 (str(c), str(n))
                 for c, n in json.loads(cache.read_text(encoding="utf-8"))
             ]
-        except Exception:
-            pass
+        except Exception as e:
+            debug_log(__name__, f"theme constituents cache {cache.name} 损坏 · 重新拉", e)
 
     import adata
 

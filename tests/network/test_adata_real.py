@@ -64,12 +64,25 @@ def test_adata_em_reverse_real():
 def test_adata_arm64_py_mini_racer_known_issue():
     """记录 Apple Silicon arm64 的 py_mini_racer dylib 缺失 · 文档化已知问题。
 
-    本测试不应阻塞 CI · 只在 arm64 darwin 上 expected fail。
+    本测试不应阻塞 CI · 只在 arm64 darwin 上检测 · weak-fail 模式:
+    - 仍抛 dylib 错误 → 文档化已知问题 still relevant
+    - 不抛(上游修了 / V8 自愈)→ pytest.skip 提示"可考虑撤掉本测试"
     """
     import platform
     if not (platform.system() == "Darwin" and platform.machine() == "arm64"):
         pytest.skip("only relevant on Apple Silicon")
 
     import adata
-    with pytest.raises((RuntimeError, AttributeError), match=r"libmini_racer|py_mini_racer|mr_eval_context"):
-        adata.stock.market.get_market_concept_ths(index_code="886108", k_type=1)
+    try:
+        df = adata.stock.market.get_market_concept_ths(index_code="886108", k_type=1)
+    except (RuntimeError, AttributeError) as e:
+        msg = str(e)
+        assert any(t in msg for t in ("libmini_racer", "py_mini_racer", "mr_eval_context")), (
+            f"非预期异常类型: {e}"
+        )
+        return
+    # 没抛 = 上游已修 · 文档化此情况但不 fail
+    pytest.skip(
+        f"arm64 py_mini_racer 已修复 · 收到 {len(df) if df is not None else 0} 行 · "
+        f"可考虑撤掉本测试"
+    )
