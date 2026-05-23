@@ -27,12 +27,15 @@ def help_cmd() -> None:
     Console().print(f"""[bold]慢慢看 · v{__version__} · 命令速记[/bold]
 
 [bold cyan]自选股管理[/bold cyan]
-  kan add 600519 000858     添加自选股（代码）
-  kan add 茅台              添加自选股（名称搜索）
-  kan remove 600519 茅台    移除自选股（支持多只 + 名称）
-  kan list                  查看自选列表
-  kan import stocks.csv     CSV 批量导入
-  kan clear                 清空自选列表
+  kan add 600519 000858       添加自选股（代码）
+  kan add 茅台                添加自选股（名称搜索）
+  kan add --industry 半导体   按行业批量添加成分股（二次确认）
+  kan remove 600519 茅台      移除自选股（支持多只 + 名称）
+  kan remove --industry 白酒  按行业批量移除自选 ∩ 该行业
+  kan list                    查看自选列表
+  kan list --industry 半导体  只列某行业的自选
+  kan import stocks.csv       CSV 批量导入
+  kan clear                   清空自选列表
 
 [bold cyan]位置扫描[/bold cyan]
   kan scan                  全景扫描 10 周期（低点模式）
@@ -45,8 +48,9 @@ def help_cmd() -> None:
   kan low 30 60 120         多周期一次看
   kan high 30               谁在 30 日高点？
 
-[bold cyan]单只详情[/bold cyan]
-  kan info 600519           单只股票全周期位置 + 涨跌 + 共振
+[bold cyan]单只详情 / 多股对比[/bold cyan]
+  kan info 600519                    单只股票全周期位置 + 涨跌 + 共振
+  kan compare 600519 000858          多股横向对比（2-8 只 · -p 30,60,120）
 
 [bold cyan]连续涨跌[/bold cyan]
   kan trend                 连续涨跌看板（不筛选）
@@ -60,9 +64,32 @@ def help_cmd() -> None:
   [dim]以上参数可任意组合：kan trend --down 5 --latest 7 --candle[/dim]
   [dim]N 范围：2-30[/dim]
 
+[bold cyan]行业 / 热榜 / 题材扫描[/bold cyan]
+  kan scan --industry 半导体      扫指定行业全成分股（自选股 ⭐ 高亮）
+  kan scan --hot rank             扫东财热榜（rank 人气榜 / surge 飙升榜）
+  kan scan --theme AI             扫指定题材全成分股
+  kan low 30 --industry 白酒      行业里筛 30 日低点
+  kan info --industry 半导体      查看行业板块档案
+  kan theme list                  列出热门题材（top 30）
+  kan theme search 数据要素       模糊搜题材
+
+  [dim]--industry / --hot / --theme 三者互斥 · 加 --only-watchlist 取自选交集[/dim]
+
+[bold cyan]导出格式[/bold cyan]
+  kan scan --format md      markdown 表格输出
+  kan scan --format json    JSON 结构化输出
+
+  [dim]--format 适用 scan / low / high / info / trend / compare[/dim]
+
 [bold cyan]数据管理[/bold cyan]
   kan fetch                 拉取数据（通常不需要，scan 自动更新）
   kan fetch --force         强制刷新
+  kan fetch --industry X    预拉某行业全部成分股
+
+[bold cyan]配置（tushare-pro 凭证）[/bold cyan]
+  kan config get                              查看当前配置
+  kan config set tushare_token <YOUR_TOKEN>   设 tushare 凭证
+  kan config unset tushare_token              清凭证
 
 [bold cyan]shell 命令补全[/bold cyan] (mac/linux/windows)
   kan completion install    安装补全脚本（自动检测 shell · 之后 kan s<Tab>=kan scan）
