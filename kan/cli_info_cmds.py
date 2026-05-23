@@ -128,7 +128,12 @@ def info(
         typer.Option("--format", help="输出格式：terminal（默认）/ md / json"),
     ] = export.OutputFormat.terminal,
 ) -> None:
-    """单只股票详情（全周期位置 + 涨跌信息）"""
+    """单只股票详情（全周期位置 + 涨跌信息）。
+
+    成交量 5 档对称 label(对比 5 日均量):
+      明显放大 ≥2.0x · 温和放大 1.5-2.0x · 量能平稳 0.67-1.5x
+      温和萎缩 0.5-0.67x · 明显萎缩 <0.5x
+    """
     if sum(1 for x in (industry, theme) if x is not None) > 1:
         _print_err("❌ --industry 与 --theme 不能同时使用")
         raise typer.Exit(2)

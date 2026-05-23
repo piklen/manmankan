@@ -21,6 +21,10 @@ from kan.hot import HotList
 
 @app.command()
 def trend(
+    extra_args: Annotated[
+        list[str] | None,
+        typer.Argument(metavar="", show_default=False, help="(内部:防 trend 600519 dead-end · 引导到 kan info)"),
+    ] = None,
     latest: Annotated[int | None, typer.Option("--latest", "-l", help="展示近 N 天走势详情（1-180）", min=1, max=180)] = None,
     down: Annotated[int | None, typer.Option("--down", help="只看连跌≥N天（不带 N 默认 3）")] = None,
     up: Annotated[int | None, typer.Option("--up", help="只看连涨≥N天（不带 N 默认 3）")] = None,
@@ -47,6 +51,23 @@ def trend(
     ] = export.OutputFormat.terminal,
 ) -> None:
     """连续涨跌看板"""
+    # 处理 trend <ticker> 误用 · 散户最直觉的"看茅台趋势 kan trend 600519"会进 extra_args
+    # 引导到 `kan info <ticker>` · 接口升级到收 ticker 是 v0.0.6 计划
+    if extra_args:
+        first = extra_args[0]
+        # 判断:6 位数字 → 像股票代码 · isalpha 含非 ASCII(中文) / ASCII(英文)→ 像股票名
+        # 用 .isdigit / .isalpha / .isascii 避开 unicode 字符范围正则
+        looks_like_code = first.isdigit() and len(first) == 6
+        looks_like_name = first.isalpha()  # 中文 / 英文都返 True
+        if looks_like_code or looks_like_name:
+            _print_err(
+                f"💡 看单只趋势用 `kan info {first}` · "
+                f"`kan trend` 是看全板涨跌(无 ticker 参数 · 用 --down / --up / --latest)"
+            )
+        else:
+            _print_err(f"❌ 不识别的参数: {first}")
+        raise typer.Exit(2)
+
     from rich.console import Console
 
     status_console = Console(stderr=True)

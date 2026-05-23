@@ -96,7 +96,8 @@ def test_scan_hot_data_unavailable(hot_runner, monkeypatch):
     monkeypatch.setattr(hot, "fetch_hot_list", _raise)
     result = hot_runner.invoke(app, ["scan", "--hot", "rank"])
     assert result.exit_code == 1
-    assert "热榜数据源暂时不可用" in result.output
+    assert "东财热榜源暂时不可用" in result.output
+    assert "替代:" in result.output  # P0-10 fallback 引导
 
 
 def test_scan_hot_only_watchlist_intersects(hot_runner):

@@ -9,6 +9,8 @@ from __future__ import annotations
 import json
 import re
 import time
+from concurrent.futures import ThreadPoolExecutor
+from concurrent.futures import TimeoutError as FuturesTimeout
 from dataclasses import asdict, dataclass
 from enum import StrEnum
 
@@ -16,6 +18,7 @@ from kan._log import debug_log
 from kan.paths import HOT_DIR, ensure_dirs
 
 _CACHE_TTL = 3600  # 1h · 热榜实时榜 · 盘后工具 1h 内重复跑结果稳定 · 不反复打源
+_HOT_TIMEOUT_SECONDS = 15  # 单次拉取硬超时 · 防 v0.0.4.3 同型"沉默 5 分钟卡死"
 
 _PREFIX_RE = re.compile(r"^[A-Za-z]{2}")
 _CODE_RE = re.compile(r"\d{6}")
@@ -86,10 +89,22 @@ def fetch_hot_list(which: HotList, force: bool = False) -> list[HotEntry]:
     fn_name, _label = _HOT_SPEC[which]
     import akshare as ak
 
-    try:
-        df = getattr(ak, fn_name)()
-    except Exception as e:
-        raise HotListUnavailableError(f"东财热榜拉取失败 {fn_name}: {e}") from e
+    # 硬超时拉取 · 防 akshare/requests 默认长重试导致用户感受"卡死"
+    # ThreadPoolExecutor.result(timeout) 让 main thread 立即 return 报错
+    # 真 thread 不能强制 kill(Python 限制)· 但用户看到错误 + 后台 thread 自然结束
+    def _call():
+        return getattr(ak, fn_name)()
+
+    with ThreadPoolExecutor(max_workers=1) as executor:
+        future = executor.submit(_call)
+        try:
+            df = future.result(timeout=_HOT_TIMEOUT_SECONDS)
+        except FuturesTimeout as e:
+            raise HotListUnavailableError(
+                f"东财热榜拉取超时({_HOT_TIMEOUT_SECONDS}s) {fn_name} · 网络慢或接口限流"
+            ) from e
+        except Exception as e:
+            raise HotListUnavailableError(f"东财热榜拉取失败 {fn_name}: {e}") from e
     if df is None or df.empty:
         raise HotListUnavailableError(f"东财热榜为空: {fn_name}")
 
