@@ -7,7 +7,7 @@ import pandas as pd
 import pytest
 
 from kan import boards
-from kan.boards import ThemeDataUnavailableError
+from kan.boards import ThemeDataUnavailableError, ThemeNotFoundError
 from kan.models import Theme
 
 
@@ -146,3 +146,63 @@ def test_load_theme_catalog_falls_back_to_stale_cache_on_failure(monkeypatch, _i
     assert len(log_calls) >= 1, f"expected debug_log to be called, got {len(log_calls)} calls"
     assert any("adata THS catalog" in op for _, op, _ in log_calls), \
         f"expected debug_log with 'adata THS catalog' in op, got: {log_calls}"
+
+
+# ── search_theme / normalize_theme_name ──────────────────────────────
+
+def _seed_catalog(_isolate_boards_dir):
+    """写入一个完整 catalog 到 tmp · 供 search 测试用。"""
+    cache = _isolate_boards_dir / "catalog_concept_ths.json"
+    cache.write_text(
+        json.dumps(
+            [
+                {"code": "886108", "name": "AI应用", "source": "ths", "size": None},
+                {"code": "886112", "name": "AI智能体", "source": "ths", "size": None},
+                {"code": "885525", "name": "白酒概念", "source": "ths", "size": None},
+                {"code": "886058", "name": "华为昇腾", "source": "ths", "size": None},
+                {"code": "886109", "name": "同花顺", "source": "ths", "size": None},
+            ],
+            ensure_ascii=False,
+        ),
+        encoding="utf-8",
+    )
+
+
+def test_normalize_theme_name_strips_spaces(_isolate_boards_dir):
+    """'AI 应用' → 'AI应用'(去全角半角空格)。"""
+    assert boards.normalize_theme_name("AI 应用") == "AI应用"
+    assert boards.normalize_theme_name("AI　应用") == "AI应用"  # 全角空格
+    assert boards.normalize_theme_name("白酒  概念") == "白酒概念"
+
+
+def test_normalize_theme_name_idempotent(_isolate_boards_dir):
+    """'AI应用' → 'AI应用'(已规范不变)。"""
+    assert boards.normalize_theme_name("AI应用") == "AI应用"
+
+
+def test_search_theme_exact_code(_isolate_boards_dir):
+    """精确代码命中。"""
+    _seed_catalog(_isolate_boards_dir)
+    t = boards.search_theme("886108")
+    assert t.name == "AI应用"
+
+
+def test_search_theme_exact_name(_isolate_boards_dir):
+    """精确题材名命中。"""
+    _seed_catalog(_isolate_boards_dir)
+    t = boards.search_theme("白酒概念")
+    assert t.code == "885525"
+
+
+def test_search_theme_fuzzy_normalized(_isolate_boards_dir):
+    """模糊命中 · normalize 后含匹配 · 多命中按 catalog 顺序取第一个。"""
+    _seed_catalog(_isolate_boards_dir)
+    t = boards.search_theme("AI 应用")  # 带空格 → normalize → "AI应用"
+    assert t.name == "AI应用"
+
+
+def test_search_theme_not_found(_isolate_boards_dir):
+    """完全不命中 · 抛 ThemeNotFoundError。"""
+    _seed_catalog(_isolate_boards_dir)
+    with pytest.raises(ThemeNotFoundError):
+        boards.search_theme("不存在的题材xyz")

@@ -282,3 +282,32 @@ def load_theme_catalog(force: bool = False) -> list[Theme]:
         encoding="utf-8",
     )
     return themes
+
+
+def normalize_theme_name(name: str) -> str:
+    """规范化题材名 · 去全角半角空格 · alias 表后续累积。
+
+    THS 'AI应用' / 'AI 应用' / 'AI　应用' → 'AI应用'。
+    EM 'AI应用' / THS 'AI应用' → 同字串(本期不做跨源 alias)。
+    """
+    return name.replace(" ", "").replace("　", "").strip()
+
+
+def search_theme(query: str) -> Theme:
+    """模糊匹配题材名或代码 → Theme · 未命中抛 ThemeNotFoundError。
+
+    优先级:精确代码 > 精确名(normalize) > 含匹配(normalize)。
+    """
+    q = query.strip()
+    q_norm = normalize_theme_name(q)
+    catalog = load_theme_catalog()
+    for t in catalog:
+        if t.code == q:
+            return t
+    for t in catalog:
+        if normalize_theme_name(t.name) == q_norm:
+            return t
+    for t in catalog:
+        if q_norm in normalize_theme_name(t.name):
+            return t
+    raise ThemeNotFoundError(query)
