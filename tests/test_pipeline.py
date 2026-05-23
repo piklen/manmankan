@@ -1,5 +1,7 @@
-"""kan/_pipeline.py 单元测试 · mock resolve_scan_targets 与 _print_err · 不走真网络。"""
+"""kan/_pipeline.py 单元测试 · mock 上游(resolve_scan_targets / fetcher / trading_calendar)。"""
 from __future__ import annotations
+
+from datetime import date
 
 import pytest
 import typer
@@ -21,7 +23,7 @@ def _make_raiser(exc: Exception):
     return _raise
 
 
-# ── 透传行为 ──────────────────────────────────────────────────────────
+# ═══ resolve_targets_or_exit ═══════════════════════════════════════════
 
 
 def test_resolve_targets_or_exit_no_source_returns_watchlist_pairs():
@@ -30,7 +32,7 @@ def test_resolve_targets_or_exit_no_source_returns_watchlist_pairs():
     targets, meta = _pipeline.resolve_targets_or_exit(
         None, only_watchlist=False, watchlist_pairs=pairs,
     )
-    assert targets is pairs  # 透传(同一对象)
+    assert targets is pairs
     assert meta is None
 
 
@@ -79,9 +81,6 @@ def test_resolve_targets_or_exit_passes_kwargs_through(monkeypatch):
     }
 
 
-# ── 5 类 source 错误 → typer.Exit ────────────────────────────────────
-
-
 @pytest.mark.parametrize(("exc_cls", "expected_code", "msg_part"), [
     (BoardNotFoundError, 1, "未找到行业"),
     (BoardDataUnavailableError, 1, "行业数据源"),
@@ -107,14 +106,11 @@ def test_resolve_targets_or_exit_source_errors(
             "test",
             only_watchlist=False,
             watchlist_pairs=[],
-            theme="testtheme",  # 给 theme 错误消息引用用
+            theme="testtheme",
         )
     assert exc_info.value.exit_code == expected_code
     assert len(err_calls) == 1
     assert msg_part in err_calls[0]
-
-
-# ── 错误消息内容(防 future 简化导致用户体验回退)──────────────────────
 
 
 def test_resolve_targets_or_exit_board_not_found_includes_industry_and_examples(
@@ -181,4 +177,144 @@ def test_resolve_targets_or_exit_theme_data_unavailable_hints_industry(monkeypat
         )
     msg = err_calls[0]
     assert "题材数据源" in msg
-    assert "--industry" in msg  # 降级路径提示
+    assert "--industry" in msg
+
+
+# ═══ Freshness / freshness_of ══════════════════════════════════════════
+
+
+def _patch_calendar(monkeypatch, expected_date=date(2026, 5, 23), phase="post"):
+    """统一 patch latest_trade_date + market_phase。"""
+    monkeypatch.setattr(
+        "kan.trading_calendar.latest_trade_date", lambda: expected_date,
+    )
+    monkeypatch.setattr("kan.trading_calendar.market_phase", lambda: phase)
+
+
+def _patch_fetcher(monkeypatch, cutoffs: dict, ages: dict):
+    """patch data_cutoff_date 与 cache_age,字典 lookup,缺失返回 None。"""
+    monkeypatch.setattr(
+        "kan.fetcher.data_cutoff_date", lambda sym: cutoffs.get(sym),
+    )
+    monkeypatch.setattr(
+        "kan.fetcher.cache_age", lambda sym: ages.get(sym),
+    )
+
+
+def test_freshness_of_empty_symbols(monkeypatch):
+    """空 symbols → data_cutoff=None · fetched_at=None · is_stale=True。"""
+    _patch_calendar(monkeypatch)
+    _patch_fetcher(monkeypatch, cutoffs={}, ages={})
+    f = _pipeline.freshness_of([])
+    assert f.data_cutoff is None
+    assert f.fetched_at is None
+    assert f.expected_cutoff == date(2026, 5, 23)
+    assert f.is_stale is True
+    assert f.phase == "post"
+
+
+def test_freshness_of_single_symbol_fresh(monkeypatch):
+    """单 symbol 且 cutoff == expected → is_stale=False。"""
+    _patch_calendar(monkeypatch, expected_date=date(2026, 5, 23))
+    _patch_fetcher(
+        monkeypatch,
+        cutoffs={"600519": date(2026, 5, 23)},
+        ages={"600519": "2026-05-23T16:00:00"},
+    )
+    f = _pipeline.freshness_of(["600519"])
+    assert f.data_cutoff == date(2026, 5, 23)
+    assert f.fetched_at == "2026-05-23T16:00:00"
+    assert f.is_stale is False
+
+
+def test_freshness_of_single_symbol_stale(monkeypatch):
+    """单 symbol 但 cutoff < expected → is_stale=True。"""
+    _patch_calendar(monkeypatch, expected_date=date(2026, 5, 23))
+    _patch_fetcher(
+        monkeypatch,
+        cutoffs={"600519": date(2026, 5, 20)},
+        ages={"600519": "2026-05-20T16:00:00"},
+    )
+    f = _pipeline.freshness_of(["600519"])
+    assert f.data_cutoff == date(2026, 5, 20)
+    assert f.is_stale is True
+
+
+def test_freshness_of_multi_symbol_takes_max(monkeypatch):
+    """多 symbols → data_cutoff 与 fetched_at 都取 max。"""
+    _patch_calendar(monkeypatch, expected_date=date(2026, 5, 23))
+    _patch_fetcher(
+        monkeypatch,
+        cutoffs={
+            "600519": date(2026, 5, 20),
+            "000858": date(2026, 5, 22),  # max
+            "300750": date(2026, 5, 19),
+        },
+        ages={
+            "600519": "2026-05-20T10:00:00",
+            "000858": "2026-05-22T16:00:00",  # max(字符串字典序 == 时间序)
+            "300750": "2026-05-19T09:00:00",
+        },
+    )
+    f = _pipeline.freshness_of(["600519", "000858", "300750"])
+    assert f.data_cutoff == date(2026, 5, 22)
+    assert f.fetched_at == "2026-05-22T16:00:00"
+    assert f.is_stale is True  # max cutoff 仍 < expected 2026-05-23
+
+
+def test_freshness_of_skips_none_cutoff(monkeypatch):
+    """某 symbol 无 cutoff(data_cutoff_date 返回 None)→ 跳过 · 不影响其他 symbol。"""
+    _patch_calendar(monkeypatch, expected_date=date(2026, 5, 23))
+    _patch_fetcher(
+        monkeypatch,
+        cutoffs={
+            "600519": date(2026, 5, 22),
+            "NEW01": None,  # 新进自选但还没拉数据
+        },
+        ages={"600519": "2026-05-22T16:00:00"},
+    )
+    f = _pipeline.freshness_of(["600519", "NEW01"])
+    assert f.data_cutoff == date(2026, 5, 22)
+    assert f.fetched_at == "2026-05-22T16:00:00"
+
+
+def test_freshness_of_skips_falsy_cache_age(monkeypatch):
+    """cache_age 返回 None / 空串 → 跳过(沿用现状的 `if t and ...` 判定)。"""
+    _patch_calendar(monkeypatch, expected_date=date(2026, 5, 23))
+    _patch_fetcher(
+        monkeypatch,
+        cutoffs={"600519": date(2026, 5, 22), "000858": date(2026, 5, 22)},
+        ages={"600519": "", "000858": "2026-05-22T16:00:00"},  # 空串被跳过
+    )
+    f = _pipeline.freshness_of(["600519", "000858"])
+    assert f.fetched_at == "2026-05-22T16:00:00"
+
+
+def test_freshness_of_phase_passthrough(monkeypatch):
+    """phase 直接来自 market_phase()。"""
+    _patch_calendar(monkeypatch, phase="intraday")
+    _patch_fetcher(monkeypatch, cutoffs={}, ages={})
+    f = _pipeline.freshness_of([])
+    assert f.phase == "intraday"
+
+
+def test_freshness_of_accepts_generator(monkeypatch):
+    """symbols 可以是生成器(支持 `freshness_of(r.symbol for r in results)` 用法)。"""
+    _patch_calendar(monkeypatch, expected_date=date(2026, 5, 23))
+    _patch_fetcher(
+        monkeypatch,
+        cutoffs={"600519": date(2026, 5, 22), "000858": date(2026, 5, 21)},
+        ages={"600519": "x", "000858": "y"},
+    )
+    f = _pipeline.freshness_of(sym for sym in ["600519", "000858"])
+    assert f.data_cutoff == date(2026, 5, 22)
+    assert f.fetched_at == "y"  # max("x", "y") = "y"
+
+
+def test_freshness_returns_frozen_dataclass(monkeypatch):
+    """Freshness 是 frozen=True · 不可变 · 防意外修改。"""
+    _patch_calendar(monkeypatch)
+    _patch_fetcher(monkeypatch, cutoffs={}, ages={})
+    f = _pipeline.freshness_of([])
+    with pytest.raises((AttributeError, Exception)):  # FrozenInstanceError
+        f.is_stale = False  # type: ignore[misc]
