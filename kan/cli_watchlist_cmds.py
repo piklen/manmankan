@@ -30,10 +30,13 @@ def help_cmd() -> None:
   kan add 600519 000858       添加自选股（代码）
   kan add 茅台                添加自选股（名称搜索）
   kan add --industry 半导体   按行业批量添加成分股（二次确认）
+  kan add --theme AI          按题材批量添加成分股（二次确认）
   kan remove 600519 茅台      移除自选股（支持多只 + 名称）
   kan remove --industry 白酒  按行业批量移除自选 ∩ 该行业
+  kan remove --theme AI       按题材批量移除自选 ∩ 该题材
   kan list                    查看自选列表
   kan list --industry 半导体  只列某行业的自选
+  kan list --theme AI         只列某题材的自选
   kan import stocks.csv       CSV 批量导入
   kan clear                   清空自选列表
 
@@ -78,6 +81,7 @@ def help_cmd() -> None:
 [bold cyan]导出格式[/bold cyan]
   kan scan --format md      markdown 表格输出
   kan scan --format json    JSON 结构化输出
+  kan compare 600519 000858 --format md
 
   [dim]--format 适用 scan / low / high / info / trend / compare[/dim]
 
@@ -85,11 +89,14 @@ def help_cmd() -> None:
   kan fetch                 拉取数据（通常不需要，scan 自动更新）
   kan fetch --force         强制刷新
   kan fetch --industry X    预拉某行业全部成分股
+  kan fetch --hot rank      预拉东财人气榜股票
+  kan fetch --theme AI      预拉某题材全部成分股
 
 [bold cyan]配置（tushare-pro 凭证）[/bold cyan]
   kan config get                              查看当前配置
-  kan config set tushare_token <YOUR_TOKEN>   设 tushare 凭证
-  kan config unset tushare_token              清凭证
+  kan config set tushare-token <YOUR_TOKEN>   设 tushare 凭证
+  kan config set tushare-endpoint https://x   设 tushare API 端点
+  kan config unset tushare-token              清凭证
 
 [bold cyan]shell 命令补全[/bold cyan] (mac/linux/windows)
   kan completion install    安装补全脚本（自动检测 shell · 之后 kan s<Tab>=kan scan）

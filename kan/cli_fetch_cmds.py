@@ -62,6 +62,7 @@ def fetch(
         symbols = [s.symbol for s in wl.stocks]
 
     success = 0
+    failed = 0
     for sym in symbols:
         if not force and is_fresh(sym):
             typer.echo(f"  {sym} 已是最新（今日已拉取）")
@@ -77,3 +78,8 @@ def fetch(
             success += 1
         except Exception as e:
             typer.echo(f"  ❌ {sym} 拉取失败：{_safe_error_msg(e)}", err=True)
+            failed += 1
+
+    if failed:
+        typer.echo(f"拉取完成：✅ 成功 {success} · ❌ 失败 {failed}", err=True)
+        raise typer.Exit(1)

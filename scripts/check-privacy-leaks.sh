@@ -72,6 +72,9 @@ DENY_TERMS=(
   "round 4"
   "round 5"
   "候选版"
+  ".dev-thinking/"
+  "/tmp/adata-spike"
+  "私密路线规划目录"
 )
 
 # 扫描范围委托给 git: ls-files --cached --others --exclude-standard
@@ -131,6 +134,91 @@ fi
 # ===========================================================
 echo ""
 echo "🔍 版本号一致性检查 ..."
+
+PROJECT_VERSION=$(python - <<'PY'
+import tomllib
+from pathlib import Path
+
+data = tomllib.loads(Path("pyproject.toml").read_text())
+print(data["project"]["version"])
+PY
+)
+
+RUNTIME_VERSION=$(python - <<'PY'
+from pathlib import Path
+
+for line in Path("kan/__init__.py").read_text().splitlines():
+    if line.startswith("__version__"):
+        print(line.split("=", 1)[1].strip().strip('"'))
+        break
+PY
+)
+
+CHANGELOG_VERSION=$(python - <<'PY'
+import re
+from pathlib import Path
+
+match = re.search(r"^## \[(\d+\.\d+\.\d+(?:\.\d+)?)\]", Path("CHANGELOG.md").read_text(), re.M)
+print(match.group(1) if match else "")
+PY
+)
+
+if [ "$PROJECT_VERSION" != "$RUNTIME_VERSION" ] || [ "$PROJECT_VERSION" != "$CHANGELOG_VERSION" ]; then
+  echo "❌ 发布版本号不一致:"
+  echo "   pyproject.toml: ${PROJECT_VERSION:-<missing>}"
+  echo "   kan/__init__.py: ${RUNTIME_VERSION:-<missing>}"
+  echo "   CHANGELOG.md 顶部: ${CHANGELOG_VERSION:-<missing>}"
+  echo ""
+  echo "═══════════════════════════════════════════════════════════"
+  echo "❌ 版本号撕裂 · 修复后再 commit / push"
+  echo "═══════════════════════════════════════════════════════════"
+  exit 1
+fi
+
+CHANGELOG_LINK_ERRORS=$(python - <<'PY'
+import re
+from pathlib import Path
+
+text = Path("CHANGELOG.md").read_text()
+versions = re.findall(r"^## \[(\d+\.\d+\.\d+(?:\.\d+)?)\]", text, re.M)
+errors = []
+
+if versions:
+    current = versions[0]
+    current_tag = f"v{current}"
+    unreleased_expected = (
+        f"[Unreleased]: https://github.com/piklen/manmankan/compare/"
+        f"{current_tag}...HEAD"
+    )
+    if unreleased_expected not in text:
+        errors.append(f"missing or stale Unreleased compare link: {unreleased_expected}")
+
+    if len(versions) > 1:
+        previous = versions[1]
+        current_expected = (
+            f"[{current}]: https://github.com/piklen/manmankan/compare/"
+            f"v{previous}...v{current}"
+        )
+        if current_expected not in text:
+            errors.append(f"missing current release compare link: {current_expected}")
+
+for version in versions:
+    if f"[{version}]: " not in text:
+        errors.append(f"missing changelog reference for [{version}]")
+
+print("\n".join(errors))
+PY
+)
+
+if [ -n "$CHANGELOG_LINK_ERRORS" ]; then
+  echo "❌ CHANGELOG.md 版本链接不完整:"
+  echo "$CHANGELOG_LINK_ERRORS" | sed 's/^/   /'
+  echo ""
+  echo "═══════════════════════════════════════════════════════════"
+  echo "❌ CHANGELOG 链接撕裂 · 修复后再 commit / push"
+  echo "═══════════════════════════════════════════════════════════"
+  exit 1
+fi
 
 VERSION_PATTERN='v0\.[123456789]|v[1-9]\.[0-9]'
 VERSION_LEAKS=$(scan_files_z | xargs -0 grep -nEH "$VERSION_PATTERN" 2>/dev/null \

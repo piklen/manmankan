@@ -13,7 +13,14 @@
 """
 from __future__ import annotations
 
+import re
+import tomllib
+from pathlib import Path
+
+from kan import __version__
 from kan.cli import app
+
+REPO_ROOT = Path(__file__).resolve().parents[1]
 
 # 命令分布（加新命令时同步更新此 canary）：
 # - cli_watchlist_cmds (6): help / add / remove / list / import / clear
@@ -70,3 +77,13 @@ def test_command_names_match_expected() -> None:
     assert not missing and not extra, (
         f"命令集合不匹配 · 缺失: {sorted(missing)} · 多出: {sorted(extra)}"
     )
+
+
+def test_release_version_matches_package_metadata_and_changelog_top_entry() -> None:
+    """发布版本必须在 runtime / pyproject / CHANGELOG 顶部三处一致。"""
+    pyproject = tomllib.loads((REPO_ROOT / "pyproject.toml").read_text())
+    changelog = (REPO_ROOT / "CHANGELOG.md").read_text()
+    match = re.search(r"^## \[(?P<version>\d+\.\d+\.\d+(?:\.\d+)?)\]", changelog, re.M)
+    assert match is not None, "CHANGELOG.md must start with a versioned release section"
+
+    assert __version__ == pyproject["project"]["version"] == match.group("version")
