@@ -175,12 +175,13 @@ def _add_by_theme(theme_query: str, yes: bool) -> None:
         typer.echo(f"「{themed.name}」全部 {len(cons)} 只成分股已在自选 · 无需添加")
         return
 
+    from kan.render_theme import THEME_CLASSIFICATION, THEME_RISK
     summary = (
         f"⚠️ 将加 {len(cons)} 只{themed.name}股进自选\n"
         f"   其中 {already} 只已在自选 · 实际新增 {len(new)} 只\n"
         f"   自选股 {old_total} → {old_total + len(new)} 只\n"
-        f"   ⚠️ 题材分类各家口径不同 · 同名题材成分股可能差异\n"
-        f"   ⚠️ 题材跟风风险高于行业"
+        f"   ⚠️ {THEME_CLASSIFICATION}\n"
+        f"   ⚠️ {THEME_RISK}"
     )
     if not confirm_destructive(summary, yes=yes):
         typer.echo("已取消")

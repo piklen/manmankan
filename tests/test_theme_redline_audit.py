@@ -48,8 +48,11 @@ def test_theme_disclaimer_4_lines_present():
 
 
 def test_theme_cmds_have_education_disclaimer():
-    """cli_theme_cmds.py 必须含散户教育 disclaimer。"""
+    """cli_theme_cmds.py 必须含散户教育 disclaimer(***REMOVED*** 后 disclaimer 改 SOT · const import)。"""
     p = Path(__file__).parent.parent / "kan/cli_theme_cmds.py"
     content = p.read_text(encoding="utf-8")
-    assert "题材是标签" in content or "一只股可能在多个题材" in content
-    assert "投机炒作" in content or "CSRC" in content
+    # ***REMOVED*** 后:THEME_VS_INDUSTRY / THEME_CLASSIFICATION / THEME_RISK 三个 const 任一引用
+    assert "THEME_VS_INDUSTRY" in content or "THEME_CLASSIFICATION" in content
+    assert "THEME_RISK" in content
+    # 真跑 theme list 必须输出"用工具看位置不等于买卖建议"散户教育语
+    assert "用工具看位置不等于买卖建议" in content

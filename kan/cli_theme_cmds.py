@@ -67,9 +67,10 @@ def list_cmd(
     typer.echo("")
     if not all_ and total > _DEFAULT_LIST_TOP:
         typer.echo(f"💡 共 {total} 个题材 · 看全部:kan theme list --all  ·  模糊搜:kan theme search 关键词")
-    typer.echo("💡 题材是标签 · 一只股可能在多个题材中(科大讯飞同属 AI/教育/智慧城市等)")
-    typer.echo("💡 题材分类各家口径不同 · 这是同花顺口径")
-    typer.echo("⚠️  题材跟「投机炒作」是 CSRC 监管重点 · 用工具看位置不等于买卖建议")
+    from kan.render_theme import THEME_CLASSIFICATION, THEME_RISK, THEME_VS_INDUSTRY
+    typer.echo(f"💡 {THEME_VS_INDUSTRY}(科大讯飞同属 AI/教育/智慧城市等)")
+    typer.echo(f"💡 {THEME_CLASSIFICATION}")
+    typer.echo(f"⚠️  {THEME_RISK} · 用工具看位置不等于买卖建议")
 
 
 @theme_app.command("search")

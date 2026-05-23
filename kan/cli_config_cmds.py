@@ -40,7 +40,7 @@ def _mask_token(token: str) -> str:
 
 @config_app.command("get")
 def get_cmd() -> None:
-    """显示当前配置（token 自动 mask · env 覆盖时标注）。"""
+    """显示当前配置(token 自动 mask · env 覆盖时标注 · 未配置时给散户引导)。"""
     cfg = config.load()
 
     env_tok = os.environ.get("TUSHARE_TOKEN")
@@ -52,6 +52,12 @@ def get_cmd() -> None:
             typer.echo(f"tushare_token: {masked}   (set via TUSHARE_TOKEN env, overriding config)")
         else:
             typer.echo(f"tushare_token: {masked}   (set via config)")
+    else:
+        # 未配置时给散户引导***REMOVED***)· 而不是无声跳过该行
+        typer.echo(
+            "tushare_token: 未配置 · 用 `kan config set tushare-token <你的_token>` "
+            "启用 TuShare Pro 数据源(可选 · 不配也能跑)"
+        )
 
     env_ep = os.environ.get("TUSHARE_ENDPOINT")
     cfg_ep = cfg.get("tushare_endpoint")
@@ -60,7 +66,7 @@ def get_cmd() -> None:
     elif cfg_ep:
         typer.echo(f"tushare_endpoint: {cfg_ep}   (set via config)")
     else:
-        typer.echo(f"tushare_endpoint: <default: {DEFAULT_ENDPOINT}>")
+        typer.echo(f"tushare_endpoint: {DEFAULT_ENDPOINT} (默认)")
 
 
 @config_app.command("set")
