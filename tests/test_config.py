@@ -120,3 +120,29 @@ def test_save_unicode_chinese_content(temp_config_path):
     assert "中文版本" in raw  # ensure_ascii=False 才能直接看到汉字（不是 \uXXXX）
     reloaded = config.load()
     assert reloaded["latest_seen_version"] == "测试-中文版本"
+
+
+class TestTushareFields:
+    """v0.0.5 新增 tushare_token / tushare_endpoint 字段"""
+
+    def test_default_tushare_fields_are_none(self, temp_config_path):
+        """新装用户读到 None，不打开 tushare 分支"""
+        cfg = config.load()
+        assert cfg["tushare_token"] is None
+        assert cfg["tushare_endpoint"] is None
+
+    def test_save_and_reload_tushare_token(self, temp_config_path):
+        cfg = config.load()
+        cfg["tushare_token"] = "tk_test_abcdef123456"
+        config.save(cfg)
+        reloaded = config.load()
+        assert reloaded["tushare_token"] == "tk_test_abcdef123456"
+        assert reloaded["tushare_endpoint"] is None
+
+    def test_legacy_config_without_tushare_fields_self_heals(self, temp_config_path):
+        """老 config.json 没有 tushare_* 字段也能 load → 缺字段补 None"""
+        temp_config_path.write_text(json.dumps({"auto_update": True}))
+        cfg = config.load()
+        assert cfg["auto_update"] is True
+        assert cfg["tushare_token"] is None
+        assert cfg["tushare_endpoint"] is None
