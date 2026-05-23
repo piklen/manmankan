@@ -20,6 +20,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - 配 token 后 TuShare Pro 顶替 baostock 作 `fetch_kline` 主路径；未配 token 行为零变化
   - `kan config get` 自动 mask token（仅显示末 4 位）；token 永不出现在 logs / exceptions
   - 自写 ~80 行 HTTP client，不依赖官方 `tushare` SDK（SDK 端点硬编码无法替换）
+- **🎯 题材位置扫描（F11）** · 全 11 命令矩阵支持 `--theme=<题材名>`（设计:[docs/design-f11-theme-scan.md](docs/design-f11-theme-scan.md)):
+  - 8 只读命令 `scan / low / high / trend / info / list / fetch` 支持 `--theme` + `--only-watchlist`
+  - 3 破坏性命令 `add / remove` 支持 `--theme`,必经二次确认,`--yes` 跳过(慎用)
+  - 题材发现入口 `kan theme list [--all]` / `kan theme search 关键词`(参考 `kan config` 子命令树体例)
+- 🆕 数据源:`adata`(同花顺 catalog/成分股 + 东方财富 datacenter K 线/反查 + EM push2 fallback 走 T6 熔断 5min cooldown)· 零 token 零配置
+- 🆕 新模块 `kan/boards.py` 扩 6 个 theme 函数(load_theme_catalog / search_theme / normalize_theme_name / get_theme_constituents / fetch_theme_kline / get_themes_of_stock)
+- 🆕 新模块 `kan/_confirm.py`(破坏性 helper)+ `kan/cli_theme_cmds.py`(子命令树)+ `kan/render_theme.py`(4 行 disclaimer)
+- 🆕 cache schema:`boards/catalog_concept_ths.json`(24h)· `cons_THS{886xxx}.json` / `cons_EM{BK1xxx}.json`(per-theme 24h)· `kline_EM{BK1xxx}.parquet` · `stock_themes_<symbol>.json`(12h)
+- 🆕 deps:`adata>=2.9,<3` 主依赖(零 token · 多源融合)
+- 🆕 红线词自动 audit 测试(`test_theme_redline_audit.py`)· AGENTS.md §6 合规防回归
+- 🆕 真网络冒烟 marker `@pytest.mark.network`(默认跳 · daily cron 跑)
+
+### Changed (F11)
+
+- `kan/_scan_targets.py::resolve_scan_targets` 从 3 模式扩为 **4 模式互斥**(industry / hot / theme / 默认自选)· 加 `theme` 参数 + `ThemeMeta` dataclass
+- 题材线 disclaimer 比 `--industry` 强一档:加 "题材跟风风险高于行业 · 题材分类各家口径不同"
+- baseline 测试 525 → 585(+60 新 F11 case · 网络 5 跳过)
 
 ## [0.0.4.8] - 2026-05-16
 
