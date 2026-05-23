@@ -10,8 +10,8 @@ import json
 import time
 from typing import TYPE_CHECKING
 
-from kan.infra.log import debug_log
 from kan.core.models import Board
+from kan.infra.log import debug_log
 from kan.storage.paths import BOARDS_DIR, atomic_write_json, ensure_dirs
 
 if TYPE_CHECKING:
@@ -317,8 +317,8 @@ def get_theme_constituents(theme, force: bool = False) -> list[tuple[str, str]]:
 
     熔断器 source id `em_push2_concept` · 5min cooldown(沿 T6 LOCKED 默认 TTL)。
     """
-    from kan.infra.log import debug_log
     from kan.infra.circuit_breaker import get_breaker
+    from kan.infra.log import debug_log
 
     ensure_dirs()
     src_prefix = "THS" if theme.source == "ths" else "EM"

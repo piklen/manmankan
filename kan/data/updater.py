@@ -22,8 +22,8 @@ from typing import Literal, NamedTuple
 from rich.console import Console
 
 from kan import __version__
-from kan.storage import config
 from kan.infra.log import debug_log
+from kan.storage import config
 
 PYPI_URL = "https://pypi.org/pypi/manmankan/json"
 USER_AGENT = f"manmankan/{__version__}"
