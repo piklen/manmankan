@@ -177,10 +177,14 @@ def calc_volume_state(df: pd.DataFrame) -> VolumeState | None:
     ratio = round(float(today) / float(avg), 2)
     if ratio >= 2.0:
         label = "明显放大"
-    elif ratio <= 0.5:
-        label = "明显萎缩"
-    else:
+    elif ratio >= 1.5:
+        label = "温和放大"
+    elif ratio >= 0.67:
         label = "量能平稳"
+    elif ratio >= 0.5:
+        label = "温和萎缩"
+    else:
+        label = "明显萎缩"
     return VolumeState(ratio=ratio, label=label, window=VOLUME_WINDOW)
 
 

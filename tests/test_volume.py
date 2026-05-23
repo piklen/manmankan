@@ -1,4 +1,12 @@
-"""成交量异动测试 · calc_volume_state"""
+"""成交量异动测试 · calc_volume_state · 5 档对称设计
+
+档位边界(对数对称):
+  [2.0, ∞)   明显放大
+  [1.5, 2.0) 温和放大
+  [0.67, 1.5)量能平稳   ← 0.67 = 1/1.5 几何中位对称
+  [0.5, 0.67)温和萎缩
+  [0, 0.5)   明显萎缩    ← 0.5 = 1/2.0 几何中位对称
+"""
 
 import pandas as pd
 
@@ -32,6 +40,66 @@ def test_volume_steady():
     v = calc_volume_state(_df([100, 100, 100, 100, 100, 110]))
     assert v is not None
     assert v.label == "量能平稳"
+
+
+def test_volume_mild_surge_typical():
+    """涨停日实例: 今日量 = 近 5 日均量的 1.73 倍 → 温和放大(不再误标量能平稳)。
+
+    任务卡 5a 来源场景: kan info 002463 涨停日,旧 2 档把 1.73 倍归"量能平稳",
+    违反"只如实描述"红线。本测试锚定 5 档落地。
+    """
+    v = calc_volume_state(_df([100, 100, 100, 100, 100, 173]))
+    assert v is not None
+    assert v.ratio == 1.73
+    assert v.label == "温和放大"
+
+
+def test_volume_mild_surge_lower_boundary():
+    """ratio 恰好 1.5 → 温和放大(下边界含)。"""
+    v = calc_volume_state(_df([100, 100, 100, 100, 100, 150]))
+    assert v is not None
+    assert v.ratio == 1.5
+    assert v.label == "温和放大"
+
+
+def test_volume_steady_just_below_mild_surge():
+    """ratio 1.49 → 量能平稳(温和放大区间不含)。"""
+    v = calc_volume_state(_df([100, 100, 100, 100, 100, 149]))
+    assert v is not None
+    assert v.ratio == 1.49
+    assert v.label == "量能平稳"
+
+
+def test_volume_steady_lower_boundary():
+    """ratio 恰好 0.67(= 1/1.5 几何对称) → 量能平稳(下边界含)。"""
+    v = calc_volume_state(_df([100, 100, 100, 100, 100, 67]))
+    assert v is not None
+    assert v.ratio == 0.67
+    assert v.label == "量能平稳"
+
+
+def test_volume_mild_shrink_typical():
+    """ratio = 0.6 → 温和萎缩(中间档落地)。"""
+    v = calc_volume_state(_df([100, 100, 100, 100, 100, 60]))
+    assert v is not None
+    assert v.ratio == 0.6
+    assert v.label == "温和萎缩"
+
+
+def test_volume_mild_shrink_lower_boundary():
+    """ratio 恰好 0.5(= 1/2.0 几何对称) → 温和萎缩(下边界含)。"""
+    v = calc_volume_state(_df([100, 100, 100, 100, 100, 50]))
+    assert v is not None
+    assert v.ratio == 0.5
+    assert v.label == "温和萎缩"
+
+
+def test_volume_obvious_surge_upper_boundary():
+    """ratio 恰好 2.0 → 明显放大(明显放大区间含 2.0)。"""
+    v = calc_volume_state(_df([100, 100, 100, 100, 100, 200]))
+    assert v is not None
+    assert v.ratio == 2.0
+    assert v.label == "明显放大"
 
 
 def test_volume_insufficient_history():
