@@ -195,6 +195,7 @@ def scan(
     freshness = freshness_of(r.symbol for r in results)
     data_cutoff = freshness.data_cutoff
     fetched_at = freshness.fetched_at
+    is_stale = freshness.is_stale  # JSON/MD payload + --diff branch 仍引用
 
     title = f"慢慢看 · 自选股位置扫描 · {'高点' if high else '低点'}模式"
     if signal:
