@@ -109,6 +109,7 @@ def trend(
     freshness = freshness_of(r.symbol for r in results)
     data_cutoff = freshness.data_cutoff
     fetched_at = freshness.fetched_at
+    is_stale = freshness.is_stale  # JSON/MD payload 仍引用
 
     mode_label = "阳线阴线口径" if candle else "收盘价口径"
     title = f"慢慢看 · 连续涨跌看板 · {mode_label}{filter_label}"
