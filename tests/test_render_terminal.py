@@ -1,0 +1,347 @@
+"""kan/render_terminal.py · 5 个 builder + 2 个 title helper 单测。
+
+测试断言 _columns 名 + _rows 内容 · 不依赖具体颜色 markup(那由 format_pct 单测保证)。
+
+覆盖矩阵:
+  scan_table:   normal / hot rank / board_index_row
+  extreme_table: low / high / hot rank
+  info_table:   single-stock (insufficient → Text dim) / industry (insufficient → "-")
+  compare_table: basic / ST + 涨停 mark
+  trend_table:  normal / latest 日期列 / hot rank
+  scan_title:   self+cutoff/industry/hot/theme/signal_only
+  trend_title:  self+cutoff / industry+candle
+"""
+from datetime import date
+
+import pandas as pd
+from rich.text import Text
+
+from kan import render_terminal
+from kan._pipeline import DataCtx, Freshness
+from kan._scan_targets import BoardMeta, HotMeta, ThemeMeta
+from kan.models import Board, PeriodResult, StockScanResult, Theme
+from kan.scanner import TrendResult
+
+# ── fixtures ──────────────────────────────────────────────────────────
+
+
+def _period(period=30, *, insufficient=False, at_low=False, at_high=False, pct=50.0):
+    return PeriodResult(
+        period=period,
+        n_low=10.0,
+        n_high=20.0,
+        position_pct=pct,
+        at_low=at_low,
+        at_high=at_high,
+        insufficient=insufficient,
+    )
+
+
+def _stock(symbol="600519", name="贵州茅台", **kw):
+    defaults = {
+        "symbol": symbol,
+        "name": name,
+        "current_price": 15.0,
+        "scan_date": date(2026, 5, 21),
+        "periods": [_period(30), _period(60), _period(180)],
+        "low_resonance": 0,
+        "high_resonance": 0,
+    }
+    defaults.update(kw)
+    return StockScanResult(**defaults)
+
+
+def _freshness(cutoff=date(2026, 5, 21), fetched_at="2026-05-21 23:00:00"):
+    return Freshness(
+        data_cutoff=cutoff,
+        fetched_at=fetched_at,
+        expected_cutoff=date(2026, 5, 21),
+        is_stale=False,
+        phase="closed",
+    )
+
+
+def _ctx(meta=None, results=None, freshness=None):
+    return DataCtx(
+        targets=[],
+        meta=meta,
+        results=results or [],
+        freshness=freshness or _freshness(),
+    )
+
+
+def _board_meta(name="半导体", code="801080"):
+    return BoardMeta(
+        board=Board(code=code, name=name, level=1, size=50),
+        index_kline=pd.DataFrame(),
+        constituents=[],
+        highlight={"600519"},
+    )
+
+
+def _hot_meta():
+    return HotMeta(
+        list_name="东财人气榜",
+        rank_map={"600519": 3, "000858": 7},
+        highlight={"600519"},
+    )
+
+
+def _theme_meta(name="AI应用"):
+    return ThemeMeta(
+        theme=Theme(code="886108", name=name, source="ths"),
+        index_kline=pd.DataFrame(),
+        constituents=[],
+        highlight={"600519"},
+    )
+
+
+def _trend(symbol="600519", name="贵州茅台", *, streak=2, pct=3.5, days=None):
+    return TrendResult(
+        symbol=symbol,
+        name=name,
+        current_price=15.0,
+        streak=streak,
+        streak_pct=pct,
+        daily_changes=days or [
+            ("2026-05-21", 1.2),
+            ("2026-05-20", 2.3),
+            ("2026-05-19", -0.5),
+        ],
+    )
+
+
+# ── scan_title ────────────────────────────────────────────────────────
+
+
+def test_scan_title_self_low_with_cutoff():
+    title = render_terminal.scan_title(_ctx(), high_mode=False)
+    assert title.startswith("慢慢看 · 自选股位置扫描 · 低点模式")
+    assert "数据截止 05-21 收盘" in title
+    assert "拉取" in title
+
+
+def test_scan_title_signal_only_appended():
+    title = render_terminal.scan_title(_ctx(), high_mode=True, signal_only=True)
+    assert "高点模式 · 仅信号" in title
+
+
+def test_scan_title_industry_replaces_completely():
+    """BoardMeta 分支 title 完全替换 · 不带 cutoff/fetched_at/仅信号 后缀。"""
+    title = render_terminal.scan_title(
+        _ctx(meta=_board_meta()), high_mode=False, signal_only=True,
+    )
+    assert title == "慢慢看 · 半导体 行业位置扫描 · 低点模式"
+    assert "仅信号" not in title  # 板块模式无信号尾巴 · 字符级一致
+
+
+def test_scan_title_hot_branch():
+    title = render_terminal.scan_title(_ctx(meta=_hot_meta()), high_mode=False)
+    assert title == "慢慢看 · 东财人气榜 位置扫描 · 低点模式"
+
+
+def test_scan_title_theme_branch():
+    title = render_terminal.scan_title(_ctx(meta=_theme_meta()), high_mode=True)
+    assert title == "慢慢看 · AI应用 题材位置扫描 · 高点模式"
+
+
+# ── scan_table ────────────────────────────────────────────────────────
+
+
+def test_scan_table_basic_columns_and_row():
+    table = render_terminal.scan_table(
+        _ctx(),
+        [_stock(low_resonance=2)],
+        display_periods=[30, 60, 180],
+        high_mode=False,
+    )
+    col_headers = [c.header for c in table.columns]
+    assert col_headers == ["股票", "现价", "30日", "60日", "180日", "共振"]
+    assert table.row_count == 1
+
+
+def test_scan_table_hot_adds_rank_column_and_value():
+    table = render_terminal.scan_table(
+        _ctx(meta=_hot_meta()),
+        [_stock(low_resonance=1), _stock(symbol="000858", name="五粮液")],
+        display_periods=[30],
+        high_mode=False,
+    )
+    col_headers = [c.header for c in table.columns]
+    assert col_headers[0] == "榜"
+    assert "股票" in col_headers
+    # 第一列(榜)的两行值就是 rank_map 的 lookup
+    assert table.columns[0]._cells == ["3", "7"]
+
+
+def test_scan_table_with_board_index_row():
+    """board_index_result 不为 None 时作为顶部行 + add_section · row_count +1。"""
+    board_idx = _stock(symbol="801080", name="半导体", periods=[_period(30, pct=45)])
+    table = render_terminal.scan_table(
+        _ctx(meta=_board_meta()),
+        [_stock()],
+        display_periods=[30],
+        high_mode=False,
+        board_index_result=board_idx,
+    )
+    assert table.row_count == 2
+    # 板块指数行在第一行 · 名称单元格含 🏛️
+    assert "🏛️" in table.columns[0]._cells[0]
+
+
+# ── extreme_table ─────────────────────────────────────────────────────
+
+
+def test_extreme_table_low_columns():
+    stock = _stock()
+    hits = [(stock, _period(30, at_low=True, pct=2.5))]
+    table = render_terminal.extreme_table(
+        30, hits, "low",
+        data_cutoff=date(2026, 5, 21), fetched_at="2026-05-21 23:00:00",
+    )
+    assert "低点 · 1 只触及" in table.title
+    headers = [c.header for c in table.columns]
+    assert headers == ["股票", "现价", "30日最低", "30日最高", "位置"]
+    assert table.row_count == 1
+
+
+def test_extreme_table_high_title_label():
+    table = render_terminal.extreme_table(60, [], "high")
+    assert "高点 · 0 只触及" in table.title
+    # 无累积 cutoff/fetched_at 时无后缀
+    assert "数据截止" not in table.title
+
+
+def test_extreme_table_hot_adds_rank_column():
+    stock = _stock()
+    hits = [(stock, _period(30, at_low=True, pct=1.5))]
+    table = render_terminal.extreme_table(
+        30, hits, "low",
+        is_hot=True, rank_map={"600519": 3}, highlight={"600519"},
+    )
+    headers = [c.header for c in table.columns]
+    assert headers[0] == "榜"
+    assert table.columns[0]._cells == ["3"]
+    # 股票列含 ⭐
+    assert "⭐" in table.columns[1]._cells[0]
+
+
+# ── info_table ────────────────────────────────────────────────────────
+
+
+def test_info_table_normal_uses_dim_text_for_insufficient():
+    """单股 info · insufficient 周期 → 位置单元格用 Text("-", style="dim")。"""
+    result = _stock(periods=[
+        _period(180, insufficient=True),
+        _period(30, pct=42.0),
+    ])
+    table = render_terminal.info_table(result, is_industry=False)
+    pos_col = table.columns[3]
+    # 第 1 行(insufficient) 位置单元格是 Text · 第 2 行是 Text(format_pct 返回)
+    assert isinstance(pos_col._cells[0], Text)
+    assert pos_col._cells[0].plain == "-"
+    assert pos_col._cells[0].style == "dim"
+
+
+def test_info_table_industry_uses_plain_dash_for_insufficient():
+    """行业 / 题材档案 · insufficient → 位置单元格用普通字符串 "-"(字符级保留)。"""
+    result = _stock(periods=[
+        _period(180, insufficient=True),
+        _period(30, pct=42.0),
+    ])
+    table = render_terminal.info_table(
+        result, is_industry=True, board_meta=_board_meta(),
+    )
+    pos_col = table.columns[3]
+    assert pos_col._cells[0] == "-"  # 字符串 · 不是 Text
+    assert not isinstance(pos_col._cells[0], Text)
+
+
+# ── compare_table ─────────────────────────────────────────────────────
+
+
+def test_compare_table_basic_shape():
+    s1 = _stock()
+    s2 = _stock(symbol="000858", name="五粮液", low_resonance=1, high_resonance=2)
+    table = render_terminal.compare_table([s1, s2], periods=[30])
+    headers = [c.header for c in table.columns]
+    # 指标列 + 两支股票列
+    assert headers[0] == "指标"
+    assert "贵州茅台 600519" in headers[1]
+    assert "五粮液 000858" in headers[2]
+    # 行:现价 / 30日位置 / 低点共振 / 高点共振 / ST / 涨跌停 / 数据截止 = 7
+    assert table.row_count == 7
+    assert table.title == "慢慢看 · 多股对比"
+
+
+def test_compare_table_st_and_limit_up_marked():
+    st_stock = _stock(symbol="000333", name="某ST", is_st=True, limit_up=True)
+    normal = _stock()
+    table = render_terminal.compare_table([st_stock, normal], periods=[30])
+    # ST 行(第 5 行 · 0-indexed 4)第一只股票值=是 · 第二只=—
+    st_col_1 = table.columns[1]._cells[4]
+    st_col_2 = table.columns[2]._cells[4]
+    assert st_col_1 == "是"
+    assert st_col_2 == "—"
+    # 涨跌停行(第 6 行 · 0-indexed 5)第一只=涨停 · 第二只=—
+    limit_col_1 = table.columns[1]._cells[5]
+    assert limit_col_1 == "涨停"
+
+
+# ── trend_title ───────────────────────────────────────────────────────
+
+
+def test_trend_title_self_close_with_cutoff():
+    title = render_terminal.trend_title(_ctx(), candle=False)
+    assert title.startswith("慢慢看 · 连续涨跌看板 · 收盘价口径")
+    assert "数据截止 05-21 收盘" in title
+
+
+def test_trend_title_industry_candle_replaces():
+    title = render_terminal.trend_title(
+        _ctx(meta=_board_meta()), candle=True, filter_label=" · 连跌≥3天",
+    )
+    assert title == "慢慢看 · 半导体 行业连续涨跌 · 阳线阴线口径 · 连跌≥3天"
+
+
+# ── trend_table ───────────────────────────────────────────────────────
+
+
+def test_trend_table_basic_no_latest():
+    table = render_terminal.trend_table(
+        _ctx(), [_trend(streak=2, pct=3.5)],
+        latest=None, candle=False,
+    )
+    headers = [c.header for c in table.columns]
+    assert headers == ["股票", "现价", "连续", "累计"]
+    assert table.row_count == 1
+
+
+def test_trend_table_with_latest_adds_date_columns():
+    """latest=2 时加 2 个日期列(MM-DD)。"""
+    days = [
+        ("2026-05-21", 1.5),
+        ("2026-05-20", -0.8),
+        ("2026-05-19", 2.0),
+    ]
+    table = render_terminal.trend_table(
+        _ctx(), [_trend(streak=2, pct=2.5, days=days)],
+        latest=2, candle=False,
+    )
+    headers = [c.header for c in table.columns]
+    assert headers[:4] == ["股票", "现价", "连续", "累计"]
+    # 后面 2 个是 MM-DD 日期列
+    assert headers[4] == "05-21"
+    assert headers[5] == "05-20"
+    assert len(headers) == 6
+
+
+def test_trend_table_hot_adds_rank_column():
+    table = render_terminal.trend_table(
+        _ctx(meta=_hot_meta()),
+        [_trend(symbol="600519"), _trend(symbol="000858", name="五粮液")],
+        latest=None, candle=False,
+    )
+    headers = [c.header for c in table.columns]
+    assert headers[0] == "榜"
+    assert table.columns[0]._cells == ["3", "7"]
