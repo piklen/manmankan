@@ -5,6 +5,16 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.0.5.1] - 2026-05-24
+
+### Fixed (UX)
+
+- **升级期间显示进度 spinner** · 之前 `kan` 检测到新版后用户选 `y` 立即升级,从「✅ 偏好已保存 · 立即升级中...」到结果之间是完全的黑屏静默(实测 10-30s · 上限 120s),用户感知为"卡死"
+  - 根因:`updater.run_upgrade()` 用 `subprocess.run(capture_output=True)` 把 `uv tool install` / `pipx install` 的原生输出全部吞掉
+  - 修法:rich `Console.status` 包 subprocess 调用 · 主升级阶段「下载并安装中... (uv tool)」+ smoke 阶段「验证安装...」两段 spinner
+  - 非 TTY (pipe / CI) 自动退化静默 · 不污染 `kan scan | jq` 等 stdout pipe
+  - 影响入口:`kan` atexit auto-upgrade(场景 A 首次选 y / 场景 B auto_update=True)+ `kan update` 命令
+
 ## [0.0.5.0] - 2026-05-23
 
 ### Added

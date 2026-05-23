@@ -311,3 +311,85 @@ class TestRunUpgrade:
         ):
             status, _msg = updater.run_upgrade()
         assert status == "failed"
+
+
+# --- spinner UX (v0.0.5.1) ---
+
+
+class TestRunUpgradeSpinner:
+    """v0.0.5.1: run_upgrade 用 rich.Console.status 显示进度 spinner
+
+    根因守护:capture_output=True 吞掉 uv/pipx 原生输出 · 用户感知"卡死"
+    修复后:主升级阶段 + smoke 阶段各一段 spinner · 非 TTY 自动退化静默
+    """
+
+    def _make_completed(self, returncode: int, stdout: str = "", stderr: str = ""):
+        m = MagicMock()
+        m.returncode = returncode
+        m.stdout = stdout
+        m.stderr = stderr
+        return m
+
+    def test_uses_passed_console_status(self, monkeypatch):
+        """caller (cli_atexit / cli_meta_cmds) 传入的 console 必须被用于 spinner
+
+        防回归:避免 updater 自建 console · 与 caller 输出风格不一致
+        """
+        monkeypatch.setattr(
+            "sys.executable",
+            "/Users/x/.local/share/uv/tools/manmankan/bin/python",
+        )
+        fake_console = MagicMock()
+        fake_console.status.return_value.__enter__ = MagicMock()
+        fake_console.status.return_value.__exit__ = MagicMock(return_value=False)
+
+        with patch(
+            "kan.updater.subprocess.run",
+            return_value=self._make_completed(0),
+        ):
+            status, _msg = updater.run_upgrade(console=fake_console)
+
+        assert status == "success"
+        # 主升级 + smoke 两段 spinner = 2 次 status 调用
+        assert fake_console.status.call_count == 2
+        # 第一段必含"安装" · 第二段必含"验证"
+        call_texts = [str(c.args[0]) for c in fake_console.status.call_args_list]
+        assert any("安装" in t for t in call_texts)
+        assert any("验证" in t for t in call_texts)
+
+    def test_no_spinner_on_failed_install_skips_smoke(self, monkeypatch):
+        """主升级失败 (returncode != 0) · smoke 不该跑 · 只 1 段 spinner"""
+        monkeypatch.setattr(
+            "sys.executable",
+            "/Users/x/.local/share/uv/tools/manmankan/bin/python",
+        )
+        fake_console = MagicMock()
+        fake_console.status.return_value.__enter__ = MagicMock()
+        fake_console.status.return_value.__exit__ = MagicMock(return_value=False)
+
+        with patch(
+            "kan.updater.subprocess.run",
+            return_value=self._make_completed(1, "", "boom"),
+        ):
+            status, _msg = updater.run_upgrade(console=fake_console)
+
+        assert status == "failed"
+        # 只跑了主升级阶段 · smoke 因 returncode != 0 跳过
+        assert fake_console.status.call_count == 1
+
+    def test_no_console_arg_does_not_break(self, monkeypatch):
+        """console=None 时 updater 自建 stderr console · 行为不破
+
+        守护:非 TTY (pytest 默认) Console.status 退化为静默 · 不抛错
+        """
+        monkeypatch.setattr(
+            "sys.executable",
+            "/Users/x/.local/share/uv/tools/manmankan/bin/python",
+        )
+        with patch(
+            "kan.updater.subprocess.run",
+            return_value=self._make_completed(0),
+        ):
+            status, msg = updater.run_upgrade()  # 不传 console
+        assert status == "success"
+        assert msg == "uv tool"

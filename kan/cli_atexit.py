@@ -162,7 +162,7 @@ def _check_updates_atexit() -> None:
             console.print(
                 f"\n[dim]💡 检测到新版本 v{info.latest} · 自动升级中...[/dim]"
             )
-            status, msg = updater.run_upgrade()
+            status, msg = updater.run_upgrade(console=console)
             if status == "success":
                 console.print(
                     f"[dim]✅ 已升级到 v{info.latest} · 下次跑 kan 命令生效[/dim]"
@@ -212,7 +212,7 @@ def _check_updates_atexit() -> None:
             with contextlib.suppress(OSError):
                 config.save(cfg)
             console.print("[green]✅ 偏好已保存 · 立即升级中...[/green]")
-            status, msg = updater.run_upgrade()
+            status, msg = updater.run_upgrade(console=console)
             if status == "success":
                 console.print(
                     f"[green]✅ 已升级到 v{info.latest} · 下次跑 kan 命令生效[/green]"
