@@ -23,7 +23,7 @@ def help_cmd() -> None:
 
     from kan import __version__
 
-    # ***REMOVED*** ***REMOVED*** v0.0.4.8): 速记表顶部加版本号 · issue 复现成本下降
+    # 速记表顶部加版本号 · issue 复现成本下降
     Console().print(f"""[bold]慢慢看 · v{__version__} · 命令速记[/bold]
 
 [bold cyan]自选股管理[/bold cyan]
@@ -223,7 +223,7 @@ def add(
 
     import time as _time
 
-    # U-2 (v0.0.4.8): 无参 Typer 默认英文 "Missing argument 'SYMBOLS...'"
+    # 无参 Typer 默认英文 "Missing argument 'SYMBOLS...'"
     # 改散户中文友好提示 + 例子 (replace argument-not-provided default)
     if not symbols:
         typer.echo(
@@ -277,7 +277,7 @@ def add(
                     continue
                 name = names.get(cleaned)
                 if not name:
-                    # U-3 (v0.0.4.8): 加下一步引导 · 不留 dead-end
+                    # 加下一步引导 · 不留 dead-end
                     failures.append(
                         f"未找到股票: {cleaned}（不在 A 股代码表中）· "
                         f"试 `kan list` 看自选 / 用名称搜索 `kan add 茅台`"
@@ -304,14 +304,14 @@ def add(
                             typer.echo(f"  ✅ 已添加 {_name.replace(' ', '')} ({code})")
                         success += 1
                 elif len(matches) == 0:
-                    # U-3 (v0.0.4.8): 加下一步引导
+                    # 加下一步引导
                     failures.append(
                         f"未找到包含「{sym}」的股票 · "
                         f"试 `kan list` 看自选 / 用代码精确加 `kan add 600519`"
                     )
                     fail += 1
                 else:
-                    # U-1 (v0.0.4.7 P0): 多匹配列出候选 · 与 kan remove 一致
+                    # 多匹配列出候选 · 与 kan remove 一致
                     # 旧: 只说"匹配到 N 只 · 请用更精确名称或代码" → dead-end
                     # 新: 列出全部候选 · 用户能直接 copy 代码再 add
                     matches_preview = "; ".join(
@@ -469,7 +469,7 @@ def remove(
         _remove_by_theme(theme, yes)
         return
 
-    # U-1 (v0.0.4.8 P0-6): 跟 kan add 同款散户中文 · 兑现 U-2 承诺到 remove 命令
+    # 跟 kan add 同款散户中文 · 兑现承诺到 remove 命令
     if not symbols:
         typer.echo(
             "请告诉我要移除哪只股票 · 例: kan remove 600519 (代码或名称都行)",

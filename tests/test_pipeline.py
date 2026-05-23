@@ -405,7 +405,7 @@ def test_render_freshness_warning_fresh_and_post_silent():
 def test_render_freshness_warning_stale_supersedes_intraday():
     """is_stale=True 即使 phase=intraday · 仍走 stale 分支(互斥优先级)。
 
-    Why(v0.0.4.7 ***REMOVED*** 行为):stale 状态下用户首动作是 fetch → fetch 后会重 scan → 那时再判 intraday。
+    Why(v0.0.4.7 行为):stale 状态下用户首动作是 fetch → fetch 后会重 scan → 那时再判 intraday。
     """
     console = Mock()
     f = _make_freshness(

@@ -158,7 +158,7 @@ def scan(
 
     prev_snapshot = load_snapshot() if (diff and board_meta is None) else None
 
-    # P1-8: 单次 scan_batch · 后续 filter / diff / snapshot 都用 all_results · 避免重复调用
+    # 单次 scan_batch · 后续 filter / diff / snapshot 都用 all_results · 避免重复调用
     all_results = scan_batch(targets, mode=mode)
 
     board_index_result = None
@@ -684,7 +684,7 @@ def info(
             raise typer.Exit(2)
         _info_theme(theme, fmt)
         return
-    # U-1 (v0.0.4.8 P0-6): 跟 kan add 同款散户中文 · 兑现 U-2 承诺到 info 命令
+    # 跟 kan add 同款散户中文 · 兑现承诺到 info 命令
     if not symbol:
         typer.echo(
             "请告诉我看哪只股票 · 例: kan info 600519 (代码或名称都行)",
@@ -811,7 +811,7 @@ def info(
             f"{volume_state.ratio} 倍 · {volume_state.label}"
         )
 
-    # ***REMOVED*** (v0.0.4.7 P0): kan info 加 stale/intraday 警告 · 与 scan/trend 一致
+    # kan info 加 stale/intraday 警告 · 与 scan/trend 一致
     # 单只详情诱导决策性比 scan 更强 · 缺警告是 dead-end 风险
     from kan.trading_calendar import PHASE_INTRADAY, latest_trade_date, market_phase
     expected_cutoff = latest_trade_date()
