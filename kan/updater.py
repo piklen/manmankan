@@ -19,6 +19,8 @@ import urllib.request
 from datetime import date
 from typing import Literal, NamedTuple
 
+from rich.console import Console
+
 from kan import __version__, config
 from kan._log import debug_log
 
@@ -153,19 +155,32 @@ def detect_install_method() -> DetectedInstall:
 UpgradeStatus = Literal["success", "failed"]
 
 
-def run_upgrade() -> tuple[UpgradeStatus, str]:
+def run_upgrade(console: Console | None = None) -> tuple[UpgradeStatus, str]:
     """运行升级命令 · 返回 (status, 描述消息)。
 
     所有异常吞掉 · 不让 caller (atexit hook / kan update 命令) 受影响。
+
+    Args:
+        console: 可选 rich Console (TTY 下显示 spinner · 非 TTY 自动退化静默)
+                 caller 传入自己的 console 保持输出风格一致 · None 则建 stderr console
+                 (注：rich.Console.status 在 is_terminal=False 时不干扰 stdout pipe)
     """
     install = detect_install_method()
+    if console is None:
+        console = Console(stderr=True)
+
     try:
-        result = subprocess.run(
-            install.upgrade_cmd,
-            capture_output=True,
-            text=True,
-            timeout=UPGRADE_TIMEOUT,
-        )
+        # spinner 在 TTY 下转、非 TTY 下退化为单行打印 · 不破坏 pipe / CI
+        with console.status(
+            f"[cyan]下载并安装中...[/cyan] [dim]({install.name})[/dim]",
+            spinner="dots",
+        ):
+            result = subprocess.run(
+                install.upgrade_cmd,
+                capture_output=True,
+                text=True,
+                timeout=UPGRADE_TIMEOUT,
+            )
     except subprocess.TimeoutExpired:
         return "failed", f"{install.name} upgrade 超时 (>{int(UPGRADE_TIMEOUT)}s) · 请手动重试"
     except FileNotFoundError:
@@ -177,11 +192,12 @@ def run_upgrade() -> tuple[UpgradeStatus, str]:
         # v0.0.4.4: 升级文件下载成功 ≠ 装得起来 · 跑 import smoke 验证
         # 防 v0.0.4.3 类装机崩 (deps partial state · old .so cache 不重链)
         try:
-            smoke = subprocess.run(
-                [sys.executable, "-c",
-                 "import kan; from kan import scanner, fetcher, watchlist"],
-                capture_output=True, text=True, timeout=10,
-            )
+            with console.status("[cyan]验证安装...[/cyan]", spinner="dots"):
+                smoke = subprocess.run(
+                    [sys.executable, "-c",
+                     "import kan; from kan import scanner, fetcher, watchlist"],
+                    capture_output=True, text=True, timeout=10,
+                )
         except (subprocess.TimeoutExpired, FileNotFoundError):
             return "success", install.name  # smoke 自身失败不阻塞 · 信任 returncode
         if smoke.returncode != 0:

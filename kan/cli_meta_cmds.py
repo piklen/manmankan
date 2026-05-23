@@ -73,7 +73,7 @@ def update(
         f"[dim]检测到安装方式: {install.name} · 升级中...[/dim]"
     )
 
-    status, msg = updater.run_upgrade()
+    status, msg = updater.run_upgrade(console=console)
     if status == "success":
         console.print(
             f"[green]✅ 已升级到 v{info.latest}[/green] "
