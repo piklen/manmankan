@@ -93,7 +93,7 @@ def migrate_legacy() -> None:
     )
 
     import typer
-    # P1-9: migration message 走 stderr · 不污染 stdout
+    # migration message 走 stderr · 不污染 stdout
     # (kan --version 等 nullary 命令保持干净 · 脚本可 2>/dev/null 过滤)
     typer.echo(f"📦 数据已从 ~/.kan/ 迁移到 {BASE_DIR}", err=True)
     typer.echo("   旧目录可安全删除（rm -rf ~/.kan/）", err=True)
