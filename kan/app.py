@@ -33,7 +33,7 @@ def main(
     """慢慢看 · 看清你的股票正站在历史价格的哪个位置"""
     import sys
     if len(sys.argv) == 1:
-        # lazy import 避免循环 · help_cmd 装饰在 app 上但位于 cli_watchlist_cmds
-        from kan.cli_watchlist_cmds import help_cmd
+        # lazy import 避免循环 · help_cmd 装饰在 app 上但位于 cli_help
+        from kan.cli_help import help_cmd
         help_cmd()
         raise typer.Exit()
