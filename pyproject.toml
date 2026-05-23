@@ -76,6 +76,7 @@ ignore = [
 testpaths = ["tests"]
 markers = [
     "tty: true terminal PTY tests for Rich spinner/progress first-frame SLO",
+    "network: 真网络冒烟 case · 默认 CI 跳 · 用 -m network 单独跑",
 ]
 
 [tool.coverage.run]
