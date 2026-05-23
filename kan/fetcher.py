@@ -13,6 +13,7 @@ from kan import circuit_breaker
 from kan._log import debug_log
 from kan._numeric import to_numeric_checked
 from kan.paths import DATA_DIR
+from kan.tushare_pro import _fetch_tushare  # noqa: F401 — re-export for monkeypatch/tests + dispatch use
 
 if TYPE_CHECKING:
     from collections.abc import Callable
@@ -431,11 +432,12 @@ def _fetch_via_akshare(symbol: str, start: str) -> tuple[pd.DataFrame, str] | No
 # ── 公开 API ─────────────────────────────────────────────────────────
 
 def fetch_kline(symbol: str, days: int = 180, force: bool = False) -> pd.DataFrame:
-    """拉取单只股票前复权日 K 线（baostock → 东财/新浪并发 → 腾讯）。
+    """拉取单只股票前复权日 K 线（tushare 配 token 时优先 → baostock → 东财/新浪并发 → 腾讯）。
 
     返回 DataFrame · 标准列：date, open, high, low, close, volume, amount
 
     fallback 设计：
+    0. TuShare Pro（仅当 tushare_token 配置时）· 顶优先 · 付费源 / 自部署镜像
     1. baostock 独立服务器最稳 · 数值精度全 A 股板块对齐 · 主路径
     2. 东财 + 新浪 两个 akshare 源并发 race（_fetch_via_akshare）· 谁先成功用谁 ·
        任一源慢/挂不拖累另一个 · 东财 push2his 对部分 IP 段持续封禁时新浪兜底
@@ -452,8 +454,12 @@ def fetch_kline(symbol: str, days: int = 180, force: bool = False) -> pd.DataFra
     _ensure_no_proxy()
     start = (datetime.now() - timedelta(days=int(days * 1.8))).strftime("%Y%m%d")
 
-    raw = _fetch_baostock(symbol, start)
-    source = "baostock"
+    # v0.0.5: TuShare Pro 优先（配 token 时）→ baostock → akshare 并发 → 腾讯
+    raw = _fetch_tushare(symbol, start)
+    source = "tushare"
+    if raw is None:
+        raw = _fetch_baostock(symbol, start)
+        source = "baostock"
     if raw is None:
         akshare_result = _fetch_via_akshare(symbol, start)
         if akshare_result is not None:

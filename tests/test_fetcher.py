@@ -453,3 +453,61 @@ def test_read_cutoff_unaffected_by_migration(temp_data_dir):
     assert mtime_before == mtime_after
     reloaded = pd.read_parquet(cache)
     assert "_source" not in reloaded.columns
+
+
+class TestTushareProDispatch:
+    """v0.0.5: 配 token 时 tushare 顶替 baostock 作主路径；未配 token 行为不变"""
+
+    @pytest.fixture
+    def isolated_env(self, tmp_path, monkeypatch):
+        from kan import circuit_breaker, config
+        monkeypatch.setattr(paths, "BASE_DIR", tmp_path)
+        monkeypatch.setattr(paths, "CIRCUIT_PATH", tmp_path / "circuit.json")
+        monkeypatch.setattr(config, "CONFIG_PATH", tmp_path / "config.json")
+        monkeypatch.setattr(fetcher, "DATA_DIR", tmp_path)
+        monkeypatch.setattr(circuit_breaker, "_default", None)
+        monkeypatch.delenv("TUSHARE_TOKEN", raising=False)
+        monkeypatch.delenv("TUSHARE_ENDPOINT", raising=False)
+        return tmp_path
+
+    def test_no_token_path_unchanged(self, isolated_env, monkeypatch, fake_akshare_df):
+        """未配 token → _fetch_tushare 返回 None → 原 fallback 链生效"""
+        called = {"tushare": False}
+        def spy_tushare(*a, **kw):
+            called["tushare"] = True
+            return None
+        monkeypatch.setattr(fetcher, "_fetch_tushare", spy_tushare)
+        monkeypatch.setattr(fetcher, "_fetch_baostock", lambda *a, **kw: None)
+        monkeypatch.setattr(fetcher, "_fetch_sina", lambda *a, **kw: None)
+        with patch("akshare.stock_zh_a_hist", return_value=fake_akshare_df):
+            df = fetcher.fetch_kline("600519", force=True)
+        # spy 应被调用一次但返回 None
+        assert called["tushare"]
+        assert not df.empty
+
+    def test_with_token_uses_tushare_first(self, isolated_env, monkeypatch):
+        """配 token → tushare 命中 → 不再 fallback baostock"""
+        from kan import config
+        config.save({**config.DEFAULT_CONFIG, "tushare_token": "tk"})
+
+        sample = pd.DataFrame({
+            "date": [date(2026, 4, 28), date(2026, 4, 29)],
+            "open": [100.0, 101.0],
+            "high": [101.5, 102.5],
+            "low": [99.5, 100.5],
+            "close": [101.0, 102.0],
+            "volume": [10000, 11000],
+            "amount": [1010000.0, 1122000.0],
+        })
+
+        baostock_called = {"hit": False}
+        def fake_baostock(*a, **kw):
+            baostock_called["hit"] = True
+            return None
+
+        monkeypatch.setattr(fetcher, "_fetch_tushare", lambda *a, **kw: sample.copy())
+        monkeypatch.setattr(fetcher, "_fetch_baostock", fake_baostock)
+
+        df = fetcher.fetch_kline("600519", force=True)
+        assert not baostock_called["hit"]
+        assert (df["_source"] == "tushare").all()
