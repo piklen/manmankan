@@ -47,6 +47,13 @@ def hot_runner(monkeypatch):
         "kan.cli_trend_cmds._load_watchlist_pairs", lambda: [("600519", "贵州茅台")]
     )
     monkeypatch.setattr(
+        "kan.cli_extreme_cmds._get_watchlist_pairs", lambda: [("600519", "贵州茅台")]
+    )
+    monkeypatch.setattr("kan.cli_extreme_cmds._auto_fetch_stale", lambda _p: None)
+    monkeypatch.setattr(
+        "kan.cli_extreme_cmds._load_watchlist_pairs", lambda: [("600519", "贵州茅台")]
+    )
+    monkeypatch.setattr(
         "kan.scanner.scan_batch",
         lambda pairs, mode="low": [_fake_scan_result(s, n) for s, n in pairs],
     )
