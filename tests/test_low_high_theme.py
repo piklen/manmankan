@@ -52,7 +52,7 @@ def _stub(monkeypatch):
     )
     # 让 filter_extreme 返回空(简化 · 只验命令能跑通 + 路径正确)
     monkeypatch.setattr("kan.scanner.filter_extreme", lambda targets, periods, mode: {})
-    monkeypatch.setattr("kan.cli_scan_cmds._auto_fetch_stale", lambda targets: None)
+    monkeypatch.setattr("kan.cli_extreme_cmds._auto_fetch_stale", lambda targets: None)
 
 
 def test_low_theme_runs(monkeypatch, _isolate_all):
