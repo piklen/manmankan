@@ -3,6 +3,8 @@
 本版后此文件只装 scan 命令本身;fetch / low / high / info / compare 各自拆到
 cli_fetch_cmds / cli_extreme_cmds / cli_info_cmds / cli_compare_cmds。
 """
+from __future__ import annotations
+
 from typing import Annotated
 
 import typer
@@ -150,6 +152,8 @@ def scan(
         signal_only=signal,
         board_index_result=board_index_result,
     )
+    # U-7: 头部 1 行 disclaimer 呼应(自选 100+ 只表格 · 防底部 disclaimer 滚屏顶掉)
+    console.print("[dim]💡 慢慢看是观察工具 · 不预测涨跌 · 详见底部免责[/dim]")
     console.print(table)
 
     if is_compact:

@@ -382,11 +382,20 @@ def test_high_command_with_period_runs(scan_runner, monkeypatch):
     assert "Traceback" not in result.output
 
 
-def test_low_command_invalid_period_typer_error(scan_runner):
-    """`kan low` 无参数 · typer 应报参数错误 (exit_code=2)"""
+def test_low_command_no_args_uses_default_periods(scan_runner, monkeypatch):
+    """U-3: `kan low` 无参 · 用默认 periods [30, 60, 120] 跑(不报错)"""
+    from kan import cli_extreme_cmds
     from kan.app import app
+
+    # 拦下 _filter_extreme_cmd 不真跑 · 只看 periods 默认值传对
+    captured = {}
+    def _fake_filter(periods, **kwargs):
+        captured["periods"] = periods
+
+    monkeypatch.setattr(cli_extreme_cmds, "_filter_extreme_cmd", _fake_filter)
     result = scan_runner.invoke(app, ["low"])
-    assert result.exit_code == 2, "typer 缺参数应 exit_code=2"
+    assert result.exit_code == 0, f"无参应跑默认 periods · stderr: {result.output}"
+    assert captured["periods"] == [30, 60, 120]
 
 
 def test_info_command_with_existing_symbol(scan_runner, monkeypatch):

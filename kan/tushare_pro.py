@@ -13,6 +13,8 @@ import re
 from typing import TYPE_CHECKING
 
 import requests
+from requests.adapters import HTTPAdapter
+from urllib3.util.retry import Retry
 
 from kan._log import debug_log
 
@@ -24,6 +26,40 @@ _SYMBOL_PATTERN = re.compile(r"^\d{6}$")
 DEFAULT_ENDPOINT = "https://api.tushare.pro"
 
 _TIMEOUT_SECONDS = 30
+
+
+def _make_session() -> requests.Session:
+    """带连接池 + 1 次自动重试的 Session(***REMOVED***)。
+
+    架构考量:
+    - 付费 token 用户主动配置 TuShare Pro 当主路径 · 期望 production 级
+    - 5xx / connection reset 应给 1 次重试 · 不立即降级 baostock(免费 · 慢 · 精度低)
+    - fetch_batch 12 并发 · pool_maxsize=12 防 connection-pool-is-full 警告
+    - allowed_methods 含 POST(TuShare 用 POST JSON)
+    - backoff_factor=0.5 · 重试间隔 0.5s · 不过分阻塞用户
+    """
+    s = requests.Session()
+    retry = Retry(
+        total=1,  # 1 次重试(总 2 次请求)· 重试太多反而拖体感
+        status_forcelist=[502, 503, 504],
+        allowed_methods=["POST"],
+        backoff_factor=0.5,
+    )
+    adapter = HTTPAdapter(max_retries=retry, pool_maxsize=12)
+    s.mount("https://", adapter)
+    s.mount("http://", adapter)
+    return s
+
+
+_session: requests.Session | None = None
+
+
+def _get_session() -> requests.Session:
+    """lazy session · 避免顶层 import 时建 connection pool。"""
+    global _session
+    if _session is None:
+        _session = _make_session()
+    return _session
 
 _FIELD_MAP = {
     "trade_date": "date",
@@ -110,7 +146,7 @@ def _post_tushare_api(
         "fields": fields,
     }
     try:
-        resp = requests.post(endpoint, json=payload, timeout=_TIMEOUT_SECONDS)
+        resp = _get_session().post(endpoint, json=payload, timeout=_TIMEOUT_SECONDS)
     except Exception as e:
         # 传真 Exception · _log.py 的 _redact 会兜底处理 path / token 模式
         debug_log(__name__, "tushare POST 失败", e)

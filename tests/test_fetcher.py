@@ -7,7 +7,7 @@ from unittest.mock import MagicMock, patch
 import pandas as pd
 import pytest
 
-from kan import fetcher, paths, trading_calendar
+from kan import data_sources, fetcher, paths, trading_calendar
 
 
 @pytest.fixture
@@ -24,8 +24,10 @@ def force_eastmoney_path(monkeypatch):
     把 baostock 和新浪 mock 成 None，并发档里只剩东财能中标，
     流程落到 akshare.stock_zh_a_hist (东财) mock。
     """
+    # _fetch_baostock 在 fetcher 内被 fetch_kline 直接调用 → patch fetcher.globals
+    # _fetch_sina 在 _fetch_via_akshare(data_sources) 内被调用 → patch data_sources.globals
     monkeypatch.setattr(fetcher, "_fetch_baostock", lambda *a, **kw: None)
-    monkeypatch.setattr(fetcher, "_fetch_sina", lambda *a, **kw: None)
+    monkeypatch.setattr(data_sources, "_fetch_sina", lambda *a, **kw: None)
 
 
 @pytest.fixture
@@ -273,8 +275,8 @@ def test_fetch_baostock_returns_dataframe(temp_data_dir):
 
     with patch("baostock.login"), \
          patch("baostock.query_history_k_data_plus", return_value=mock_rs):
-        fetcher._bs_logged_in = False
-        df = fetcher._fetch_baostock("600519", "20260501")
+        data_sources._bs_logged_in = False
+        df = data_sources._fetch_baostock("600519", "20260501")
 
     assert df is not None
     assert len(df) == 2
@@ -288,8 +290,8 @@ def test_fetch_baostock_returns_none_on_error(temp_data_dir):
 
     with patch("baostock.login"), \
          patch("baostock.query_history_k_data_plus", return_value=mock_rs):
-        fetcher._bs_logged_in = False
-        df = fetcher._fetch_baostock("999999", "20260501")
+        data_sources._bs_logged_in = False
+        df = data_sources._fetch_baostock("999999", "20260501")
 
     assert df is None
 
@@ -300,8 +302,9 @@ def test_fetch_baostock_returns_none_on_error(temp_data_dir):
 def test_circuit_skips_breaker_down_source(temp_data_dir, raw_kline_df, isolated_breaker, monkeypatch):
     """breaker 标记 baostock down → fetch_kline 跳过它 · 走 akshare 档."""
     isolated_breaker.record("baostock", ok=False)
-    monkeypatch.setattr(fetcher, "_fetch_eastmoney", lambda *a, **kw: None)
-    monkeypatch.setattr(fetcher, "_fetch_sina", lambda *a, **kw: raw_kline_df)
+    # _fetch_via_akshare 在 data_sources 内查 _fetch_eastmoney/_fetch_sina · patch data_sources
+    monkeypatch.setattr(data_sources, "_fetch_eastmoney", lambda *a, **kw: None)
+    monkeypatch.setattr(data_sources, "_fetch_sina", lambda *a, **kw: raw_kline_df)
 
     df = fetcher.fetch_kline("600519", force=True)
     assert (df["_source"] == "sina").all()
@@ -310,7 +313,7 @@ def test_circuit_skips_breaker_down_source(temp_data_dir, raw_kline_df, isolated
 def test_circuit_records_down_on_source_exception(isolated_breaker):
     """源抛异常 → 被记 down."""
     with patch("akshare.stock_zh_a_hist", side_effect=Exception("timeout")):
-        result = fetcher._fetch_eastmoney("600519", "20260501")
+        result = data_sources._fetch_eastmoney("600519", "20260501")
     assert result is None
     assert isolated_breaker.is_down("eastmoney")
 
@@ -318,7 +321,7 @@ def test_circuit_records_down_on_source_exception(isolated_breaker):
 def test_circuit_empty_result_not_recorded_down(isolated_breaker):
     """源返回空数据（无效代码/无数据）≠ 源挂 · 不记 down."""
     with patch("akshare.stock_zh_a_hist", return_value=pd.DataFrame()):
-        result = fetcher._fetch_eastmoney("999999", "20260501")
+        result = data_sources._fetch_eastmoney("999999", "20260501")
     assert result is None
     assert not isolated_breaker.is_down("eastmoney")
 
@@ -350,11 +353,18 @@ def test_fetch_kline_stamps_source(temp_data_dir, raw_kline_df, source, mock_tar
     """各源 fallback 标记正确 source · 其它源全 mock None 让目标源生效.
 
     东财/新浪经 _fetch_via_akshare 并发档 · 关掉非目标源使结果确定（不受 race 影响）.
+
+    v0.0.5.0:
+    - _fetch_baostock / _fetch_tencent 在 fetcher.globals 被 fetch_kline 直接调 → patch fetcher
+    - _fetch_sina / _fetch_eastmoney 在 data_sources.globals 被 _fetch_via_akshare 调 → patch data_sources
     """
-    all_sources = ["_fetch_baostock", "_fetch_sina", "_fetch_eastmoney", "_fetch_tencent"]
-    for f in all_sources:
-        monkeypatch.setattr(fetcher, f, lambda *a, **kw: None)
-    monkeypatch.setattr(fetcher, mock_target, lambda *a, **kw: raw_kline_df)
+    monkeypatch.setattr(fetcher, "_fetch_baostock", lambda *a, **kw: None)
+    monkeypatch.setattr(fetcher, "_fetch_tencent", lambda *a, **kw: None)
+    monkeypatch.setattr(data_sources, "_fetch_sina", lambda *a, **kw: None)
+    monkeypatch.setattr(data_sources, "_fetch_eastmoney", lambda *a, **kw: None)
+
+    target_module = fetcher if mock_target in ("_fetch_baostock", "_fetch_tencent") else data_sources
+    monkeypatch.setattr(target_module, mock_target, lambda *a, **kw: raw_kline_df)
 
     df = fetcher.fetch_kline("600519", force=True)
     assert (df["_source"] == source).all()
@@ -478,7 +488,7 @@ class TestTushareProDispatch:
             return None
         monkeypatch.setattr(fetcher, "_fetch_tushare", spy_tushare)
         monkeypatch.setattr(fetcher, "_fetch_baostock", lambda *a, **kw: None)
-        monkeypatch.setattr(fetcher, "_fetch_sina", lambda *a, **kw: None)
+        monkeypatch.setattr(data_sources, "_fetch_sina", lambda *a, **kw: None)
         with patch("akshare.stock_zh_a_hist", return_value=fake_akshare_df):
             df = fetcher.fetch_kline("600519", force=True)
         # spy 应被调用一次但返回 None

@@ -50,6 +50,24 @@ uv run pytest --cov=kan          # 带覆盖率
 4. 推送到 fork：`git push origin feat/your-feature`
 5. 在 GitHub 上发起 Pull Request
 
+## Git Author Email 推荐(隐私保护)
+
+公开开源仓 commit author email 通过 `git log` 可见 · 是 OSINT 数据库 / spam 钓鱼的常见来源。
+推荐贡献者用 **GitHub noreply alias**(隐藏个人邮箱):
+
+```bash
+# 全局设置(所有 repo 生效)
+git config --global user.email "<your-id>+<github-username>@users.noreply.github.com"
+
+# 或仅本仓
+git config user.email "<your-id>+<github-username>@users.noreply.github.com"
+```
+
+获取你的 noreply email:GitHub Settings → Emails → 启用 "Keep my email addresses private" · 页面会显示形如
+`12345+username@users.noreply.github.com`。
+
+**老 commits 不动**(force-push 风险 · v0.0.4.7 已有先例)· 新 commits 起用 noreply。
+
 ## Commit Message 规范
 
 使用 Conventional Commits 格式：

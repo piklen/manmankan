@@ -1,4 +1,6 @@
 """low / high · N 日极值（低点/高点）筛选 · 多周期支持。"""
+from __future__ import annotations
+
 from typing import Annotated
 
 import typer
@@ -113,9 +115,15 @@ def _filter_extreme_cmd(
         console.print(DISCLAIMER, style="dim")
 
 
+_DEFAULT_PERIODS = [30, 60, 120]  # 无参时默认 · 覆盖中短中长 3 段
+
+
 @app.command()
 def low(
-    periods: Annotated[list[int], typer.Argument(help="周期天数（2-360 · 支持多个：30 60 120）")],
+    periods: Annotated[
+        list[int] | None,
+        typer.Argument(help="周期天数（2-360 · 支持多个：30 60 120 · 无参默认 30 60 120）"),
+    ] = None,
     fmt: Annotated[
         export.OutputFormat,
         typer.Option("--format", help="输出格式：terminal（默认）/ md / json"),
@@ -137,16 +145,19 @@ def low(
         typer.Option("--only-watchlist", help="仅显示自选 ∩ 行业/热榜/题材(需配合 --industry / --hot / --theme)"),
     ] = False,
 ) -> None:
-    """筛选 N 日低点的自选股（支持多周期）"""
+    """筛选 N 日低点的自选股（支持多周期 · 无参默认 30/60/120 三段）"""
     _filter_extreme_cmd(
-        periods, mode="low", fmt=fmt,
+        periods or _DEFAULT_PERIODS, mode="low", fmt=fmt,
         industry=industry, only_watchlist=only_watchlist, hot=hot, theme=theme,
     )
 
 
 @app.command()
 def high(
-    periods: Annotated[list[int], typer.Argument(help="周期天数（2-360 · 支持多个：30 60 120）")],
+    periods: Annotated[
+        list[int] | None,
+        typer.Argument(help="周期天数（2-360 · 支持多个：30 60 120 · 无参默认 30 60 120）"),
+    ] = None,
     fmt: Annotated[
         export.OutputFormat,
         typer.Option("--format", help="输出格式：terminal（默认）/ md / json"),
@@ -168,8 +179,8 @@ def high(
         typer.Option("--only-watchlist", help="仅显示自选 ∩ 行业/热榜/题材(需配合 --industry / --hot / --theme)"),
     ] = False,
 ) -> None:
-    """筛选 N 日高点的自选股（支持多周期）"""
+    """筛选 N 日高点的自选股（支持多周期 · 无参默认 30/60/120 三段）"""
     _filter_extreme_cmd(
-        periods, mode="high", fmt=fmt,
+        periods or _DEFAULT_PERIODS, mode="high", fmt=fmt,
         industry=industry, only_watchlist=only_watchlist, hot=hot, theme=theme,
     )

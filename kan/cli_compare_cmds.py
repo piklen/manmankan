@@ -1,4 +1,5 @@
 """compare · 横向对比多只股票的多周期位置（转置表）。"""
+from __future__ import annotations
 
 from typing import Annotated
 
@@ -91,4 +92,15 @@ def compare(
 
     table = render_terminal.compare_table(results, periods=period_list)
     console.print(table)
+
+    # ***REMOVED***: 窄屏 + 多列时给提示 · 80 列下 ≥5 只表头会折断或裁掉
+    # 经验阈值:每只股大约要 12-14 列(名称 + 代码 + 现价 + N 周期位置)
+    estimated_width_per_col = 14
+    overhead = 12  # "指标" 列宽 + 表格边框
+    needed = overhead + len(symbols) * estimated_width_per_col
+    if console.width < needed:
+        console.print(
+            f"\n[dim]💡 窄屏模式 · 终端 {console.width} 列 / 建议 ≥ {needed} 列容 {len(symbols)} 只"
+            f" · 太窄时名称/代码会被裁 · 试 4 只以内 / 加宽终端 / 用 --format md 看完整表[/dim]"
+        )
     console.print(DISCLAIMER, style="dim")

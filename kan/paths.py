@@ -6,6 +6,7 @@
 
 from __future__ import annotations
 
+import contextlib
 import os
 import shutil
 from pathlib import Path
@@ -65,10 +66,39 @@ def atomic_write_parquet(df, path: Path) -> None:
     实现：写 path.tmp 再 os.replace(tmp, path) · POSIX + Windows atomic
     guarantee (Python 3.3+)。所有 parquet 写入统一走此 helper · 保持
     paths.py 轻量 (df 不加 pd.DataFrame 注解 · 不顶层 import pandas)。
+
+    v0.0.5.1 ***REMOVED***: 加 chmod 0o600 防持仓画像跨备份(Time Machine / iCloud)/
+    跨容器逃逸 / 跨 FS(SMB/NFS)被同机其他用户读。父目录 0o700 是中度防御 ·
+    0o600 是最后一道线。
     """
     tmp = path.with_suffix(path.suffix + ".tmp")
     df.to_parquet(tmp, index=False)
     os.replace(tmp, path)
+    # Windows / 异常 FS chmod 失败容错(不致命)
+    with contextlib.suppress(OSError):
+        os.chmod(path, 0o600)
+
+
+def atomic_write_json(path: Path, data: object, **dumps_kw) -> None:
+    """atomic 写入 JSON + chmod 0o600(***REMOVED*** · 持仓画像保护)。
+
+    替代 path.write_text(json.dumps(...)) · 所有 cache/snapshot 写入应走此 helper:
+    - boards.py / hot.py / circuit_breaker.py 等 cache 文件
+    - 自动 atomic(tmp + os.replace)+ 0o600
+
+    json.dumps 参数(ensure_ascii / indent 等)通过 **dumps_kw 透传。
+
+    Examples:
+        atomic_write_json(cache, [b.model_dump() for b in boards], ensure_ascii=False)
+    """
+    import json
+
+    tmp = path.with_suffix(path.suffix + ".tmp")
+    tmp.write_text(json.dumps(data, **dumps_kw), encoding="utf-8")
+    os.replace(tmp, path)
+    # Windows / 异常 FS chmod 失败容错(不致命)
+    with contextlib.suppress(OSError):
+        os.chmod(path, 0o600)
 
 
 def migrate_legacy() -> None:
