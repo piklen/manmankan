@@ -211,7 +211,7 @@ def fetch_industry_kline(board: Board, force: bool = False) -> pd.DataFrame:
     return df
 
 # ══════════════════════════════════════════════════════════════════
-# 题材(theme)数据子系统 · ***REMOVED*** · 见 docs/design-f11-theme-scan.md §5
+# 题材(theme)数据子系统 · v0.0.5.0 引入
 # ══════════════════════════════════════════════════════════════════
 
 _THEME_CATALOG_TTL = 24 * 3600
@@ -314,7 +314,7 @@ def search_theme(query: str) -> Theme:
 
 
 def get_theme_constituents(theme, force: bool = False) -> list[tuple[str, str]]:
-    """题材成分股 (代码, 名称) 列表 · THS 优先 → EM fallback(走 ***REMOVED***) · JSON cache 24h。
+    """题材成分股 (代码, 名称) 列表 · THS 优先 → EM fallback(走上游熔断) · JSON cache 24h。
 
     THS adata.stock.info.concept_constituent_ths(index_code=) · 走 THS HTTP · 稳定。
     EM  adata.stock.info.concept_constituent_east(concept_code=) · 走 push2 · 反爬触发熔断。

@@ -2,7 +2,7 @@
 
 industry 给定 → 拉行业成分股;
 hot 给定 → 拉东财热榜;
-theme 给定 → 拉题材成分股(***REMOVED***);
+theme 给定 → 拉题材成分股;
 否则用自选股。
 
 四种来源的差异收敛进 resolve_scan_targets 一个函数,各命令只需"换数据来源

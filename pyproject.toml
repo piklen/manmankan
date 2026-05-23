@@ -35,7 +35,7 @@ dependencies = [
     "pyarrow>=15.0,<25",  # pandas 读写 parquet 的运行时依赖
     "baostock>=0.9.1,<1",
     "numpy>=1.26,<3",  # 间接 → 直接依赖 · 控制版本面 · 防 macOS Gatekeeper .so 签名问题
-    "adata>=2.9,<3",  # ***REMOVED***: 题材位置扫描 · 同花顺 catalog/成分股 + 东财 K 线/反查 · 2026-05-23 spike LOCKED
+    "adata>=2.9,<3",  # v0.0.5.0 题材位置扫描 · 同花顺 catalog/成分股 + 东财 K 线/反查
 ]
 
 [project.urls]

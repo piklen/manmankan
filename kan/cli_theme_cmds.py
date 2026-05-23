@@ -1,12 +1,12 @@
-"""`kan theme` 子命令组 · 题材发现入口 · ***REMOVED*** 引入。
+"""`kan theme` 子命令组 · 题材发现入口 · v0.0.5.0 引入。
 
-参考 `cli_config_cmds.py` 体例(typer.Typer + add_typer 注册风格 LOCKED)。
+参考 `cli_config_cmds.py` 体例(typer.Typer + add_typer 注册风格)。
 
 子命令:
 - theme list [--all]    列题材清单(默认拼音前 30 · --all 全部 ~391 + 散户超载警告)
 - theme search 关键词    模糊搜题材
 
-注:本版不实现"top N 活跃热度榜"(adata 无批量接口 · O(391) HTTP 触发反爬 · 留 ***REMOVED***.2)。
+注:本版不实现"top N 活跃热度榜"(adata 无批量接口 · O(391) HTTP 触发反爬 · 留后续版本)。
 """
 from __future__ import annotations
 
