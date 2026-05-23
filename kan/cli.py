@@ -81,6 +81,7 @@ from kan import (  # noqa: E402, F401
     cli_config_cmds,
     cli_extreme_cmds,
     cli_fetch_cmds,
+    cli_help,
     cli_info_cmds,
     cli_meta_cmds,
     cli_scan_cmds,

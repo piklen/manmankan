@@ -40,7 +40,7 @@ def _mask_token(token: str) -> str:
 
 @config_app.command("get")
 def get_cmd() -> None:
-    """显示当前配置（token 自动 mask · env 覆盖时标注）。"""
+    """显示当前配置(token 自动 mask · env 覆盖时标注 · 未配置时给散户引导)。"""
     cfg = config.load()
 
     env_tok = os.environ.get("TUSHARE_TOKEN")
@@ -52,6 +52,12 @@ def get_cmd() -> None:
             typer.echo(f"tushare_token: {masked}   (set via TUSHARE_TOKEN env, overriding config)")
         else:
             typer.echo(f"tushare_token: {masked}   (set via config)")
+    else:
+        # 未配置时给散户引导(U-8)· 而不是无声跳过该行
+        typer.echo(
+            "tushare_token: 未配置 · 用 `kan config set tushare-token <你的_token>` "
+            "启用 TuShare Pro 数据源(可选 · 不配也能跑)"
+        )
 
     env_ep = os.environ.get("TUSHARE_ENDPOINT")
     cfg_ep = cfg.get("tushare_endpoint")
@@ -60,7 +66,7 @@ def get_cmd() -> None:
     elif cfg_ep:
         typer.echo(f"tushare_endpoint: {cfg_ep}   (set via config)")
     else:
-        typer.echo(f"tushare_endpoint: <default: {DEFAULT_ENDPOINT}>")
+        typer.echo(f"tushare_endpoint: {DEFAULT_ENDPOINT} (默认)")
 
 
 @config_app.command("set")
@@ -71,7 +77,9 @@ def set_cmd(
     """设置一项配置（原子写入 ~/.local/share/kan/config.json）。"""
     if key not in _KEY_MAP:
         typer.echo(
-            f"❌ 未知配置项: {key}\n支持的字段: {', '.join(_KEY_MAP)}",
+            f"❌ 未知配置项: {key}\n"
+            f"   支持: {' / '.join(_KEY_MAP)}\n"
+            f"   例: kan config set tushare-token <你的_token>",
         )
         raise typer.Exit(code=2)
 
@@ -79,10 +87,13 @@ def set_cmd(
     cleaned = value.strip()
 
     if internal_key == "tushare_token" and not cleaned:
-        typer.echo("❌ token 不能为空")
+        typer.echo("❌ token 不能为空 · 例: kan config set tushare-token abc123def456")
         raise typer.Exit(code=2)
     if internal_key == "tushare_endpoint" and not cleaned.startswith(("http://", "https://")):
-        typer.echo("❌ 端点需以 http:// 或 https:// 开头")
+        typer.echo(
+            "❌ 端点需以 http:// 或 https:// 开头\n"
+            "   例: kan config set tushare-endpoint https://api.tushare.pro",
+        )
         raise typer.Exit(code=2)
 
     cfg = config.load()

@@ -15,7 +15,7 @@ from dataclasses import asdict, dataclass
 from enum import StrEnum
 
 from kan._log import debug_log
-from kan.paths import HOT_DIR, ensure_dirs
+from kan.paths import HOT_DIR, atomic_write_json, ensure_dirs
 
 _CACHE_TTL = 3600  # 1h · 热榜实时榜 · 盘后工具 1h 内重复跑结果稳定 · 不反复打源
 _HOT_TIMEOUT_SECONDS = 15  # 单次拉取硬超时 · 防 v0.0.4.3 同型"沉默 5 分钟卡死"
@@ -134,8 +134,5 @@ def fetch_hot_list(which: HotList, force: bool = False) -> list[HotEntry]:
     if not entries:
         raise HotListUnavailableError(f"东财热榜无有效条目: {fn_name}")
 
-    cache.write_text(
-        json.dumps([asdict(e) for e in entries], ensure_ascii=False),
-        encoding="utf-8",
-    )
+    atomic_write_json(cache, [asdict(e) for e in entries], ensure_ascii=False)
     return entries

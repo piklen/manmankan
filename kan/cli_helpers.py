@@ -9,6 +9,18 @@
 - 杂项：_NoopContext / _human_size
 
 lazy import 模式保留 · 顶层只 import 极轻的 stdlib + typer · rich/akshare 等重模块函数体内 lazy。
+
+Helper 适用矩阵(架-7 · 防 6 命令使用漂移):
+  helper                          scan trend low high info compare fetch
+  _auto_fetch_stale                ✓   ✓    ✓   ✓   ✓    ✓       —
+  _get_watchlist_pairs             ✓   ✓    ✓   ✓   —    —       ✓
+  _load_watchlist_pairs            ✓   ✓    —   —   —    —       —
+  _print_err / _safe_error_msg     ✓   ✓    ✓   ✓   ✓    ✓       ✓
+  _with_heavy_imports_spinner      ✓   ✓    ✓   ✓   ✓    ✓       ✓
+  _network_error_msg               —   ✓    —   —   ✓    ✓       ✓
+  format_date_compact              ✓   ✓    ✓   ✓   ✓    ✓       —
+  format_fetched_at_compact        ✓   ✓    ✓   ✓   ✓    ✓       —
+  _pipeline.render_freshness_warning ✓ ✓   —   —   —    —       —   ← v0.0.5.1 计划推 4/6
 """
 import contextlib
 import os
