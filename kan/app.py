@@ -14,6 +14,8 @@ app = typer.Typer(
     name="kan",
     help="慢慢看 · A 股自选股位置感工具",
     invoke_without_command=True,
+    # -h 作 --help short flag · Unix 通用约定 (F2 修)
+    context_settings={"help_option_names": ["-h", "--help"]},
 )
 
 

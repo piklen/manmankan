@@ -85,14 +85,21 @@ def help_cmd() -> None:
   kan fetch --theme AI      预拉某题材全部成分股
 
 [bold cyan]配置（tushare-pro 凭证）[/bold cyan]
-  kan config get                              查看当前配置
+  kan config get                              查看当前配置（全部）
+  kan config get tushare-token                查看单 key（v0.0.5.1+）
   kan config set tushare-token <YOUR_TOKEN>   设 tushare 凭证
   kan config set tushare-endpoint https://x   设 tushare API 端点
   kan config unset tushare-token              清凭证
+
+[bold cyan]版本管理[/bold cyan]
+  kan update                检查并升级到最新版（会 prompt 确认）
+  kan update --check        仅检查不升级
+  kan update -y             跳过确认 · 用于脚本 / CI
 
 [bold cyan]shell 命令补全[/bold cyan] (mac/linux/windows)
   kan completion install    安装补全脚本（自动检测 shell · 之后 kan s<Tab>=kan scan）
   kan completion install zsh  显式指定 shell（zsh/bash/fish/powershell）
 
 [dim]涨跌停自动标记 · ST 默认显示，kan scan --exclude-st 可排除[/dim]
+[dim]任何命令加 --help / -h 看详细说明[/dim]
 """)
