@@ -16,6 +16,8 @@ from kan.paths import BOARDS_DIR, ensure_dirs
 if TYPE_CHECKING:
     import pandas as pd
 
+    from kan.models import Theme
+
 _CATALOG_TTL = 24 * 3600  # 24h
 _CONS_TTL = 24 * 3600
 
@@ -217,7 +219,20 @@ _THEME_CONS_TTL = 24 * 3600
 _STOCK_THEMES_TTL = 12 * 3600  # 个股反查 TTL 更短(公司频繁变题材归属)
 
 
-def load_theme_catalog(force: bool = False):
+def _load_themes_from_cache(cache) -> list[Theme] | None:
+    """题材 catalog 陈旧 cache 退化读取 · 失败返回 None(由调用方决定 raise 还是 raise from)。"""
+    from kan.models import Theme
+
+    if not cache.exists():
+        return None
+    try:
+        data = json.loads(cache.read_text(encoding="utf-8"))
+        return [Theme(**t) for t in data]
+    except Exception:
+        return None
+
+
+def load_theme_catalog(force: bool = False) -> list[Theme]:
     """adata THS 题材 catalog · 24h JSON cache · 失败退化到陈旧 cache。
 
     返回 list[Theme] · 391 个题材左右(2026-05-23 spike 实测)。
@@ -239,24 +254,18 @@ def load_theme_catalog(force: bool = False):
         df = adata.stock.info.all_concept_code_ths()
     except Exception as e:
         # 失败时退化到陈旧 cache(若存在),否则抛
-        if cache.exists():
-            try:
-                data = json.loads(cache.read_text(encoding="utf-8"))
-                from kan._log import debug_log
+        stale = _load_themes_from_cache(cache)
+        if stale is not None:
+            from kan._log import debug_log
 
-                debug_log(__name__, "load adata THS catalog", e)
-                return [Theme(**t) for t in data]
-            except Exception:
-                pass
+            debug_log(__name__, "load adata THS catalog", e)
+            return stale
         raise ThemeDataUnavailableError(f"题材清单首次拉取失败: {e}") from e
 
     if df is None or df.empty:
-        if cache.exists():
-            try:
-                data = json.loads(cache.read_text(encoding="utf-8"))
-                return [Theme(**t) for t in data]
-            except Exception:
-                pass
+        stale = _load_themes_from_cache(cache)
+        if stale is not None:
+            return stale
         raise ThemeDataUnavailableError("adata THS catalog 返回空数据")
 
     themes = [
