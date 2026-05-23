@@ -43,6 +43,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - 新模块 `kan/_pipeline.py` 编排器 · scan/trend 统一 resolve → fetch → compute → freshness 流水线
 - 新模块 `kan/render_terminal.py`(448 行)· 终端表格构建器统一 · scan/extreme/info/compare/trend 5 个 builder 复用
 - `cli_scan_cmds` 大文件拆为 5 个 per-command-group 文件(scan/extreme/info/compare/fetch · 单一职责)
+- `cli_watchlist_cmds` god-file 拆出 `cli_help.py`(help_cmd 速记 cheat-sheet 90 行独立 · watchlist 减 87 行 · help 文案变更不再触发 watchlist 编辑冲突)
+- `fetcher.py` 拆出 `kan/data_sources.py`(4 个数据源 fetcher + akshare 双源并发集中管理 · fetcher 保留 cache + 编排 + 公开 API · 数据获取与缓存编排解耦 · fetcher 613 → 384 行)
 - 公开仓内部注释清扫 · 注释中性化(整库 zero 残留)
 
 ### Tests
