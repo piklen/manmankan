@@ -35,9 +35,13 @@ def trend(
         HotList | None,
         typer.Option("--hot", help="扫东财热榜 · rank=人气榜 / surge=飙升榜 · 自选股 ⭐ 高亮"),
     ] = None,
+    theme: Annotated[
+        str | None,
+        typer.Option("--theme", help="扫指定题材全成分股 · 自选 ⭐ 高亮"),
+    ] = None,
     only_watchlist: Annotated[
         bool,
-        typer.Option("--only-watchlist", help="仅显示自选 ∩ 行业/热榜(需配合 --industry 或 --hot)"),
+        typer.Option("--only-watchlist", help="仅显示自选 ∩ 行业/热榜/题材(需配合 --industry / --hot / --theme)"),
     ] = False,
     fmt: Annotated[
         export.OutputFormat,
@@ -62,22 +66,27 @@ def trend(
         )
 
     console = Console()
-    if industry is not None and hot is not None:
-        _print_err("❌ --industry 与 --hot 不能同时使用")
+    if sum(1 for x in (industry, hot, theme) if x is not None) > 1:
+        _print_err("❌ --industry / --hot / --theme 三者互斥 · 同时只能用一个")
         raise typer.Exit(2)
-    source_mode = industry is not None or hot is not None
+    source_mode = industry is not None or hot is not None or theme is not None
     watchlist_pairs = (
         _load_watchlist_pairs() if source_mode else _get_watchlist_pairs()
     )
     if only_watchlist and not source_mode:
-        _print_err("❌ --only-watchlist 需配合 --industry 或 --hot 使用")
+        _print_err("❌ --only-watchlist 需配合 --industry / --hot / --theme 使用")
         raise typer.Exit(1)
-    from kan._scan_targets import BoardMeta, HotMeta, resolve_scan_targets
-    from kan.boards import BoardDataUnavailableError, BoardNotFoundError
+    from kan._scan_targets import BoardMeta, HotMeta, ThemeMeta, resolve_scan_targets
+    from kan.boards import (
+        BoardDataUnavailableError,
+        BoardNotFoundError,
+        ThemeDataUnavailableError,
+        ThemeNotFoundError,
+    )
     from kan.hot import HotListUnavailableError
     try:
         targets, board_meta = resolve_scan_targets(
-            industry, only_watchlist, watchlist_pairs, hot=hot,
+            industry, only_watchlist, watchlist_pairs, hot=hot, theme=theme,
         )
     except BoardNotFoundError:
         _print_err(f"❌ 未找到行业「{industry}」· 可试更短关键词")
@@ -87,6 +96,14 @@ def trend(
         raise typer.Exit(1) from None
     except HotListUnavailableError:
         _print_err("❌ 热榜数据源暂时不可用,稍后再试")
+        raise typer.Exit(1) from None
+    except ThemeNotFoundError:
+        _print_err(
+            f"❌ 未找到题材「{theme}」· 试更短关键词 · 或跑 kan theme search 看候选"
+        )
+        raise typer.Exit(2) from None
+    except ThemeDataUnavailableError:
+        _print_err("❌ 题材数据源暂时不可用 · 稍后再试")
         raise typer.Exit(1) from None
     _auto_fetch_stale(targets)
     if down is not None and up is not None:
@@ -143,6 +160,8 @@ def trend(
         title = f"慢慢看 · {board_meta.board.name} 行业连续涨跌 · {mode_label}{filter_label}"
     elif isinstance(board_meta, HotMeta):
         title = f"慢慢看 · {board_meta.list_name} 连续涨跌 · {mode_label}{filter_label}"
+    elif isinstance(board_meta, ThemeMeta):
+        title = f"慢慢看 · {board_meta.theme.name} 题材连续涨跌 · {mode_label}{filter_label}"
 
     if fmt is not export.OutputFormat.terminal:
         if fmt is export.OutputFormat.json:
@@ -261,4 +280,8 @@ def trend(
         console.print(
             "[dim]  榜 = 东方财富热榜实时名次 · 非慢慢看观点 · 热榜为实时榜单[/dim]"
         )
-    console.print(DISCLAIMER, style="dim")
+    if isinstance(board_meta, ThemeMeta):
+        from kan.render_theme import render_theme_disclaimer
+        render_theme_disclaimer()
+    else:
+        console.print(DISCLAIMER, style="dim")
