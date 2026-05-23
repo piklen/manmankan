@@ -58,7 +58,19 @@ def cli_main() -> None:
         # atexit LIFO 执行 · 后注册先跑 · update 检查先于 completion install
         atexit.register(_auto_install_completion)
         atexit.register(_check_updates_atexit)
-        app()
+        try:
+            app()
+        except Exception as e:
+            # 顶层 WatchlistCorruptError catch · 改架构后 load_watchlist 不再 sys.exit
+            # 避免 list / scan / fetch 等命令在损坏场景下抛 traceback
+            from kan.watchlist import WatchlistCorruptError
+            if isinstance(e, WatchlistCorruptError):
+                _sys.stderr.write(
+                    f"❌ {e}\n"
+                    f"   跑 `kan clear --yes` 强制重置(会丢全部自选 · 不可恢复)\n"
+                )
+                _sys.exit(1)
+            raise
     except (ImportError, ModuleNotFoundError) as e:
         # v0.0.4.4: 装机不完整时给清晰行动建议 · 不抛 traceback
         # 用 stdlib stderr write · 不依赖 rich (rich 可能正是 ImportError 来源)
