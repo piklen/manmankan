@@ -80,6 +80,7 @@ from kan import (  # noqa: E402, F401
     cli_config_cmds,
     cli_meta_cmds,
     cli_scan_cmds,
+    cli_theme_cmds,
     cli_trend_cmds,
     cli_watchlist_cmds,
 )

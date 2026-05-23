@@ -35,6 +35,7 @@ dependencies = [
     "pyarrow>=15.0,<25",  # pandas 读写 parquet 的运行时依赖
     "baostock>=0.9.1,<1",
     "numpy>=1.26,<3",  # 间接 → 直接依赖 · 控制版本面 · 防 macOS Gatekeeper .so 签名问题
+    "adata>=2.9,<3",  # F11: 题材位置扫描 · 同花顺 catalog/成分股 + 东财 K 线/反查 · 2026-05-23 spike LOCKED
 ]
 
 [project.urls]
@@ -75,6 +76,7 @@ ignore = [
 testpaths = ["tests"]
 markers = [
     "tty: true terminal PTY tests for Rich spinner/progress first-frame SLO",
+    "network: 真网络冒烟 case · 默认 CI 跳 · 用 -m network 单独跑",
 ]
 
 [tool.coverage.run]
