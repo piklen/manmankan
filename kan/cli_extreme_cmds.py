@@ -1,4 +1,6 @@
 """low / high · N 日极值（低点/高点）筛选 · 多周期支持。"""
+from __future__ import annotations
+
 from typing import Annotated
 
 import typer

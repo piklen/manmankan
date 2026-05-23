@@ -1,4 +1,6 @@
 """info · 单股 / 行业 / 题材 详情（全周期位置 + 涨跌信息）。"""
+from __future__ import annotations
+
 from typing import Annotated
 
 import typer
