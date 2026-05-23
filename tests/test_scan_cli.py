@@ -298,8 +298,8 @@ def test_scan_intraday_warning_compliant_phrasing(scan_runner, monkeypatch):
     assert "涨跌停标签反映当前时刻" in output, f"scan intraday 新文案应出现 · output: {output[-500:]}"
     assert "建议盘后 15:30" in output
     assert "下一秒打开" not in output, "scan 不应残留预测性词 (AGENTS.md §6)"
-    assert "都是正常波动" not in output, "v0.0.4.8 ***REMOVED***: 应删除"
-    assert "可能回落" not in output, "v0.0.4.8 ***REMOVED***: 应删除"
+    assert "都是正常波动" not in output, "v0.0.4.8: 应删除"
+    assert "可能回落" not in output, "v0.0.4.8: 应删除"
 
 
 def test_scan_warnings_mutex_stale_wins(scan_runner, monkeypatch):
@@ -322,7 +322,7 @@ def test_scan_warnings_mutex_stale_wins(scan_runner, monkeypatch):
     assert "当前缓存到" in output, "scan stale 警告应显示"
     assert "数据滞后" in output
     assert "涨跌停标签反映当前时刻" not in output, (
-        "scan stale=True 时不应同时显示 intraday 警告 (***REMOVED*** if/elif 互斥)"
+        "scan stale=True 时不应同时显示 intraday 警告 (if/elif 互斥)"
     )
 
 
