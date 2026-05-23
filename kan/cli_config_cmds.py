@@ -78,14 +78,12 @@ def set_cmd(
     internal_key = _KEY_MAP[key]
     cleaned = value.strip()
 
-    if internal_key == "tushare_token":
-        if not cleaned:
-            typer.echo("❌ token 不能为空")
-            raise typer.Exit(code=2)
-    elif internal_key == "tushare_endpoint":
-        if not cleaned.startswith(("http://", "https://")):
-            typer.echo("❌ 端点需以 http:// 或 https:// 开头")
-            raise typer.Exit(code=2)
+    if internal_key == "tushare_token" and not cleaned:
+        typer.echo("❌ token 不能为空")
+        raise typer.Exit(code=2)
+    if internal_key == "tushare_endpoint" and not cleaned.startswith(("http://", "https://")):
+        typer.echo("❌ 端点需以 http:// 或 https:// 开头")
+        raise typer.Exit(code=2)
 
     cfg = config.load()
     cfg[internal_key] = cleaned

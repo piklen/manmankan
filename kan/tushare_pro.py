@@ -120,7 +120,7 @@ def _post_tushare_api(
     return body.get("data")
 
 
-def _to_kline_df(data: dict | None) -> "pd.DataFrame | None":
+def _to_kline_df(data: dict | None) -> pd.DataFrame | None:
     """TuShare data 块 → DataFrame，列名映射到 manmankan KLINE 标准。"""
     import pandas as pd
     if not data:
@@ -134,7 +134,7 @@ def _to_kline_df(data: dict | None) -> "pd.DataFrame | None":
     return df
 
 
-def _fetch_tushare(symbol: str, start: str) -> "pd.DataFrame | None":
+def _fetch_tushare(symbol: str, start: str) -> pd.DataFrame | None:
     """TuShare Pro 日 K 入口 · fetch_kline 顶优先调用。
 
     Args:
