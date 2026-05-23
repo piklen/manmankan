@@ -207,3 +207,69 @@ def fetch_industry_kline(board: Board, force: bool = False) -> pd.DataFrame:
     )
     atomic_write_parquet(df, cache)
     return df
+
+# ══════════════════════════════════════════════════════════════════
+# 题材(theme)数据子系统 · ***REMOVED*** · 见 docs/design-f11-theme-scan.md §5
+# ══════════════════════════════════════════════════════════════════
+
+_THEME_CATALOG_TTL = 24 * 3600
+_THEME_CONS_TTL = 24 * 3600
+_STOCK_THEMES_TTL = 12 * 3600  # 个股反查 TTL 更短(公司频繁变题材归属)
+
+
+def load_theme_catalog(force: bool = False):
+    """adata THS 题材 catalog · 24h JSON cache · 失败退化到陈旧 cache。
+
+    返回 list[Theme] · 391 个题材左右(2026-05-23 spike 实测)。
+    """
+    from kan.models import Theme
+
+    ensure_dirs()
+    cache = BOARDS_DIR / "catalog_concept_ths.json"
+    if not force and _cache_fresh(cache, _THEME_CATALOG_TTL):
+        try:
+            data = json.loads(cache.read_text(encoding="utf-8"))
+            return [Theme(**t) for t in data]
+        except Exception:
+            pass
+
+    import adata
+
+    try:
+        df = adata.stock.info.all_concept_code_ths()
+    except Exception as e:
+        # 失败时退化到陈旧 cache(若存在),否则抛
+        if cache.exists():
+            try:
+                data = json.loads(cache.read_text(encoding="utf-8"))
+                from kan._log import debug_log
+
+                debug_log(__name__, "load adata THS catalog", e)
+                return [Theme(**t) for t in data]
+            except Exception:
+                pass
+        raise ThemeDataUnavailableError(f"题材清单首次拉取失败: {e}") from e
+
+    if df is None or df.empty:
+        if cache.exists():
+            try:
+                data = json.loads(cache.read_text(encoding="utf-8"))
+                return [Theme(**t) for t in data]
+            except Exception:
+                pass
+        raise ThemeDataUnavailableError("adata THS catalog 返回空数据")
+
+    themes = [
+        Theme(
+            code=str(row["index_code"]).strip(),
+            name=str(row["name"]).strip(),
+            source="ths",
+            size=None,
+        )
+        for _, row in df.iterrows()
+    ]
+    cache.write_text(
+        json.dumps([t.model_dump() for t in themes], ensure_ascii=False),
+        encoding="utf-8",
+    )
+    return themes
