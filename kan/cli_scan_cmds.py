@@ -3,6 +3,8 @@
 本版后此文件只装 scan 命令本身;fetch / low / high / info / compare 各自拆到
 cli_fetch_cmds / cli_extreme_cmds / cli_info_cmds / cli_compare_cmds。
 """
+from __future__ import annotations
+
 from typing import Annotated
 
 import typer

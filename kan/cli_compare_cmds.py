@@ -1,4 +1,5 @@
 """compare · 横向对比多只股票的多周期位置（转置表）。"""
+from __future__ import annotations
 
 from typing import Annotated
 

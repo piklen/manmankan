@@ -1,4 +1,6 @@
 """fetch · 拉取股票历史 K 线数据 (含 --industry / --hot / --theme 批量预拉)。"""
+from __future__ import annotations
+
 from typing import Annotated
 
 import typer
