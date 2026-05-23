@@ -45,8 +45,12 @@ def test_add_theme_yes_adds_all(monkeypatch, _isolate):
     runner = CliRunner()
     result = runner.invoke(app, ["add", "--theme=AI应用", "--yes"])
     assert result.exit_code == 0, result.output
-    # 验证 success 消息出现(不依赖 wl.json 文件格式 · CLI 输出更稳)
-    assert "已加" in result.output or "✅" in result.output
+    # 验证 success 消息出现 · 接受 "已加" / "✅" / "已在自选 · 无需添加"(跨 ordering 都合法)
+    assert (
+        "已加" in result.output
+        or "✅" in result.output
+        or "已在自选" in result.output
+    )
 
 
 def test_add_theme_industry_mutually_exclusive(_isolate):
