@@ -12,7 +12,7 @@ from typing import TYPE_CHECKING
 
 from kan._log import debug_log
 from kan.models import Board
-from kan.paths import BOARDS_DIR, ensure_dirs
+from kan.paths import BOARDS_DIR, atomic_write_json, ensure_dirs
 
 if TYPE_CHECKING:
     import pandas as pd
@@ -64,10 +64,7 @@ def load_industry_catalog(force: bool = False) -> list[Board]:
         except Exception as e:
             debug_log(__name__, f"industry catalog cache {cache.name} 损坏 · 重新拉", e)
     boards_list = _fetch_catalog()
-    cache.write_text(
-        json.dumps([b.model_dump() for b in boards_list], ensure_ascii=False),
-        encoding="utf-8",
-    )
+    atomic_write_json(cache, [b.model_dump() for b in boards_list], ensure_ascii=False)
     return boards_list
 
 
@@ -148,7 +145,7 @@ def get_industry_constituents(
         (str(row["证券代码"]).strip(), str(row["证券名称"]).strip())
         for _, row in df.iterrows()
     ]
-    cache.write_text(json.dumps(pairs, ensure_ascii=False), encoding="utf-8")
+    atomic_write_json(cache, pairs, ensure_ascii=False)
     return pairs
 
 
@@ -279,10 +276,7 @@ def load_theme_catalog(force: bool = False) -> list[Theme]:
         )
         for _, row in df.iterrows()
     ]
-    cache.write_text(
-        json.dumps([t.model_dump() for t in themes], ensure_ascii=False),
-        encoding="utf-8",
-    )
+    atomic_write_json(cache, [t.model_dump() for t in themes], ensure_ascii=False)
     return themes
 
 
@@ -351,7 +345,7 @@ def get_theme_constituents(theme, force: bool = False) -> list[tuple[str, str]]:
                 (str(row["stock_code"]).strip(), str(row["short_name"]).strip())
                 for _, row in df.iterrows()
             ]
-            cache.write_text(json.dumps(pairs, ensure_ascii=False), encoding="utf-8")
+            atomic_write_json(cache, pairs, ensure_ascii=False)
             return pairs
     except Exception as e:
         debug_log(__name__, f"THS concept_constituent_ths({theme.code})", e)
@@ -373,7 +367,7 @@ def get_theme_constituents(theme, force: bool = False) -> list[tuple[str, str]]:
             (str(row["stock_code"]).strip(), str(row["short_name"]).strip())
             for _, row in df.iterrows()
         ]
-        cache.write_text(json.dumps(pairs, ensure_ascii=False), encoding="utf-8")
+        atomic_write_json(cache, pairs, ensure_ascii=False)
         breaker.record("em_push2_concept", ok=True)
         return pairs
     except ThemeDataUnavailableError:
@@ -469,7 +463,7 @@ def get_themes_of_stock(stock_code: str, force: bool = False) -> list[Theme]:
         return []
 
     if df is None or df.empty:
-        cache.write_text("[]", encoding="utf-8")
+        atomic_write_json(cache, [], ensure_ascii=False)
         return []
 
     themes = [
@@ -481,8 +475,5 @@ def get_themes_of_stock(stock_code: str, force: bool = False) -> list[Theme]:
         )
         for _, row in df.iterrows()
     ]
-    cache.write_text(
-        json.dumps([t.model_dump() for t in themes], ensure_ascii=False),
-        encoding="utf-8",
-    )
+    atomic_write_json(cache, [t.model_dump() for t in themes], ensure_ascii=False)
     return themes

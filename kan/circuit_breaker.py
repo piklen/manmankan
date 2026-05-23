@@ -75,13 +75,13 @@ class CircuitBreaker:
         return result
 
     def _save(self) -> None:
-        """原子写 circuit.json · 写失败不抛（内存态仍有效）。"""
+        """原子写 circuit.json + chmod 0o600 · 写失败不抛(内存态仍有效)。"""
+        from kan.paths import atomic_write_json
+
         payload = {s: dt.isoformat() for s, dt in self._down.items()}
-        tmp = self._path.with_suffix(self._path.suffix + ".tmp")
         try:
             self._path.parent.mkdir(parents=True, exist_ok=True)
-            tmp.write_text(json.dumps(payload, indent=2), encoding="utf-8")
-            tmp.replace(self._path)
+            atomic_write_json(self._path, payload, indent=2)
         except OSError as e:
             debug_log(__name__, f"circuit save ({self._path.name})", e)
 
