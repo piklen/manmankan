@@ -1,4 +1,4 @@
-"""kan/_log.py debug_log helper 测试 (CR-4 v0.0.4.8 + P2 backlog A.2 合并实施).
+"""kan/_log.py debug_log helper 测试 (v0.0.4.8).
 
 设计要求:
 - KAN_DEBUG 不设 / 不是 truthy → no-op (默认静默 · 不打扰)
@@ -111,7 +111,7 @@ class TestDebugLog:
 
 
 class TestRedact:
-    """安-2 (v0.0.4.8 finalize): debug_log path/token redact 防 issue 截图 PII leak"""
+    """v0.0.4.8 finalize: debug_log path/token redact 防 issue 截图 PII leak"""
 
     def test_redact_home_dir_unix(self, monkeypatch, caplog):
         """mac/linux home dir 替换 · /Users/xiaobao → /Users/<user>"""

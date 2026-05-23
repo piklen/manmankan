@@ -174,7 +174,7 @@ class TestSearchByName:
         assert results[0][0] == "600519"
 
 
-# --- P1-12: import_csv 入口校验 (路径 / 后缀 / 大小) ---
+# --- import_csv 入口校验 (路径 / 后缀 / 大小) ---
 
 
 class TestImportCsvValidation:

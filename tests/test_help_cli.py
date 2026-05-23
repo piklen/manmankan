@@ -68,10 +68,10 @@ def test_subcommand_help_unaffected() -> None:
     assert "Options" in result.stdout
 
 
-# --- _maybe_print_boot_banner 测试 (v0.0.4.4 加 · 修代码 CR Finding CR-2)
+# --- _maybe_print_boot_banner 测试 (v0.0.4.4 加 · 补 CR finding)
 #
 # v0.0.4.3 在 kan/cli.py:14-32 加了 stderr boot banner 但零测试覆盖 ·
-# 违反 LOCKED 5-10「新功能必须同步写测试」· v0.0.4.4 补齐 4 case 参数化测试
+# 违反「新功能必须同步写测试」· v0.0.4.4 补齐 4 case 参数化测试
 
 
 @pytest.mark.parametrize(
