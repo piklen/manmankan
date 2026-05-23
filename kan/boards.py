@@ -260,8 +260,6 @@ def load_theme_catalog(force: bool = False) -> list[Theme]:
         # 失败时退化到陈旧 cache(若存在),否则抛
         stale = _load_themes_from_cache(cache)
         if stale is not None:
-            from kan._log import debug_log
-
             debug_log(__name__, "load adata THS catalog", e)
             return stale
         raise ThemeDataUnavailableError(f"题材清单首次拉取失败: {e}") from e
