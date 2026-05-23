@@ -12,6 +12,7 @@
 """
 from __future__ import annotations
 
+from collections.abc import Callable
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any
 
@@ -180,3 +181,64 @@ def render_freshness_warning(freshness: Freshness, console: Any) -> None:
             "   (盘中价格仍在变动 · 涨停/跌停状态可能与收盘不同)\n"
             "   建议盘后 15:30 后看 final 数据[/bold yellow]"
         )
+
+
+# ── 数据命令统一流水线 ───────────────────────────────────────────────
+
+
+@dataclass(frozen=True)
+class DataCtx:
+    """数据命令流水线的产出快照 · 命令层只读不改。
+
+    一次调用产出 4 样东西:
+      - targets:  resolve 出的 (symbol, name) 列表(可能含板块成分股 / 热榜 / 题材)
+      - meta:     BoardMeta / HotMeta / ThemeMeta / None(无 source 时)
+      - results:  compute(targets, **kwargs) 的原始返回(未做命令侧过滤)
+      - freshness: 基于 results 的 symbols 聚合的 Freshness
+
+    frozen=True · 命令侧从 ctx 解构后做 filter / format · 不回填到 ctx。
+    """
+
+    targets: list[tuple[str, str]]
+    meta: BoardMeta | HotMeta | ThemeMeta | None
+    results: list
+    freshness: Freshness
+
+
+def run_data_pipeline(
+    industry: str | None,
+    only_watchlist: bool,
+    watchlist_pairs: list[tuple[str, str]],
+    *,
+    hot: HotList | None = None,
+    theme: str | None = None,
+    compute: Callable,
+    **compute_kwargs: Any,
+) -> DataCtx:
+    """resolve → auto_fetch → compute → freshness 的统一编排。
+
+    收口顺序:
+      1. resolve_targets_or_exit:把 5 类 source 错误统一成 typer.Exit
+      2. _auto_fetch_stale:对落后 / 缺失的 symbols 静默补缺(网络相关 / 不阻塞)
+      3. compute(targets, **compute_kwargs):各命令注入自己的批处理函数
+         (scan_batch / trend_batch · 都接 `watchlist: list[tuple[str, str]]` + kwargs)
+      4. freshness_of:遍历 results 的 .symbol · 聚合 max(data_cutoff) + max(cache_age)
+
+    设计要点:
+      - compute 是 Callable 注入而非内部 dispatch · 不需要为 scan/trend 各开一条
+        分支 · 也方便后续命令(如未来的 trend backtest)复用
+      - **compute_kwargs 把 scan/trend 各自的旋钮(mode / candle / ...)透传 ·
+        本 helper 不关心也不解释 · 但要求 compute 返回的元素有 .symbol 属性
+      - freshness 在原始 results 上算 · 命令侧 exclude_st / --signal / --down
+        等过滤是「展示侧」选择,不应该改「我们刚加载了什么数据」的事实
+        (v0.0.5 行为微调:之前各命令在过滤后再算 freshness · 现在统一前置 ·
+         实际数值差异 ≤ 极少数 ST 边界 case)
+    """
+    from kan.cli_helpers import _auto_fetch_stale
+    targets, meta = resolve_targets_or_exit(
+        industry, only_watchlist, watchlist_pairs, hot=hot, theme=theme,
+    )
+    _auto_fetch_stale(targets)
+    results = compute(targets, **compute_kwargs)
+    freshness = freshness_of(r.symbol for r in results)
+    return DataCtx(targets=targets, meta=meta, results=results, freshness=freshness)

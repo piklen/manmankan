@@ -127,7 +127,7 @@ def scan(
         from rich.table import Table
         from rich.text import Text
 
-        from kan._pipeline import freshness_of, render_freshness_warning
+        from kan._pipeline import render_freshness_warning
         from kan.render import DISCLAIMER, format_pct, responsive_periods
         from kan.scanner import (
             PERIODS,
@@ -148,18 +148,22 @@ def scan(
     if only_watchlist and not source_mode:
         _print_err("❌ --only-watchlist 需配合 --industry / --hot / --theme 使用")
         raise typer.Exit(1)
-    from kan._pipeline import resolve_targets_or_exit
+    from kan._pipeline import run_data_pipeline
     from kan._scan_targets import BoardMeta, HotMeta, ThemeMeta
-    targets, board_meta = resolve_targets_or_exit(
-        industry, only_watchlist, watchlist_pairs, hot=hot, theme=theme,
-    )
-    _auto_fetch_stale(targets)
     mode = "high" if high else "low"
+    ctx = run_data_pipeline(
+        industry, only_watchlist, watchlist_pairs,
+        hot=hot, theme=theme,
+        compute=scan_batch, mode=mode,
+    )
+    all_results = ctx.results
+    board_meta = ctx.meta
+    data_cutoff = ctx.freshness.data_cutoff
+    fetched_at = ctx.freshness.fetched_at
+    is_stale = ctx.freshness.is_stale  # JSON/MD payload + --diff 分支仍引用
+    freshness = ctx.freshness  # 给 render_freshness_warning 用
 
     prev_snapshot = load_snapshot() if (diff and board_meta is None) else None
-
-    # 单次 scan_batch · 后续 filter / diff / snapshot 都用 all_results · 避免重复调用
-    all_results = scan_batch(targets, mode=mode)
 
     board_index_result = None
     if isinstance(board_meta, BoardMeta):
@@ -191,11 +195,6 @@ def scan(
             if board_meta is None:
                 save_snapshot(all_results)
             return
-
-    freshness = freshness_of(r.symbol for r in results)
-    data_cutoff = freshness.data_cutoff
-    fetched_at = freshness.fetched_at
-    is_stale = freshness.is_stale  # JSON/MD payload + --diff branch 仍引用
 
     title = f"慢慢看 · 自选股位置扫描 · {'高点' if high else '低点'}模式"
     if signal:

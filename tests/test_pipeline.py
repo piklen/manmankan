@@ -416,3 +416,178 @@ def test_render_freshness_warning_stale_supersedes_intraday():
     msg = console.print.call_args.args[0]
     assert "当前缓存到" in msg  # stale 分支
     assert "盘中" not in msg  # 没走 intraday 分支
+
+
+# ═══ run_data_pipeline ══════════════════════════════════════════════════
+
+
+def _patch_pipeline_compose(
+    monkeypatch,
+    *,
+    targets,
+    meta=None,
+    cutoffs=None,
+    ages=None,
+    expected_date=date(2026, 5, 23),
+    phase="post",
+):
+    """mock 编排器上游 4 步:resolve / _auto_fetch_stale / calendar / fetcher。
+
+    返回 fetched_targets / kwargs_seen 两个可观察容器供测试 assert。
+    """
+    cutoffs = cutoffs or {}
+    ages = ages or {}
+    fetched_targets: list = []
+
+    monkeypatch.setattr(
+        "kan._pipeline.resolve_scan_targets",
+        lambda *a, **kw: (targets, meta),
+    )
+    monkeypatch.setattr(
+        "kan.cli_helpers._auto_fetch_stale",
+        lambda pairs: fetched_targets.append(pairs),
+    )
+    _patch_calendar(monkeypatch, expected_date=expected_date, phase=phase)
+    _patch_fetcher(monkeypatch, cutoffs=cutoffs, ages=ages)
+    return fetched_targets
+
+
+class _FakeResult:
+    """compute 函数的 result 元素 stub · 只需有 .symbol。"""
+    def __init__(self, symbol: str):
+        self.symbol = symbol
+
+
+def test_run_data_pipeline_happy_path(monkeypatch):
+    """resolve → auto_fetch → compute → freshness 4 步顺序串好 · DataCtx 字段都填齐。"""
+    targets = [("600519", "贵州茅台"), ("000858", "五粮液")]
+    fetched_targets = _patch_pipeline_compose(
+        monkeypatch,
+        targets=targets,
+        cutoffs={"600519": date(2026, 5, 22), "000858": date(2026, 5, 23)},
+        ages={"600519": "2026-05-22T16:00:00", "000858": "2026-05-23T16:00:00"},
+    )
+    compute_calls = []
+
+    def _compute(t, **kw):
+        compute_calls.append((t, kw))
+        return [_FakeResult("600519"), _FakeResult("000858")]
+
+    ctx = _pipeline.run_data_pipeline(
+        None, only_watchlist=False, watchlist_pairs=targets,
+        compute=_compute,
+    )
+    assert ctx.targets is targets
+    assert ctx.meta is None
+    assert [r.symbol for r in ctx.results] == ["600519", "000858"]
+    assert ctx.freshness.data_cutoff == date(2026, 5, 23)
+    assert ctx.freshness.fetched_at == "2026-05-23T16:00:00"
+    assert ctx.freshness.is_stale is False
+    assert ctx.freshness.phase == "post"
+    assert fetched_targets == [targets]
+    assert compute_calls == [(targets, {})]
+
+
+def test_run_data_pipeline_passes_meta_through(monkeypatch):
+    """resolve_scan_targets 返回的 meta(BoardMeta/HotMeta/ThemeMeta)原样进 DataCtx.meta。"""
+    targets = [("600519", "贵州茅台")]
+    sentinel_meta = object()
+    _patch_pipeline_compose(
+        monkeypatch,
+        targets=targets,
+        meta=sentinel_meta,
+        cutoffs={"600519": date(2026, 5, 23)},
+        ages={"600519": "2026-05-23T16:00:00"},
+    )
+    ctx = _pipeline.run_data_pipeline(
+        "半导体", only_watchlist=False, watchlist_pairs=[],
+        compute=lambda t, **kw: [_FakeResult("600519")],
+    )
+    assert ctx.meta is sentinel_meta
+
+
+def test_run_data_pipeline_forwards_compute_kwargs(monkeypatch):
+    """compute_kwargs 原样透传给 compute · 不解释 / 不重命名(mode / candle 等都靠它过去)。"""
+    targets = [("600519", "贵州茅台")]
+    _patch_pipeline_compose(
+        monkeypatch,
+        targets=targets,
+        cutoffs={"600519": date(2026, 5, 23)},
+        ages={"600519": "2026-05-23T16:00:00"},
+    )
+    captured = {}
+
+    def _compute(t, **kw):
+        captured["targets"] = t
+        captured["kwargs"] = kw
+        return [_FakeResult("600519")]
+
+    _pipeline.run_data_pipeline(
+        None, only_watchlist=False, watchlist_pairs=targets,
+        compute=_compute, mode="high", candle=True, extra=42,
+    )
+    assert captured["targets"] is targets
+    assert captured["kwargs"] == {"mode": "high", "candle": True, "extra": 42}
+
+
+def test_run_data_pipeline_source_error_exits_before_compute(monkeypatch):
+    """resolve 抛 source 错误时 · helper 在第 1 步就 Exit · compute 不应被调到。"""
+    monkeypatch.setattr(
+        "kan._pipeline._print_err", lambda msg: None,
+    )
+    monkeypatch.setattr(
+        "kan._pipeline.resolve_scan_targets",
+        _make_raiser(BoardNotFoundError("ghost industry")),
+    )
+    compute_calls = []
+
+    def _compute(t, **kw):
+        compute_calls.append(t)
+        return []
+
+    with pytest.raises(typer.Exit) as exc_info:
+        _pipeline.run_data_pipeline(
+            "ghost industry", only_watchlist=False, watchlist_pairs=[],
+            compute=_compute,
+        )
+    assert exc_info.value.exit_code == 1
+    assert compute_calls == []  # compute 不该被调
+
+
+def test_run_data_pipeline_empty_results_yields_stale_freshness(monkeypatch):
+    """compute 返回空列表 · freshness_of 收到空 generator · data_cutoff=None / is_stale=True。"""
+    _patch_pipeline_compose(
+        monkeypatch,
+        targets=[],
+        cutoffs={},
+        ages={},
+    )
+    ctx = _pipeline.run_data_pipeline(
+        None, only_watchlist=False, watchlist_pairs=[],
+        compute=lambda t, **kw: [],
+    )
+    assert ctx.results == []
+    assert ctx.freshness.data_cutoff is None
+    assert ctx.freshness.fetched_at is None
+    assert ctx.freshness.is_stale is True
+
+
+def test_run_data_pipeline_calls_auto_fetch_with_resolved_targets(monkeypatch):
+    """_auto_fetch_stale 必须用 resolve 出的 targets · 不是入参 watchlist_pairs。
+
+    Why:industry/hot/theme 模式下 resolve 返回的 targets ≠ watchlist_pairs ·
+    误用 watchlist_pairs 会漏拉板块成分股。
+    """
+    resolved = [("000001", "平安银行"), ("000002", "万科 A")]
+    input_pairs = [("600519", "贵州茅台")]  # 用户自选 · 与 resolve 结果不同
+    fetched_targets = _patch_pipeline_compose(
+        monkeypatch,
+        targets=resolved,
+        cutoffs={"000001": date(2026, 5, 23), "000002": date(2026, 5, 23)},
+        ages={"000001": "2026-05-23T16:00:00", "000002": "2026-05-23T16:00:00"},
+    )
+    _pipeline.run_data_pipeline(
+        "银行", only_watchlist=False, watchlist_pairs=input_pairs,
+        compute=lambda t, **kw: [_FakeResult(s) for s, _ in t],
+    )
+    assert fetched_targets == [resolved]

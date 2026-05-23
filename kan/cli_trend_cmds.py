@@ -10,7 +10,7 @@ import typer
 from kan import export
 from kan.app import app
 from kan.cli_helpers import (
-    _auto_fetch_stale,
+    _auto_fetch_stale,  # noqa: F401 · 保留兼容测试 monkeypatch · 实际调用由 _pipeline.run_data_pipeline 内部完成
     _get_watchlist_pairs,
     _load_watchlist_pairs,
     _print_err,
@@ -56,7 +56,7 @@ def trend(
         from rich.table import Table
         from rich.text import Text
 
-        from kan._pipeline import freshness_of, render_freshness_warning
+        from kan._pipeline import render_freshness_warning
         from kan.render import DISCLAIMER, max_trend_dates
         from kan.scanner import trend_batch
 
@@ -71,12 +71,7 @@ def trend(
     if only_watchlist and not source_mode:
         _print_err("❌ --only-watchlist 需配合 --industry / --hot / --theme 使用")
         raise typer.Exit(1)
-    from kan._pipeline import resolve_targets_or_exit
-    from kan._scan_targets import BoardMeta, HotMeta, ThemeMeta
-    targets, board_meta = resolve_targets_or_exit(
-        industry, only_watchlist, watchlist_pairs, hot=hot, theme=theme,
-    )
-    _auto_fetch_stale(targets)
+    # fail-fast:参数校验前置 · 不让 invalid args 触发网络 fetch
     if down is not None and up is not None:
         _print_err("❌ --down 和 --up 不能同时使用")
         raise typer.Exit(1)
@@ -85,7 +80,19 @@ def trend(
             _print_err(f"❌ {name} 的值必须在 2-30 之间（当前：{val}）")
             raise typer.Exit(1)
 
-    results = trend_batch(targets, candle=candle)
+    from kan._pipeline import run_data_pipeline
+    from kan._scan_targets import BoardMeta, HotMeta, ThemeMeta
+    ctx = run_data_pipeline(
+        industry, only_watchlist, watchlist_pairs,
+        hot=hot, theme=theme,
+        compute=trend_batch, candle=candle,
+    )
+    results = ctx.results
+    board_meta = ctx.meta
+    data_cutoff = ctx.freshness.data_cutoff
+    fetched_at = ctx.freshness.fetched_at
+    is_stale = ctx.freshness.is_stale  # JSON/MD payload 仍引用
+    freshness = ctx.freshness  # 给 render_freshness_warning 用
 
     if not results:
         _print_err("无缓存数据 · 请先 `kan fetch` 拉取数据")
@@ -105,11 +112,6 @@ def trend(
         if not results and fmt is export.OutputFormat.terminal:
             console.print(f"没有连续涨 {up} 天以上的股票")
             return
-
-    freshness = freshness_of(r.symbol for r in results)
-    data_cutoff = freshness.data_cutoff
-    fetched_at = freshness.fetched_at
-    is_stale = freshness.is_stale  # JSON/MD payload 仍引用
 
     mode_label = "阳线阴线口径" if candle else "收盘价口径"
     title = f"慢慢看 · 连续涨跌看板 · {mode_label}{filter_label}"
