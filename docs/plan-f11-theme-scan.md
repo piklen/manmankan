@@ -12,7 +12,7 @@
 - 工作分支 `feat/v0.0.5-f11-theme`(已 worktree 隔离 · base = `feat/v0.0.5.0` @ `3b2cf0d` · tushare-pro 合入后 baseline = 525 passed)。
 - 设计依据 `docs/design-f11-theme-scan.md`(391 行 · 5 节 brainstorming approved)。
 - 所有 `pytest` / `ruff` / `uv` 命令在 worktree 根目录运行(`.worktrees/feat-v0.0.5-f11-theme`)。
-- `adata` 数据源选择依据 `***REMOVED***manmankan-v0.0.5/v0.0.5.0/***REMOVED***-data-source-findings-2026-05-22.md` + `***REMOVED***/spike{1..4}.py`(2026-05-23 真网络 spike 4 轮)。
+- `adata` 数据源选择依据 2026-05-22/23 真网络调研结论:akshare 题材接口不可用,adata 的 THS catalog/成分股 + EM K 线/反查可用。
 - 接口可用性分层 LOCKED:catalog/成分股 = THS · K 线/反查 = EM datacenter · EM 成分股 = fallback + ***REMOVED***。
 
 **目标 baseline:** 现 525 passed · 目标 **585+ passed**(+60 新 case · 真网络 6 跳过 `-m "not network"`)。
@@ -3036,11 +3036,10 @@ git push -u origin feat/v0.0.5-f11-theme
 - ✅ 真网络冒烟 6 case `@pytest.mark.network` 标签 · daily cron 跑
 - ✅ ***REMOVED*** 17 LOCKED:***REMOVED*** 数据源永远走 adata · 不走 Tushare(即使 tushare-pro 已合入)
 
-**完成后清理**(plan 实施完毕后,维护者定):
+**完成后清理**:
 
-- `***REMOVED***manmankan-v0.0.5/v0.0.5.0/***REMOVED***-theme-scan.md`(v3 LOCKED 设计稿 · § 4 已被 supersede)→ 维护者定保留 / 移到 archive / 删
-- `***REMOVED***manmankan-v0.0.5/v0.0.5.0/***REMOVED***-data-source-findings-2026-05-22.md`(数据源调研 · § "正式开发起步" 已 supersede)→ 同上
-- `***REMOVED***/spike{1..4}.py`(本地 spike 临时文件 · 已无价值)→ session 结束自动清
+- 本地未跟踪调研草稿和临时脚本不进入公开仓库。
+- 公开证据保留在 `docs/design-f11-theme-scan.md` 的数据源调研摘要中。
 
 **已知限制(后续候选)**:
 

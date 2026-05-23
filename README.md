@@ -23,9 +23,9 @@ It deliberately stops there: **no buy/sell advice, no ratings, no price targets,
 
 慢慢看是一个**纯命令行**的 A 股自选股位置感工具。它把电商「慢慢买」的「先看历史价位再决策」迁移到股市:把你 30 只自选股在 3、5、7、10、15、30、60、90、120、180 日窗口内的位置百分位**一屏显示**,把「同时触及多个低点」标成共振信号,然后**闭嘴**——剩下的判断,你自己做。
 
-> 📦 **当前版本 v0.0.4.8**（Alpha · ***REMOVED***/***REMOVED*** 测试改造完毕 + UX 散户化升级:凌晨日界 + spinner ✅❌ + kan add/remove/info 中文友好 + 错误消息加引导）· `pip install manmankan` 即装即用 · API 在 1.0 前可能调整。
+> 📦 **当前版本 v0.0.5.0**（Alpha · 热榜 / 题材扫描 + TuShare Pro 可选数据源 + Markdown/JSON 导出）· `pip install manmankan` 即装即用 · API 在 1.0 前可能调整。
 >
-> 🌱 **[新手专区](#新手专区)**（默认展开 · v0.0.4.8 升级）：第一次用命令行的散户 mac / Windows 各 2 步装好。
+> 🌱 **[新手专区](#新手专区)**（默认展开）：第一次用命令行的散户 mac / Windows 各 2 步装好。
 >
 > ⚠️ **v0.0.4.4 及之前**有"凌晨拉数据后 scan 整天显示昨日涨停名单"bug · v0.0.4.5 已修。建议升级到最新版：`uv tool install manmankan --upgrade`
 >
@@ -134,7 +134,7 @@ less /tmp/install.sh    # 自己看完(151 行 · 核心就是 uv tool install �
 bash /tmp/install.sh    # SHA256 对得上 + 看完再装
 ```
 
-> 💡 当前 alpha 阶段脚本未做 sigstore 签名 · SHA256 公布是文化层防御 · v0.0.5.0 后加 PEP 740 attestation + `cosign verify-blob` 机械验证。
+> 💡 当前 alpha 阶段脚本未做 sigstore 签名 · SHA256 公布是文化层防御 · 后续版本再加 PEP 740 attestation + `cosign verify-blob` 机械验证。
 
 </details>
 
@@ -344,13 +344,62 @@ kan trend --down 5 --latest 7 --candle    # 任意组合
 
 > N 范围 2-30 天 · `--latest` 展示日期数会按终端宽度自动收缩。
 
+### 行业 / 热榜 / 题材
+
+```bash
+kan scan --industry 半导体      # 扫某申万行业全成分股 · 自选股 ⭐ 高亮
+kan scan --hot rank             # 扫东财人气榜(rank) · 也支持 surge 飙升榜
+kan scan --theme AI应用         # 扫某题材全成分股 · 题材是标签,一股可归多个
+kan low 30 --theme 数据要素     # 题材里筛 30 日低点
+kan trend --hot surge           # 飙升榜连续涨跌看板
+kan fetch --theme AI应用        # 预拉题材成分股 K 线
+kan scan --theme AI应用 --only-watchlist  # 只看自选 ∩ 题材
+```
+
+> `--industry` / `--hot` / `--theme` 三者互斥。`--only-watchlist` 需配合其中之一使用。
+
+### 题材发现
+
+```bash
+kan theme list                  # 列题材清单(默认前 30)
+kan theme list --all            # 列全部题材
+kan theme search 数据要素       # 模糊搜题材名
+```
+
+题材分类来自上游数据源口径,不是慢慢看的判断。题材扫描输出会额外提示“题材跟风风险高于行业”。
+
+### 导出格式
+
+```bash
+kan scan --format md            # Markdown 表格
+kan scan --format json          # JSON 结构化输出
+kan info 600519 --format json
+kan compare 600519 000858 --format md
+```
+
+`--format` 适用 `scan / low / high / info / trend / compare`。终端默认仍是 Rich table。
+
 ### 数据管理
 
 ```bash
 kan fetch                      # 拉取数据(通常不需要 · scan 自动更新)
 kan fetch --force              # 强制刷新(忽略今日已更新的缓存)
 kan fetch 600519 000858        # 只拉指定股票
+kan fetch --industry 半导体     # 预拉行业成分股
+kan fetch --hot rank           # 预拉热榜成分股
+kan fetch --theme AI应用       # 预拉题材成分股
 ```
+
+### TuShare Pro 可选数据源
+
+```bash
+kan config get
+kan config set tushare-token <YOUR_TOKEN>
+kan config set tushare-endpoint https://your-proxy.example.com
+kan config unset tushare-token
+```
+
+未配置 token 时行为不变。配置 token 后,TuShare Pro 会优先作为日 K 数据源;`TUSHARE_TOKEN` / `TUSHARE_ENDPOINT` 环境变量可临时覆盖本地配置。
 
 ### 自动更新
 
@@ -397,16 +446,17 @@ kan completion install zsh     # 显式指定 shell(zsh / bash / fish / powershe
 
 ## 数据源 · 缓存 · 涨跌停
 
-### 4 源 fallback K 线拉取
+### K 线拉取链路
 
-数据来自 [AKShare](https://github.com/akfamily/akshare) 体系,但慢慢看做了**多源 fallback** 防单源失效:
+默认数据来自 [AKShare](https://github.com/akfamily/akshare) 体系,慢慢看做了**多源 fallback** 防单源失效。配置 TuShare Pro token 后,TuShare Pro 会顶在最前面:
 
 ```
 fetch_kline(symbol) →
-  1. baostock (独立服务器 · 免熔断 · 主路径 · 实测最稳)
-  2. 新浪    (akshare.stock_zh_a_daily · 免登录 · 数值精度跟 baostock 对齐)
-  3. 东财    (akshare.stock_zh_a_hist · push2his 对部分 IP 段持续封禁,常 fail)
-  4. 腾讯    (akshare.stock_zh_a_hist_tx · 仅价格可信 · amount 字段板块语义不一致已 drop)
+  0. TuShare Pro (可选 · 配 token 后启用)
+  1. baostock    (独立服务器 · 免熔断 · 默认主路径)
+  2. 新浪        (akshare.stock_zh_a_daily · 免登录 · 数值精度跟 baostock 对齐)
+  3. 东财        (akshare.stock_zh_a_hist · push2his 对部分 IP 段持续封禁,常 fail)
+  4. 腾讯        (akshare.stock_zh_a_hist_tx · 仅价格可信 · amount 字段板块语义不一致已 drop)
 ```
 
 设计依据:akshare GitHub Issue [#6092](https://github.com/akfamily/akshare/issues/6092) / [#6148](https://github.com/akfamily/akshare/issues/6148) / [#7011](https://github.com/akfamily/akshare/issues/7011) / [#6214](https://github.com/akfamily/akshare/issues/6214) —— 东财 push2his 对国内多个 IP 段长期 ban,实测 retry 4 次 5s 间隔无效(持续不是间歇性)。把 baostock 推到主路径,东财降到第三。
@@ -416,6 +466,12 @@ fetch_kline(symbol) →
 > ⚠️ **AKShare 数据使用条款**:[AKShare 官方声明](https://github.com/akfamily/akshare) 数据 "仅限学术研究用途(Academic Research Only)"。本工具继承此限制,**仅供个人研究 / 教育用途,不得用于商业产品 / SaaS / 二次分发**。
 
 > ⚠️ **数据可用性依赖上游**:AKShare 与各数据源策略变更可能导致接口失效,本工具不保证数据持续可用。
+
+### 热榜 / 题材数据
+
+- 热榜来自东方财富热榜接口,只作为临时标的来源,不代表慢慢看的观点。
+- 题材清单和成分股来自同花顺口径;题材 K 线和反查走东方财富 datacenter 路径。
+- 题材 / 热榜缓存用于降低上游压力;接口阶段性不可用时,CLI 会给出可恢复提示。
 
 ### 缓存生命周期
 
@@ -547,7 +603,7 @@ P0 候选功能（下批新功能优先级）:
 
 1. **`kan alert` 价格提醒**(寄生 `scan` 数据通路 · 阈值穿越 / 涨跌幅超阈值 · 走系统通知中心)
 2. **指数基准对照**(自选股扫描时同步给上证 / 深证 / 创业板 / 沪深 300 同周期位置 · 判断「个股弱还是大盘弱」)
-3. **Markdown / JSON 输出**(`--format md|json` · 让脚本能调)
+3. **成交量异动**(放量 / 缩量识别,结合位置状态过滤噪音)
 
 完整路线图 + 已知技术债 + 跨板块交易单位备忘见 [`docs/roadmap.md`](docs/roadmap.md)。
 

@@ -1,6 +1,6 @@
 # 路线图
 
-> 当前发布版本 **v0.0.4.7.1**。本路线图列出**用户面新功能候选**，按优先级分组；
+> 当前发布候选 **v0.0.5.0**。本路线图列出**用户面新功能候选**，按优先级分组；
 > 内部技术债清理（重构 / 测试覆盖 / CI 加固）不进本表，仅记录在 CHANGELOG 中。
 >
 > **版本节奏**：patch 累加（v0.0.X → v0.0.X+1），不偏好 minor 跨越。
@@ -21,18 +21,15 @@
 - 自选股扫描时同步给出 上证 / 深证 / 创业板 / 沪深 300 同周期位置。
 - 用于判断"是个股弱还是大盘弱"，避免误判机会。
 
-### 3. Markdown + JSON 输出（`--format md|json`）
+### 3. 成交量异动
 
-- 当前只有 terminal table，导出能力缺失。
-- 推动渲染层抽象（见下方架构评审）一起做。
+- 放量 / 缩量识别，结合位置状态过滤噪音。
+- 前置：parquet `_source` 列必须先落地（TD-1），否则跨源 volume 单位差异会污染异动判断。
 
 ---
 
 ## P1（P0 稳定后启动）
 
-- **成交量异动**：放量 / 缩量识别，结合位置信号过滤伪突破。
-  **前置**：parquet `_source` 列必须先落地（TD-1），否则跨源 volume 单位差异会污染异动判断。
-  腾讯 fallback 时 volume=NaN 跳过该股。
 - **分组标签**：`Stock.groups` 字段已在 schema 预埋，P1 接 CLI（`kan add --group 核心仓`、`kan scan --group xxx`）。
 - **`kan history` 历史位置回溯**：`snapshots/YYYY-MM-DD.parquet` 按日归档已预埋，P1 加查询命令。
 
@@ -47,10 +44,9 @@
 
 ## 架构评审结论
 
-### 立即做
+### 已落地
 
-- **渲染层抽象**：`render_scan_table()` 拆出来，加 `format` 参数支持 terminal / md / json。
-  P0 做 `--format` 时同步落地，避免重复实现。
+- **Markdown / JSON 输出**：v0.0.5.0 已支持 `scan / low / high / info / trend / compare --format md|json`。
 
 ### 暂不做
 
@@ -139,4 +135,4 @@ manmankan 既然只支持 A 股，安全策略是 drop 而非 board-aware 转换
 
 ---
 
-*最后更新：2026-05-16*
+*最后更新：2026-05-23*

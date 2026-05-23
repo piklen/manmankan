@@ -1,6 +1,6 @@
 [project]
 name = "manmankan"
-version = "0.0.4.8"
+version = "0.0.5.0"
 description = "A 股自选股位置感 CLI 工具 · 多周期位置扫描 + 共振信号 + 连续涨跌看板"
 requires-python = ">=3.11"
 license = { text = "MIT" }
@@ -28,7 +28,7 @@ classifiers = [
 
 dependencies = [
     "akshare>=1.14,<2",
-    "pandas>=2.0,<4",  # v0.0.4.8 P0-3 (***REMOVED***): 收紧 <3 (pandas 3.0 read_parquet schema 严格化 + Timestamp.date() 微调 = fetcher.py:92-98 直接受影响)
+    "pandas>=2.0,<4",  # 允许 pandas 3.x/4.x 前夜版本面 · CI 覆盖读写 parquet 主路径
     "pydantic>=2.0,<3",
     "rich>=13.0,<16",
     "typer>=0.12,<0.26",

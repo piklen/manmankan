@@ -1,6 +1,6 @@
 # 题材位置扫描功能 · 设计方案
 
-> 状态:设计 LOCKED · 待 implementation
+> 状态:已实施(v0.0.5.0)
 > 创建:2026-05-23 · 5 节 brainstorming 全 approved
 > 分支:`feat/v0.0.5-f11-theme`(从 `feat/v0.0.5.0` fork · `.worktrees/feat-v0.0.5-f11-theme` 隔离开发)
 > 目标版本:v0.0.5.0(PR #18 扩容 · 跟 hot-list / 行业扫描 同批发版)
@@ -22,30 +22,31 @@
 - **题材成分股动态调整自动追踪**:成分股每日有小调整 · cache TTL 24h 内不刷新 · 用户主动 `--force` 才重拉。
 - **AI 选股 / 题材推荐 / 热点信号订阅**:AGENTS.md §6 红线明文不做。
 
-## 3. 命令范围(全 11 命令矩阵)
+## 3. 命令范围(已实施矩阵)
 
 | 类 | 命令 | `--theme` 加载语义 |
 |---|---|---|
-| 只读 (8) | `scan` `low` `high` `trend` `info` `list` `fetch` `update` | 扫指定题材全成分股 · 自选 ⭐ 高亮 · 跟 `--industry` 对称 |
-| 破坏性 (3) | `add` `remove` `clear` | 批量增删自选 · **必经 `_confirm` 二次确认** · `--yes` 跳过 |
+| 只读 / 数据 (7) | `scan` `low` `high` `trend` `info` `list` `fetch` | 扫指定题材全成分股或自选交集 · 跟 `--industry` 对称 |
+| 破坏性 (2) | `add` `remove` | 批量增删自选 · **必经 `_confirm` 二次确认** · `--yes` 跳过 |
 | 发现入口 (新 sub-app) | `kan theme list` `kan theme search` | 列题材清单 / 模糊搜 · 跟 `kan watchlist` 子命令树对齐 |
 
 约束:
 
 - `--theme` 与 `--industry` / `--hot` 互斥 → `❌ --industry / --hot / --theme 三者互斥 · 同时只能用一个`,exit 2。
 - `--theme` 与显式股票代码互斥(沿用 `fetch --industry` 已有校验)。
-- `--only-watchlist` 对 `--theme` 生效:targets = 成分股 ∩ 自选,全部 ⭐。
+- `--only-watchlist` 对 `scan` / `low` / `high` / `trend` / `fetch --theme` 生效:targets = 成分股 ∩ 自选,全部 ⭐。
+- `compare` 仍只接受显式股票代码;`clear` 仍只做清空全部自选;`update` 仍只做包升级,三者本版不接 `--theme`。
 
-## 4. 数据源:adata 按接口分发(spike 推翻 v3 LOCKED)
+## 4. 数据源:adata 按接口分发
 
-### 4.1 spike 推翻的旧假设
+### 4.1 调研推翻的旧假设
 
-`[***REMOVED***]/manmankan-v0.0.5/v0.0.5.0/***REMOVED***-theme-scan.md` v3 LOCKED 设计"默认 THS · fallback EM 对称双源"。两轮 spike 推翻此假设:
+早期方案设想"默认 THS · fallback EM 对称双源"。两轮数据源调研推翻此假设:
 
-- **2026-05-22 akshare 直拉 spike**(`***REMOVED***-data-source-findings-2026-05-22.md`):同花顺 akshare 1.18.60 **无题材成分股接口** · 东财 `stock_board_concept_cons_em` **连接级拒绝** · 富途返回非 JSON · 题材成分股 API 全死。
-- **2026-05-23 adata spike**(`***REMOVED***/spike*.py` 4 轮真网络):adata 解决核心阻塞,但 **不是"源对源对称"** 而是 **"接口可用性分层"** —— 同一根域名下不同子域名 / 不同端点 反爬粒度不同。
+- **2026-05-22 akshare 直拉调研**:同花顺 akshare 1.18.60 **无题材成分股接口** · 东财 `stock_board_concept_cons_em` **连接级拒绝** · 富途返回非 JSON · 题材成分股 API 全死。
+- **2026-05-23 adata 真网络调研**:adata 解决核心阻塞,但 **不是"源对源对称"** 而是 **"接口可用性分层"** —— 同一根域名下不同子域名 / 不同端点 反爬粒度不同。
 
-### 4.2 spike 真相(LOCKED 数据源映射)
+### 4.2 数据源映射
 
 | 接口 | adata 调用 | 实际端点 | 状态 | 选用理由 |
 |---|---|---|---|---|
@@ -162,7 +163,7 @@ def resolve_scan_targets(
 
 返回类型 `BoardMeta | HotMeta | ThemeMeta | None`。命令层 isinstance 分流到题材渲染。
 
-## 7. CLI 层 11 命令接入
+## 7. CLI 层命令接入
 
 每条命令加 1 个 typer.Option:
 
@@ -179,9 +180,12 @@ theme: Annotated[
 
 | 文件 | 改动 | 行数 |
 |---|---|---|
-| `kan/cli_scan_cmds.py` | scan / low / high / info / fetch / update 加 `--theme` 接入 | ~150 |
+| `kan/cli_scan_cmds.py` | scan 加 `--theme` 接入 | ~150 |
+| `kan/cli_extreme_cmds.py` | low / high 加 `--theme` 接入 | ~80 |
+| `kan/cli_info_cmds.py` | info 加 `--theme` 接入 | ~80 |
+| `kan/cli_fetch_cmds.py` | fetch 加 `--theme` 接入 | ~40 |
 | `kan/cli_trend_cmds.py` | trend 加 `--theme` | ~30 |
-| `kan/cli_watchlist_cmds.py` | add / remove / clear / list 加 `--theme` + 破坏性接 `_confirm` | ~80 |
+| `kan/cli_watchlist_cmds.py` | add / remove / list 加 `--theme` + 破坏性接 `_confirm` | ~80 |
 | `kan/_scan_targets.py` | 加 theme 分支 + ThemeMeta | ~30 |
 | `kan/cli_theme_cmds.py` | 新建 · theme list / search | ~180 |
 | `kan/_confirm.py` | 新建 · 破坏性 helper | ~80 |
@@ -227,7 +231,7 @@ def show_summary_and_confirm(
     """
 ```
 
-破坏性 3 命令 `kan add/remove/clear --theme=X` 必经此 helper · `--yes` 才跳过。
+破坏性 2 命令 `kan add/remove --theme=X` 必经此 helper · `--yes` 才跳过。
 
 设计参考 ***REMOVED***010 backup 协议精神(破坏性操作前出 summary + 确认)。`_confirm.py` 后续也给 F10-破坏性 3 命令(`--industry`)用,职责通用。
 
@@ -305,17 +309,17 @@ AI应用(同花顺)    │ 82%   78%   85%   88%  │ —
 
 ## 13. 测试
 
-三层金字塔(沿 v0.0.4.8 ***REMOVED*** LOCKED "CliRunner 真测 · 不 bootstrap 作弊"):
+三层金字塔:
 
 | 层 | 数量 | 工具 |
 |---|---|---|
 | unit | ~25 | pytest + `fake_adata` fixture mock |
-| integration (CliRunner) | ~30 | typer.testing.CliRunner · 11 命令真跑 · `_confirm` y/N 交互 · `--yes` skip |
+| integration (CliRunner) | ~30 | typer.testing.CliRunner · 9 个 `--theme` 命令真跑 · `_confirm` y/N 交互 · `--yes` skip |
 | 真网络冒烟 | ~6 | 真 adata HTTP · `@pytest.mark.network` 默认跳 · daily cron 跑 |
 
 ### 13.1 `fake_adata` fixture
 
-`tests/conftest.py` 加 autouse fixture · 返回 schema **跟 2026-05-23 spike 真返回结构一致**的 stub(避免 v0.0.4.8 ***REMOVED*** "空 DataFrame 测过 · prod 崩"的再发)。
+测试 stub 必须返回接近真实接口的字段结构,避免只用空 DataFrame 测过但生产字段变化时崩溃。
 
 ### 13.2 真网络 case(可单独跳)
 
@@ -342,7 +346,7 @@ def test_adata_em_kline_real_world(): ...        # 11 列 schema 未变 · OHLC 
 
 ### 13.4 目标
 
-- 基线:525 passed(feat/v0.0.5.0 当前 · tushare-pro 合入后 · 2026-05-23 rebase 实测)
+- 基线:525 passed(feat/v0.0.5.0 合入 TuShare Pro 后)
 - 目标:**585+ passed**(525 + ~60 新 case · 网络 6 跳过)
 - 覆盖:`boards.py` theme 部分 ≥ 60% · `cli_theme_cmds.py` ≥ 60% · `_confirm.py` ≥ 70%
 
@@ -352,50 +356,39 @@ def test_adata_em_kline_real_world(): ...        # 11 列 schema 未变 · OHLC 
 - ⚠️ **adata 包升级 breaking**:2.9.5 实测,deps cap `<3` 防 major · 但 2.x 内 minor 升级仍可能改 schema · 实施时实测目标版本。
 - ⚠️ **题材名 alias 表初始空**:`normalize_theme_name` 第一版只做"去空格 + 小写",alias 表(如 THS "人工智能" ↔ EM "AI应用")随用户反馈累积。
 - ⚠️ **新概念 < 250d 实测**:2024-2025 新增的"算力租赁 / Sora / 商业航天 / 数据要素" 实施时全量真跑测多周期退化。
-- ⚠️ **`adata` 跟 `tushare-pro` PR 在 `pyproject.toml` / `uv.lock` 冲突**:merge resolve 不可逆 · 维护者手工 resolve · 不在自主权范围。
+- ⚠️ **依赖合并风险**:`adata` 与主线依赖更新同时改 `pyproject.toml` / `uv.lock` 时,发布分支必须在合并前重跑 `uv sync` / `uv build`。
 - ⚠️ **rate-limit 在并发扫描下影响放大**:`kan scan --theme=X` 跑 101 只成分股 K 线时,如果走 EM datacenter 是反查接口(0.18s × 101 ≈ 20s),不会触发 push2 反爬;但若误触 push2 路径,反爬会连锁。实施时 strict 接口分发。
 
-## 15. spike 证据存档
+## 15. 数据源调研摘要
 
-正式证据存档在(`.gitignore` 不进 git):
+本版数据源选择来自 2026-05-22/23 的真网络调研:
 
-- `[***REMOVED***]/manmankan-v0.0.5/v0.0.5.0/***REMOVED***-data-source-findings-2026-05-22.md`:akshare 路径全死的 spike 结论。
-- `***REMOVED***/spike{1,2,3,4}.py`:2026-05-23 adata 4 轮 spike 真返回(本地临时 · session 结束清理)。
+- akshare 当时没有可稳定使用的同花顺题材成分股接口,东财题材成分股接口存在连接级失败。
+- adata 的同花顺 catalog/成分股接口可满足题材清单和成分股需求。
+- adata 的东方财富 datacenter K 线/反查接口比 push2 成分股接口稳定,因此本版按接口可用性分发,不是按站点做对称 fallback。
 
-实施时(`writing-plans` 阶段)再做一次 spike 防退化,确认 adata 当前版本接口未变。
+## 16. 跟 `tushare-pro` 集成的边界(已合入版)
 
-## 16. supersede 旧文档清单
+tushare-pro 数据源接入已进入 v0.0.5.0 发布分支。***REMOVED*** 跟 tushare-pro 的关系是"同版发布,数据通路正交":
 
-本设计推翻或更新以下旧文档:
+### 16.1 工程隔离点
 
-| 旧文档 | 状态 | 推翻点 |
-|---|---|---|
-| `***REMOVED***manmankan-v0.0.5/v0.0.5.0/***REMOVED***-theme-scan.md` v3 LOCKED | **§4 数据源章节作废** · 其余仍有效 | 双源对称 fallback 改为接口可用性分层 |
-| `***REMOVED***manmankan-v0.0.5/v0.0.5.0/***REMOVED***-data-source-findings-2026-05-22.md` | **§"正式开发起步" 节作废** · spike 证据节仍有效 | JoinQuant / Tushare 三选一被 adata 第四选项 supersede |
-| `***REMOVED***manmankan-v0.0.5/post-v0.0.5.0-candidate-pool.md` §5 "***REMOVED*** 数据源决策" | **决策结果记录:走 adata 按接口分发** · 候选池其余条目不动 | 我之前在候选池倾向"继续搁置" · 维护者 2026-05-23 选 adata 反转 |
-
-## 17. 跟 `tushare-pro` 集成的边界(已合入版)
-
-tushare-pro 数据源接入已于 2026-05-23 合并进 `feat/v0.0.5.0`(10 commit · `956517d → 3b2cf0d`)。本 branch 已 rebase 到合入后 HEAD。***REMOVED*** 跟 tushare-pro 的关系从"并行未 merge 协调"变为"已合入基线上的边界声明":
-
-### 17.1 已 verified 的工程隔离点
-
-- **`pyproject.toml` / `uv.lock` zero diff**:tushare-pro 走自写 HTTP client(`kan/tushare_pro.py` 183 行 · 不依赖 `tushare` Python 包)· ***REMOVED*** 加 `adata>=2.9.0,<3` 是干净 append,无冲突。
+- **依赖边界**:tushare-pro 走自写 HTTP client(`kan/tushare_pro.py` · 不依赖 `tushare` Python 包)· ***REMOVED*** 加 `adata>=2.9,<3`。
 - **`fetcher.py` 改 +12 行**:仅在 K 线获取链路插入 Tushare Pro 作 top-priority 源 · ***REMOVED*** 题材数据通路不经过 `fetcher.py`(题材数据走 `boards.py` 独立链路 + adata)· 正交。
-- **`kan/config.py` + `kan config` 子命令组**:tushare-pro 引入 per-user token 配置基建(`kan config get/set/unset tushare_token`)· ***REMOVED*** 不需要 per-user 配置(adata 零 token)· 不复用。
+- **`kan/config.py` + `kan config` 子命令组**:tushare-pro 引入 per-user token 配置基建(`kan config get/set/unset tushare-token`)· ***REMOVED*** 不需要 per-user 配置(adata 零 token)· 不复用。
 - **测试**:tushare-pro 测试套件 +455 行不动 · ***REMOVED*** 测试新增独立模块 `tests/test_boards_theme.py` / `tests/test_cli_theme_cmds.py` / `tests/test_confirm_destructive.py` · 互不干扰。
 
-### 17.2 LOCKED 约束(保留)
+### 16.2 保留约束
 
 - *****REMOVED*** 数据源永远走 adata · 不走 Tushare**:即使用户配了 tushare token,***REMOVED*** 题材调用仍走 adata · 跟 fetcher 数据源策略解耦 · 因 Tushare 题材接口(`dc_member` / `ths_member`)需 6000 积分(~¥600/年)· 破坏零配置承诺。
 - **不复用 `kan config`**:***REMOVED*** 不引入新 config key · 不在 `kan/config.py` 加字段 · 跟 tushare-pro 的 config 范式解耦。
 
-### 17.3 子命令树风格对齐
+### 16.3 子命令树风格对齐
 
 tushare-pro 加 `kan config <get|set|unset>` · ***REMOVED*** 加 `kan theme <list|search>` —— 两个子命令树同为 typer.Typer 注册风格 · 实施时参考 `kan/cli_config_cmds.py` 体例写 `kan/cli_theme_cmds.py`,保持命令组注册 / 帮助文案 / 退出码 一致。
 
-## 18. 版本与发布
+## 17. 版本与发布
 
-- 目标版本 **v0.0.5.0**,与行业扫描 / 热榜扫描 / 数据韧性 同批发布,同分支链路 `feat/v0.0.5.0 ← feat/v0.0.5-f11-theme(merge 后)`。
-- `roadmap.md` 未列此功能;实施时在 `CHANGELOG.md` 落 Added 条目。维护者定是否补 `roadmap.md`。
-- 7 角色 ***REMOVED*** 流程实施时 ***REMOVED*** 与其他 v0.0.5.0 功能一起审。`AGENTS.md §6` 红线复检列 ***REMOVED*** disclaimer 强度专项审查。
+- 目标版本 **v0.0.5.0**,与热榜扫描 / TuShare Pro / 导出格式 同批发布。
+- `CHANGELOG.md` 记录用户可见能力;`roadmap.md` 保持候选功能视角。
+- 发版前必须重跑离线测试、隐私/版本自检、TTY 入口测试和 `uv build`。

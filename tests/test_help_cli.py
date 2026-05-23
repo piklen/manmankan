@@ -58,6 +58,31 @@ def test_root_help_returns_chinese_cheatsheet() -> None:
     assert "命令速记" in result_help_dash.stdout
 
 
+def test_root_help_uses_real_config_key_spelling() -> None:
+    """速记表中的 config key 必须与真实 CLI 参数一致。"""
+    runner = CliRunner()
+    result = runner.invoke(app, ["help"])
+    assert result.exit_code == 0
+    assert "tushare-token" in result.stdout
+    assert "tushare-endpoint" in result.stdout
+    assert "tushare_token <YOUR_TOKEN>" not in result.stdout
+
+
+def test_root_help_lists_v0050_batch_sources_and_theme_watchlist_commands() -> None:
+    """速记表必须覆盖 v0.0.5.0 新增的热榜 / 题材 / 导出核心入口。"""
+    runner = CliRunner()
+    result = runner.invoke(app, ["help"])
+    assert result.exit_code == 0
+    output = result.stdout
+
+    assert "kan add --theme AI" in output
+    assert "kan remove --theme AI" in output
+    assert "kan list --theme AI" in output
+    assert "kan fetch --hot rank" in output
+    assert "kan fetch --theme AI" in output
+    assert "kan compare 600519 000858 --format md" in output
+
+
 def test_subcommand_help_unaffected() -> None:
     """子命令 --help 仍走 typer 默认"""
     runner = CliRunner()

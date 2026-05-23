@@ -20,9 +20,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - 配 token 后 TuShare Pro 顶替 baostock 作 `fetch_kline` 主路径；未配 token 行为零变化
   - `kan config get` 自动 mask token（仅显示末 4 位）；token 永不出现在 logs / exceptions
   - 自写 ~80 行 HTTP client，不依赖官方 `tushare` SDK（SDK 端点硬编码无法替换）
-- **🎯 题材位置扫描（***REMOVED***）** · 全 11 命令矩阵支持 `--theme=<题材名>`（设计:[docs/design-f11-theme-scan.md](docs/design-f11-theme-scan.md)):
-  - 8 只读命令 `scan / low / high / trend / info / list / fetch` 支持 `--theme` + `--only-watchlist`
-  - 3 破坏性命令 `add / remove` 支持 `--theme`,必经二次确认,`--yes` 跳过(慎用)
+- **🎯 题材位置扫描（***REMOVED***）** · 9 个用户命令支持 `--theme=<题材名>`（设计:[docs/design-f11-theme-scan.md](docs/design-f11-theme-scan.md)):
+  - 7 个只读/数据命令 `scan / low / high / trend / info / list / fetch` 支持 `--theme`;其中 `scan / low / high / trend / fetch` 支持 `--only-watchlist`
+  - 2 个破坏性命令 `add / remove` 支持 `--theme`,必经二次确认,`--yes` 跳过(慎用)
   - 题材发现入口 `kan theme list [--all]` / `kan theme search 关键词`(参考 `kan config` 子命令树体例)
 - 🆕 数据源:`adata`(同花顺 catalog/成分股 + 东方财富 datacenter K 线/反查 + EM push2 fallback 走 ***REMOVED*** 5min cooldown)· 零 token 零配置
 - 🆕 新模块 `kan/boards.py` 扩 6 个 theme 函数(load_theme_catalog / search_theme / normalize_theme_name / get_theme_constituents / fetch_theme_kline / get_themes_of_stock)
@@ -574,7 +574,9 @@ pandas / numpy / bs4 / requests 整窝拖入启动路径。单个 akshare import
 - 所有数据本地存储 · 不上传任何用户数据
 - `CONTRIBUTING.md` + `SECURITY.md` + 公开输出语言纪律
 
-[Unreleased]: https://github.com/piklen/manmankan/compare/v0.0.4.7.1...HEAD
+[Unreleased]: https://github.com/piklen/manmankan/compare/v0.0.5.0...HEAD
+[0.0.5.0]: https://github.com/piklen/manmankan/compare/v0.0.4.8...v0.0.5.0
+[0.0.4.8]: https://github.com/piklen/manmankan/compare/v0.0.4.7.1...v0.0.4.8
 [0.0.4.7.1]: https://github.com/piklen/manmankan/compare/v0.0.4.7...v0.0.4.7.1
 [0.0.4.7]: https://github.com/piklen/manmankan/compare/v0.0.4.6...v0.0.4.7
 [0.0.4.6]: https://github.com/piklen/manmankan/compare/v0.0.4.5...v0.0.4.6

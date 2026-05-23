@@ -104,6 +104,7 @@ def test_fetch_theme_pulls_constituents(monkeypatch, _isolate_all):
 
     def counting(symbol, **kw):
         call_count["n"] += 1
+        return pd.DataFrame({"close": [1.0]})
 
     monkeypatch.setattr("kan.fetcher.fetch_kline", counting)
     # 强制每只股都走 fetch · 不让 is_fresh 短路
@@ -112,3 +113,17 @@ def test_fetch_theme_pulls_constituents(monkeypatch, _isolate_all):
     result = runner.invoke(app, ["fetch", "--theme=AI应用"])
     assert result.exit_code == 0, result.output
     assert call_count["n"] >= 2
+
+
+def test_fetch_returns_nonzero_when_any_symbol_fails(monkeypatch, _isolate_all):
+    """fetch 任一股票拉取失败时必须 exit 非 0 · 防脚本误判成功。"""
+    monkeypatch.setattr("kan.fetcher.is_fresh", lambda symbol: False)
+
+    def fail_fetch(symbol, force=False):
+        raise ValueError(f"无效股票代码或无数据: {symbol}")
+
+    monkeypatch.setattr("kan.fetcher.fetch_kline", fail_fetch)
+    runner = CliRunner()
+    result = runner.invoke(app, ["fetch", "999999"])
+    assert result.exit_code == 1
+    assert "拉取失败" in result.output
