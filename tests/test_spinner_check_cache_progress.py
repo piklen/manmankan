@@ -141,7 +141,7 @@ def test_empty_watchlist_no_crash(captured_status_messages, patched_dependencies
 
 
 def test_latest_trade_date_exception_does_not_crash(captured_status_messages, monkeypatch):
-    """fail-soft:latest_trade_date 抛异常时 spinner 不 crash (***REMOVED*** fail-soft 保险)."""
+    """fail-soft:latest_trade_date 抛异常时 spinner 不 crash."""
     def raise_for_pre_warm():
         raise RuntimeError("trade calendar unavailable (mock)")
     monkeypatch.setattr("kan.trading_calendar.latest_trade_date", raise_for_pre_warm)
