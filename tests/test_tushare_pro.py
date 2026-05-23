@@ -115,7 +115,12 @@ class TestPostTushareApi:
             mock.json.return_value = self.SAMPLE_RESPONSE
             return mock
 
-        monkeypatch.setattr(tushare_pro.requests, "post", fake_post)
+        # ***REMOVED*** 后用 _get_session() · monkeypatch 改为 inject fake session
+        class _FakeSession:
+            def post(self, url, json, timeout):
+                return fake_post(url, json, timeout)
+
+        monkeypatch.setattr(tushare_pro, "_get_session", lambda: _FakeSession())
 
         result = tushare_pro._post_tushare_api(
             endpoint="http://api.tushare.pro",
@@ -231,7 +236,12 @@ class TestFetchTushare:
             mock.json.return_value = sample
             return mock
 
-        monkeypatch.setattr(tushare_pro.requests, "post", fake_post)
+        # ***REMOVED*** 后用 _get_session() · monkeypatch 改为 inject fake session
+        class _FakeSession:
+            def post(self, url, json, timeout):
+                return fake_post(url, json, timeout)
+
+        monkeypatch.setattr(tushare_pro, "_get_session", lambda: _FakeSession())
         df = tushare_pro._fetch_tushare("600519", "20260101")
         assert df is not None
         assert "date" in df.columns
