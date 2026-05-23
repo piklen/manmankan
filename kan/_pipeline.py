@@ -1,11 +1,16 @@
 """CLI 数据命令的脊椎与共享 helper · scan/low/high/trend/info/fetch 共用。
 
-行为保持型 helper:把 resolve_scan_targets 的 5 类 source 错误统一收成
-typer.Exit;后续会在此基础上扩成完整数据流水线 orchestrator(聚合新鲜度、
-统一格式分发、注入 compute 等)。
+行为保持型 helper:
+  - resolve_targets_or_exit:把 resolve_scan_targets 的 5 类 source 错误统一收成
+    typer.Exit。
+  - Freshness + freshness_of:跨 symbols 聚合 max data_cutoff 与 max cache_age,
+    一并推导 is_stale / phase,各命令的标题与警告复用同一份结果。
+
+后续会在此基础上扩成完整数据流水线 orchestrator(注入 compute、统一格式分发等)。
 """
 from __future__ import annotations
 
+from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
 import typer
@@ -21,8 +26,14 @@ from kan.cli_helpers import _print_err
 from kan.hot import HotListUnavailableError
 
 if TYPE_CHECKING:
+    from collections.abc import Iterable
+    from datetime import date
+
     from kan._scan_targets import BoardMeta, HotMeta, ThemeMeta
     from kan.hot import HotList
+
+
+# ── 目标源错误统一处理 ────────────────────────────────────────────────
 
 
 def resolve_targets_or_exit(
@@ -70,3 +81,61 @@ def resolve_targets_or_exit(
             "❌ 题材数据源暂时不可用 · 稍后再试 · 行业扫描可用(--industry)"
         )
         raise typer.Exit(1) from None
+
+
+# ── 数据新鲜度聚合 ───────────────────────────────────────────────────
+
+
+@dataclass(frozen=True)
+class Freshness:
+    """跨 symbols 的数据新鲜度聚合 + 推导状态。
+
+    data_cutoff     = max(data_cutoff_date(sym) for sym in symbols) · None 若全 None
+    fetched_at      = max(cache_age(sym) for sym in symbols)(ISO datetime string)
+    expected_cutoff = latest_trade_date() (helper 调用时的快照)
+    is_stale        = data_cutoff is None or data_cutoff < expected_cutoff
+    phase           = market_phase() snapshot
+
+    frozen=True · helper 返回不可变快照 · 命令侧只读不改。
+    """
+
+    data_cutoff: date | None
+    fetched_at: str | None
+    expected_cutoff: date
+    is_stale: bool
+    phase: str
+
+
+def freshness_of(symbols: Iterable[str]) -> Freshness:
+    """聚合 symbols 列表的 max data_cutoff 与 max cache_age · 推导 is_stale / phase。
+
+    用法:
+        freshness = freshness_of(r.symbol for r in results)
+        if freshness.data_cutoff:
+            title += f" · 数据截止 {format_date_compact(freshness.data_cutoff)} 收盘"
+        if freshness.is_stale: ...
+
+    空 symbols / 所有 symbols 都无 cutoff → data_cutoff = None · is_stale = True
+    (与 v0.0.4.5+ 各命令的现状一致:无缓存视为 stale)。
+    """
+    from kan.fetcher import cache_age, data_cutoff_date
+    from kan.trading_calendar import latest_trade_date, market_phase
+
+    data_cutoff: date | None = None
+    fetched_at: str | None = None
+    for sym in symbols:
+        d = data_cutoff_date(sym)
+        if d is not None and (data_cutoff is None or d > data_cutoff):
+            data_cutoff = d
+        t = cache_age(sym)
+        if t and (fetched_at is None or t > fetched_at):
+            fetched_at = t
+    expected = latest_trade_date()
+    is_stale = data_cutoff is None or data_cutoff < expected
+    return Freshness(
+        data_cutoff=data_cutoff,
+        fetched_at=fetched_at,
+        expected_cutoff=expected,
+        is_stale=is_stale,
+        phase=market_phase(),
+    )
