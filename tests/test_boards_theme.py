@@ -1,0 +1,124 @@
+"""kan/boards.py 的 theme 函数单元测试 · mock adata · 不走真网络。"""
+import json
+
+import pandas as pd
+import pytest
+
+from kan import boards
+from kan.boards import ThemeDataUnavailableError
+from kan.models import Theme
+
+
+@pytest.fixture(autouse=True)
+def _isolate_boards_dir(tmp_path, monkeypatch):
+    """boards cache 指向 tmp · 杜绝读写真实 ~/.local/share/kan/boards/。
+
+    同 F10a `tests/test_boards.py` 风格 · 复用 F10a tests/conftest.py 的 isolate
+    若已建可省 · 若未建在此 fixture 内 monkeypatch BOARDS_DIR + paths.ensure_dirs。
+    """
+    bdir = tmp_path / "boards"
+    bdir.mkdir()
+    monkeypatch.setattr(boards, "BOARDS_DIR", bdir)
+    monkeypatch.setattr("kan.paths.BOARDS_DIR", bdir)
+    monkeypatch.setattr("kan.paths.ensure_dirs", lambda: None)
+    return bdir
+
+
+def _fake_ths_catalog_df():
+    """模拟 adata.stock.info.all_concept_code_ths() 真返回结构(2026-05-23 spike 实测)。"""
+    return pd.DataFrame(
+        [
+            {"index_code": "886108", "name": "AI应用", "concept_code": "308767", "source": "同花顺"},
+            {"index_code": "885525", "name": "白酒概念", "concept_code": "308768", "source": "同花顺"},
+            {"index_code": "886109", "name": "同花顺", "concept_code": "309265", "source": "同花顺"},
+        ]
+    )
+
+
+def test_load_theme_catalog_first_run_hits_adata(monkeypatch, _isolate_boards_dir):
+    """无 cache · 第一次跑应调 adata · 返回 list[Theme]。"""
+    monkeypatch.setattr(
+        "adata.stock.info.all_concept_code_ths",
+        lambda: _fake_ths_catalog_df(),
+    )
+    themes = boards.load_theme_catalog()
+    assert len(themes) == 3
+    assert all(isinstance(t, Theme) for t in themes)
+    assert themes[0].code == "886108"
+    assert themes[0].name == "AI应用"
+    assert themes[0].source == "ths"
+
+
+def test_load_theme_catalog_writes_cache(monkeypatch, _isolate_boards_dir):
+    """跑完 catalog 应写 catalog_concept_ths.json。"""
+    monkeypatch.setattr(
+        "adata.stock.info.all_concept_code_ths",
+        lambda: _fake_ths_catalog_df(),
+    )
+    boards.load_theme_catalog()
+    cache = _isolate_boards_dir / "catalog_concept_ths.json"
+    assert cache.exists()
+    data = json.loads(cache.read_text(encoding="utf-8"))
+    assert len(data) == 3
+    assert data[0]["code"] == "886108"
+
+
+def test_load_theme_catalog_uses_cache_within_ttl(monkeypatch, _isolate_boards_dir):
+    """24h 内第二次调不应再打 adata。"""
+    call_count = {"n": 0}
+
+    def counting_adata():
+        call_count["n"] += 1
+        return _fake_ths_catalog_df()
+
+    monkeypatch.setattr("adata.stock.info.all_concept_code_ths", counting_adata)
+    boards.load_theme_catalog()       # 第一次写 cache
+    boards.load_theme_catalog()       # 第二次应读 cache
+    assert call_count["n"] == 1
+
+
+def test_load_theme_catalog_force_bypasses_cache(monkeypatch, _isolate_boards_dir):
+    """force=True 应强制重拉。"""
+    call_count = {"n": 0}
+
+    def counting_adata():
+        call_count["n"] += 1
+        return _fake_ths_catalog_df()
+
+    monkeypatch.setattr("adata.stock.info.all_concept_code_ths", counting_adata)
+    boards.load_theme_catalog()
+    boards.load_theme_catalog(force=True)
+    assert call_count["n"] == 2
+
+
+def test_load_theme_catalog_raises_when_adata_fails_and_no_cache(monkeypatch, _isolate_boards_dir):
+    """adata 抛错 + 无 cache → ThemeDataUnavailableError。"""
+
+    def raising():
+        raise ConnectionError("adata down")
+
+    monkeypatch.setattr("adata.stock.info.all_concept_code_ths", raising)
+    with pytest.raises(ThemeDataUnavailableError):
+        boards.load_theme_catalog()
+
+
+def test_load_theme_catalog_falls_back_to_stale_cache_on_failure(monkeypatch, _isolate_boards_dir):
+    """adata 挂 + cache 陈旧 → 用陈旧 cache 不抛(warn 但继续)。"""
+    # 先建一个陈旧 cache(mtime 改为 25h 前)
+    cache = _isolate_boards_dir / "catalog_concept_ths.json"
+    cache.write_text(
+        json.dumps([{"code": "886108", "name": "AI应用", "source": "ths", "size": None}], ensure_ascii=False),
+        encoding="utf-8",
+    )
+    import os
+    import time
+    old = time.time() - 25 * 3600
+    os.utime(cache, (old, old))
+
+    monkeypatch.setattr(
+        "adata.stock.info.all_concept_code_ths",
+        lambda: (_ for _ in ()).throw(ConnectionError("adata down")),
+    )
+    themes = boards.load_theme_catalog()
+    assert len(themes) == 1
+    assert themes[0].code == "886108"
