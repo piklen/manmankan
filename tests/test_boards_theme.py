@@ -1,5 +1,7 @@
 """kan/boards.py 的 theme 函数单元测试 · mock adata · 不走真网络。"""
 import json
+import sys
+from unittest.mock import MagicMock
 
 import pandas as pd
 import pytest
@@ -7,6 +9,16 @@ import pytest
 from kan import boards
 from kan.boards import ThemeDataUnavailableError
 from kan.models import Theme
+
+
+@pytest.fixture(autouse=True)
+def _mock_adata(monkeypatch):
+    """创建 adata mock module · 防止真实网络调用。"""
+    mock_adata = MagicMock()
+    monkeypatch.setitem(sys.modules, "adata", mock_adata)
+    monkeypatch.setitem(sys.modules, "adata.stock", MagicMock())
+    monkeypatch.setitem(sys.modules, "adata.stock.info", MagicMock())
+    return mock_adata
 
 
 @pytest.fixture(autouse=True)
@@ -119,6 +131,18 @@ def test_load_theme_catalog_falls_back_to_stale_cache_on_failure(monkeypatch, _i
         "adata.stock.info.all_concept_code_ths",
         lambda: (_ for _ in ()).throw(ConnectionError("adata down")),
     )
+
+    # 捕获 debug_log 调用
+    log_calls = []
+    def capture_debug_log(module, op, err):
+        log_calls.append((module, op, err))
+
+    monkeypatch.setattr("kan._log.debug_log", capture_debug_log)
+
     themes = boards.load_theme_catalog()
     assert len(themes) == 1
     assert themes[0].code == "886108"
+    # 应已记录退化警告
+    assert len(log_calls) >= 1, f"expected debug_log to be called, got {len(log_calls)} calls"
+    assert any("adata THS catalog" in op for _, op, _ in log_calls), \
+        f"expected debug_log with 'adata THS catalog' in op, got: {log_calls}"
