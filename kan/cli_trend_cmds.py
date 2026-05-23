@@ -15,8 +15,6 @@ from kan.cli_helpers import (
     _load_watchlist_pairs,
     _print_err,
     _with_heavy_imports_spinner,
-    format_date_compact,
-    format_fetched_at_compact,
 )
 from kan.hot import HotList
 
@@ -53,9 +51,7 @@ def trend(
 
     status_console = Console(stderr=True)
     with _with_heavy_imports_spinner(status_console, "⏳ 加载数据模块..."):
-        from rich.table import Table
-        from rich.text import Text
-
+        from kan import render_terminal
         from kan._pipeline import render_freshness_warning
         from kan.render import DISCLAIMER, max_trend_dates
         from kan.scanner import trend_batch
@@ -81,7 +77,7 @@ def trend(
             raise typer.Exit(1)
 
     from kan._pipeline import run_data_pipeline
-    from kan._scan_targets import BoardMeta, HotMeta, ThemeMeta
+    from kan._scan_targets import ThemeMeta
     ctx = run_data_pipeline(
         industry, only_watchlist, watchlist_pairs,
         hot=hot, theme=theme,
@@ -113,18 +109,9 @@ def trend(
             console.print(f"没有连续涨 {up} 天以上的股票")
             return
 
-    mode_label = "阳线阴线口径" if candle else "收盘价口径"
-    title = f"慢慢看 · 连续涨跌看板 · {mode_label}{filter_label}"
-    if data_cutoff:
-        title += f" · 数据截止 {format_date_compact(data_cutoff)} 收盘"
-    if fetched_at:
-        title += f" · {format_fetched_at_compact(fetched_at)} 拉取"
-    if isinstance(board_meta, BoardMeta):
-        title = f"慢慢看 · {board_meta.board.name} 行业连续涨跌 · {mode_label}{filter_label}"
-    elif isinstance(board_meta, HotMeta):
-        title = f"慢慢看 · {board_meta.list_name} 连续涨跌 · {mode_label}{filter_label}"
-    elif isinstance(board_meta, ThemeMeta):
-        title = f"慢慢看 · {board_meta.theme.name} 题材连续涨跌 · {mode_label}{filter_label}"
+    title = render_terminal.trend_title(
+        ctx, candle=candle, filter_label=filter_label,
+    )
 
     if fmt is not export.OutputFormat.terminal:
         if fmt is export.OutputFormat.json:
@@ -136,82 +123,20 @@ def trend(
             typer.echo(export.trend_markdown(results, title=title, latest=latest))
         return
 
+    from kan._scan_targets import HotMeta
     is_hot = isinstance(board_meta, HotMeta)
-    rank_map = board_meta.rank_map if is_hot else {}
-    base_cols = 5 if is_hot else 4
 
-    table = Table(title=title, show_lines=False, pad_edge=False, padding=(0, 1))
-    if is_hot:
-        table.add_column("榜", justify="right", style="cyan", min_width=3)
-    table.add_column("股票", style="white", no_wrap=True)
-    table.add_column("现价", justify="right", style="white")
-    table.add_column("连续", justify="center")
-    table.add_column("累计", justify="right")
-
-    # 有 --latest 时加日期列头（新→旧，最近日期在左）
-    date_headers: list[str] = []
+    actual_latest: int | None = None
     if latest and results:
-        max_dates = max_trend_dates(console.width)
-        actual_latest = min(latest, max_dates)
-        ref = results[0]
-        days = ref.daily_changes[:actual_latest]
-        for date_str, _ in days:
-            short = date_str[-5:]  # MM-DD
-            date_headers.append(short)
-            table.add_column(short, justify="right", min_width=7)
+        actual_latest = min(latest, max_trend_dates(console.width))
 
-    highlight = board_meta.highlight if board_meta else set()
-    for r in results:
-        name_short = r.name.replace(" ", "")
-
-        if r.streak < 0:
-            streak_text = Text(r.direction, style="bold green")
-            cum_text = Text(f"{abs(r.streak_pct):.2f}%", style="green")
-        elif r.streak > 0:
-            streak_text = Text(r.direction, style="bold red")
-            cum_text = Text(f"{abs(r.streak_pct):.2f}%", style="red")
-        else:
-            streak_text = Text("平", style="dim")
-            cum_text = Text("0%", style="dim")
-
-        star = "⭐ " if r.symbol in highlight else ""
-        row: list[str | Text] = []
-        if is_hot:
-            rank = rank_map.get(r.symbol)
-            row.append(str(rank) if rank is not None else "-")
-        row += [
-            f"{star}{name_short} {r.symbol}",
-            f"{r.current_price:.2f}",
-            streak_text,
-            cum_text,
-        ]
-
-        if latest:
-            from kan.scanner import get_limit_threshold
-            limit = get_limit_threshold(r.symbol, r.name)
-
-            days_data = r.daily_changes[:actual_latest]  # 新→旧 · 按终端宽度截取
-            for _, chg in days_data:
-                abs_chg = abs(chg)
-                if chg > 0 and abs_chg >= limit - 0.1:
-                    row.append(Text("涨停", style="bold red"))
-                elif chg < 0 and abs_chg >= limit - 0.1:
-                    row.append(Text("跌停", style="bold green"))
-                elif chg > 0:
-                    row.append(Text(f"▲{abs_chg:.2f}%", style="red"))
-                elif chg < 0:
-                    row.append(Text(f"▼{abs_chg:.2f}%", style="green"))
-                else:
-                    row.append(Text("—", style="dim"))
-            # 补齐列数（某些股票交易日可能少）· base_cols 含热榜名次列
-            while len(row) < base_cols + len(date_headers):
-                row.append(Text("-", style="dim"))
-
-        table.add_row(*row)
-
+    table = render_terminal.trend_table(
+        ctx, results,
+        latest=actual_latest, candle=candle, filter_label=filter_label,
+    )
     console.print(table)
 
-    if latest and actual_latest < latest:
+    if latest and actual_latest is not None and actual_latest < latest:
         console.print(
             f"\n  [dim]窄屏模式 · 显示近 {actual_latest}/{latest} 天"
             " · 加宽终端可见全部[/dim]"

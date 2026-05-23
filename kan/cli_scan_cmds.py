@@ -124,11 +124,9 @@ def scan(
 
     status_console = Console(stderr=True)
     with _with_heavy_imports_spinner(status_console, "⏳ 加载数据模块..."):
-        from rich.table import Table
-        from rich.text import Text
-
+        from kan import render_terminal
         from kan._pipeline import render_freshness_warning
-        from kan.render import DISCLAIMER, format_pct, responsive_periods
+        from kan.render import DISCLAIMER, responsive_periods
         from kan.scanner import (
             PERIODS,
             compute_diff,
@@ -196,28 +194,7 @@ def scan(
                 save_snapshot(all_results)
             return
 
-    title = f"慢慢看 · 自选股位置扫描 · {'高点' if high else '低点'}模式"
-    if signal:
-        title += " · 仅信号"
-    if data_cutoff:
-        title += f" · 数据截止 {format_date_compact(data_cutoff)} 收盘"
-    if fetched_at:
-        title += f" · {format_fetched_at_compact(fetched_at)} 拉取"
-    if isinstance(board_meta, BoardMeta):
-        title = (
-            f"慢慢看 · {board_meta.board.name} 行业位置扫描"
-            f" · {'高点' if high else '低点'}模式"
-        )
-    elif isinstance(board_meta, HotMeta):
-        title = (
-            f"慢慢看 · {board_meta.list_name} 位置扫描"
-            f" · {'高点' if high else '低点'}模式"
-        )
-    elif isinstance(board_meta, ThemeMeta):
-        title = (
-            f"慢慢看 · {board_meta.theme.name} 题材位置扫描"
-            f" · {'高点' if high else '低点'}模式"
-        )
+    title = render_terminal.scan_title(ctx, high_mode=high, signal_only=signal)
 
     if fmt is export.OutputFormat.json:
         typer.echo(export.to_json(export.scan_payload(
@@ -239,61 +216,13 @@ def scan(
     is_compact = len(display_periods) < len(PERIODS)
 
     is_hot = isinstance(board_meta, HotMeta)
-    table = Table(title=title, show_lines=False, pad_edge=False, padding=(0, 1))
-    if is_hot:
-        table.add_column("榜", justify="right", style="cyan", min_width=3)
-    table.add_column("股票", style="white", no_wrap=True)
-    table.add_column("现价", justify="right", style="white", min_width=8)
-    for p in display_periods:
-        table.add_column(f"{p}日", justify="right", min_width=6)
-    table.add_column("共振", justify="center")
-
-    highlight = board_meta.highlight if board_meta else set()
-    if board_index_result is not None:
-        brow: list[str | Text] = [f"🏛️ {board_index_result.name} 板块指数"]
-        brow.append(f"{board_index_result.current_price:.2f}")
-        for p in display_periods:
-            pr = next(
-                (x for x in board_index_result.periods if x.period == p), None
-            )
-            brow.append(Text("-", style="dim") if pr is None
-                        else format_pct(pr, high_mode=high))
-        brow.append("")
-        table.add_row(*brow)
-        table.add_section()
-
-    for r in results:
-        row: list[str | Text] = []
-        if is_hot:
-            rank = board_meta.rank_map.get(r.symbol)
-            row.append(str(rank) if rank is not None else "-")
-        name_short = r.name.replace(" ", "")
-        tag = ""
-        if r.limit_up:
-            tag = " 涨停"
-        elif r.limit_down:
-            tag = " 跌停"
-        star = "⭐ " if r.symbol in highlight else ""
-        row.append(f"{star}{name_short} {r.symbol}{tag}")
-        row.append(f"{r.current_price:.2f}")
-
-        for p in display_periods:
-            pr = next((x for x in r.periods if x.period == p), None)
-            if pr is None:
-                row.append(Text("-", style="dim"))
-            else:
-                row.append(format_pct(pr, high_mode=high))
-
-        resonance = r.high_resonance if high else r.low_resonance
-        if resonance >= 3:
-            row.append(Text(f"×{resonance}", style="bold yellow"))
-        elif resonance > 0:
-            row.append(Text(f"×{resonance}", style="yellow"))
-        else:
-            row.append("")
-
-        table.add_row(*row)
-
+    table = render_terminal.scan_table(
+        ctx, results,
+        display_periods=display_periods,
+        high_mode=high,
+        signal_only=signal,
+        board_index_result=board_index_result,
+    )
     console.print(table)
 
     if is_compact:
@@ -354,9 +283,7 @@ def _filter_extreme_cmd(
 
     status_console = Console(stderr=True)
     with _with_heavy_imports_spinner(status_console, "⏳ 加载数据模块..."):
-        from rich.table import Table
-        from rich.text import Text
-
+        from kan import render_terminal
         from kan.fetcher import cache_age, data_cutoff_date
         from kan.render import DISCLAIMER
         from kan.scanner import filter_extreme
@@ -368,7 +295,6 @@ def _filter_extreme_cmd(
             raise typer.Exit(1)
 
     label = "低点" if mode == "low" else "高点"
-    signal_style = "bold green" if mode == "low" else "bold yellow"
 
     if sum(1 for x in (industry, hot, theme) if x is not None) > 1:
         _print_err("❌ --industry / --hot / --theme 三者互斥 · 同时只能用一个")
@@ -425,35 +351,11 @@ def _filter_extreme_cmd(
             if t and (fetched_at is None or t > fetched_at):
                 fetched_at = t
 
-        title = f"慢慢看 · {n} 日{label} · {len(hits)} 只触及"
-        if data_cutoff:
-            title += f" · 数据截止 {format_date_compact(data_cutoff)} 收盘"
-        if fetched_at:
-            title += f" · {format_fetched_at_compact(fetched_at)} 拉取"
-
-        table = Table(title=title, show_lines=False, pad_edge=False, padding=(0, 1))
-        if is_hot:
-            table.add_column("榜", justify="right", style="cyan", min_width=3)
-        table.add_column("股票", style="white", no_wrap=True)
-        table.add_column("现价", justify="right", style="white", min_width=8)
-        table.add_column(f"{n}日最低", justify="right", style="dim", min_width=8)
-        table.add_column(f"{n}日最高", justify="right", style="dim", min_width=8)
-        table.add_column("位置", justify="right", min_width=8)
-
-        for result, pr in hits:
-            name_short = result.name.replace(" ", "")
-            star = "⭐ " if result.symbol in highlight else ""
-            row: list[str | Text] = []
-            if is_hot:
-                rank = rank_map.get(result.symbol)
-                row.append(str(rank) if rank is not None else "-")
-            row.append(f"{star}{name_short} {result.symbol}")
-            row.append(f"{result.current_price:.2f}")
-            row.append(f"{pr.n_low:.2f}")
-            row.append(f"{pr.n_high:.2f}")
-            row.append(Text(f"[{pr.position_pct:.1f}%]", style=signal_style))
-            table.add_row(*row)
-
+        table = render_terminal.extreme_table(
+            n, hits, mode,
+            is_hot=is_hot, rank_map=rank_map, highlight=highlight,
+            data_cutoff=data_cutoff, fetched_at=fetched_at,
+        )
         console.print(table)
         console.print()
 
@@ -536,10 +438,9 @@ def _info_industry(industry: str, fmt: export.OutputFormat) -> None:
 
     status_console = Console(stderr=True)
     with _with_heavy_imports_spinner(status_console, "⏳ 加载数据模块..."):
-        from rich.table import Table
-
+        from kan import render_terminal
         from kan._pipeline import resolve_targets_or_exit
-        from kan.render import DISCLAIMER, format_pct
+        from kan.render import DISCLAIMER
         from kan.scanner import scan_stock
 
     console = Console()
@@ -570,19 +471,9 @@ def _info_industry(industry: str, fmt: export.OutputFormat) -> None:
     console.print(f"  成分股 {len(meta.constituents)} 只 · 板块指数多周期位置:")
     console.print()
 
-    table = Table(show_lines=False, pad_edge=False, padding=(0, 1))
-    table.add_column("周期", justify="right", style="cyan")
-    table.add_column("最低", justify="right", style="dim", min_width=8)
-    table.add_column("最高", justify="right", style="dim", min_width=8)
-    table.add_column("位置", justify="right", min_width=8)
-    for pr in board_result.periods:
-        if pr.insufficient:
-            table.add_row(f"{pr.period}日", "-", "-", "-")
-        else:
-            table.add_row(
-                f"{pr.period}日", f"{pr.n_low:.2f}",
-                f"{pr.n_high:.2f}", format_pct(pr),
-            )
+    table = render_terminal.info_table(
+        board_result, is_industry=True, board_meta=meta,
+    )
     console.print(table)
     console.print(DISCLAIMER, style="dim")
 
@@ -593,10 +484,8 @@ def _info_theme(theme_query: str, fmt: export.OutputFormat) -> None:
 
     status_console = Console(stderr=True)
     with _with_heavy_imports_spinner(status_console, "⏳ 加载数据模块..."):
-        from rich.table import Table
-
+        from kan import render_terminal
         from kan._pipeline import resolve_targets_or_exit
-        from kan.render import format_pct
         from kan.render_theme import render_theme_disclaimer
         from kan.scanner import scan_stock
 
@@ -631,19 +520,9 @@ def _info_theme(theme_query: str, fmt: export.OutputFormat) -> None:
     console.print(f"  成分股 {len(meta.constituents)} 只 · 题材指数多周期位置:")
     console.print()
 
-    table = Table(show_lines=False, pad_edge=False, padding=(0, 1))
-    table.add_column("周期", justify="right", style="cyan")
-    table.add_column("最低", justify="right", style="dim", min_width=8)
-    table.add_column("最高", justify="right", style="dim", min_width=8)
-    table.add_column("位置", justify="right", min_width=8)
-    for pr in theme_result.periods:
-        if pr.insufficient:
-            table.add_row(f"{pr.period}日", "-", "-", "-")
-        else:
-            table.add_row(
-                f"{pr.period}日", f"{pr.n_low:.2f}",
-                f"{pr.n_high:.2f}", format_pct(pr),
-            )
+    table = render_terminal.info_table(
+        theme_result, is_industry=True, board_meta=meta,
+    )
     console.print(table)
     render_theme_disclaimer()
 
@@ -695,11 +574,9 @@ def info(
 
     status_console = Console(stderr=True)
     with _with_heavy_imports_spinner(status_console, "⏳ 加载数据模块..."):
-        from rich.table import Table
-        from rich.text import Text
-
+        from kan import render_terminal
         from kan.fetcher import cache_age, data_cutoff_date, fetch_kline, get_cached, is_fresh
-        from kan.render import DISCLAIMER, format_pct
+        from kan.render import DISCLAIMER
         from kan.scanner import calc_trend, calc_volume_state, scan_stock
         from kan.watchlist import _lookup_name, _normalize_symbol
 
@@ -784,24 +661,7 @@ def info(
     console.print()
 
     # 全周期位置表
-    table = Table(show_lines=False, pad_edge=False, padding=(0, 1))
-    table.add_column("周期", justify="right", style="cyan")
-    table.add_column("最低", justify="right", style="dim", min_width=8)
-    table.add_column("最高", justify="right", style="dim", min_width=8)
-    table.add_column("位置", justify="right", min_width=8)
-
-    for pr in result.periods:
-        if pr.insufficient:
-            table.add_row(f"{pr.period}日", "-", "-", Text("-", style="dim"))
-            continue
-
-        table.add_row(
-            f"{pr.period}日",
-            f"{pr.n_low:.2f}",
-            f"{pr.n_high:.2f}",
-            format_pct(pr),
-        )
-
+    table = render_terminal.info_table(result, is_industry=False)
     console.print(table)
     console.print(f"\n  低点共振 ×{result.low_resonance} · 高点共振 ×{result.high_resonance}")
     if volume_state is not None:
@@ -865,11 +725,9 @@ def compare(
 
     status_console = Console(stderr=True)
     with _with_heavy_imports_spinner(status_console, "⏳ 加载数据模块..."):
-        from rich.table import Table
-        from rich.text import Text
-
+        from kan import render_terminal
         from kan.fetcher import fetch_kline, get_cached, is_fresh
-        from kan.render import DISCLAIMER, format_pct
+        from kan.render import DISCLAIMER
         from kan.scanner import PERIODS, scan_stock
         from kan.watchlist import _lookup_name, _normalize_symbol
 
@@ -918,28 +776,6 @@ def compare(
         typer.echo(export.compare_markdown(results, periods=period_list))
         return
 
-    table = Table(
-        title="慢慢看 · 多股对比", show_lines=False, pad_edge=False, padding=(0, 1),
-    )
-    table.add_column("指标", style="cyan", no_wrap=True)
-    for r in results:
-        table.add_column(f"{r.name.replace(' ', '')} {r.symbol}", justify="right")
-
-    table.add_row("现价", *[f"{r.current_price:.2f}" for r in results])
-    for p in period_list:
-        cells: list[str | Text] = []
-        for r in results:
-            pr = next((x for x in r.periods if x.period == p), None)
-            cells.append(Text("-", style="dim") if pr is None else format_pct(pr))
-        table.add_row(f"{p}日位置", *cells)
-    table.add_row("低点共振", *[f"×{r.low_resonance}" for r in results])
-    table.add_row("高点共振", *[f"×{r.high_resonance}" for r in results])
-    table.add_row("ST", *["是" if r.is_st else "—" for r in results])
-    table.add_row(
-        "涨跌停",
-        *["涨停" if r.limit_up else ("跌停" if r.limit_down else "—") for r in results],
-    )
-    table.add_row("数据截止", *[format_date_compact(r.scan_date) for r in results])
-
+    table = render_terminal.compare_table(results, periods=period_list)
     console.print(table)
     console.print(DISCLAIMER, style="dim")
