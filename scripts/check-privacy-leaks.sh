@@ -15,6 +15,57 @@ set -uo pipefail
 
 cd "$(git rev-parse --show-toplevel 2>/dev/null || echo .)"
 
+# ─── 模式 1: --commit-msg <file> · 单独扫一个 commit message 文件 ───
+# 给 .githooks/commit-msg 调用 · 拦下 commit 阶段的内部代号 / 隐私词
+if [ "${1:-}" = "--commit-msg" ]; then
+  COMMIT_MSG_FILE="${2:-}"
+  if [ -z "$COMMIT_MSG_FILE" ] || [ ! -f "$COMMIT_MSG_FILE" ]; then
+    echo "❌ check-privacy-leaks.sh --commit-msg: 收到无效 message 文件" >&2
+    exit 1
+  fi
+  COMMIT_MSG="$(cat "$COMMIT_MSG_FILE")"
+  # 跳过空 commit msg / merge commit / squash 模板
+  if [ -z "$(echo "$COMMIT_MSG" | grep -v '^#' | tr -d '[:space:]')" ]; then
+    exit 0
+  fi
+  # 简化扫描:对每个禁词跑 grep -F
+  # 用 array 累积命中行 + 跳过 nounset 局部问题
+  COMMIT_MSG_DENY=(
+    "Claude" "Codex" "Co-authored-by:" "🤖 Generated" "claude.com/claude-code"
+    "鼠鼠" "鼠哥" "所长" "章鱼哥" "韭菜实验室"
+    "youzi" "biemai" "stock-mbti" "zhiyan-stock"
+    "8w 韭菜" "¥8w" "北极星" "小红书" "雪球" "一鱼两吃"
+    "silent 期" "round 2" "round 3" "候选版" ".dev-thinking/"
+    "Spec §" "T6 熔断" "T16 " "card-" "F11"
+  )
+  COMMIT_HITS=()
+  for t in "${COMMIT_MSG_DENY[@]}"; do
+    if printf '%s' "$COMMIT_MSG" | grep -qF -- "$t"; then
+      COMMIT_HITS+=("  命中字面值: $t")
+    fi
+  done
+  # 任务卡代号模式扫描(grep -E · 精确捕获)
+  COMMIT_MSG_PATTERNS=(
+    '\(U-[0-9]+\)' '\(UX-[0-9]+\)' '\(CR-[0-9]+\)'
+    '\(PM-[0-9]+\)' '\(架-[0-9]+\)' '\(安-[0-9]+\)' '\(合-[0-9]+\)'
+  )
+  for p in "${COMMIT_MSG_PATTERNS[@]}"; do
+    if printf '%s' "$COMMIT_MSG" | grep -qE -- "$p"; then
+      COMMIT_HITS+=("  命中模式: $p")
+    fi
+  done
+  if [ "${#COMMIT_HITS[@]}" -gt 0 ]; then
+    echo "❌ commit message 命中 ${#COMMIT_HITS[@]} 处禁词 / 内部代号:"
+    printf '%s\n' "${COMMIT_HITS[@]}"
+    echo ""
+    echo "💡 改 commit message 后重新 commit · 紧急跳过: git commit --no-verify"
+    exit 1
+  fi
+  exit 0
+fi
+
+# ─── 模式 2: 默认 · 扫 git tracked 工作树 + 版本号一致性 ───
+
 # 禁用词表
 # grep 用 -F (固定字符串) 避免正则误伤
 DENY_TERMS=(
@@ -75,6 +126,12 @@ DENY_TERMS=(
   ".dev-thinking/"
   "/tmp/adata-spike"
   "私密路线规划目录"
+  # v0.0.5.0: 内部 spec / 任务卡代号(neutral-expression 公开仓硬规则)
+  "F11"
+  "T6 熔断"
+  "T16 "
+  "Spec §"
+  "card-"
 )
 
 # 扫描范围委托给 git: ls-files --cached --others --exclude-standard

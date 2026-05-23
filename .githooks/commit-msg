@@ -1,0 +1,35 @@
+#!/usr/bin/env bash
+#
+# commit-msg hook · 扫 commit message 防内部代号 / 隐私词泄漏
+#
+# 启用(一次性):
+#   bash scripts/install-hooks.sh
+#
+# 跳过(紧急 · 不推荐):
+#   git commit --no-verify -m "..."
+#
+# 详见 CONTRIBUTING.md「公开输出语言规范」
+
+set -uo pipefail
+
+COMMIT_MSG_FILE="${1:-}"
+
+if [ -z "$COMMIT_MSG_FILE" ] || [ ! -f "$COMMIT_MSG_FILE" ]; then
+  echo "❌ commit-msg hook: 收到无效 message 文件" >&2
+  exit 1
+fi
+
+REPO_ROOT="$(git rev-parse --show-toplevel)"
+
+echo ""
+echo "═══ commit-msg 自检 ═══"
+
+if ! bash "$REPO_ROOT/scripts/check-privacy-leaks.sh" --commit-msg "$COMMIT_MSG_FILE"; then
+  echo ""
+  echo "❌ commit-msg 阻断"
+  echo "💡 修复 commit message 后重新 commit"
+  echo "💡 紧急跳过(不推荐): git commit --no-verify"
+  exit 1
+fi
+
+exit 0
