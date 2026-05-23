@@ -137,7 +137,8 @@ def test_load_theme_catalog_falls_back_to_stale_cache_on_failure(monkeypatch, _i
     def capture_debug_log(module, op, err):
         log_calls.append((module, op, err))
 
-    monkeypatch.setattr("kan._log.debug_log", capture_debug_log)
+    # patch 在使用处(kan.boards 顶部 from kan._log import debug_log 后 name 绑到 boards module)
+    monkeypatch.setattr("kan.boards.debug_log", capture_debug_log)
 
     themes = boards.load_theme_catalog()
     assert len(themes) == 1
