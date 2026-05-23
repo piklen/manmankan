@@ -342,8 +342,8 @@ def test_adata_em_kline_real_world(): ...        # 11 列 schema 未变 · OHLC 
 
 ### 13.4 目标
 
-- 基线:479 passed(feat/v0.0.5.0 当前)
-- 目标:**540+ passed**(479 + ~60 新 case · 网络 6 跳过)
+- 基线:525 passed(feat/v0.0.5.0 当前 · tushare-pro 合入后 · 2026-05-23 rebase 实测)
+- 目标:**585+ passed**(525 + ~60 新 case · 网络 6 跳过)
 - 覆盖:`boards.py` theme 部分 ≥ 60% · `cli_theme_cmds.py` ≥ 60% · `_confirm.py` ≥ 70%
 
 ## 14. 风险与待验证
@@ -374,15 +374,25 @@ def test_adata_em_kline_real_world(): ...        # 11 列 schema 未变 · OHLC 
 | `***REMOVED***manmankan-v0.0.5/v0.0.5.0/***REMOVED***-data-source-findings-2026-05-22.md` | **§"正式开发起步" 节作废** · spike 证据节仍有效 | JoinQuant / Tushare 三选一被 adata 第四选项 supersede |
 | `***REMOVED***manmankan-v0.0.5/post-v0.0.5.0-candidate-pool.md` §5 "***REMOVED*** 数据源决策" | **决策结果记录:走 adata 各取***REMOVED***** · 候选池其余条目不动 | 我之前在候选池倾向"继续搁置" · ***REMOVED*** 2026-05-23 选 adata 反转 |
 
-## 17. 跟 `tushare-pro` AI 协调
+## 17. 跟 `tushare-pro` 集成的边界(已合入版)
 
-并行开发约束:
+tushare-pro 数据源接入已于 2026-05-23 合并进 `feat/v0.0.5.0`(10 commit · `956517d → 3b2cf0d`)。本 branch 已 rebase 到合入后 HEAD。***REMOVED*** 跟 tushare-pro 的关系从"并行未 merge 协调"变为"已合入基线上的边界声明":
 
-- 另一 worktree `feat/v0.0.5-tushare-pro` 正在做 fetcher 层接入 Tushare Pro 作 K 线第一优先级数据源 · 跟 ***REMOVED*** 题材功能正交。
-- 共改文件 risk:`pyproject.toml`(都加新 deps · adata + tushare) · `uv.lock`(都会再生成) · 可能 `kan/models.py`(都加字段)。
-- **本 spec 假设**:***REMOVED*** 数据源**永远走 adata · 不走 Tushare** · 即使 Tushare Pro 集成完成后,题材数据通路保持 adata · 跟 fetcher 数据源策略解耦。
-- 合并时:Tushare Pro PR 先 merge / 后 merge 不影响 ***REMOVED*** 功能 · 但 `pyproject.toml` 需手工 resolve(append 不替换)。
-- ***REMOVED***负责协调两个 PR 的合并顺序(`AGENTS.md §5` 决策权归***REMOVED***)。
+### 17.1 已 verified 的工程隔离点
+
+- **`pyproject.toml` / `uv.lock` zero diff**:tushare-pro 走自写 HTTP client(`kan/tushare_pro.py` 183 行 · 不依赖 `tushare` Python 包)· ***REMOVED*** 加 `adata>=2.9.0,<3` 是干净 append,无冲突。
+- **`fetcher.py` 改 +12 行**:仅在 K 线获取链路插入 Tushare Pro 作 top-priority 源 · ***REMOVED*** 题材数据通路不经过 `fetcher.py`(题材数据走 `boards.py` 独立链路 + adata)· 正交。
+- **`kan/config.py` + `kan config` 子命令组**:tushare-pro 引入 per-user token 配置基建(`kan config get/set/unset tushare_token`)· ***REMOVED*** 不需要 per-user 配置(adata 零 token)· 不复用。
+- **测试**:tushare-pro 测试套件 +455 行不动 · ***REMOVED*** 测试新增独立模块 `tests/test_boards_theme.py` / `tests/test_cli_theme_cmds.py` / `tests/test_confirm_destructive.py` · 互不干扰。
+
+### 17.2 LOCKED 约束(保留)
+
+- *****REMOVED*** 数据源永远走 adata · 不走 Tushare**:即使用户配了 tushare token,***REMOVED*** 题材调用仍走 adata · 跟 fetcher 数据源策略解耦 · 因 Tushare 题材接口(`dc_member` / `ths_member`)需 6000 积分(~¥600/年)· 破坏零配置承诺。
+- **不复用 `kan config`**:***REMOVED*** 不引入新 config key · 不在 `kan/config.py` 加字段 · 跟 tushare-pro 的 config 范式解耦。
+
+### 17.3 子命令树风格对齐
+
+tushare-pro 加 `kan config <get|set|unset>` · ***REMOVED*** 加 `kan theme <list|search>` —— 两个子命令树同为 typer.Typer 注册风格 · 实施时参考 `kan/cli_config_cmds.py` 体例写 `kan/cli_theme_cmds.py`,保持命令组注册 / 帮助文案 / 退出码 一致。
 
 ## 18. 版本与发布
 
