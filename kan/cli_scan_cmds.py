@@ -56,37 +56,14 @@ def fetch(
         if symbols:
             typer.echo("--industry / --hot / --theme 与股票代码不能同时使用", err=True)
             raise typer.Exit(2)
-        from kan._scan_targets import resolve_scan_targets
-        from kan.boards import (
-            BoardDataUnavailableError,
-            BoardNotFoundError,
-            ThemeDataUnavailableError,
-            ThemeNotFoundError,
-        )
-        from kan.hot import HotListUnavailableError
+        from kan._pipeline import resolve_targets_or_exit
         wl_pairs = []
         if only_watchlist:
             from kan.watchlist import load_watchlist
             wl_pairs = [(s.symbol, s.name) for s in load_watchlist().stocks]
-        try:
-            targets, _meta = resolve_scan_targets(
-                industry, only_watchlist, wl_pairs, hot=hot, theme=theme,
-            )
-        except BoardNotFoundError:
-            typer.echo(f"未找到行业「{industry}」· 可试更短关键词", err=True)
-            raise typer.Exit(1) from None
-        except BoardDataUnavailableError:
-            typer.echo("行业数据源暂时不可用,稍后再试", err=True)
-            raise typer.Exit(1) from None
-        except HotListUnavailableError:
-            typer.echo("热榜数据源暂时不可用,稍后再试", err=True)
-            raise typer.Exit(1) from None
-        except ThemeNotFoundError:
-            typer.echo(f"未找到题材「{theme}」· 试更短关键词 · 或跑 kan theme search", err=True)
-            raise typer.Exit(2) from None
-        except ThemeDataUnavailableError:
-            typer.echo("题材数据源暂时不可用,稍后再试", err=True)
-            raise typer.Exit(1) from None
+        targets, _meta = resolve_targets_or_exit(
+            industry, only_watchlist, wl_pairs, hot=hot, theme=theme,
+        )
         symbols = [s for s, _ in targets]
 
     if not symbols:
@@ -176,37 +153,11 @@ def scan(
     if only_watchlist and not source_mode:
         _print_err("❌ --only-watchlist 需配合 --industry / --hot / --theme 使用")
         raise typer.Exit(1)
-    from kan._scan_targets import BoardMeta, HotMeta, ThemeMeta, resolve_scan_targets
-    from kan.boards import (
-        BoardDataUnavailableError,
-        BoardNotFoundError,
-        ThemeDataUnavailableError,
-        ThemeNotFoundError,
+    from kan._pipeline import resolve_targets_or_exit
+    from kan._scan_targets import BoardMeta, HotMeta, ThemeMeta
+    targets, board_meta = resolve_targets_or_exit(
+        industry, only_watchlist, watchlist_pairs, hot=hot, theme=theme,
     )
-    from kan.hot import HotListUnavailableError
-    try:
-        targets, board_meta = resolve_scan_targets(
-            industry, only_watchlist, watchlist_pairs, hot=hot, theme=theme,
-        )
-    except BoardNotFoundError:
-        _print_err(
-            f"❌ 未找到行业「{industry}」· 可试更短关键词(如「半导体」「白酒」)"
-        )
-        raise typer.Exit(1) from None
-    except BoardDataUnavailableError:
-        _print_err("❌ 行业数据源暂时不可用,稍后再试")
-        raise typer.Exit(1) from None
-    except HotListUnavailableError:
-        _print_err("❌ 热榜数据源暂时不可用,稍后再试")
-        raise typer.Exit(1) from None
-    except ThemeNotFoundError:
-        _print_err(
-            f"❌ 未找到题材「{theme}」· 试更短关键词(如「AI」「华为」) · 或跑 kan theme search 看候选"
-        )
-        raise typer.Exit(2) from None
-    except ThemeDataUnavailableError:
-        _print_err("❌ 题材数据源暂时不可用 · 稍后再试 · 行业扫描可用(--industry)")
-        raise typer.Exit(1) from None
     _auto_fetch_stale(targets)
     mode = "high" if high else "low"
 
