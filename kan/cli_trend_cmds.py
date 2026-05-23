@@ -56,14 +56,9 @@ def trend(
         from rich.table import Table
         from rich.text import Text
 
-        from kan.fetcher import cache_age, data_cutoff_date
+        from kan._pipeline import freshness_of, render_freshness_warning
         from kan.render import DISCLAIMER, max_trend_dates
         from kan.scanner import trend_batch
-        from kan.trading_calendar import (
-            PHASE_INTRADAY,
-            latest_trade_date,
-            market_phase,
-        )
 
     console = Console()
     if sum(1 for x in (industry, hot, theme) if x is not None) > 1:
@@ -111,20 +106,9 @@ def trend(
             console.print(f"没有连续涨 {up} 天以上的股票")
             return
 
-    # v0.0.4.5: 数据截止 / 拉取时间分离展示
-    data_cutoff = None
-    fetched_at = None
-    for r in results:
-        d = data_cutoff_date(r.symbol)
-        if d is not None and (data_cutoff is None or d > data_cutoff):
-            data_cutoff = d
-        t = cache_age(r.symbol)
-        if t and (fetched_at is None or t > fetched_at):
-            fetched_at = t
-
-    expected_cutoff = latest_trade_date()
-    is_stale = data_cutoff is None or data_cutoff < expected_cutoff
-    phase = market_phase()
+    freshness = freshness_of(r.symbol for r in results)
+    data_cutoff = freshness.data_cutoff
+    fetched_at = freshness.fetched_at
 
     mode_label = "阳线阴线口径" if candle else "收盘价口径"
     title = f"慢慢看 · 连续涨跌看板 · {mode_label}{filter_label}"
@@ -230,22 +214,7 @@ def trend(
             " · 加宽终端可见全部[/dim]"
         )
 
-    # UX-4: 双警告互斥渲染 (if/elif 替代 if/if · 与 scan 一致)
-    if is_stale:
-        cutoff_str = format_date_compact(data_cutoff) if data_cutoff else "无缓存"
-        expected_str = format_date_compact(expected_cutoff)
-        days_behind = (expected_cutoff - data_cutoff).days if data_cutoff else "?"
-        console.print(
-            f"\n  [bold yellow]⚠️ 当前缓存到 {cutoff_str} 收盘 · "
-            f"最近交易日是 {expected_str} · 数据滞后 {days_behind} 天\n"
-            "   运行 `kan fetch --force` 拉取最新数据[/bold yellow]"
-        )
-    elif phase == PHASE_INTRADAY:
-        console.print(
-            "\n  [bold yellow]⚠️ 当前盘中 · 涨跌停标签反映当前时刻 · 非收盘 final\n"
-            "   (盘中价格仍在变动 · 涨停/跌停状态可能与收盘不同)\n"
-            "   建议盘后 15:30 后看 final 数据[/bold yellow]"
-        )
+    render_freshness_warning(freshness, console)
 
     console.print()
     if candle:

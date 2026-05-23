@@ -127,7 +127,7 @@ def scan(
         from rich.table import Table
         from rich.text import Text
 
-        from kan.fetcher import cache_age, data_cutoff_date
+        from kan._pipeline import freshness_of, render_freshness_warning
         from kan.render import DISCLAIMER, format_pct, responsive_periods
         from kan.scanner import (
             PERIODS,
@@ -135,11 +135,6 @@ def scan(
             load_snapshot,
             save_snapshot,
             scan_batch,
-        )
-        from kan.trading_calendar import (
-            PHASE_INTRADAY,
-            latest_trade_date,
-            market_phase,
         )
 
     console = Console()
@@ -197,20 +192,9 @@ def scan(
                 save_snapshot(all_results)
             return
 
-    # v0.0.4.5: 数据截止日 (K 线 date 列) 与 拉取时间 (文件 mtime) 严格分离展示
-    data_cutoff = None
-    fetched_at = None
-    for r in results:
-        d = data_cutoff_date(r.symbol)
-        if d is not None and (data_cutoff is None or d > data_cutoff):
-            data_cutoff = d
-        t = cache_age(r.symbol)
-        if t and (fetched_at is None or t > fetched_at):
-            fetched_at = t
-
-    expected_cutoff = latest_trade_date()
-    is_stale = data_cutoff is None or data_cutoff < expected_cutoff
-    phase = market_phase()
+    freshness = freshness_of(r.symbol for r in results)
+    data_cutoff = freshness.data_cutoff
+    fetched_at = freshness.fetched_at
 
     title = f"慢慢看 · 自选股位置扫描 · {'高点' if high else '低点'}模式"
     if signal:
@@ -320,22 +304,7 @@ def scan(
             f"（{shown}日）· 加宽终端可见全部[/dim]"
         )
 
-    # UX-4: 双警告互斥渲染 (if/elif 替代 if/if)
-    if is_stale:
-        cutoff_str = format_date_compact(data_cutoff) if data_cutoff else "无缓存"
-        expected_str = format_date_compact(expected_cutoff)
-        days_behind = (expected_cutoff - data_cutoff).days if data_cutoff else "?"
-        console.print(
-            f"\n  [bold yellow]⚠️ 当前缓存到 {cutoff_str} 收盘 · "
-            f"最近交易日是 {expected_str} · 数据滞后 {days_behind} 天\n"
-            "   运行 `kan fetch --force` 拉取最新数据[/bold yellow]"
-        )
-    elif phase == PHASE_INTRADAY:
-        console.print(
-            "\n  [bold yellow]⚠️ 当前盘中 · 涨跌停标签反映当前时刻 · 非收盘 final\n"
-            "   (盘中价格仍在变动 · 涨停/跌停状态可能与收盘不同)\n"
-            "   建议盘后 15:30 后看 final 数据[/bold yellow]"
-        )
+    render_freshness_warning(freshness, console)
 
     # 增量对比 · 仅自选模式 (board_meta is None) · industry/hot 模式不做 diff/snapshot
     if board_meta is None and diff and prev_snapshot:
