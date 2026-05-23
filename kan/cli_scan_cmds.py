@@ -411,35 +411,11 @@ def _filter_extreme_cmd(
     if only_watchlist and not source_mode:
         _print_err("❌ --only-watchlist 需配合 --industry / --hot / --theme 使用")
         raise typer.Exit(1)
-    from kan._scan_targets import BoardMeta, HotMeta, ThemeMeta, resolve_scan_targets
-    from kan.boards import (
-        BoardDataUnavailableError,
-        BoardNotFoundError,
-        ThemeDataUnavailableError,
-        ThemeNotFoundError,
+    from kan._pipeline import resolve_targets_or_exit
+    from kan._scan_targets import BoardMeta, HotMeta, ThemeMeta
+    targets, board_meta = resolve_targets_or_exit(
+        industry, only_watchlist, watchlist_pairs, hot=hot, theme=theme,
     )
-    from kan.hot import HotListUnavailableError
-    try:
-        targets, board_meta = resolve_scan_targets(
-            industry, only_watchlist, watchlist_pairs, hot=hot, theme=theme,
-        )
-    except BoardNotFoundError:
-        _print_err(f"❌ 未找到行业「{industry}」· 可试更短关键词")
-        raise typer.Exit(1) from None
-    except BoardDataUnavailableError:
-        _print_err("❌ 行业数据源暂时不可用,稍后再试")
-        raise typer.Exit(1) from None
-    except HotListUnavailableError:
-        _print_err("❌ 热榜数据源暂时不可用,稍后再试")
-        raise typer.Exit(1) from None
-    except ThemeNotFoundError:
-        _print_err(
-            f"❌ 未找到题材「{theme}」· 试更短关键词 · 或跑 kan theme search 看候选"
-        )
-        raise typer.Exit(2) from None
-    except ThemeDataUnavailableError:
-        _print_err("❌ 题材数据源暂时不可用 · 稍后再试 · 行业扫描可用(--industry)")
-        raise typer.Exit(1) from None
     highlight = board_meta.highlight if board_meta else set()
     is_hot = isinstance(board_meta, HotMeta)
     rank_map = board_meta.rank_map if is_hot else {}
@@ -593,22 +569,14 @@ def _info_industry(industry: str, fmt: export.OutputFormat) -> None:
     with _with_heavy_imports_spinner(status_console, "⏳ 加载数据模块..."):
         from rich.table import Table
 
-        from kan._scan_targets import resolve_scan_targets
-        from kan.boards import BoardDataUnavailableError, BoardNotFoundError
+        from kan._pipeline import resolve_targets_or_exit
         from kan.render import DISCLAIMER, format_pct
         from kan.scanner import scan_stock
 
     console = Console()
-    try:
-        _targets, meta = resolve_scan_targets(
-            industry, only_watchlist=False, watchlist_pairs=[],
-        )
-    except BoardNotFoundError:
-        _print_err(f"❌ 未找到行业「{industry}」· 可试更短关键词")
-        raise typer.Exit(1) from None
-    except BoardDataUnavailableError:
-        _print_err("❌ 行业数据源暂时不可用,稍后再试")
-        raise typer.Exit(1) from None
+    _targets, meta = resolve_targets_or_exit(
+        industry, only_watchlist=False, watchlist_pairs=[],
+    )
 
     assert meta is not None
     board_result = scan_stock(meta.index_kline, meta.board.code, meta.board.name)
@@ -658,26 +626,16 @@ def _info_theme(theme_query: str, fmt: export.OutputFormat) -> None:
     with _with_heavy_imports_spinner(status_console, "⏳ 加载数据模块..."):
         from rich.table import Table
 
-        from kan._scan_targets import resolve_scan_targets
-        from kan.boards import ThemeDataUnavailableError, ThemeNotFoundError
+        from kan._pipeline import resolve_targets_or_exit
         from kan.render import format_pct
         from kan.render_theme import render_theme_disclaimer
         from kan.scanner import scan_stock
 
     console = Console()
-    try:
-        _targets, meta = resolve_scan_targets(
-            industry=None, only_watchlist=False, watchlist_pairs=[],
-            theme=theme_query,
-        )
-    except ThemeNotFoundError:
-        _print_err(
-            f"❌ 未找到题材「{theme_query}」· 试更短关键词 · 或跑 kan theme search 看候选"
-        )
-        raise typer.Exit(2) from None
-    except ThemeDataUnavailableError:
-        _print_err("❌ 题材数据源暂时不可用,稍后再试")
-        raise typer.Exit(1) from None
+    _targets, meta = resolve_targets_or_exit(
+        industry=None, only_watchlist=False, watchlist_pairs=[],
+        theme=theme_query,
+    )
 
     assert meta is not None
     if meta.index_kline.empty:
