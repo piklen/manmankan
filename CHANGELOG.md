@@ -5,6 +5,55 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.0.5.0] - 2026-05-23
+
+### Added
+
+- **东方财富热榜扫描** · `--hot rank|surge` 把人气榜 / 飙升榜作"临时自选股"标的来源
+  - 加到 scan / low / high / trend / fetch 5 个命令
+  - 热榜模式表格新增"榜"列(实时名次)
+  - `--only-watchlist` 支持自选 ∩ 热榜(过滤出"你的自选里也在热榜上的股")
+  - JSON cache 1h TTL · 减少接口压力
+- **TuShare Pro 可选数据源**(不配 token 行为零变化)
+  - 新命令组 `kan config get/set/unset` 管理用户配置
+  - 配置 `tushare-token`(在 https://tushare.pro 申请)+ `tushare-endpoint`(可选 · 默认 https://api.tushare.pro · 可填自部署镜像)
+  - 环境变量 `TUSHARE_TOKEN` / `TUSHARE_ENDPOINT` 在运行时覆盖 config.json
+  - 配 token 后 TuShare Pro 顶替 baostock 作 `fetch_kline` 主路径
+  - `kan config get` 自动 mask token(仅显示末 4 位)· token 永不进入 logs / exceptions
+- **题材位置扫描** · 9 个命令支持 `--theme=<题材名>`
+  - 7 个只读命令 `scan / low / high / trend / info / list / fetch` 支持 `--theme`(其中 5 个支持 `--only-watchlist`)
+  - 2 个破坏性命令 `add / remove` 支持 `--theme` · 必经二次确认 · `--yes` 跳过(慎用)
+  - 题材发现入口 `kan theme list [--all]` / `kan theme search 关键词`
+  - 数据源:同花顺 catalog/成分股 + 东方财富 K 线/反查 + 东财备份 fallback · 零 token 零配置
+  - 上游数据源限流时自动 5 分钟冷却 · 不重复打挂数据源
+- 新数据源 `adata>=2.9,<3` 主依赖(零 token · 多源融合)
+
+### Changed (用户可见)
+
+- **成交量异动标签从 2 档扩为 5 档对称**(scan 表 / `kan info` 详情)
+  - 明显放大(≥2.0x)/ 温和放大(1.5-2.0x)/ 量能平稳(0.67-1.5x)/ 温和萎缩(0.5-0.67x)/ 明显萎缩(<0.5x)
+  - 边界对数对称 · 修旧版"涨停日 1.73× 误标量能平稳"
+  - 阈值表见 `kan info --help`
+- **`kan --help` 速记表补齐 v0.0.5.0 全命令面**:compare / --format / --industry / --hot / --theme / kan theme / kan config
+- **`kan compare --format md` 表头统一为「名称 代码」** · 跟 terminal / scan / info / list 对齐(脚本 parse 用户注意)
+- 题材线 disclaimer 比 `--industry` 强一档:"题材跟风风险高于行业 · 题材分类各家口径不同"
+
+### Changed (内部架构 · 不影响用户行为)
+
+- 新模块 `kan/_pipeline.py` 编排器 · scan/trend 统一 resolve → fetch → compute → freshness 流水线
+- 新模块 `kan/render_terminal.py`(448 行)· 终端表格构建器统一 · scan/extreme/info/compare/trend 5 个 builder 复用
+- `cli_scan_cmds` 大文件拆为 5 个 per-command-group 文件(scan/extreme/info/compare/fetch · 单一职责)
+- 公开仓内部注释清扫 · 注释中性化(整库 zero 残留)
+
+### Tests
+
+- baseline 525 → 648+ passed(+120 新 case)· 网络冒烟用 `@pytest.mark.network` marker 默认 CI 跳
+
+### Known Issues
+
+- **题材成分股数据源动态不稳定**:同花顺 / 东方财富接口受上游限流 / 反爬 / 端点变化影响,可能阶段性不可用 · 触发时给友好提示"题材数据源暂不可用 · 行业扫描可用(`--industry`)"
+- **Apple Silicon arm64 + adata 间接依赖 `py_mini_racer`**:某些题材数据路径在 arm64 上 dylib 缺失会有 noise · 题材扫描已绕开主路径 · 影响仅在 debug log · M1+ Mac 用户题材出错时改用 `--industry` 替代
+
 ## [0.0.4.8] - 2026-05-16
 
 ### Added
@@ -536,7 +585,9 @@ pandas / numpy / bs4 / requests 整窝拖入启动路径。单个 akshare import
 - 所有数据本地存储 · 不上传任何用户数据
 - `CONTRIBUTING.md` + `SECURITY.md` + 公开输出语言纪律
 
-[Unreleased]: https://github.com/piklen/manmankan/compare/v0.0.4.7.1...HEAD
+[Unreleased]: https://github.com/piklen/manmankan/compare/v0.0.5.0...HEAD
+[0.0.5.0]: https://github.com/piklen/manmankan/compare/v0.0.4.8...v0.0.5.0
+[0.0.4.8]: https://github.com/piklen/manmankan/compare/v0.0.4.7.1...v0.0.4.8
 [0.0.4.7.1]: https://github.com/piklen/manmankan/compare/v0.0.4.7...v0.0.4.7.1
 [0.0.4.7]: https://github.com/piklen/manmankan/compare/v0.0.4.6...v0.0.4.7
 [0.0.4.6]: https://github.com/piklen/manmankan/compare/v0.0.4.5...v0.0.4.6

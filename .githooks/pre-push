@@ -1,0 +1,25 @@
+#!/usr/bin/env bash
+#
+# pre-push hook · 防直接 push 到 main / master
+#
+# 启用(一次性):
+#   bash scripts/install-hooks.sh
+#
+# 跳过(紧急 · 不推荐):
+#   git push --no-verify
+
+set -uo pipefail
+
+# git 调 pre-push 时传 stdin: <local-ref> <local-sha> <remote-ref> <remote-sha>
+while read -r LOCAL_REF LOCAL_SHA REMOTE_REF REMOTE_SHA; do
+  if [ "$REMOTE_REF" = "refs/heads/main" ] || [ "$REMOTE_REF" = "refs/heads/master" ]; then
+    echo ""
+    echo "═══ pre-push 阻断 ═══"
+    echo "❌ 不能直接 push 到 $REMOTE_REF"
+    echo "💡 走 PR flow: 推 feature 分支 → gh pr create"
+    echo "💡 紧急跳过(不推荐): git push --no-verify"
+    exit 1
+  fi
+done
+
+exit 0

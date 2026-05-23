@@ -10,9 +10,9 @@ v0.0.4.4 前缓存新鲜度只看 mtime · 凌晨 02:55 拉了昨日数据后 mt
 - 市场相位: 本地时间判 pre / intraday / post / closed_day
 - "应有最近交易日": 盘后 ≥ 15:30 当日已 final; 否则回退到最近交易日
 - 不引入 pytz / zoneinfo · 假设系统时区为本地(Asia/Shanghai 用户主体)
-- 跨时区用户可通过 TZ 环境变量影响 datetime.now() · 或设 KAN_DATA_AVAIL_OFFSET_MIN (***REMOVED***)
+- 跨时区用户可通过 TZ 环境变量影响 datetime.now() · 或设 KAN_DATA_AVAIL_OFFSET_MIN
 
-v0.0.4.7 防御纵深 (***REMOVED*** + ***REMOVED***/2/3 + ***REMOVED***):
+v0.0.4.7 防御纵深:
 - akshare 失败 / 返脏 / cache 损坏 → 不抛 RuntimeError · 退化 weekday 启发式 + stderr warning
 - 缓存内容三 invariant sanity check (count > 5000 · min year < 2010 · max date > today-30)
 - chmod 0o600 后真校验 · 失败 stderr warn (不再静默 suppress)
@@ -36,7 +36,7 @@ MARKET_CLOSE = time(15, 0)
 def _resolve_data_available_after() -> time:
     """计算 DATA_AVAILABLE_AFTER · 支持 env var KAN_DATA_AVAIL_OFFSET_MIN 覆盖.
 
-    ***REMOVED*** (v0.0.4.7): 跨时区 / WSL2 默认 UTC / Docker 容器用户能自救.
+    v0.0.4.7: 跨时区 / WSL2 默认 UTC / Docker 容器用户能自救.
 
     默认 15:30 北京时间 (= 15:00 收盘 + 30min 数据延迟 final).
     Override: KAN_DATA_AVAIL_OFFSET_MIN=N (整数 minutes) · 变为 15:00 + N min.
@@ -75,12 +75,12 @@ PHASE_CLOSED_DAY = "closed"
 TRADE_DATES_CACHE = BASE_DIR / "trade_dates.json"
 TRADE_DATES_TTL_DAYS = 7
 
-# Sanity check 阈值 (***REMOVED*** + ***REMOVED***)
+# Sanity check 阈值
 SANITY_MIN_COUNT = 5000             # akshare 至少给 5000+ trade_dates(历史 2000-2027 约 6500 天)
 SANITY_MAX_YEAR_MIN = 2010          # 最早 date.year 必须 < 2010(确保有历史回溯)
 SANITY_MAX_DAYS_OLD = 30            # 最大 date 至少在 today - 30 之内(确保近期数据)
 
-# 模块级 memo + 锁 (***REMOVED*** double-checked locking)
+# 模块级 memo + 锁 (double-checked locking)
 _trade_dates_memo: set[date] | None = None
 _memo_lock = threading.Lock()
 
@@ -89,7 +89,7 @@ def _sanity_check_dates(dates: set[date], context: str = "") -> bool:
     """三 invariant sanity check.
 
     任一 fail → return False · 触发 cache miss / 重拉。
-    用于 (***REMOVED***) cache 内容校验 + (***REMOVED***) akshare 返回值校验。
+    用于 cache 内容校验 + akshare 返回值校验。
     """
     if not dates or len(dates) < SANITY_MIN_COUNT:
         print(
@@ -104,7 +104,7 @@ def _sanity_check_dates(dates: set[date], context: str = "") -> bool:
             file=sys.stderr,
         )
         return False
-    today = _today()  # ***REMOVED*** v0.0.4.8: 用 kan._time.today() 集中 SoT
+    today = _today()  # v0.0.4.8: 用 kan._time.today() 集中(单一来源)
     max_d = max(dates)
     if max_d < today - timedelta(days=SANITY_MAX_DAYS_OLD):
         print(
@@ -119,8 +119,8 @@ def _sanity_check_dates(dates: set[date], context: str = "") -> bool:
 def _read_cache() -> set[date] | None:
     """读 trade_dates.json 缓存 · TTL + sanity check 全通过才返回。
 
-    ***REMOVED***: 加 sanity check 三 invariant · 失败返 None 触发重拉。
-    ***REMOVED***: except 缩窄到 (JSONDecodeError | ValueError | OSError) + stderr warn。
+    加 sanity check 三 invariant · 失败返 None 触发重拉。
+    except 缩窄到 (JSONDecodeError | ValueError | OSError) + stderr warn。
     """
     if not TRADE_DATES_CACHE.exists():
         return None
@@ -134,7 +134,7 @@ def _read_cache() -> set[date] | None:
             return None
         return dates
     except (json.JSONDecodeError, ValueError, OSError) as e:
-        # ***REMOVED***: 缩 except 范围 + stderr warn
+        # 缩 except 范围 + stderr warn
         print(
             f"[kan] ⚠️  trade_dates.json 读取失败 ({type(e).__name__}: {e}) · 重新拉取",
             file=sys.stderr,
@@ -145,7 +145,7 @@ def _read_cache() -> set[date] | None:
 def _write_cache(dates: set[date]) -> None:
     """写 trade_dates.json + chmod 0600 真校验。
 
-    ***REMOVED***: chmod 失败不再静默 contextlib.suppress · 改 stderr warn。
+    chmod 失败不再静默 contextlib.suppress · 改 stderr warn。
     """
     from kan.paths import ensure_dirs
     ensure_dirs()
@@ -153,7 +153,7 @@ def _write_cache(dates: set[date]) -> None:
     TRADE_DATES_CACHE.write_text(
         json.dumps(payload, ensure_ascii=False), encoding="utf-8"
     )
-    # ***REMOVED***: chmod 0o600 后真校验 · 失败 stderr warn
+    # chmod 0o600 后真校验 · 失败 stderr warn
     try:
         TRADE_DATES_CACHE.chmod(0o600)
         actual_mode = TRADE_DATES_CACHE.stat().st_mode & 0o777
@@ -165,7 +165,7 @@ def _write_cache(dates: set[date]) -> None:
                 file=sys.stderr,
             )
     except OSError as e:
-        # ***REMOVED*** (v0.0.4.7 P0): 不暴露 errno 原文 · 仅给类型 · 防容器逃逸侦察辅助
+        # v0.0.4.7: 不暴露 errno 原文 · 仅给类型 · 防容器逃逸侦察辅助
         print(
             f"[kan] ⚠️  chmod 失败 (errno {e.errno}) · trade_dates.json 权限可能开放",
             file=sys.stderr,
@@ -175,8 +175,8 @@ def _write_cache(dates: set[date]) -> None:
 def _fetch_from_akshare() -> set[date]:
     """从 akshare 拉全部 A 股交易日历 · 包 try/except + sanity check。
 
-    ***REMOVED***: 失败抛 RuntimeError (由 get_trade_dates 兜底降级 weekday 启发式)。
-    ***REMOVED***: akshare 返回值零校验 sanity check (与 _read_cache 同结构)。
+    失败抛 RuntimeError (由 get_trade_dates 兜底降级 weekday 启发式)。
+    akshare 返回值零校验 sanity check (与 _read_cache 同结构)。
 
     数据 ~10000 行 · 序列化后 JSON ~100KB · in-memory set ~1MB。
     """
@@ -194,7 +194,7 @@ def _fetch_from_akshare() -> set[date]:
             raise RuntimeError(f"akshare DataFrame 缺 trade_date 列 (有 {list(df.columns)})")
         col = df["trade_date"]
         dates = {pd.to_datetime(v).date() for v in col}
-        # ***REMOVED***: sanity check akshare 返回值
+        # sanity check akshare 返回值
         if not _sanity_check_dates(dates, context="akshare tool_trade_date_hist_sina"):
             raise RuntimeError(f"akshare 返回值 sanity 失败 (count={len(dates)})")
         return dates
@@ -210,7 +210,7 @@ def _fetch_from_akshare() -> set[date]:
 def _weekday_heuristic(as_of: datetime) -> date:
     """退化路径: 周一-周五视为交易日 (不识别节假日)。
 
-    ***REMOVED*** fail-soft fallback · 不抛 RuntimeError。
+    fail-soft fallback · 不抛 RuntimeError。
     """
     today = as_of.date()
     if today.weekday() < 5 and as_of.time() >= DATA_AVAILABLE_AFTER:
@@ -227,8 +227,8 @@ def _weekday_heuristic(as_of: datetime) -> date:
 def get_trade_dates() -> set[date]:
     """返回交易日集合 · 7 天 TTL 缓存 · 进程内 memo · 多线程安全。
 
-    ***REMOVED***: double-checked locking 防 fetch_batch 多线程并发首调 akshare。
-    ***REMOVED***: akshare fail → 返回空 set · 调用方走 weekday 启发式 path · 不抛 RuntimeError。
+    double-checked locking 防 fetch_batch 多线程并发首调 akshare。
+    akshare fail → 返回空 set · 调用方走 weekday 启发式 path · 不抛 RuntimeError。
     """
     global _trade_dates_memo
     # 第一次 check (无锁 · 命中路径快)
@@ -252,7 +252,7 @@ def get_trade_dates() -> set[date]:
             _trade_dates_memo = dates
             return dates
         except RuntimeError as e:
-            # ***REMOVED***: 降级 · 不抛 · 返回空 set · 调用方走 weekday 启发式
+            # 降级 · 不抛 · 返回空 set · 调用方走 weekday 启发式
             print(
                 f"[kan] ⚠️  交易日历不可用 ({e}) · 降级到 weekday 启发式 "
                 "(周一-周五视为交易日 · 不识别节假日 · 长假后可能误判)",
@@ -265,7 +265,7 @@ def get_trade_dates() -> set[date]:
 def is_trading_day(d: date) -> bool:
     """判断指定日期是否为交易日。
 
-    ***REMOVED*** fail-soft: get_trade_dates() 空集合时退化 weekday 启发式。
+    fail-soft: get_trade_dates() 空集合时退化 weekday 启发式。
     """
     dates = get_trade_dates()
     if not dates:
@@ -287,7 +287,7 @@ def latest_trade_date(as_of: datetime | None = None) -> date:
     - 周六任何时间         → 周五
     - 长假后第一天 09:00   → 节前最后一个交易日
 
-    ***REMOVED*** fail-soft: 交易日历不可用时退化 weekday 启发式 · 不抛 RuntimeError。
+    fail-soft: 交易日历不可用时退化 weekday 启发式 · 不抛 RuntimeError。
     """
     if as_of is None:
         as_of = datetime.now()
@@ -295,7 +295,7 @@ def latest_trade_date(as_of: datetime | None = None) -> date:
     trade_days = get_trade_dates()
     today = as_of.date()
 
-    # ***REMOVED*** 退化路径: trade_days 为空 (akshare + cache 双失败)
+    # 退化路径: trade_days 为空 (akshare + cache 双失败)
     if not trade_days:
         return _weekday_heuristic(as_of)
 
@@ -308,7 +308,7 @@ def latest_trade_date(as_of: datetime | None = None) -> date:
         if cursor in trade_days:
             return cursor
 
-    # ***REMOVED***: 14 天保护失败也降级 · 不抛 RuntimeError
+    # 14 天保护失败也降级 · 不抛 RuntimeError
     print(
         f"[kan] ⚠️  找不到 {today} 之前 14 天内的交易日 · "
         "用 weekday 启发式 · 试 `kan fetch --force`",
@@ -325,7 +325,7 @@ def market_phase(as_of: datetime | None = None) -> str:
     PHASE_POST       交易日 ≥ 15:00 (含数据延迟未 final 的 15:00-15:30 窗口)
     PHASE_CLOSED_DAY 非交易日 (周末 / 节假日)
 
-    ***REMOVED*** fail-soft: trade_days 为空时用 weekday 启发式判 trading_day。
+    fail-soft: trade_days 为空时用 weekday 启发式判 trading_day。
     """
     if as_of is None:
         as_of = datetime.now()

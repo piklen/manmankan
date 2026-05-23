@@ -14,6 +14,21 @@ resolution-markers = [
 ]
 
 [[package]]
+name = "adata"
+version = "2.9.5"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "beautifulsoup4" },
+    { name = "pandas" },
+    { name = "py-mini-racer" },
+    { name = "requests" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/0e/da/1eb2f05b14e4d41edcc017b9d6b428f30712d0d046f1b85cd54201b423a5/adata-2.9.5.tar.gz", hash = "sha256:b398fd885ee31baca41b8a141c586d3430ef0fec633f6088a830429437210cf6", size = 188823, upload-time = "2025-12-26T11:09:29.759Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/1d/9f/51a65fb438febc0ab38f493a837c5aeb9135dfee2e2c1224920038bbc686/adata-2.9.5-py3-none-any.whl", hash = "sha256:f9dc5d276f8771cf5a5f11fb81c6d97a00d188e20cfcef67022f210c8b23cbf1", size = 229158, upload-time = "2025-12-26T11:09:23.007Z" },
+]
+
+[[package]]
 name = "akracer"
 version = "0.0.14"
 source = { registry = "https://pypi.org/simple" }
@@ -577,9 +592,10 @@ wheels = [
 
 [[package]]
 name = "manmankan"
-version = "0.0.4.8"
+version = "0.0.5.0"
 source = { editable = "." }
 dependencies = [
+    { name = "adata" },
     { name = "akshare" },
     { name = "baostock" },
     { name = "numpy" },
@@ -599,10 +615,11 @@ dev = [
 
 [package.metadata]
 requires-dist = [
+    { name = "adata", specifier = ">=2.9,<3" },
     { name = "akshare", specifier = ">=1.14,<2" },
     { name = "baostock", specifier = ">=0.9.1,<1" },
     { name = "numpy", specifier = ">=1.26,<3" },
-    { name = "pandas", specifier = ">=2.0,<3" },
+    { name = "pandas", specifier = ">=2.0,<4" },
     { name = "pyarrow", specifier = ">=15.0,<25" },
     { name = "pydantic", specifier = ">=2.0,<3" },
     { name = "rich", specifier = ">=13.0,<16" },
@@ -818,7 +835,9 @@ version = "0.6.0"
 source = { registry = "https://pypi.org/simple" }
 sdist = { url = "https://files.pythonhosted.org/packages/50/97/a578b918b2e5923dd754cb60bb8b8aeffc85255ffb92566e3c65b148ff72/py_mini_racer-0.6.0.tar.gz", hash = "sha256:f71e36b643d947ba698c57cd9bd2232c83ca997b0802fc2f7f79582377040c11", size = 5994836, upload-time = "2021-04-22T07:58:35.993Z" }
 wheels = [
+    { url = "https://files.pythonhosted.org/packages/13/13/058240c7fd1fbf29a24bda048d93346c2a56275736b76b56afe64050a161/py_mini_racer-0.6.0-py2.py3-none-macosx_10_10_x86_64.whl", hash = "sha256:346e73bb89a2024888244d487834be24a121089ceb0641dd0200cb96c4e24b57", size = 5280865, upload-time = "2021-04-22T07:58:29.118Z" },
     { url = "https://files.pythonhosted.org/packages/29/a9/8ce0ca222ef04d602924a1e099be93f5435ca6f3294182a30574d4159ca2/py_mini_racer-0.6.0-py2.py3-none-manylinux1_x86_64.whl", hash = "sha256:42896c24968481dd953eeeb11de331f6870917811961c9b26ba09071e07180e2", size = 5416149, upload-time = "2021-04-22T07:58:25.615Z" },
+    { url = "https://files.pythonhosted.org/packages/5d/71/76ac5d593e14b148a4847b608c5ad9a2c7c4827c796c33b396d0437fa113/py_mini_racer-0.6.0-py2.py3-none-win_amd64.whl", hash = "sha256:97cab31bbf63ce462ba4cd6e978c572c916d8b15586156c7c5e0b2e42c10baab", size = 4797809, upload-time = "2021-04-22T07:58:32.286Z" },
 ]
 
 [[package]]

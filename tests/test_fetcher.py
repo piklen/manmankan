@@ -1,5 +1,6 @@
 """fetcher 测试 · 缓存逻辑 + AKShare mock + 多源 fallback"""
 
+import logging
 from datetime import date, datetime, timedelta
 from unittest.mock import MagicMock, patch
 
@@ -17,11 +18,11 @@ def temp_data_dir(tmp_path, monkeypatch):
 
 @pytest.fixture
 def force_eastmoney_path(monkeypatch):
-    """绕过新的 baostock/sina 主路径 · 让 fetch_kline 走到东财 mock。
+    """绕过 baostock / 新浪 · 让 fetch_kline 走到东财 mock。
 
-    fallback 顺序 2026-05-10 改为 baostock → 新浪 → 东财 → 腾讯。
-    旧测试 mock 的是 akshare.stock_zh_a_hist (东财)，需要先把前两个源 mock None
-    才能让流程走到东财。新测试应该直接 mock 主路径。
+    fallback：baostock → _fetch_via_akshare(东财+新浪并发) → 腾讯。
+    把 baostock 和新浪 mock 成 None，并发档里只剩东财能中标，
+    流程落到 akshare.stock_zh_a_hist (东财) mock。
     """
     monkeypatch.setattr(fetcher, "_fetch_baostock", lambda *a, **kw: None)
     monkeypatch.setattr(fetcher, "_fetch_sina", lambda *a, **kw: None)
@@ -200,6 +201,63 @@ class TestNormalizeKline:
         dates = list(df["date"])
         assert dates == sorted(dates)
 
+    def test_clean_data_emits_no_warning(self, caplog):
+        raw = pd.DataFrame({
+            "date": ["2026-05-08"], "open": ["100"], "high": ["101"],
+            "low": ["99"], "close": ["100.5"], "volume": ["10000"], "amount": ["1e6"],
+        })
+        with caplog.at_level(logging.WARNING, logger="kan.fetcher"):
+            fetcher._normalize_kline(raw, source="baostock")
+        assert caplog.records == []
+
+    def test_unparseable_value_warns_with_source_and_column(self, caplog):
+        raw = pd.DataFrame({
+            "date": ["2026-05-07", "2026-05-08"],
+            "open": ["100", "101"], "high": ["101", "102"], "low": ["99", "100"],
+            "close": ["100.5", "N/A"],
+        })
+        with caplog.at_level(logging.WARNING, logger="kan.fetcher"):
+            df = fetcher._normalize_kline(raw, source="baostock")
+        assert len(caplog.records) == 1
+        msg = caplog.records[0].getMessage()
+        assert "baostock" in msg
+        assert "close" in msg
+        assert len(df) == 1  # 垃圾 close 行被 dropna 丢掉
+
+    def test_preexisting_nan_does_not_warn(self, caplog):
+        raw = pd.DataFrame({
+            "date": ["2026-05-07", "2026-05-08"],
+            "open": ["100", "101"], "high": ["101", "102"], "low": ["99", "100"],
+            "close": ["100.5", "101.5"], "volume": ["10000", None],
+        })
+        with caplog.at_level(logging.WARNING, logger="kan.fetcher"):
+            fetcher._normalize_kline(raw, source="sina")
+        assert caplog.records == []
+
+    def test_multiple_bad_columns_single_warning(self, caplog):
+        raw = pd.DataFrame({
+            "date": ["2026-05-08"],
+            "open": ["bad"], "high": ["101"], "low": ["99"],
+            "close": ["100.5"], "volume": ["oops"], "amount": ["1e6"],
+        })
+        with caplog.at_level(logging.WARNING, logger="kan.fetcher"):
+            fetcher._normalize_kline(raw, source="baostock")
+        assert len(caplog.records) == 1
+        msg = caplog.records[0].getMessage()
+        assert "open×1" in msg
+        assert "volume×1" in msg
+
+    @pytest.mark.parametrize("source", ["sina", "eastmoney", "tencent"])
+    def test_warning_carries_source_name(self, caplog, source):
+        raw = pd.DataFrame({
+            "date": ["2026-05-08"], "open": ["100"], "high": ["101"],
+            "low": ["99"], "close": ["junk"],
+        })
+        with caplog.at_level(logging.WARNING, logger="kan.fetcher"):
+            fetcher._normalize_kline(raw, source=source)
+        assert len(caplog.records) == 1
+        assert source in caplog.records[0].getMessage()
+
 
 # --- _fetch_baostock mock ---
 
@@ -236,30 +294,33 @@ def test_fetch_baostock_returns_none_on_error(temp_data_dir):
     assert df is None
 
 
-# --- 熔断器 ---
+# --- 熔断器集成 ---
 
 
-class TestCircuitBreaker:
-    def test_eastmoney_circuit_breaker_trips_on_failure(self, temp_data_dir, monkeypatch):
-        monkeypatch.setattr(fetcher, "_eastmoney_ok", None)
-        with patch("akshare.stock_zh_a_hist", side_effect=Exception("timeout")):
-            result = fetcher._fetch_eastmoney("600519", "20260501")
-        assert result is None
-        assert fetcher._eastmoney_ok is False
+def test_circuit_skips_breaker_down_source(temp_data_dir, raw_kline_df, isolated_breaker, monkeypatch):
+    """breaker 标记 baostock down → fetch_kline 跳过它 · 走 akshare 档."""
+    isolated_breaker.record("baostock", ok=False)
+    monkeypatch.setattr(fetcher, "_fetch_eastmoney", lambda *a, **kw: None)
+    monkeypatch.setattr(fetcher, "_fetch_sina", lambda *a, **kw: raw_kline_df)
 
-    def test_eastmoney_circuit_breaker_skips_after_trip(self, temp_data_dir, monkeypatch):
-        monkeypatch.setattr(fetcher, "_eastmoney_ok", False)
-        with patch("akshare.stock_zh_a_hist") as mock:
-            result = fetcher._fetch_eastmoney("600519", "20260501")
-        assert result is None
-        mock.assert_not_called()
+    df = fetcher.fetch_kline("600519", force=True)
+    assert (df["_source"] == "sina").all()
 
-    def test_eastmoney_circuit_breaker_resets_on_success(self, temp_data_dir, fake_akshare_df, monkeypatch):
-        monkeypatch.setattr(fetcher, "_eastmoney_ok", None)
-        with patch("akshare.stock_zh_a_hist", return_value=fake_akshare_df):
-            result = fetcher._fetch_eastmoney("600519", "20260501")
-        assert result is not None
-        assert fetcher._eastmoney_ok is True
+
+def test_circuit_records_down_on_source_exception(isolated_breaker):
+    """源抛异常 → 被记 down."""
+    with patch("akshare.stock_zh_a_hist", side_effect=Exception("timeout")):
+        result = fetcher._fetch_eastmoney("600519", "20260501")
+    assert result is None
+    assert isolated_breaker.is_down("eastmoney")
+
+
+def test_circuit_empty_result_not_recorded_down(isolated_breaker):
+    """源返回空数据（无效代码/无数据）≠ 源挂 · 不记 down."""
+    with patch("akshare.stock_zh_a_hist", return_value=pd.DataFrame()):
+        result = fetcher._fetch_eastmoney("999999", "20260501")
+    assert result is None
+    assert not isolated_breaker.is_down("eastmoney")
 
 
 # ── source stamping + migration · _source column ───────────────────────
@@ -286,10 +347,12 @@ def raw_kline_df():
     ("tencent", "_fetch_tencent"),
 ])
 def test_fetch_kline_stamps_source(temp_data_dir, raw_kline_df, source, mock_target, monkeypatch):
-    """4 源 fallback 各自标记正确 source · 关掉前置源让目标源生效."""
-    order = ["_fetch_baostock", "_fetch_sina", "_fetch_eastmoney", "_fetch_tencent"]
-    idx = order.index(mock_target)
-    for f in order[:idx]:
+    """各源 fallback 标记正确 source · 其它源全 mock None 让目标源生效.
+
+    东财/新浪经 _fetch_via_akshare 并发档 · 关掉非目标源使结果确定（不受 race 影响）.
+    """
+    all_sources = ["_fetch_baostock", "_fetch_sina", "_fetch_eastmoney", "_fetch_tencent"]
+    for f in all_sources:
         monkeypatch.setattr(fetcher, f, lambda *a, **kw: None)
     monkeypatch.setattr(fetcher, mock_target, lambda *a, **kw: raw_kline_df)
 
@@ -390,3 +453,61 @@ def test_read_cutoff_unaffected_by_migration(temp_data_dir):
     assert mtime_before == mtime_after
     reloaded = pd.read_parquet(cache)
     assert "_source" not in reloaded.columns
+
+
+class TestTushareProDispatch:
+    """v0.0.5: 配 token 时 tushare 顶替 baostock 作主路径；未配 token 行为不变"""
+
+    @pytest.fixture
+    def isolated_env(self, tmp_path, monkeypatch):
+        from kan import circuit_breaker, config
+        monkeypatch.setattr(paths, "BASE_DIR", tmp_path)
+        monkeypatch.setattr(paths, "CIRCUIT_PATH", tmp_path / "circuit.json")
+        monkeypatch.setattr(config, "CONFIG_PATH", tmp_path / "config.json")
+        monkeypatch.setattr(fetcher, "DATA_DIR", tmp_path)
+        monkeypatch.setattr(circuit_breaker, "_default", None)
+        monkeypatch.delenv("TUSHARE_TOKEN", raising=False)
+        monkeypatch.delenv("TUSHARE_ENDPOINT", raising=False)
+        return tmp_path
+
+    def test_no_token_path_unchanged(self, isolated_env, monkeypatch, fake_akshare_df):
+        """未配 token → _fetch_tushare 返回 None → 原 fallback 链生效"""
+        called = {"tushare": False}
+        def spy_tushare(*a, **kw):
+            called["tushare"] = True
+            return None
+        monkeypatch.setattr(fetcher, "_fetch_tushare", spy_tushare)
+        monkeypatch.setattr(fetcher, "_fetch_baostock", lambda *a, **kw: None)
+        monkeypatch.setattr(fetcher, "_fetch_sina", lambda *a, **kw: None)
+        with patch("akshare.stock_zh_a_hist", return_value=fake_akshare_df):
+            df = fetcher.fetch_kline("600519", force=True)
+        # spy 应被调用一次但返回 None
+        assert called["tushare"]
+        assert not df.empty
+
+    def test_with_token_uses_tushare_first(self, isolated_env, monkeypatch):
+        """配 token → tushare 命中 → 不再 fallback baostock"""
+        from kan import config
+        config.save({**config.DEFAULT_CONFIG, "tushare_token": "tk"})
+
+        sample = pd.DataFrame({
+            "date": [date(2026, 4, 28), date(2026, 4, 29)],
+            "open": [100.0, 101.0],
+            "high": [101.5, 102.5],
+            "low": [99.5, 100.5],
+            "close": [101.0, 102.0],
+            "volume": [10000, 11000],
+            "amount": [1010000.0, 1122000.0],
+        })
+
+        baostock_called = {"hit": False}
+        def fake_baostock(*a, **kw):
+            baostock_called["hit"] = True
+            return None
+
+        monkeypatch.setattr(fetcher, "_fetch_tushare", lambda *a, **kw: sample.copy())
+        monkeypatch.setattr(fetcher, "_fetch_baostock", fake_baostock)
+
+        df = fetcher.fetch_kline("600519", force=True)
+        assert not baostock_called["hit"]
+        assert (df["_source"] == "tushare").all()

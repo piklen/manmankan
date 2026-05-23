@@ -1,10 +1,10 @@
-"""D-2 + D-3 (v0.0.4.7 · 用户 5-13 反馈): resolve_max_workers 启发式测试.
+"""v0.0.4.7(用户反馈触发):resolve_max_workers 启发式测试.
 
-D-2 改动: max_workers 硬编码 5 → min(cpu_count*2, 12) 启发式.
+改动: max_workers 硬编码 5 → min(cpu_count*2, 12) 启发式.
 - akshare 是 I/O bound 不是 CPU bound · cpu_count*2 比 cpu-1 更合理
 - 上限 cap 12 防 akshare 限流
 
-教育性 (用户 5-13 反馈"并发可以根据系统的核数-1来自动适配"):
+教育性 (用户反馈"并发可以根据系统的核数-1来自动适配"):
 - 老观点: cpu-1 (CPU bound 经典启发式 · 留 1 核给主线程)
 - 修正: I/O bound 程序 thread 大多在等 syscall 阻塞 · cpu*2~5 都合理 · 关键是上限 cap
 """
@@ -16,7 +16,7 @@ from kan.fetcher import resolve_max_workers
 
 
 class TestAutoMaxWorkers:
-    """D-2: 4 case 覆盖 cpu_count 边界 (8/4/2/None)."""
+    """4 case 覆盖 cpu_count 边界 (8/4/2/None)."""
 
     def test_default_8_core_returns_12_capped(self, monkeypatch):
         """8 核: cpu_count*2 = 16 → cap 12."""
@@ -58,13 +58,13 @@ class TestKanWorkersEnvVar:
             assert resolve_max_workers() == 3
 
     def test_env_var_zero_falls_back(self, monkeypatch):
-        """0 不在 1-20 范围 · 回退默认 (***REMOVED*** v0.0.4.7 上限 50→20)."""
+        """0 不在 1-20 范围 · 回退默认 (v0.0.4.7 上限 50→20)."""
         monkeypatch.setenv("KAN_WORKERS", "0")
         with patch("os.cpu_count", return_value=8):
             assert resolve_max_workers() == 12  # 8*2 cap 12
 
     def test_env_var_over_20_falls_back(self, monkeypatch):
-        """***REMOVED*** (v0.0.4.7): 上限 50→20 · 防 KAN_WORKERS=50 反射 DoS akshare."""
+        """v0.0.4.7 安全收紧:上限 50→20 · 防 KAN_WORKERS=50 反射 DoS akshare."""
         monkeypatch.setenv("KAN_WORKERS", "21")
         with patch("os.cpu_count", return_value=8):
             assert resolve_max_workers() == 12
@@ -82,9 +82,9 @@ class TestKanWorkersEnvVar:
 
 
 class TestD1RuntimeBehavior:
-    """D-1 + D-2 (v0.0.4.7): _auto_fetch_stale 运行时行为真测.
+    """v0.0.4.7:_auto_fetch_stale 运行时行为真测.
 
-    ***REMOVED*** v0.0.4.8: 改造自旧 TestD1MigrationTextRemoved (grep-source 作弊 · 违反 LOCKED).
+    v0.0.4.8 改造:从旧"grep 源码作弊"测试改为 CliRunner runtime 真测.
     新设计: mock rich.Console / rich.Progress · capture 所有调用 · verify runtime 用户面输出.
     """
 
@@ -153,7 +153,7 @@ class TestD1RuntimeBehavior:
         }
 
     def test_no_v045_migration_text_in_runtime_output(self):
-        """D-1: v0.0.4.5 一次性迁移文案不应出现在 _auto_fetch_stale 的任何 user-facing 输出中."""
+        """v0.0.4.5 一次性迁移文案不应出现在 _auto_fetch_stale 的任何 user-facing 输出中."""
         pairs = [(f"60000{i:04d}", f"股{i}") for i in range(35)]
         result = self._run_auto_fetch_stale(pairs)
         assert "v0.0.4.5 起首次刷新会全量补数据" not in result["all_text"], (
@@ -161,7 +161,7 @@ class TestD1RuntimeBehavior:
         )
 
     def test_status_spinner_shows_stale_count(self):
-        """D-1: status spinner 在 ticking 阶段应显示 'N 只 stale' 信息密度 ·
+        """status spinner 在 ticking 阶段应显示 'N 只 stale' 信息密度 ·
 
         让用户理解"为什么这么多只在拉"(cache 全失效场景).
         """
@@ -175,7 +175,7 @@ class TestD1RuntimeBehavior:
         )
 
     def test_concurrency_message_shows_dynamic_workers_not_hardcoded_5(self):
-        """D-2: 30+ stale 股票时 concurrency 提示应显示 resolve_max_workers 动态值 · 不硬编码 '并发 5'."""
+        """30+ stale 股票时 concurrency 提示应显示 resolve_max_workers 动态值 · 不硬编码 '并发 5'."""
         pairs = [(f"60000{i:04d}", f"股{i}") for i in range(35)]
         # max_workers=8 模拟 4 核 mac 的启发式结果
         result = self._run_auto_fetch_stale(pairs, max_workers=8)
@@ -184,5 +184,5 @@ class TestD1RuntimeBehavior:
             f"应显示动态 '并发 8' · 实际 console prints: {result['console_prints']}"
         )
         assert "并发 5" not in all_prints, (
-            "不应硬编码 '并发 5' (D-2 v0.0.4.7 改造点)"
+            "不应硬编码 '并发 5' (v0.0.4.7 改造点)"
         )
