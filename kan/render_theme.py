@@ -8,6 +8,12 @@ from __future__ import annotations
 
 import typer
 
+# 题材 disclaimer 3 个关键短语 SOT · 所有调用点 import 同一份(防 4 处不一致漂移)
+# scan/info 用全 4 行 · add/remove 二次确认 + theme list 用其中部分
+THEME_CLASSIFICATION = "题材分类各家口径不同(本工具用同花顺口径)"
+THEME_RISK = "题材跟风风险高于行业"
+THEME_VS_INDUSTRY = "题材是标签 · 一只股可能在多个题材中"
+
 
 def render_theme_disclaimer() -> None:
     """4 行强 disclaimer(AGENTS.md §6 · spec §12.1 LOCKED · 不省一行)。
@@ -17,5 +23,5 @@ def render_theme_disclaimer() -> None:
     typer.echo("")
     typer.echo("💡 数据源:同花顺 catalog/成分股 · 东方财富 K 线/反查")
     typer.echo("⚠️  位置 ≠ 买卖信号  ·  共振低位区间 ≠ 买入建议")
-    typer.echo("⚠️  题材分类各家口径不同 · 同名题材成分股可能差异  ·  题材跟风风险高于行业")
+    typer.echo(f"⚠️  {THEME_CLASSIFICATION} · 同名题材成分股可能差异  ·  {THEME_RISK}")
     typer.echo("ℹ️  manmankan 是观察工具 · 不预测涨跌 · 不荐股")

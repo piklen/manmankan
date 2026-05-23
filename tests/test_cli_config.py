@@ -30,12 +30,16 @@ def app():
 
 class TestConfigGet:
 
-    def test_get_empty_shows_default_endpoint_only(self, runner, app, isolated_env):
+    def test_get_empty_shows_default_endpoint_and_unconfigured_token(self, runner, app, isolated_env):
+        """U-8: 未配 token 时 get 显示「未配置 · 用 kan config set ...」引导 + 默认 endpoint"""
         result = runner.invoke(app, ["config", "get"])
         assert result.exit_code == 0
         assert "tushare_endpoint" in result.stdout
-        assert "default" in result.stdout.lower() or "默认" in result.stdout
-        assert "tushare_token" not in result.stdout
+        assert "默认" in result.stdout
+        # 未配 token 应给散户引导(不再无声跳过)
+        assert "tushare_token" in result.stdout
+        assert "未配置" in result.stdout
+        assert "kan config set tushare-token" in result.stdout
 
     def test_get_with_token_masks(self, runner, app, isolated_env):
         config.save({**config.DEFAULT_CONFIG, "tushare_token": "tk_abcdefghij1234"})
