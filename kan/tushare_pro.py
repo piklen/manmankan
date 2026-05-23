@@ -132,3 +132,52 @@ def _to_kline_df(data: dict | None) -> "pd.DataFrame | None":
     df = pd.DataFrame(items, columns=fields)
     df = df.rename(columns=_FIELD_MAP)
     return df
+
+
+def _fetch_tushare(symbol: str, start: str) -> "pd.DataFrame | None":
+    """TuShare Pro 日 K 入口 · fetch_kline 顶优先调用。
+
+    Args:
+      symbol: 6 位股票代码
+      start:  YYYYMMDD 起始日期（与 fetcher.py 其它 _fetch_* 函数一致）
+
+    Returns:
+      DataFrame（manmankan KLINE 标准列）或 None（未配 token / 熔断 / 失败）。
+      失败时上游 fetch_kline 会 fallback 到 baostock → akshare → 腾讯。
+    """
+    from kan import circuit_breaker
+
+    token, endpoint = _resolve_config()
+    if not token:
+        return None
+
+    cb = circuit_breaker.get_breaker()
+    if cb.is_down("tushare"):
+        return None
+
+    try:
+        ts_code = _normalize_symbol_to_ts(symbol)
+    except ValueError:
+        return None
+
+    try:
+        data = _post_tushare_api(
+            endpoint=endpoint,
+            token=token,
+            api_name="daily",
+            params={"ts_code": ts_code, "start_date": start},
+            fields="trade_date,open,high,low,close,vol,amount",
+        )
+        if data is None:
+            cb.record("tushare", ok=False)
+            return None
+        df = _to_kline_df(data)
+        if df is None or df.empty:
+            cb.record("tushare", ok=False)
+            return None
+        cb.record("tushare", ok=True)
+        return df
+    except Exception as e:
+        debug_log(__name__, "fetch tushare", type(e).__name__)
+        cb.record("tushare", ok=False)
+        return None
