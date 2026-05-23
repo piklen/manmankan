@@ -1,4 +1,4 @@
-"""kan low / high --theme CLI 真测。"""
+"""kan info/list/fetch --theme CLI 真测。"""
 import sys
 from unittest.mock import MagicMock
 
@@ -50,30 +50,56 @@ def _stub(monkeypatch):
             "volume": [1e6] * 100, "amount": [1e8] * 100,
         }),
     )
-    # 让 filter_extreme 返回空(简化 · 只验命令能跑通 + 路径正确)
-    monkeypatch.setattr("kan.scanner.filter_extreme", lambda targets, periods, mode: {})
-    monkeypatch.setattr("kan.cli_scan_cmds._auto_fetch_stale", lambda targets: None)
 
 
-def test_low_theme_runs(monkeypatch, _isolate_all):
+def test_info_theme_shows_dossier(monkeypatch, _isolate_all):
+    """`kan info --theme=AI应用` 输出题材档案 + 成分股数 + 4 行 disclaimer。"""
     _stub(monkeypatch)
     runner = CliRunner()
-    result = runner.invoke(app, ["low", "30", "--theme=AI应用"])
-    assert result.exit_code == 0, result.output
-    # 输出含题材成分股 location label
-    assert "AI应用" in result.output
-
-
-def test_high_theme_runs(monkeypatch, _isolate_all):
-    _stub(monkeypatch)
-    runner = CliRunner()
-    result = runner.invoke(app, ["high", "30", "--theme=AI应用"])
+    result = runner.invoke(app, ["info", "--theme=AI应用"])
     assert result.exit_code == 0, result.output
     assert "AI应用" in result.output
+    assert "成分股" in result.output
+    assert "题材跟风风险高于行业" in result.output
 
 
-def test_low_theme_mutually_exclusive(_isolate_all):
+def test_info_theme_industry_mutually_exclusive(_isolate_all):
     runner = CliRunner()
-    result = runner.invoke(app, ["low", "30", "--theme=AI应用", "--hot=rank"])
+    result = runner.invoke(app, ["info", "--theme=AI应用", "--industry=半导体"])
     assert result.exit_code == 2
-    assert "互斥" in result.output or "不能同时" in result.output
+
+
+def test_list_theme_shows_intersection(monkeypatch, _isolate_all):
+    """list --theme=AI应用 · 自选 [002230, 600000] · 题材 [002230, 300033] → 只 002230。"""
+    (_isolate_all / "wl.json").write_text(
+        '{"stocks": [{"symbol": "002230", "name": "科大讯飞", "added_at": "2026-05-01"},'
+        ' {"symbol": "600000", "name": "浦发银行", "added_at": "2026-05-01"}]}',
+        encoding="utf-8",
+    )
+    _stub(monkeypatch)
+    runner = CliRunner()
+    result = runner.invoke(app, ["list", "--theme=AI应用"])
+    assert result.exit_code == 0, result.output
+    assert "002230" in result.output
+    assert "600000" not in result.output
+
+
+def test_list_theme_industry_mutually_exclusive(_isolate_all):
+    runner = CliRunner()
+    result = runner.invoke(app, ["list", "--theme=AI应用", "--industry=半导体"])
+    assert result.exit_code == 2
+
+
+def test_fetch_theme_pulls_constituents(monkeypatch, _isolate_all):
+    """fetch --theme=AI应用 调 2 个成分股 fetcher。"""
+    _stub(monkeypatch)
+    call_count = {"n": 0}
+
+    def counting(symbol, **kw):
+        call_count["n"] += 1
+
+    monkeypatch.setattr("kan.fetcher.fetch_kline", counting)
+    runner = CliRunner()
+    result = runner.invoke(app, ["fetch", "--theme=AI应用"])
+    assert result.exit_code == 0, result.output
+    assert call_count["n"] >= 2

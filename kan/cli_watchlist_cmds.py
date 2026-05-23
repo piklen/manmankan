@@ -375,13 +375,21 @@ def list_stocks(
         str | None,
         typer.Option("--industry", help="只列自选里属于该申万行业的股票"),
     ] = None,
+    theme: Annotated[
+        str | None,
+        typer.Option("--theme", help="只列自选里属于该题材的股票"),
+    ] = None,
 ) -> None:
-    """查看自选列表(--industry 只看某行业的)"""
+    """查看自选列表(--industry / --theme 只看某行业/题材的)"""
     from rich.console import Console
     from rich.table import Table
 
     from kan.cli_helpers import _print_err
     from kan.watchlist import list_all
+
+    if industry is not None and theme is not None:
+        _print_err("❌ --industry 与 --theme 不能同时使用")
+        raise typer.Exit(2)
 
     stocks = list_all()
     if not stocks:
@@ -405,6 +413,22 @@ def list_stocks(
             typer.echo(f"自选股里没有属于「{board.name}」行业的")
             return
         title = f"自选股 · {board.name} 行业 · {len(stocks)} 只"
+    elif theme is not None:
+        from kan import boards
+        try:
+            themed = boards.search_theme(theme)
+            cons_codes = {c for c, _ in boards.get_theme_constituents(themed)}
+        except boards.ThemeNotFoundError:
+            _print_err(f"❌ 未找到题材「{theme}」· 试更短关键词")
+            raise typer.Exit(2) from None
+        except boards.ThemeDataUnavailableError:
+            _print_err("❌ 题材数据源暂时不可用,稍后再试")
+            raise typer.Exit(1) from None
+        stocks = [s for s in stocks if s.symbol in cons_codes]
+        if not stocks:
+            typer.echo(f"自选股里没有属于「{themed.name}」题材的")
+            return
+        title = f"自选股 · {themed.name} 题材 · {len(stocks)} 只"
 
     table = Table(title=title)
     table.add_column("代码", style="cyan")

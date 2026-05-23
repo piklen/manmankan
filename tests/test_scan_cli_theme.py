@@ -6,7 +6,7 @@ import pandas as pd
 import pytest
 from typer.testing import CliRunner
 
-from kan.app import app
+from kan.cli import app
 from kan.models import Theme
 
 
