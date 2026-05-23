@@ -86,3 +86,114 @@ class TestResolveConfig:
         monkeypatch.setenv("TUSHARE_ENDPOINT", "not-a-url")
         _, endpoint = tushare_pro._resolve_config()
         assert endpoint == self.DEFAULT_ENDPOINT
+
+
+from unittest.mock import MagicMock
+
+
+class TestPostTushareApi:
+    """POST JSON 协议 · 字段映射 · 错误码处理"""
+
+    SAMPLE_RESPONSE = {
+        "code": 0,
+        "msg": "",
+        "data": {
+            "fields": ["trade_date", "open", "high", "low", "close", "vol", "amount"],
+            "items": [
+                ["20260102", 1500.0, 1520.0, 1490.0, 1510.0, 100000.0, 150000000.0],
+                ["20260103", 1510.0, 1530.0, 1500.0, 1525.0, 120000.0, 180000000.0],
+            ],
+        },
+    }
+
+    def test_post_sends_correct_payload(self, monkeypatch):
+        captured = {}
+
+        def fake_post(url, json, timeout):
+            captured["url"] = url
+            captured["json"] = json
+            captured["timeout"] = timeout
+            mock = MagicMock()
+            mock.status_code = 200
+            mock.json.return_value = self.SAMPLE_RESPONSE
+            return mock
+
+        monkeypatch.setattr(tushare_pro.requests, "post", fake_post)
+
+        result = tushare_pro._post_tushare_api(
+            endpoint="http://api.tushare.pro",
+            token="tk_test",
+            api_name="daily",
+            params={"ts_code": "600519.SH", "start_date": "20260101"},
+            fields="trade_date,open,high,low,close,vol,amount",
+        )
+
+        assert captured["url"] == "http://api.tushare.pro"
+        assert captured["json"]["api_name"] == "daily"
+        assert captured["json"]["token"] == "tk_test"
+        assert captured["json"]["params"]["ts_code"] == "600519.SH"
+        assert captured["json"]["fields"] == "trade_date,open,high,low,close,vol,amount"
+        assert captured["timeout"] == 30
+        assert result == self.SAMPLE_RESPONSE["data"]
+
+    def test_nonzero_code_returns_none(self, monkeypatch):
+        def fake_post(url, json, timeout):
+            mock = MagicMock()
+            mock.status_code = 200
+            mock.json.return_value = {"code": 40001, "msg": "token 无效", "data": None}
+            return mock
+        monkeypatch.setattr(tushare_pro.requests, "post", fake_post)
+        assert tushare_pro._post_tushare_api(
+            "http://api.tushare.pro", "bad", "daily", {}, "x") is None
+
+    def test_http_5xx_returns_none(self, monkeypatch):
+        def fake_post(url, json, timeout):
+            mock = MagicMock()
+            mock.status_code = 502
+            mock.json.return_value = {}
+            return mock
+        monkeypatch.setattr(tushare_pro.requests, "post", fake_post)
+        assert tushare_pro._post_tushare_api(
+            "http://api.tushare.pro", "tk", "daily", {}, "x") is None
+
+    def test_network_exception_returns_none(self, monkeypatch):
+        def fake_post(*a, **kw):
+            raise tushare_pro.requests.exceptions.ConnectionError("DNS fail")
+        monkeypatch.setattr(tushare_pro.requests, "post", fake_post)
+        assert tushare_pro._post_tushare_api(
+            "http://api.tushare.pro", "tk", "daily", {}, "x") is None
+
+    def test_exception_message_does_not_leak_token(self, monkeypatch, caplog):
+        """token 永不进 logs / exception 文本"""
+        import logging
+        def fake_post(*a, **kw):
+            raise tushare_pro.requests.exceptions.ConnectionError("boom")
+        monkeypatch.setattr(tushare_pro.requests, "post", fake_post)
+        with caplog.at_level(logging.DEBUG):
+            tushare_pro._post_tushare_api(
+                "http://api.tushare.pro", "SECRET_TK", "daily", {}, "x")
+        for rec in caplog.records:
+            assert "SECRET_TK" not in rec.getMessage()
+
+
+class TestToKlineDf:
+    """TuShare 响应 → manmankan KLINE_REQUIRED schema 转换"""
+
+    def test_maps_fields(self):
+        data = {
+            "fields": ["trade_date", "open", "high", "low", "close", "vol", "amount"],
+            "items": [
+                ["20260102", 1500.0, 1520.0, 1490.0, 1510.0, 100000.0, 150000000.0],
+            ],
+        }
+        df = tushare_pro._to_kline_df(data)
+        assert list(df.columns) == ["date", "open", "high", "low", "close", "volume", "amount"]
+        assert df.iloc[0]["close"] == 1510.0
+
+    def test_empty_items_returns_none(self):
+        data = {"fields": ["trade_date", "open"], "items": []}
+        assert tushare_pro._to_kline_df(data) is None
+
+    def test_missing_data_returns_none(self):
+        assert tushare_pro._to_kline_df(None) is None
+        assert tushare_pro._to_kline_df({}) is None
