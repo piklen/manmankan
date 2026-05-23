@@ -45,6 +45,7 @@ def test_adata_em_kline_real():
 def test_adata_em_reverse_real():
     """adata EM datacenter 个股反查(科大讯飞 002230) · 应返回 ≥ 5 题材 · 1s 内。"""
     import time
+
     import adata
     t0 = time.time()
     df = adata.stock.info.get_concept_east(stock_code="002230")
