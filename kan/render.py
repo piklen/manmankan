@@ -40,19 +40,27 @@ def max_trend_dates(console_width: int) -> int:
 
 
 def format_pct(pr, *, high_mode: bool = False) -> Text:
-    """格式化位置百分比单元格 · [x%] 带颜色方括号表示触及极值。"""
+    """格式化位置百分比单元格 · [x%] 带颜色方括号表示触及极值。
+
+    high_mode=True (kan scan --high) → 只对 at_high 加 [%] 高亮信号 ·
+    at_low 走普通色, 防止深度回调股(全 0%)被误标 "触高信号"。
+    """
     if pr.insufficient:
         return Text("-", style="dim")
-    elif pr.at_low:
-        return Text(
-            f"[{pr.position_pct:.0f}%]", style="bold green"
-        )
-    elif pr.at_high:
-        style = "bold yellow" if high_mode else "bold red"
-        return Text(f"[{pr.position_pct:.0f}%]", style=style)
-    elif pr.position_pct <= 20:
-        return Text(f"{pr.position_pct:.0f}%", style="green")
-    elif pr.position_pct >= 80:
-        return Text(f"{pr.position_pct:.0f}%", style="red")
-    else:
+    if high_mode:
+        if pr.at_high:
+            return Text(f"[{pr.position_pct:.0f}%]", style="bold yellow")
+        if pr.position_pct <= 20:
+            return Text(f"{pr.position_pct:.0f}%", style="green")
+        if pr.position_pct >= 80:
+            return Text(f"{pr.position_pct:.0f}%", style="red")
         return Text(f"{pr.position_pct:.0f}%")
+    if pr.at_low:
+        return Text(f"[{pr.position_pct:.0f}%]", style="bold green")
+    if pr.at_high:
+        return Text(f"[{pr.position_pct:.0f}%]", style="bold red")
+    if pr.position_pct <= 20:
+        return Text(f"{pr.position_pct:.0f}%", style="green")
+    if pr.position_pct >= 80:
+        return Text(f"{pr.position_pct:.0f}%", style="red")
+    return Text(f"{pr.position_pct:.0f}%")

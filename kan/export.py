@@ -50,11 +50,21 @@ def _disclaimer_quote() -> str:
 
 # ── scan ──────────────────────────────────────────────────────────────
 
-def _pct_cell(pr: PeriodResult, *, decimals: int = 0) -> str:
-    """位置百分比 → md 单元格 · 触及极值保留方括号语义(无颜色)。"""
+def _pct_cell(
+    pr: PeriodResult, *, decimals: int = 0, mode: str | None = None
+) -> str:
+    """位置百分比 → md 单元格 · 触及极值保留方括号语义(无颜色)。
+
+    mode="high" → 只 at_high 加 [%] · mode="low" → 只 at_low 加 [%]。
+    mode=None (info / compare 等双模显示) → 沿用旧行为(任一极值都 mark)。
+    """
     if pr.insufficient:
         return "-"
     text = f"{pr.position_pct:.{decimals}f}%"
+    if mode == "high":
+        return f"[{text}]" if pr.at_high else text
+    if mode == "low":
+        return f"[{text}]" if pr.at_low else text
     return f"[{text}]" if (pr.at_low or pr.at_high) else text
 
 
@@ -93,7 +103,7 @@ def scan_markdown(
         cells = [f"{name_short} {r.symbol}{tag}", f"{r.current_price:.2f}"]
         for p in periods:
             pr = next((x for x in r.periods if x.period == p), None)
-            cells.append("-" if pr is None else _pct_cell(pr))
+            cells.append("-" if pr is None else _pct_cell(pr, mode=mode))
         resonance = r.high_resonance if mode == "high" else r.low_resonance
         cells.append(f"×{resonance}" if resonance else "")
         rows.append(cells)
