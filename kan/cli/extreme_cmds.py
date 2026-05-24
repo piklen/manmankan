@@ -51,11 +51,16 @@ def _filter_extreme_cmd(
     if only_watchlist and not source_mode:
         _print_err("❌ --only-watchlist 需配合 --industry / --hot / --theme 使用")
         raise typer.Exit(1)
-    from kan.core.pipeline import resolve_targets_or_exit
-    from kan.core.scan_targets import BoardMeta, HotMeta, ThemeMeta
-    targets, board_meta = resolve_targets_or_exit(
-        industry, only_watchlist, watchlist_pairs, hot=hot, theme=theme,
+    # v0.0.5.3 OOP 路径:from_flags → resolve_stock_set_or_exit · 取代 resolve_targets_or_exit
+    from kan.core.models import BoardMeta, HotMeta, ThemeMeta
+    from kan.core.pipeline import resolve_stock_set_or_exit
+    from kan.core.stock_set import from_flags
+    stock_set = from_flags(
+        industry=industry, hot=hot, theme=theme,
+        watchlist_pairs=watchlist_pairs,
+        only_watchlist=only_watchlist,
     )
+    targets, board_meta = resolve_stock_set_or_exit(stock_set)
     highlight = board_meta.highlight if board_meta else set()
     is_hot = isinstance(board_meta, HotMeta)
     rank_map = board_meta.rank_map if is_hot else {}

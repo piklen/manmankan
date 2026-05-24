@@ -97,13 +97,16 @@ def trend(
             _print_err(f"❌ {name} 的值必须在 2-30 之间（当前：{val}）")
             raise typer.Exit(1)
 
+    # v0.0.5.3 OOP 路径
+    from kan.core.models import ThemeMeta
     from kan.core.pipeline import run_data_pipeline
-    from kan.core.scan_targets import ThemeMeta
-    ctx = run_data_pipeline(
-        industry, only_watchlist, watchlist_pairs,
-        hot=hot, theme=theme,
-        compute=trend_batch, candle=candle,
+    from kan.core.stock_set import from_flags
+    stock_set = from_flags(
+        industry=industry, hot=hot, theme=theme,
+        watchlist_pairs=watchlist_pairs,
+        only_watchlist=only_watchlist,
     )
+    ctx = run_data_pipeline(stock_set, compute=trend_batch, candle=candle)
     results = ctx.results
     board_meta = ctx.meta
     data_cutoff = ctx.freshness.data_cutoff
@@ -144,7 +147,7 @@ def trend(
             typer.echo(export.trend_markdown(results, title=title, latest=latest))
         return
 
-    from kan.core.scan_targets import HotMeta
+    from kan.core.models import HotMeta
     is_hot = isinstance(board_meta, HotMeta)
 
     actual_latest: int | None = None

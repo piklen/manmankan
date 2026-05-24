@@ -33,8 +33,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - 入口契约不变(pyproject `kan = "kan.cli:cli_main"` 通过 `kan/cli/__init__.py` re-export 保留 · CLI 用户零感知)
   - typer 单例 `kan/app.py` 位置不变
   - 内部 imports / 测试 imports 全更新到子包路径(`from kan.data.fetcher` 取代 `from kan.fetcher`)
-  - 测试基线 651 passed → 682 passed(新增 31 stock_set + 18 verbs · 零 functional regression)
-  - CLI 层仍走 `resolve_scan_targets` + `run_data_pipeline` 编排(成熟稳定 · 不打破) · OOP 层是为渐进迁移打地基
+- **CLI 4 命令完整迁移到 StockSet** · `scan / low / high / trend / fetch` 全部用 `from_flags()` 构造 StockSet + 调 `run_data_pipeline(stock_set, ...)` 新签名
+  - StockSet 升级:加 `meta()` method + `watchlist_pairs` + `only_watchlist` 字段 · highlight / rank_map / index_kline / ∩ filter 全部沉降为 Set 内部职责
+  - `BoardMeta / HotMeta / ThemeMeta` 三个 dataclass 迁到 `kan/core/models.py`(跟 `Board / Theme` 同地存放) · `kan/core/scan_targets.py` 保留 re-export 不破坏老 caller
+  - `resolve_scan_targets()` 退化为 thin wrapper(走 `from_flags()`)· 测试 + 第三方脚本仍可调
+  - `run_data_pipeline()` 升级为双签名重载:第一个 positional arg 是 StockSet 走新路径 · 是 `str / None` 走老路径(`test_pipeline.py` 31 个测试零破坏)
+  - 新增 `resolve_stock_set_or_exit()` · StockSet 版的错误统一处理(上游异常 → typer.Exit)
+- 测试基线 651 passed → 692 passed(+10 stock_set meta 行为测试 · 零 functional regression)
+- StockSet `Protocol.meta` 用 method 不用 `@property` · 让 `isinstance(x, StockSet)` 的 `hasattr` 探测不触发 lazy IO(Pythonic + offline 测试友好)
 
 ### Removed (公开 docs 精简)
 
