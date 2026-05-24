@@ -80,7 +80,11 @@ def _info_theme(theme_query: str, fmt: export.OutputFormat) -> None:
 
     assert meta is not None
     if meta.index_kline.empty:
-        _print_err("❌ 题材指数 K 线暂不可用 · 无法生成档案")
+        _print_err(
+            "❌ 题材指数 K 线暂不可用 · 无法生成档案\n"
+            f"   替代:`kan scan --theme={theme_query}` 看成分股(不依赖指数)\n"
+            "   或 `kan info --industry <行业名>` 看相近行业档案"
+        )
         raise typer.Exit(1)
     theme_result = scan_stock(meta.index_kline, meta.theme.code, meta.theme.name)
 
@@ -114,7 +118,7 @@ def _info_theme(theme_query: str, fmt: export.OutputFormat) -> None:
 def info(
     symbol: Annotated[
         str | None,
-        typer.Argument(help="股票代码（如 600519）", show_default=False),
+        typer.Argument(help="股票代码或名称（如 600519 / 茅台）", show_default=False),
     ] = None,
     industry: Annotated[
         str | None,
@@ -166,18 +170,12 @@ def info(
         from kan.data.fetcher import cache_age, data_cutoff_date, fetch_kline, get_cached, is_fresh
         from kan.render import terminal
         from kan.render.base import DISCLAIMER
-        from kan.storage.watchlist import _lookup_name, _normalize_symbol
+        from kan.storage.watchlist import resolve_symbol_or_name
 
     console = Console()
 
     try:
-        symbol = _normalize_symbol(symbol)
-    except ValueError as e:
-        _print_err(f"❌ {e}")
-        raise typer.Exit(1) from e
-
-    try:
-        name = _lookup_name(symbol)
+        symbol, name = resolve_symbol_or_name(symbol)
     except ValueError as e:
         _print_err(f"❌ {e}")
         raise typer.Exit(1) from e

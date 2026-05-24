@@ -51,7 +51,14 @@ def update(
     console.print(f"最新版本: [cyan]v{info.latest}[/cyan]")
 
     if not info.has_update:
-        console.print("[green]✅ 已是最新版本[/green]")
+        # 区分 "齐平 PyPI" 与 "本地超前(dev 安装 / 预发版)" · 不再让两者共享"已是最新"文案
+        if updater.is_newer(info.current, info.latest):
+            console.print(
+                f"[green]✅ 当前 v{info.current} 已超前 PyPI 最新发布版 v{info.latest}"
+                " · 通常是开发版 / editable install[/green]"
+            )
+        else:
+            console.print("[green]✅ 已是最新版本[/green]")
         return
 
     console.print(
