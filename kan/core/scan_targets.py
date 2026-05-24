@@ -41,7 +41,7 @@ def resolve_scan_targets(
     - industry / hot / theme 任一给定 → 拉对应 source · 组 meta · 应用 only_watchlist 过滤
     - 三者同时给定 → ValueError("--industry / --hot / --theme 三者互斥 ...")
     - 上游异常 (BoardNotFound / ThemeNotFound / HotListUnavailable /
-      ThemeDataUnavailable) 直接 propagate (pipeline.resolve_targets_or_exit 负责转 typer.Exit)
+      ThemeDataUnavailable) 直接 propagate (caller 负责转 typer.Exit)
     """
     given = sum(1 for x in (industry, hot, theme) if x is not None)
     if given > 1:

@@ -453,6 +453,90 @@ kan completion install zsh     # 显式指定 shell(zsh / bash / fish / powershe
 
 ---
 
+## Python API (脚本化使用)
+
+除了 CLI · 慢慢看也提供稳定的 **`kan.api`** 入口,适合写脚本 / cron 任务 / 集成到 notebook:
+
+```python
+from kan.api import WatchlistSet, ThemeSet, HotRankSet, IndustrySet
+from kan.api import scan, low, high, trend, fetch
+```
+
+### 四类股票集合 (StockSet)
+
+| 类 | 含义 | 构造示例 |
+|---|---|---|
+| `WatchlistSet()` | 自选股 (本地 `kan add` 管理) | `WatchlistSet()` |
+| `HotRankSet(mode=...)` | 东方财富热榜 | `HotRankSet(mode="rank")` / `HotRankSet(mode="surge")` |
+| `ThemeSet(theme=...)` | 题材股 (同花顺概念) | `ThemeSet("新能源")` / `ThemeSet("AI")` |
+| `IndustrySet(industry=...)` | 行业股 (申万分类) | `IndustrySet("白酒")` / `IndustrySet("半导体")` |
+
+### 五个 verb (任何 StockSet 都可接受)
+
+```python
+scan(stock_set, mode="low")             # 多周期位置扫描 + 共振排序
+low(stock_set, periods=[30, 60, 120])   # 筛触及 N 日低点
+high(stock_set, periods=[30, 60, 120])  # 筛触及 N 日高点
+trend(stock_set, candle=False)          # 连续涨跌排序
+fetch(stock_set, days=180)              # 拉 K 线数据到本地缓存
+```
+
+### 用例
+
+**自选股低位 + JSON 输出脚本:**
+
+```python
+from kan.api import WatchlistSet, low
+
+hits = low(WatchlistSet(), periods=[60])
+for period, stocks in hits.items():
+    for r, period_result in stocks:
+        print(f"{r.symbol} {r.name}: {period} 日位置 {period_result.position_pct:.1%}")
+```
+
+**新能源题材高位 + cron 定时:**
+
+```python
+from kan.api import ThemeSet, high
+
+stock_set = ThemeSet("新能源")
+hits = high(stock_set, periods=[120])
+# stock_set.meta() 含 highlight (∩ 自选) / index_kline (板块指数 K)
+```
+
+**自定义集合 (鸭子类型 · 无需继承):**
+
+```python
+from kan.api import StockSet, scan
+
+class MyETFBasket:
+    name = "新能源车 ETF 篮"
+    def codes(self): return ["600519", "300750", "002230"]
+    def pairs(self): return [("600519","茅台"), ("300750","宁德"), ("002230","讯飞")]
+    def meta(self): return None  # 不需要 highlight / index_kline
+
+assert isinstance(MyETFBasket(), StockSet)  # True · 自动满足 Protocol
+results = scan(MyETFBasket())
+```
+
+**用 CLI flag 风格构造 (`from_flags` 互斥校验):**
+
+```python
+from kan.api import from_flags, scan
+
+stock_set = from_flags(theme="AI", watchlist_pairs=[("600519","贵州茅台")])
+results = scan(stock_set)  # AI 题材成分 · 自选 ⭐ 标记
+```
+
+### 注意
+
+- verb 不主动拉数据 · 假设本地缓存已存在 (没缓存的股票静默跳过)。先跑 `fetch()` 拉数据。
+- `meta()` 在 industry / hot / theme 模式才有非 None 返回 (`WatchlistSet.meta()` = `None`)。
+- `kan.api` 是公开 contract · 内部模块 (`kan.core.stock_set` / `kan.core.verbs`) 可能小版本重构 · 优先用 `kan.api`。
+- 完整 docstring + 更多示例见 `kan/api.py` 文件头。
+
+---
+
 ## 数据源 · 缓存 · 涨跌停
 
 ### K 线拉取链路
