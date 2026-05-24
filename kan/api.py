@@ -83,6 +83,69 @@
 - meta 在 industry/hot/theme 模式才有 (WatchlistSet.meta() = None) · 含 highlight
   (集合 ∩ 自选)、rank_map (热榜名次)、index_kline (板块指数 K 线) 等。
 - 数据源限流时各 Set 内部已做 5 分钟熔断 · 不会反复打挂上游。
+
+数据源扩展 (v0.0.6 起)
+─────────────────────
+
+manmankan 内置 K 线 5 源 (tushare/baostock/eastmoney/sina/tencent · 按稳定性排优先级)
++ 题材成分股 2 源 (THS / EM)。用户可通过 `register_*_source` 注入自定义源 ·
+chain 自动按 priority 排序 + fallback · 你的源失败不影响其他源。
+
+K 线数据源 (实现 `KlineSource` Protocol):
+
+    >>> from kan.api import KlineSource, register_kline_source
+    >>> import pandas as pd
+    >>>
+    >>> class MyWindKlineSource:
+    ...     '''自接 Wind / 自建数据库 / 通达信本地缓存 / 任何源。'''
+    ...     name = "user_wind"            # 唯一标识 (建议 user_ 前缀避免与内置撞名)
+    ...     priority = 5                  # 顶档 (内置最高 tushare=10 · 你可压它)
+    ...     def is_available(self) -> bool:
+    ...         return True               # 软依赖 / token / 熔断检查 · cheap (不做网络)
+    ...     def fetch(self, symbol: str, start: str) -> pd.DataFrame | None:
+    ...         # 返回标准 schema · 必含 date/open/high/low/close · 可选 volume/amount
+    ...         # 失败返 None · chain 自动 fallback 下一档 (异常吞掉 + debug_log)
+    ...         return your_wind_query(symbol, start)
+    ...
+    >>> register_kline_source(MyWindKlineSource())
+    >>> # 之后 fetch / scan / low / high / trend 自动走 chain · Wind 顶档优先
+
+题材成分股数据源 (实现 `ThemeConstituentSource` Protocol):
+
+    >>> from kan.api import ThemeConstituentSource, register_theme_constituent_source
+    >>> from kan.core.models import Theme
+    >>>
+    >>> class MyTdxThemeSource:
+    ...     '''通达信本地 .blk 板块文件 / 自建题材库 / 任何源。'''
+    ...     name = "user_tdx"
+    ...     priority = 5
+    ...     def is_available(self) -> bool:
+    ...         return Path("~/.tdx/blk").expanduser().exists()
+    ...     def fetch(self, theme: Theme) -> list[tuple[str, str]] | None:
+    ...         # 返 [(code, name), ...] · 失败 None
+    ...         return read_tdx_blk(theme.code)
+    ...
+    >>> register_theme_constituent_source(MyTdxThemeSource())
+
+priority 约定 (按稳定性 · 数字小优先):
+- 0-9   极顶档 (未来 ToB 付费 + 自部署留)
+- 10-19 内置付费 (tushare)
+- 20-29 内置免费稳定 (baostock 独立服务器)
+- 30-39 内置免费并发 race (eastmoney / sina · 同 priority 自动 ThreadPool race)
+- 40-49 内置兜底 (tencent · 部分字段不可信)
+- **50-89 留给用户自定义** (推荐区间 · 避开内置)
+- 90-99 极兜底保留
+
+熔断器 + chain skip 语义:
+- TushareKlineSource.is_available() 未配 token 返 False · chain 跳过 (不浪费 fetch 调用)
+- BaostockKlineSource.is_available() 未装 baostock 软依赖返 False · 跳过
+- 任意源连续失败 → 熔断器 5min 冷却 · is_available 返 False · chain 跳过
+
+inspect 当前 chain 注册的源 (调试 / 用户脚本检查):
+
+    >>> from kan.api import kline_chain, theme_constituent_chain
+    >>> for src in kline_chain().sources:
+    ...     print(src.name, src.priority, src.is_available())
 """
 from __future__ import annotations
 
@@ -105,18 +168,45 @@ from kan.core.verbs import (
     trend,
 )
 
+# v0.0.6 · 数据源扩展 API (KlineSource + ThemeConstituentSource Protocol + register/inspect)
+from kan.data._builtin_sources import (
+    clear_user_kline_sources,
+    register_kline_source,
+)
+from kan.data.protocols import KlineSource
+from kan.data.source_chain import default_kline_chain as kline_chain
+from kan.data.theme_constituents import (
+    ThemeConstituentSource,
+    clear_user_theme_constituent_sources,
+    register_theme_constituent_source,
+)
+from kan.data.theme_constituents import (
+    default_theme_constituent_chain as theme_constituent_chain,
+)
+
 __all__ = [
     # StockSet
     "HotRankSet",
     "IndustrySet",
+    # v0.0.6: 数据源扩展 Protocol (用户写自定义源时用作 typing 提示)
+    "KlineSource",
     "StockSet",
+    "ThemeConstituentSource",
     "ThemeSet",
     "WatchlistSet",
+    # v0.0.6: chain inspect
+    "clear_user_kline_sources",
+    "clear_user_theme_constituent_sources",
     # verbs
     "fetch",
     "from_flags",
     "high",
+    "kline_chain",
     "low",
+    # v0.0.6: register 自定义数据源
+    "register_kline_source",
+    "register_theme_constituent_source",
     "scan",
+    "theme_constituent_chain",
     "trend",
 ]

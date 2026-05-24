@@ -63,6 +63,7 @@ P0 候选 1+2 推到 v0.0.6 minor。
 - **题材位置扫描**:9 命令 `--theme` + `kan theme list/search` 发现入口(v0.0.5.0)
 - **5 档对称成交量识别**:scan/info 表(v0.0.5.0)
 - **题材连续涨跌榜**:`kan theme trend [--up/--down/--latest/--candle/--limit/--all/--force/--format]`(v0.0.5.7 · 并行 16 worker 抓 391 题材 · streak 算法复用 calc_trend · 修订 "adata 反爬" 注释仅适用 push2 路径)
+- **数据源 chain 架构 + 用户自定义源 API**:v0.0.6 把 K 线 (`KlineSourceChain` · 5 内置源 · 同 priority race) 和题材成分股 (`ThemeConstituentSourceChain` · 2 内置源) 改成「适配器 + 责任链」· `kan.api` 新增 `KlineSource` / `ThemeConstituentSource` Protocol + `register_*` API · 用户可接 Wind / 通达信本地 .blk / 自建数据库 / 任意源 · chain 按 priority sort + 失败 fallback。详见 CHANGELOG v0.0.6 段。
 
 ### 暂不做
 
@@ -72,13 +73,13 @@ P0 候选 1+2 推到 v0.0.6 minor。
 
 以下方案在评审中被明确否决，避免引入复杂度：
 
-- 数据源工厂模式（当前 4 源 if-chain 足够清晰）
+- ~~数据源工厂模式（当前 4 源 if-chain 足够清晰）~~ → **v0.0.6 翻盘做了**:5 源 + 题材成分股 2 源累计 3 处 fallback 重复实现 + 用户想接 Wind/通达信 · 痛点出现 · 改「适配器 + 责任链」(见 CHANGELOG v0.0.6)
 - DAL 数据访问层（parquet 直读够用）
 - 独立 API 层（CLI 即 API）
 - SQLite 替换 parquet（无并发写入需求）
 - 事件总线（订阅者就一个，没必要）
 
-判断标准：**当前痛点没出现就不引入抽象**。
+判断标准：**当前痛点没出现就不引入抽象**(v0.0.6 chain 是该原则的正向应用 · 痛点出现 → 抽象 ROI 已正)。
 
 ---
 
@@ -103,14 +104,17 @@ P0 候选 1+2 推到 v0.0.6 minor。
 
 ---
 
-## fallback 链路设计
+## fallback 链路设计 (v0.0.6 起走 `KlineSourceChain`)
 
 ```
-fetch_kline(symbol) →
-  1. baostock (独立服务器 · 免熔断 · 主路径)
-  2. 新浪 (akshare.stock_zh_a_daily · 免登录 · 精度高)
-  3. 东财 (akshare.stock_zh_a_hist · push2his 被部分 IP 段 ban · 实战常 fail)
-  4. 腾讯 (akshare.stock_zh_a_hist_tx · 仅价格可信 · amount/volume 已 drop)
+fetch_kline(symbol) → default_kline_chain().fetch(symbol, start) →
+  10. TushareKlineSource    (配 token 时顶档 · 数据精度高 · is_available 看 token)
+  20. BaostockKlineSource   (独立服务器 · 免熔断 · 主路径)
+  30. EastmoneyKlineSource  ┐
+                            ├ 同 priority · chain 自动 ThreadPool race
+  30. SinaKlineSource       ┘ (akshare.stock_zh_a_daily · 东财封禁时兜底)
+  40. TencentKlineSource    (仅价格可信 · amount/volume 已 drop)
+  50-89  用户自定义源        (register_kline_source · README "自定义数据源" 段)
 ```
 
 **根因依据**：akshare GitHub Issue
@@ -151,4 +155,4 @@ manmankan 既然只支持 A 股，安全策略是 drop 而非 board-aware 转换
 
 ---
 
-*最后更新：2026-05-23*
+*最后更新：2026-05-25 · v0.0.6 数据源 chain 架构 + 用户自定义源 API · 推翻旧版"拒绝数据源工厂模式" (原 if-chain 痛点出现 · 抽象 ROI 已正)*
