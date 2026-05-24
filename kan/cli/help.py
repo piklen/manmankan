@@ -55,19 +55,24 @@ def help_cmd() -> None:
   kan trend --up 5          只看连涨 ≥ 5 天
   kan trend --latest 7      展示近 7 天走势详情
   kan trend --candle        阳线阴线口径（默认收盘价口径）
+  kan trend --industry 半导体     行业范围连续涨跌（自选 ⭐ 高亮）
+  kan trend --hot rank            热榜范围连续涨跌
+  kan trend --theme AI应用        题材范围连续涨跌
 
-  [dim]以上参数可任意组合：kan trend --down 5 --latest 7 --candle[/dim]
+  [dim]以上参数可任意组合：kan trend --down 5 --latest 7 --candle --industry 半导体[/dim]
   [dim]N 范围：2-30[/dim]
 
 [bold cyan]行业 / 热榜 / 题材扫描[/bold cyan]
   kan scan --industry 半导体      扫指定行业全成分股（自选股 ⭐ 高亮）
   kan scan --hot rank             扫东财热榜（rank 人气榜 / surge 飙升榜）
-  kan scan --theme AI             扫指定题材全成分股
+  kan scan --theme AI应用         扫指定题材全成分股
   kan low 30 --industry 白酒      行业里筛 30 日低点
+  kan high 60 --theme AI应用      题材里筛 60 日高点
   kan info --industry 半导体      查看行业板块档案
   kan theme list                  列出热门题材（top 30）
   kan theme search 数据要素       模糊搜题材
 
+  [dim]scan / low / high / trend / fetch 全部支持 --industry / --hot / --theme 自由切换[/dim]
   [dim]--industry / --hot / --theme 三者互斥 · 加 --only-watchlist 取自选交集[/dim]
 
 [bold cyan]导出格式[/bold cyan]

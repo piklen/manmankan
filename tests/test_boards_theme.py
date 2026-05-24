@@ -209,6 +209,14 @@ def test_search_theme_not_found(_isolate_boards_dir):
         boards.search_theme("不存在的题材xyz")
 
 
+@pytest.mark.parametrize("bad", ["", "   ", "\t"])
+def test_search_theme_rejects_blank_query(_isolate_boards_dir, bad):
+    """空 / 纯空白 query 必须 raise · 镜像 search_industry 的 short-circuit 修复。"""
+    _seed_catalog(_isolate_boards_dir)
+    with pytest.raises(ThemeNotFoundError):
+        boards.search_theme(bad)
+
+
 # ── get_theme_constituents · THS 优先 + EM fallback + 熔断 ─────────────
 
 def _ths_cons_df():

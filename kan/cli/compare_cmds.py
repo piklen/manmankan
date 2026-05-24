@@ -46,7 +46,7 @@ def compare(
         from kan.data.fetcher import fetch_kline, get_cached, is_fresh
         from kan.render import terminal
         from kan.render.base import DISCLAIMER
-        from kan.storage.watchlist import _lookup_name, _normalize_symbol
+        from kan.storage.watchlist import resolve_symbol_or_name
 
     console = Console()
 
@@ -63,13 +63,16 @@ def compare(
         raise typer.Exit(2)
 
     results = []
+    seen: set[str] = set()
     for raw in symbols:
         try:
-            sym = _normalize_symbol(raw)
-            name = _lookup_name(sym)
+            sym, name = resolve_symbol_or_name(raw)
         except ValueError as e:
             _print_err(f"❌ {raw}：{e}")
             raise typer.Exit(1) from e
+        if sym in seen:
+            continue  # 静默去重 · `compare 茅台 600519 茅台` 这种用户重复输入
+        seen.add(sym)
         if not is_fresh(sym):
             try:
                 with status_console.status(
