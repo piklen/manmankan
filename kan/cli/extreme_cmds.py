@@ -28,7 +28,7 @@ def _filter_extreme_cmd(
 
     status_console = Console(stderr=True)
     with _with_heavy_imports_spinner(status_console, "⏳ 加载数据模块..."):
-        from kan.core.scanner import filter_extreme
+        from kan.core.scanner import filter_extreme, scan_stock
         from kan.data.fetcher import cache_age, data_cutoff_date
         from kan.render import terminal
         from kan.render.base import DISCLAIMER
@@ -65,17 +65,55 @@ def _filter_extreme_cmd(
     is_hot = isinstance(board_meta, HotMeta)
     rank_map = board_meta.rank_map if is_hot else {}
     _auto_fetch_stale(targets)
+
+    # 板块 / 题材指数 reference · 跟 scan --industry / --theme 视觉对齐(v0.0.5.5 backlog)
+    board_index_result = None
+    if isinstance(board_meta, BoardMeta):
+        board_index_result = scan_stock(
+            board_meta.index_kline,
+            board_meta.board.code, board_meta.board.name, periods=periods,
+        )
+    elif isinstance(board_meta, ThemeMeta) and not board_meta.index_kline.empty:
+        board_index_result = scan_stock(
+            board_meta.index_kline,
+            board_meta.theme.code, board_meta.theme.name, periods=periods,
+        )
+
     results_by_period = filter_extreme(targets, periods, mode=mode)
 
     if fmt is not export.OutputFormat.terminal:
         if fmt is export.OutputFormat.json:
             typer.echo(export.to_json(
-                export.extreme_payload(results_by_period, mode=mode)
+                export.extreme_payload(
+                    results_by_period, mode=mode,
+                    board_index_result=board_index_result, board_meta=board_meta,
+                )
             ))
         else:
-            typer.echo(export.extreme_markdown(results_by_period, mode=mode))
+            typer.echo(export.extreme_markdown(
+                results_by_period, mode=mode,
+                board_index_result=board_index_result, board_meta=board_meta,
+                periods=periods,
+            ))
         return
 
+    # 数据截止 / 拉取时间分离展示 · 板块 K 线 cutoff 也聚合(reference 行需要)
+    data_cutoff = None
+    fetched_at = None
+    if board_index_result is not None and isinstance(
+        board_meta, (BoardMeta, ThemeMeta),
+    ):
+        import pandas as pd
+
+        kline = board_meta.index_kline
+        if not kline.empty and "date" in kline.columns:
+            raw = kline["date"].iloc[-1]
+            board_date = raw if hasattr(raw, "isoformat") else pd.Timestamp(raw).date()
+            if data_cutoff is None or board_date > data_cutoff:
+                data_cutoff = board_date
+
+    # 空 hits 时:有 reference 就画 reference + 文案 + disclaimer(industry/theme) ·
+    # 自选股 / hot 保持原行为(纯文案 return · 板块当前位置 reference 仅对 board/theme 有意义)
     if not results_by_period:
         if isinstance(board_meta, BoardMeta):
             where = f"{board_meta.board.name} 行业成分股"
@@ -85,12 +123,30 @@ def _filter_extreme_cmd(
             where = f"{board_meta.theme.name} 题材成分股"
         else:
             where = "自选股"
-        console.print(f"{where}中没有触及 {'/'.join(map(str, periods))} 日{label}的股票")
+        if board_index_result is not None:
+            for p in periods:
+                ref_table = terminal.extreme_table(
+                    p, [], mode,
+                    is_hot=is_hot, rank_map=rank_map, highlight=highlight,
+                    data_cutoff=data_cutoff, fetched_at=fetched_at,
+                    board_index_result=board_index_result,
+                    board_meta=board_meta,
+                )
+                console.print(ref_table)
+                console.print()
+            console.print(
+                f"{where}中没有触及 {'/'.join(map(str, periods))} 日{label}的股票"
+            )
+            if isinstance(board_meta, ThemeMeta):
+                from kan.render.theme import render_theme_disclaimer
+                render_theme_disclaimer()
+            else:
+                console.print(DISCLAIMER, style="dim")
+        else:
+            console.print(
+                f"{where}中没有触及 {'/'.join(map(str, periods))} 日{label}的股票"
+            )
         return
-
-    # v0.0.4.5: 数据截止 / 拉取时间分离展示（与 scan 一致）
-    data_cutoff = None
-    fetched_at = None
 
     for n, hits in results_by_period.items():
         for r, _ in hits:
@@ -105,6 +161,8 @@ def _filter_extreme_cmd(
             n, hits, mode,
             is_hot=is_hot, rank_map=rank_map, highlight=highlight,
             data_cutoff=data_cutoff, fetched_at=fetched_at,
+            board_index_result=board_index_result,
+            board_meta=board_meta,
         )
         console.print(table)
         console.print()
