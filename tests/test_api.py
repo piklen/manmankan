@@ -80,5 +80,113 @@ def test_api_all_lists_match_actual_exports():
         "from_flags",
         # verbs
         "fetch", "high", "low", "scan", "trend",
+        # v0.0.6: 数据源扩展 API
+        "KlineSource", "ThemeConstituentSource",
+        "register_kline_source", "register_theme_constituent_source",
+        "clear_user_kline_sources", "clear_user_theme_constituent_sources",
+        "kline_chain", "theme_constituent_chain",
     }
     assert declared == expected, f"kan.api.__all__ 与预期 surface 不符: 多={declared-expected} · 少={expected-declared}"
+
+
+# ── v0.0.6 数据源扩展 API surface ──────────────────────────────────────
+
+
+def test_api_exports_kline_source_protocol():
+    """kan.api 暴露 KlineSource Protocol · 用户写自定义源时 typing 用。"""
+    from kan.api import KlineSource
+
+    # Protocol 是 runtime_checkable · 自定义 class 鸭子满足
+    class _MyKline:
+        name = "user_t"
+        priority = 50
+        def is_available(self) -> bool: return True
+        def fetch(self, symbol, start): return None
+
+    assert isinstance(_MyKline(), KlineSource), "鸭子类型必须自动满足 Protocol"
+
+
+def test_api_exports_theme_constituent_source_protocol():
+    from kan.api import ThemeConstituentSource
+
+    class _MyTheme:
+        name = "user_t"
+        priority = 50
+        def is_available(self) -> bool: return True
+        def fetch(self, theme): return None
+
+    assert isinstance(_MyTheme(), ThemeConstituentSource)
+
+
+def test_api_register_kline_source_round_trip():
+    """register_kline_source → kline_chain() 可见新源 → clear 后消失。"""
+    from kan.api import (
+        clear_user_kline_sources,
+        kline_chain,
+        register_kline_source,
+    )
+
+    clear_user_kline_sources()  # 干净起手
+
+    class _U:
+        name = "u_test_api"
+        priority = 55
+        def is_available(self) -> bool: return True
+        def fetch(self, symbol, start): return None
+
+    register_kline_source(_U())
+    try:
+        names = [s.name for s in kline_chain().sources]
+        assert "u_test_api" in names
+    finally:
+        clear_user_kline_sources()
+        names_after = [s.name for s in kline_chain().sources]
+        assert "u_test_api" not in names_after
+
+
+def test_api_register_theme_constituent_source_round_trip():
+    from kan.api import (
+        clear_user_theme_constituent_sources,
+        register_theme_constituent_source,
+        theme_constituent_chain,
+    )
+
+    clear_user_theme_constituent_sources()
+
+    class _U:
+        name = "u_theme_api"
+        priority = 55
+        def is_available(self) -> bool: return True
+        def fetch(self, theme): return None
+
+    register_theme_constituent_source(_U())
+    try:
+        names = [s.name for s in theme_constituent_chain().sources]
+        assert "u_theme_api" in names
+    finally:
+        clear_user_theme_constituent_sources()
+        names_after = [s.name for s in theme_constituent_chain().sources]
+        assert "u_theme_api" not in names_after
+
+
+def test_api_kline_chain_returns_chain_with_builtin_sources():
+    """kline_chain() 返回 default chain · 含内置 5 源。"""
+    from kan.api import clear_user_kline_sources, kline_chain
+
+    clear_user_kline_sources()
+    chain = kline_chain()
+    names = {s.name for s in chain.sources}
+    assert {"tushare", "baostock", "eastmoney", "sina", "tencent"}.issubset(names)
+
+
+def test_api_theme_constituent_chain_returns_chain_with_builtin_sources():
+    """theme_constituent_chain() 返回 default chain · 含内置 2 源。"""
+    from kan.api import (
+        clear_user_theme_constituent_sources,
+        theme_constituent_chain,
+    )
+
+    clear_user_theme_constituent_sources()
+    chain = theme_constituent_chain()
+    names = {s.name for s in chain.sources}
+    assert {"ths_constituent", "em_push2_concept"}.issubset(names)

@@ -235,3 +235,34 @@ def _fetch_tushare(symbol: str, start: str) -> pd.DataFrame | None:
         debug_log(__name__, "fetch tushare 失败", e)
         cb.record("tushare", ok=False)
         return None
+
+
+# ══════════════════════════════════════════════════════════════════
+# KlineSource Protocol 适配 (v0.0.6) · 顶档付费源 · is_available 含 token 检查
+# ══════════════════════════════════════════════════════════════════
+
+
+class TushareKlineSource:
+    """TuShare Pro K 线源 · priority=10 · 配 token 时顶档优先。
+
+    is_available 三重检查:
+    1. token 配置 (env TUSHARE_TOKEN 或 config tushare_token) · 缺则 skip 整源
+    2. 熔断器 (持续失败时 skip)
+    3. requests 必须 import-able (打包必然有 · 防御性检查省略)
+
+    与其他源不同之处: 未配 token 时 is_available 直接 False · chain 跳过 ·
+    不浪费一次 fetch 调用 (fetch 内部也有 token 检查兜底 · 但 is_available 先短路)。
+    """
+
+    name = "tushare"
+    priority = 10
+
+    def is_available(self) -> bool:
+        token, _ = _resolve_config()
+        if not token:
+            return False
+        from kan.infra import circuit_breaker
+        return not circuit_breaker.get_breaker().is_down(self.name)
+
+    def fetch(self, symbol: str, start: str) -> pd.DataFrame | None:
+        return _fetch_tushare(symbol, start)

@@ -316,14 +316,18 @@ def search_theme(query: str) -> Theme:
 
 
 def get_theme_constituents(theme, force: bool = False) -> list[tuple[str, str]]:
-    """题材成分股 (代码, 名称) 列表 · THS 优先 → EM fallback(走上游熔断) · JSON cache 24h。
+    """题材成分股 (代码, 名称) 列表 · v0.0.6 走 ThemeConstituentSourceChain。
 
-    THS adata.stock.info.concept_constituent_ths(index_code=) · 走 THS HTTP · 稳定。
-    EM  adata.stock.info.concept_constituent_east(concept_code=) · 走 push2 · 反爬触发熔断。
+    chain 内置 2 源 (THS priority=10 → EM priority=20 with em_push2_concept 5min 熔断):
+    - ThsConstituentSource · adata.stock.info.concept_constituent_ths · 主源
+    - EmConstituentSource  · adata.stock.info.concept_constituent_east · fallback
 
-    熔断器 source id `em_push2_concept` · 5min cooldown(沿 T6 LOCKED 默认 TTL)。
+    JSON cache 24h · cache key 仍按 src_prefix (THS vs EM) 区分 ·
+    保持文件 layout 与旧版兼容 (用户磁盘上现有 cache 不需迁移)。
+
+    用户可通过 kan.api.register_theme_constituent_source 加自定义源。
     """
-    from kan.infra.circuit_breaker import get_breaker
+    from kan.data.theme_constituents import default_theme_constituent_chain
     from kan.infra.log import debug_log
 
     ensure_dirs()
@@ -339,50 +343,21 @@ def get_theme_constituents(theme, force: bool = False) -> list[tuple[str, str]]:
         except Exception as e:
             debug_log(__name__, f"theme constituents cache {cache.name} 损坏 · 重新拉", e)
 
-    import adata
-
-    breaker = get_breaker()
-
-    # 1. THS 优先
-    try:
-        df = adata.stock.info.concept_constituent_ths(index_code=theme.code)
-        if df is not None and not df.empty:
-            pairs = [
-                (str(row["stock_code"]).strip(), str(row["short_name"]).strip())
-                for _, row in df.iterrows()
-            ]
-            atomic_write_json(cache, pairs, ensure_ascii=False)
-            return pairs
-    except Exception as e:
-        debug_log(__name__, f"THS concept_constituent_ths({theme.code})", e)
-
-    # 2. EM fallback · 先检查熔断
-    if breaker.is_down("em_push2_concept"):
+    result = default_theme_constituent_chain().fetch(theme)
+    if result is None:
+        # chain 全失败 · inspect 熔断器决定 error 文案 (保留旧版语义)
+        from kan.infra.circuit_breaker import get_breaker
+        if get_breaker().is_down("em_push2_concept"):
+            raise ThemeDataUnavailableError(
+                f"题材成分股 {theme.code} 不可用 · THS 失败 · EM push2 在 5min 熔断冷却中"
+            )
         raise ThemeDataUnavailableError(
-            f"题材成分股 {theme.code} 不可用 · THS 失败 · EM push2 在 5min 熔断冷却中"
+            f"题材成分股 {theme.code} 不可用 · 全源失败"
         )
 
-    try:
-        df = adata.stock.info.concept_constituent_east(concept_code=theme.code)
-        if df is None or df.empty:
-            breaker.record("em_push2_concept", ok=False)
-            raise ThemeDataUnavailableError(
-                f"题材成分股 {theme.code} 不可用 · EM 返回空"
-            )
-        pairs = [
-            (str(row["stock_code"]).strip(), str(row["short_name"]).strip())
-            for _, row in df.iterrows()
-        ]
-        atomic_write_json(cache, pairs, ensure_ascii=False)
-        breaker.record("em_push2_concept", ok=True)
-        return pairs
-    except ThemeDataUnavailableError:
-        raise
-    except Exception as e:
-        breaker.record("em_push2_concept", ok=False)
-        raise ThemeDataUnavailableError(
-            f"题材成分股 {theme.code} 不可用 · THS+EM 双源失败: {e}"
-        ) from e
+    pairs, _source_name = result
+    atomic_write_json(cache, pairs, ensure_ascii=False)
+    return pairs
 
 
 # ── 题材指数 K 线 ──────────────────────────────────────────────────────────

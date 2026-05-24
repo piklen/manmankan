@@ -18,7 +18,7 @@ from __future__ import annotations
 import pandas as pd
 import pytest
 
-from kan.data import fetcher
+from kan.data import sources
 from kan.data.fetcher import KLINE_COLUMNS, _normalize_kline
 from kan.data.sources import _EM_COLUMN_MAP
 
@@ -138,7 +138,7 @@ def test_tencent_drops_amount_to_avoid_cross_board_unit_mismatch(tencent_raw: pd
     from unittest.mock import patch
 
     with patch("akshare.stock_zh_a_hist_tx", return_value=tencent_raw):
-        raw = fetcher._fetch_tencent("600519", "20260501")
+        raw = sources._fetch_tencent("600519", "20260501")
 
     assert raw is not None
     assert "amount" not in raw.columns, "腾讯 fallback 必须 drop 'amount' 字段"
