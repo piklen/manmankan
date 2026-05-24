@@ -535,21 +535,57 @@ results = scan(stock_set)  # AI 题材成分 · 自选 ⭐ 标记
 - `kan.api` 是公开 contract · 内部模块 (`kan.core.stock_set` / `kan.core.verbs`) 可能小版本重构 · 优先用 `kan.api`。
 - 完整 docstring + 更多示例见 `kan/api.py` 文件头。
 
+### 自定义数据源 (v0.0.6 新增)
+
+慢慢看 v0.0.6 起把数据源做成**适配器 + 责任链**架构 · 用户可注入自定义源 (Wind / 通达信本地 .blk / 自建数据库 / ...) · chain 按 priority 自动 fallback。
+
+```python
+from kan.api import KlineSource, register_kline_source
+import pandas as pd
+
+class MyWindKlineSource:
+    """对接自建 Wind 镜像 / 内网数据库 / 任何源。"""
+    name = "user_wind"            # 唯一标识 · 建议 user_ 前缀
+    priority = 5                  # 数字小优先 · 5 比内置 tushare(10) 还高
+    def is_available(self) -> bool:
+        return True               # cheap 检查 (软依赖 / token / 熔断)
+    def fetch(self, symbol: str, start: str) -> pd.DataFrame | None:
+        # 必含 date/open/high/low/close · 可选 volume/amount
+        # 失败返 None · chain 自动 fallback 内置源
+        return your_wind_query(symbol, start)
+
+register_kline_source(MyWindKlineSource())
+# 之后 fetch() / scan() / low() / high() / trend() 全部走新 chain
+```
+
+题材成分股源同理 (`ThemeConstituentSource` + `register_theme_constituent_source`)。
+
+inspect 当前 chain 注册的源 (调试):
+
+```python
+from kan.api import kline_chain
+for src in kline_chain().sources:
+    print(src.name, src.priority, src.is_available())
+```
+
+完整 priority 约定 + 题材源示例见 `kan/api.py` docstring。
+
 ---
 
 ## 数据源 · 缓存 · 涨跌停
 
 ### K 线拉取链路
 
-默认数据来自 [AKShare](https://github.com/akfamily/akshare) 体系,慢慢看做了**多源 fallback** 防单源失效。配置 TuShare Pro token 后,TuShare Pro 会顶在最前面:
+v0.0.6 起 fallback 走统一 `KlineSourceChain` (适配器 + 责任链) · 按 priority 排序 · 同 priority 多源并发 race。配置 TuShare Pro token 后顶档优先,未配 token 时 chain 直接 skip TushareSource (不浪费 fetch 调用):
 
 ```
-fetch_kline(symbol) →
-  0. TuShare Pro (可选 · 配 token 后启用)
-  1. baostock    (独立服务器 · 免熔断 · 默认主路径)
-  2. 新浪        (akshare.stock_zh_a_daily · 免登录 · 数值精度跟 baostock 对齐)
-  3. 东财        (akshare.stock_zh_a_hist · push2his 对部分 IP 段持续封禁,常 fail)
-  4. 腾讯        (akshare.stock_zh_a_hist_tx · 仅价格可信 · amount 字段板块语义不一致已 drop)
+fetch_kline(symbol) → KlineSourceChain →
+  10. TushareKlineSource    (配 token 时顶档 · 数据精度高 · is_available 含 token 检查)
+  20. BaostockKlineSource   (独立服务器 · 免熔断 · 主路径)
+  30. EastmoneyKlineSource  ┐
+                            ├ 同 priority 自动 ThreadPool race · 谁先返回用谁
+  30. SinaKlineSource       ┘ (akshare.stock_zh_a_daily · 东财封禁时新浪兜底)
+  40. TencentKlineSource    (仅价格可信 · amount 字段语义不可移植已 drop)
 ```
 
 设计依据:akshare GitHub Issue [#6092](https://github.com/akfamily/akshare/issues/6092) / [#6148](https://github.com/akfamily/akshare/issues/6148) / [#7011](https://github.com/akfamily/akshare/issues/7011) / [#6214](https://github.com/akfamily/akshare/issues/6214) —— 东财 push2his 对国内多个 IP 段长期 ban,实测 retry 4 次 5s 间隔无效(持续不是间歇性)。把 baostock 推到主路径,东财降到第三。

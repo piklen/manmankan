@@ -7,6 +7,44 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added (v0.0.6 · 数据源架构 · 适配器 + 责任链)
+
+数据源层重构 · 把 `fetcher.py` 硬编码 if-chain + `boards.py` 散布式 try-except fallback 统一到「适配器 + 责任链」架构。**用户可注入自定义数据源** (Wind / 通达信本地 .blk / 自建数据库 / ...) · chain 自动按 priority sort + fallback · 与内置 5 源 (K 线) / 2 源 (题材成分股) 同等对待。
+
+**Phase 1 · K 线领域 Chain**
+- `kan/data/protocols.py` · `KlineSource` Protocol (runtime_checkable · name/priority/is_available/fetch)
+- `kan/data/source_chain.py` · `KlineSourceChain` + 通用 `_run_chain[T]` generic helper (priority sort + 同 priority race + 异常防御)
+- `kan/data/_builtin_sources.py` · 内置 5 源工厂 + 用户运行时注册表
+- 5 个 `*KlineSource` class (Tushare/Baostock/Eastmoney/Sina/Tencent) · thin wrapper 调原 `_fetch_*` (SOT 保留)
+- 内置 priority 约定 (按稳定性 · 不显式标价格):
+  - **10**  TushareKlineSource    · 配 token 时顶档 · `is_available()` 含 token 检查 · 未配则 chain 直接 skip (不浪费 fetch 调用)
+  - **20**  BaostockKlineSource   · 独立服务器最稳
+  - **30**  EastmoneyKlineSource + SinaKlineSource · 同 priority 自动 ThreadPool race (复刻旧 `_fetch_via_akshare` 语义)
+  - **40**  TencentKlineSource    · 兜底 · volume/amount 已 drop
+  - **50-89** 留给用户自定义源 · **90-99** 兜底保留
+
+**Phase 2 · 题材成分股 Chain**
+- `kan/data/theme_constituents.py` · `ThemeConstituentSource` Protocol + `ThemeConstituentSourceChain` + `Ths/EmConstituentSource` 2 内置
+- `boards.get_theme_constituents` 改走 chain · 内部 -84 行 · 保留 cache 编排 + 熔断器 inspect 决定 error 文案
+
+**Phase 3 · public API (kan.api 新增 8 符号)**
+- `KlineSource` / `ThemeConstituentSource` Protocol (用户写自定义源时 typing 提示)
+- `register_kline_source(src)` / `register_theme_constituent_source(src)` · 用户注册自定义源
+- `clear_user_kline_sources()` / `clear_user_theme_constituent_sources()` · 清空用户源 (测试 / 切换场景)
+- `kline_chain()` / `theme_constituent_chain()` · inspect 当前 default chain (调试)
+- README 新增「自定义数据源」段 + Wind / 通达信集成示例
+
+**测试 · 60 新 + 0 break**
+- `tests/test_source_chain.py` · 22 新 (priority sort / race / fallback / 异常防御 / 注册表)
+- `tests/test_theme_constituent_chain.py` · 19 新 (chain + sources + boards 集成 + 熔断 error 文案)
+- `tests/test_api.py` · 6 新 surface 守护 + KlineSource/ThemeConstituentSource Protocol 鸭子验证
+- `tests/test_fetcher.py` · monkeypatch 路径从 fetcher namespace 迁到 SOT (sources/tushare) · 行为不变
+- 总 baseline 773 → **820 passed** (`-m "not network"`) · ruff clean
+
+**已知边界**
+- `theme_leaderboard.py` 内的 TuShare batch vs adata EM 并发**仍是两条独立路径**而非 chain (两路径执行算法差距 60×: 60 次 HTTP batch vs 391 题材并发 · 不该硬塞同形 chain)
+- `boards.fetch_industry_kline` / `fetch_theme_kline` / `hot.fetch_hot_list` 仍是单源 · 未来加 fallback 时可同形抽 chain (现阶段单源无意义)
+
 ### Added (v0.0.5.7)
 
 - **`kan theme trend`** · 题材连续涨跌榜 · 按 `abs(streak)` 降序 · 配 TuShare token 时走 `ths_daily` batch · 否则走 adata EM
