@@ -333,6 +333,63 @@ def trend_payload(
     }
 
 
+def theme_leaderboard_payload(
+    results: list[TrendResult],
+    *,
+    candle: bool,
+    total_themes: int,
+    errors_count: int,
+    data_cutoff: date | None,
+    fetched_at: str | None,
+) -> dict:
+    """kan theme trend --format json · 题材榜结构化输出 · v0.0.5.7。"""
+    return {
+        "command": "theme_trend",
+        "mode": "candle" if candle else "close",
+        "total_themes": total_themes,
+        "shown": len(results),
+        "errors_count": errors_count,
+        "data_cutoff": data_cutoff.isoformat() if data_cutoff else None,
+        "fetched_at": fetched_at or None,
+        "results": [
+            {**_trend_dict(r), "rank": idx}
+            for idx, r in enumerate(results, start=1)
+        ],
+    }
+
+
+def theme_leaderboard_markdown(
+    results: list[TrendResult], *, title: str, latest: int | None,
+) -> str:
+    """kan theme trend --format md · 题材榜 · 排名列 + 可选近 N 天明细 · v0.0.5.7。"""
+    headers = ["排名", "题材", "现价", "连续", "累计"]
+    n_dates = 0
+    if latest and results:
+        n_dates = min(latest, len(results[0].daily_changes))
+        headers += [d[-5:] for d, _ in results[0].daily_changes[:n_dates]]
+    rows: list[list[str]] = []
+    for idx, r in enumerate(results, start=1):
+        cells = [
+            str(idx),
+            r.name.replace(" ", ""),
+            f"{r.current_price:.2f}",
+            r.direction,
+            f"{abs(r.streak_pct):.2f}%",
+        ]
+        if n_dates:
+            for _, chg in r.daily_changes[:n_dates]:
+                if chg > 0:
+                    cells.append(f"+{chg:.2f}%")
+                elif chg < 0:
+                    cells.append(f"{chg:.2f}%")
+                else:
+                    cells.append("—")
+            while len(cells) < len(headers):
+                cells.append("-")
+        rows.append(cells)
+    return f"# {title}\n\n{md_table(headers, rows)}\n\n{_disclaimer_quote()}"
+
+
 def trend_markdown(
     results: list[TrendResult], *, title: str, latest: int | None,
 ) -> str:
