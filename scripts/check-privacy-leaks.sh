@@ -185,8 +185,11 @@ fi
 
 # ===========================================================
 # 版本号一致性检查 (堵文档与发版号撕裂的盲区)
-# 允许位置: CHANGELOG.md / docs/reviews/ (历史回顾允许多版本号) ·
-#           CODE_OF_CONDUCT.md (引用 Contributor Covenant 外部标准版本号)
+# 允许位置:
+#   - CHANGELOG.md / docs/reviews/ (历史回顾允许多版本号)
+#   - CODE_OF_CONDUCT.md (引用 Contributor Covenant 外部标准版本号)
+#   - scripts/check-version-bump.sh (本身是版本守门脚本 · docstring 含反例)
+#   - tests/test_check_version_bump.py (测试 fixture 含 fake 版本号合法)
 # 其他文件出现 v0.[1-9].x 或 v[1-9].x 字样视为撕裂
 # ===========================================================
 echo ""
@@ -280,13 +283,15 @@ fi
 VERSION_PATTERN='v0\.[123456789]|v[1-9]\.[0-9]'
 VERSION_LEAKS=$(scan_files_z | xargs -0 grep -nEH "$VERSION_PATTERN" 2>/dev/null \
   | grep -v '^scripts/check-privacy-leaks\.sh:' \
+  | grep -v '^scripts/check-version-bump\.sh:' \
+  | grep -v '^tests/test_check_version_bump\.py:' \
   | grep -v '^CHANGELOG\.md:' \
   | grep -v '^docs/reviews/' \
   | grep -v '^CODE_OF_CONDUCT\.md:' \
   || true)
 
 if [ -n "$VERSION_LEAKS" ]; then
-  echo "❌ 发现非当前版本号引用 (允许位置: CHANGELOG.md · docs/reviews/ · CODE_OF_CONDUCT.md):"
+  echo "❌ 发现非当前版本号引用 (允许位置: CHANGELOG.md · docs/reviews/ · CODE_OF_CONDUCT.md · scripts/check-version-bump.sh · tests/test_check_version_bump.py):"
   echo "$VERSION_LEAKS" | sed 's/^/   /'
   echo ""
   echo "═══════════════════════════════════════════════════════════"

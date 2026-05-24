@@ -3,7 +3,15 @@
 > 当前发布候选 **v0.0.5.0**。本路线图列出**用户面新功能候选**，按优先级分组；
 > 内部技术债清理（重构 / 测试覆盖 / CI 加固）不进本表，仅记录在 CHANGELOG 中。
 >
-> **版本节奏**：patch 累加（v0.0.X → v0.0.X+1），不偏好 minor 跨越。
+> **版本节奏 · hard rule**：PEP 440 4-段格式 `A.B.C.D` (epoch.major.minor.patch)。
+> 前 3 段 `A.B.C` 是稳定段；仅第 4 段 `D` (patch) 可累加 (例 `v0.0.5.7 → v0.0.5.8`)。
+> AI 工具**严禁主动 bump** 前 3 段；跨 minor (`C` 变 · 例 `v0.0.5 → v0.0.6`) / major (`B` 变)
+> / epoch (`A` 变) 由项目所有者明示同意。
+>
+> 机械守门：`.githooks/commit-msg` 调 `scripts/check-version-bump.sh` 扫 commit message
+> 中的 `vX.Y.Z(.W)?` pattern · 跨段会被 block。pyproject.toml 的 version 字段是 baseline
+> source of truth。紧急跳过 `git commit --no-verify` (不推荐 · 留 audit trail)。
+>
 > P0 / P1 / P2 是**优先级分组**，不等于发版号。具体哪批 patch 装哪个功能视开发进度而定。
 
 ---

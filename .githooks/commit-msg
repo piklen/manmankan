@@ -24,9 +24,19 @@ REPO_ROOT="$(git rev-parse --show-toplevel)"
 echo ""
 echo "═══ commit-msg 自检 ═══"
 
+# [1/2] 隐私词
 if ! bash "$REPO_ROOT/scripts/check-privacy-leaks.sh" --commit-msg "$COMMIT_MSG_FILE"; then
   echo ""
-  echo "❌ commit-msg 阻断"
+  echo "❌ commit-msg 阻断 (隐私词)"
+  echo "💡 修复 commit message 后重新 commit"
+  echo "💡 紧急跳过(不推荐): git commit --no-verify"
+  exit 1
+fi
+
+# [2/2] 版本号机械守门 (AI 严禁主动 bump 跨 minor/major)
+if ! bash "$REPO_ROOT/scripts/check-version-bump.sh" "$COMMIT_MSG_FILE"; then
+  echo ""
+  echo "❌ commit-msg 阻断 (version bump)"
   echo "💡 修复 commit message 后重新 commit"
   echo "💡 紧急跳过(不推荐): git commit --no-verify"
   exit 1
