@@ -1,15 +1,17 @@
-"""CLI 数据命令的脊椎与共享 helper · scan/low/high/trend/info/fetch 共用。
+"""CLI 数据命令的脊椎与共享 helper · scan/low/high/trend/fetch 共用。
 
-行为保持型 helper:
-  - resolve_targets_or_exit:把 resolve_scan_targets 的 5 类 source 错误统一收成
-    typer.Exit。
-  - resolve_stock_set_or_exit (v0.0.5.3):StockSet 版本 · 触发 .pairs() / .meta
-    并把上游异常转 typer.Exit (CLI 走 StockSet 路径用这个)。
+v0.0.5.4 起 (cleanup): 老 `resolve_targets_or_exit` + `run_data_pipeline` 双签名重载
+已移除 · CLI 全部走 StockSet 单一路径。
+
+helpers:
+  - resolve_stock_set_or_exit:触发 StockSet.pairs() / .meta() · 把 5 类 source
+    错误统一收成 typer.Exit (BoardNotFound / BoardDataUnavailable /
+    HotListUnavailable / ThemeNotFound / ThemeDataUnavailable)。
   - Freshness + freshness_of:跨 symbols 聚合 max data_cutoff 与 max cache_age,
     一并推导 is_stale / phase。
   - render_freshness_warning:在终端打 stale / 盘中 互斥警告。
-  - run_data_pipeline (v0.0.5.3 起):双签名重载 · 第一个 positional arg 是 StockSet
-    走 OOP 路径 · 否则走老签名 (兼容老测试)。
+  - run_data_pipeline (StockSet 单签名):resolve → auto_fetch → compute → freshness
+    一次性编排。各命令注入自己的 compute (scan_batch / trend_batch / ...)。
 """
 from __future__ import annotations
 
@@ -20,7 +22,6 @@ from typing import TYPE_CHECKING, Any
 import typer
 
 from kan.cli.helpers import _print_err
-from kan.core.scan_targets import resolve_scan_targets
 from kan.data.boards import (
     BoardDataUnavailableError,
     BoardNotFoundError,
@@ -35,74 +36,27 @@ if TYPE_CHECKING:
 
     from kan.core.models import BoardMeta, HotMeta, ThemeMeta
     from kan.core.stock_set import StockSet
-    from kan.data.hot import HotList
 
 
-# ── 目标源错误统一处理 ────────────────────────────────────────────────
-
-
-def resolve_targets_or_exit(
-    industry: str | None,
-    only_watchlist: bool,
-    watchlist_pairs: list[tuple[str, str]],
-    *,
-    hot: HotList | None = None,
-    theme: str | None = None,
-) -> tuple[list[tuple[str, str]], BoardMeta | HotMeta | ThemeMeta | None]:
-    """resolve_scan_targets 的 CLI 友好包装 · 5 类 source 错误 → _print_err + typer.Exit。
-
-    退出码沿用现有命令(行为保持):
-      - BoardNotFound / BoardDataUnavailable / HotListUnavailable
-        / ThemeDataUnavailable → Exit(1)
-      - ThemeNotFound → Exit(2)(theme 名 typo 视为用户输入错,与命令现状一致)
-
-    错误文案取最完整版本(带场景提示和后续动作引导)。各命令调本 helper 后
-    可从 ~12 行 try/except 块塌成 1 行 `targets, meta = resolve_targets_or_exit(...)`。
-    """
-    try:
-        return resolve_scan_targets(
-            industry, only_watchlist, watchlist_pairs,
-            hot=hot, theme=theme,
-        )
-    except BoardNotFoundError:
-        _print_err(
-            f"❌ 未找到行业「{industry}」· 可试更短关键词(如「半导体」「白酒」)"
-        )
-        raise typer.Exit(1) from None
-    except BoardDataUnavailableError:
-        _print_err("❌ 行业数据源暂时不可用,稍后再试")
-        raise typer.Exit(1) from None
-    except HotListUnavailableError as e:
-        _print_err(
-            f"❌ 东财热榜源暂时不可用 · 可能东财接口波动 / 限流 ({e})\n"
-            "   替代:`kan scan --industry <行业名>` 或 `kan scan --theme=<题材>`\n"
-            "   详情设 KAN_DEBUG=1 跑同命令看底层错误"
-        )
-        raise typer.Exit(1) from None
-    except ThemeNotFoundError:
-        _print_err(
-            f"❌ 未找到题材「{theme}」· 试更短关键词(如「AI」「华为」) · "
-            "或跑 kan theme search 看候选"
-        )
-        raise typer.Exit(2) from None
-    except ThemeDataUnavailableError:
-        _print_err(
-            "❌ 题材数据源暂时不可用 · 稍后再试 · 行业扫描可用(--industry)"
-        )
-        raise typer.Exit(1) from None
+# ── 目标源错误统一处理 (StockSet 路径) ─────────────────────────────────
 
 
 def resolve_stock_set_or_exit(
     stock_set: StockSet,
 ) -> tuple[list[tuple[str, str]], BoardMeta | HotMeta | ThemeMeta | None]:
-    """StockSet 版本的 resolve_targets_or_exit (v0.0.5.3)。
+    """触发 stock_set.pairs() + .meta() · 把上游异常转 typer.Exit。
 
-    触发 stock_set.pairs() + .meta · 把上游异常转 typer.Exit。CLI OOP 路径专用。
-
-    错误退出码沿用 resolve_targets_or_exit (行为对齐):
+    错误退出码:
       - BoardNotFound / BoardDataUnavailable / HotListUnavailable
         / ThemeDataUnavailable → Exit(1)
-      - ThemeNotFound → Exit(2)
+      - ThemeNotFound → Exit(2) (typo 视为用户输入错)
+
+    错误文案带场景提示 + 后续动作引导。命令侧调本 helper 后从 ~12 行 try/except
+    塌为 1 行 `targets, meta = resolve_stock_set_or_exit(stock_set)`。
+
+    industry / theme 名从 stock_set 属性 (IndustrySet.industry / ThemeSet.theme)
+    抽取 · 用于错误文案中引用用户原始输入。HotRankSet / WatchlistSet 无此属性 ·
+    getattr 安全 fallback 到 None。
     """
     industry_name = getattr(stock_set, "industry", None)
     theme_name = getattr(stock_set, "theme", None)
@@ -243,9 +197,9 @@ class DataCtx:
     """数据命令流水线的产出快照 · 命令层只读不改。
 
     一次调用产出 4 样东西:
-      - targets:  resolve 出的 (symbol, name) 列表(可能含板块成分股 / 热榜 / 题材)
-      - meta:     BoardMeta / HotMeta / ThemeMeta / None(无 source 时)
-      - results:  compute(targets, **kwargs) 的原始返回(未做命令侧过滤)
+      - targets:  StockSet 解析出的 (symbol, name) 列表 (可能含板块成分股 / 热榜 / 题材)
+      - meta:     BoardMeta / HotMeta / ThemeMeta / None (无 source 时)
+      - results:  compute(targets, **kwargs) 的原始返回 (未做命令侧过滤)
       - freshness: 基于 results 的 symbols 聚合的 Freshness
 
     frozen=True · 命令侧从 ctx 解构后做 filter / format · 不回填到 ctx。
@@ -258,46 +212,37 @@ class DataCtx:
 
 
 def run_data_pipeline(
-    stock_set_or_industry: StockSet | str | None,
-    only_watchlist: bool = False,
-    watchlist_pairs: list[tuple[str, str]] | None = None,
+    stock_set: StockSet,
     *,
-    hot: HotList | None = None,
-    theme: str | None = None,
     compute: Callable,
     **compute_kwargs: Any,
 ) -> DataCtx:
-    """resolve → auto_fetch → compute → freshness 的统一编排。
+    """resolve → auto_fetch → compute → freshness 的统一编排 (StockSet 单签名)。
 
-    v0.0.5.3 起支持双签名重载:
-    - **新 (StockSet)**: ``run_data_pipeline(stock_set, *, compute=..., **kw)``
-      第一个 positional arg 是 StockSet 实例 (鸭子判别:``hasattr(.., "pairs")``)。
-      不需要 only_watchlist / watchlist_pairs / hot / theme — 这些都已注入 StockSet。
-    - **老 (兼容)**: ``run_data_pipeline(industry, only_watchlist, watchlist_pairs,
-      *, hot=..., theme=..., compute=..., **kw)`` — 行为不变 · test_pipeline 等老
-      测试 + 第三方脚本可继续用。内部走 resolve_targets_or_exit。
+    v0.0.5.4 起 (cleanup) · 老签名 ``run_data_pipeline(industry, only_watchlist,
+    watchlist_pairs, *, hot=..., theme=..., compute=...)`` 已移除 · 调用方必须先
+    构造 StockSet (`from_flags(...)`) · 再传本函数。
 
-    收口顺序 (双路径一致):
-      1. 拿 (targets, meta) — 新路径走 stock_set.pairs()/meta + resolve_stock_set_or_exit
-         · 老路径走 resolve_targets_or_exit
-      2. _auto_fetch_stale:对落后 / 缺失的 symbols 静默补缺
+    收口顺序:
+      1. resolve_stock_set_or_exit:触发 stock_set.pairs() + .meta() · 把 5 类
+         source 错误统一成 typer.Exit
+      2. _auto_fetch_stale:对落后 / 缺失的 symbols 静默补缺 (网络相关 / 不阻塞)
       3. compute(targets, **compute_kwargs):各命令注入自己的批处理函数
-      4. freshness_of:聚合 max(data_cutoff) + max(cache_age)
+         (scan_batch / trend_batch · 都接 `(targets, **kwargs)` · 要求 result 元素
+         有 .symbol 属性供 freshness 聚合)
+      4. freshness_of:遍历 results 的 .symbol · 聚合 max(data_cutoff) + max(cache_age)
+
+    设计要点:
+      - compute 是 Callable 注入而非内部 dispatch · 不需要为 scan/trend 各开一条
+        分支 · 也方便后续命令 (如 trend backtest) 复用
+      - **compute_kwargs 把 scan/trend 各自的旋钮 (mode / candle / ...) 透传 ·
+        本 helper 不关心也不解释
+      - freshness 在原始 results 上算 · 命令侧 exclude_st / --signal / --down
+        等过滤是「展示侧」选择,不应该改「我们刚加载了什么数据」的事实
     """
     from kan.cli.helpers import _auto_fetch_stale
 
-    # 鸭子判别:第一个 arg 是 StockSet 实例?(它实现 pairs() 和 meta property)
-    if hasattr(stock_set_or_industry, "pairs") and hasattr(stock_set_or_industry, "codes"):
-        stock_set = stock_set_or_industry
-        targets, meta = resolve_stock_set_or_exit(stock_set)
-    else:
-        # 老签名:industry (str | None) + only_watchlist + watchlist_pairs + hot/theme
-        industry = stock_set_or_industry
-        targets, meta = resolve_targets_or_exit(
-            industry, only_watchlist, watchlist_pairs or [],
-            hot=hot, theme=theme,
-        )
-
+    targets, meta = resolve_stock_set_or_exit(stock_set)
     _auto_fetch_stale(targets)
     results = compute(targets, **compute_kwargs)
     freshness = freshness_of(r.symbol for r in results)

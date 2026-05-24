@@ -7,6 +7,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added (Public API surface · v0.0.5.4)
+
+- **`kan.api` · 公开 Python API 入口** · 一个稳定 import 收口 OOP 框架
+  - `from kan.api import WatchlistSet, ThemeSet, HotRankSet, IndustrySet, StockSet`
+  - `from kan.api import scan, low, high, trend, fetch, from_flags`
+  - 文档化于 `kan/api.py` 模块 docstring(完整用例 · 自定义 StockSet 示例)
+  - 6 个新单元测试 (test_api.py) 守护 surface 稳定性 · `kan.api.__all__` 锁定符号集
+  - README 新增 ## Python API (脚本化使用) 段 · 4 类 StockSet × 5 verb 矩阵 + 3 用例
+  - 内部模块 (`kan.core.stock_set` / `kan.core.verbs`) 可继续小版本重构 · 用户脚本不破
+
+### Changed (内部架构 · v0.0.5.4 cleanup)
+
+- **`pipeline.run_data_pipeline` 简化为 StockSet 单签名** · 移除 v0.0.5.3 的双签名重载 + 鸭子判别
+  - 调用方必须先 `from_flags(...)` 构造 StockSet · 再传 `run_data_pipeline(stock_set, ...)`
+  - 4 个 CLI 命令早已用 StockSet 签名 · 0 实际 caller 被破坏
+- **删除 `pipeline.resolve_targets_or_exit`** · v0.0.5.3 留作"老 caller 兼容"的函数现在彻底移除 · CLI 全走 `resolve_stock_set_or_exit`
+- **`test_pipeline.py` 重写** · 7 个 `resolve_targets_or_exit` 测试替换为对等的 `resolve_stock_set_or_exit` 测试 (覆盖 5 类 source 错误 → typer.Exit) · 6 个 `run_data_pipeline` 测试改用 fake StockSet 注入 · `freshness_of` (10) + `render_freshness_warning` (5) 测试不变
+- 测试基线 692 → **698 passed** (净 +6 测试 · 删 13 老 + 加 19 新 · 含 6 个 `test_api.py` 公开 surface 守护测试)
+
 ### Added (Python API · OOP 视角)
 
 - **`kan.core.stock_set` · 股票集合抽象** · 把"一组股票"抽象成对象,让 verb 统一处理

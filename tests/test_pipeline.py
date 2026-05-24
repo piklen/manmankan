@@ -1,4 +1,9 @@
-"""kan/pipeline.py 单元测试 · mock 上游(resolve_scan_targets / fetcher / trading_calendar)。"""
+"""kan/core/pipeline.py 单元测试 · mock 上游 (StockSet / fetcher / trading_calendar)。
+
+v0.0.5.4 起 (cleanup):
+- resolve_targets_or_exit 已删 · 改测 resolve_stock_set_or_exit
+- run_data_pipeline 老签名已删 · 改测 StockSet 单签名
+"""
 from __future__ import annotations
 
 from datetime import date
@@ -18,70 +23,68 @@ from kan.data.boards import (
 )
 from kan.data.hot import HotListUnavailableError
 
-
-def _make_raiser(exc: Exception):
-    """生成 raise 指定异常的 fake · 用于 monkeypatch resolve_scan_targets。"""
-    def _raise(*args, **kwargs):
-        raise exc
-    return _raise
+# ─────────────── fake StockSet ───────────────
 
 
-# ═══ resolve_targets_or_exit ═══════════════════════════════════════════
+class _FakeStockSet:
+    """fake StockSet for testing · pairs() / meta() / codes() / .name 都可控。
+
+    用关键字参数构造 · 字段全 optional · 覆盖 happy / error / industry / theme
+    各种场景。industry / theme 名字段 setter 可选 · 模拟 IndustrySet / ThemeSet
+    暴露的 industry / theme 属性 (供错误文案抽取)。
+    """
+
+    def __init__(
+        self,
+        *,
+        pairs: list[tuple[str, str]] | None = None,
+        meta: object | None = None,
+        name: str = "fake",
+        pairs_error: Exception | None = None,
+        industry: str | None = None,
+        theme: str | None = None,
+    ):
+        self.name = name
+        self._pairs = pairs or []
+        self._meta = meta
+        self._pairs_error = pairs_error
+        if industry is not None:
+            self.industry = industry
+        if theme is not None:
+            self.theme = theme
+
+    def pairs(self) -> list[tuple[str, str]]:
+        if self._pairs_error is not None:
+            raise self._pairs_error
+        return self._pairs
+
+    def codes(self) -> list[str]:
+        return [c for c, _ in self.pairs()]
+
+    def meta(self):
+        return self._meta
 
 
-def test_resolve_targets_or_exit_no_source_returns_watchlist_pairs():
-    """三源都 None → 真实 resolve_scan_targets 直接返回 (pairs, None)。"""
+# ═══ resolve_stock_set_or_exit ═════════════════════════════════════════
+
+
+def test_resolve_stock_set_or_exit_happy_path_returns_pairs_and_meta():
+    """成功路径 · stock_set.pairs() + .meta() 原样返回。"""
     pairs = [("600519", "贵州茅台"), ("000858", "五粮液")]
-    targets, meta = pipeline.resolve_targets_or_exit(
-        None, only_watchlist=False, watchlist_pairs=pairs,
-    )
-    assert targets is pairs
+    sentinel_meta = object()
+    stock_set = _FakeStockSet(pairs=pairs, meta=sentinel_meta)
+    targets, meta = pipeline.resolve_stock_set_or_exit(stock_set)
+    assert targets == pairs
+    assert meta is sentinel_meta
+
+
+def test_resolve_stock_set_or_exit_no_meta_returns_none():
+    """WatchlistSet 风格 · meta() 返回 None · 透传到 caller。"""
+    pairs = [("600519", "贵州茅台")]
+    stock_set = _FakeStockSet(pairs=pairs, meta=None)
+    targets, meta = pipeline.resolve_stock_set_or_exit(stock_set)
+    assert targets == pairs
     assert meta is None
-
-
-def test_resolve_targets_or_exit_passes_through_return(monkeypatch):
-    """成功路径 · resolve_scan_targets 返回值原样返回,不做加工。"""
-    expected_targets = [("600519", "贵州茅台")]
-    monkeypatch.setattr(
-        "kan.core.pipeline.resolve_scan_targets",
-        lambda *a, **kw: (expected_targets, None),
-    )
-    targets, meta = pipeline.resolve_targets_or_exit(
-        None, only_watchlist=False, watchlist_pairs=expected_targets,
-    )
-    assert targets is expected_targets
-    assert meta is None
-
-
-def test_resolve_targets_or_exit_passes_kwargs_through(monkeypatch):
-    """industry / hot / theme / only_watchlist / pairs 都正确透传给 resolve_scan_targets。"""
-    captured = {}
-
-    def _capture(industry, only_watchlist, pairs, *, hot=None, theme=None):
-        captured.update(
-            industry=industry,
-            only_watchlist=only_watchlist,
-            pairs=pairs,
-            hot=hot,
-            theme=theme,
-        )
-        return ([], None)
-
-    monkeypatch.setattr("kan.core.pipeline.resolve_scan_targets", _capture)
-    pipeline.resolve_targets_or_exit(
-        "半导体",
-        only_watchlist=True,
-        watchlist_pairs=[("600519", "茅台")],
-        hot=None,
-        theme=None,
-    )
-    assert captured == {
-        "industry": "半导体",
-        "only_watchlist": True,
-        "pairs": [("600519", "茅台")],
-        "hot": None,
-        "theme": None,
-    }
 
 
 @pytest.mark.parametrize(("exc_cls", "expected_code", "msg_part"), [
@@ -91,7 +94,7 @@ def test_resolve_targets_or_exit_passes_kwargs_through(monkeypatch):
     (ThemeNotFoundError, 2, "未找到题材"),
     (ThemeDataUnavailableError, 1, "题材数据源"),
 ])
-def test_resolve_targets_or_exit_source_errors(
+def test_resolve_stock_set_or_exit_source_errors(
     monkeypatch, exc_cls, expected_code, msg_part,
 ):
     """5 类 source 错误统一转换为 _print_err + typer.Exit · exit 码与现状一致。"""
@@ -100,39 +103,33 @@ def test_resolve_targets_or_exit_source_errors(
         "kan.core.pipeline._print_err",
         lambda msg: err_calls.append(msg),
     )
-    monkeypatch.setattr(
-        "kan.core.pipeline.resolve_scan_targets",
-        _make_raiser(exc_cls("test")),
+    stock_set = _FakeStockSet(
+        pairs_error=exc_cls("test"),
+        industry="test",
+        theme="testtheme",
     )
     with pytest.raises(typer.Exit) as exc_info:
-        pipeline.resolve_targets_or_exit(
-            "test",
-            only_watchlist=False,
-            watchlist_pairs=[],
-            theme="testtheme",
-        )
+        pipeline.resolve_stock_set_or_exit(stock_set)
     assert exc_info.value.exit_code == expected_code
     assert len(err_calls) == 1
     assert msg_part in err_calls[0]
 
 
-def test_resolve_targets_or_exit_board_not_found_includes_industry_and_examples(
+def test_resolve_stock_set_or_exit_board_not_found_includes_industry_and_examples(
     monkeypatch,
 ):
-    """BoardNotFound 错误消息引用 industry 参数名 + 散户化示例关键词。"""
+    """BoardNotFound 错误消息引用 stock_set.industry + 散户化示例关键词。"""
     err_calls: list[str] = []
     monkeypatch.setattr(
         "kan.core.pipeline._print_err",
         lambda msg: err_calls.append(msg),
     )
-    monkeypatch.setattr(
-        "kan.core.pipeline.resolve_scan_targets",
-        _make_raiser(BoardNotFoundError("我的行业")),
+    stock_set = _FakeStockSet(
+        pairs_error=BoardNotFoundError("我的行业"),
+        industry="我的行业",
     )
     with pytest.raises(typer.Exit):
-        pipeline.resolve_targets_or_exit(
-            "我的行业", only_watchlist=False, watchlist_pairs=[],
-        )
+        pipeline.resolve_stock_set_or_exit(stock_set)
     msg = err_calls[0]
     assert "我的行业" in msg
     assert "半导体" in msg
@@ -140,47 +137,57 @@ def test_resolve_targets_or_exit_board_not_found_includes_industry_and_examples(
     assert "❌" in msg
 
 
-def test_resolve_targets_or_exit_theme_not_found_includes_theme_and_search_hint(
+def test_resolve_stock_set_or_exit_theme_not_found_includes_theme_and_search_hint(
     monkeypatch,
 ):
-    """ThemeNotFound 错误消息引用 theme 参数名 + 提示 kan theme search。"""
+    """ThemeNotFound 错误消息引用 stock_set.theme + 提示 kan theme search。"""
     err_calls: list[str] = []
     monkeypatch.setattr(
         "kan.core.pipeline._print_err",
         lambda msg: err_calls.append(msg),
     )
-    monkeypatch.setattr(
-        "kan.core.pipeline.resolve_scan_targets",
-        _make_raiser(ThemeNotFoundError("我的题材")),
+    stock_set = _FakeStockSet(
+        pairs_error=ThemeNotFoundError("我的题材"),
+        theme="我的题材",
     )
     with pytest.raises(typer.Exit):
-        pipeline.resolve_targets_or_exit(
-            None, only_watchlist=False, watchlist_pairs=[], theme="我的题材",
-        )
+        pipeline.resolve_stock_set_or_exit(stock_set)
     msg = err_calls[0]
     assert "我的题材" in msg
     assert "kan theme search" in msg
     assert "AI" in msg or "华为" in msg
 
 
-def test_resolve_targets_or_exit_theme_data_unavailable_hints_industry(monkeypatch):
+def test_resolve_stock_set_or_exit_theme_data_unavailable_hints_industry(monkeypatch):
     """ThemeDataUnavailable 提示用户可以退化用 --industry(题材源死时的降级路径)。"""
     err_calls: list[str] = []
     monkeypatch.setattr(
         "kan.core.pipeline._print_err",
         lambda msg: err_calls.append(msg),
     )
-    monkeypatch.setattr(
-        "kan.core.pipeline.resolve_scan_targets",
-        _make_raiser(ThemeDataUnavailableError("api down")),
+    stock_set = _FakeStockSet(
+        pairs_error=ThemeDataUnavailableError("api down"),
+        theme="AI",
     )
     with pytest.raises(typer.Exit):
-        pipeline.resolve_targets_or_exit(
-            None, only_watchlist=False, watchlist_pairs=[], theme="AI",
-        )
+        pipeline.resolve_stock_set_or_exit(stock_set)
     msg = err_calls[0]
     assert "题材数据源" in msg
     assert "--industry" in msg
+
+
+def test_resolve_stock_set_or_exit_missing_industry_attr_uses_none(monkeypatch):
+    """stock_set 无 .industry 属性 (如 WatchlistSet / HotRankSet) → 错误文案显「None」不崩。"""
+    err_calls: list[str] = []
+    monkeypatch.setattr(
+        "kan.core.pipeline._print_err",
+        lambda msg: err_calls.append(msg),
+    )
+    stock_set = _FakeStockSet(pairs_error=BoardNotFoundError("x"))  # 不传 industry
+    with pytest.raises(typer.Exit):
+        pipeline.resolve_stock_set_or_exit(stock_set)
+    # getattr fallback 到 None · 不应抛 AttributeError
+    assert "None" in err_calls[0] or "❌" in err_calls[0]
 
 
 # ═══ Freshness / freshness_of ══════════════════════════════════════════
@@ -418,31 +425,32 @@ def test_render_freshness_warning_stale_supersedes_intraday():
     assert "盘中" not in msg  # 没走 intraday 分支
 
 
-# ═══ run_data_pipeline ══════════════════════════════════════════════════
+# ═══ run_data_pipeline (StockSet 单签名) ═══════════════════════════════
 
 
-def _patch_pipeline_compose(
+class _FakeResult:
+    """compute 函数的 result 元素 stub · 只需有 .symbol。"""
+
+    def __init__(self, symbol: str):
+        self.symbol = symbol
+
+
+def _patch_pipeline_deps(
     monkeypatch,
     *,
-    targets,
-    meta=None,
     cutoffs=None,
     ages=None,
     expected_date=date(2026, 5, 23),
     phase="post",
 ):
-    """mock 编排器上游 4 步:resolve / _auto_fetch_stale / calendar / fetcher。
+    """mock _auto_fetch_stale + freshness 依赖 (calendar + fetcher)。
 
-    返回 fetched_targets / kwargs_seen 两个可观察容器供测试 assert。
+    返回 fetched_targets 可观察容器供测试 assert auto-fetch 调用。
     """
     cutoffs = cutoffs or {}
     ages = ages or {}
     fetched_targets: list = []
 
-    monkeypatch.setattr(
-        "kan.core.pipeline.resolve_scan_targets",
-        lambda *a, **kw: (targets, meta),
-    )
     monkeypatch.setattr(
         "kan.cli.helpers._auto_fetch_stale",
         lambda pairs: fetched_targets.append(pairs),
@@ -452,32 +460,23 @@ def _patch_pipeline_compose(
     return fetched_targets
 
 
-class _FakeResult:
-    """compute 函数的 result 元素 stub · 只需有 .symbol。"""
-    def __init__(self, symbol: str):
-        self.symbol = symbol
-
-
 def test_run_data_pipeline_happy_path(monkeypatch):
     """resolve → auto_fetch → compute → freshness 4 步顺序串好 · DataCtx 字段都填齐。"""
     targets = [("600519", "贵州茅台"), ("000858", "五粮液")]
-    fetched_targets = _patch_pipeline_compose(
+    fetched_targets = _patch_pipeline_deps(
         monkeypatch,
-        targets=targets,
         cutoffs={"600519": date(2026, 5, 22), "000858": date(2026, 5, 23)},
         ages={"600519": "2026-05-22T16:00:00", "000858": "2026-05-23T16:00:00"},
     )
+    stock_set = _FakeStockSet(pairs=targets, meta=None)
     compute_calls = []
 
     def _compute(t, **kw):
         compute_calls.append((t, kw))
         return [_FakeResult("600519"), _FakeResult("000858")]
 
-    ctx = pipeline.run_data_pipeline(
-        None, only_watchlist=False, watchlist_pairs=targets,
-        compute=_compute,
-    )
-    assert ctx.targets is targets
+    ctx = pipeline.run_data_pipeline(stock_set, compute=_compute)
+    assert ctx.targets == targets
     assert ctx.meta is None
     assert [r.symbol for r in ctx.results] == ["600519", "000858"]
     assert ctx.freshness.data_cutoff == date(2026, 5, 23)
@@ -489,19 +488,17 @@ def test_run_data_pipeline_happy_path(monkeypatch):
 
 
 def test_run_data_pipeline_passes_meta_through(monkeypatch):
-    """resolve_scan_targets 返回的 meta(BoardMeta/HotMeta/ThemeMeta)原样进 DataCtx.meta。"""
+    """stock_set.meta() 返回值原样进 DataCtx.meta(BoardMeta/HotMeta/ThemeMeta sentinel)。"""
     targets = [("600519", "贵州茅台")]
     sentinel_meta = object()
-    _patch_pipeline_compose(
+    _patch_pipeline_deps(
         monkeypatch,
-        targets=targets,
-        meta=sentinel_meta,
         cutoffs={"600519": date(2026, 5, 23)},
         ages={"600519": "2026-05-23T16:00:00"},
     )
+    stock_set = _FakeStockSet(pairs=targets, meta=sentinel_meta, industry="半导体")
     ctx = pipeline.run_data_pipeline(
-        "半导体", only_watchlist=False, watchlist_pairs=[],
-        compute=lambda t, **kw: [_FakeResult("600519")],
+        stock_set, compute=lambda t, **kw: [_FakeResult("600519")],
     )
     assert ctx.meta is sentinel_meta
 
@@ -509,12 +506,12 @@ def test_run_data_pipeline_passes_meta_through(monkeypatch):
 def test_run_data_pipeline_forwards_compute_kwargs(monkeypatch):
     """compute_kwargs 原样透传给 compute · 不解释 / 不重命名(mode / candle 等都靠它过去)。"""
     targets = [("600519", "贵州茅台")]
-    _patch_pipeline_compose(
+    _patch_pipeline_deps(
         monkeypatch,
-        targets=targets,
         cutoffs={"600519": date(2026, 5, 23)},
         ages={"600519": "2026-05-23T16:00:00"},
     )
+    stock_set = _FakeStockSet(pairs=targets)
     captured = {}
 
     def _compute(t, **kw):
@@ -523,21 +520,20 @@ def test_run_data_pipeline_forwards_compute_kwargs(monkeypatch):
         return [_FakeResult("600519")]
 
     pipeline.run_data_pipeline(
-        None, only_watchlist=False, watchlist_pairs=targets,
-        compute=_compute, mode="high", candle=True, extra=42,
+        stock_set, compute=_compute, mode="high", candle=True, extra=42,
     )
-    assert captured["targets"] is targets
+    assert captured["targets"] == targets
     assert captured["kwargs"] == {"mode": "high", "candle": True, "extra": 42}
 
 
 def test_run_data_pipeline_source_error_exits_before_compute(monkeypatch):
-    """resolve 抛 source 错误时 · helper 在第 1 步就 Exit · compute 不应被调到。"""
+    """stock_set.pairs() 抛 source 错误时 · helper 在第 1 步就 Exit · compute 不应被调到。"""
     monkeypatch.setattr(
         "kan.core.pipeline._print_err", lambda msg: None,
     )
-    monkeypatch.setattr(
-        "kan.core.pipeline.resolve_scan_targets",
-        _make_raiser(BoardNotFoundError("ghost industry")),
+    stock_set = _FakeStockSet(
+        pairs_error=BoardNotFoundError("ghost industry"),
+        industry="ghost industry",
     )
     compute_calls = []
 
@@ -546,25 +542,17 @@ def test_run_data_pipeline_source_error_exits_before_compute(monkeypatch):
         return []
 
     with pytest.raises(typer.Exit) as exc_info:
-        pipeline.run_data_pipeline(
-            "ghost industry", only_watchlist=False, watchlist_pairs=[],
-            compute=_compute,
-        )
+        pipeline.run_data_pipeline(stock_set, compute=_compute)
     assert exc_info.value.exit_code == 1
     assert compute_calls == []  # compute 不该被调
 
 
 def test_run_data_pipeline_empty_results_yields_stale_freshness(monkeypatch):
     """compute 返回空列表 · freshness_of 收到空 generator · data_cutoff=None / is_stale=True。"""
-    _patch_pipeline_compose(
-        monkeypatch,
-        targets=[],
-        cutoffs={},
-        ages={},
-    )
+    _patch_pipeline_deps(monkeypatch, cutoffs={}, ages={})
+    stock_set = _FakeStockSet(pairs=[])
     ctx = pipeline.run_data_pipeline(
-        None, only_watchlist=False, watchlist_pairs=[],
-        compute=lambda t, **kw: [],
+        stock_set, compute=lambda t, **kw: [],
     )
     assert ctx.results == []
     assert ctx.freshness.data_cutoff is None
@@ -573,21 +561,20 @@ def test_run_data_pipeline_empty_results_yields_stale_freshness(monkeypatch):
 
 
 def test_run_data_pipeline_calls_auto_fetch_with_resolved_targets(monkeypatch):
-    """_auto_fetch_stale 必须用 resolve 出的 targets · 不是入参 watchlist_pairs。
+    """_auto_fetch_stale 必须用 stock_set.pairs() 返回的 targets。
 
-    Why:industry/hot/theme 模式下 resolve 返回的 targets ≠ watchlist_pairs ·
-    误用 watchlist_pairs 会漏拉板块成分股。
+    Why:industry/hot/theme 模式下 stock_set.pairs() = 板块成分股 ≠ 自选股 ·
+    误用 watchlist 会漏拉板块成分股。
     """
     resolved = [("000001", "平安银行"), ("000002", "万科 A")]
-    input_pairs = [("600519", "贵州茅台")]  # 用户自选 · 与 resolve 结果不同
-    fetched_targets = _patch_pipeline_compose(
+    fetched_targets = _patch_pipeline_deps(
         monkeypatch,
-        targets=resolved,
         cutoffs={"000001": date(2026, 5, 23), "000002": date(2026, 5, 23)},
         ages={"000001": "2026-05-23T16:00:00", "000002": "2026-05-23T16:00:00"},
     )
+    stock_set = _FakeStockSet(pairs=resolved, industry="银行")
     pipeline.run_data_pipeline(
-        "银行", only_watchlist=False, watchlist_pairs=input_pairs,
+        stock_set,
         compute=lambda t, **kw: [_FakeResult(s) for s, _ in t],
     )
     assert fetched_targets == [resolved]

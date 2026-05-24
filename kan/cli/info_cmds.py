@@ -22,15 +22,15 @@ def _info_industry(industry: str, fmt: export.OutputFormat) -> None:
 
     status_console = Console(stderr=True)
     with _with_heavy_imports_spinner(status_console, "⏳ 加载数据模块..."):
-        from kan.core.pipeline import resolve_targets_or_exit
+        from kan.core.pipeline import resolve_stock_set_or_exit
         from kan.core.scanner import scan_stock
+        from kan.core.stock_set import from_flags
         from kan.render import terminal
         from kan.render.base import DISCLAIMER
 
     console = Console()
-    _targets, meta = resolve_targets_or_exit(
-        industry, only_watchlist=False, watchlist_pairs=[],
-    )
+    # v0.0.5.4 OOP 路径
+    _targets, meta = resolve_stock_set_or_exit(from_flags(industry=industry))
 
     assert meta is not None
     board_result = scan_stock(meta.index_kline, meta.board.code, meta.board.name)
@@ -68,16 +68,15 @@ def _info_theme(theme_query: str, fmt: export.OutputFormat) -> None:
 
     status_console = Console(stderr=True)
     with _with_heavy_imports_spinner(status_console, "⏳ 加载数据模块..."):
-        from kan.core.pipeline import resolve_targets_or_exit
+        from kan.core.pipeline import resolve_stock_set_or_exit
         from kan.core.scanner import scan_stock
+        from kan.core.stock_set import from_flags
         from kan.render import terminal
         from kan.render.theme import render_theme_disclaimer
 
     console = Console()
-    _targets, meta = resolve_targets_or_exit(
-        industry=None, only_watchlist=False, watchlist_pairs=[],
-        theme=theme_query,
-    )
+    # v0.0.5.4 OOP 路径
+    _targets, meta = resolve_stock_set_or_exit(from_flags(theme=theme_query))
 
     assert meta is not None
     if meta.index_kline.empty:
