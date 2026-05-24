@@ -21,6 +21,30 @@ def _debug_enabled() -> bool:
     return os.environ.get("KAN_DEBUG", "").lower() in ("1", "true", "yes", "on")
 
 
+_HANDLER_INSTALLED = False
+
+
+def _ensure_kan_handler() -> None:
+    """KAN_DEBUG=1 时，给 `kan` namespace logger 装 StreamHandler(stderr)。
+
+    Python logging 默认 root level=WARNING + 无 handler · DEBUG 永远被吞 ·
+    没这步用户开 KAN_DEBUG=1 也看不到任何 debug_log 输出(P0 嫌疑修复)。
+    幂等 · 模块级 flag 防多次安装重复输出。
+    propagate 保留默认 True · pytest caplog 通过 root 拦截 · 也兼容用户
+    自配 root handler;CLI 进程通常没有 root handler · 不会双输出。
+    """
+    global _HANDLER_INSTALLED
+    if _HANDLER_INSTALLED:
+        return
+    logger = logging.getLogger("kan")
+    logger.setLevel(logging.DEBUG)
+    handler = logging.StreamHandler()  # stderr by default
+    handler.setLevel(logging.DEBUG)
+    handler.setFormatter(logging.Formatter("%(levelname)s:%(name)s: %(message)s"))
+    logger.addHandler(handler)
+    _HANDLER_INSTALLED = True
+
+
 # v0.0.4.8 finalize: path/token redact 防 issue 截图 leak
 # 用户开 KAN_DEBUG=1 后截图发 issue 会暴露 username / 本地路径 / API token
 # 这里 best-effort 替换常见 PII pattern · 不保证 100% 覆盖 · 仍提醒 docstring
@@ -71,5 +95,6 @@ def debug_log(module: str, op: str, err: BaseException) -> None:
     用户应在公网共享 debug log 前自查。
     """
     if _debug_enabled():
+        _ensure_kan_handler()
         msg = _redact(f"{op}: {type(err).__name__}: {err}")
         logging.getLogger(module).debug("%s", msg)

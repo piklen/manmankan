@@ -23,7 +23,11 @@ from kan.storage import export
 def trend(
     extra_args: Annotated[
         list[str] | None,
-        typer.Argument(metavar="", show_default=False, help="(内部:防 trend 600519 dead-end · 引导到 kan info)"),
+        typer.Argument(
+            metavar="[...]",
+            show_default=False,
+            help="(内部:防 trend 600519 dead-end · 引导到 kan info · 不该传)",
+        ),
     ] = None,
     latest: Annotated[int | None, typer.Option("--latest", "-l", help="展示近 N 天走势详情（1-180）", min=1, max=180)] = None,
     down: Annotated[int | None, typer.Option("--down", help="只看连跌≥N天（不带 N 默认 3）")] = None,

@@ -191,7 +191,39 @@ def search_by_name(query: str, _names_cache: dict[str, str] | None = None) -> li
     """按名称模糊搜索股票 · 返回 [(代码, 名称), ...]"""
     names = _names_cache if _names_cache is not None else _load_stock_names()
     query = query.strip()
+    if not query:
+        return []
     return [(code, name) for code, name in names.items() if query in name]
+
+
+def resolve_symbol_or_name(raw: str) -> tuple[str, str]:
+    """6 位代码 → 精确查名;非 6 位 → 名称模糊搜.返回 (code, name).
+
+    多匹配 / 零匹配 / 空输入抛 ValueError + 散户引导.info / compare 共用 ·
+    跟 add 的内联流程一致(单匹配通过 · 多匹配列候选 · 零匹配引导).
+    """
+    cleaned = re.sub(r"^(sh|sz|SH|SZ)", "", raw.strip())
+    if re.match(r"^\d{6}$", cleaned):
+        return cleaned, _lookup_name(cleaned)
+    if not cleaned:
+        raise ValueError(
+            "空字符串不是有效股票名 / 代码 · 例: kan info 600519 或 kan info 茅台"
+        )
+    matches = search_by_name(cleaned)
+    if len(matches) == 1:
+        return matches[0]
+    if len(matches) == 0:
+        raise ValueError(
+            f"未找到包含「{raw}」的股票 · 试更短关键词或用 6 位代码"
+        )
+    preview = "; ".join(
+        f"{code} {name.replace(' ', '')}" for code, name in matches[:8]
+    )
+    if len(matches) > 8:
+        preview += f"; …等 {len(matches)} 只"
+    raise ValueError(
+        f"「{raw}」匹配到 {len(matches)} 只 · 候选: {preview} · 请用代码精确指定"
+    )
 
 
 def preload_stock_names() -> dict[str, str]:

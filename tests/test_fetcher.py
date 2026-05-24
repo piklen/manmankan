@@ -233,6 +233,18 @@ class TestNormalizeKline:
         assert "close" in msg
         assert len(df) == 1  # 垃圾 close 行被 dropna 丢掉
 
+    def test_unparseable_warning_includes_symbol_when_provided(self, caplog):
+        """v0.0.5.5 起 warning 末尾带 `[symbol]` · 调试时定位脏数据源头(批量 fetch 时一连串
+        warning 没标 symbol → 用户实测无法判断是哪只股票的脏数据)。
+        """
+        raw = pd.DataFrame({
+            "date": ["2026-05-08"], "open": ["100"], "high": ["101"],
+            "low": ["99"], "close": ["100.5"], "volume": ["bad"], "amount": ["1e6"],
+        })
+        with caplog.at_level(logging.WARNING, logger="kan.data.fetcher"):
+            fetcher._normalize_kline(raw, source="baostock", symbol="600519")
+        assert any("[600519]" in r.getMessage() for r in caplog.records)
+
     def test_preexisting_nan_does_not_warn(self, caplog):
         raw = pd.DataFrame({
             "date": ["2026-05-07", "2026-05-08"],

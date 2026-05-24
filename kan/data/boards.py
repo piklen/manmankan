@@ -97,8 +97,11 @@ def search_industry(query: str) -> Board:
     """模糊匹配行业名或代码 → Board。未命中抛 BoardNotFoundError。
 
     优先级:精确代码 > 精确名 > 含匹配(二级 > 一级 > 三级)。
+    空白 query("" / "   ") 直接拒绝 · 防 `q in name` 短路误匹配第一只 board。
     """
     q = query.strip()
+    if not q:
+        raise BoardNotFoundError(query)
     catalog = load_industry_catalog()
     code_q = q.split(".")[0]
     for b in catalog:
@@ -293,8 +296,11 @@ def search_theme(query: str) -> Theme:
     """模糊匹配题材名或代码 → Theme · 未命中抛 ThemeNotFoundError。
 
     优先级:精确代码 > 精确名(normalize) > 含匹配(normalize)。
+    空白 query 直接拒绝 · 同 search_industry 防 `in name` 短路误匹配。
     """
     q = query.strip()
+    if not q:
+        raise ThemeNotFoundError(query)
     q_norm = normalize_theme_name(q)
     catalog = load_theme_catalog()
     for t in catalog:
