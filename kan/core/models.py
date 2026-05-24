@@ -1,6 +1,13 @@
+from __future__ import annotations
+
+from dataclasses import dataclass, field
 from datetime import date
+from typing import TYPE_CHECKING
 
 from pydantic import BaseModel
+
+if TYPE_CHECKING:
+    import pandas as pd
 
 
 class Stock(BaseModel):
@@ -62,3 +69,43 @@ class Theme(BaseModel):
     name: str          # "AI应用" / "白酒概念"
     source: str        # "ths" | "em"
     size: int | None = None  # 成分股数 · catalog 接口未必提供 · 可空
+
+
+# ───────────────────── 集合 meta (StockSet / scan_targets 共享) ─────────────────────
+
+
+@dataclass
+class BoardMeta:
+    """IndustrySet / resolve_scan_targets industry 模式的附加产物。"""
+
+    board: Board
+    index_kline: pd.DataFrame          # 板块指数 K(已归一化)
+    constituents: list[tuple[str, str]]  # 全成分股 (代码, 名称)
+    highlight: set[str]                  # 成分股代码 ∩ 自选股代码
+
+
+@dataclass
+class HotMeta:
+    """HotRankSet / resolve_scan_targets hot 模式的附加产物。"""
+
+    list_name: str                # "东财人气榜" / "东财飙升榜"
+    rank_map: dict[str, int]      # {代码: 热榜名次}
+    highlight: set[str]           # 热榜代码 ∩ 自选股代码
+
+
+@dataclass
+class ThemeMeta:
+    """ThemeSet / resolve_scan_targets theme 模式的附加产物 · 跟 BoardMeta 对称。"""
+
+    theme: Theme
+    index_kline: pd.DataFrame              # EM 题材指数 K(已 rename)· K 线失败时为空 DataFrame
+    constituents: list[tuple[str, str]]    # 全成分股(THS 拉)
+    highlight: set[str]                    # 成分股 ∩ 自选
+    source_dispatch: dict[str, str] = field(
+        default_factory=lambda: {
+            "catalog": "ths",
+            "cons": "ths",
+            "kline": "em",
+            "reverse": "em",
+        }
+    )

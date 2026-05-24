@@ -5,24 +5,28 @@
 else watchlist 分支分发。
 
 四类基础实现:
-- WatchlistSet:  自选股 (本地 storage)
-- HotRankSet:    东方财富热榜 (人气榜 / 飙升榜)
-- ThemeSet:      题材股 (同花顺概念板块成分股)
-- IndustrySet:   行业股 (东财行业分类)
+- WatchlistSet:  自选股 (本地 storage · 无 meta)
+- HotRankSet:    东方财富热榜 (人气榜 / 飙升榜 · meta = HotMeta)
+- ThemeSet:      题材股 (同花顺概念板块成分股 · meta = ThemeMeta)
+- IndustrySet:   行业股 (东财行业分类 · meta = BoardMeta)
 
 设计选择:
-- Protocol-based · 任何带 name / codes() / pairs() 的对象都可扮演 StockSet
-  (无需继承 · 鸭子类型 · 利于用户扩展自定义集合)
-- lazy resolution · 调 .codes() / .pairs() 时才真正拉数据 (不阻塞 import)
-- 构造器只接 identifier (theme 名 / hot mode) · 数据获取沉淀到 .pairs()
+- Protocol-based · 任何带 name / codes() / pairs() / meta 的对象都可扮演 StockSet
+- lazy resolution · 调 .pairs() / .codes() / .meta 时才真正拉数据
+- meta 承载 highlight / rank_map / index_kline / 板块名 (取代 resolve_scan_targets 中的等价计算)
+- watchlist_pairs + only_watchlist 是 Set 自身职责 · 解放 CLI 命令重复布线
 
-CLI 层 (kan/cli/*_cmds.py) 暂未迁移 · 仍走 resolve_scan_targets。OOP 层是
-为"Python API 使用 + 渐进迁移 CLI"打地基。
+v0.0.5.3 起 CLI 层 (kan/cli/*_cmds.py) 直接走 StockSet · 不再用 resolve_scan_targets。
+老函数 resolve_scan_targets 仍存在作 thin wrapper (内部走本模块) · 给老测试用。
 """
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import Protocol, runtime_checkable
+from typing import TYPE_CHECKING, Protocol, runtime_checkable
+
+if TYPE_CHECKING:
+    from kan.core.models import BoardMeta, HotMeta, ThemeMeta
+    from kan.data.hot import HotList
 
 
 @runtime_checkable
@@ -33,6 +37,14 @@ class StockSet(Protocol):
     - `name` (property 或 attr): 集合显示名 (CLI 输出 / 日志 / 错误提示)
     - `codes()`: 6 位纯数字代码列表
     - `pairs()`: (代码, 名称) 元组列表 (名称缺失时可为空字符串)
+    - `meta()`: 返回 BoardMeta / HotMeta / ThemeMeta / None (method · 不是 property)
+      - WatchlistSet → None
+      - HotRankSet → HotMeta
+      - ThemeSet → ThemeMeta
+      - IndustrySet → BoardMeta
+      meta() 触发 lazy resolve · 调用前可先 .pairs() 触发 (两者共享 cache)
+      用 method 不用 @property:让 `isinstance(x, StockSet)` 的 hasattr 探测不会
+      触发 IO (lazy fetch 推迟到实际 .meta() 调用)
 
     可选:
     - `__len__`: 元素个数 (默认走 len(codes()))
@@ -42,6 +54,7 @@ class StockSet(Protocol):
 
     def codes(self) -> list[str]: ...
     def pairs(self) -> list[tuple[str, str]]: ...
+    def meta(self) -> BoardMeta | HotMeta | ThemeMeta | None: ...
 
 
 # ───────────────────── 4 个具体实现 ─────────────────────
@@ -68,6 +81,10 @@ class WatchlistSet:
     def pairs(self) -> list[tuple[str, str]]:
         return list(self._resolve())
 
+    def meta(self) -> None:
+        """自选股集合无 meta (highlight/index_kline/rank_map 仅对 industry/hot/theme 有意义)。"""
+        return None
+
     def __len__(self) -> int:
         return len(self._resolve())
 
@@ -76,34 +93,65 @@ class WatchlistSet:
 class HotRankSet:
     """东方财富热榜 / 涨速榜集合。
 
-    mode = "rank" → 人气榜 (HotList.RANK)
-    mode = "surge" → 飙升榜 (HotList.SURGE)
+    mode = "rank" (or HotList.RANK) → 人气榜
+    mode = "surge" (or HotList.SURGE) → 飙升榜
+
+    watchlist_pairs / only_watchlist:
+    - watchlist_pairs:可选 · 用来算 meta.highlight (热榜 ∩ 自选 高亮)
+    - only_watchlist=True:.pairs() 自动 filter 成 热榜 ∩ 自选 (需要 watchlist_pairs 非空)
     """
 
-    mode: str = "rank"
+    mode: HotList | str = "rank"
+    watchlist_pairs: list[tuple[str, str]] = field(default_factory=list, repr=False)
+    only_watchlist: bool = False
     _pairs: list[tuple[str, str]] | None = field(default=None, repr=False)
+    _meta: HotMeta | None = field(default=None, repr=False)
 
     @property
     def name(self) -> str:
-        return "东财人气榜" if self.mode == "rank" else "东财飙升榜"
+        return "东财人气榜" if str(self.mode) == "rank" else "东财飙升榜"
 
-    def _resolve(self) -> list[tuple[str, str]]:
-        if self._pairs is None:
-            from kan.data.hot import HotList, fetch_hot_list
+    def _hot_list(self) -> HotList:
+        from kan.data.hot import HotList
 
-            which = HotList.RANK if self.mode == "rank" else HotList.SURGE
-            entries = fetch_hot_list(which)
-            self._pairs = [(e.symbol, e.name) for e in entries]
-        return self._pairs
+        return self.mode if isinstance(self.mode, HotList) else HotList(self.mode)
+
+    def _resolve_full(self) -> None:
+        """触发完整 fetch · 同时填 _pairs + _meta。"""
+        from kan.core.models import HotMeta
+        from kan.data.hot import fetch_hot_list, hot_list_name
+
+        which = self._hot_list()
+        entries = fetch_hot_list(which)
+        wl_codes = {c for c, _ in self.watchlist_pairs}
+        highlight = {e.symbol for e in entries} & wl_codes
+        pairs = [(e.symbol, e.name) for e in entries]
+        if self.only_watchlist:
+            pairs = [(c, n) for c, n in pairs if c in highlight]
+        self._pairs = pairs
+        self._meta = HotMeta(
+            list_name=hot_list_name(which),
+            rank_map={e.symbol: e.rank for e in entries},
+            highlight=highlight,
+        )
 
     def codes(self) -> list[str]:
-        return [c for c, _ in self._resolve()]
+        if self._pairs is None:
+            self._resolve_full()
+        return [c for c, _ in self._pairs or []]
 
     def pairs(self) -> list[tuple[str, str]]:
-        return list(self._resolve())
+        if self._pairs is None:
+            self._resolve_full()
+        return list(self._pairs or [])
+
+    def meta(self) -> HotMeta:
+        if self._meta is None:
+            self._resolve_full()
+        return self._meta  # type: ignore[return-value]
 
     def __len__(self) -> int:
-        return len(self._resolve())
+        return len(self.pairs())
 
 
 @dataclass
@@ -111,65 +159,121 @@ class ThemeSet:
     """题材股集合 · 同花顺概念板块成分股。
 
     构造时传题材名 (如 "AI" / "国产软件" / "新能源")。
-    .pairs() 触发 catalog 查找 + 拉成分股。
     """
 
-    theme: str
+    theme: str = ""
+    watchlist_pairs: list[tuple[str, str]] = field(default_factory=list, repr=False)
+    only_watchlist: bool = False
     _pairs: list[tuple[str, str]] | None = field(default=None, repr=False)
+    _meta: ThemeMeta | None = field(default=None, repr=False)
 
     @property
     def name(self) -> str:
         return f"题材「{self.theme}」"
 
-    def _resolve(self) -> list[tuple[str, str]]:
-        if self._pairs is None:
-            from kan.data import boards
+    def _resolve_full(self) -> None:
+        """触发完整 fetch · 同时填 _pairs + _meta (含 index_kline)。"""
+        import pandas as pd
 
-            themed = boards.search_theme(self.theme)
-            self._pairs = boards.get_theme_constituents(themed)
-        return self._pairs
+        from kan.core.models import ThemeMeta
+        from kan.data import boards
+        from kan.data.boards import ThemeDataUnavailableError
+
+        themed = boards.search_theme(self.theme)
+        constituents = boards.get_theme_constituents(themed)
+        # K 线失败降级为空 df · 不影响成分股扫描 (spec §11)
+        try:
+            index_kline = boards.fetch_theme_kline(themed)
+        except ThemeDataUnavailableError as e:
+            from kan.infra.log import debug_log
+
+            debug_log(__name__, f"fetch theme kline · theme={themed.name}", e)
+            index_kline = pd.DataFrame()
+
+        wl_codes = {c for c, _ in self.watchlist_pairs}
+        highlight = {code for code, _ in constituents} & wl_codes
+        pairs = constituents if not self.only_watchlist else [
+            (c, n) for c, n in constituents if c in highlight
+        ]
+        self._pairs = pairs
+        self._meta = ThemeMeta(
+            theme=themed,
+            index_kline=index_kline,
+            constituents=constituents,
+            highlight=highlight,
+        )
 
     def codes(self) -> list[str]:
-        return [c for c, _ in self._resolve()]
+        if self._pairs is None:
+            self._resolve_full()
+        return [c for c, _ in self._pairs or []]
 
     def pairs(self) -> list[tuple[str, str]]:
-        return list(self._resolve())
+        if self._pairs is None:
+            self._resolve_full()
+        return list(self._pairs or [])
+
+    def meta(self) -> ThemeMeta:
+        if self._meta is None:
+            self._resolve_full()
+        return self._meta  # type: ignore[return-value]
 
     def __len__(self) -> int:
-        return len(self._resolve())
+        return len(self.pairs())
 
 
 @dataclass
 class IndustrySet:
-    """行业股集合 · 东财行业分类 (申万 / 中信类似行业体系)。
+    """行业股集合 · 东财行业分类 (申万 / 中信类似行业体系)。"""
 
-    构造时传行业名 (如 "银行" / "白酒" / "半导体")。
-    .pairs() 触发 catalog 查找 + 拉成分股。
-    """
-
-    industry: str
+    industry: str = ""
+    watchlist_pairs: list[tuple[str, str]] = field(default_factory=list, repr=False)
+    only_watchlist: bool = False
     _pairs: list[tuple[str, str]] | None = field(default=None, repr=False)
+    _meta: BoardMeta | None = field(default=None, repr=False)
 
     @property
     def name(self) -> str:
         return f"行业「{self.industry}」"
 
-    def _resolve(self) -> list[tuple[str, str]]:
-        if self._pairs is None:
-            from kan.data import boards
+    def _resolve_full(self) -> None:
+        """触发完整 fetch · 同时填 _pairs + _meta (含 index_kline)。"""
+        from kan.core.models import BoardMeta
+        from kan.data import boards
 
-            board = boards.search_industry(self.industry)
-            self._pairs = boards.get_industry_constituents(board)
-        return self._pairs
+        board = boards.search_industry(self.industry)
+        constituents = boards.get_industry_constituents(board)
+        index_kline = boards.fetch_industry_kline(board)
+        wl_codes = {c for c, _ in self.watchlist_pairs}
+        highlight = {code for code, _ in constituents} & wl_codes
+        pairs = constituents if not self.only_watchlist else [
+            (c, n) for c, n in constituents if c in highlight
+        ]
+        self._pairs = pairs
+        self._meta = BoardMeta(
+            board=board,
+            index_kline=index_kline,
+            constituents=constituents,
+            highlight=highlight,
+        )
 
     def codes(self) -> list[str]:
-        return [c for c, _ in self._resolve()]
+        if self._pairs is None:
+            self._resolve_full()
+        return [c for c, _ in self._pairs or []]
 
     def pairs(self) -> list[tuple[str, str]]:
-        return list(self._resolve())
+        if self._pairs is None:
+            self._resolve_full()
+        return list(self._pairs or [])
+
+    def meta(self) -> BoardMeta:
+        if self._meta is None:
+            self._resolve_full()
+        return self._meta  # type: ignore[return-value]
 
     def __len__(self) -> int:
-        return len(self._resolve())
+        return len(self.pairs())
 
 
 # ───────────────────── factory ─────────────────────
@@ -178,26 +282,46 @@ class IndustrySet:
 def from_flags(
     *,
     industry: str | None = None,
-    hot: str | None = None,
+    hot: HotList | str | None = None,
     theme: str | None = None,
+    watchlist_pairs: list[tuple[str, str]] | None = None,
+    only_watchlist: bool = False,
 ) -> StockSet:
     """从 CLI flags 构造对应 StockSet (一类 factory)。
 
-    - 三者全 None → WatchlistSet (默认走自选股)
-    - 任一非 None → 对应 Set
+    - 三者全 None → WatchlistSet (默认走自选股 · watchlist_pairs/only_watchlist 忽略)
+    - 任一非 None → 对应 Set · 同时把 watchlist_pairs + only_watchlist 注入 (算 highlight + filter)
     - 任意两个或三个同时非 None → ValueError (互斥)
+
+    Args:
+        industry / hot / theme: 三选一(或都 None)的 source 标识
+        watchlist_pairs: 自选股 pairs · 用来算 meta.highlight (industry/hot/theme 集合 ∩ 自选)
+        only_watchlist: True 时 set.pairs() = source 集合 ∩ 自选 (要求 watchlist_pairs 非空)
     """
     given = sum(1 for x in (industry, hot, theme) if x is not None)
     if given > 1:
         raise ValueError(
             "industry / hot / theme 三者互斥 · 同时只能指定一个"
         )
+    wl_pairs = watchlist_pairs or []
     if industry is not None:
-        return IndustrySet(industry)
+        return IndustrySet(
+            industry=industry,
+            watchlist_pairs=wl_pairs,
+            only_watchlist=only_watchlist,
+        )
     if hot is not None:
-        return HotRankSet(hot)
+        return HotRankSet(
+            mode=hot,
+            watchlist_pairs=wl_pairs,
+            only_watchlist=only_watchlist,
+        )
     if theme is not None:
-        return ThemeSet(theme)
+        return ThemeSet(
+            theme=theme,
+            watchlist_pairs=wl_pairs,
+            only_watchlist=only_watchlist,
+        )
     return WatchlistSet()
 
 

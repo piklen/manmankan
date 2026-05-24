@@ -103,8 +103,9 @@ def test_hot_rank_set_lazy_load(monkeypatch):
 
     def fake_fetch(which):
         calls["n"] += 1
+        # v0.0.5.3: stub HotEntry 加 rank · meta() 算 rank_map 用
         return [
-            type("E", (), {"symbol": "300750", "name": "宁德时代"})(),
+            type("E", (), {"symbol": "300750", "name": "宁德时代", "rank": 1})(),
         ]
 
     monkeypatch.setattr("kan.data.hot.fetch_hot_list", fake_fetch)
@@ -123,18 +124,26 @@ def test_theme_set_name():
 
 
 def test_theme_set_lazy_load(monkeypatch):
-    calls = {"search": 0, "constituents": 0}
+    import pandas as pd
+
+    calls = {"search": 0, "constituents": 0, "kline": 0}
 
     def fake_search(query):
         calls["search"] += 1
-        return type("T", (), {"name": query})()
+        # v0.0.5.3: 加 code 属性 · fetch_theme_kline 拼 cache path 用
+        return type("T", (), {"name": query, "code": "886108", "source": "ths"})()
 
     def fake_constituents(themed):
         calls["constituents"] += 1
         return [("002230", "科大讯飞"), ("002405", "四维图新")]
 
+    def fake_kline(themed, force=False):
+        calls["kline"] += 1
+        return pd.DataFrame()
+
     monkeypatch.setattr("kan.data.boards.search_theme", fake_search)
     monkeypatch.setattr("kan.data.boards.get_theme_constituents", fake_constituents)
+    monkeypatch.setattr("kan.data.boards.fetch_theme_kline", fake_kline)
 
     ts = ThemeSet(theme="AI")
     assert calls["search"] == 0
@@ -152,14 +161,21 @@ def test_industry_set_name():
 
 
 def test_industry_set_lazy_load(monkeypatch):
+    import pandas as pd
+
     def fake_search(query):
-        return type("B", (), {"name": query})()
+        # v0.0.5.3: 加 code + level + size · fetch_industry_kline 拼 cache path 用
+        return type("B", (), {"name": query, "code": "801080", "level": 2, "size": 5})()
 
     def fake_constituents(board):
         return [("600519", "贵州茅台"), ("000858", "五粮液")]
 
+    def fake_kline(board, force=False):
+        return pd.DataFrame()
+
     monkeypatch.setattr("kan.data.boards.search_industry", fake_search)
     monkeypatch.setattr("kan.data.boards.get_industry_constituents", fake_constituents)
+    monkeypatch.setattr("kan.data.boards.fetch_industry_kline", fake_kline)
 
     its = IndustrySet(industry="白酒")
     assert its.codes() == ["600519", "000858"]
@@ -200,3 +216,148 @@ def test_from_flags_theme():
 def test_from_flags_mutual_exclusion(kwargs):
     with pytest.raises(ValueError, match="互斥"):
         from_flags(**kwargs)
+
+
+# ─────────────── meta() · v0.0.5.3 新加 ───────────────
+
+
+def test_watchlist_meta_is_none():
+    """WatchlistSet 无 meta · meta() 返回 None (industry/hot/theme 才有 meta)。"""
+    ws = WatchlistSet(_pairs=[("600519", "贵州茅台")])
+    assert ws.meta() is None
+
+
+def test_hot_rank_meta_carries_rank_map_and_highlight(monkeypatch):
+    """HotRankSet.meta() 返回 HotMeta · 含 list_name / rank_map / highlight (∩ 自选)。"""
+    def fake_fetch(which):
+        return [
+            type("E", (), {"symbol": "300750", "name": "宁德时代", "rank": 1})(),
+            type("E", (), {"symbol": "600519", "name": "贵州茅台", "rank": 2})(),
+        ]
+    monkeypatch.setattr("kan.data.hot.fetch_hot_list", fake_fetch)
+
+    hs = HotRankSet(mode="rank", watchlist_pairs=[("600519", "贵州茅台")])
+    meta = hs.meta()
+    assert meta.list_name == "东财人气榜"
+    assert meta.rank_map == {"300750": 1, "600519": 2}
+    assert meta.highlight == {"600519"}, "highlight 应为热榜 ∩ 自选"
+
+
+def test_hot_rank_only_watchlist_filters_pairs(monkeypatch):
+    """only_watchlist=True · .pairs() 仅返热榜 ∩ 自选 (∩ filter)。"""
+    def fake_fetch(which):
+        return [
+            type("E", (), {"symbol": "300750", "name": "宁德时代", "rank": 1})(),
+            type("E", (), {"symbol": "600519", "name": "贵州茅台", "rank": 2})(),
+        ]
+    monkeypatch.setattr("kan.data.hot.fetch_hot_list", fake_fetch)
+
+    hs = HotRankSet(
+        mode="rank",
+        watchlist_pairs=[("600519", "贵州茅台")],
+        only_watchlist=True,
+    )
+    assert hs.pairs() == [("600519", "贵州茅台")], "only_watchlist=True 应只留 ∩ 自选"
+
+
+def test_theme_meta_carries_constituents_index_highlight(monkeypatch):
+    """ThemeSet.meta() 返回 ThemeMeta · 含 theme/constituents/highlight/index_kline。"""
+    import pandas as pd
+
+    def fake_search(q):
+        return type("T", (), {"name": q, "code": "886108", "source": "ths"})()
+    def fake_cons(themed):
+        return [("002230", "科大讯飞"), ("002405", "四维图新")]
+    def fake_kline(themed, force=False):
+        return pd.DataFrame({"date": ["2026-05-23"], "close": [100.0]})
+    monkeypatch.setattr("kan.data.boards.search_theme", fake_search)
+    monkeypatch.setattr("kan.data.boards.get_theme_constituents", fake_cons)
+    monkeypatch.setattr("kan.data.boards.fetch_theme_kline", fake_kline)
+
+    ts = ThemeSet(theme="AI", watchlist_pairs=[("002230", "科大讯飞")])
+    meta = ts.meta()
+    assert meta.theme.name == "AI"
+    assert meta.highlight == {"002230"}, "highlight = 题材成分 ∩ 自选"
+    assert len(meta.constituents) == 2
+    assert not meta.index_kline.empty
+
+
+def test_theme_kline_failure_degrades_to_empty(monkeypatch):
+    """题材 K 线 fetch 失败 · index_kline 降级空 df · constituents 仍可用。"""
+    import pandas as pd
+
+    from kan.data.boards import ThemeDataUnavailableError
+
+    def fake_search(q):
+        return type("T", (), {"name": q, "code": "886108", "source": "ths"})()
+    def fake_cons(themed):
+        return [("002230", "科大讯飞")]
+    def fake_kline_fail(themed, force=False):
+        raise ThemeDataUnavailableError("kline down")
+    monkeypatch.setattr("kan.data.boards.search_theme", fake_search)
+    monkeypatch.setattr("kan.data.boards.get_theme_constituents", fake_cons)
+    monkeypatch.setattr("kan.data.boards.fetch_theme_kline", fake_kline_fail)
+
+    ts = ThemeSet(theme="AI")
+    meta = ts.meta()
+    assert isinstance(meta.index_kline, pd.DataFrame)
+    assert meta.index_kline.empty
+    assert len(meta.constituents) == 1, "K 线挂掉不应影响 constituents"
+
+
+def test_industry_meta_carries_board_constituents_highlight(monkeypatch):
+    """IndustrySet.meta() 返回 BoardMeta · 含 board/constituents/highlight/index_kline。"""
+    import pandas as pd
+
+    def fake_search(q):
+        return type("B", (), {"name": q, "code": "801080", "level": 2, "size": 2})()
+    def fake_cons(b):
+        return [("600519", "贵州茅台"), ("000858", "五粮液")]
+    def fake_kline(b, force=False):
+        return pd.DataFrame({"date": ["2026-05-23"], "close": [200.0]})
+    monkeypatch.setattr("kan.data.boards.search_industry", fake_search)
+    monkeypatch.setattr("kan.data.boards.get_industry_constituents", fake_cons)
+    monkeypatch.setattr("kan.data.boards.fetch_industry_kline", fake_kline)
+
+    its = IndustrySet(industry="白酒", watchlist_pairs=[("600519", "贵州茅台")])
+    meta = its.meta()
+    assert meta.board.name == "白酒"
+    assert meta.highlight == {"600519"}
+    assert len(meta.constituents) == 2
+
+
+# ─────────────── from_flags 透传 watchlist_pairs / only_watchlist ───────────────
+
+
+def test_from_flags_passes_watchlist_pairs_to_industry():
+    s = from_flags(industry="白酒", watchlist_pairs=[("600519", "贵州茅台")])
+    assert isinstance(s, IndustrySet)
+    assert s.watchlist_pairs == [("600519", "贵州茅台")]
+    assert s.only_watchlist is False
+
+
+def test_from_flags_passes_only_watchlist_to_hot():
+    s = from_flags(hot="rank", watchlist_pairs=[("600519", "贵州茅台")], only_watchlist=True)
+    assert isinstance(s, HotRankSet)
+    assert s.watchlist_pairs == [("600519", "贵州茅台")]
+    assert s.only_watchlist is True
+
+
+def test_from_flags_watchlist_default_ignores_extras():
+    """三源都 None → WatchlistSet · watchlist_pairs/only_watchlist 忽略 (无意义)。"""
+    s = from_flags(watchlist_pairs=[("600519", "贵州茅台")], only_watchlist=True)
+    assert isinstance(s, WatchlistSet)
+    # WatchlistSet 不存这两参数 · 不报错即可
+
+
+def test_from_flags_hot_accepts_str_or_enum():
+    """from_flags(hot=) 接 str 或 HotList enum 都 work (StrEnum compat)。"""
+    from kan.data.hot import HotList
+
+    s1 = from_flags(hot="rank")
+    assert isinstance(s1, HotRankSet)
+    s2 = from_flags(hot=HotList.RANK)
+    assert isinstance(s2, HotRankSet)
+    s3 = from_flags(hot=HotList.SURGE)
+    assert isinstance(s3, HotRankSet)
+    assert s3.name == "东财飙升榜"

@@ -45,15 +45,20 @@ def fetch(
         if symbols:
             typer.echo("--industry / --hot / --theme 与股票代码不能同时使用", err=True)
             raise typer.Exit(2)
-        from kan.core.pipeline import resolve_targets_or_exit
+        # v0.0.5.3 OOP 路径:from_flags → resolve_stock_set_or_exit
+        from kan.core.pipeline import resolve_stock_set_or_exit
+        from kan.core.stock_set import from_flags
         wl_pairs = []
         if only_watchlist:
             from kan.storage.watchlist import load_watchlist
             wl_pairs = [(s.symbol, s.name) for s in load_watchlist().stocks]
-        targets, _meta = resolve_targets_or_exit(
-            industry, only_watchlist, wl_pairs, hot=hot, theme=theme,
+        stock_set = from_flags(
+            industry=industry, hot=hot, theme=theme,
+            watchlist_pairs=wl_pairs,
+            only_watchlist=only_watchlist,
         )
-        symbols = [s for s, _ in targets]
+        symbols = stock_set.codes()
+        resolve_stock_set_or_exit(stock_set)  # 触发 .pairs() lazy fetch + 转 typer.Exit · 上一行 .codes() 已触发了 fetch · 这里走 cache 不再 IO
 
     if not symbols:
         from kan.storage.watchlist import load_watchlist

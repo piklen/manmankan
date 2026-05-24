@@ -75,14 +75,17 @@ def scan(
     if only_watchlist and not source_mode:
         _print_err("❌ --only-watchlist 需配合 --industry / --hot / --theme 使用")
         raise typer.Exit(1)
+    # v0.0.5.3 OOP 路径:CLI 构造 StockSet 再喂 pipeline · meta/highlight/filter 全部由 Set 承担
+    from kan.core.models import BoardMeta, HotMeta, ThemeMeta
     from kan.core.pipeline import run_data_pipeline
-    from kan.core.scan_targets import BoardMeta, HotMeta, ThemeMeta
+    from kan.core.stock_set import from_flags
     mode = "high" if high else "low"
-    ctx = run_data_pipeline(
-        industry, only_watchlist, watchlist_pairs,
-        hot=hot, theme=theme,
-        compute=scan_batch, mode=mode,
+    stock_set = from_flags(
+        industry=industry, hot=hot, theme=theme,
+        watchlist_pairs=watchlist_pairs,
+        only_watchlist=only_watchlist,
     )
+    ctx = run_data_pipeline(stock_set, compute=scan_batch, mode=mode)
     all_results = ctx.results
     board_meta = ctx.meta
     data_cutoff = ctx.freshness.data_cutoff
