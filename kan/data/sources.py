@@ -7,9 +7,14 @@
 v0.0.5.0 起从 fetcher.py 抽出 · fetcher.py 保留 cache + 编排 + 公开 API ·
 本模块只放数据源 fetcher · 解耦"网络访问"与"缓存编排"。
 
+v0.0.6 起加 `*KlineSource` class (实现 KlineSource Protocol) · 作为责任链 (KlineSourceChain)
+中的元数据携带 (name / priority / is_available)。class 是 thin Protocol 适配 ·
+内部仍调 module function `_fetch_<source>` (保持 SOT · 测试 monkeypatch 路径不破)。
+
 monkeypatch 路径:测试 patch 在本模块 namespace
 (例:`monkeypatch.setattr("kan.data.sources._fetch_sina", ...)`)· `_fetch_via_akshare`
 通过 module globals 查 `_fetch_sina` / `_fetch_eastmoney` · patch 生效。
+v0.0.6 KlineSource class 的 fetch() 也通过 module globals 调 `_fetch_*` · patch 同样生效。
 """
 
 from __future__ import annotations
@@ -267,3 +272,90 @@ def _fetch_via_akshare(symbol: str, start: str) -> tuple[pd.DataFrame, str] | No
         return None
     finally:
         executor.shutdown(wait=False, cancel_futures=True)
+
+
+# ══════════════════════════════════════════════════════════════════
+# KlineSource Protocol 适配 (v0.0.6) · 每个 class 是 thin wrapper
+# 调对应 _fetch_<source> module function (SOT) · 元数据携带 name / priority
+# is_available · chain 内统一接管 fallback / race / 熔断 / debug_log
+# ══════════════════════════════════════════════════════════════════
+
+
+class BaostockKlineSource:
+    """Baostock 独立服务器 K 线源 · priority=20 · tushare 之后 / akshare 之前。
+
+    is_available 检查:
+    - baostock 软依赖 (try import)
+    - 熔断器 (baostock 不可用时 skip)
+    """
+
+    name = "baostock"
+    priority = 20
+
+    def is_available(self) -> bool:
+        try:
+            import baostock  # noqa: F401
+        except ImportError:
+            return False
+        from kan.infra import circuit_breaker
+        return not circuit_breaker.get_breaker().is_down(self.name)
+
+    def fetch(self, symbol: str, start: str) -> pd.DataFrame | None:
+        return _fetch_baostock(symbol, start)
+
+
+class EastmoneyKlineSource:
+    """东方财富 (akshare.stock_zh_a_hist) K 线源 · priority=30 · 与 sina race。"""
+
+    name = "eastmoney"
+    priority = 30
+
+    def is_available(self) -> bool:
+        try:
+            import akshare  # noqa: F401
+        except ImportError:
+            return False
+        from kan.infra import circuit_breaker
+        return not circuit_breaker.get_breaker().is_down(self.name)
+
+    def fetch(self, symbol: str, start: str) -> pd.DataFrame | None:
+        return _fetch_eastmoney(symbol, start)
+
+
+class SinaKlineSource:
+    """新浪 (akshare.stock_zh_a_daily) K 线源 · priority=30 · 与 eastmoney race。
+
+    免登录 · 东财 push2his 被 ban 时最稳路径之一。
+    """
+
+    name = "sina"
+    priority = 30
+
+    def is_available(self) -> bool:
+        try:
+            import akshare  # noqa: F401
+        except ImportError:
+            return False
+        from kan.infra import circuit_breaker
+        return not circuit_breaker.get_breaker().is_down(self.name)
+
+    def fetch(self, symbol: str, start: str) -> pd.DataFrame | None:
+        return _fetch_sina(symbol, start)
+
+
+class TencentKlineSource:
+    """腾讯 (akshare.stock_zh_a_hist_tx) K 线源 · priority=40 · 兜底 · volume 不可信已 drop。"""
+
+    name = "tencent"
+    priority = 40
+
+    def is_available(self) -> bool:
+        try:
+            import akshare  # noqa: F401
+        except ImportError:
+            return False
+        from kan.infra import circuit_breaker
+        return not circuit_breaker.get_breaker().is_down(self.name)
+
+    def fetch(self, symbol: str, start: str) -> pd.DataFrame | None:
+        return _fetch_tencent(symbol, start)

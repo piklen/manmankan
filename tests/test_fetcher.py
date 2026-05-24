@@ -1,4 +1,11 @@
-"""fetcher 测试 · 缓存逻辑 + AKShare mock + 多源 fallback"""
+"""fetcher 测试 · 缓存逻辑 + AKShare mock + 多源 fallback (v0.0.6 chain 架构)。
+
+v0.0.6 起 fallback 走 KlineSourceChain · `_fetch_<source>` SOT 在各 source module:
+- `_fetch_tushare`  在 `kan.data.tushare`
+- `_fetch_<其余 4>` 在 `kan.data.sources`
+
+测试 monkeypatch 路径同步迁移 · fetcher namespace 不再持有 `_fetch_*` 别名。
+"""
 
 import logging
 from datetime import date, datetime, timedelta
@@ -8,7 +15,7 @@ import pandas as pd
 import pytest
 
 from kan.core import trading_calendar
-from kan.data import fetcher, sources
+from kan.data import fetcher, sources, tushare
 from kan.storage import paths
 
 
@@ -20,20 +27,18 @@ def temp_data_dir(tmp_path, monkeypatch):
 
 @pytest.fixture
 def force_eastmoney_path(monkeypatch):
-    """绕过 tushare / baostock / 新浪 · 让 fetch_kline 走到东财 mock。
+    """绕过 tushare / baostock / 新浪 · 让 chain 落到东财 (priority 30 race · sina None 后只剩 eastmoney)。
 
-    fallback：tushare → baostock → _fetch_via_akshare(东财+新浪并发) → 腾讯。
-    把 tushare / baostock / 新浪 mock 成 None,并发档里只剩东财能中标,
-    流程落到 akshare.stock_zh_a_hist (东财) mock。
+    v0.0.6 chain 架构 monkeypatch 路径:
+    - `_fetch_tushare` SOT 在 `kan.data.tushare` (TushareKlineSource.fetch 调它)
+    - `_fetch_baostock/_sina/_tencent` SOT 在 `kan.data.sources` (对应 class 调它)
 
-    v0.0.5.0 加 tushare path · v0.0.5.1 fix: 用户本地 ~/.config/kan/config.json
-    若配 tushare_token · _fetch_tushare 返真实 213 行 · mock akshare 路径失效。
+    sina + eastmoney 同 priority 30 自动并发 race · 把 sina mock 成 None ·
+    eastmoney 凭 patched akshare.stock_zh_a_hist 返 fake_akshare_df 中标。
+    tushare/baostock 都 mock None 防止用户本地 token / baostock 装好时短路。
     """
-    # _fetch_tushare 在 fetcher 内被 fetch_kline 直接调用 → patch fetcher.globals
-    monkeypatch.setattr(fetcher, "_fetch_tushare", lambda *a, **kw: None)
-    # _fetch_baostock 在 fetcher 内被 fetch_kline 直接调用 → patch fetcher.globals
-    # _fetch_sina 在 _fetch_via_akshare(sources) 内被调用 → patch sources.globals
-    monkeypatch.setattr(fetcher, "_fetch_baostock", lambda *a, **kw: None)
+    monkeypatch.setattr(tushare, "_fetch_tushare", lambda *a, **kw: None)
+    monkeypatch.setattr(sources, "_fetch_baostock", lambda *a, **kw: None)
     monkeypatch.setattr(sources, "_fetch_sina", lambda *a, **kw: None)
 
 
@@ -319,11 +324,12 @@ def test_fetch_baostock_returns_none_on_error(temp_data_dir):
 
 
 def test_circuit_skips_breaker_down_source(temp_data_dir, raw_kline_df, isolated_breaker, monkeypatch):
-    """breaker 标记 baostock down → fetch_kline 跳过它 · 走 akshare 档."""
-    # v0.0.5.0 加 tushare top priority · 必须 mock None
-    monkeypatch.setattr(fetcher, "_fetch_tushare", lambda *a, **kw: None)
+    """breaker 标记 baostock down → chain 跳过 BaostockKlineSource → 走 akshare race 档.
+
+    v0.0.6: BaostockKlineSource.is_available() 看熔断器 · down 时返 False · chain skip。
+    """
+    monkeypatch.setattr(tushare, "_fetch_tushare", lambda *a, **kw: None)
     isolated_breaker.record("baostock", ok=False)
-    # _fetch_via_akshare 在 sources 内查 _fetch_eastmoney/_fetch_sina · patch sources
     monkeypatch.setattr(sources, "_fetch_eastmoney", lambda *a, **kw: None)
     monkeypatch.setattr(sources, "_fetch_sina", lambda *a, **kw: raw_kline_df)
 
@@ -373,22 +379,21 @@ def raw_kline_df():
 def test_fetch_kline_stamps_source(temp_data_dir, raw_kline_df, source, mock_target, monkeypatch):
     """各源 fallback 标记正确 source · 其它源全 mock None 让目标源生效.
 
-    东财/新浪经 _fetch_via_akshare 并发档 · 关掉非目标源使结果确定（不受 race 影响）.
+    v0.0.6 chain monkeypatch 路径:
+    - `_fetch_tushare` 在 `kan.data.tushare` namespace
+    - `_fetch_baostock / _sina / _eastmoney / _tencent` 在 `kan.data.sources` namespace
 
-    v0.0.5.0:
-    - _fetch_baostock / _fetch_tencent 在 fetcher.globals 被 fetch_kline 直接调 → patch fetcher
-    - _fetch_sina / _fetch_eastmoney 在 sources.globals 被 _fetch_via_akshare 调 → patch sources
+    sina + eastmoney 同 priority 30 并发 race · 测试时其中之一 mock None ·
+    另一个 mock raw_df 让结果确定 (不受 race 顺序影响)。
     """
-    # v0.0.5.0 加 tushare top priority · 必须 mock None 让 fallback 流到目标源
-    # 否则用户本地配 tushare_token 时 _fetch_tushare 返真实数据 · 测试失败
-    monkeypatch.setattr(fetcher, "_fetch_tushare", lambda *a, **kw: None)
-    monkeypatch.setattr(fetcher, "_fetch_baostock", lambda *a, **kw: None)
-    monkeypatch.setattr(fetcher, "_fetch_tencent", lambda *a, **kw: None)
+    # 全 mock None · 再单独 mock 目标源为 raw_df (顺序覆盖)
+    monkeypatch.setattr(tushare, "_fetch_tushare", lambda *a, **kw: None)
+    monkeypatch.setattr(sources, "_fetch_baostock", lambda *a, **kw: None)
     monkeypatch.setattr(sources, "_fetch_sina", lambda *a, **kw: None)
     monkeypatch.setattr(sources, "_fetch_eastmoney", lambda *a, **kw: None)
+    monkeypatch.setattr(sources, "_fetch_tencent", lambda *a, **kw: None)
 
-    target_module = fetcher if mock_target in ("_fetch_baostock", "_fetch_tencent") else sources
-    monkeypatch.setattr(target_module, mock_target, lambda *a, **kw: raw_kline_df)
+    monkeypatch.setattr(sources, mock_target, lambda *a, **kw: raw_kline_df)
 
     df = fetcher.fetch_kline("600519", force=True)
     assert (df["_source"] == source).all()
@@ -506,22 +511,29 @@ class TestTushareProDispatch:
         return tmp_path
 
     def test_no_token_path_unchanged(self, isolated_env, monkeypatch, fake_akshare_df):
-        """未配 token → _fetch_tushare 返回 None → 原 fallback 链生效"""
+        """未配 token → TushareKlineSource.is_available()=False → chain 跳过 · 走 akshare 档.
+
+        v0.0.6: 未配 token 时 chain 直接 skip TushareKlineSource (不调 fetch) ·
+        与 v0.0.5.x 不同 (旧版本 fetch 内部检查 token · 调用一次返 None)。
+        新行为更高效 · 不浪费一次 fetch 调用。
+        """
+        # 把 _fetch_tushare 设 spy 没必要 (chain 不会调它 · is_available 已 False)
+        # 仅保留作为 safeguard · 确认 chain 真的没调用
         called = {"tushare": False}
         def spy_tushare(*a, **kw):
             called["tushare"] = True
             return None
-        monkeypatch.setattr(fetcher, "_fetch_tushare", spy_tushare)
-        monkeypatch.setattr(fetcher, "_fetch_baostock", lambda *a, **kw: None)
+        monkeypatch.setattr(tushare, "_fetch_tushare", spy_tushare)
+        monkeypatch.setattr(sources, "_fetch_baostock", lambda *a, **kw: None)
         monkeypatch.setattr(sources, "_fetch_sina", lambda *a, **kw: None)
         with patch("akshare.stock_zh_a_hist", return_value=fake_akshare_df):
             df = fetcher.fetch_kline("600519", force=True)
-        # spy 应被调用一次但返回 None
-        assert called["tushare"]
+        # v0.0.6: 未配 token 时 chain skip TushareKlineSource · _fetch_tushare 不被调
+        assert not called["tushare"]
         assert not df.empty
 
     def test_with_token_uses_tushare_first(self, isolated_env, monkeypatch):
-        """配 token → tushare 命中 → 不再 fallback baostock"""
+        """配 token → TushareKlineSource priority=10 顶档命中 → chain 不再走 baostock"""
         from kan.storage import config
         config.save({**config.DEFAULT_CONFIG, "tushare_token": "tk"})
 
@@ -540,8 +552,8 @@ class TestTushareProDispatch:
             baostock_called["hit"] = True
             return None
 
-        monkeypatch.setattr(fetcher, "_fetch_tushare", lambda *a, **kw: sample.copy())
-        monkeypatch.setattr(fetcher, "_fetch_baostock", fake_baostock)
+        monkeypatch.setattr(tushare, "_fetch_tushare", lambda *a, **kw: sample.copy())
+        monkeypatch.setattr(sources, "_fetch_baostock", fake_baostock)
 
         df = fetcher.fetch_kline("600519", force=True)
         assert not baostock_called["hit"]

@@ -1,10 +1,18 @@
-"""K 线数据拉取编排 · cache + fallback 链 + 公开 API。
+"""K 线数据拉取编排 · cache + chain (责任链) + 公开 API。
 
-v0.0.5.0 起架构拆为两层:
-- `kan.data.sources` 单点数据源 fetcher(eastmoney/baostock/sina/tencent + akshare race)
-- `kan.data.fetcher`(本文件) cache + fallback 编排 + `fetch_kline` / `fetch_batch` 公开 API
+架构分层 (v0.0.6 起):
+- `kan.data.protocols.KlineSource`     · Protocol (adapter 契约)
+- `kan.data.sources` / `kan.data.tushare` · 5 个内置 KlineSource 实现
+- `kan.data.source_chain.KlineSourceChain` · 责任链 (priority sort + race + 熔断)
+- `kan.data._builtin_sources`         · 内置源工厂 + 用户注册表 (internal)
+- `kan.data.fetcher` (本文件)         · cache + chain 编排 + 公开 API (fetch_kline / fetch_batch)
+- `kan.api`                            · 用户 facing (register_kline_source / kline_chain)
 
-fallback 链:tushare → baostock → akshare 双源并发 → tencent · 见 `fetch_kline`。
+用户自定义源: `from kan.api import register_kline_source` · 详见 `kan.api` docstring。
+
+历史:
+- v0.0.5.0: sources.py 从 fetcher.py 抽出 · 单点 fetcher / 编排分离
+- v0.0.6:   chain 抽出 · 删 if-chain · 同 priority 多源并发 race 统一进 chain
 """
 
 from __future__ import annotations
@@ -15,12 +23,7 @@ from datetime import date, datetime, timedelta
 from pathlib import Path
 from typing import TYPE_CHECKING
 
-from kan.data.sources import (
-    _fetch_baostock,
-    _fetch_tencent,
-    _fetch_via_akshare,
-)
-from kan.data.tushare import _fetch_tushare
+from kan.data.source_chain import default_kline_chain
 from kan.infra.log import debug_log
 from kan.infra.numeric import to_numeric_checked
 from kan.storage.paths import DATA_DIR
@@ -205,17 +208,19 @@ def _ensure_no_proxy() -> None:
 # ── 公开 API ─────────────────────────────────────────────────────────
 
 def fetch_kline(symbol: str, days: int = 180, force: bool = False) -> pd.DataFrame:
-    """拉取单只股票前复权日 K 线（tushare 配 token 时优先 → baostock → 东财/新浪并发 → 腾讯）。
+    """拉取单只股票前复权日 K 线 · 走 default KlineSourceChain (按 priority sort + race)。
 
-    返回 DataFrame · 标准列：date, open, high, low, close, volume, amount
+    返回 DataFrame · 标准列：date, open, high, low, close, volume, amount, _source
 
-    fallback 设计：
-    0. TuShare Pro（仅当 tushare_token 配置时）· 顶优先 · 付费源 / 自部署镜像
-    1. baostock 独立服务器最稳 · 数值精度全 A 股板块对齐 · 主路径
-    2. 东财 + 新浪 两个 akshare 源并发 race（_fetch_via_akshare）· 谁先成功用谁 ·
-       任一源慢/挂不拖累另一个 · 东财 push2his 对部分 IP 段持续封禁时新浪兜底
-       （akshare GitHub Issue #6092/#6148/#7011/#6214）
-    3. 腾讯（akshare stock_zh_a_hist_tx）· 仅价格可信 · amount 字段板块语义不一致已 drop
+    内置 priority (chain 内自动排序 · 见 protocols.py priority 约定):
+    - 10  TushareKlineSource    · 配 token 时顶档 · 付费源
+    - 20  BaostockKlineSource   · 独立服务器最稳 · 数值精度全板块对齐
+    - 30  EastmoneyKlineSource  · akshare 主路径
+    - 30  SinaKlineSource       · 与 eastmoney 并发 race · 任一慢/挂不拖累另一个
+                                  (东财 push2his 对部分 IP 段封禁时新浪兜底)
+    - 40  TencentKlineSource    · 兜底 · 仅价格可信 · volume 已 drop
+
+    用户可通过 `kan.api.register_kline_source` 插队自定义源 (priority ∈ [50, 89] 推荐)。
     """
     symbol = _validate_symbol(symbol)
     _ensure_data_dir()
@@ -227,22 +232,10 @@ def fetch_kline(symbol: str, days: int = 180, force: bool = False) -> pd.DataFra
     _ensure_no_proxy()
     start = (datetime.now() - timedelta(days=int(days * 1.8))).strftime("%Y%m%d")
 
-    # v0.0.5: TuShare Pro 优先（配 token 时）→ baostock → akshare 并发 → 腾讯
-    raw = _fetch_tushare(symbol, start)
-    source = "tushare"
-    if raw is None:
-        raw = _fetch_baostock(symbol, start)
-        source = "baostock"
-    if raw is None:
-        akshare_result = _fetch_via_akshare(symbol, start)
-        if akshare_result is not None:
-            raw, source = akshare_result
-    if raw is None:
-        raw = _fetch_tencent(symbol, start)
-        source = "tencent"
-
-    if raw is None or raw.empty:
+    result = default_kline_chain().fetch(symbol, start)
+    if result is None:
         raise ValueError(f"无效股票代码或无数据: {symbol}")
+    raw, source = result
 
     from kan.storage.paths import atomic_write_parquet
 
