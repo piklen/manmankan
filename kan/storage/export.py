@@ -14,8 +14,22 @@ from typing import TYPE_CHECKING
 if TYPE_CHECKING:
     from datetime import date
 
-    from kan.core.models import PeriodResult, StockScanResult, VolumeState
+    from kan.core.models import (
+        BoardMeta,
+        HotMeta,
+        PeriodResult,
+        StockScanResult,
+        ThemeMeta,
+        VolumeState,
+    )
     from kan.core.scanner import TrendResult
+
+
+def _board_reference_kind(meta: BoardMeta | HotMeta | ThemeMeta | None) -> str:
+    """meta 类型对应的 reference kind 标识 · md / json 共用。"""
+    from kan.core.scan_targets import ThemeMeta
+
+    return "theme" if isinstance(meta, ThemeMeta) else "industry"
 
 
 class OutputFormat(StrEnum):
@@ -112,24 +126,89 @@ def scan_markdown(
 
 # ── low / high ────────────────────────────────────────────────────────
 
-def extreme_payload(results_by_period: dict[int, list], *, mode: str) -> dict:
-    """kan low / high --format json 的结构化 payload。"""
-    return {
+def extreme_payload(
+    results_by_period: dict[int, list],
+    *,
+    mode: str,
+    board_index_result: StockScanResult | None = None,
+    board_meta: BoardMeta | HotMeta | ThemeMeta | None = None,
+) -> dict:
+    """kan low / high --format json 的结构化 payload。
+
+    industry / theme 模式带 board_index_result 时 payload 顶层增加 `reference`
+    字段(板块 / 题材指数 K 线 scan 结果 + kind 标识)· 用户脚本侧可直接读
+    `payload['reference']['periods']` 跟成分股 hits 对照。
+    """
+    payload: dict = {
         "command": mode,  # "low" / "high"
         "results_by_period": {
             str(n): [r.model_dump(mode="json") for r, _ in hits]
             for n, hits in results_by_period.items()
         },
     }
+    if board_index_result is not None:
+        payload["reference"] = {
+            "kind": _board_reference_kind(board_meta),
+            **board_index_result.model_dump(mode="json"),
+        }
+    return payload
 
 
-def extreme_markdown(results_by_period: dict[int, list], *, mode: str) -> str:
-    """kan low / high --format md · 每周期一张表。"""
+def _extreme_reference_row(
+    board_index_result: StockScanResult,
+    board_meta: BoardMeta | HotMeta | ThemeMeta | None,
+    period: int,
+) -> list[str] | None:
+    """构造单周期 md 表格的 reference 首行 · period 不在 board.periods 时返回 None。"""
+    from kan.core.scan_targets import ThemeMeta
+
+    board_pr = next(
+        (p for p in board_index_result.periods if p.period == period), None,
+    )
+    if board_pr is None or board_pr.insufficient:
+        return None
+    if isinstance(board_meta, ThemeMeta):
+        label = f"🎯 {board_index_result.name} 题材指数"
+    else:
+        label = f"🏛️ {board_index_result.name} 板块指数"
+    return [
+        label,
+        f"{board_index_result.current_price:.2f}",
+        f"{board_pr.n_low:.2f}",
+        f"{board_pr.n_high:.2f}",
+        f"{board_pr.position_pct:.1f}%",
+    ]
+
+
+def extreme_markdown(
+    results_by_period: dict[int, list],
+    *,
+    mode: str,
+    board_index_result: StockScanResult | None = None,
+    board_meta: BoardMeta | HotMeta | ThemeMeta | None = None,
+    periods: list[int] | None = None,
+) -> str:
+    """kan low / high --format md · 每周期一张表。
+
+    industry / theme 模式带 board_index_result 时 · 每张表首行注入板块 /
+    题材指数 reference (跟终端 reference 行视觉对齐 · 阅读器侧也能直接看到
+    「板块整体当前位置」对照)。
+
+    `periods`:caller 原始周期 list · 用于空 hits 仍画 reference 表(与终端
+    行为一致)。None 时退化到 results_by_period.keys() · 跟 v0.0.5.x 一致。
+    """
     label = "低点" if mode == "low" else "高点"
     parts = [f"# 慢慢看 · {label}筛选"]
-    for n, hits in results_by_period.items():
+    target_periods = periods if periods is not None else list(results_by_period.keys())
+    for n in target_periods:
+        hits = results_by_period.get(n, [])
         headers = ["股票", "现价", f"{n}日最低", f"{n}日最高", "位置"]
-        rows = [
+        rows: list[list[str]] = []
+        if board_index_result is not None:
+            ref = _extreme_reference_row(board_index_result, board_meta, n)
+            if ref is not None:
+                rows.append(ref)
+        rows += [
             [
                 f"{r.name.replace(' ', '')} {r.symbol}",
                 f"{r.current_price:.2f}",
@@ -139,6 +218,8 @@ def extreme_markdown(results_by_period: dict[int, list], *, mode: str) -> str:
             ]
             for r, pr in hits
         ]
+        if not rows:  # 既无 reference 也无 hits · 跳过该周期(不画空表)
+            continue
         parts.append(
             f"## {n} 日{label} · {len(hits)} 只触及\n\n{md_table(headers, rows)}"
         )

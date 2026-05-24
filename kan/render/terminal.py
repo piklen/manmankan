@@ -22,10 +22,33 @@ from kan.render.base import format_pct
 if TYPE_CHECKING:
     from datetime import date
 
-    from kan.core.models import PeriodResult, StockScanResult
+    from kan.core.models import (
+        BoardMeta,
+        HotMeta,
+        PeriodResult,
+        StockScanResult,
+        ThemeMeta,
+    )
     from kan.core.pipeline import DataCtx
-    from kan.core.scan_targets import BoardMeta, ThemeMeta
     from kan.core.scanner import TrendResult
+
+
+# ── 共用 reference label ──────────────────────────────────────────────
+
+
+def _board_reference_label(
+    name: str, meta: BoardMeta | HotMeta | ThemeMeta | None,
+) -> str:
+    """板块 / 题材指数 reference 行的名称单元格 · scan / low / high 共用。
+
+    industry 模式 → 「🏛️ X 板块指数」 · theme 模式 → 「🎯 X 题材指数」
+    单 SOT 化以前 scan_table 内硬编码 🏛️ 的写法,避免 scan 与 low/high 视觉漂移。
+    """
+    from kan.core.scan_targets import ThemeMeta
+
+    if isinstance(meta, ThemeMeta):
+        return f"🎯 {name} 题材指数"
+    return f"🏛️ {name} 板块指数"
 
 
 # ── scan ──────────────────────────────────────────────────────────────
@@ -115,7 +138,9 @@ def scan_table(
     table.add_column("共振", justify="center")
 
     if board_index_result is not None:
-        brow: list[str | Text] = [f"🏛️ {board_index_result.name} 板块指数"]
+        brow: list[str | Text] = [
+            _board_reference_label(board_index_result.name, meta),
+        ]
         brow.append(f"{board_index_result.current_price:.2f}")
         for p in display_periods:
             pr = next(
@@ -177,6 +202,8 @@ def extreme_table(
     highlight: set[str] | None = None,
     data_cutoff: date | None = None,
     fetched_at: str | None = None,
+    board_index_result: StockScanResult | None = None,
+    board_meta: BoardMeta | HotMeta | ThemeMeta | None = None,
 ) -> Table:
     """kan low / high 单周期表 · 多周期时由 caller 循环逐张调用。
 
@@ -192,6 +219,11 @@ def extreme_table(
         highlight: 自选股代码集合 · 用于 ⭐ 前缀。
         data_cutoff: 截至本周期累积的最大 cutoff · 影响 title。
         fetched_at: 截至本周期累积的最晚 cache_age · 影响 title。
+        board_index_result: 板块 / 题材指数 K 线 scan 结果 · 不为 None 时
+            作为首行 + add_section 与 hits 视觉分隔。caller 提前 scan_stock
+            产出(传 periods=用户周期 list)· render 层不调度。
+        board_meta: 用于选名称前缀(BoardMeta → 🏛️ 板块指数 · ThemeMeta →
+            🎯 题材指数)· 当 board_index_result 非 None 时必须配套传入。
     """
     label = "低点" if mode == "low" else "高点"
     signal_style = "bold green" if mode == "low" else "bold yellow"
@@ -212,6 +244,29 @@ def extreme_table(
     table.add_column(f"{period}日最低", justify="right", style="dim", min_width=8)
     table.add_column(f"{period}日最高", justify="right", style="dim", min_width=8)
     table.add_column("位置", justify="right", min_width=8)
+
+    if board_index_result is not None:
+        # 找出当前 period 对应的 PeriodResult · caller 调 scan_stock 时
+        # periods 应当含 period · 但 board K 线行数 < period 时会 insufficient。
+        board_pr = next(
+            (p for p in board_index_result.periods if p.period == period), None,
+        )
+        bref: list[str | Text] = []
+        if is_hot:  # 兜底 · 当前 hot 无 index_kline · 此分支理论上走不到
+            bref.append("-")
+        bref.append(_board_reference_label(board_index_result.name, board_meta))
+        bref.append(f"{board_index_result.current_price:.2f}")
+        if board_pr is None or board_pr.insufficient:
+            bref.append("-")
+            bref.append("-")
+            bref.append(Text("-", style="dim"))
+        else:
+            bref.append(f"{board_pr.n_low:.2f}")
+            bref.append(f"{board_pr.n_high:.2f}")
+            # reference 行用普通色不带 [%] · 与 hits 的 [pct%] bold 信号区分
+            bref.append(f"{board_pr.position_pct:.1f}%")
+        table.add_row(*bref)
+        table.add_section()
 
     for result, pr in hits:
         name_short = result.name.replace(" ", "")

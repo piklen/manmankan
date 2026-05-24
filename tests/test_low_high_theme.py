@@ -62,14 +62,19 @@ def test_low_theme_runs(monkeypatch, _isolate_all):
     assert result.exit_code == 0, result.output
     # 输出含题材成分股 location label
     assert "AI应用" in result.output
+    # v0.0.6+: 空 hits 时仍显示 🎯 题材指数 reference 行(v0.0.5.5 backlog)
+    assert "🎯" in result.output
+    assert "题材指数" in result.output
 
 
 def test_high_theme_runs(monkeypatch, _isolate_all):
     _stub(monkeypatch)
     runner = CliRunner()
-    result = runner.invoke(app, ["high", "30", "--theme=AI应用"])
+    result = runner.invoke(app, ["high", "60", "--theme=AI应用"])
     assert result.exit_code == 0, result.output
     assert "AI应用" in result.output
+    assert "🎯" in result.output
+    assert "题材指数" in result.output
 
 
 def test_low_theme_mutually_exclusive(_isolate_all):
