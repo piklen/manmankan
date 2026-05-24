@@ -122,6 +122,49 @@ def test_extreme_payload_shape():
     assert payload["command"] == "low"
     assert "30" in payload["results_by_period"]
     assert payload["results_by_period"]["30"][0]["symbol"] == "600519"
+    assert "reference" not in payload  # 未传 board → 不含 reference 字段(向后兼容)
+
+
+def test_extreme_payload_with_industry_reference():
+    """传入 BoardMeta + board_index_result → payload['reference'] 含 industry kind。"""
+    from kan.core.models import Board, BoardMeta
+
+    rbp = {30: [(_result(), _result().periods[1])]}
+    board_idx = _result(symbol="801080", name="半导体")
+    bm = BoardMeta(
+        board=Board(code="801080", name="半导体", level=1, size=50),
+        index_kline=__import__("pandas").DataFrame(),
+        constituents=[], highlight=set(),
+    )
+    payload = extreme_payload(
+        rbp, mode="low",
+        board_index_result=board_idx, board_meta=bm,
+    )
+    assert "reference" in payload
+    assert payload["reference"]["kind"] == "industry"
+    assert payload["reference"]["symbol"] == "801080"
+    assert payload["reference"]["name"] == "半导体"
+    # StockScanResult.model_dump 把 periods 也带进 reference · 直接对照查
+    assert any(p["period"] == 5 for p in payload["reference"]["periods"])
+
+
+def test_extreme_payload_with_theme_reference():
+    """传入 ThemeMeta → payload['reference']['kind'] = "theme"。"""
+    from kan.core.models import Theme, ThemeMeta
+
+    rbp: dict[int, list] = {30: []}
+    board_idx = _result(symbol="886108", name="AI应用")
+    tm = ThemeMeta(
+        theme=Theme(code="886108", name="AI应用", source="ths"),
+        index_kline=__import__("pandas").DataFrame(),
+        constituents=[], highlight=set(),
+    )
+    payload = extreme_payload(
+        rbp, mode="high",
+        board_index_result=board_idx, board_meta=tm,
+    )
+    assert payload["reference"]["kind"] == "theme"
+    assert payload["reference"]["name"] == "AI应用"
 
 
 def test_extreme_markdown_per_period_sections():
@@ -130,6 +173,86 @@ def test_extreme_markdown_per_period_sections():
     assert "## 30 日低点" in md
     assert "| 股票 | 现价 | 30日最低 | 30日最高 | 位置 |" in md
     assert "[3.0%]" in md  # extreme 用 .1f
+
+
+def test_extreme_markdown_with_industry_reference():
+    """md 输出每张表首行注入 🏛️ 板块指数 reference · 阅读器侧也能看到对照锚点。"""
+    from kan.core.models import Board, BoardMeta, PeriodResult
+
+    board_idx = _result(
+        symbol="801080", name="半导体",
+        periods=[PeriodResult(
+            period=30, n_low=10000.0, n_high=11000.0,
+            position_pct=37.5, at_low=False, at_high=False,
+        )],
+    )
+    rbp = {30: [(_result(), _result().periods[1])]}
+    bm = BoardMeta(
+        board=Board(code="801080", name="半导体", level=1, size=50),
+        index_kline=__import__("pandas").DataFrame(),
+        constituents=[], highlight=set(),
+    )
+    md = extreme_markdown(
+        rbp, mode="low",
+        board_index_result=board_idx, board_meta=bm,
+    )
+    # reference 行(table 第一 data row · 在 hits 之前)
+    assert "🏛️ 半导体 板块指数" in md
+    assert "37.5%" in md  # reference 行的位置 cell 不带方括号
+    # hits 行(带 [pct%] 信号)
+    assert "[3.0%]" in md
+
+
+def test_extreme_markdown_empty_hits_with_reference_still_renders():
+    """空 results_by_period + reference + 显式 periods → 仍画 reference 表
+    (跟终端空 hits 也显示锚点的行为对齐)。"""
+    from kan.core.models import Board, BoardMeta, PeriodResult
+
+    board_idx = _result(
+        symbol="801080", name="半导体",
+        periods=[PeriodResult(
+            period=30, n_low=7000.0, n_high=11000.0,
+            position_pct=88.5, at_low=False, at_high=False,
+        )],
+    )
+    bm = BoardMeta(
+        board=Board(code="801080", name="半导体", level=1, size=50),
+        index_kline=__import__("pandas").DataFrame(),
+        constituents=[], highlight=set(),
+    )
+    md = extreme_markdown(
+        {}, mode="low",  # 空 results_by_period(没股票触低)
+        board_index_result=board_idx, board_meta=bm,
+        periods=[30],  # caller 传周期 · 让 md 知道画哪张表
+    )
+    assert "## 30 日低点 · 0 只触及" in md
+    assert "🏛️ 半导体 板块指数" in md
+    assert "88.5%" in md
+
+
+def test_extreme_markdown_with_theme_reference():
+    """题材模式 md 输出首行 🎯 题材指数。"""
+    from kan.core.models import PeriodResult, Theme, ThemeMeta
+
+    board_idx = _result(
+        symbol="886108", name="AI应用",
+        periods=[PeriodResult(
+            period=60, n_low=900.0, n_high=1100.0,
+            position_pct=82.0, at_low=False, at_high=True,
+        )],
+    )
+    rbp: dict[int, list] = {60: []}
+    tm = ThemeMeta(
+        theme=Theme(code="886108", name="AI应用", source="ths"),
+        index_kline=__import__("pandas").DataFrame(),
+        constituents=[], highlight=set(),
+    )
+    md = extreme_markdown(
+        rbp, mode="high",
+        board_index_result=board_idx, board_meta=tm,
+    )
+    assert "🎯 AI应用 题材指数" in md
+    assert "82.0%" in md
 
 
 def test_info_payload_shape():
