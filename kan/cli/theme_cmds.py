@@ -1,19 +1,25 @@
-"""`kan theme` 子命令组 · 题材发现入口 · v0.0.5.0 引入。
+"""`kan theme` 子命令组 · 题材发现 + 题材榜 · v0.0.5.0 引入 / v0.0.5.7 加 trend。
 
 参考 `cli_config_cmds.py` 体例(typer.Typer + add_typer 注册风格)。
 
 子命令:
 - theme list [--all]    列题材清单(默认拼音前 30 · --all 全部 ~391 + 散户超载警告)
 - theme search 关键词    模糊搜题材
+- theme trend           题材连续涨跌榜 · v0.0.5.7 · K 线走 EM datacenter(不在反爬名单)·
+                        并行拉 + 24h cache · streak 算法复用 calc_trend
 
-注:本版不实现"top N 活跃热度榜"(adata 无批量接口 · O(391) HTTP 触发反爬 · 留后续版本)。
+v0.0.5.7 修订:v0.0.5.0 注释 "adata 无批量接口 · 触发反爬" 仅适用于 push2 路径的成分股接口 ·
+K 线接口 get_market_concept_east 走 datacenter HTTP · 不在反爬名单 · 并行 16 worker 安全。
 """
 from __future__ import annotations
+
+from typing import Annotated
 
 import typer
 
 from kan.app import app
 from kan.data import boards
+from kan.storage import export
 
 theme_app = typer.Typer(
     name="theme",
@@ -23,6 +29,7 @@ theme_app = typer.Typer(
 app.add_typer(theme_app, name="theme")
 
 _DEFAULT_LIST_TOP = 30
+_DEFAULT_TREND_LIMIT = 30  # 跟 list 默认值对齐 · 散户单屏可读
 
 
 def _pinyin_key(name: str) -> str:
@@ -100,3 +107,190 @@ def search_cmd(
         typer.echo(f"\n  ... 还有 {len(matches) - 30} 个 · 用更具体关键词缩小范围")
     typer.echo("")
     typer.echo("💡 用完整题材名跑扫描:kan scan --theme=AI应用")
+
+
+@theme_app.command("trend")
+def trend_cmd(
+    up: Annotated[
+        int | None,
+        typer.Option("--up", help="只看连涨≥N天的题材(2-30)"),
+    ] = None,
+    down: Annotated[
+        int | None,
+        typer.Option("--down", help="只看连跌≥N天的题材(2-30)"),
+    ] = None,
+    latest: Annotated[
+        int | None,
+        typer.Option("--latest", "-l", help="展示近 N 天每日 ▲▼ 明细(1-30)", min=1, max=30),
+    ] = None,
+    candle: Annotated[
+        bool,
+        typer.Option("--candle", "-c", help="阳线阴线口径(默认收盘价口径)"),
+    ] = False,
+    limit: Annotated[
+        int,
+        typer.Option("--limit", help=f"显示前 N(默认 {_DEFAULT_TREND_LIMIT} · --all 全部)", min=1, max=500),
+    ] = _DEFAULT_TREND_LIMIT,
+    all_: Annotated[
+        bool,
+        typer.Option("--all", help="显示全部题材(~391 · 无视 --limit)"),
+    ] = False,
+    force: Annotated[
+        bool,
+        typer.Option("--force", help="强刷 K 线(忽略 24h cache · 重新拉 391 题材)"),
+    ] = False,
+    fmt: Annotated[
+        export.OutputFormat,
+        typer.Option("--format", help="输出格式:terminal(默认)/ md / json"),
+    ] = export.OutputFormat.terminal,
+) -> None:
+    """题材连续涨跌榜 · 按 streak 绝对值降序排 · 连涨大的在最上 · 连跌大的在最下。
+
+    示例:
+      kan theme trend                # 默认前 30 题材 · 收盘价口径
+      kan theme trend --up 3         # 只看连涨 ≥ 3 天
+      kan theme trend --down 3       # 只看连跌 ≥ 3 天
+      kan theme trend --latest 5     # 近 5 天每日 ▲▼ 明细列
+      kan theme trend --all          # 全部 ~391 题材
+      kan theme trend --force        # 强刷 K 线 cache
+      kan theme trend --format json  # JSON 输出(脚本化)
+
+    数据流:
+      load_theme_catalog (24h cache) → 并行 16 worker × fetch_theme_kline (24h cache) →
+      calc_trend(close 或 candle 口径) → sort by abs(streak) → 排序后展示前 N。
+    """
+    from kan.cli.helpers import _print_err
+
+    if up is not None and down is not None:
+        _print_err("❌ --up 和 --down 不能同时使用")
+        raise typer.Exit(1)
+    for name, val in [("--up", up), ("--down", down)]:
+        if val is not None and not (2 <= val <= 30):
+            _print_err(f"❌ {name} 的值必须在 2-30 之间(当前:{val})")
+            raise typer.Exit(1)
+
+    from rich.console import Console
+
+    from kan.cli.helpers import _with_heavy_imports_spinner
+
+    status_console = Console(stderr=True)
+    with _with_heavy_imports_spinner(status_console, "⏳ 加载数据模块..."):
+        from kan.data.theme_leaderboard import (
+            load_theme_leaderboard,
+            sort_leaderboard,
+        )
+        from kan.render import terminal as render_terminal
+        from kan.render.theme import render_theme_trend_disclaimer
+
+    # 非 terminal(md/json)走静默,不显示 progress 防污染 pipe
+    progress_console = status_console if fmt is export.OutputFormat.terminal else None
+
+    try:
+        all_results, errors, source = load_theme_leaderboard(
+            candle=candle,
+            force=force,
+            progress_console=progress_console,
+        )
+    except boards.ThemeDataUnavailableError as e:
+        _print_err(f"❌ 题材榜不可用: {e}")
+        raise typer.Exit(1) from None
+
+    if not all_results:
+        _print_err(
+            f"❌ 题材榜无数据 · {len(errors)} 题材失败 · 可能是网络问题 · 重试或 --force"
+        )
+        raise typer.Exit(1)
+
+    sorted_results = sort_leaderboard(
+        all_results,
+        up_filter=up,
+        down_filter=down,
+    )
+
+    if not sorted_results:
+        if up is not None:
+            _print_err(f"没有连续涨 ≥{up} 天的题材")
+        elif down is not None:
+            _print_err(f"没有连续跌 ≥{down} 天的题材")
+        else:
+            _print_err("没有符合条件的题材")
+        raise typer.Exit(0)
+
+    shown_results = sorted_results if all_ else sorted_results[:limit]
+    total_themes = len(all_results) + len(errors)
+
+    filter_label = ""
+    if up is not None:
+        filter_label = f" · 连涨≥{up}天"
+    elif down is not None:
+        filter_label = f" · 连跌≥{down}天"
+
+    if fmt is export.OutputFormat.json:
+        payload = export.theme_leaderboard_payload(
+            shown_results,
+            candle=candle,
+            total_themes=total_themes,
+            errors_count=len(errors),
+            data_cutoff=None,
+            fetched_at=None,
+        )
+        typer.echo(export.to_json(payload))
+        return
+
+    if fmt is export.OutputFormat.md:
+        title = render_terminal.theme_leaderboard_title(
+            total_themes=total_themes,
+            shown=len(shown_results),
+            candle=candle,
+            filter_label=filter_label,
+            data_cutoff=None,
+            fetched_at=None,
+            errors_count=len(errors),
+        )
+        typer.echo(export.theme_leaderboard_markdown(
+            shown_results, title=title, latest=latest,
+        ))
+        return
+
+    # terminal 渲染
+    console = Console()
+    from kan.render.base import max_trend_dates
+    actual_latest: int | None = None
+    if latest and shown_results:
+        actual_latest = min(latest, max_trend_dates(console.width))
+
+    table = render_terminal.theme_leaderboard_table(
+        shown_results,
+        total_themes=total_themes,
+        latest=actual_latest,
+        candle=candle,
+        filter_label=filter_label,
+        errors_count=len(errors),
+    )
+    console.print(table)
+
+    if latest and actual_latest is not None and actual_latest < latest:
+        console.print(
+            f"\n  [dim]窄屏模式 · 显示近 {actual_latest}/{latest} 天"
+            " · 加宽终端可见全部[/dim]"
+        )
+
+    if not all_ and len(sorted_results) > limit:
+        console.print(
+            f"\n  [dim]💡 显示前 {limit}/{len(sorted_results)} · 看全部:kan theme trend --all[/dim]"
+        )
+
+    if errors and len(errors) <= 10:
+        names = ", ".join(t.name for t, _ in errors[:10])
+        console.print(f"\n  [dim]ℹ️  {len(errors)} 题材数据不可用:{names}[/dim]")
+    elif errors:
+        console.print(
+            f"\n  [dim]ℹ️  {len(errors)} 题材数据不可用 · 可 --force 重试[/dim]"
+        )
+
+    if candle:
+        console.print("[dim]  阳线阴线口径:收盘 > 开盘 = ▲ · 收盘 < 开盘 = ▼ · 平盘不断连续[/dim]")
+    else:
+        console.print("[dim]  收盘价口径:今日收盘 > 昨日收盘 = ▲ · 今日收盘 < 昨日收盘 = ▼ · 平盘不断连续[/dim]")
+
+    render_theme_trend_disclaimer(source=source)

@@ -501,3 +501,114 @@ def trend_table(
         table.add_row(*row)
 
     return table
+
+
+# ── 题材榜 leaderboard(`kan theme trend`)· v0.0.5.7 ───────────────────
+
+
+def theme_leaderboard_title(
+    *,
+    total_themes: int,
+    shown: int,
+    candle: bool,
+    filter_label: str = "",
+    data_cutoff: date | None = None,
+    fetched_at: str | None = None,
+    errors_count: int = 0,
+) -> str:
+    """题材榜标题 · terminal + md export 共用。"""
+    mode_label = "阳线阴线口径" if candle else "收盘价口径"
+    title = f"慢慢看 · 题材连续涨跌榜 · {mode_label}{filter_label}"
+    title += f" · {shown}/{total_themes} 题材"
+    if data_cutoff:
+        title += f" · 数据截止 {format_date_compact(data_cutoff)} 收盘"
+    if fetched_at:
+        title += f" · {format_fetched_at_compact(fetched_at)} 拉取"
+    if errors_count:
+        title += f" · {errors_count} 题材数据不可用"
+    return title
+
+
+def theme_leaderboard_table(
+    results: list[TrendResult],
+    *,
+    total_themes: int,
+    latest: int | None = None,
+    candle: bool = False,
+    filter_label: str = "",
+    data_cutoff: date | None = None,
+    fetched_at: str | None = None,
+    errors_count: int = 0,
+) -> Table:
+    """题材连续涨跌榜 · 行=题材 · 列=排名/题材/现价/连续/累计(+ 可选近 N 天明细)。
+
+    跟 trend_table(行=股票)结构平行 · 但不带 ⭐ 高亮 / 不带"榜"列(排名是本地排序)。
+
+    Args:
+        results: sort_leaderboard 产出的 TrendResult 列表(已过滤 + 排序 + 截断)。
+        total_themes: 总题材数(catalog 长度)· 用于标题 "N/391 题材" 文案。
+        latest: 已经过 max_trend_dates(console.width) 截断的有效日期列数 ·
+                None 或 0 时不加日期列。原 --latest=N 由 caller 截断为窄屏 N′ 后传入。
+        candle: 阳线阴线口径 · 影响 mode_label。
+        filter_label: " · 连跌≥3天" / " · 连涨≥5天" / "" · caller 构造好传入。
+        data_cutoff: 数据截止日 · None 时省略。
+        fetched_at: 拉取时间 · None 时省略。
+        errors_count: 失败题材数 · > 0 时标题追加提示。
+    """
+    title = theme_leaderboard_title(
+        total_themes=total_themes,
+        shown=len(results),
+        candle=candle,
+        filter_label=filter_label,
+        data_cutoff=data_cutoff,
+        fetched_at=fetched_at,
+        errors_count=errors_count,
+    )
+
+    table = Table(title=title, show_lines=False, pad_edge=False, padding=(0, 1))
+    table.add_column("排名", justify="right", style="cyan", min_width=4)
+    table.add_column("题材", style="white", no_wrap=True)
+    table.add_column("现价", justify="right", style="white")
+    table.add_column("连续", justify="center")
+    table.add_column("累计", justify="right")
+
+    if latest and results:
+        ref = results[0]
+        for date_str, _ in ref.daily_changes[:latest]:
+            short = date_str[-5:]
+            table.add_column(short, justify="right", min_width=7)
+
+    for idx, r in enumerate(results, start=1):
+        name_short = r.name.replace(" ", "")
+
+        if r.streak < 0:
+            streak_text = Text(r.direction, style="bold green")
+            cum_text = Text(f"{abs(r.streak_pct):.2f}%", style="green")
+        elif r.streak > 0:
+            streak_text = Text(r.direction, style="bold red")
+            cum_text = Text(f"{abs(r.streak_pct):.2f}%", style="red")
+        else:
+            streak_text = Text("平", style="dim")
+            cum_text = Text("0%", style="dim")
+
+        row: list[str | Text] = [
+            str(idx),
+            name_short,
+            f"{r.current_price:.2f}",
+            streak_text,
+            cum_text,
+        ]
+
+        if latest:
+            for _, chg in r.daily_changes[:latest]:
+                abs_chg = abs(chg)
+                if chg > 0:
+                    row.append(Text(f"▲{abs_chg:.2f}%", style="red"))
+                elif chg < 0:
+                    row.append(Text(f"▼{abs_chg:.2f}%", style="green"))
+                else:
+                    row.append(Text("—", style="dim"))
+
+        table.add_row(*row)
+
+    return table
