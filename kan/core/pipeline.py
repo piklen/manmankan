@@ -29,6 +29,7 @@ from kan.data.boards import (
     ThemeNotFoundError,
 )
 from kan.data.hot import HotListUnavailableError
+from kan.infra.log import debug_log
 
 if TYPE_CHECKING:
     from collections.abc import Iterable
@@ -69,10 +70,12 @@ def resolve_stock_set_or_exit(
             f"❌ 未找到行业「{industry_name}」· 可试更短关键词(如「半导体」「白酒」)"
         )
         raise typer.Exit(1) from None
-    except BoardDataUnavailableError:
+    except BoardDataUnavailableError as e:
+        debug_log(__name__, "industry data fetch failed", e)
         _print_err("❌ 行业数据源暂时不可用,稍后再试")
         raise typer.Exit(1) from None
     except HotListUnavailableError as e:
+        debug_log(__name__, "hot list fetch failed", e.__cause__ or e)
         _print_err(
             f"❌ 东财热榜源暂时不可用 · 可能东财接口波动 / 限流 ({e})\n"
             "   替代:`kan scan --industry <行业名>` 或 `kan scan --theme=<题材>`\n"
@@ -85,7 +88,8 @@ def resolve_stock_set_or_exit(
             "或跑 kan theme search 看候选"
         )
         raise typer.Exit(2) from None
-    except ThemeDataUnavailableError:
+    except ThemeDataUnavailableError as e:
+        debug_log(__name__, "theme data fetch failed", e.__cause__ or e)
         _print_err(
             "❌ 题材数据源暂时不可用 · 稍后再试 · 行业扫描可用(--industry)"
         )

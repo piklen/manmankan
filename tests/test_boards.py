@@ -86,6 +86,23 @@ def test_search_industry_not_found(monkeypatch):
         boards.search_industry("不存在的行业")
 
 
+@pytest.mark.parametrize("bad", ["", "   ", "\t", "\n"])
+def test_search_industry_rejects_blank_query(monkeypatch, bad):
+    """空 / 纯空白 query 必须 raise · 防 `q in name` 短路误匹配第一只 board(用户实测看到"种植业")。"""
+    monkeypatch.setattr(
+        "akshare.sw_index_first_info",
+        lambda: _fake_sw_df([["801080.SI", "电子", 300]]),
+    )
+    monkeypatch.setattr(
+        "akshare.sw_index_second_info",
+        lambda: _fake_sw_df([["801081.SI", "半导体", 131]]),
+    )
+    monkeypatch.setattr("akshare.sw_index_third_info", lambda: _fake_sw_df([]))
+    boards.load_industry_catalog(force=True)
+    with pytest.raises(boards.BoardNotFoundError):
+        boards.search_industry(bad)
+
+
 def test_catalog_all_empty_raises_unavailable(monkeypatch):
     monkeypatch.setattr("akshare.sw_index_first_info", lambda: _fake_sw_df([]))
     monkeypatch.setattr("akshare.sw_index_second_info", lambda: _fake_sw_df([]))

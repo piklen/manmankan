@@ -50,6 +50,66 @@ def test_normalize_symbol_too_short():
         watchlist._normalize_symbol("12345")
 
 
+# ── resolve_symbol_or_name · 6 位代码 / 名称 / 多匹配 / 零匹配 / 空输入 ──────────
+# v0.0.5.5 引入 · info / compare 共用入口 · 让"用户给名称"在所有 verb 一致 work。
+
+
+def _stub_names(monkeypatch, mapping):
+    """让 _load_stock_names 直接返回测试用 mapping · 跳过 baostock/akshare 真网络。"""
+    monkeypatch.setattr(watchlist, "_load_stock_names", lambda: mapping)
+
+
+def test_resolve_symbol_or_name_pure_code(monkeypatch):
+    _stub_names(monkeypatch, {"600519": "贵州茅台"})
+    assert watchlist.resolve_symbol_or_name("600519") == ("600519", "贵州茅台")
+
+
+def test_resolve_symbol_or_name_with_prefix(monkeypatch):
+    _stub_names(monkeypatch, {"600519": "贵州茅台"})
+    assert watchlist.resolve_symbol_or_name("sh600519") == ("600519", "贵州茅台")
+
+
+def test_resolve_symbol_or_name_single_match(monkeypatch):
+    _stub_names(monkeypatch, {"600519": "贵州茅台"})
+    assert watchlist.resolve_symbol_or_name("茅台") == ("600519", "贵州茅台")
+
+
+def test_resolve_symbol_or_name_multi_match_lists_candidates(monkeypatch):
+    _stub_names(monkeypatch, {
+        "601318": "中国平安",
+        "000001": "平安银行",
+        "001359": "平安电工",
+    })
+    with pytest.raises(ValueError, match="匹配到 3 只"):
+        watchlist.resolve_symbol_or_name("平安")
+
+
+def test_resolve_symbol_or_name_zero_match(monkeypatch):
+    _stub_names(monkeypatch, {"600519": "贵州茅台"})
+    with pytest.raises(ValueError, match="未找到包含"):
+        watchlist.resolve_symbol_or_name("xxxxx")
+
+
+@pytest.mark.parametrize("bad", ["", "   ", "\t"])
+def test_resolve_symbol_or_name_blank_rejected(monkeypatch, bad):
+    _stub_names(monkeypatch, {"600519": "贵州茅台"})
+    with pytest.raises(ValueError, match="空字符串不是有效"):
+        watchlist.resolve_symbol_or_name(bad)
+
+
+def test_resolve_symbol_or_name_unknown_code(monkeypatch):
+    _stub_names(monkeypatch, {"600519": "贵州茅台"})
+    with pytest.raises(ValueError, match="未找到股票"):
+        watchlist.resolve_symbol_or_name("999999")
+
+
+def test_search_by_name_blank_returns_empty(monkeypatch):
+    """search_by_name 同样不能让 `'' in name` 短路命中全部 · 否则 add/info 多匹配 spam。"""
+    _stub_names(monkeypatch, {"600519": "贵州茅台", "000858": "五粮液"})
+    assert watchlist.search_by_name("") == []
+    assert watchlist.search_by_name("   ") == []
+
+
 def test_load_empty_watchlist(temp_kan_dir):
     wl = watchlist.load_watchlist()
     assert wl.stocks == []

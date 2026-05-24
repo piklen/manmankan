@@ -42,11 +42,14 @@ KLINE_COLUMNS = KLINE_REQUIRED + KLINE_OPTIONAL
 _SYMBOL_PATTERN = re.compile(r"^\d{6}$")
 
 
-def _normalize_kline(df: pd.DataFrame, source: str = "unknown") -> pd.DataFrame:
+def _normalize_kline(
+    df: pd.DataFrame, source: str = "unknown", symbol: str | None = None,
+) -> pd.DataFrame:
     """统一归一化：类型转换 + 补缺失列 + 排序 + 去 NaN。所有数据源的出口。
 
     source: 数据来源标记 (baostock / sina / eastmoney / tencent / unknown).
             写入 `_source` 列 · 支持跨源单位差异回查 · 缓存来源可追溯。
+    symbol: 当前归一化的股票代码 · 仅用于 warning 文案 · 调试时定位脏数据源头。
     """
     import pandas as pd
 
@@ -68,8 +71,9 @@ def _normalize_kline(df: pd.DataFrame, source: str = "unknown") -> pd.DataFrame:
             bad_cols.append((col, bad_count))
     if bad_cols:
         detail = ", ".join(f"{c}×{n}" for c, n in bad_cols)
+        sym_tag = f" [{symbol}]" if symbol else ""
         logging.getLogger(__name__).warning(
-            "数据源 %s K线含无法解析的数值 · 已置 NaN: %s", source, detail
+            "数据源 %s K线含无法解析的数值 · 已置 NaN: %s%s", source, detail, sym_tag
         )
     df["_source"] = source
 
@@ -242,7 +246,7 @@ def fetch_kline(symbol: str, days: int = 180, force: bool = False) -> pd.DataFra
 
     from kan.storage.paths import atomic_write_parquet
 
-    df = _normalize_kline(raw, source=source)
+    df = _normalize_kline(raw, source=source, symbol=symbol)
     atomic_write_parquet(df, cache)
     return df
 
