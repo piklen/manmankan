@@ -226,6 +226,104 @@ def test_extreme_table_hot_adds_rank_column():
     assert "⭐" in table.columns[1]._cells[0]
 
 
+def test_extreme_table_with_industry_reference():
+    """BoardMeta + board_index_result 注入 reference 行 · 首行 🏛️ X 板块指数。"""
+    stock = _stock()
+    hits = [(stock, _period(30, at_low=True, pct=2.5))]
+    board_idx = _stock(
+        symbol="801080", name="半导体",
+        periods=[_period(30, pct=42.0)],
+    )
+    table = terminal.extreme_table(
+        30, hits, "low",
+        board_index_result=board_idx, board_meta=_board_meta("半导体"),
+    )
+    assert table.row_count == 2  # reference + 1 hit
+    # 首行(reference)股票列 = 🏛️ + 板块指数
+    name_cell = table.columns[0]._cells[0]
+    assert "🏛️" in name_cell
+    assert "半导体" in name_cell
+    assert "板块指数" in name_cell
+    # reference 行的位置 cell 用普通字符串不带方括号 · 跟 hits 的 [pct%] 区分
+    pos_col = table.columns[-1]
+    assert pos_col._cells[0] == "42.0%"  # reference 行
+
+
+def test_extreme_table_with_theme_reference_uses_kite_emoji():
+    """ThemeMeta + board_index_result → 首行 🎯 X 题材指数。"""
+    board_idx = _stock(
+        symbol="886108", name="AI应用",
+        periods=[_period(60, pct=78.5)],
+    )
+    table = terminal.extreme_table(
+        60, [], "high",
+        board_index_result=board_idx, board_meta=_theme_meta("AI应用"),
+    )
+    assert table.row_count == 1
+    name_cell = table.columns[0]._cells[0]
+    assert "🎯" in name_cell
+    assert "AI应用" in name_cell
+    assert "题材指数" in name_cell
+    # 高点模式下 reference 行的位置 cell 也不带方括号
+    assert table.columns[-1]._cells[0] == "78.5%"
+
+
+def test_extreme_table_reference_with_empty_hits_keeps_row():
+    """hits 空 + reference → row_count=1(只剩 reference) · 验证空结果时锚点仍在。"""
+    board_idx = _stock(
+        symbol="801080", name="半导体",
+        periods=[_period(30, pct=15.0)],
+    )
+    table = terminal.extreme_table(
+        30, [], "low",
+        board_index_result=board_idx, board_meta=_board_meta("半导体"),
+    )
+    assert table.row_count == 1
+    assert "🏛️" in table.columns[0]._cells[0]
+
+
+def test_extreme_table_no_reference_backward_compat():
+    """不传 reference 参数时表格行数 = hits 数(原行为保护)。"""
+    stock = _stock()
+    hits = [(stock, _period(30, at_low=True, pct=2.5))]
+    table = terminal.extreme_table(30, hits, "low")
+    assert table.row_count == 1  # 只有 hit · 没 reference 行
+
+
+def test_scan_table_with_theme_meta_uses_kite_emoji():
+    """v0.0.6+: scan_table 题材路径首行从 🏛️ 改为 🎯 题材指数(跟 info --theme 对齐)。"""
+    board_idx = _stock(
+        symbol="886108", name="AI应用",
+        periods=[_period(30, pct=55)],
+    )
+    table = terminal.scan_table(
+        _ctx(meta=_theme_meta("AI应用")),
+        [_stock()],
+        display_periods=[30],
+        high_mode=False,
+        board_index_result=board_idx,
+    )
+    assert table.row_count == 2
+    name_cell = table.columns[0]._cells[0]
+    assert "🎯" in name_cell
+    assert "题材指数" in name_cell
+    assert "🏛️" not in name_cell  # theme 路径不再用 🏛️
+
+
+def test_board_reference_label_helper_dispatches_by_meta_type():
+    """_board_reference_label helper 单测 · 直接验 industry/theme 派发。"""
+    label_industry = terminal._board_reference_label("半导体", _board_meta())
+    label_theme = terminal._board_reference_label("AI应用", _theme_meta())
+    label_hot = terminal._board_reference_label("东财人气榜", _hot_meta())
+    label_none = terminal._board_reference_label("自选股", None)
+
+    assert label_industry == "🏛️ 半导体 板块指数"
+    assert label_theme == "🎯 AI应用 题材指数"
+    # hot / None 用 industry 默认 · 实际 caller 不会把 hot 当 reference 喂进来
+    assert label_hot == "🏛️ 东财人气榜 板块指数"
+    assert label_none == "🏛️ 自选股 板块指数"
+
+
 # ── info_table ────────────────────────────────────────────────────────
 
 
