@@ -62,6 +62,7 @@ P0 候选 1+2 推到 v0.0.6 minor。
 - **TuShare Pro 数据源**:`kan config` + 自写 HTTP client(v0.0.5.0)
 - **题材位置扫描**:9 命令 `--theme` + `kan theme list/search` 发现入口(v0.0.5.0)
 - **5 档对称成交量识别**:scan/info 表(v0.0.5.0)
+- **题材连续涨跌榜**:`kan theme trend [--up/--down/--latest/--candle/--limit/--all/--force/--format]`(v0.0.5.7 · 并行 16 worker 抓 391 题材 · streak 算法复用 calc_trend · 修订 "adata 反爬" 注释仅适用 push2 路径)
 
 ### 暂不做
 

@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added (v0.0.5.7)
+
+- **`kan theme trend`** · 题材连续涨跌榜 · 按 `abs(streak)` 降序 · 配 TuShare token 时走 `ths_daily` batch · 否则走 adata EM
+  - flag:`--up N` / `--down N` / `--latest N` / `--candle` / `--limit N` / `--all` / `--force` / `--format md|json`
+  - 默认 `--limit 30` · `--up`/`--down` 单边过滤(2-30 · 互斥)· 沿用 `kan trend` 语义
+- 测试基线 722 → 768 passed(+46 · 0 regression)
+
 ### Added (Public API surface · v0.0.5.4)
 
 - **`kan.api` · 公开 Python API 入口** · 一个稳定 import 收口 OOP 框架
