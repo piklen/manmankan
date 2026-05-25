@@ -1,0 +1,380 @@
+<!DOCTYPE html>
+<html lang="zh-CN" class="dark">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>慢慢看 · manmankan · A 股自选股位置感 CLI</title>
+  <meta name="description" content="纯命令行 A 股自选股「位置感」工具 · 一屏看完 10 周期位置百分位 + 共振信号 · 完全本地 · 不登录 · 不上传 · 不推送 · MIT 开源" />
+
+  <meta property="og:type" content="website" />
+  <meta property="og:title" content="慢慢看 · manmankan · A 股自选股位置感 CLI" />
+  <meta property="og:description" content="告诉你它站在哪 · 不告诉你买什么。纯命令行 · 完全本地 · 0 telemetry · MIT 开源。" />
+  <meta property="og:url" content="https://piklen.github.io/manmankan/" />
+  <meta name="twitter:card" content="summary_large_image" />
+  <meta name="twitter:title" content="慢慢看 · manmankan" />
+  <meta name="twitter:description" content="A 股自选股位置感 CLI · 告诉你它站在哪 · 不告诉你买什么" />
+
+  <link rel="canonical" href="https://piklen.github.io/manmankan/" />
+
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      darkMode: 'class',
+      theme: {
+        extend: {
+          fontFamily: {
+            mono: ['ui-monospace', 'SFMono-Regular', 'Menlo', 'Consolas', '"Liberation Mono"', 'monospace'],
+            sans: ['-apple-system', 'BlinkMacSystemFont', '"PingFang SC"', '"Microsoft YaHei"', 'system-ui', 'sans-serif'],
+          },
+        },
+      },
+    }
+  </script>
+  <style>
+    :root { color-scheme: dark; }
+    body { background: #09090b; color: #e4e4e7; }
+    .term { background: #0a0a0a; border: 1px solid #27272a; border-radius: 8px; }
+    .term-head { background: #18181b; border-bottom: 1px solid #27272a; }
+    .term pre { font-size: 12px; line-height: 1.5; white-space: pre; overflow-x: auto; padding: 16px; color: #e4e4e7; }
+    .pct-lo { color: #34d399; font-weight: 600; }
+    .pct-hi { color: #fb923c; font-weight: 600; }
+    .resonance { color: #fbbf24; font-weight: 700; }
+    .gradient-text { background: linear-gradient(120deg, #34d399 0%, #60a5fa 100%); -webkit-background-clip: text; background-clip: text; color: transparent; }
+    details > summary { cursor: pointer; }
+    details > summary::-webkit-details-marker { display: none; }
+    .copy-btn:hover { background: #27272a; }
+    @media (max-width: 640px) {
+      .term pre { font-size: 10px; }
+    }
+  </style>
+</head>
+<body class="font-sans antialiased">
+
+  <!-- Nav -->
+  <nav class="sticky top-0 z-50 backdrop-blur bg-zinc-950/80 border-b border-zinc-800">
+    <div class="max-w-6xl mx-auto px-6 py-3 flex items-center justify-between">
+      <a href="#top" class="flex items-center gap-2 text-zinc-100 font-semibold">
+        <span class="text-emerald-400 font-mono">$</span>
+        <span>慢慢看 · manmankan</span>
+      </a>
+      <div class="flex items-center gap-4 text-sm">
+        <a href="#install" class="text-zinc-400 hover:text-zinc-100 hidden sm:inline">安装</a>
+        <a href="#faq" class="text-zinc-400 hover:text-zinc-100 hidden sm:inline">FAQ</a>
+        <a href="https://pypi.org/project/manmankan/" class="text-zinc-400 hover:text-zinc-100">PyPI</a>
+        <a href="https://github.com/piklen/manmankan" class="px-3 py-1.5 bg-zinc-100 text-zinc-900 rounded-md font-medium hover:bg-white transition">
+          GitHub →
+        </a>
+      </div>
+    </div>
+  </nav>
+
+  <!-- Hero -->
+  <section id="top" class="max-w-6xl mx-auto px-6 pt-16 pb-12 sm:pt-24 sm:pb-16">
+    <div class="text-center max-w-3xl mx-auto">
+      <div class="inline-flex items-center gap-2 px-3 py-1 mb-6 text-xs rounded-full bg-zinc-900 border border-zinc-800 text-zinc-400">
+        <span class="w-1.5 h-1.5 rounded-full bg-emerald-400"></span>
+        <span>Alpha · v0.0.5.0 · MIT · 100% 本地</span>
+      </div>
+
+      <h1 class="text-4xl sm:text-6xl font-bold tracking-tight mb-6">
+        告诉你它<span class="gradient-text">站在哪</span><br />
+        <span class="text-zinc-400 text-3xl sm:text-5xl">不告诉你买什么</span>
+      </h1>
+
+      <p class="text-lg sm:text-xl text-zinc-400 mb-10 leading-relaxed">
+        <b class="text-zinc-200">慢慢看</b> 是一个纯命令行的 A 股自选股位置感工具 ——
+        把 30 只自选股在 3 / 5 / 7 / 10 / 15 / 30 / 60 / 90 / 120 / 180 日窗口内的位置百分位 <b class="text-zinc-200">一屏显示</b>，
+        把同时触低 / 触高的多周期共振标成 <span class="resonance font-mono">×N</span>，然后<b class="text-zinc-200">闭嘴</b>。
+      </p>
+
+      <!-- Install command -->
+      <div class="inline-flex items-center gap-3 bg-zinc-900 border border-zinc-800 rounded-lg px-5 py-3 font-mono text-sm sm:text-base mb-8 shadow-lg">
+        <span class="text-emerald-400">$</span>
+        <span class="text-zinc-100" id="install-cmd">pip install manmankan</span>
+        <button class="copy-btn ml-2 px-2 py-1 rounded text-xs text-zinc-400 border border-zinc-700" onclick="navigator.clipboard.writeText('pip install manmankan').then(()=>{this.textContent='已复制';setTimeout(()=>this.textContent='复制',1500)})">复制</button>
+      </div>
+
+      <div class="flex flex-wrap justify-center gap-3">
+        <a href="https://github.com/piklen/manmankan" class="px-6 py-3 bg-zinc-100 text-zinc-900 rounded-lg font-semibold hover:bg-white transition flex items-center gap-2">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor"><path d="M12 .297c-6.63 0-12 5.373-12 12 0 5.303 3.438 9.8 8.205 11.385.6.113.82-.258.82-.577 0-.285-.01-1.04-.015-2.04-3.338.724-4.042-1.61-4.042-1.61C4.422 18.07 3.633 17.7 3.633 17.7c-1.087-.744.084-.729.084-.729 1.205.084 1.838 1.236 1.838 1.236 1.07 1.835 2.809 1.305 3.495.998.108-.776.417-1.305.76-1.605-2.665-.3-5.466-1.332-5.466-5.93 0-1.31.465-2.38 1.235-3.22-.135-.303-.54-1.523.105-3.176 0 0 1.005-.322 3.3 1.23.96-.267 1.98-.399 3-.405 1.02.006 2.04.138 3 .405 2.28-1.552 3.285-1.23 3.285-1.23.645 1.653.24 2.873.12 3.176.765.84 1.23 1.91 1.23 3.22 0 4.61-2.805 5.625-5.475 5.92.42.36.81 1.096.81 2.22 0 1.606-.015 2.896-.015 3.286 0 .315.21.69.825.57C20.565 22.092 24 17.592 24 12.297c0-6.627-5.373-12-12-12"/></svg>
+          GitHub · Star
+        </a>
+        <a href="https://pypi.org/project/manmankan/" class="px-6 py-3 bg-zinc-900 text-zinc-100 rounded-lg font-semibold border border-zinc-800 hover:border-zinc-600 transition">
+          📦 PyPI 安装详情
+        </a>
+      </div>
+    </div>
+  </section>
+
+  <!-- Terminal mock -->
+  <section class="max-w-5xl mx-auto px-6 pb-16">
+    <div class="term shadow-2xl">
+      <div class="term-head px-4 py-2 flex items-center gap-2">
+        <span class="w-3 h-3 rounded-full bg-red-400/70"></span>
+        <span class="w-3 h-3 rounded-full bg-yellow-400/70"></span>
+        <span class="w-3 h-3 rounded-full bg-green-400/70"></span>
+        <span class="ml-3 text-xs text-zinc-500 font-mono">~/portfolio — kan scan</span>
+      </div>
+<pre>
+<span class="text-emerald-400">$</span> kan scan
+
+慢慢看 · 自选股位置扫描 · 低点模式 · 数据截止 05-10 收盘 · 16:05 拉取
+┏━━━━━━━━━━━━━━━━━━┳━━━━━━━━━┳━━━━━━┳━━━━━━┳━━━━━━┳━━━━━━┳━━━━━━┳━━━━━━┳━━━━━━┳━━━━━━┳━━━━━━━┳━━━━━━━┳━━━━━┓
+┃股票              ┃    现价 ┃  3日 ┃  5日 ┃  7日 ┃ 10日 ┃ 15日 ┃ 30日 ┃ 60日 ┃ 90日 ┃ 120日 ┃ 180日 ┃共振 ┃
+┡━━━━━━━━━━━━━━━━━━╇━━━━━━━━━╇━━━━━━╇━━━━━━╇━━━━━━╇━━━━━━╇━━━━━━╇━━━━━━╇━━━━━━╇━━━━━━╇━━━━━━━╇━━━━━━━╇━━━━━┩
+│沪深300 000300    │ 3960.20 │ <span class="pct-lo">[2%]</span> │ <span class="pct-lo">[3%]</span> │ <span class="pct-lo">[3%]</span> │ <span class="pct-lo">[3%]</span> │ <span class="pct-lo">[3%]</span> │ <span class="pct-lo">[5%]</span> │ <span class="pct-lo">[5%]</span> │ 10%  │  15%  │  18%  │ <span class="resonance">×6</span>  │
+│上证50  000016    │ 2670.10 │ <span class="pct-lo">[3%]</span> │ <span class="pct-lo">[4%]</span> │ <span class="pct-lo">[4%]</span> │  9%  │ 10%  │ 14%  │ 18%  │ 20%  │  22%  │  25%  │ <span class="resonance">×4</span>  │
+│中证500 000905    │ 5690.50 │ <span class="pct-lo">[0%]</span> │ <span class="pct-lo">[0%]</span> │ <span class="pct-lo">[0%]</span> │ <span class="pct-lo">[1%]</span> │ <span class="pct-lo">[1%]</span> │ <span class="pct-lo">[1%]</span> │  3%  │  8%  │  12%  │  16%  │ <span class="resonance">×8</span>  │
+└──────────────────┴─────────┴──────┴──────┴──────┴──────┴──────┴──────┴──────┴──────┴───────┴───────┴─────┘
+
+  <span class="pct-lo">[x%]</span> = 触及低点(≤5%) · 0%=区间最低 · 越低=越接近 N 日最低价
+
+<span class="text-amber-300">⚠️</span> 创新低 ≠ 见底 · 创新高 ≠ 顶 · 历史价格不预示未来 · 仅供参考,不构成投资建议
+</pre>
+    </div>
+    <p class="text-center text-zinc-500 text-xs mt-4 font-mono">↑ 真实终端输出 · 数据为占位示意（三大指数,不构成任何推荐）</p>
+  </section>
+
+  <!-- 三栏：做什么 / 不做什么 / 数据 -->
+  <section class="max-w-6xl mx-auto px-6 py-16 border-t border-zinc-800">
+    <div class="grid md:grid-cols-3 gap-6">
+      <div class="p-6 rounded-lg bg-zinc-900/50 border border-zinc-800">
+        <div class="text-emerald-400 text-2xl mb-3">✓</div>
+        <h3 class="text-lg font-semibold mb-3">做什么</h3>
+        <ul class="text-sm text-zinc-400 space-y-2 leading-relaxed">
+          <li>· 多周期位置百分位扫描</li>
+          <li>· 多周期共振信号（同触低/高）</li>
+          <li>· 单股详情 · 多股对比</li>
+          <li>· 行业 / 题材 / 热榜 4 类对象切换</li>
+          <li>· 涨跌停 / ST 标记 · 5 档量能识别</li>
+          <li>· JSON / Markdown 快照导出</li>
+        </ul>
+      </div>
+
+      <div class="p-6 rounded-lg bg-zinc-900/50 border border-amber-900/40">
+        <div class="text-amber-400 text-2xl mb-3">✗</div>
+        <h3 class="text-lg font-semibold mb-3">不做什么</h3>
+        <ul class="text-sm text-zinc-400 space-y-2 leading-relaxed">
+          <li>· 不给买卖建议</li>
+          <li>· 不给评级 / 目标价 / 预测涨跌</li>
+          <li>· 不做「AI 选股」</li>
+          <li>· 不接 broker · 不下单</li>
+          <li>· 不做 T+0 短线（数据延时）</li>
+          <li>· 不做港股 / 美股 / 期货</li>
+        </ul>
+      </div>
+
+      <div class="p-6 rounded-lg bg-zinc-900/50 border border-zinc-800">
+        <div class="text-blue-400 text-2xl mb-3">🔒</div>
+        <h3 class="text-lg font-semibold mb-3">数据 · 隐私</h3>
+        <ul class="text-sm text-zinc-400 space-y-2 leading-relaxed">
+          <li>· 100% 本地 · 不要登录 · 不上传自选</li>
+          <li>· 0 telemetry · 0 广告 · 0 推送</li>
+          <li>· 数据存 <code class="text-emerald-400 font-mono text-xs">~/.local/share/kan/</code></li>
+          <li>· baostock 主源 + adata / 东财兜底</li>
+          <li>· 可选接 TuShare Pro 提速</li>
+          <li>· <code class="text-emerald-400 font-mono text-xs">kan uninstall</code> 一键彻底清</li>
+        </ul>
+      </div>
+    </div>
+  </section>
+
+  <!-- 安装 -->
+  <section id="install" class="max-w-6xl mx-auto px-6 py-16 border-t border-zinc-800">
+    <h2 class="text-3xl font-bold mb-2 text-center">30 秒装好</h2>
+    <p class="text-zinc-400 text-center mb-10">Python 3.11+ · 平均装机 1-2 分钟</p>
+
+    <div class="grid md:grid-cols-2 gap-6 max-w-4xl mx-auto">
+      <div class="term">
+        <div class="term-head px-4 py-2 flex items-center gap-2">
+          <span class="text-xs text-zinc-500 font-mono">🍎 mac / Linux · Terminal</span>
+        </div>
+<pre><span class="text-emerald-400">$</span> curl -LsSf https://raw.githubusercontent.com\
+    /piklen/manmankan/main/scripts/install.sh | bash
+
+<span class="text-zinc-500"># 装 uv + manmankan + 验证 · 看到 ✅ 即成功</span></pre>
+      </div>
+
+      <div class="term">
+        <div class="term-head px-4 py-2 flex items-center gap-2">
+          <span class="text-xs text-zinc-500 font-mono">🪟 Windows · PowerShell</span>
+        </div>
+<pre><span class="text-emerald-400">&gt;</span> powershell -c "irm https://raw.githubusercontent\
+    .com/piklen/manmankan/main/scripts/install.ps1 | iex"
+
+<span class="text-zinc-500"># 注意是 PowerShell 不是 cmd</span></pre>
+      </div>
+    </div>
+
+    <div class="max-w-4xl mx-auto mt-8 p-4 rounded-lg bg-zinc-900/30 border border-zinc-800 text-sm text-zinc-400">
+      <b class="text-zinc-200">老手 1 行装：</b>
+      <code class="font-mono text-emerald-400 ml-2">uv tool install manmankan</code>
+      ·
+      或
+      <code class="font-mono text-emerald-400 ml-2">pipx install manmankan</code>
+      ·
+      或
+      <code class="font-mono text-emerald-400 ml-2">pip install manmankan</code>
+    </div>
+
+    <div class="max-w-4xl mx-auto mt-6 p-4 rounded-lg bg-amber-950/20 border border-amber-900/40 text-sm text-zinc-400">
+      🔒 <b class="text-amber-200">不放心一键脚本？</b>
+      永远不要盲跑 <code class="font-mono text-amber-300">curl ... | bash</code>。
+      脚本是开源的 · 下载看一眼再装 ·
+      <a href="https://github.com/piklen/manmankan/blob/main/scripts/install.sh" class="text-emerald-400 hover:underline">看源码</a>。
+    </div>
+  </section>
+
+  <!-- 30 秒上手 -->
+  <section class="max-w-4xl mx-auto px-6 py-16 border-t border-zinc-800">
+    <h2 class="text-3xl font-bold mb-2 text-center">装好之后</h2>
+    <p class="text-zinc-400 text-center mb-10">打开新终端窗口 · 3 行命令开始</p>
+
+    <div class="term">
+      <div class="term-head px-4 py-2 flex items-center gap-2">
+        <span class="text-xs text-zinc-500 font-mono">~ — 第一次上手</span>
+      </div>
+<pre><span class="text-emerald-400">$</span> kan add 600519 茅台 601318          <span class="text-zinc-500"># 加 3 只 · 代码/名称混搭</span>
+<span class="text-emerald-400">$</span> kan scan                            <span class="text-zinc-500"># 一屏看完位置 + 共振</span>
+<span class="text-emerald-400">$</span> kan info 600519                     <span class="text-zinc-500"># 单股详情</span>
+<span class="text-emerald-400">$</span> kan compare 茅台 五粮液             <span class="text-zinc-500"># 多股对比</span>
+
+<span class="text-zinc-500"># 进阶</span>
+<span class="text-emerald-400">$</span> kan theme search AI                 <span class="text-zinc-500"># 找题材</span>
+<span class="text-emerald-400">$</span> kan scan --theme=AI应用             <span class="text-zinc-500"># 看 AI 板块谁在低位</span>
+<span class="text-emerald-400">$</span> kan scan --hot rank                 <span class="text-zinc-500"># 看东财人气榜</span></pre>
+    </div>
+  </section>
+
+  <!-- FAQ -->
+  <section id="faq" class="max-w-4xl mx-auto px-6 py-16 border-t border-zinc-800">
+    <h2 class="text-3xl font-bold mb-10 text-center">常见问题</h2>
+
+    <div class="space-y-3">
+      <details class="p-5 rounded-lg bg-zinc-900/50 border border-zinc-800" open>
+        <summary class="font-semibold text-zinc-100 flex items-center justify-between">
+          <span>这能帮我赚钱吗？</span>
+          <span class="text-zinc-500 text-sm">▼</span>
+        </summary>
+        <p class="mt-4 text-zinc-400 leading-relaxed">
+          <b class="text-zinc-200">不能</b>。慢慢看只给你客观的「位置百分位」数据 ——
+          你的自选股现在站在过去 N 日价格区间的哪个位置。决策（买 / 卖 / 持 / 不动）100% 你自己做。
+          <br /><br />
+          创新低不等于见底 · 创新高不等于顶 · 历史价格不预示未来 · 仅供参考，不构成投资建议。
+        </p>
+      </details>
+
+      <details class="p-5 rounded-lg bg-zinc-900/50 border border-zinc-800">
+        <summary class="font-semibold text-zinc-100 flex items-center justify-between">
+          <span>会不会上传我的自选股？</span>
+          <span class="text-zinc-500 text-sm">▼</span>
+        </summary>
+        <p class="mt-4 text-zinc-400 leading-relaxed">
+          <b class="text-zinc-200">不会</b>。慢慢看是纯命令行工具，完全本地运行。
+          没有账号 · 没有登录 · 没有 telemetry · 没有推送 · 没有广告。
+          自选股数据存在你机器的 <code class="text-emerald-400 font-mono text-xs">~/.local/share/kan/</code>（XDG 规范）。
+          <br /><br />
+          唯一的「网络请求」是去 baostock / adata / 东方财富 公开 API 拉日 K 线数据，
+          这些请求只发送股票代码（公开信息），不带任何身份标识。
+          源码 <a href="https://github.com/piklen/manmankan" class="text-emerald-400 hover:underline">MIT 开源</a> · 可审。
+        </p>
+      </details>
+
+      <details class="p-5 rounded-lg bg-zinc-900/50 border border-zinc-800">
+        <summary class="font-semibold text-zinc-100 flex items-center justify-between">
+          <span>适合做 T+0 短线吗？</span>
+          <span class="text-zinc-500 text-sm">▼</span>
+        </summary>
+        <p class="mt-4 text-zinc-400 leading-relaxed">
+          <b class="text-zinc-200">不适合</b>。慢慢看用的是<b>盘后批量拉取的日 K 线数据</b>，不是分钟级实时行情。
+          适合长线 / 技术派散户做月级别周期的位置参考，不适合分钟级短线。
+          <br /><br />
+          也<b>不支持港股 / 美股 / 期货 / 加密货币</b> · 仅 A 股。
+        </p>
+      </details>
+    </div>
+
+    <p class="text-center text-zinc-500 text-sm mt-10">
+      更多问题 →
+      <a href="https://github.com/piklen/manmankan#故障排查-faq" class="text-emerald-400 hover:underline">完整 FAQ</a>
+      ·
+      <a href="https://github.com/piklen/manmankan/issues" class="text-emerald-400 hover:underline">GitHub Issues 提问</a>
+    </p>
+  </section>
+
+  <!-- English summary -->
+  <section class="max-w-4xl mx-auto px-6 py-16 border-t border-zinc-800">
+    <details class="p-6 rounded-lg bg-zinc-900/50 border border-zinc-800">
+      <summary class="font-semibold text-zinc-100 flex items-center gap-2">
+        🌐 English summary
+      </summary>
+      <div class="mt-5 text-zinc-400 leading-relaxed space-y-3">
+        <p>
+          <b class="text-zinc-200">manmankan</b> (慢慢看) is a pure command-line tool for China A-share investors who track their own watchlists.
+          It shows where each stock currently sits within its 3 / 5 / 7 / 10 / 15 / 30 / 60 / 90 / 120 / 180-day price range — a "position percentile" — and flags stocks that simultaneously touch lows (or highs) across multiple timeframes as resonance signals (<code class="font-mono text-amber-300">×N</code>).
+        </p>
+        <p>
+          It deliberately stops there: <b class="text-zinc-200">no buy/sell advice, no ratings, no price targets, no "AI stock picking."</b>
+          Just objective price-position data, fully local — no login, no account, no telemetry. Data is delayed end-of-day K-line from the AKShare ecosystem (baostock primary).
+        </p>
+        <p class="font-mono text-sm">
+          <span class="text-emerald-400">$</span> pip install manmankan
+        </p>
+        <p class="text-sm">
+          Python 3.11+ · MIT · A-share only (no HK / US / futures) ·
+          <a href="https://github.com/piklen/manmankan" class="text-emerald-400 hover:underline">GitHub</a> ·
+          <a href="https://pypi.org/project/manmankan/" class="text-emerald-400 hover:underline">PyPI</a>
+        </p>
+      </div>
+    </details>
+  </section>
+
+  <!-- Footer -->
+  <footer class="border-t border-zinc-800 mt-8">
+    <div class="max-w-6xl mx-auto px-6 py-10 text-sm text-zinc-500">
+      <div class="grid md:grid-cols-4 gap-6">
+        <div>
+          <div class="font-semibold text-zinc-300 mb-3">慢慢看 · manmankan</div>
+          <p class="text-xs leading-relaxed">A 股自选股「位置感」CLI · 告诉你它站在哪 · 不告诉你买什么</p>
+        </div>
+        <div>
+          <div class="font-semibold text-zinc-300 mb-3">项目</div>
+          <ul class="space-y-1.5 text-xs">
+            <li><a href="https://github.com/piklen/manmankan" class="hover:text-zinc-100">GitHub 仓库</a></li>
+            <li><a href="https://pypi.org/project/manmankan/" class="hover:text-zinc-100">PyPI</a></li>
+            <li><a href="https://github.com/piklen/manmankan/releases" class="hover:text-zinc-100">Release Notes</a></li>
+            <li><a href="https://github.com/piklen/manmankan/blob/main/CHANGELOG.md" class="hover:text-zinc-100">CHANGELOG</a></li>
+          </ul>
+        </div>
+        <div>
+          <div class="font-semibold text-zinc-300 mb-3">参与</div>
+          <ul class="space-y-1.5 text-xs">
+            <li><a href="https://github.com/piklen/manmankan/issues" class="hover:text-zinc-100">提 Issue</a></li>
+            <li><a href="https://github.com/piklen/manmankan/blob/main/CONTRIBUTING.md" class="hover:text-zinc-100">Contributing</a></li>
+            <li><a href="https://github.com/piklen/manmankan/blob/main/CODE_OF_CONDUCT.md" class="hover:text-zinc-100">行为准则</a></li>
+            <li><a href="https://github.com/piklen/manmankan/blob/main/SECURITY.md" class="hover:text-zinc-100">Security</a></li>
+          </ul>
+        </div>
+        <div>
+          <div class="font-semibold text-zinc-300 mb-3">合规</div>
+          <ul class="space-y-1.5 text-xs">
+            <li><a href="https://github.com/piklen/manmankan/blob/main/docs/compliance.md" class="hover:text-zinc-100">合规说明</a></li>
+            <li><a href="https://github.com/piklen/manmankan/blob/main/LICENSE" class="hover:text-zinc-100">MIT License</a></li>
+          </ul>
+        </div>
+      </div>
+
+      <div class="mt-8 pt-6 border-t border-zinc-900 text-xs text-zinc-600 leading-relaxed">
+        <p class="mb-2">
+          <b class="text-zinc-500">免责声明</b>：本工具仅提供客观的价格位置数据，不构成任何投资建议、推荐或预测。
+          股市有风险 · 投资需谨慎 · 决策由用户自行做出并自担风险。
+        </p>
+        <p>
+          © 2026 piklen · MIT License · Made for A-share retail investors who refuse the black box.
+        </p>
+      </div>
+    </div>
+  </footer>
+
+</body>
+</html>
