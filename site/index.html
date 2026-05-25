@@ -7,7 +7,7 @@
   <!-- No-FOUC theme bootstrap · 必须在样式 + body 渲染前同步执行 -->
   <script>
     (function () {
-      var t = localStorage.getItem('theme') || 'dark';
+      var t = localStorage.getItem('theme') || 'system';
       var sysDark = window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches;
       var dark = t === 'dark' || (t === 'system' && sysDark);
       document.documentElement.classList.toggle('dark', dark);
@@ -758,7 +758,7 @@
     }
     function cycleTheme() {
       var order = ['dark', 'light', 'system'];
-      var cur = localStorage.getItem('theme') || 'dark';
+      var cur = localStorage.getItem('theme') || 'system';
       var next = order[(order.indexOf(cur) + 1) % 3];
       localStorage.setItem('theme', next);
       applyTheme(next);
