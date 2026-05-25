@@ -30,8 +30,12 @@ def fetch(
         bool,
         typer.Option("--only-watchlist", help="仅拉自选 ∩ 行业/热榜/题材"),
     ] = False,
+    group: Annotated[
+        str | None,
+        typer.Option("--group", "-g", help="选自选股分组 (默认 default 组)"),
+    ] = None,
 ) -> None:
-    """拉取股票历史 K 线数据"""
+    """拉取股票历史 K 线数据 (--group 切换分组)"""
     from rich.console import Console
 
     status_console = Console(stderr=True)
@@ -50,21 +54,35 @@ def fetch(
         from kan.core.stock_set import from_flags
         wl_pairs = []
         if only_watchlist:
-            from kan.storage.watchlist import load_watchlist
-            wl_pairs = [(s.symbol, s.name) for s in load_watchlist().stocks]
+            from kan.storage.watchlist import GroupNotFoundError, load_watchlist
+            try:
+                wl_pairs = [(s.symbol, s.name) for s in load_watchlist(group).stocks]
+            except GroupNotFoundError as e:
+                typer.echo(f"❌ {e}", err=True)
+                raise typer.Exit(2) from None
         stock_set = from_flags(
             industry=industry, hot=hot, theme=theme,
             watchlist_pairs=wl_pairs,
             only_watchlist=only_watchlist,
+            watchlist_group=group,
         )
         symbols = stock_set.codes()
         resolve_stock_set_or_exit(stock_set)  # 触发 .pairs() lazy fetch + 转 typer.Exit · 上一行 .codes() 已触发了 fetch · 这里走 cache 不再 IO
 
     if not symbols:
-        from kan.storage.watchlist import load_watchlist
-        wl = load_watchlist()
+        from kan.storage.watchlist import GroupNotFoundError, load_watchlist
+        try:
+            wl = load_watchlist(group)
+        except GroupNotFoundError as e:
+            typer.echo(f"❌ {e}", err=True)
+            raise typer.Exit(2) from None
         if not wl.stocks:
-            typer.echo("自选列表为空 · 先加几只:`kan add 600519 茅台 000858` (代码或名称都行)", err=True)
+            label = "自选" if not group else f"「{group}」组"
+            suffix = "" if not group else f" --group {group}"
+            typer.echo(
+                f"{label}列表为空 · 先加几只:`kan add 600519 茅台 000858{suffix}` (代码或名称都行)",
+                err=True,
+            )
             raise typer.Exit(1)
         symbols = [s.symbol for s in wl.stocks]
 

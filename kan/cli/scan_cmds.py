@@ -43,12 +43,16 @@ def scan(
         bool,
         typer.Option("--only-watchlist", help="仅显示自选 ∩ 行业/热榜/题材(需配合 --industry / --hot / --theme)"),
     ] = False,
+    group: Annotated[
+        str | None,
+        typer.Option("--group", "-g", help="选自选股分组 (默认 default 组 · 跑 kan group list 查看)"),
+    ] = None,
     fmt: Annotated[
         export.OutputFormat,
         typer.Option("--format", help="输出格式：terminal（默认）/ md / json"),
     ] = export.OutputFormat.terminal,
 ) -> None:
-    """扫描自选股多周期位置（10 周期全景模式）"""
+    """扫描自选股多周期位置（10 周期全景模式 · --group 切换分组）"""
     from rich.console import Console
 
     status_console = Console(stderr=True)
@@ -70,7 +74,7 @@ def scan(
         raise typer.Exit(2)
     source_mode = industry is not None or hot is not None or theme is not None
     watchlist_pairs = (
-        _load_watchlist_pairs() if source_mode else _get_watchlist_pairs()
+        _load_watchlist_pairs(group) if source_mode else _get_watchlist_pairs(group)
     )
     if only_watchlist and not source_mode:
         _print_err("❌ --only-watchlist 需配合 --industry / --hot / --theme 使用")
@@ -84,6 +88,7 @@ def scan(
         industry=industry, hot=hot, theme=theme,
         watchlist_pairs=watchlist_pairs,
         only_watchlist=only_watchlist,
+        watchlist_group=group,
     )
     ctx = run_data_pipeline(stock_set, compute=scan_batch, mode=mode)
     all_results = ctx.results
