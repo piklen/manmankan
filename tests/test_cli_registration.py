@@ -27,6 +27,8 @@ REPO_ROOT = Path(__file__).resolve().parents[1]
 # - cli_scan_cmds (6):      fetch / scan / low / high / info / compare
 # - cli_trend_cmds (1):     trend
 # - cli_meta_cmds (3):      update / uninstall / completion
+# - cli_move_export_cmds (2): move / export   (v0.0.6.1 多分组管理)
+# 注:`kan group`/`kan config`/`kan theme` 是 sub-Typer (app.add_typer) · 不进 registered_commands · 不需 canary。
 _EXPECTED_COMMANDS = {
     "help",
     "add",
@@ -44,6 +46,8 @@ _EXPECTED_COMMANDS = {
     "update",
     "uninstall",
     "completion",
+    "move",
+    "export",
 }
 
 

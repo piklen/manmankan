@@ -78,7 +78,7 @@ def test_list_theme_shows_intersection(monkeypatch, _isolate_all):
     # mock list_all 返回固定股票 · 不依赖真 wl.json 文件格式
     monkeypatch.setattr(
         "kan.storage.watchlist.list_all",
-        lambda: [
+        lambda group=None: [
             Stock(symbol="002230", name="科大讯飞", added_at=date(2026, 5, 1)),
             Stock(symbol="600000", name="浦发银行", added_at=date(2026, 5, 1)),
         ],

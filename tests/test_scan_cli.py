@@ -243,7 +243,7 @@ def scan_runner(monkeypatch):
 
     monkeypatch.setattr(
         "kan.cli.scan_cmds._get_watchlist_pairs",
-        lambda: [("600519", "测试")],
+        lambda group=None: [("600519", "测试")],
     )
     monkeypatch.setattr("kan.cli.scan_cmds._auto_fetch_stale", lambda _pairs: None)
     monkeypatch.setattr(

@@ -48,7 +48,7 @@ def test_watchlist_set_lazy_load(monkeypatch):
     """构造 WatchlistSet 不触发 storage 读取 (lazy)。"""
     calls = {"n": 0}
 
-    def fake_load():
+    def fake_load(group=None):
         calls["n"] += 1
         # 用 duck-typed object 绕过 Stock pydantic required fields (added_at 等)
         fake_stock = type("S", (), {"symbol": "600519", "name": "贵州茅台"})()

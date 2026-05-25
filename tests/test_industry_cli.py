@@ -46,25 +46,25 @@ def industry_runner(monkeypatch):
         boards, "fetch_industry_kline", lambda b, force=False: _fake_kline()
     )
     monkeypatch.setattr(
-        "kan.cli.scan_cmds._get_watchlist_pairs", lambda: [("600519", "贵州茅台")]
+        "kan.cli.scan_cmds._get_watchlist_pairs", lambda group=None: [("600519", "贵州茅台")]
     )
     monkeypatch.setattr("kan.cli.scan_cmds._auto_fetch_stale", lambda _p: None)
     monkeypatch.setattr(
-        "kan.cli.scan_cmds._load_watchlist_pairs", lambda: [("600519", "贵州茅台")]
+        "kan.cli.scan_cmds._load_watchlist_pairs", lambda group=None: [("600519", "贵州茅台")]
     )
     monkeypatch.setattr(
-        "kan.cli.trend_cmds._get_watchlist_pairs", lambda: [("600519", "贵州茅台")]
+        "kan.cli.trend_cmds._get_watchlist_pairs", lambda group=None: [("600519", "贵州茅台")]
     )
     monkeypatch.setattr("kan.cli.trend_cmds._auto_fetch_stale", lambda _p: None)
     monkeypatch.setattr(
-        "kan.cli.trend_cmds._load_watchlist_pairs", lambda: [("600519", "贵州茅台")]
+        "kan.cli.trend_cmds._load_watchlist_pairs", lambda group=None: [("600519", "贵州茅台")]
     )
     monkeypatch.setattr(
-        "kan.cli.extreme_cmds._get_watchlist_pairs", lambda: [("600519", "贵州茅台")]
+        "kan.cli.extreme_cmds._get_watchlist_pairs", lambda group=None: [("600519", "贵州茅台")]
     )
     monkeypatch.setattr("kan.cli.extreme_cmds._auto_fetch_stale", lambda _p: None)
     monkeypatch.setattr(
-        "kan.cli.extreme_cmds._load_watchlist_pairs", lambda: [("600519", "贵州茅台")]
+        "kan.cli.extreme_cmds._load_watchlist_pairs", lambda group=None: [("600519", "贵州茅台")]
     )
     monkeypatch.setattr(
         "kan.core.scanner.scan_batch",
@@ -204,7 +204,7 @@ def test_list_industry_filters_watchlist(monkeypatch):
     )
     monkeypatch.setattr(
         "kan.storage.watchlist.list_all",
-        lambda: [
+        lambda group=None: [
             Stock(symbol="600519", name="贵州茅台", added_at=date(2026, 5, 1)),
             Stock(symbol="000001", name="平安银行", added_at=date(2026, 5, 1)),
         ],
@@ -231,7 +231,7 @@ def test_fetch_industry_runs(industry_runner, monkeypatch):
 def test_scan_industry_empty_watchlist_ok(industry_runner, monkeypatch):
     """空自选股时 scan --industry 仍正常扫描(只是没有 ⭐ 高亮)。"""
     from kan.app import app
-    monkeypatch.setattr("kan.cli.scan_cmds._load_watchlist_pairs", lambda: [])
+    monkeypatch.setattr("kan.cli.scan_cmds._load_watchlist_pairs", lambda group=None: [])
     result = industry_runner.invoke(app, ["scan", "--industry=食品饮料"])
     assert result.exit_code == 0, result.output
     assert "🏛️" in result.output
@@ -243,8 +243,8 @@ def test_scan_industry_empty_watchlist_ok(industry_runner, monkeypatch):
 def test_low_industry_empty_watchlist_ok(industry_runner, monkeypatch):
     """空自选股时 low --industry 仍正常。"""
     from kan.app import app
-    monkeypatch.setattr("kan.cli.scan_cmds._load_watchlist_pairs", lambda: [])
-    monkeypatch.setattr("kan.cli.extreme_cmds._load_watchlist_pairs", lambda: [])
+    monkeypatch.setattr("kan.cli.scan_cmds._load_watchlist_pairs", lambda group=None: [])
+    monkeypatch.setattr("kan.cli.extreme_cmds._load_watchlist_pairs", lambda group=None: [])
     monkeypatch.setattr(
         "kan.core.scanner.filter_extreme", lambda pairs, periods, mode="low": {}
     )
@@ -264,7 +264,7 @@ def test_trend_industry_empty_watchlist_ok(industry_runner, monkeypatch):
             self.daily_changes = []
             self.direction = "平"
 
-    monkeypatch.setattr("kan.cli.trend_cmds._load_watchlist_pairs", lambda: [])
+    monkeypatch.setattr("kan.cli.trend_cmds._load_watchlist_pairs", lambda group=None: [])
     monkeypatch.setattr(
         "kan.core.scanner.trend_batch",
         lambda pairs, candle=False: [_Tr(s, n) for s, n in pairs],

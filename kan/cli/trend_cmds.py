@@ -49,12 +49,16 @@ def trend(
         bool,
         typer.Option("--only-watchlist", help="仅显示自选 ∩ 行业/热榜/题材(需配合 --industry / --hot / --theme)"),
     ] = False,
+    group: Annotated[
+        str | None,
+        typer.Option("--group", "-g", help="选自选股分组 (默认 default 组)"),
+    ] = None,
     fmt: Annotated[
         export.OutputFormat,
         typer.Option("--format", help="输出格式：terminal（默认）/ md / json"),
     ] = export.OutputFormat.terminal,
 ) -> None:
-    """连续涨跌看板"""
+    """连续涨跌看板 (--group 切换分组)"""
     # 处理 trend <ticker> 误用 · 散户最直觉的"看茅台趋势 kan trend 600519"会进 extra_args
     # 引导到 `kan info <ticker>` · 接口升级到收 ticker 是 v0.0.6 计划
     if extra_args:
@@ -87,7 +91,7 @@ def trend(
         raise typer.Exit(2)
     source_mode = industry is not None or hot is not None or theme is not None
     watchlist_pairs = (
-        _load_watchlist_pairs() if source_mode else _get_watchlist_pairs()
+        _load_watchlist_pairs(group) if source_mode else _get_watchlist_pairs(group)
     )
     if only_watchlist and not source_mode:
         _print_err("❌ --only-watchlist 需配合 --industry / --hot / --theme 使用")
@@ -109,6 +113,7 @@ def trend(
         industry=industry, hot=hot, theme=theme,
         watchlist_pairs=watchlist_pairs,
         only_watchlist=only_watchlist,
+        watchlist_group=group,
     )
     ctx = run_data_pipeline(stock_set, compute=trend_batch, candle=candle)
     results = ctx.results

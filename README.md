@@ -307,6 +307,28 @@ kan import stocks.csv          # CSV 批量导入(每行一个代码 · 上限 1
 kan clear                      # 清空(带确认)
 ```
 
+### 多分组管理 `kan group` (v0.0.6.1+)
+
+不止自选股 · 可以建「持仓」「短线池」「长线池」等多个自定义组 · 每组独立扫描。
+
+```bash
+kan group create 持仓                 # 建组
+kan group list                        # 列所有组(标 default + 股数)
+kan group default 持仓                # 切换默认组(不带 --group 的命令都走它)
+kan group rename 短线池 短线          # 重命名
+kan group copy 自选 长线池            # 复制整组(目标必须不存在)
+kan group delete 短线 --yes           # 删除(default 组保护 · 删前先 default 切走)
+
+kan add 600519 --group 持仓           # 加股票到指定组
+kan list --group 持仓                 # 看指定组
+kan list --all                        # 一屏看所有组
+kan scan --group 持仓                 # scan / low / high / trend / fetch 全支持 --group
+kan move 600519 自选 持仓             # 跨组移动单股(src/dst 必须都存在)
+kan export --group 持仓 > pos.csv     # 导出 CSV (--all 含 group 列)
+```
+
+> 同一只股票可同时在多组(自选盯所有 · 持仓只看实买)· 老 `watchlist.json` 自动迁移到 `自选` 组 · 老命令零感知。
+
 ### 位置扫描 `kan scan`
 
 ```bash

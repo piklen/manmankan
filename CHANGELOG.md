@@ -7,6 +7,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added (v0.0.6.1 · 多分组管理)
+
+不止自选股 · 用户可建「持仓」「短线池」「长线池」等多个自定义组 · 每组独立扫描。
+
+- **storage v2 schema** · `watchlist.json` 升级为 `{version: 2, default: "自选", groups: {<name>: {stocks: [...]}}}` · 老 v1 schema 加载时自动迁移到 v2 default 组「自选」· 写回磁盘 · 用户零感知
+- **`kan group` 子命令组** · 6 子命令 (`create / list / rename / delete / default / copy`) · default 组保护 (不可删 · 重命名时指针同步) · 组名 32 字符上限 + 特殊字符拒绝
+- **`kan move <symbol> <src> <dst>`** · 跨组移动单股 · src/dst 必须都存在 (不自动建组 · 防 typo 灾难) · 支持名称模糊搜 · 同股已在 dst 时只从 src 删除不重复添加
+- **`kan export [--group X | --all]`** · CSV 导出到 stdout (重定向 `>pos.csv`) · `--all` 输出列含 `group` 前缀
+- **现有命令加 `--group` flag** · `add / remove / list / clear / import / scan / low / high / trend / fetch` 全部支持 · 不带 flag 走 default 组 (老用户零感知) · `kan list --all` 列所有组拼起来
+- **同股可同时在多组** · 「自选」盯所有 + 「持仓」只看实买 = 常见场景 · 各 `added_at` 独立反映"加到该组的日期"
+- **`WatchlistSet(group=)`** · OOP 层支持 · `from_flags(watchlist_group=)` 透传 · Python API 可写 `WatchlistSet(group="持仓").pairs()`
+- **0o600 + 0o700 权限延续** · 持仓画像隐私底线 (安-5) 在 v2 schema 不变
+- **测试覆盖 +73** · `test_watchlist_groups.py` (38) + `test_groups_cli.py` (35) · 830 → 903 全 green
+
 ### Added (v0.0.6 · 数据源架构 · 适配器 + 责任链)
 
 数据源层重构 · 把 `fetcher.py` 硬编码 if-chain + `boards.py` 散布式 try-except fallback 统一到「适配器 + 责任链」架构。**用户可注入自定义数据源** (Wind / 通达信本地 .blk / 自建数据库 / ...) · chain 自动按 priority sort + fallback · 与内置 5 源 (K 线) / 2 源 (题材成分股) 同等对待。
