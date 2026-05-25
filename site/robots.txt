@@ -1,0 +1,25 @@
+# robots.txt · 慢慢看 · manmankan
+# 默认欢迎所有搜索引擎 · 显式列国内 + 国外主流爬虫
+
+User-agent: *
+Allow: /
+
+User-agent: Googlebot
+Allow: /
+
+User-agent: Bingbot
+Allow: /
+
+User-agent: Baiduspider
+Allow: /
+
+User-agent: 360Spider
+Allow: /
+
+User-agent: Sogou web spider
+Allow: /
+
+User-agent: YisouSpider
+Allow: /
+
+Sitemap: https://piklen.github.io/manmankan/sitemap.xml

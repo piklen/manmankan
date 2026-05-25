@@ -1,0 +1,801 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+
+  <!-- No-FOUC theme bootstrap · 必须在样式 + body 渲染前同步执行 -->
+  <script>
+    (function () {
+      var t = localStorage.getItem('theme') || 'dark';
+      var sysDark = window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches;
+      var dark = t === 'dark' || (t === 'system' && sysDark);
+      document.documentElement.classList.toggle('dark', dark);
+      document.documentElement.dataset.theme = t;
+    })();
+  </script>
+
+  <!-- Primary SEO -->
+  <title>慢慢看 · manmankan · A 股自选股位置感 CLI · 100% 本地开源</title>
+  <meta name="description" content="慢慢看 (manmankan) 是纯命令行 A 股自选股位置感工具 · 一屏看完 10 个周期位置百分位 + 多周期共振信号 · 100% 本地运行 · 不登录 · 不上传 · 不广告 · MIT 开源 · 支持 mac/Linux/Windows。" />
+  <meta name="keywords" content="慢慢看,manmankan,A股,自选股,位置百分位,共振信号,命令行工具,CLI,股票工具,开源,MIT,本地运行,Python,散户,长线投资,K线,板块,题材扫描,东方财富热榜" />
+  <meta name="author" content="piklen" />
+  <meta name="robots" content="index,follow,max-image-preview:large" />
+  <meta name="googlebot" content="index,follow" />
+  <meta name="format-detection" content="telephone=no" />
+  <meta name="theme-color" content="#09090b" media="(prefers-color-scheme: dark)" />
+  <meta name="theme-color" content="#ffffff" media="(prefers-color-scheme: light)" />
+
+  <!-- 国内搜索引擎站长平台验证占位 (maintainer 申请后填) -->
+  <!-- <meta name="baidu-site-verification" content="" /> -->
+  <!-- <meta name="360-site-verification" content="" /> -->
+  <!-- <meta name="sogou_site_verification" content="" /> -->
+
+  <link rel="canonical" href="https://piklen.github.io/manmankan/" />
+  <link rel="sitemap" type="application/xml" href="/manmankan/sitemap.xml" />
+
+  <!-- Open Graph (FB / WeChat / Telegram / Discord) -->
+  <meta property="og:type" content="website" />
+  <meta property="og:site_name" content="慢慢看 · manmankan" />
+  <meta property="og:title" content="慢慢看 · manmankan · A 股自选股位置感 CLI" />
+  <meta property="og:description" content="告诉你它站在哪 · 不告诉你买什么。纯命令行 · 完全本地 · 0 telemetry · MIT 开源。" />
+  <meta property="og:url" content="https://piklen.github.io/manmankan/" />
+  <meta property="og:image" content="https://piklen.github.io/manmankan/og.svg" />
+  <meta property="og:image:width" content="1200" />
+  <meta property="og:image:height" content="630" />
+  <meta property="og:image:alt" content="慢慢看 · A 股自选股位置感 CLI · 终端截图" />
+  <meta property="og:locale" content="zh_CN" />
+  <meta property="og:locale:alternate" content="en_US" />
+
+  <!-- Twitter / X Card -->
+  <meta name="twitter:card" content="summary_large_image" />
+  <meta name="twitter:title" content="慢慢看 · manmankan" />
+  <meta name="twitter:description" content="A 股自选股位置感 CLI · 告诉你它站在哪 · 不告诉你买什么 · 100% 本地 · MIT 开源" />
+  <meta name="twitter:image" content="https://piklen.github.io/manmankan/og.svg" />
+
+  <!-- JSON-LD · Schema.org SoftwareApplication (Google rich result) -->
+  <script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@type": "SoftwareApplication",
+    "name": "manmankan",
+    "alternateName": "慢慢看",
+    "description": "A 股自选股位置感 CLI · 一屏看完 10 个周期位置百分位 + 多周期共振信号 · 100% 本地开源",
+    "applicationCategory": "FinanceApplication",
+    "applicationSubCategory": "InvestmentTool",
+    "operatingSystem": "macOS, Linux, Windows",
+    "softwareRequirements": "Python 3.11+",
+    "softwareVersion": "0.0.5.0",
+    "downloadUrl": "https://pypi.org/project/manmankan/",
+    "installUrl": "https://github.com/piklen/manmankan#安装",
+    "url": "https://piklen.github.io/manmankan/",
+    "license": "https://opensource.org/licenses/MIT",
+    "isAccessibleForFree": true,
+    "offers": {
+      "@type": "Offer",
+      "price": "0",
+      "priceCurrency": "CNY"
+    },
+    "author": {
+      "@type": "Person",
+      "name": "piklen",
+      "url": "https://github.com/piklen"
+    },
+    "codeRepository": "https://github.com/piklen/manmankan",
+    "programmingLanguage": "Python",
+    "inLanguage": ["zh-CN", "en"]
+  }
+  </script>
+
+  <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Crect width='100' height='100' rx='20' fill='%2309090b'/%3E%3Ctext x='50' y='68' font-size='60' text-anchor='middle' fill='%2334d399' font-family='monospace' font-weight='bold'%3E$%3C/text%3E%3C/svg%3E" />
+
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = { darkMode: 'class' };
+  </script>
+  <style>
+    /* ===== Theme tokens · CSS 变量驱动 dark/light 双模式 ===== */
+    :root {
+      --bg: #ffffff;
+      --bg-soft: #fafafa;
+      --bg-card: #f4f4f5;
+      --bg-elev: #ffffff;
+      --text: #18181b;
+      --text-soft: #52525b;
+      --text-muted: #71717a;
+      --border: #e4e4e7;
+      --border-soft: #f4f4f5;
+      --accent: #059669;
+      --accent-soft: #d1fae5;
+      --warn: #d97706;
+      --warn-soft: #fef3c7;
+      --shadow-color: 0 0% 60%;
+      --term-shadow: 0 30px 80px -20px rgba(0,0,0,0.25);
+      color-scheme: light;
+    }
+    .dark {
+      --bg: #09090b;
+      --bg-soft: #0a0a0a;
+      --bg-card: #18181b;
+      --bg-elev: #18181b;
+      --text: #fafafa;
+      --text-soft: #d4d4d8;
+      --text-muted: #71717a;
+      --border: #27272a;
+      --border-soft: #18181b;
+      --accent: #34d399;
+      --accent-soft: rgba(52, 211, 153, 0.12);
+      --warn: #fbbf24;
+      --warn-soft: rgba(251, 191, 36, 0.12);
+      --shadow-color: 0 0% 0%;
+      --term-shadow: 0 30px 80px -10px rgba(0,0,0,0.6), 0 10px 30px -10px rgba(52, 211, 153, 0.1);
+      color-scheme: dark;
+    }
+
+    html, body {
+      background: var(--bg);
+      color: var(--text);
+      -webkit-font-smoothing: antialiased;
+      -moz-osx-font-smoothing: grayscale;
+    }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'PingFang SC', 'Microsoft YaHei', system-ui, sans-serif;
+      transition: background-color 0.3s ease, color 0.3s ease;
+    }
+
+    /* ===== Hero background · 微妙径向渐变 ===== */
+    .hero-bg {
+      background:
+        radial-gradient(ellipse 80% 50% at 50% -20%, var(--accent-soft), transparent),
+        radial-gradient(ellipse 60% 40% at 100% 0%, rgba(96, 165, 250, 0.08), transparent);
+    }
+
+    /* ===== Terminal mock · 始终保持暗色 (CLI brand) ===== */
+    .term {
+      background: #0a0a0a;
+      border: 1px solid #27272a;
+      border-radius: 12px;
+      box-shadow: var(--term-shadow);
+      overflow: hidden;
+    }
+    .term-head {
+      background: #18181b;
+      border-bottom: 1px solid #27272a;
+    }
+    .term pre {
+      font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, 'Liberation Mono', monospace;
+      font-size: 12.5px;
+      line-height: 1.6;
+      white-space: pre;
+      overflow-x: auto;
+      padding: 18px;
+      color: #e4e4e7;
+      margin: 0;
+    }
+    .pct-lo { color: #34d399; font-weight: 700; }
+    .pct-hi { color: #fb923c; font-weight: 700; }
+    .resonance { color: #fbbf24; font-weight: 800; }
+
+    /* ===== Gradient brand text ===== */
+    .gradient-text {
+      background: linear-gradient(120deg, #34d399 0%, #60a5fa 50%, #a78bfa 100%);
+      -webkit-background-clip: text;
+      background-clip: text;
+      color: transparent;
+    }
+
+    /* ===== Card · 通用 ===== */
+    .card {
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      transition: transform 0.2s ease, box-shadow 0.2s ease, border-color 0.2s ease;
+    }
+    .hover-lift:hover {
+      transform: translateY(-2px);
+      border-color: var(--accent);
+      box-shadow: 0 10px 30px -10px hsla(var(--shadow-color), 0.3);
+    }
+
+    /* ===== Button · primary/secondary ===== */
+    .btn {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      padding: 14px 22px;
+      border-radius: 10px;
+      font-weight: 600;
+      font-size: 15px;
+      transition: transform 0.15s ease, box-shadow 0.15s ease, background-color 0.15s ease;
+    }
+    .btn:hover { transform: translateY(-1px); }
+    .btn:active { transform: translateY(0); }
+    .btn-primary {
+      background: var(--text);
+      color: var(--bg);
+      box-shadow: 0 4px 14px -2px hsla(var(--shadow-color), 0.2);
+    }
+    .btn-primary:hover {
+      box-shadow: 0 10px 24px -4px hsla(var(--shadow-color), 0.35);
+    }
+    .btn-secondary {
+      background: var(--bg-card);
+      color: var(--text);
+      border: 1px solid var(--border);
+    }
+    .btn-secondary:hover {
+      border-color: var(--accent);
+      color: var(--accent);
+    }
+
+    /* ===== Copy card · 整张可点击复制 ===== */
+    .copy-card {
+      display: flex;
+      align-items: center;
+      gap: 14px;
+      background: var(--bg-card);
+      border: 1.5px solid var(--border);
+      border-radius: 12px;
+      padding: 16px 22px;
+      cursor: pointer;
+      font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+      transition: border-color 0.2s ease, transform 0.15s ease, box-shadow 0.2s ease;
+      position: relative;
+      width: 100%;
+      text-align: left;
+    }
+    .copy-card:hover {
+      border-color: var(--accent);
+      transform: translateY(-1px);
+      box-shadow: 0 8px 24px -8px hsla(var(--shadow-color), 0.25);
+    }
+    .copy-card:active { transform: translateY(0); }
+    .copy-card .copy-hint {
+      position: absolute;
+      top: 6px;
+      right: 10px;
+      font-size: 10px;
+      color: var(--text-muted);
+      opacity: 0;
+      transition: opacity 0.2s ease;
+      font-family: -apple-system, BlinkMacSystemFont, sans-serif;
+    }
+    .copy-card:hover .copy-hint { opacity: 1; }
+    .copy-card.copied {
+      border-color: var(--accent);
+      background: var(--accent-soft);
+    }
+    .copy-card .feedback {
+      color: var(--accent);
+      font-weight: 700;
+      position: absolute;
+      right: 22px;
+      opacity: 0;
+      transition: opacity 0.2s ease;
+      font-family: -apple-system, BlinkMacSystemFont, sans-serif;
+    }
+    .copy-card.copied .feedback { opacity: 1; }
+
+    /* ===== Theme toggle · 三态 cycle ===== */
+    .theme-toggle {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      width: 36px;
+      height: 36px;
+      border-radius: 8px;
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      color: var(--text-soft);
+      cursor: pointer;
+      transition: background-color 0.2s ease, color 0.2s ease, border-color 0.2s ease;
+    }
+    .theme-toggle:hover { color: var(--accent); border-color: var(--accent); }
+    .theme-icon { display: none; width: 18px; height: 18px; }
+    html[data-theme="dark"] .theme-icon-dark { display: block; }
+    html[data-theme="light"] .theme-icon-light { display: block; }
+    html[data-theme="system"] .theme-icon-system { display: block; }
+
+    /* ===== Nav ===== */
+    .nav {
+      background: color-mix(in srgb, var(--bg) 80%, transparent);
+      backdrop-filter: blur(12px);
+      -webkit-backdrop-filter: blur(12px);
+      border-bottom: 1px solid var(--border-soft);
+    }
+
+    /* ===== Details / FAQ ===== */
+    details > summary { cursor: pointer; list-style: none; }
+    details > summary::-webkit-details-marker { display: none; }
+    details .chevron { transition: transform 0.2s ease; }
+    details[open] .chevron { transform: rotate(180deg); }
+
+    /* ===== Gradient divider ===== */
+    .divider-grad {
+      height: 1px;
+      background: linear-gradient(to right, transparent, var(--border), transparent);
+      border: 0;
+      margin: 0;
+    }
+
+    /* ===== Scroll hint ===== */
+    @keyframes bounce-soft {
+      0%, 100% { transform: translateY(0); opacity: 0.5; }
+      50% { transform: translateY(6px); opacity: 1; }
+    }
+    .scroll-hint { animation: bounce-soft 2s ease-in-out infinite; }
+
+    /* ===== Code inline ===== */
+    code { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }
+    .ci { color: var(--accent); background: var(--accent-soft); padding: 2px 6px; border-radius: 4px; font-size: 0.9em; }
+
+    @media (max-width: 640px) {
+      .term pre { font-size: 10.5px; padding: 14px; }
+    }
+
+    /* Selection */
+    ::selection { background: var(--accent); color: var(--bg); }
+  </style>
+</head>
+<body class="antialiased">
+
+  <!-- ============ Nav ============ -->
+  <nav class="nav sticky top-0 z-50">
+    <div class="max-w-6xl mx-auto px-6 py-3 flex items-center justify-between">
+      <div class="flex items-center gap-3">
+        <!-- Theme toggle (左侧 · 用户要求) -->
+        <button type="button" class="theme-toggle" onclick="cycleTheme(this)" aria-label="切换主题" title="切换主题: 深色 / 浅色 / 跟随系统">
+          <svg class="theme-icon theme-icon-dark" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M21.752 15.002A9.72 9.72 0 0 1 18 15.75c-5.385 0-9.75-4.365-9.75-9.75 0-1.33.266-2.597.748-3.752A9.753 9.753 0 0 0 3 11.25C3 16.635 7.365 21 12.75 21a9.753 9.753 0 0 0 9.002-5.998Z" /></svg>
+          <svg class="theme-icon theme-icon-light" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><circle cx="12" cy="12" r="4"/><line x1="12" y1="2" x2="12" y2="4"/><line x1="12" y1="20" x2="12" y2="22"/><line x1="2" y1="12" x2="4" y2="12"/><line x1="20" y1="12" x2="22" y2="12"/><line x1="5" y1="5" x2="6.5" y2="6.5"/><line x1="17.5" y1="17.5" x2="19" y2="19"/><line x1="5" y1="19" x2="6.5" y2="17.5"/><line x1="17.5" y1="6.5" x2="19" y2="5"/></svg>
+          <svg class="theme-icon theme-icon-system" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="13" rx="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/></svg>
+        </button>
+        <a href="#top" class="flex items-center gap-2 font-semibold" style="color: var(--text);">
+          <span style="color: var(--accent);" class="font-mono">$</span>
+          <span>慢慢看 · manmankan</span>
+        </a>
+      </div>
+      <div class="flex items-center gap-1 sm:gap-4 text-sm">
+        <a href="#install" class="hidden sm:inline px-2 py-1" style="color: var(--text-soft);">安装</a>
+        <a href="#faq" class="hidden sm:inline px-2 py-1" style="color: var(--text-soft);">FAQ</a>
+        <a href="https://pypi.org/project/manmankan/" class="px-2 py-1" style="color: var(--text-soft);">PyPI</a>
+        <a href="https://github.com/piklen/manmankan" class="btn btn-primary !py-2 !px-4 !text-sm">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M12 .297c-6.63 0-12 5.373-12 12 0 5.303 3.438 9.8 8.205 11.385.6.113.82-.258.82-.577 0-.285-.01-1.04-.015-2.04-3.338.724-4.042-1.61-4.042-1.61C4.422 18.07 3.633 17.7 3.633 17.7c-1.087-.744.084-.729.084-.729 1.205.084 1.838 1.236 1.838 1.236 1.07 1.835 2.809 1.305 3.495.998.108-.776.417-1.305.76-1.605-2.665-.3-5.466-1.332-5.466-5.93 0-1.31.465-2.38 1.235-3.22-.135-.303-.54-1.523.105-3.176 0 0 1.005-.322 3.3 1.23.96-.267 1.98-.399 3-.405 1.02.006 2.04.138 3 .405 2.28-1.552 3.285-1.23 3.285-1.23.645 1.653.24 2.873.12 3.176.765.84 1.23 1.91 1.23 3.22 0 4.61-2.805 5.625-5.475 5.92.42.36.81 1.096.81 2.22 0 1.606-.015 2.896-.015 3.286 0 .315.21.69.825.57C20.565 22.092 24 17.592 24 12.297c0-6.627-5.373-12-12-12"/></svg>
+          GitHub
+        </a>
+      </div>
+    </div>
+  </nav>
+
+  <!-- ============ Hero ============ -->
+  <section id="top" class="hero-bg relative">
+    <div class="max-w-5xl mx-auto px-6 pt-20 pb-20 sm:pt-32 sm:pb-28 text-center">
+      <div class="inline-flex items-center gap-2 px-3 py-1.5 mb-8 text-xs rounded-full" style="background: var(--bg-card); border: 1px solid var(--border); color: var(--text-soft);">
+        <span class="w-1.5 h-1.5 rounded-full" style="background: var(--accent);"></span>
+        <span>Alpha · v0.0.5.0 · MIT · 100% 本地</span>
+      </div>
+
+      <h1 class="text-5xl sm:text-7xl lg:text-8xl font-extrabold tracking-tight mb-7 leading-[1.05]">
+        告诉你它<span class="gradient-text">站在哪</span>
+        <br />
+        <span style="color: var(--text-muted);" class="text-4xl sm:text-6xl lg:text-7xl font-bold">不告诉你买什么</span>
+      </h1>
+
+      <p class="text-lg sm:text-xl mb-12 leading-relaxed max-w-3xl mx-auto" style="color: var(--text-soft);">
+        <b style="color: var(--text);">慢慢看</b> 是一个纯命令行的 A 股自选股位置感工具 ——
+        把 30 只自选股在 <b style="color: var(--text);">3 / 5 / 7 / 10 / 15 / 30 / 60 / 90 / 120 / 180 日</b> 窗口内的位置百分位
+        <b style="color: var(--text);">一屏显示</b>，
+        把同时触低 / 触高的多周期共振标成 <span class="resonance font-mono px-1.5">×N</span>，然后 <b style="color: var(--text);">闭嘴</b>。
+      </p>
+
+      <!-- Click-to-copy install command -->
+      <div class="max-w-md mx-auto mb-8">
+        <button type="button" class="copy-card" data-copy="pip install manmankan" onclick="copyCmd(this)">
+          <span class="copy-hint">点击复制 ↗</span>
+          <span style="color: var(--accent);" class="font-bold">$</span>
+          <span style="color: var(--text);" class="flex-1 text-sm sm:text-base font-medium" data-copy-label>pip install manmankan</span>
+          <span class="feedback text-sm">✓ 已复制</span>
+        </button>
+      </div>
+
+      <div class="flex flex-wrap justify-center gap-3">
+        <a href="https://github.com/piklen/manmankan" class="btn btn-primary">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor"><path d="M12 .297c-6.63 0-12 5.373-12 12 0 5.303 3.438 9.8 8.205 11.385.6.113.82-.258.82-.577 0-.285-.01-1.04-.015-2.04-3.338.724-4.042-1.61-4.042-1.61C4.422 18.07 3.633 17.7 3.633 17.7c-1.087-.744.084-.729.084-.729 1.205.084 1.838 1.236 1.838 1.236 1.07 1.835 2.809 1.305 3.495.998.108-.776.417-1.305.76-1.605-2.665-.3-5.466-1.332-5.466-5.93 0-1.31.465-2.38 1.235-3.22-.135-.303-.54-1.523.105-3.176 0 0 1.005-.322 3.3 1.23.96-.267 1.98-.399 3-.405 1.02.006 2.04.138 3 .405 2.28-1.552 3.285-1.23 3.285-1.23.645 1.653.24 2.873.12 3.176.765.84 1.23 1.91 1.23 3.22 0 4.61-2.805 5.625-5.475 5.92.42.36.81 1.096.81 2.22 0 1.606-.015 2.896-.015 3.286 0 .315.21.69.825.57C20.565 22.092 24 17.592 24 12.297c0-6.627-5.373-12-12-12"/></svg>
+          GitHub · Star
+        </a>
+        <a href="https://pypi.org/project/manmankan/" class="btn btn-secondary">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/><polyline points="3.27 6.96 12 12.01 20.73 6.96"/><line x1="12" y1="22.08" x2="12" y2="12"/></svg>
+          PyPI 安装详情
+        </a>
+      </div>
+
+      <!-- scroll hint -->
+      <div class="mt-20 scroll-hint" style="color: var(--text-muted);">
+        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="mx-auto">
+          <polyline points="6 9 12 15 18 9"/>
+        </svg>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============ Terminal mock ============ -->
+  <section class="max-w-5xl mx-auto px-6 pb-20">
+    <div class="text-center mb-8">
+      <h2 class="text-2xl sm:text-3xl font-bold mb-3">一屏看完全部自选</h2>
+      <p style="color: var(--text-soft);">真实终端输出 · 数据为占位示意</p>
+    </div>
+    <div class="term">
+      <div class="term-head px-4 py-2.5 flex items-center gap-2">
+        <span class="w-3 h-3 rounded-full" style="background: #ef4444; opacity: 0.7;"></span>
+        <span class="w-3 h-3 rounded-full" style="background: #fbbf24; opacity: 0.7;"></span>
+        <span class="w-3 h-3 rounded-full" style="background: #34d399; opacity: 0.7;"></span>
+        <span class="ml-3 text-xs font-mono" style="color: #71717a;">~/portfolio — kan scan</span>
+      </div>
+<pre>
+<span style="color: #34d399;">$</span> kan scan
+
+慢慢看 · 自选股位置扫描 · 低点模式 · 数据截止 05-10 收盘 · 16:05 拉取
+┏━━━━━━━━━━━━━━━━━━┳━━━━━━━━━┳━━━━━━┳━━━━━━┳━━━━━━┳━━━━━━┳━━━━━━┳━━━━━━┳━━━━━━┳━━━━━━┳━━━━━━━┳━━━━━━━┳━━━━━┓
+┃股票              ┃    现价 ┃  3日 ┃  5日 ┃  7日 ┃ 10日 ┃ 15日 ┃ 30日 ┃ 60日 ┃ 90日 ┃ 120日 ┃ 180日 ┃共振 ┃
+┡━━━━━━━━━━━━━━━━━━╇━━━━━━━━━╇━━━━━━╇━━━━━━╇━━━━━━╇━━━━━━╇━━━━━━╇━━━━━━╇━━━━━━╇━━━━━━╇━━━━━━━╇━━━━━━━╇━━━━━┩
+│沪深300 000300    │ 3960.20 │ <span class="pct-lo">[2%]</span> │ <span class="pct-lo">[3%]</span> │ <span class="pct-lo">[3%]</span> │ <span class="pct-lo">[3%]</span> │ <span class="pct-lo">[3%]</span> │ <span class="pct-lo">[5%]</span> │ <span class="pct-lo">[5%]</span> │ 10%  │  15%  │  18%  │ <span class="resonance">×6</span>  │
+│上证50  000016    │ 2670.10 │ <span class="pct-lo">[3%]</span> │ <span class="pct-lo">[4%]</span> │ <span class="pct-lo">[4%]</span> │  9%  │ 10%  │ 14%  │ 18%  │ 20%  │  22%  │  25%  │ <span class="resonance">×4</span>  │
+│中证500 000905    │ 5690.50 │ <span class="pct-lo">[0%]</span> │ <span class="pct-lo">[0%]</span> │ <span class="pct-lo">[0%]</span> │ <span class="pct-lo">[1%]</span> │ <span class="pct-lo">[1%]</span> │ <span class="pct-lo">[1%]</span> │  3%  │  8%  │  12%  │  16%  │ <span class="resonance">×8</span>  │
+└──────────────────┴─────────┴──────┴──────┴──────┴──────┴──────┴──────┴──────┴──────┴───────┴───────┴─────┘
+
+  <span class="pct-lo">[x%]</span> = 触及低点(≤5%) · 0%=区间最低 · 越低=越接近 N 日最低价
+
+<span style="color: #fbbf24;">⚠️</span> 创新低 ≠ 见底 · 创新高 ≠ 顶 · 历史价格不预示未来 · 仅供参考,不构成投资建议
+</pre>
+    </div>
+    <p class="text-center text-xs mt-5 font-mono" style="color: var(--text-muted);">
+      ↑ 三大指数仅用于占位示意 · 不构成任何形式的推荐
+    </p>
+  </section>
+
+  <hr class="divider-grad max-w-6xl mx-auto" />
+
+  <!-- ============ 三栏 · 做什么 / 不做什么 / 隐私 ============ -->
+  <section class="max-w-6xl mx-auto px-6 py-20">
+    <div class="text-center mb-14">
+      <h2 class="text-3xl sm:text-4xl font-bold mb-4">极致克制 · 不做的事比做的事更重要</h2>
+      <p style="color: var(--text-soft);">用 6 + 6 + 6 = 18 条说清边界</p>
+    </div>
+
+    <div class="grid md:grid-cols-3 gap-5">
+      <div class="card hover-lift p-7">
+        <div class="w-11 h-11 rounded-lg flex items-center justify-center mb-5" style="background: var(--accent-soft); color: var(--accent);">
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+        </div>
+        <h3 class="text-lg font-bold mb-4">做什么</h3>
+        <ul class="text-sm space-y-2.5 leading-relaxed" style="color: var(--text-soft);">
+          <li>· 多周期位置百分位扫描</li>
+          <li>· 多周期共振信号（同触低 / 触高）</li>
+          <li>· 单股详情 · 多股对比</li>
+          <li>· 行业 / 题材 / 热榜 4 类对象切换</li>
+          <li>· 涨跌停 / ST 标记 · 5 档量能识别</li>
+          <li>· JSON / Markdown 快照导出</li>
+        </ul>
+      </div>
+
+      <div class="card hover-lift p-7" style="border-color: var(--warn);">
+        <div class="w-11 h-11 rounded-lg flex items-center justify-center mb-5" style="background: var(--warn-soft); color: var(--warn);">
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+        </div>
+        <h3 class="text-lg font-bold mb-4">不做什么</h3>
+        <ul class="text-sm space-y-2.5 leading-relaxed" style="color: var(--text-soft);">
+          <li>· 不给买卖建议</li>
+          <li>· 不给评级 / 目标价 / 预测涨跌</li>
+          <li>· 不做「AI 选股」</li>
+          <li>· 不接 broker · 不下单</li>
+          <li>· 不做 T+0 短线（数据延时）</li>
+          <li>· 不做港股 / 美股 / 期货</li>
+        </ul>
+      </div>
+
+      <div class="card hover-lift p-7">
+        <div class="w-11 h-11 rounded-lg flex items-center justify-center mb-5" style="background: rgba(96, 165, 250, 0.12); color: #60a5fa;">
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
+        </div>
+        <h3 class="text-lg font-bold mb-4">数据 · 隐私</h3>
+        <ul class="text-sm space-y-2.5 leading-relaxed" style="color: var(--text-soft);">
+          <li>· 100% 本地 · 不要登录 · 不上传自选</li>
+          <li>· 0 telemetry · 0 广告 · 0 推送</li>
+          <li>· 数据存 <code class="ci text-xs">~/.local/share/kan/</code></li>
+          <li>· baostock 主源 + adata / 东财兜底</li>
+          <li>· 可选接 TuShare Pro 提速</li>
+          <li>· <code class="ci text-xs">kan uninstall</code> 一键彻底清</li>
+        </ul>
+      </div>
+    </div>
+  </section>
+
+  <hr class="divider-grad max-w-6xl mx-auto" />
+
+  <!-- ============ 安装 ============ -->
+  <section id="install" class="max-w-6xl mx-auto px-6 py-20">
+    <div class="text-center mb-12">
+      <h2 class="text-3xl sm:text-4xl font-bold mb-3">30 秒装好</h2>
+      <p style="color: var(--text-soft);">Python 3.11+ · 任意命令点击即复制 · 装机平均 1-2 分钟</p>
+    </div>
+
+    <!-- 推荐 · 一键脚本 -->
+    <div class="grid md:grid-cols-2 gap-4 max-w-4xl mx-auto mb-6">
+      <button type="button" class="copy-card flex-col items-stretch !p-0 overflow-hidden" data-copy="curl -LsSf https://raw.githubusercontent.com/piklen/manmankan/main/scripts/install.sh | bash" onclick="copyCmd(this)" style="cursor: pointer;">
+        <span class="copy-hint">点击复制 ↗</span>
+        <div class="px-4 py-2.5 text-xs font-mono flex items-center gap-2 border-b" style="background: var(--bg-soft); border-color: var(--border); color: var(--text-muted);">
+          <span style="color: #ef4444;">●</span><span style="color: #fbbf24;">●</span><span style="color: #34d399;">●</span>
+          <span class="ml-2">🍎 mac / Linux · Terminal</span>
+        </div>
+        <div class="px-5 py-4 text-xs sm:text-sm font-mono break-all leading-relaxed" style="color: var(--text);">
+          <span style="color: var(--accent);">$</span> <span data-copy-label>curl -LsSf https://raw.githubusercontent.com/piklen/manmankan/main/scripts/install.sh | bash</span>
+        </div>
+        <span class="feedback" style="bottom: 16px; right: 22px; top: auto;">✓ 已复制</span>
+      </button>
+
+      <button type="button" class="copy-card flex-col items-stretch !p-0 overflow-hidden" data-copy='powershell -c "irm https://raw.githubusercontent.com/piklen/manmankan/main/scripts/install.ps1 | iex"' onclick="copyCmd(this)" style="cursor: pointer;">
+        <span class="copy-hint">点击复制 ↗</span>
+        <div class="px-4 py-2.5 text-xs font-mono flex items-center gap-2 border-b" style="background: var(--bg-soft); border-color: var(--border); color: var(--text-muted);">
+          <span style="color: #ef4444;">●</span><span style="color: #fbbf24;">●</span><span style="color: #34d399;">●</span>
+          <span class="ml-2">🪟 Windows · PowerShell</span>
+        </div>
+        <div class="px-5 py-4 text-xs sm:text-sm font-mono break-all leading-relaxed" style="color: var(--text);">
+          <span style="color: var(--accent);">&gt;</span> <span data-copy-label>powershell -c "irm https://raw.githubusercontent.com/piklen/manmankan/main/scripts/install.ps1 | iex"</span>
+        </div>
+        <span class="feedback" style="bottom: 16px; right: 22px; top: auto;">✓ 已复制</span>
+      </button>
+    </div>
+
+    <!-- 老手 3 行 -->
+    <div class="max-w-4xl mx-auto">
+      <p class="text-sm mb-3 font-medium" style="color: var(--text-soft);">老手 1 行装（任选其一 · 点击复制）：</p>
+      <div class="grid sm:grid-cols-3 gap-3">
+        <button type="button" class="copy-card !py-3" data-copy="uv tool install manmankan" onclick="copyCmd(this)">
+          <span style="color: var(--accent);" class="font-bold">$</span>
+          <span class="text-sm" data-copy-label>uv tool install manmankan</span>
+          <span class="feedback text-xs">✓</span>
+        </button>
+        <button type="button" class="copy-card !py-3" data-copy="pipx install manmankan" onclick="copyCmd(this)">
+          <span style="color: var(--accent);" class="font-bold">$</span>
+          <span class="text-sm" data-copy-label>pipx install manmankan</span>
+          <span class="feedback text-xs">✓</span>
+        </button>
+        <button type="button" class="copy-card !py-3" data-copy="pip install manmankan" onclick="copyCmd(this)">
+          <span style="color: var(--accent);" class="font-bold">$</span>
+          <span class="text-sm" data-copy-label>pip install manmankan</span>
+          <span class="feedback text-xs">✓</span>
+        </button>
+      </div>
+    </div>
+
+    <div class="max-w-4xl mx-auto mt-7 p-4 rounded-lg text-sm leading-relaxed" style="background: var(--warn-soft); border: 1px solid var(--warn); color: var(--text-soft);">
+      🔒 <b style="color: var(--text);">不放心一键脚本？</b>
+      永远不要盲跑 <code class="ci">curl ... | bash</code>。
+      脚本是开源的 ·
+      <a href="https://github.com/piklen/manmankan/blob/main/scripts/install.sh" style="color: var(--accent);" class="font-medium hover:underline">先看源码再装</a>
+      · 校验 SHA256（每版 release notes 公布）。
+    </div>
+  </section>
+
+  <hr class="divider-grad max-w-6xl mx-auto" />
+
+  <!-- ============ 装好之后 ============ -->
+  <section class="max-w-4xl mx-auto px-6 py-20">
+    <div class="text-center mb-12">
+      <h2 class="text-3xl sm:text-4xl font-bold mb-3">装好之后</h2>
+      <p style="color: var(--text-soft);">打开新终端窗口 · 3 行命令开始</p>
+    </div>
+
+    <div class="term">
+      <div class="term-head px-4 py-2.5 flex items-center gap-2">
+        <span class="w-3 h-3 rounded-full" style="background: #ef4444; opacity: 0.7;"></span>
+        <span class="w-3 h-3 rounded-full" style="background: #fbbf24; opacity: 0.7;"></span>
+        <span class="w-3 h-3 rounded-full" style="background: #34d399; opacity: 0.7;"></span>
+        <span class="ml-3 text-xs font-mono" style="color: #71717a;">~ — 第一次上手</span>
+      </div>
+<pre><span style="color: #34d399;">$</span> kan add 600519 茅台 601318          <span style="color: #71717a;"># 加 3 只 · 代码/名称混搭</span>
+<span style="color: #34d399;">$</span> kan scan                            <span style="color: #71717a;"># 一屏看完位置 + 共振</span>
+<span style="color: #34d399;">$</span> kan info 600519                     <span style="color: #71717a;"># 单股详情</span>
+<span style="color: #34d399;">$</span> kan compare 茅台 五粮液             <span style="color: #71717a;"># 多股对比</span>
+
+<span style="color: #71717a;"># 进阶</span>
+<span style="color: #34d399;">$</span> kan theme search AI                 <span style="color: #71717a;"># 找题材</span>
+<span style="color: #34d399;">$</span> kan scan --theme=AI应用             <span style="color: #71717a;"># 看 AI 板块谁在低位</span>
+<span style="color: #34d399;">$</span> kan scan --hot rank                 <span style="color: #71717a;"># 看东财人气榜</span></pre>
+    </div>
+  </section>
+
+  <hr class="divider-grad max-w-6xl mx-auto" />
+
+  <!-- ============ FAQ ============ -->
+  <section id="faq" class="max-w-4xl mx-auto px-6 py-20">
+    <div class="text-center mb-12">
+      <h2 class="text-3xl sm:text-4xl font-bold mb-3">常见问题</h2>
+      <p style="color: var(--text-soft);">直接问出最常被问的 3 件事</p>
+    </div>
+
+    <div class="space-y-3">
+      <details class="card p-6" open>
+        <summary class="font-semibold flex items-center justify-between">
+          <span class="text-base sm:text-lg">这能帮我赚钱吗？</span>
+          <svg class="chevron" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="color: var(--text-muted);"><polyline points="6 9 12 15 18 9"/></svg>
+        </summary>
+        <p class="mt-4 leading-relaxed" style="color: var(--text-soft);">
+          <b style="color: var(--text);">不能</b>。慢慢看只给你客观的「位置百分位」数据 ——
+          你的自选股现在站在过去 N 日价格区间的哪个位置。决策（买 / 卖 / 持 / 不动）100% 你自己做。
+          <br /><br />
+          创新低不等于见底 · 创新高不等于顶 · 历史价格不预示未来 · 仅供参考，不构成投资建议。
+        </p>
+      </details>
+
+      <details class="card p-6">
+        <summary class="font-semibold flex items-center justify-between">
+          <span class="text-base sm:text-lg">会不会上传我的自选股？</span>
+          <svg class="chevron" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="color: var(--text-muted);"><polyline points="6 9 12 15 18 9"/></svg>
+        </summary>
+        <p class="mt-4 leading-relaxed" style="color: var(--text-soft);">
+          <b style="color: var(--text);">不会</b>。慢慢看是纯命令行工具，完全本地运行。
+          没有账号 · 没有登录 · 没有 telemetry · 没有推送 · 没有广告。
+          自选股数据存在你机器的 <code class="ci">~/.local/share/kan/</code>（XDG 规范）。
+          <br /><br />
+          唯一的「网络请求」是去 baostock / adata / 东方财富 公开 API 拉日 K 线数据，
+          这些请求只发送股票代码（公开信息），不带任何身份标识。
+          源码 <a href="https://github.com/piklen/manmankan" style="color: var(--accent);" class="hover:underline">MIT 开源</a> · 可审。
+        </p>
+      </details>
+
+      <details class="card p-6">
+        <summary class="font-semibold flex items-center justify-between">
+          <span class="text-base sm:text-lg">适合做 T+0 短线吗？</span>
+          <svg class="chevron" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="color: var(--text-muted);"><polyline points="6 9 12 15 18 9"/></svg>
+        </summary>
+        <p class="mt-4 leading-relaxed" style="color: var(--text-soft);">
+          <b style="color: var(--text);">不适合</b>。慢慢看用的是<b>盘后批量拉取的日 K 线数据</b>，不是分钟级实时行情。
+          适合长线 / 技术派散户做月级别周期的位置参考，不适合分钟级短线。
+          <br /><br />
+          也<b>不支持港股 / 美股 / 期货 / 加密货币</b> · 仅 A 股。
+        </p>
+      </details>
+    </div>
+
+    <p class="text-center text-sm mt-10" style="color: var(--text-muted);">
+      更多问题 →
+      <a href="https://github.com/piklen/manmankan#故障排查-faq" style="color: var(--accent);" class="hover:underline">完整 FAQ</a>
+      ·
+      <a href="https://github.com/piklen/manmankan/issues" style="color: var(--accent);" class="hover:underline">GitHub Issues 提问</a>
+    </p>
+  </section>
+
+  <hr class="divider-grad max-w-6xl mx-auto" />
+
+  <!-- ============ English summary ============ -->
+  <section class="max-w-4xl mx-auto px-6 py-16">
+    <details class="card p-7">
+      <summary class="font-semibold flex items-center justify-between">
+        <span class="flex items-center gap-2 text-base sm:text-lg">
+          <span>🌐</span><span>English summary</span>
+        </span>
+        <svg class="chevron" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="color: var(--text-muted);"><polyline points="6 9 12 15 18 9"/></svg>
+      </summary>
+      <div class="mt-5 leading-relaxed space-y-3" style="color: var(--text-soft);">
+        <p>
+          <b style="color: var(--text);">manmankan</b> (慢慢看) is a pure command-line tool for China A-share investors who track their own watchlists.
+          It shows where each stock currently sits within its 3 / 5 / 7 / 10 / 15 / 30 / 60 / 90 / 120 / 180-day price range — a "position percentile" — and flags stocks that simultaneously touch lows (or highs) across multiple timeframes as resonance signals (<code class="ci">×N</code>).
+        </p>
+        <p>
+          It deliberately stops there: <b style="color: var(--text);">no buy/sell advice, no ratings, no price targets, no "AI stock picking."</b>
+          Just objective price-position data, fully local — no login, no account, no telemetry. Data is delayed end-of-day K-line from the AKShare ecosystem (baostock primary).
+        </p>
+        <p class="font-mono text-sm">
+          <span style="color: var(--accent);">$</span> pip install manmankan
+        </p>
+        <p class="text-sm">
+          Python 3.11+ · MIT · A-share only (no HK / US / futures) ·
+          <a href="https://github.com/piklen/manmankan" style="color: var(--accent);" class="hover:underline">GitHub</a> ·
+          <a href="https://pypi.org/project/manmankan/" style="color: var(--accent);" class="hover:underline">PyPI</a>
+        </p>
+      </div>
+    </details>
+  </section>
+
+  <!-- ============ Footer ============ -->
+  <footer style="border-top: 1px solid var(--border);">
+    <div class="max-w-6xl mx-auto px-6 py-12 text-sm" style="color: var(--text-muted);">
+      <div class="grid md:grid-cols-4 gap-8">
+        <div>
+          <div class="font-bold mb-3 flex items-center gap-2" style="color: var(--text);">
+            <span style="color: var(--accent);" class="font-mono">$</span>
+            <span>慢慢看 · manmankan</span>
+          </div>
+          <p class="text-xs leading-relaxed">A 股自选股「位置感」CLI · 告诉你它站在哪 · 不告诉你买什么</p>
+        </div>
+        <div>
+          <div class="font-semibold mb-3" style="color: var(--text-soft);">项目</div>
+          <ul class="space-y-2 text-xs">
+            <li><a href="https://github.com/piklen/manmankan" class="hover:underline" style="color: var(--text-muted);">GitHub 仓库</a></li>
+            <li><a href="https://pypi.org/project/manmankan/" class="hover:underline" style="color: var(--text-muted);">PyPI</a></li>
+            <li><a href="https://github.com/piklen/manmankan/releases" class="hover:underline" style="color: var(--text-muted);">Release Notes</a></li>
+            <li><a href="https://github.com/piklen/manmankan/blob/main/CHANGELOG.md" class="hover:underline" style="color: var(--text-muted);">CHANGELOG</a></li>
+          </ul>
+        </div>
+        <div>
+          <div class="font-semibold mb-3" style="color: var(--text-soft);">参与</div>
+          <ul class="space-y-2 text-xs">
+            <li><a href="https://github.com/piklen/manmankan/issues" class="hover:underline" style="color: var(--text-muted);">提 Issue</a></li>
+            <li><a href="https://github.com/piklen/manmankan/blob/main/CONTRIBUTING.md" class="hover:underline" style="color: var(--text-muted);">Contributing</a></li>
+            <li><a href="https://github.com/piklen/manmankan/blob/main/CODE_OF_CONDUCT.md" class="hover:underline" style="color: var(--text-muted);">行为准则</a></li>
+            <li><a href="https://github.com/piklen/manmankan/blob/main/SECURITY.md" class="hover:underline" style="color: var(--text-muted);">Security</a></li>
+          </ul>
+        </div>
+        <div>
+          <div class="font-semibold mb-3" style="color: var(--text-soft);">合规</div>
+          <ul class="space-y-2 text-xs">
+            <li><a href="https://github.com/piklen/manmankan/blob/main/docs/compliance.md" class="hover:underline" style="color: var(--text-muted);">合规说明</a></li>
+            <li><a href="https://github.com/piklen/manmankan/blob/main/LICENSE" class="hover:underline" style="color: var(--text-muted);">MIT License</a></li>
+          </ul>
+        </div>
+      </div>
+
+      <hr class="divider-grad my-8" />
+
+      <div class="text-xs leading-relaxed">
+        <p class="mb-2">
+          <b style="color: var(--text-soft);">免责声明</b>：本工具仅提供客观的价格位置数据，不构成任何投资建议、推荐或预测。
+          股市有风险 · 投资需谨慎 · 决策由用户自行做出并自担风险。
+        </p>
+        <p>© 2026 piklen · MIT License · Made for A-share retail investors who refuse the black box.</p>
+      </div>
+    </div>
+  </footer>
+
+  <!-- ============ JS · theme cycle + copy ============ -->
+  <script>
+    // Theme cycle: dark → light → system → dark
+    function applyTheme(t) {
+      var sys = window.matchMedia('(prefers-color-scheme: dark)').matches;
+      var dark = t === 'dark' || (t === 'system' && sys);
+      document.documentElement.classList.toggle('dark', dark);
+      document.documentElement.dataset.theme = t;
+    }
+    function cycleTheme() {
+      var order = ['dark', 'light', 'system'];
+      var cur = localStorage.getItem('theme') || 'dark';
+      var next = order[(order.indexOf(cur) + 1) % 3];
+      localStorage.setItem('theme', next);
+      applyTheme(next);
+    }
+    // re-apply on system change while in system mode
+    if (window.matchMedia) {
+      window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', function () {
+        if (localStorage.getItem('theme') === 'system') applyTheme('system');
+      });
+    }
+
+    // Click-to-copy on install commands
+    function copyCmd(btn) {
+      var text = btn.dataset.copy;
+      if (!text) return;
+      var done = function () {
+        btn.classList.add('copied');
+        setTimeout(function () { btn.classList.remove('copied'); }, 1800);
+      };
+      if (navigator.clipboard && navigator.clipboard.writeText) {
+        navigator.clipboard.writeText(text).then(done).catch(function () { fallbackCopy(text); done(); });
+      } else {
+        fallbackCopy(text);
+        done();
+      }
+    }
+    function fallbackCopy(text) {
+      var ta = document.createElement('textarea');
+      ta.value = text;
+      ta.style.position = 'fixed';
+      ta.style.left = '-9999px';
+      document.body.appendChild(ta);
+      ta.select();
+      try { document.execCommand('copy'); } catch (e) {}
+      document.body.removeChild(ta);
+    }
+  </script>
+
+</body>
+</html>
