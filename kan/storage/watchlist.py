@@ -1,4 +1,20 @@
-"""自选股管理"""
+"""自选股管理 · v0.0.6.1 起支持多分组 (GroupedWatchlist)。
+
+storage schema v2:
+    {
+        "version": 2,
+        "default": "自选",
+        "groups": {
+            "自选": {"stocks": [Stock, ...]},
+            "持仓": {"stocks": [Stock, ...]}
+        }
+    }
+
+老 v1 schema {"stocks": [...]} 加载时自动迁移为 v2 (包成 default 组「自选」) ·
+迁移即时写回磁盘 · 用户零感知。老 API load_watchlist() / _save_watchlist(wl) /
+add / remove / clear / list_all 行为不变 (默认走 default 组) · 新 group 参数
+让 CLI 直接操作指定组。
+"""
 
 from __future__ import annotations
 
@@ -21,9 +37,14 @@ from kan.storage.paths import (
 )
 
 MAX_CSV_SIZE = 10 * 1024 * 1024  # 10 MB · CSV 导入文件大小上限
+SCHEMA_VERSION = 2
+DEFAULT_GROUP_NAME = "自选"
+MAX_GROUP_NAME_LEN = 32
 
 __all__ = [  # 显式 re-export · is_stock_names_cache_fresh / NAMES_CACHE_MAX_AGE_DAYS 来自 paths
+    "DEFAULT_GROUP_NAME",
     "NAMES_CACHE_MAX_AGE_DAYS",
+    "SCHEMA_VERSION",
     "STOCK_NAMES_CACHE",
     "is_stock_names_cache_fresh",
 ]
@@ -58,6 +79,81 @@ class Watchlist:
             if s.symbol == symbol:
                 return s
         return None
+
+
+class GroupedWatchlist:
+    """多分组自选股 · v2 schema 包多个 named groups。
+
+    每个 group 拥有独立的 stock list (含独立 added_at) · 同一只股票可同时属于
+    多个组 (例如「自选」盯所有 ·「持仓」只看实买) · 各 added_at 反映"加到该组
+    的日期"而非"全局首次添加日期"。
+
+    delete_group / rename_group / set_default 都内置 default 组保护 ·
+    防误删唯一可用组留下"无 default"的损坏状态。
+    """
+
+    def __init__(
+        self,
+        *,
+        groups: dict[str, list[Stock]] | None = None,
+        default: str = DEFAULT_GROUP_NAME,
+    ) -> None:
+        if groups is None:
+            groups = {default: []}
+        if default not in groups:
+            # 防御性 · 理论不发生 (load 时已校正)
+            groups[default] = []
+        self.groups: dict[str, list[Stock]] = groups
+        self.default: str = default
+
+    @property
+    def group_names(self) -> list[str]:
+        """按插入顺序返回所有组名 (Python 3.7+ dict 保插入序)。"""
+        return list(self.groups.keys())
+
+    def get_group(self, name: str | None = None) -> list[Stock]:
+        g = name or self.default
+        if g not in self.groups:
+            raise GroupNotFoundError(
+                f"组「{g}」不存在 · 跑 `kan group list` 查看所有组"
+            )
+        return self.groups[g]
+
+    def has_group(self, name: str) -> bool:
+        return name in self.groups
+
+    def find(self, symbol: str, group: str | None = None) -> Stock | None:
+        for s in self.get_group(group):
+            if s.symbol == symbol:
+                return s
+        return None
+
+
+class GroupNotFoundError(Exception):
+    """指定组不存在 · CLI 层 catch 后给散户友好引导。"""
+
+
+class GroupExistsError(Exception):
+    """组名冲突 (create / rename / copy 目标已存在)。"""
+
+
+class GroupProtectedError(Exception):
+    """default 组保护 · 不允许删除 / 重命名到合并状态。"""
+
+
+def _validate_group_name(name: str) -> str:
+    """组名规范化 + 校验 · 防特殊字符 / 过长 / 空。"""
+    name = name.strip() if name else ""
+    if not name:
+        raise ValueError("组名不能为空 · 例: kan group create 持仓")
+    if len(name) > MAX_GROUP_NAME_LEN:
+        raise ValueError(
+            f"组名过长 (上限 {MAX_GROUP_NAME_LEN} 字符 · 当前 {len(name)})"
+        )
+    for ch in "/\\\0\n\r\t":
+        if ch in name:
+            raise ValueError("组名不能包含 / \\ 换行符 制表符 等特殊字符")
+    return name
 
 
 def _normalize_symbol(raw: str) -> str:
@@ -239,9 +335,9 @@ def add_stock(wl: Watchlist, symbol: str, name: str) -> bool:
     return True
 
 
-def save_watchlist(wl: Watchlist) -> None:
-    """Save watchlist to disk."""
-    _save_watchlist(wl)
+def save_watchlist(wl: Watchlist, group: str | None = None) -> None:
+    """Save watchlist to disk · group=None 走 default 组 (向后兼容)。"""
+    _save_watchlist(wl, group=group)
 
 
 class WatchlistCorruptError(Exception):
@@ -253,9 +349,41 @@ class WatchlistCorruptError(Exception):
     """
 
 
-def load_watchlist() -> Watchlist:
+def load_watchlist(group: str | None = None) -> Watchlist:
+    """加载指定组的自选股 (默认 default 组) · 返回老 Watchlist 对象向后兼容。
+
+    旧调用 `load_watchlist()` 不带参 → 返回 default 组 stocks (跟 v0.0.6 行为一致) ·
+    现有测试 / WatchlistSet / cli_*_cmds 零改动仍 work。
+    """
+    gw = load_grouped_watchlist()
+    return Watchlist(stocks=list(gw.get_group(group)))
+
+
+def _save_watchlist(wl: Watchlist, group: str | None = None) -> None:
+    """保存 wl 到指定组 (默认 default 组) · 老调用 _save_watchlist(wl) 不变。
+
+    实现:加载 GroupedWatchlist · 替换目标组的 stocks · 写回。这保留 v2 schema
+    完整性 (不擦掉其他组)。
+    """
+    gw = load_grouped_watchlist()
+    target = group or gw.default
+    if target not in gw.groups:
+        raise GroupNotFoundError(
+            f"组「{target}」不存在 · 跑 `kan group create {target}` 新建"
+        )
+    gw.groups[target] = list(wl.stocks)
+    _save_grouped_watchlist(gw)
+
+
+def load_grouped_watchlist() -> GroupedWatchlist:
+    """加载完整多分组 storage · v1 schema 自动迁移到 v2 + 持久化。
+
+    迁移路径:
+      v1 {"stocks": [...]} → v2 {"version":2, "default":"自选", "groups":{"自选":{"stocks":[...]}}}
+    迁移即时写回磁盘 (一次性) · 之后所有读都直走 v2 fast path。
+    """
     if not WATCHLIST_PATH.exists():
-        return Watchlist()
+        return GroupedWatchlist()
     try:
         with open(WATCHLIST_PATH, encoding="utf-8") as f:
             data = json.load(f)
@@ -264,51 +392,235 @@ def load_watchlist() -> Watchlist:
             f"自选股文件损坏（{WATCHLIST_PATH.name}）· "
             f"错误: {e.msg} (行 {e.lineno} 列 {e.colno})"
         ) from e
-    stocks = [Stock(**s) for s in data.get("stocks", [])]
-    return Watchlist(stocks)
+
+    # v1 → v2 在线迁移 · 检测条件: 顶层有 stocks 但没 groups
+    if "stocks" in data and "groups" not in data:
+        stocks = [Stock(**s) for s in data.get("stocks", [])]
+        gw = GroupedWatchlist(
+            groups={DEFAULT_GROUP_NAME: stocks},
+            default=DEFAULT_GROUP_NAME,
+        )
+        _save_grouped_watchlist(gw)
+        return gw
+
+    # v2 fast path
+    raw_groups = data.get("groups", {})
+    groups: dict[str, list[Stock]] = {}
+    for name, payload in raw_groups.items():
+        stock_list = payload.get("stocks", []) if isinstance(payload, dict) else []
+        groups[name] = [Stock(**s) for s in stock_list]
+
+    default = data.get("default", DEFAULT_GROUP_NAME)
+    # default 指向不存在组时降级 (理论不发生 · 防御性):
+    # 1. 有任意组 → 取第一个为 default 并写回
+    # 2. 完全空 → 重建 default 组
+    if default not in groups:
+        if groups:
+            default = next(iter(groups.keys()))
+        else:
+            groups[DEFAULT_GROUP_NAME] = []
+            default = DEFAULT_GROUP_NAME
+
+    return GroupedWatchlist(groups=groups, default=default)
 
 
-def _save_watchlist(wl: Watchlist) -> None:
+def _save_grouped_watchlist(gw: GroupedWatchlist) -> None:
+    """原子写 v2 schema · 保 0o600 持仓画像隐私底线。"""
     ensure_dirs()
-    data = {"stocks": [s.model_dump(mode="json") for s in wl.stocks]}
+    data = {
+        "version": SCHEMA_VERSION,
+        "default": gw.default,
+        "groups": {
+            name: {"stocks": [s.model_dump(mode="json") for s in stocks]}
+            for name, stocks in gw.groups.items()
+        },
+    }
     _atomic_write_json(WATCHLIST_PATH, data)
 
 
-def add(symbol: str) -> tuple[bool, str]:
-    """添加股票。返回 (是否新增, 消息)。"""
-    symbol = _normalize_symbol(symbol)
-    wl = load_watchlist()
+def save_grouped_watchlist(gw: GroupedWatchlist) -> None:
+    """公开 wrapper · cli/group_cmds 直接 import 调用 · 跟 save_watchlist 同形。"""
+    _save_grouped_watchlist(gw)
 
-    if wl.find(symbol):
-        return False, f"{symbol} 已在自选列表中"
+
+# ───────────────────── group CRUD API ─────────────────────
+
+
+def list_groups() -> list[tuple[str, int, bool]]:
+    """返回 [(组名, 股数, 是否 default), ...] 按插入顺序。"""
+    gw = load_grouped_watchlist()
+    return [
+        (name, len(stocks), name == gw.default)
+        for name, stocks in gw.groups.items()
+    ]
+
+
+def create_group(name: str) -> str:
+    """创建新组 · 返回规范化后的组名。重名抛 GroupExistsError。"""
+    name = _validate_group_name(name)
+    gw = load_grouped_watchlist()
+    if name in gw.groups:
+        raise GroupExistsError(f"组「{name}」已存在 · 跑 `kan group list` 查看")
+    gw.groups[name] = []
+    _save_grouped_watchlist(gw)
+    return name
+
+
+def rename_group(old: str, new: str) -> str:
+    """重命名组 · 同时更新 default 指针 (如指向 old)。返回新组名。"""
+    new = _validate_group_name(new)
+    gw = load_grouped_watchlist()
+    if old not in gw.groups:
+        raise GroupNotFoundError(f"组「{old}」不存在")
+    if new == old:
+        return new  # noop
+    if new in gw.groups:
+        raise GroupExistsError(
+            f"组「{new}」已存在 · 拒绝合并 · 想合并跑 `kan group copy {old} {new}` 再 `kan group delete {old}`"
+        )
+    # 保插入顺序:重建 dict (Python 3.7+ insertion-ordered)
+    gw.groups = {(new if k == old else k): v for k, v in gw.groups.items()}
+    if gw.default == old:
+        gw.default = new
+    _save_grouped_watchlist(gw)
+    return new
+
+
+def delete_group(name: str) -> int:
+    """删除组 · 不能删 default (先切换 default 再删) · 返回被删股数。"""
+    gw = load_grouped_watchlist()
+    if name not in gw.groups:
+        raise GroupNotFoundError(f"组「{name}」不存在")
+    if name == gw.default:
+        raise GroupProtectedError(
+            f"组「{name}」是默认组 · 不能删除 · 先 `kan group default <其他组>` 切换"
+        )
+    count = len(gw.groups[name])
+    del gw.groups[name]
+    _save_grouped_watchlist(gw)
+    return count
+
+
+def set_default_group(name: str) -> str:
+    """切换 default 组 · 返回旧 default 组名。"""
+    gw = load_grouped_watchlist()
+    if name not in gw.groups:
+        raise GroupNotFoundError(f"组「{name}」不存在")
+    old = gw.default
+    gw.default = name
+    _save_grouped_watchlist(gw)
+    return old
+
+
+def get_default_group() -> str:
+    """获取当前 default 组名。"""
+    return load_grouped_watchlist().default
+
+
+def copy_group(src: str, dst: str) -> int:
+    """复制 src 整组到 dst (dst 必须不存在 · 防误覆盖) · 返回复制的股数。"""
+    dst = _validate_group_name(dst)
+    gw = load_grouped_watchlist()
+    if src not in gw.groups:
+        raise GroupNotFoundError(f"源组「{src}」不存在")
+    if dst in gw.groups:
+        raise GroupExistsError(
+            f"目标组「{dst}」已存在 · 拒绝覆盖 · 想覆盖先 `kan group delete {dst}`"
+        )
+    gw.groups[dst] = [s.model_copy() for s in gw.groups[src]]
+    _save_grouped_watchlist(gw)
+    return len(gw.groups[dst])
+
+
+def move_stock(symbol: str, src: str, dst: str) -> tuple[Stock, bool]:
+    """跨组移动单股 · src/dst 都必须存在 (不自动建组 · 防 typo 灾难)。
+
+    返回 (移动的 Stock, dst_already_had) ·
+    dst_already_had=True 表示目标组已有该股 (只从 src 删除 · 不重复添加)。
+    """
+    symbol = _normalize_symbol(symbol)
+    gw = load_grouped_watchlist()
+    if src not in gw.groups:
+        raise GroupNotFoundError(f"源组「{src}」不存在")
+    if dst not in gw.groups:
+        raise GroupNotFoundError(
+            f"目标组「{dst}」不存在 · 跑 `kan group create {dst}` 新建 · 不自动建组防 typo"
+        )
+    src_stocks = gw.groups[src]
+    found = next((s for s in src_stocks if s.symbol == symbol), None)
+    if found is None:
+        raise ValueError(f"{symbol} 不在「{src}」组中")
+    dst_existed = any(s.symbol == symbol for s in gw.groups[dst])
+    gw.groups[src] = [s for s in src_stocks if s.symbol != symbol]
+    if not dst_existed:
+        gw.groups[dst].append(found)
+    _save_grouped_watchlist(gw)
+    return found, dst_existed
+
+
+def add(symbol: str, group: str | None = None) -> tuple[bool, str]:
+    """添加股票到指定组 (不传走 default 组)。返回 (是否新增, 消息)。"""
+    symbol = _normalize_symbol(symbol)
+    gw = load_grouped_watchlist()
+    target = group or gw.default
+    if target not in gw.groups:
+        raise GroupNotFoundError(
+            f"组「{target}」不存在 · 跑 `kan group create {target}` 新建"
+        )
+
+    stocks = gw.groups[target]
+    is_default = target == gw.default
+    if any(s.symbol == symbol for s in stocks):
+        msg = (
+            f"{symbol} 已在自选列表中"
+            if is_default
+            else f"{symbol} 已在「{target}」组中"
+        )
+        return False, msg
 
     name = _lookup_name(symbol)
-    stock = Stock(symbol=symbol, name=name, added_at=date.today())
-    wl.stocks.append(stock)
-    _save_watchlist(wl)
-    return True, f"✅ 已添加 {name} ({symbol})"
+    stocks.append(Stock(symbol=symbol, name=name, added_at=date.today()))
+    _save_grouped_watchlist(gw)
+    suffix = "" if is_default else f" → 「{target}」"
+    return True, f"✅ 已添加 {name} ({symbol}){suffix}"
 
 
-def remove(symbol: str) -> tuple[bool, str]:
-    """移除股票。返回 (是否移除, 消息)。"""
+def remove(symbol: str, group: str | None = None) -> tuple[bool, str]:
+    """从指定组移除股票 (不传走 default 组)。返回 (是否移除, 消息)。"""
     symbol = _normalize_symbol(symbol)
-    wl = load_watchlist()
-    original_len = len(wl.stocks)
-    wl.stocks = [s for s in wl.stocks if s.symbol != symbol]
+    gw = load_grouped_watchlist()
+    target = group or gw.default
+    if target not in gw.groups:
+        raise GroupNotFoundError(
+            f"组「{target}」不存在 · 跑 `kan group list` 查看"
+        )
 
-    if len(wl.stocks) == original_len:
-        return False, f"{symbol} 不在自选列表中"
+    stocks = gw.groups[target]
+    is_default = target == gw.default
+    new_stocks = [s for s in stocks if s.symbol != symbol]
+    if len(new_stocks) == len(stocks):
+        msg = (
+            f"{symbol} 不在自选列表中"
+            if is_default
+            else f"{symbol} 不在「{target}」组中"
+        )
+        return False, msg
 
-    _save_watchlist(wl)
-    return True, f"已移除 {symbol}"
+    gw.groups[target] = new_stocks
+    _save_grouped_watchlist(gw)
+    suffix = "" if is_default else f"(自「{target}」)"
+    return True, f"已移除 {symbol}{suffix}"
 
 
-def list_all() -> list[Stock]:
-    return load_watchlist().stocks
+def list_all(group: str | None = None) -> list[Stock]:
+    """列指定组股票 (不传走 default 组) · 老调用 list_all() 不变。"""
+    return load_watchlist(group).stocks
 
 
-def import_csv(path: str | Path) -> tuple[int, int, list[str]]:
-    """CSV 导入。返回 (成功数, 跳过数, 错误列表)。
+def import_csv(
+    path: str | Path, group: str | None = None,
+) -> tuple[int, int, list[str]]:
+    """CSV 导入到指定组 (不传走 default 组)。返回 (成功数, 跳过数, 错误列表)。
 
     CSV 格式：每行一个代码，或 代码,名称。
 
@@ -353,7 +665,7 @@ def import_csv(path: str | Path) -> tuple[int, int, list[str]]:
             continue
         raw = row[0].strip()
         try:
-            ok, _msg = add(raw)
+            ok, _msg = add(raw, group=group)
             if ok:
                 success += 1
             else:
@@ -364,9 +676,15 @@ def import_csv(path: str | Path) -> tuple[int, int, list[str]]:
     return success, skipped, errors
 
 
-def clear() -> int:
-    """清空自选列表，返回被清除的数量。"""
-    wl = load_watchlist()
-    count = len(wl.stocks)
-    _save_watchlist(Watchlist())
+def clear(group: str | None = None) -> int:
+    """清空指定组 (不传走 default 组) · 不影响其他组 · 返回被清除的股数。"""
+    gw = load_grouped_watchlist()
+    target = group or gw.default
+    if target not in gw.groups:
+        raise GroupNotFoundError(
+            f"组「{target}」不存在 · 跑 `kan group list` 查看"
+        )
+    count = len(gw.groups[target])
+    gw.groups[target] = []
+    _save_grouped_watchlist(gw)
     return count

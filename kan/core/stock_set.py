@@ -62,16 +62,26 @@ class StockSet(Protocol):
 
 @dataclass
 class WatchlistSet:
-    """自选股集合 · 从本地 storage 加载 (kan add / kan remove 管理的列表)。"""
+    """自选股集合 · 从本地 storage 加载指定组 (kan add/remove --group 管理)。
+
+    group=None → 走 default 组 (kan group default 切换) · 跟 v0.0.6 行为完全一致 ·
+    group="持仓" → 走该具名组 · 触发 lazy resolve 时调 load_watchlist("持仓")。
+    """
 
     name: str = "自选股"
+    group: str | None = None
     _pairs: list[tuple[str, str]] | None = None
+
+    def __post_init__(self) -> None:
+        # group 指定时 name 自动加组名后缀 (CLI 输出 / 日志识别) · 默认不变
+        if self.group and self.name == "自选股":
+            self.name = f"自选股·{self.group}"
 
     def _resolve(self) -> list[tuple[str, str]]:
         if self._pairs is None:
             from kan.storage.watchlist import load_watchlist
 
-            wl = load_watchlist()
+            wl = load_watchlist(self.group)
             self._pairs = [(s.symbol, s.name) for s in wl.stocks]
         return self._pairs
 
@@ -286,10 +296,11 @@ def from_flags(
     theme: str | None = None,
     watchlist_pairs: list[tuple[str, str]] | None = None,
     only_watchlist: bool = False,
+    watchlist_group: str | None = None,
 ) -> StockSet:
     """从 CLI flags 构造对应 StockSet (一类 factory)。
 
-    - 三者全 None → WatchlistSet (默认走自选股 · watchlist_pairs/only_watchlist 忽略)
+    - 三者全 None → WatchlistSet · 走 watchlist_group 指定组 (不指定走 default)
     - 任一非 None → 对应 Set · 同时把 watchlist_pairs + only_watchlist 注入 (算 highlight + filter)
     - 任意两个或三个同时非 None → ValueError (互斥)
 
@@ -297,6 +308,7 @@ def from_flags(
         industry / hot / theme: 三选一(或都 None)的 source 标识
         watchlist_pairs: 自选股 pairs · 用来算 meta.highlight (industry/hot/theme 集合 ∩ 自选)
         only_watchlist: True 时 set.pairs() = source 集合 ∩ 自选 (要求 watchlist_pairs 非空)
+        watchlist_group: 选 WatchlistSet 的具名组 (None 走 default · 等价 v0.0.6 行为)
     """
     given = sum(1 for x in (industry, hot, theme) if x is not None)
     if given > 1:
@@ -322,7 +334,7 @@ def from_flags(
             watchlist_pairs=wl_pairs,
             only_watchlist=only_watchlist,
         )
-    return WatchlistSet()
+    return WatchlistSet(group=watchlist_group)
 
 
 __all__ = [

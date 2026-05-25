@@ -99,7 +99,7 @@ def runner(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> CliRunner:
     # 到 cli_trend_cmds 的 namespace · monkeypatch 必须改这里才能拦截
     monkeypatch.setattr(
         "kan.cli.trend_cmds._get_watchlist_pairs",
-        lambda: [("600519", "测试跌5"), ("000001", "测试涨3"), ("002001", "测试平")],
+        lambda group=None: [("600519", "测试跌5"), ("000001", "测试涨3"), ("002001", "测试平")],
     )
     monkeypatch.setattr("kan.cli.trend_cmds._auto_fetch_stale", lambda _pairs: None)
     monkeypatch.setattr("kan.core.scanner.trend_batch", _fake_trend_batch)

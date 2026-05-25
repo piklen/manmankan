@@ -184,21 +184,30 @@ def _with_heavy_imports_spinner(console, message: str):
         yield status
 
 
-def _load_watchlist_pairs() -> list[tuple[str, str]]:
-    """自选股 (代码, 名称) 列表;自选为空时返回 [] · 不报错。
+def _load_watchlist_pairs(group: str | None = None) -> list[tuple[str, str]]:
+    """指定组的 (代码, 名称) 列表;组为空时返回 [] · 不报错(--group 不传走 default)。
 
     用于 --industry 模式 —— 扫的是板块成分股,自选股仅用于 ⭐ 高亮,
     自选为空只意味着没有高亮,不应阻止扫描。
     """
-    from kan.storage.watchlist import load_watchlist
-    return [(s.symbol, s.name) for s in load_watchlist().stocks]
+    from kan.storage.watchlist import GroupNotFoundError, load_watchlist
+    try:
+        return [(s.symbol, s.name) for s in load_watchlist(group).stocks]
+    except GroupNotFoundError as e:
+        typer.echo(f"❌ {e}", err=True)
+        raise typer.Exit(2) from None
 
 
-def _get_watchlist_pairs() -> list[tuple[str, str]]:
-    """自选股 (代码, 名称) 列表;自选为空时友好报错 + 退出(自选模式命令用)。"""
-    pairs = _load_watchlist_pairs()
+def _get_watchlist_pairs(group: str | None = None) -> list[tuple[str, str]]:
+    """指定组 (代码, 名称) 列表;为空时友好报错 + 退出(自选模式命令用)。"""
+    pairs = _load_watchlist_pairs(group)
     if not pairs:
-        typer.echo("自选列表为空 · 先加几只:`kan add 600519 茅台 000858` (代码或名称都行)", err=True)
+        label = "自选" if not group else f"「{group}」组"
+        suffix = "" if not group else f" --group {group}"
+        typer.echo(
+            f"{label}列表为空 · 先加几只:`kan add 600519 茅台 000858{suffix}` (代码或名称都行)",
+            err=True,
+        )
         raise typer.Exit(1)
     return pairs
 
