@@ -4,7 +4,7 @@
 >
 > *A "where does it stand" CLI for China A-share watchlists — it tells you the coordinates, not the decision.*
 
-[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+[![License: Parity 7.0.0](https://img.shields.io/badge/License-Parity_7.0.0-orange.svg)](https://paritylicense.com/versions/7.0.0.html)
 [![Python 3.11+](https://img.shields.io/badge/python-3.11+-blue.svg)](https://www.python.org/downloads/)
 [![PyPI version](https://img.shields.io/pypi/v/manmankan.svg)](https://pypi.org/project/manmankan/)
 [![PyPI downloads](https://img.shields.io/pypi/dm/manmankan.svg)](https://pypi.org/project/manmankan/)
@@ -18,7 +18,7 @@
 
 It deliberately stops there: **no buy/sell advice, no ratings, no price targets, no "AI stock picking."** Just objective price-position data, fully local — no login, no account, no telemetry. Data is delayed end-of-day K-line from the AKShare ecosystem (baostock primary).
 
-`pip install manmankan` · Python 3.11+ · MIT · A-share only (no HK / US / futures).
+`pip install manmankan` · Python 3.11+ · [Parity Public License 7.0.0](LICENSE) (non-commercial · copyleft · see [NOTICE](NOTICE)) · A-share only (no HK / US / futures).
 </details>
 
 慢慢看是一个**纯命令行**的 A 股自选股位置感工具。它把电商「慢慢买」的「先看历史价位再决策」迁移到股市:把你 30 只自选股在 3、5、7、10、15、30、60、90、120、180 日窗口内的位置百分位**一屏显示**,把「同时触及多个低点」标成共振信号,然后**闭嘴**——剩下的判断,你自己做。
@@ -755,7 +755,7 @@ ST 涨跌停切换日 2026-07-06 来自沪深北交易所 2026-04 公告,代码�
 
 **A 股市场有风险,投资需谨慎。**
 
-如需将本工具用于商业目的或二次开发,请遵守 [MIT 协议](LICENSE) 并自行确保合规(特别是 [AKShare 数据使用限制](https://github.com/akfamily/akshare))。
+本工具采用 [Parity Public License 7.0.0](LICENSE) + [Attribution Rider (NOTICE)](NOTICE) · 个人 / 学术 / 评估 / 非营利**二次开发免费**(衍生须同 license 公开 · copyleft)· **商业使用**(销售产品 / 付费服务 / SaaS / 嵌入商业产品)须先获作者书面授权 · 数据源使用另需遵守 [AKShare 数据限制](https://github.com/akfamily/akshare)。
 
 ---
 
@@ -865,8 +865,10 @@ uv run ruff check kan/        # lint
 
 ## 许可证
 
-[MIT](LICENSE) © 2026 piklen
+[Parity Public License 7.0.0](LICENSE) · 附 [Attribution Rider (NOTICE)](NOTICE) · © 2026 piklen
 
-欢迎自由使用、修改、商用与二次开发(注意 AKShare 数据使用限制)。
+**非商业使用**(个人 / 学术 / 评估 / 非营利)免费 · 衍生作品须同 license 公开(copyleft)· **商业使用**(销售产品 / 付费服务 / SaaS / 嵌入商业产品)须先获作者书面授权 · 详见 [NOTICE](NOTICE)。
+
+衍生作品须在 README 显著位置标注"Based on manmankan (https://github.com/piklen/manmankan)"(详见 NOTICE Attribution Rider 第 2 条)· 数据源使用另需遵守 [AKShare 数据限制](https://github.com/akfamily/akshare)。
 
 Bug / 功能反馈走 [GitHub Issues](https://github.com/piklen/manmankan/issues) 或 [Discussions](https://github.com/piklen/manmankan/discussions)。
