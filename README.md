@@ -1,8 +1,10 @@
 # 慢慢看 · manmankan
 
-> A 股自选股「位置感」CLI · **不告诉你买什么，只告诉你它现在站在哪**
+> A 股自选股 CLI · **不告诉你买什么 · 帮你找到符合条件的**
 >
-> *A "where does it stand" CLI for China A-share watchlists — it tells you the coordinates, not the decision.*
+> *A China A-share CLI that doesn't tell you what to buy — it helps you find what matches your rules.*
+>
+> 多周期位置 · 共振信号 · 用户主导的选股 DSL(v0.0.6.5+ `kan find`)· 100% 本地。
 
 [![License: Parity 7.0.0](https://img.shields.io/badge/License-Parity_7.0.0-orange.svg)](https://paritylicense.com/versions/7.0.0.html)
 [![Python 3.11+](https://img.shields.io/badge/python-3.11+-blue.svg)](https://www.python.org/downloads/)
