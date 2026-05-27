@@ -36,9 +36,9 @@ def _render_failure_diagnosis(diagnosis) -> list[str]:
     """把 LeaderboardDiagnosis 展开成多行用户可读的失败消息(每行一条)。
 
     背景: v0.0.6.5 之前失败消息只有 "391 题材失败 · 可能是网络问题",
-    完全屏蔽了多源 fallback 链路状态(TuShare 试没试 / 哪一步挂)。
-    高级用户(配了 TuShare token)的诊断价值被吃掉。本函数按 diagnosis 状态
-    展开"链路诊断 + 可能修复"两段,给用户 actionable 信息。
+    完全屏蔽多源 fallback 链路状态。v0.0.6.5 加 diagnosis 但建议靠脑补
+    ("ths_daily 需 2000+ 积分" 实测打脸 · 真实是频率限速)。
+    本版本透传 TuShare server msg 当 ground truth · 我们不再猜。
     """
     lines: list[str] = ["❌ 题材榜无数据 · 所有数据源失败", ""]
     lines.append("数据源链路:")
@@ -48,11 +48,14 @@ def _render_failure_diagnosis(diagnosis) -> list[str]:
         lines.append(f"  ① TuShare Pro (你配了 token {token_label}):")
         lines.append(f"     endpoint: {diagnosis.tushare_endpoint or '(未知)'}")
         if diagnosis.tushare_failed_at == "catalog":
-            lines.append("     结果:     ❌ catalog 拉取失败 (代理 / 网络 / token 任一)")
+            lines.append("     结果:     ❌ catalog (ths_index) 拉取失败")
         elif diagnosis.tushare_failed_at == "klines":
-            lines.append("     结果:     ❌ K 线 batch 拉取失败 (catalog 通了但 ths_daily 挂)")
+            lines.append("     结果:     ❌ K 线 (ths_daily) 拉取失败 (catalog 通了)")
         else:
             lines.append("     结果:     ⚠️  状态未知")
+        # 透传 server msg · TuShare 官方原文比脑补更权威
+        if diagnosis.tushare_error_msg:
+            lines.append(f"     server:   code={diagnosis.tushare_error_code} · {diagnosis.tushare_error_msg}")
     else:
         lines.append("  ① TuShare Pro: 未尝试 (没配 token · 跳过)")
 
@@ -70,12 +73,25 @@ def _render_failure_diagnosis(diagnosis) -> list[str]:
     if diagnosis.tushare_attempted and diagnosis.tushare_failed_at:
         from kan.data.tushare import DEFAULT_ENDPOINT
 
-        # 用自部署代理 → 推荐切官方;已用官方 → 这条建议无意义,改推积分检查
-        if diagnosis.tushare_endpoint and diagnosis.tushare_endpoint != DEFAULT_ENDPOINT:
-            lines.append(f"  · 切回官方端点:    kan config set tushare-endpoint {DEFAULT_ENDPOINT}")
-        elif diagnosis.tushare_failed_at == "klines":
-            # 官方 endpoint + catalog 通 + klines 挂 = 极大概率积分不够 (ths_daily 需 2000+)
-            lines.append("  · 检查 TuShare 积分: https://tushare.pro/user/token (ths_daily 需 2000+ 积分)")
+        code = diagnosis.tushare_error_code
+        # 按 server 实际 code 给精准建议 · 替代之前的脑补文案
+        if code == 40101:
+            # token 不对
+            lines.append("  · token 无效 · 检查 https://tushare.pro/user/token 重新复制完整 token")
+        elif code == 40203:
+            # 频率超限 · 让 server msg "频率超限(X次/小时)" 自解释具体频次
+            lines.append("  · 频率超限 · 频次表见 https://tushare.pro/document/1?doc_id=290")
+        elif code == 40004:
+            lines.append("  · 积分不足 · 充值 https://tushare.pro/user/token")
+        elif code is not None and code < 0:
+            # -1/-2/-3 = 客户端层 (网络/HTTP/JSON) · 检查 endpoint
+            if diagnosis.tushare_endpoint and diagnosis.tushare_endpoint != DEFAULT_ENDPOINT:
+                lines.append(f"  · 客户端层失败 · 切回官方端点试试: kan config set tushare-endpoint {DEFAULT_ENDPOINT}")
+            else:
+                lines.append("  · 客户端层失败 · 检查本机网络 / TuShare 服务状态")
+        elif diagnosis.tushare_endpoint and diagnosis.tushare_endpoint != DEFAULT_ENDPOINT:
+            # 没拿到 code 但用了自部署代理 · 推切官方
+            lines.append(f"  · 切回官方端点试试: kan config set tushare-endpoint {DEFAULT_ENDPOINT}")
         lines.append("  · 关闭 TuShare 走 EM: kan config unset tushare-token")
     elif not diagnosis.tushare_attempted:
         lines.append("  · 配 TuShare 走付费源: kan config set tushare-token <你的_token>")

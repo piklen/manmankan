@@ -26,6 +26,29 @@ def _mock_adata(monkeypatch):
     monkeypatch.setitem(sys.modules, "adata.stock.market", MagicMock())
 
 
+@pytest.fixture(autouse=True)
+def _isolate_boards_and_disable_tushare(monkeypatch, tmp_path):
+    """v0.0.6.5 加: 防 leaderboard test 命中真实用户 cache。
+
+    之前 test 假设 TuShare token 没配 · 走 EM 路径 · monkeypatch fetch_theme_kline 起效。
+    但用户配 tushare token + 跑过一次后 · ~/.local/share/kan/boards/ 留 cache · 下次
+    跑 test 走 TuShare cache hit 路径 · monkeypatch 失效 · result 数量 = cache 题材数。
+    本 fixture 两件事:
+    1. BOARDS_DIR → tmp_path · cache 永远 miss
+    2. tushare_token_configured → False · 强制走 EM 路径 (本文件 test 主题)
+    """
+    from kan.data import boards
+
+    bdir = tmp_path / "boards"
+    bdir.mkdir()
+    monkeypatch.setattr(boards, "BOARDS_DIR", bdir)
+    monkeypatch.setattr("kan.storage.paths.BOARDS_DIR", bdir)
+    monkeypatch.setattr("kan.storage.paths.ensure_dirs", lambda: None)
+    monkeypatch.setattr(
+        "kan.data.tushare_themes.tushare_token_configured", lambda: False,
+    )
+
+
 # ── _resolve_parallel ─────────────────────────────────────────────────
 
 

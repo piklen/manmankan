@@ -57,6 +57,10 @@ class LeaderboardDiagnosis:
                           None=没尝试 / 成功
       tushare_endpoint:   实际用的端点(env > config > DEFAULT)· 仅 attempted 时填
       tushare_token_masked: ***xxxx 形式 · 永不存原 token
+      tushare_error_code: TuShare server 业务码 (40101/40203/40004) 或客户端码 (-1/-2/-3)·
+                          None=没失败 / 没拿到 error · v0.0.6.5 加 · 用于精准建议
+      tushare_error_msg:  TuShare server 原文 msg (已 redact 防 token 泄漏)·
+                          直接给用户看是安全的 · 比我们脑补文案更权威
       em_attempted:       走 EM 路径 → True (token 未配 或 TuShare 失败 fallback)
       em_total:           EM catalog 拿到的题材数(分母)
       em_failed_count:    EM 并行 fetch 失败的题材数(分子)
@@ -66,6 +70,8 @@ class LeaderboardDiagnosis:
     tushare_failed_at: str | None = None
     tushare_endpoint: str | None = None
     tushare_token_masked: str | None = None
+    tushare_error_code: int | None = None
+    tushare_error_msg: str | None = None
     em_attempted: bool = False
     em_total: int = 0
     em_failed_count: int = 0
@@ -138,20 +144,25 @@ def load_theme_leaderboard(
         diagnosis.tushare_endpoint = endpoint
         diagnosis.tushare_token_masked = mask_token(token)
 
-        ts_catalog = tushare_load_theme_catalog()
+        ts_catalog, catalog_err = tushare_load_theme_catalog()
         if ts_catalog:
-            ts_results = _load_via_tushare(
+            ts_results, ts_errors, klines_err = _load_via_tushare(
                 ts_catalog, candle=candle, progress_console=progress_console,
                 tushare_load_klines=tushare_load_theme_klines,
             )
-            if ts_results is not None:
-                results, errors = ts_results
-                return results, errors, "tushare", diagnosis
-            # TuShare klines 接口失败 · 标记后落 EM 路径(双重保险)
+            if ts_results:
+                return ts_results, ts_errors, "tushare", diagnosis
+            # TuShare klines 接口失败 · 透传 server error 给 diagnosis · 落 EM
             diagnosis.tushare_failed_at = "klines"
+            if klines_err is not None:
+                diagnosis.tushare_error_code = klines_err.code
+                diagnosis.tushare_error_msg = klines_err.msg
         else:
-            # TuShare catalog 接口失败(token 无效 / 代理坏 / 网络)· 落 EM 路径
+            # TuShare catalog 接口失败 · 透传 server error · 落 EM 路径
             diagnosis.tushare_failed_at = "catalog"
+            if catalog_err is not None:
+                diagnosis.tushare_error_code = catalog_err.code
+                diagnosis.tushare_error_msg = catalog_err.msg
 
     catalog = load_theme_catalog(force=False)  # catalog 单独走 24h cache · 不并行
     if not catalog:
@@ -246,12 +257,13 @@ def _load_via_tushare(
     candle: bool,
     progress_console: Console | None,
     tushare_load_klines,
-) -> tuple[list[TrendResult], list[tuple[Theme, Exception]]] | None:
-    """TuShare 路径编排 · 1 次 batch 拿所有题材 60 天 K 线 + 逐题材 calc_trend。
+):
+    """TuShare 路径编排 · 1 次 batch 拿所有题材 35 天 K 线 + 逐题材 calc_trend。
 
     Returns:
-        (results, errors) 同 load_theme_leaderboard 主签名
-        None 表示 TuShare 不可用(batch 失败 / 0 结果)· caller fallback EM 路径
+        (results, errors, klines_error):
+          - 成功:  (list[TrendResult], list[(Theme, Exception)], None)
+          - 失败:  ([], [], TushareApiError) · klines_error 透传给 caller diagnosis
 
     progress_console 在 TuShare 路径下表现为单 task bar(N 个交易日 HTTP loop) ·
     比 EM 路径(391 题材并行)语义不同 · 但同样能让用户看到进度。
@@ -266,19 +278,20 @@ def _load_via_tushare(
             console=progress_console,
             transient=True,
         )
-        progress.add_task("正在拉取 (~60 个交易日 batch)...", total=None)
+        progress.add_task("正在拉取 (~35 个交易日 batch)...", total=None)
         progress.start()
     else:
         progress = None
 
     try:
-        klines_by_code = tushare_load_klines(catalog)
+        klines_by_code, klines_err = tushare_load_klines(catalog)
     finally:
         if progress is not None:
             progress.stop()
 
     if not klines_by_code:
-        return None
+        # ths_daily 全 N 天失败 · 透传 first error 给 caller (frequency/credit/token 区分)
+        return [], [], klines_err
 
     results: list[TrendResult] = []
     errors: list[tuple[Theme, Exception]] = []
@@ -292,4 +305,4 @@ def _load_via_tushare(
         except Exception as e:
             errors.append((theme, e))
 
-    return results, errors
+    return results, errors, None

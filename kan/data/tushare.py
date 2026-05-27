@@ -10,13 +10,14 @@ from __future__ import annotations
 
 import os
 import re
+from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
 import requests
 from requests.adapters import HTTPAdapter
 from urllib3.util.retry import Retry
 
-from kan.infra.log import debug_log
+from kan.infra.log import debug_log, redact_text
 
 if TYPE_CHECKING:
     import pandas as pd
@@ -26,6 +27,29 @@ _SYMBOL_PATTERN = re.compile(r"^\d{6}$")
 DEFAULT_ENDPOINT = "https://api.tushare.pro"
 
 _TIMEOUT_SECONDS = 30
+
+
+@dataclass(frozen=True)
+class TushareApiError:
+    """TuShare API 失败的结构化错误 · 让上层 caller(diagnosis 渲染)能拿到真实 server msg。
+
+    Fields:
+      code:     TuShare 业务码 (40101 token 不对 / 40203 频率超限 / 40004 积分不足 /
+                负数 = 客户端层失败: -1 网络 · -2 HTTP 非 2xx · -3 response 非 JSON)
+      msg:      sanitized server msg (经 redact_text 处理 · token-like pattern → ***)·
+                直接给用户看是安全的
+      api_name: 失败的接口名 (e.g. 'ths_daily' · 'daily' · 'ths_index')·
+                让 diagnosis 渲染能精确说明"哪个接口挂了"
+
+    设计 trade-off:
+    - 老版本 _post_tushare_api 失败时 return None · 把 server msg 吞进 debug_log
+    - 用户看不到具体 code (积分/频率/token 三类问题 UI 全长一样)
+    - 新版本 return (data, error) tuple · caller 可选择性透传给用户
+    """
+
+    code: int
+    msg: str
+    api_name: str
 
 
 def _make_session() -> requests.Session:
@@ -129,15 +153,21 @@ def _post_tushare_api(
     api_name: str,
     params: dict,
     fields: str,
-) -> dict | None:
-    """POST JSON 到 TuShare Pro API · 返回 data 块或 None。
+) -> tuple[dict | None, TushareApiError | None]:
+    """POST JSON 到 TuShare Pro API · 返回 (data, error) tuple。
 
-    错误兜底（一律返回 None，由调用方 fallback）：
-    - 网络异常 / DNS / 超时
-    - HTTP 非 2xx
-    - 业务 code != 0（token 无效、积分不足、限流）
+    成功:   (data_dict, None)
+    失败:   (None, TushareApiError) · caller 可选择透传给用户(diagnosis 渲染)
 
-    关键不变量：token 永不进入 logs / exceptions。
+    失败分类(都填 TushareApiError):
+    - code=-1: 网络异常 / DNS / 超时
+    - code=-2: HTTP 非 2xx
+    - code=-3: response 非 JSON
+    - code>0:  TuShare 业务码 (40101 token 不对 / 40203 频率超限 / 40004 积分不足 ...)
+
+    关键不变量:
+    - token 永不进入 logs / exceptions / 返回的 error.msg
+    - error.msg 已经过 redact_text 处理(防 server msg 偶尔含 token 字符串)
     """
     payload = {
         "api_name": api_name,
@@ -148,30 +178,40 @@ def _post_tushare_api(
     try:
         resp = _get_session().post(endpoint, json=payload, timeout=_TIMEOUT_SECONDS)
     except Exception as e:
-        # 传真 Exception · log.py 的 _redact 会兜底处理 path / token 模式
+        # 传真 Exception · log.py 的 redact_text 会兜底处理 path / token 模式
         debug_log(__name__, "tushare POST 失败", e)
-        return None
+        return None, TushareApiError(
+            code=-1, msg=f"网络/连接错误: {type(e).__name__}", api_name=api_name,
+        )
     if resp.status_code != 200:
         debug_log(
             __name__,
             f"tushare HTTP {resp.status_code}",
             RuntimeError(f"endpoint={endpoint}"),
         )
-        return None
+        return None, TushareApiError(
+            code=-2, msg=f"HTTP {resp.status_code} (非 2xx)", api_name=api_name,
+        )
     try:
         body = resp.json()
     except ValueError:
-        return None
-    if body.get("code", -1) != 0:
-        # 不把 server msg 传日志 · TuShare 错误消息常含 token 字符串("token xxx invalid")
-        # 只记 code 数字 · log.py REDACT 还会兜底处理 body 文本里的 token 模式
+        return None, TushareApiError(
+            code=-3, msg="response 非 JSON (代理转发错? endpoint URL 错?)", api_name=api_name,
+        )
+    biz_code = body.get("code", -1)
+    if biz_code != 0:
+        raw_msg = str(body.get("msg") or "(server msg 为空)")
+        # redact 防 server msg 偶尔含 token 字符串("您的 token xxx 失效" 模式)
+        sanitized_msg = redact_text(raw_msg)
         debug_log(
             __name__,
-            f"tushare api non-zero code={body.get('code', '?')}",
+            f"tushare api code={biz_code} msg={sanitized_msg}",
             RuntimeError("api refused"),
         )
-        return None
-    return body.get("data")
+        return None, TushareApiError(
+            code=biz_code, msg=sanitized_msg, api_name=api_name,
+        )
+    return body.get("data"), None
 
 
 def _to_kline_df(data: dict | None) -> pd.DataFrame | None:
@@ -215,13 +255,15 @@ def _fetch_tushare(symbol: str, start: str) -> pd.DataFrame | None:
         return None
 
     try:
-        data = _post_tushare_api(
+        data, _err = _post_tushare_api(
             endpoint=endpoint,
             token=token,
             api_name="daily",
             params={"ts_code": ts_code, "start_date": start},
             fields="trade_date,open,high,low,close,vol,amount",
         )
+        # 个股 daily 走多源 fallback chain (TuShare → baostock → akshare → 腾讯)
+        # · error 已被 _post_tushare_api 写进 debug_log · 不上抛 caller
         if data is None:
             cb.record("tushare", ok=False)
             return None
