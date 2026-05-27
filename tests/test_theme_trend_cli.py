@@ -34,8 +34,10 @@ def _isolate(tmp_path, monkeypatch):
     return tmp_path
 
 
-def _stub_leaderboard(monkeypatch, results=None, errors=None, source="em"):
-    """stub load_theme_leaderboard · 直接返回预制 (results, errors, source)。"""
+def _stub_leaderboard(monkeypatch, results=None, errors=None, source="em", diagnosis=None):
+    """stub load_theme_leaderboard · 直接返回预制 (results, errors, source, diagnosis)。"""
+    from kan.data.theme_leaderboard import LeaderboardDiagnosis
+
     if results is None:
         results = [
             TrendResult("886108", "AI应用", 1245.3, 7, 12.5, [
@@ -53,9 +55,14 @@ def _stub_leaderboard(monkeypatch, results=None, errors=None, source="em"):
         ]
     if errors is None:
         errors = []
+    if diagnosis is None:
+        diagnosis = LeaderboardDiagnosis(
+            em_attempted=True, em_total=len(results) + len(errors),
+            em_failed_count=len(errors),
+        )
     monkeypatch.setattr(
         "kan.data.theme_leaderboard.load_theme_leaderboard",
-        lambda **kw: (results, errors, source),
+        lambda **kw: (results, errors, source, diagnosis),
     )
 
 
@@ -234,3 +241,91 @@ def test_trend_partial_errors_shown(monkeypatch):
     result = runner.invoke(app, ["theme", "trend", "--limit", "2"])
     assert result.exit_code == 0
     assert "2 题材数据不可用" in result.output
+
+
+def test_trend_failure_diagnosis_with_tushare(monkeypatch):
+    """v0.0.6.5 加: 配了 token + tushare 失败 + EM 全失败 → 错误消息暴露 tushare 链路。
+
+    回归防御: 防止失败消息回退到 "可能是网络问题" 这种黑屏诊断。
+    用户配 token 走付费源的努力必须在错误消息中可见。
+    """
+    from kan.data.theme_leaderboard import LeaderboardDiagnosis
+
+    diagnosis = LeaderboardDiagnosis(
+        tushare_attempted=True,
+        tushare_failed_at="catalog",
+        tushare_endpoint="http://lianghua.example.top",
+        tushare_token_masked="***3c7d",
+        em_attempted=True, em_total=391, em_failed_count=391,
+    )
+    errors = [
+        (Theme(code=f"88{i:04d}", name=f"T{i}", source="ths"), Exception("net"))
+        for i in range(391)
+    ]
+    _stub_leaderboard(monkeypatch, results=[], errors=errors, diagnosis=diagnosis)
+    runner = CliRunner()
+    result = runner.invoke(app, ["theme", "trend"])
+    assert result.exit_code == 1
+    # 失败消息必须暴露 TuShare 状态(包含 endpoint + masked token)
+    assert "TuShare Pro" in result.output
+    assert "***3c7d" in result.output
+    assert "lianghua.example.top" in result.output
+    assert "catalog 拉取失败" in result.output
+    # 失败消息必须暴露 EM 兜底状态
+    assert "391/391" in result.output
+    # 失败消息必须给 actionable 修复建议
+    assert "kan config set tushare-endpoint" in result.output
+    assert "kan config unset tushare-token" in result.output
+
+
+def test_trend_failure_diagnosis_official_endpoint_klines_fail(monkeypatch):
+    """官方 endpoint + catalog 通 + klines 挂 (典型积分不够 case) → 推积分检查 URL · 不推切端点(已经是官方)。"""
+    from kan.data.theme_leaderboard import LeaderboardDiagnosis
+    from kan.data.tushare import DEFAULT_ENDPOINT
+
+    diagnosis = LeaderboardDiagnosis(
+        tushare_attempted=True,
+        tushare_failed_at="klines",  # catalog 通 · ths_daily 挂
+        tushare_endpoint=DEFAULT_ENDPOINT,  # 已经是官方
+        tushare_token_masked="***6d78",
+        em_attempted=True, em_total=391, em_failed_count=391,
+    )
+    errors = [
+        (Theme(code=f"88{i:04d}", name=f"T{i}", source="ths"), Exception("net"))
+        for i in range(391)
+    ]
+    _stub_leaderboard(monkeypatch, results=[], errors=errors, diagnosis=diagnosis)
+    runner = CliRunner()
+    result = runner.invoke(app, ["theme", "trend"])
+    assert result.exit_code == 1
+    # 已经在官方 endpoint · 不该再推荐切回官方
+    assert "切回官方端点" not in result.output
+    # 应该推荐查积分(klines 失败的典型原因)
+    assert "积分" in result.output
+    assert "tushare.pro/user/token" in result.output
+    # 关闭走 EM 仍是有效建议
+    assert "kan config unset tushare-token" in result.output
+
+
+def test_trend_failure_diagnosis_without_tushare(monkeypatch):
+    """没配 token + EM 全失败 → 错误消息提示 TuShare 未尝试 + 推荐配 token。"""
+    from kan.data.theme_leaderboard import LeaderboardDiagnosis
+
+    diagnosis = LeaderboardDiagnosis(
+        tushare_attempted=False,
+        em_attempted=True, em_total=391, em_failed_count=391,
+    )
+    errors = [
+        (Theme(code=f"88{i:04d}", name=f"T{i}", source="ths"), Exception("net"))
+        for i in range(391)
+    ]
+    _stub_leaderboard(monkeypatch, results=[], errors=errors, diagnosis=diagnosis)
+    runner = CliRunner()
+    result = runner.invoke(app, ["theme", "trend"])
+    assert result.exit_code == 1
+    # 没配 token → 提示未尝试
+    assert "未尝试" in result.output
+    # 推荐配 TuShare 走付费源
+    assert "kan config set tushare-token" in result.output
+    # token 没配时不应推荐 unset(那是配了的场景)
+    assert "kan config unset" not in result.output

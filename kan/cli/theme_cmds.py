@@ -32,6 +32,58 @@ _DEFAULT_LIST_TOP = 30
 _DEFAULT_TREND_LIMIT = 30  # 跟 list 默认值对齐 · 散户单屏可读
 
 
+def _render_failure_diagnosis(diagnosis) -> list[str]:
+    """把 LeaderboardDiagnosis 展开成多行用户可读的失败消息(每行一条)。
+
+    背景: v0.0.6.5 之前失败消息只有 "391 题材失败 · 可能是网络问题",
+    完全屏蔽了多源 fallback 链路状态(TuShare 试没试 / 哪一步挂)。
+    高级用户(配了 TuShare token)的诊断价值被吃掉。本函数按 diagnosis 状态
+    展开"链路诊断 + 可能修复"两段,给用户 actionable 信息。
+    """
+    lines: list[str] = ["❌ 题材榜无数据 · 所有数据源失败", ""]
+    lines.append("数据源链路:")
+
+    if diagnosis.tushare_attempted:
+        token_label = diagnosis.tushare_token_masked or "***"
+        lines.append(f"  ① TuShare Pro (你配了 token {token_label}):")
+        lines.append(f"     endpoint: {diagnosis.tushare_endpoint or '(未知)'}")
+        if diagnosis.tushare_failed_at == "catalog":
+            lines.append("     结果:     ❌ catalog 拉取失败 (代理 / 网络 / token 任一)")
+        elif diagnosis.tushare_failed_at == "klines":
+            lines.append("     结果:     ❌ K 线 batch 拉取失败 (catalog 通了但 ths_daily 挂)")
+        else:
+            lines.append("     结果:     ⚠️  状态未知")
+    else:
+        lines.append("  ① TuShare Pro: 未尝试 (没配 token · 跳过)")
+
+    if diagnosis.em_attempted:
+        lines.append("  ② adata EM (兜底):")
+        lines.append(
+            f"     结果:     ❌ {diagnosis.em_failed_count}/{diagnosis.em_total} "
+            "题材失败 (datacenter 不稳定 · 已知问题)"
+        )
+    else:
+        lines.append("  ② adata EM (兜底): 未尝试")
+
+    lines.append("")
+    lines.append("可能修复:")
+    if diagnosis.tushare_attempted and diagnosis.tushare_failed_at:
+        from kan.data.tushare import DEFAULT_ENDPOINT
+
+        # 用自部署代理 → 推荐切官方;已用官方 → 这条建议无意义,改推积分检查
+        if diagnosis.tushare_endpoint and diagnosis.tushare_endpoint != DEFAULT_ENDPOINT:
+            lines.append(f"  · 切回官方端点:    kan config set tushare-endpoint {DEFAULT_ENDPOINT}")
+        elif diagnosis.tushare_failed_at == "klines":
+            # 官方 endpoint + catalog 通 + klines 挂 = 极大概率积分不够 (ths_daily 需 2000+)
+            lines.append("  · 检查 TuShare 积分: https://tushare.pro/user/token (ths_daily 需 2000+ 积分)")
+        lines.append("  · 关闭 TuShare 走 EM: kan config unset tushare-token")
+    elif not diagnosis.tushare_attempted:
+        lines.append("  · 配 TuShare 走付费源: kan config set tushare-token <你的_token>")
+    lines.append("  · 5-10 分钟后重试 (EM datacenter 通常自愈)")
+
+    return lines
+
+
 def _pinyin_key(name: str) -> str:
     """简易拼音首字母键 · 仅做排序用 · 中英混排兼容。
 
@@ -186,7 +238,7 @@ def trend_cmd(
     progress_console = status_console if fmt is export.OutputFormat.terminal else None
 
     try:
-        all_results, errors, source = load_theme_leaderboard(
+        all_results, errors, source, diagnosis = load_theme_leaderboard(
             candle=candle,
             force=force,
             progress_console=progress_console,
@@ -196,9 +248,8 @@ def trend_cmd(
         raise typer.Exit(1) from None
 
     if not all_results:
-        _print_err(
-            f"❌ 题材榜无数据 · {len(errors)} 题材失败 · 可能是网络问题 · 重试或 --force"
-        )
+        for line in _render_failure_diagnosis(diagnosis):
+            _print_err(line)
         raise typer.Exit(1)
 
     sorted_results = sort_leaderboard(

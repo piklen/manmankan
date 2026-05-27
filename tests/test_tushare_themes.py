@@ -228,7 +228,7 @@ def test_leaderboard_dispatches_to_em_when_no_token(monkeypatch):
 
     monkeypatch.setattr(theme_leaderboard, "fetch_theme_kline", _fake_kline)
 
-    results, _, source = theme_leaderboard.load_theme_leaderboard(progress_console=None)
+    results, _, source, _diag = theme_leaderboard.load_theme_leaderboard(progress_console=None)
 
     assert source == "em"
     assert len(results) == 1
@@ -267,7 +267,7 @@ def test_leaderboard_dispatches_to_tushare_when_token_configured(monkeypatch):
     # EM 路径不应被调用 · 设置为 raise 防默触发
     monkeypatch.setattr(theme_leaderboard, "load_theme_catalog", lambda force=False: (_ for _ in ()).throw(AssertionError("EM 不应被调")))
 
-    results, _, source = theme_leaderboard.load_theme_leaderboard(progress_console=None)
+    results, _, source, _diag = theme_leaderboard.load_theme_leaderboard(progress_console=None)
 
     assert source == "tushare"
     assert len(results) == 1
@@ -307,7 +307,7 @@ def test_leaderboard_fallback_em_when_tushare_returns_none(monkeypatch):
         }),
     )
 
-    results, _, source = theme_leaderboard.load_theme_leaderboard(progress_console=None)
+    results, _, source, _diag = theme_leaderboard.load_theme_leaderboard(progress_console=None)
 
     assert source == "em"  # fallback 生效
     assert len(results) == 1

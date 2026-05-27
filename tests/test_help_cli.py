@@ -110,8 +110,10 @@ def test_subcommand_help_unaffected() -> None:
         ("scan", ["--help"], False, True, False),
         # case 4: KAN_NO_BOOT_BANNER=1 env → 不写
         ("scan", [], True, True, False),
+        # case 5: theme 子命令组 + TTY → 应写 (v0.0.6.5 补 · 防 banner 漏 theme 子命令组的 cold-start 黑屏回归)
+        ("theme", [], False, True, True),
     ],
-    ids=["whitelist+tty", "non-whitelist", "with-help", "env-suppressed"],
+    ids=["whitelist+tty", "non-whitelist", "with-help", "env-suppressed", "theme-whitelisted"],
 )
 def test_maybe_print_boot_banner(
     command: str,
