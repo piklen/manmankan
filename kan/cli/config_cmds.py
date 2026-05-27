@@ -151,9 +151,36 @@ def set_cmd(
 
 @config_app.command("unset")
 def unset_cmd(
-    key: str = typer.Argument(..., help="配置项名（tushare-token / tushare-endpoint）"),
+    key: str | None = typer.Argument(
+        None,
+        help="配置项名（tushare-token / tushare-endpoint）· 不传时列当前已配字段引导",
+    ),
 ) -> None:
-    """清除一项配置（回 null = 用默认值）。"""
+    """清除一项配置（回 null = 用默认值）。
+
+    不传 KEY 时不报错 · 改为列当前已配字段 + 用法引导(v0.0.6.5 加 ·
+    替代 typer 默认 'Missing argument' 黑屏 · 维护者实测痛点)。
+    """
+    cfg = config.load()
+
+    if key is None:
+        # 不传 KEY · 显示可视化引导 + 当前已配字段(可直接 copy 命令)
+        set_keys = [
+            cli_key for cli_key, internal_key in _KEY_MAP.items()
+            if cfg.get(internal_key) is not None
+        ]
+        typer.echo("用法: kan config unset <key>")
+        typer.echo("")
+        typer.echo(f"支持的字段: {' / '.join(_KEY_MAP)}")
+        typer.echo("")
+        if set_keys:
+            typer.echo("当前已配字段(可直接复制 unset 命令):")
+            for k in set_keys:
+                typer.echo(f"  kan config unset {k}")
+        else:
+            typer.echo("当前没有任何字段被配置 · 无需 unset")
+        return  # exit 0 · 用户在浏览选项不是错误
+
     if key not in _KEY_MAP:
         typer.echo(
             f"❌ 未知配置项: {key}\n支持的字段: {', '.join(_KEY_MAP)}",
@@ -161,7 +188,6 @@ def unset_cmd(
         raise typer.Exit(code=2)
 
     internal_key = _KEY_MAP[key]
-    cfg = config.load()
     if cfg.get(internal_key) is None:
         typer.echo(f"ℹ️  {internal_key} 已是默认值，无需清除")
         return

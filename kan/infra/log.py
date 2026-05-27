@@ -61,8 +61,16 @@ _REDACT_PATTERNS = [
 ]
 
 
-def _redact(text: str) -> str:
-    """对 debug log 文本做 best-effort path/token redact."""
+def redact_text(text: str) -> str:
+    """对任何用户可见文本做 best-effort path/token redact (public · 跨模块可用)。
+
+    用例:
+    - debug_log 内部 sanitize 异常文本(原有用法)
+    - tushare server msg 透传给用户前 sanitize (v0.0.6.5 后 · _post_tushare_api)
+    - 任何要打印给用户的含 PII 文本
+
+    覆盖: home dir / URL token 参数 / Windows path / body 文本里裸 token
+    """
     for pattern, replacement in _REDACT_PATTERNS:
         text = pattern.sub(replacement, text)
     return text
@@ -88,7 +96,7 @@ def debug_log(module: str, op: str, err: BaseException) -> None:
     用户开 KAN_DEBUG=1 后 stderr 显示:
         DEBUG:kan.data.fetcher:fetch eastmoney: ConnectionError: HTTPSConnectionPool ...
 
-    v0.0.4.8 finalize · str(err) 经 _redact 处理:
+    v0.0.4.8 finalize · str(err) 经 redact_text 处理:
         - /Users/<真名> → /Users/<user>
         - token=xxx → token=<redacted>
     截图发 issue 时 best-effort 防 PII leak · 但**不保证 100% 覆盖** (e.g. IP / 内部 hostname 未 redact)
@@ -96,5 +104,5 @@ def debug_log(module: str, op: str, err: BaseException) -> None:
     """
     if _debug_enabled():
         _ensure_kan_handler()
-        msg = _redact(f"{op}: {type(err).__name__}: {err}")
+        msg = redact_text(f"{op}: {type(err).__name__}: {err}")
         logging.getLogger(module).debug("%s", msg)

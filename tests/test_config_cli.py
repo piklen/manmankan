@@ -50,3 +50,49 @@ def test_mask_token_never_returns_raw():
     assert mask_token("abc") == "***"
     assert mask_token(None) == "***"
     assert mask_token("") == "***"
+
+
+def test_config_unset_no_arg_shows_set_keys(monkeypatch, capsys):
+    """v0.0.6.5: kan config unset 不传 KEY 不报错 · 列当前已配字段 + 引导。
+
+    回归防御: 防文案回退到 typer 默认 'Missing argument' 黑屏(维护者实测痛点)。
+    """
+    from typer.testing import CliRunner
+
+    from kan.cli import app
+    from kan.storage import config
+
+    # mock load() 返回有配置 token + endpoint 的状态
+    monkeypatch.setattr(
+        config, "load",
+        lambda: {"tushare_token": "abcd1234", "tushare_endpoint": "http://example.com"},
+    )
+
+    runner = CliRunner()
+    result = runner.invoke(app, ["config", "unset"])
+    assert result.exit_code == 0  # 不传 KEY 不算 error
+    assert "用法: kan config unset" in result.output
+    assert "支持的字段" in result.output
+    assert "tushare-token" in result.output
+    assert "tushare-endpoint" in result.output
+    # 当前已配字段两个 · 都列出来
+    assert "kan config unset tushare-token" in result.output
+    assert "kan config unset tushare-endpoint" in result.output
+
+
+def test_config_unset_no_arg_no_keys_set(monkeypatch):
+    """没任何字段被配置时 unset 无参 → 提示 '无需 unset' · 仍 exit 0。"""
+    from typer.testing import CliRunner
+
+    from kan.cli import app
+    from kan.storage import config
+
+    monkeypatch.setattr(
+        config, "load",
+        lambda: {"tushare_token": None, "tushare_endpoint": None},
+    )
+
+    runner = CliRunner()
+    result = runner.invoke(app, ["config", "unset"])
+    assert result.exit_code == 0
+    assert "无需 unset" in result.output
