@@ -28,6 +28,7 @@ from __future__ import annotations
 
 import concurrent.futures
 import os
+from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
 from kan.core.scanner import TrendResult, calc_trend
@@ -41,6 +42,33 @@ if TYPE_CHECKING:
     from rich.console import Console
 
     from kan.core.models import Theme
+
+
+@dataclass
+class LeaderboardDiagnosis:
+    """题材榜数据源链路诊断 · 失败时驱动可解释错误消息。
+
+    每条 fallback 路径都填一个状态字段 · caller 渲染多行错误消息时按需展开。
+    成功路径下 caller 通常忽略(source 字符串已够)· 失败路径下用字段值组装诊断。
+
+    Fields:
+      tushare_attempted:  token 配了 → True · 没配 → False
+      tushare_failed_at:  'catalog'=ths_index 失败 · 'klines'=ths_daily 失败 ·
+                          None=没尝试 / 成功
+      tushare_endpoint:   实际用的端点(env > config > DEFAULT)· 仅 attempted 时填
+      tushare_token_masked: ***xxxx 形式 · 永不存原 token
+      em_attempted:       走 EM 路径 → True (token 未配 或 TuShare 失败 fallback)
+      em_total:           EM catalog 拿到的题材数(分母)
+      em_failed_count:    EM 并行 fetch 失败的题材数(分子)
+    """
+
+    tushare_attempted: bool = False
+    tushare_failed_at: str | None = None
+    tushare_endpoint: str | None = None
+    tushare_token_masked: str | None = None
+    em_attempted: bool = False
+    em_total: int = 0
+    em_failed_count: int = 0
 
 
 def _resolve_parallel(parallel: int | None) -> int:
@@ -63,8 +91,13 @@ def load_theme_leaderboard(
     force: bool = False,
     parallel: int | None = None,
     progress_console: Console | None = None,
-) -> tuple[list[TrendResult], list[tuple[Theme, Exception]], str]:
-    """拉所有题材 K 线 + 算 streak · 返回 (TrendResult 列表, 失败题材列表, 实际数据源)。
+) -> tuple[
+    list[TrendResult],
+    list[tuple[Theme, Exception]],
+    str,
+    LeaderboardDiagnosis,
+]:
+    """拉所有题材 K 线 + 算 streak · 返回 (results, errors, source, diagnosis)。
 
     数据源选择(运行时):
     - TuShare token 配置 + ths_daily batch 通 → 走 TuShare 路径(快 · 稳定 · source='tushare')
@@ -79,22 +112,32 @@ def load_theme_leaderboard(
                           None 时静默(测试 / `--format json` pipe 场景)。
 
     Returns:
-        (results, errors, source)
+        (results, errors, source, diagnosis)
         - results: TrendResult 列表 · 未排序(caller 决定 sort key)
         - errors: [(Theme, Exception), ...] · 单题材失败不阻塞 · 不抛
         - source: 'tushare' 或 'em' · 给 caller 的 disclaimer / 标题用
+        - diagnosis: LeaderboardDiagnosis · 数据源链路状态 · 失败时驱动可解释错误消息
 
     Raises:
         ThemeDataUnavailableError: catalog 拉取失败(题材清单都没拿到 · 无法继续)。
     """
+    from kan.data.tushare import _resolve_config
     from kan.data.tushare_themes import (
         tushare_load_theme_catalog,
         tushare_load_theme_klines,
         tushare_token_configured,
     )
+    from kan.storage.config import mask_token
+
+    diagnosis = LeaderboardDiagnosis()
 
     # 优先尝试 TuShare 路径(配 token 时)
     if tushare_token_configured():
+        diagnosis.tushare_attempted = True
+        token, endpoint = _resolve_config()
+        diagnosis.tushare_endpoint = endpoint
+        diagnosis.tushare_token_masked = mask_token(token)
+
         ts_catalog = tushare_load_theme_catalog()
         if ts_catalog:
             ts_results = _load_via_tushare(
@@ -103,12 +146,19 @@ def load_theme_leaderboard(
             )
             if ts_results is not None:
                 results, errors = ts_results
-                return results, errors, "tushare"
-        # token 配了但 TuShare 接口挂 · 落 EM 路径(双重保险)
+                return results, errors, "tushare", diagnosis
+            # TuShare klines 接口失败 · 标记后落 EM 路径(双重保险)
+            diagnosis.tushare_failed_at = "klines"
+        else:
+            # TuShare catalog 接口失败(token 无效 / 代理坏 / 网络)· 落 EM 路径
+            diagnosis.tushare_failed_at = "catalog"
 
     catalog = load_theme_catalog(force=False)  # catalog 单独走 24h cache · 不并行
     if not catalog:
         raise ThemeDataUnavailableError("题材清单为空 · 无法生成榜单")
+
+    diagnosis.em_attempted = True
+    diagnosis.em_total = len(catalog)
 
     workers = _resolve_parallel(parallel)
     results: list[TrendResult] = []
@@ -163,7 +213,8 @@ def load_theme_leaderboard(
         if progress is not None:
             progress.stop()
 
-    return results, errors, "em"
+    diagnosis.em_failed_count = len(errors)
+    return results, errors, "em", diagnosis
 
 
 def sort_leaderboard(
