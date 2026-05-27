@@ -155,7 +155,7 @@ def test_load_leaderboard_all_success(monkeypatch):
         lambda theme, force=False: _make_kline_df(streak_dir=1),
     )
 
-    results, errors, source = theme_leaderboard.load_theme_leaderboard(progress_console=None)
+    results, errors, source, _diag = theme_leaderboard.load_theme_leaderboard(progress_console=None)
     assert source == "em"  # 没配 TuShare token · 走 adata EM 路径
 
     assert len(results) == 3
@@ -178,7 +178,7 @@ def test_load_leaderboard_partial_failure(monkeypatch):
 
     monkeypatch.setattr(theme_leaderboard, "fetch_theme_kline", _fake_fetch)
 
-    results, errors, source = theme_leaderboard.load_theme_leaderboard(progress_console=None)
+    results, errors, source, _diag = theme_leaderboard.load_theme_leaderboard(progress_console=None)
     assert source == "em"  # 没配 TuShare token · 走 adata EM 路径
 
     # 5 题材中 3 个 code 末位 0/2/4 · 2 个 1/3 挂
@@ -201,7 +201,7 @@ def test_load_leaderboard_empty_kline_records_error(monkeypatch):
         lambda theme, force=False: pd.DataFrame(),  # 空 DataFrame
     )
 
-    results, errors, source = theme_leaderboard.load_theme_leaderboard(progress_console=None)
+    results, errors, source, _diag = theme_leaderboard.load_theme_leaderboard(progress_console=None)
     assert source == "em"  # 没配 TuShare token · 走 adata EM 路径
 
     assert results == []
@@ -235,7 +235,7 @@ def test_load_leaderboard_candle_passes_through(monkeypatch):
         lambda theme, force=False: _make_kline_df(),
     )
 
-    results, _, _ = theme_leaderboard.load_theme_leaderboard(
+    results, _, _, _ = theme_leaderboard.load_theme_leaderboard(
         candle=True, progress_console=None,
     )
 

@@ -67,3 +67,13 @@ def load() -> dict[str, Any]:
 def save(config: dict[str, Any]) -> None:
     """原子写入 · 自动 mkdir · 防半截写入。"""
     _atomic_write_json(CONFIG_PATH, config)
+
+
+def mask_token(token: str | None) -> str:
+    """末 4 位显形 · 前面 *** · 少于 4 位 / None / 空串全返 '***'。
+
+    所有 token 出 CLI / 日志 / 错误消息一律走此函数 · 永不直传原 token。
+    """
+    if not token or len(token) < 4:
+        return "***"
+    return f"***{token[-4:]}"

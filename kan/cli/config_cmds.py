@@ -16,6 +16,7 @@ import typer
 from kan.app import app
 from kan.data.tushare import DEFAULT_ENDPOINT
 from kan.storage import config
+from kan.storage.config import mask_token
 
 config_app = typer.Typer(
     name="config",
@@ -31,13 +32,6 @@ _KEY_MAP = {
 }
 
 
-def _mask_token(token: str) -> str:
-    """末 4 位显形，前面 ***；少于 4 位全 mask。"""
-    if not token or len(token) < 4:
-        return "***"
-    return f"***{token[-4:]}"
-
-
 def _print_token(cfg: dict, *, raw: bool = False) -> None:
     env_tok = os.environ.get("TUSHARE_TOKEN")
     cfg_tok = cfg.get("tushare_token")
@@ -48,7 +42,7 @@ def _print_token(cfg: dict, *, raw: bool = False) -> None:
             # 单 key 查 · 给原值 · 适合 token=$(kan config get tushare-token) 脚本场景
             typer.echo(cleaned)
             return
-        masked = _mask_token(cleaned)
+        masked = mask_token(cleaned)
         if env_tok:
             typer.echo(
                 f"tushare_token: {masked}   "
@@ -80,7 +74,12 @@ def _print_endpoint(cfg: dict, *, raw: bool = False) -> None:
     elif cfg_ep:
         typer.echo(f"tushare_endpoint: {cfg_ep}   (set via config)")
     else:
-        typer.echo(f"tushare_endpoint: {DEFAULT_ENDPOINT} (默认)")
+        # 默认状态也给 set 引导 · 对齐 _print_token 风格 ·
+        # 自部署代理 / 内网镜像用户必须知道用 dash 不是 underscore (key 命名约定)
+        typer.echo(
+            f"tushare_endpoint: {DEFAULT_ENDPOINT} (默认 · "
+            f"自部署代理用 `kan config set tushare-endpoint <url>` 切换)"
+        )
 
 
 @config_app.command("get")
@@ -145,7 +144,7 @@ def set_cmd(
     config.save(cfg)
 
     if internal_key == "tushare_token":
-        typer.echo(f"✅ 已保存 tushare_token ({_mask_token(cleaned)}) 到 ~/.local/share/kan/config.json")
+        typer.echo(f"✅ 已保存 tushare_token ({mask_token(cleaned)}) 到 ~/.local/share/kan/config.json")
     else:
         typer.echo(f"✅ 已保存 {internal_key}={cleaned} 到 ~/.local/share/kan/config.json")
 
