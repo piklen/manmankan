@@ -1,0 +1,62 @@
+# NOTICE
+
+This NOTICE accompanies LICENSE (Parity Public License 7.0.0) and provides:
+
+1. A non-binding **License Intent** statement clarifying intent for users.
+2. A legally binding **Attribution Rider** that supplements LICENSE.
+
+By distributing or using this software, you accept both LICENSE and this
+NOTICE as a unified agreement.
+
+---
+
+## License Intent (informative, not legally binding)
+
+manmankan is distributed under Parity Public License 7.0.0.
+
+- **Non-commercial use** — including personal, academic, evaluation, and
+  non-profit purposes — is granted free of charge under the LICENSE.
+  Derivative works must be published under the same license. See LICENSE.
+
+- **Commercial use** — including selling products, providing paid services
+  (consulting, SaaS, hosted service), or embedding manmankan into a
+  commercial product or service — requires prior written authorization
+  from the contributor.
+
+To inquire about commercial licensing, open an issue at
+https://github.com/piklen/manmankan/issues with the subject prefix
+`[commercial-license]`.
+
+---
+
+## Attribution Rider (legally binding, in addition to LICENSE)
+
+Any derivative work or redistribution of this software, in source or binary
+form, with or without modifications, MUST satisfy all of the following:
+
+1. **Retain all copyright notices.** Copyright notices in source files and
+   the LICENSE file must be retained verbatim. Removing or altering these
+   notices is not permitted.
+
+2. **Include a prominent attribution.** The derivative's primary README
+   (and equivalent project landing page, if any) must include the following
+   attribution within the first visible section:
+
+       Based on manmankan (https://github.com/piklen/manmankan)
+
+   In HTML-rendered versions, the project URL must be a clickable link.
+
+3. **Preserve compliance disclaimers.** Compliance and risk-disclosure
+   statements in `docs/compliance.md` and any in-product disclaimers must
+   not be removed or weakened. Derivatives may extend disclaimers but may
+   not delete or contradict them.
+
+4. **Do not imply endorsement.** Derivative works must not represent
+   themselves as endorsed by manmankan or its contributor, unless prior
+   written authorization is obtained.
+
+---
+
+Contributor: piklen
+
+Source Code: https://github.com/piklen/manmankan

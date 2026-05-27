@@ -15,6 +15,7 @@ from kan.cli import (
     config_cmds,
     extreme_cmds,
     fetch_cmds,
+    find_cmds,
     group_cmds,
     help,
     helpers,
