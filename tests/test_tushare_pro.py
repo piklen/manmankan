@@ -123,7 +123,7 @@ class TestPostTushareApi:
 
         monkeypatch.setattr(tushare, "_get_session", lambda: _FakeSession())
 
-        result = tushare._post_tushare_api(
+        data, err = tushare._post_tushare_api(
             endpoint="http://api.tushare.pro",
             token="tk_test",
             api_name="daily",
@@ -137,34 +137,73 @@ class TestPostTushareApi:
         assert captured["json"]["params"]["ts_code"] == "600519.SH"
         assert captured["json"]["fields"] == "trade_date,open,high,low,close,vol,amount"
         assert captured["timeout"] == 30
-        assert result == self.SAMPLE_RESPONSE["data"]
+        assert data == self.SAMPLE_RESPONSE["data"]
+        assert err is None
 
-    def test_nonzero_code_returns_none(self, monkeypatch):
-        def fake_post(url, json, timeout):
-            mock = MagicMock()
-            mock.status_code = 200
-            mock.json.return_value = {"code": 40001, "msg": "token 无效", "data": None}
-            return mock
-        monkeypatch.setattr(tushare.requests, "post", fake_post)
-        assert tushare._post_tushare_api(
-            "http://api.tushare.pro", "bad", "daily", {}, "x") is None
+    def test_nonzero_code_returns_error_with_msg(self, monkeypatch):
+        """v0.0.6.5 后: 业务码非 0 返 (None, TushareApiError) · server msg 透传给上层。"""
+        class _FakeSession:
+            def post(self, url, json, timeout):
+                mock = MagicMock()
+                mock.status_code = 200
+                mock.json.return_value = {"code": 40203, "msg": "频率超限(1次/小时)", "data": None}
+                return mock
+        monkeypatch.setattr(tushare, "_get_session", lambda: _FakeSession())
+        data, err = tushare._post_tushare_api(
+            "http://api.tushare.pro", "bad", "ths_daily", {}, "x")
+        assert data is None
+        assert err is not None
+        assert err.code == 40203
+        assert "频率超限" in err.msg
+        assert err.api_name == "ths_daily"
 
-    def test_http_5xx_returns_none(self, monkeypatch):
-        def fake_post(url, json, timeout):
-            mock = MagicMock()
-            mock.status_code = 502
-            mock.json.return_value = {}
-            return mock
-        monkeypatch.setattr(tushare.requests, "post", fake_post)
-        assert tushare._post_tushare_api(
-            "http://api.tushare.pro", "tk", "daily", {}, "x") is None
+    def test_http_5xx_returns_error(self, monkeypatch):
+        """HTTP 非 2xx 返 (None, error with code=-2)。"""
+        class _FakeSession:
+            def post(self, url, json, timeout):
+                mock = MagicMock()
+                mock.status_code = 502
+                mock.json.return_value = {}
+                return mock
+        monkeypatch.setattr(tushare, "_get_session", lambda: _FakeSession())
+        data, err = tushare._post_tushare_api(
+            "http://api.tushare.pro", "tk", "daily", {}, "x")
+        assert data is None
+        assert err is not None
+        assert err.code == -2
+        assert "502" in err.msg
 
-    def test_network_exception_returns_none(self, monkeypatch):
-        def fake_post(*a, **kw):
-            raise tushare.requests.exceptions.ConnectionError("DNS fail")
-        monkeypatch.setattr(tushare.requests, "post", fake_post)
-        assert tushare._post_tushare_api(
-            "http://api.tushare.pro", "tk", "daily", {}, "x") is None
+    def test_network_exception_returns_error(self, monkeypatch):
+        """网络/连接异常返 (None, error with code=-1)。"""
+        class _FakeSession:
+            def post(self, url, json, timeout):
+                raise tushare.requests.exceptions.ConnectionError("DNS fail")
+        monkeypatch.setattr(tushare, "_get_session", lambda: _FakeSession())
+        data, err = tushare._post_tushare_api(
+            "http://api.tushare.pro", "tk", "daily", {}, "x")
+        assert data is None
+        assert err is not None
+        assert err.code == -1
+        assert "ConnectionError" in err.msg
+
+    def test_token_redacted_in_server_msg(self, monkeypatch):
+        """v0.0.6.5: server msg 若含 token-like 字符串 · err.msg 必经 redact_text 清洗。"""
+        class _FakeSession:
+            def post(self, url, json, timeout):
+                mock = MagicMock()
+                mock.status_code = 200
+                # 模拟 TuShare 偶尔 msg 含 token 字符串(防御)
+                mock.json.return_value = {
+                    "code": 40101,
+                    "msg": "token abc1234567890def 已失效",
+                    "data": None,
+                }
+                return mock
+        monkeypatch.setattr(tushare, "_get_session", lambda: _FakeSession())
+        _data, err = tushare._post_tushare_api(
+            "http://api.tushare.pro", "tk", "daily", {}, "x")
+        assert err is not None
+        assert "abc1234567890def" not in err.msg  # token 被 redact
 
     def test_exception_message_does_not_leak_token(self, monkeypatch, caplog):
         """token 永不进 logs / exception 文本"""

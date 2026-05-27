@@ -243,11 +243,10 @@ def test_trend_partial_errors_shown(monkeypatch):
     assert "2 题材数据不可用" in result.output
 
 
-def test_trend_failure_diagnosis_with_tushare(monkeypatch):
-    """v0.0.6.5 加: 配了 token + tushare 失败 + EM 全失败 → 错误消息暴露 tushare 链路。
+def test_trend_failure_diagnosis_with_tushare_self_hosted_proxy(monkeypatch):
+    """v0.0.6.5 加 · 6.6 更新: 自部署代理 + 没拿到具体 code → 推切官方端点。
 
-    回归防御: 防止失败消息回退到 "可能是网络问题" 这种黑屏诊断。
-    用户配 token 走付费源的努力必须在错误消息中可见。
+    历史: 之前文案 '可能是网络问题' 屏蔽链路 · 现透传 server msg 给用户。
     """
     from kan.data.theme_leaderboard import LeaderboardDiagnosis
 
@@ -266,28 +265,32 @@ def test_trend_failure_diagnosis_with_tushare(monkeypatch):
     runner = CliRunner()
     result = runner.invoke(app, ["theme", "trend"])
     assert result.exit_code == 1
-    # 失败消息必须暴露 TuShare 状态(包含 endpoint + masked token)
     assert "TuShare Pro" in result.output
     assert "***3c7d" in result.output
     assert "lianghua.example.top" in result.output
-    assert "catalog 拉取失败" in result.output
-    # 失败消息必须暴露 EM 兜底状态
+    assert "catalog (ths_index) 拉取失败" in result.output
     assert "391/391" in result.output
-    # 失败消息必须给 actionable 修复建议
+    # 没拿到具体 code · 用了自部署代理 → 推切官方
     assert "kan config set tushare-endpoint" in result.output
     assert "kan config unset tushare-token" in result.output
 
 
-def test_trend_failure_diagnosis_official_endpoint_klines_fail(monkeypatch):
-    """官方 endpoint + catalog 通 + klines 挂 (典型积分不够 case) → 推积分检查 URL · 不推切端点(已经是官方)。"""
+def test_trend_failure_diagnosis_passes_server_msg_through(monkeypatch):
+    """v0.0.6.6 核心: server 返的 msg 透传给用户 · code/msg 都在输出里。
+
+    场景: 8000 积分官方 endpoint · ths_daily 仍 1次/小时 · 频率超限 40203。
+    用户必须直接看到 TuShare 原话 "频率超限(1次/小时)" · 不靠我们脑补。
+    """
     from kan.data.theme_leaderboard import LeaderboardDiagnosis
     from kan.data.tushare import DEFAULT_ENDPOINT
 
     diagnosis = LeaderboardDiagnosis(
         tushare_attempted=True,
-        tushare_failed_at="klines",  # catalog 通 · ths_daily 挂
-        tushare_endpoint=DEFAULT_ENDPOINT,  # 已经是官方
-        tushare_token_masked="***6d78",
+        tushare_failed_at="klines",
+        tushare_endpoint=DEFAULT_ENDPOINT,
+        tushare_token_masked="***3835",
+        tushare_error_code=40203,
+        tushare_error_msg="抱歉，您访问接口(ths_daily)频率超限(1次/小时)",
         em_attempted=True, em_total=391, em_failed_count=391,
     )
     errors = [
@@ -298,13 +301,42 @@ def test_trend_failure_diagnosis_official_endpoint_klines_fail(monkeypatch):
     runner = CliRunner()
     result = runner.invoke(app, ["theme", "trend"])
     assert result.exit_code == 1
-    # 已经在官方 endpoint · 不该再推荐切回官方
-    assert "切回官方端点" not in result.output
-    # 应该推荐查积分(klines 失败的典型原因)
-    assert "积分" in result.output
+    # server msg 必须原文透传(已 redact 防 token · 这里 msg 无 token-like pattern)
+    assert "code=40203" in result.output
+    assert "频率超限" in result.output
+    assert "1次/小时" in result.output
+    # 按 40203 给精准建议
+    assert "频率超限" in result.output  # 建议段也包含
+    assert "doc_id=290" in result.output  # 频次表 URL
+    # 不该硬编码 "2000+ 积分" 或 "6000 积分" 之类的猜测数字
+    assert "2000+" not in result.output
+    # token 必须 masked
+    assert "***3835" in result.output
+
+
+def test_trend_failure_diagnosis_token_invalid(monkeypatch):
+    """code=40101 token 不对 → 推 token 重复制(不推切端点)。"""
+    from kan.data.theme_leaderboard import LeaderboardDiagnosis
+    from kan.data.tushare import DEFAULT_ENDPOINT
+
+    diagnosis = LeaderboardDiagnosis(
+        tushare_attempted=True,
+        tushare_failed_at="catalog",
+        tushare_endpoint=DEFAULT_ENDPOINT,
+        tushare_token_masked="***xxxx",
+        tushare_error_code=40101,
+        tushare_error_msg="您的token不对，请确认。",
+        em_attempted=True, em_total=391, em_failed_count=391,
+    )
+    _stub_leaderboard(monkeypatch, results=[], errors=[], diagnosis=diagnosis)
+    runner = CliRunner()
+    result = runner.invoke(app, ["theme", "trend"])
+    assert result.exit_code == 1
+    assert "token 无效" in result.output
     assert "tushare.pro/user/token" in result.output
-    # 关闭走 EM 仍是有效建议
-    assert "kan config unset tushare-token" in result.output
+    # 40101 不是频率/积分问题
+    assert "频率超限" not in result.output.split("可能修复")[1]
+    assert "积分不足" not in result.output
 
 
 def test_trend_failure_diagnosis_without_tushare(monkeypatch):

@@ -30,7 +30,7 @@ import time
 from typing import TYPE_CHECKING
 
 from kan.core.models import Theme
-from kan.data.tushare import _post_tushare_api, _resolve_config
+from kan.data.tushare import TushareApiError, _post_tushare_api, _resolve_config
 from kan.infra.log import debug_log
 from kan.storage.paths import BOARDS_DIR, atomic_write_json, ensure_dirs
 
@@ -56,41 +56,48 @@ def _cache_fresh(path, ttl: float) -> bool:
     return (time.time() - path.stat().st_mtime) < ttl
 
 
-def tushare_load_theme_catalog() -> list[Theme] | None:
+def tushare_load_theme_catalog() -> tuple[list[Theme] | None, TushareApiError | None]:
     """走 ths_index?type=N&exchange=A · A 股题材清单(~409 个)· 24h JSON cache。
 
     Returns:
-        list[Theme] · source='tushare' · code 已 strip '.TI' 后缀
-        None 表示 TuShare 不可用(token 没配 / 接口返回 None / 数据空)
+        (themes, error):
+          - 成功:        (list[Theme], None) · source='tushare' · code 已 strip '.TI'
+          - cache 命中:  (list[Theme], None)
+          - token 未配:  (None, None) · 不算错误 · caller 走 attempted=False 路径
+          - server 失败: (None, TushareApiError) · caller 透传给 diagnosis
 
     caller 拿 None 时应 fallback `boards.load_theme_catalog()`(adata 路径)。
     """
     token, endpoint = _resolve_config()
     if not token:
-        return None
+        return None, None  # 未配 token = 默认状态 · 不算 error
 
     ensure_dirs()
     cache = BOARDS_DIR / "catalog_tushare_ths.json"
     if _cache_fresh(cache, _THEME_CATALOG_TTL):
         try:
             data = json.loads(cache.read_text(encoding="utf-8"))
-            return [Theme(**t) for t in data]
+            return [Theme(**t) for t in data], None
         except Exception as e:
             debug_log(__name__, f"tushare catalog cache {cache.name} 损坏", e)
 
-    data = _post_tushare_api(
+    data, err = _post_tushare_api(
         endpoint, token,
         api_name="ths_index",
         params={"type": "N", "exchange": "A"},
         fields="ts_code,name,count,exchange",
     )
     if data is None:
-        return None
+        return None, err
 
     items = data.get("items") or []
     fields = data.get("fields") or []
     if not items or not fields:
-        return None
+        return None, TushareApiError(
+            code=0,
+            msg=f"server 返回空数据 (items={len(items)} fields={len(fields)})",
+            api_name="ths_index",
+        )
 
     themes: list[Theme] = []
     for row in items:
@@ -112,10 +119,14 @@ def tushare_load_theme_catalog() -> list[Theme] | None:
         ))
 
     if not themes:
-        return None
+        return None, TushareApiError(
+            code=0,
+            msg=f"所有 row 解析失败 · raw items={len(items)} 但 ts_code/name 都空",
+            api_name="ths_index",
+        )
 
     atomic_write_json(cache, [t.model_dump() for t in themes], ensure_ascii=False)
-    return themes
+    return themes, None
 
 
 def _recent_trading_days(n: int) -> list[date]:
@@ -135,19 +146,24 @@ def tushare_load_theme_klines(
     themes: list[Theme],
     *,
     n_trading_days: int = _DEFAULT_HISTORY_DAYS,
-) -> dict[str, pd.DataFrame] | None:
-    """批量拉 N 个交易日 × 全部题材 → 按 code group · 返回 dict[code, DataFrame]。
+) -> tuple[dict[str, pd.DataFrame] | None, TushareApiError | None]:
+    """批量拉 N 个交易日 × 全部题材 → 按 code group · 返回 (dict, error)。
 
     使用 ths_daily(trade_date=YYYYMMDD) · 服务端聚合所有题材当日数据 ·
     N 次 HTTP 拿到 N 天 × ~1232 行 = ~74K 行 · 客户端按 ts_code group 拼装。
 
     Args:
         themes: 目标题材列表(source='tushare' 才用 · 别的 source 静默跳过)
-        n_trading_days: 历史天数 · 默认 60 个交易日 · 覆盖 30 天 streak 余量
+        n_trading_days: 历史天数 · 默认 35 个交易日 · 覆盖 30 天 streak 余量
 
     Returns:
-        dict[code(纯数字), DataFrame(date/open/high/low/close/volume/amount)]
-        None 表示 TuShare 不可用 · caller fallback adata EM 路径
+        (klines, error):
+          - 成功:        (dict[code, DataFrame], None)
+          - cache 命中:  (dict, None)
+          - token 未配:  (None, None) · 默认状态非 error
+          - 全 N 天失败: (None, TushareApiError) · 透传 first error · 通常是
+                         40203 频率超限 / 40004 积分不足 (ths_daily 1次/小时
+                         即使 8000 积分仍可能 block · 是特殊接口)
     """
     import pandas as pd
 
@@ -155,15 +171,17 @@ def tushare_load_theme_klines(
 
     token, endpoint = _resolve_config()
     if not token:
-        return None
+        return None, None  # 未配 token = 默认状态 · 不算 error
 
     target_codes = {f"{t.code}.TI" for t in themes if t.source == "tushare"}
     if not target_codes:
-        return None
+        return None, None  # 输入题材没 tushare source · 不算 error
 
     days = _recent_trading_days(n_trading_days)
     if not days:
-        return None
+        return None, TushareApiError(
+            code=0, msg="trading_calendar 不可用 · 无法 batch", api_name="ths_daily",
+        )
 
     ensure_dirs()
     # cache key:第一天 + 最后一天 + 题材数 · 当日数据变化时(收盘后)key 自动更新
@@ -171,15 +189,16 @@ def tushare_load_theme_klines(
     if _cache_fresh(cache, _THEME_KLINES_TTL):
         try:
             big_df = pd.read_parquet(cache)
-            return _group_klines_by_code(big_df, target_codes)
+            return _group_klines_by_code(big_df, target_codes), None
         except Exception as e:
             debug_log(__name__, f"tushare klines cache {cache.name} 损坏", e)
 
     all_rows: list[dict] = []
     failed_days: list[str] = []
+    first_error: TushareApiError | None = None  # 第一个失败 day 的 error · 全失败时透传
     for d in days:
         date_str = d.strftime("%Y%m%d")
-        data = _post_tushare_api(
+        data, err = _post_tushare_api(
             endpoint, token,
             api_name="ths_daily",
             params={"trade_date": date_str},
@@ -187,6 +206,8 @@ def tushare_load_theme_klines(
         )
         if data is None:
             failed_days.append(date_str)
+            if first_error is None and err is not None:
+                first_error = err  # 记第一个 · 通常多天连续失败原因一致(频率/积分)
             continue
         items = data.get("items") or []
         fields = data.get("fields") or []
@@ -196,7 +217,8 @@ def tushare_load_theme_klines(
                 all_rows.append(rec)
 
     if not all_rows:
-        return None
+        # 全 N 天失败 · 透传 first error 给上层 diagnosis 渲染
+        return None, first_error
 
     if failed_days:
         debug_log(
@@ -216,7 +238,7 @@ def tushare_load_theme_klines(
     except Exception as e:
         debug_log(__name__, "tushare klines cache 落 parquet 失败 · 不影响本次结果", e)
 
-    return _group_klines_by_code(big_df, target_codes)
+    return _group_klines_by_code(big_df, target_codes), None
 
 
 def _group_klines_by_code(
