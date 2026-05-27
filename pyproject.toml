@@ -1,6 +1,6 @@
 [project]
 name = "manmankan"
-version = "0.0.5.1"
+version = "0.0.6.5"
 description = "A 股自选股 CLI · 不告诉你买什么 · 帮你找到符合条件的 · 多周期位置 + 共振 + 选股 DSL"
 requires-python = ">=3.11"
 license = { file = "LICENSE" }

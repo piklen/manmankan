@@ -8,7 +8,7 @@
 import os as _os
 import sys as _sys
 
-_BOOT_BANNER_COMMANDS = {"add", "scan", "fetch", "low", "high", "info", "trend"}
+_BOOT_BANNER_COMMANDS = {"add", "scan", "fetch", "low", "high", "info", "trend", "find"}
 
 
 def _maybe_print_boot_banner() -> None:

@@ -25,7 +25,9 @@ It deliberately stops there: **no buy/sell advice, no ratings, no price targets,
 
 慢慢看是一个**纯命令行**的 A 股自选股位置感工具。它把电商「慢慢买」的「先看历史价位再决策」迁移到股市:把你 30 只自选股在 3、5、7、10、15、30、60、90、120、180 日窗口内的位置百分位**一屏显示**,把「同时触及多个低点」标成共振信号,然后**闭嘴**——剩下的判断,你自己做。
 
-> 📦 **当前版本 v0.0.5.0**（Alpha · 热榜 / 题材扫描 + TuShare Pro 可选数据源 + 5 档成交量识别）· `pip install manmankan` 即装即用 · API 在 1.0 前可能调整。
+> 📦 **当前版本 v0.0.6.5**（Alpha · `kan find` 用户主导选股 DSL + 多分组管理 + Parity 7.0.0）· `pip install manmankan` 即装即用 · API 在 1.0 前可能调整。
+>
+> 📜 **License · Parity 7.0.0**（source-available · copyleft · 非 OSI）· **个人散户日常自用 = 完全免费 · 无需任何授权**·商业使用 / SaaS / 二次打包卖给第三方需先联系作者(GitHub issue 加 `[commercial-license]` 前缀)。详见 [LICENSE](LICENSE) + [NOTICE](NOTICE)。
 >
 > 🌱 **[新手专区](#新手专区)**（默认展开）：第一次用命令行的散户 mac / Windows 各 2 步装好。
 >
@@ -161,6 +163,7 @@ bash /tmp/install.sh    # SHA256 对得上 + 看完再装
 uv tool install manmankan          # 一行装好(推荐)
 kan add 600519 茅台 601318          # 名称 / 代码混搭
 kan scan                            # 一屏看完位置 + 共振信号
+kan find --pos 180:lt:5 --limit 5  # ⭐ 按你的规则筛 · 180 日位置 < 5%
 ```
 
 > 装坏了? 跑 `uv tool install manmankan --reinstall` (或 `pipx install manmankan --force`) ·

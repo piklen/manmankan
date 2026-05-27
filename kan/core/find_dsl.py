@@ -50,22 +50,28 @@ class PosFilter:
         try:
             period = int(parts[0])
         except ValueError as e:
-            raise FilterParseError(f"--pos 周期非整数 '{parts[0]}'") from e
+            raise FilterParseError(
+                f"--pos 周期非整数 '{parts[0]}' · 例: --pos 180:lt:5"
+            ) from e
         if period not in ALLOWED_PERIODS:
             raise FilterParseError(
-                f"--pos 周期 {period} 不支持 · 仅 {list(ALLOWED_PERIODS)}"
+                f"--pos 周期 {period} 不支持 · 仅 {list(ALLOWED_PERIODS)} · 例: --pos 180:lt:5"
             )
         op = parts[1].lower()
         if op not in ALLOWED_OPS:
             raise FilterParseError(
-                f"--pos 运算符 '{op}' 不支持 · 仅 {list(ALLOWED_OPS)}"
+                f"--pos 运算符 '{op}' 不支持 · 仅 {list(ALLOWED_OPS)} · 例: --pos 180:lt:5"
             )
         try:
             value = float(parts[2])
         except ValueError as e:
-            raise FilterParseError(f"--pos 数值非数字 '{parts[2]}'") from e
+            raise FilterParseError(
+                f"--pos 数值非数字 '{parts[2]}' · 例: --pos 180:lt:5"
+            ) from e
         if not 0 <= value <= 100:
-            raise FilterParseError(f"--pos 数值 {value} 越界 · 需 [0, 100]")
+            raise FilterParseError(
+                f"--pos 数值 {value} 越界 · 需 [0, 100] · 例: --pos 180:lt:5"
+            )
         return cls(period=period, op=op, value=value)
 
 
@@ -88,19 +94,23 @@ class ResonanceFilter:
         level = parts[0].lower()
         if level not in RESONANCE_LEVELS:
             raise FilterParseError(
-                f"--resonance 级别 '{level}' 不支持 · 仅 low/high"
+                f"--resonance 级别 '{level}' 不支持 · 仅 low/high · 例: --resonance low:gte:3"
             )
         op = parts[1].lower()
         if op not in ALLOWED_OPS:
             raise FilterParseError(
-                f"--resonance 运算符 '{op}' 不支持 · 仅 {list(ALLOWED_OPS)}"
+                f"--resonance 运算符 '{op}' 不支持 · 仅 {list(ALLOWED_OPS)} · 例: --resonance low:gte:3"
             )
         try:
             value = int(parts[2])
         except ValueError as e:
-            raise FilterParseError(f"--resonance 数值非整数 '{parts[2]}'") from e
+            raise FilterParseError(
+                f"--resonance 数值非整数 '{parts[2]}' · 例: --resonance low:gte:3"
+            ) from e
         if not 0 <= value <= 10:
-            raise FilterParseError(f"--resonance 数值 {value} 越界 · 需 [0, 10]")
+            raise FilterParseError(
+                f"--resonance 数值 {value} 越界 · 需 [0, 10] · 例: --resonance low:gte:3"
+            )
         return cls(level=level, op=op, value=value)  # type: ignore[arg-type]
 
 

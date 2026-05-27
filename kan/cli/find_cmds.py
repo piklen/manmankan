@@ -110,6 +110,11 @@ def find(
 
     console = Console()
 
+    # 0. Validate --limit (CR-1 防 silent data loss via Python 负切片)
+    if limit <= 0:
+        _print_err("❌ --limit 必须为正整数 (例 --limit 20)")
+        raise typer.Exit(2)
+
     # 1. Parse DSL flags
     try:
         conditions = ConditionSet.from_flags(
@@ -201,7 +206,11 @@ def find(
         if not m.triggered:
             continue
         if shown >= 20:
-            console.print(f"  [dim](还有 {len(matches_limited) - shown} 只 · 展开请用 --format json)[/dim]")
+            remaining = sum(1 for x in matches_limited[shown:] if x.triggered)
+            if remaining > 0:
+                console.print(
+                    f"  [dim](还有 {remaining} 只命中 · 调小 filter 或减 --limit 看完整)[/dim]"
+                )
             break
         trigs = " · ".join(
             f"{t.filter_type}={t.param}@{t.value:.1f}" for t in m.triggered

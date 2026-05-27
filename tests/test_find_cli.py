@@ -69,6 +69,35 @@ class TestFindCli:
         assert ec in (0, 2)
         assert "PERIOD:OP:VAL" in out or "kan find" in out
 
+    def test_limit_negative_exits_two(self):
+        """CR-1 P0 · v0.0.6.5 release-review · 防 Python 负切片 silent drop."""
+        ec, out = _run(["find", "--pos", "180:lt:5", "--limit", "-1"])
+        assert ec == 2
+        assert "--limit 必须为正整数" in out
+
+    def test_limit_zero_exits_two(self):
+        """CR-1 P0 · v0.0.6.5 release-review · --limit 0 不能跟 '无命中' 分支混淆."""
+        ec, out = _run(["find", "--pos", "180:lt:5", "--limit", "0"])
+        assert ec == 2
+        assert "--limit 必须为正整数" in out
+
+    def test_dsl_errors_include_fix_hint(self):
+        """用-3 P0 · v0.0.6.5 release-review · DSL 错误信息必须含修复示例.
+
+        Rich console 可能 soft-wrap "例: --pos 180:lt:5" 跨行,因此分开断言
+        "例:" 和 "180:lt:5" 都在 stderr 出现就够了。
+        """
+        for bad_pos in ["foo:bar:baz", "200:lt:5", "180:wtf:5", "180:lt:abc", "180:lt:150"]:
+            ec, out = _run(["find", "--pos", bad_pos])
+            assert ec == 2, f"{bad_pos} should exit 2"
+            assert "例:" in out, f"{bad_pos} missing 例: hint"
+            assert "180:lt:5" in out, f"{bad_pos} missing --pos sample 180:lt:5"
+        for bad_res in ["mid:gte:3", "low:wtf:3", "low:gte:abc", "low:gte:99"]:
+            ec, out = _run(["find", "--resonance", bad_res])
+            assert ec == 2, f"{bad_res} should exit 2"
+            assert "例:" in out, f"{bad_res} missing 例: hint"
+            assert "low:gte:3" in out, f"{bad_res} missing --resonance sample low:gte:3"
+
     @pytest.mark.skipif(
         not os.environ.get("KAN_RUN_FIND_DATA_TEST"),
         reason="needs watchlist data · set KAN_RUN_FIND_DATA_TEST=1 to run",

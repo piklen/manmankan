@@ -33,6 +33,7 @@ jobs:
         uses: pypa/gh-action-pypi-publish@cef221092ed1bacb1cc03d23a2d87d1d172e277b  # release/v1 (pinned 2026-02-18)
         with:
           packages-dir: dist/
+          attestations: true  # 安-2 显式开启 sigstore PEP 740 attestation (v0.0.6.5)
 
   # v0.0.4.4 架构师 Finding 架-6 + 代码 CR Finding CR-1 (P0):
   # 发版前 CI 测试 != 装回来跑命令 · v0.0.4.3 装机崩根因之一
