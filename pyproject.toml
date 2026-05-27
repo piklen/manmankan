@@ -1,9 +1,9 @@
 [project]
 name = "manmankan"
-version = "0.0.5.1"
-description = "A 股自选股位置感 CLI 工具 · 多周期位置扫描 + 共振信号 + 连续涨跌看板"
+version = "0.0.6.5"
+description = "A 股自选股 CLI · 不告诉你买什么 · 帮你找到符合条件的 · 多周期位置 + 共振 + 选股 DSL"
 requires-python = ">=3.11"
-license = { text = "MIT" }
+license = { file = "LICENSE" }
 authors = [
     { name = "piklen" },
 ]
@@ -16,7 +16,7 @@ classifiers = [
     "Development Status :: 3 - Alpha",
     "Environment :: Console",
     "Intended Audience :: End Users/Desktop",
-    "License :: OSI Approved :: MIT License",
+    "License :: Other/Proprietary License",
     "Operating System :: OS Independent",
     "Programming Language :: Python :: 3",
     "Programming Language :: Python :: 3.11",

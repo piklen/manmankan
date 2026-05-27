@@ -7,6 +7,45 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.0.6.5] - 2026-05-27
+
+> **累积发版** · 上次 PyPI release 是 v0.0.5.0 (2026-05-23) · 至今累积 5 个内部 minor (v0.0.5.1 → v0.0.6.1) + 本版 3 主题 (license / slogan / kan find) 一次性 ship 到 PyPI。
+> 7 角色 ***REMOVED*** 第 7 次实施 · 49 finding · 9 P0 全修 (***REMOVED***在维护者私有***REMOVED***)
+
+### ⚠️ Breaking
+
+- **License 切 MIT → Parity Public License 7.0.0** (source-available · 禁商用 · 禁 SaaS)
+  - 个人散户日常自用**完全免费 · 无需任何授权**
+  - 商业使用 / 把本工具打包卖给第三方需先获作者书面授权
+  - 二次开发**必须** 保留版权 + 显著 attribution "Based on manmankan (https://github.com/piklen/manmankan)" + 保留 disclaimer + 不得暗示作者背书
+  - 详见 `LICENSE` + `NOTICE`(Attribution Rider 4 条 binding rule)
+
+### Added (v0.0.6.5 · kan find · 用户主导选股 DSL)
+
+> **新 slogan**: 不告诉你买什么 · 帮你找到符合条件的 (工具仅返回数据 · 不替你判断)
+
+- **`kan find` 命令** · 按你的规则筛全市场 · 3 filter MVP:
+  - `--pos PERIOD:OP:VAL` · 位置百分位 filter (例 `180:lt:5` = 180 日位置 < 5%)
+  - `--resonance LEVEL:OP:VAL` · 共振 filter (例 `low:gte:3` = 低点共振 ≥ 3 周期)
+  - `--exclude-st` · 排 ST/*ST · quiet 不记 triggered
+- **池 selector 跟 kan scan 完全一致**: `--industry / --hot rank|surge / --theme` 三者互斥 · `--only-watchlist` 取交集 · `--group` 选自选股具名组
+- **AND 语义 + early ST reject** · 命中股票按 `len(triggered)` 降序展示
+- **强制 disclaimer** · 输出末尾不可删 · "候选 ≠ 买入信号 · 工具仅返回符合您设置规则的股票数据 · 不构成任何形式的推荐或建议 · 用户自行评估"
+- **测试覆盖** · `test_find_dsl.py` (63 case) + `test_find_filter.py` (17 case · 含 FrozenInstanceError immutability) + `test_find_cli.py` (10 case · subprocess 真测无 bootstrap 作弊)
+- **合规** · `docs/compliance.md §7` 新增 kan find 合规表 (规则来源 / 评估 / 输出 / 触发 / 商业 / AI 接入 / Disclaimer · 7 条 hard rule)
+
+### Migration Guide · v0.0.5.0 → v0.0.6.5
+
+如果你从 PyPI `manmankan==0.0.5.0` 升级到 v0.0.6.5,以下变更需了解:
+
+1. **License** · MIT → Parity 7.0.0 · 个人自用无变化 · 商业 / SaaS / 二次开发卖出请先 review LICENSE+NOTICE
+2. **新命令** · `kan find` (条件选股) · `kan group` (多分组管理 · v0.0.6.1) · `kan move` (跨组移动) · `kan export` (CSV 导出)
+3. **现有命令加 `--group` flag** · 老用户零感知 · 不带 flag 走 default 组「自选」
+4. **数据源架构升级** · 用户可注入自定义 `KlineSource` / `ThemeConstituentSource` (Wind / 通达信本地 .blk / 自建数据库) · 详见 README「自定义数据源」段
+5. **Public Python API** · `from kan.api import scan, low, high, trend, fetch, from_flags, WatchlistSet, ...` · 脚本化使用
+6. **OOP 框架** · `StockSet` Protocol + 4 实现 (WatchlistSet/HotRankSet/ThemeSet/IndustrySet)
+7. **storage v2 schema** · `~/.manmankan/watchlist.json` 自动迁移 v1 → v2 default 组「自选」· 用户零感知
+
 ### Added (v0.0.6.1 · 多分组管理)
 
 不止自选股 · 用户可建「持仓」「短线池」「长线池」等多个自定义组 · 每组独立扫描。
@@ -718,7 +757,8 @@ pandas / numpy / bs4 / requests 整窝拖入启动路径。单个 akshare import
 - 所有数据本地存储 · 不上传任何用户数据
 - `CONTRIBUTING.md` + `SECURITY.md` + 公开输出语言纪律
 
-[Unreleased]: https://github.com/piklen/manmankan/compare/v0.0.5.1...HEAD
+[Unreleased]: https://github.com/piklen/manmankan/compare/v0.0.6.5...HEAD
+[0.0.6.5]: https://github.com/piklen/manmankan/compare/v0.0.5.1...v0.0.6.5
 [0.0.5.1]: https://github.com/piklen/manmankan/compare/v0.0.5.0...v0.0.5.1
 [0.0.5.0]: https://github.com/piklen/manmankan/compare/v0.0.4.8...v0.0.5.0
 [0.0.4.8]: https://github.com/piklen/manmankan/compare/v0.0.4.7.1...v0.0.4.8
