@@ -137,7 +137,7 @@ def detect_install_method() -> DetectedInstall:
     """
     exe = sys.executable
     # v0.0.4.4: 全部命令改用 force-reinstall 模式 · 避免 partial state 升级
-    # 老 .so cache 不重链导致 macOS Gatekeeper 拒载等场景 (v0.0.4.3 ***REMOVED***根因)
+    # 老 .so cache 不重链导致 macOS Gatekeeper 拒载等安装后导入失败场景
     if "uv/tools" in exe and "manmankan" in exe:
         return DetectedInstall("uv tool", ["uv", "tool", "install", "--reinstall", "manmankan"])
     if "pipx/venvs/manmankan" in exe:
@@ -191,7 +191,7 @@ def run_upgrade(console: Console | None = None) -> tuple[UpgradeStatus, str]:
 
     if result.returncode == 0:
         # v0.0.4.4: 升级文件下载成功 ≠ 装得起来 · 跑 import smoke 验证
-        # 防 v0.0.4.3 类***REMOVED*** (deps partial state · old .so cache 不重链)
+        # 防依赖 partial state / 老 .so cache 不重链导致的安装后导入失败
         try:
             with console.status("[cyan]验证安装...[/cyan]", spinner="dots"):
                 smoke = subprocess.run(

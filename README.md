@@ -31,7 +31,7 @@ It deliberately stops there: **no buy/sell advice, no ratings, no price targets,
 >
 > 🌱 **[新手专区](#新手专区)**（默认展开）：第一次用命令行的散户 mac / Windows 各 2 步装好。
 >
-> ⚠️ **v0.0.4.4 及之前**有"凌晨拉数据后 scan 整天显示昨日涨停名单"bug · v0.0.4.5 已修。建议升级到最新版：`uv tool install manmankan --upgrade`
+> ⚠️ **建议使用最新版** · 早期版本存在已修复的数据时效性问题 · 升级：`uv tool install manmankan --upgrade`
 >
 > 🔒 **100% 本地** · 不要登录 · 不上传自选 · 不推送 · 不广告 · 数据存 `~/.local/share/kan/`(XDG 规范)。
 >
@@ -117,7 +117,7 @@ kan add 600519 茅台 601318     # 加 3 只自选股
 kan scan                        # 看一屏位置 + 共振信号
 ```
 
-**v0.0.5.0 新功能**(可选 · 不影响默认体验):
+**进阶功能**(可选 · 不影响默认体验):
 
 ```bash
 kan theme search AI             # 找你关心的题材
@@ -772,7 +772,7 @@ P0 候选功能（下批新功能优先级）:
 2. **指数基准对照**(自选股扫描时同步给上证 / 深证 / 创业板 / 沪深 300 同周期位置 · 判断「个股弱还是大盘弱」)
 3. **成交量异动**(放量 / 缩量识别,结合位置状态过滤噪音)
 
-完整路线图 + 已知技术债 + 跨板块交易单位备忘见 [`docs/roadmap.md`](docs/roadmap.md)。
+完整路线图见 [`docs/roadmap.md`](docs/roadmap.md)。
 
 > **版本节奏**:patch 累加(`v0.0.1 → v0.0.2 → ...`),不偏好 minor 跨越。
 

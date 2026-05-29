@@ -333,7 +333,7 @@ def test_same_stock_in_multiple_groups(temp_kan_dir):
 
 @pytest.mark.skipif(os.name == "nt", reason="Windows 无 POSIX 权限")
 def test_v2_storage_keeps_0o600_permissions(temp_kan_dir):
-    """v2 schema 写入仍是 0o600 (持仓画像隐私底线 · ***REMOVED***)。"""
+    """v2 schema 写入仍是 0o600 (持仓画像隐私底线)。"""
     watchlist.create_group("持仓")
     mode = stat.S_IMODE(watchlist.WATCHLIST_PATH.stat().st_mode)
     assert mode == 0o600, f"v2 watchlist.json 权限应为 0o600 · 实际 0o{mode:o}"

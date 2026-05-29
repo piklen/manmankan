@@ -9,753 +9,162 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [0.0.6.5] - 2026-05-27
 
-> **累积发版** · 上次 PyPI release 是 v0.0.5.0 (2026-05-23) · 至今累积 5 个内部 minor (v0.0.5.1 → v0.0.6.1) + 本版 3 主题 (license / slogan / kan find) 一次性 ship 到 PyPI。
-> 7 角色 ***REMOVED*** 第 7 次实施 · 49 finding · 9 P0 全修 (***REMOVED***在维护者私有***REMOVED***)
+> 自 v0.0.5.0 起累积的多个内部版本（v0.0.5.1 → v0.0.6.1）一次性发布到 PyPI。
 
 ### ⚠️ Breaking
 
-- **License 切 MIT → Parity Public License 7.0.0** (source-available · 禁商用 · 禁 SaaS)
-  - 个人散户日常自用**完全免费 · 无需任何授权**
+- **License 由 MIT 切换为 Parity Public License 7.0.0**（source-available · 禁商用 · 禁 SaaS）
+  - 个人散户日常自用完全免费 · 无需任何授权
   - 商业使用 / 把本工具打包卖给第三方需先获作者书面授权
-  - 二次开发**必须** 保留版权 + 显著 attribution "Based on manmankan (https://github.com/piklen/manmankan)" + 保留 disclaimer + 不得暗示作者背书
-  - 详见 `LICENSE` + `NOTICE`(Attribution Rider 4 条 binding rule)
+  - 二次开发须保留版权 + 显著 attribution「Based on manmankan (https://github.com/piklen/manmankan)」+ 保留 disclaimer
+  - 详见 `LICENSE` + `NOTICE`
 
-### Added (v0.0.6.5 · kan find · 用户主导选股 DSL)
+### Added
 
-> **新 slogan**: 不告诉你买什么 · 帮你找到符合条件的 (工具仅返回数据 · 不替你判断)
+- **`kan find`** · 用户主导的条件选股 DSL：`--pos PERIOD:OP:VAL`（位置百分位筛选）· `--resonance LEVEL:OP:VAL`（共振筛选）· `--exclude-st` · AND 语义 · 输出末尾强制 disclaimer
+- **`kan group`** · 多分组管理（create / list / rename / delete / default / copy）· 现有命令新增 `--group` flag · 老用户零感知
+- **`kan move`** · 跨组移动单股 · **`kan export`** · CSV 导出
+- **数据源适配器 + 责任链架构** · 可注入自定义 `KlineSource` / `ThemeConstituentSource`（Wind / 通达信本地 .blk / 自建数据库）· chain 按 priority 排序 + 失败 fallback
+- **公开 Python API** · `from kan.api import scan, low, high, trend, fetch, from_flags, WatchlistSet, ...`
+- **`kan theme trend`** · 题材连续涨跌榜
+- storage 升级到 v2 schema（多分组）· 老 `watchlist.json` 自动迁移 · 用户零感知
 
-- **`kan find` 命令** · 按你的规则筛全市场 · 3 filter MVP:
-  - `--pos PERIOD:OP:VAL` · 位置百分位 filter (例 `180:lt:5` = 180 日位置 < 5%)
-  - `--resonance LEVEL:OP:VAL` · 共振 filter (例 `low:gte:3` = 低点共振 ≥ 3 周期)
-  - `--exclude-st` · 排 ST/*ST · quiet 不记 triggered
-- **池 selector 跟 kan scan 完全一致**: `--industry / --hot rank|surge / --theme` 三者互斥 · `--only-watchlist` 取交集 · `--group` 选自选股具名组
-- **AND 语义 + early ST reject** · 命中股票按 `len(triggered)` 降序展示
-- **强制 disclaimer** · 输出末尾不可删 · "候选 ≠ 买入信号 · 工具仅返回符合您设置规则的股票数据 · 不构成任何形式的推荐或建议 · 用户自行评估"
-- **测试覆盖** · `test_find_dsl.py` (63 case) + `test_find_filter.py` (17 case · 含 FrozenInstanceError immutability) + `test_find_cli.py` (10 case · subprocess 真测无 bootstrap 作弊)
-- **合规** · `docs/compliance.md §7` 新增 kan find 合规表 (规则来源 / 评估 / 输出 / 触发 / 商业 / AI 接入 / Disclaimer · 7 条 hard rule)
+### Migration · v0.0.5.0 → v0.0.6.5
 
-### Migration Guide · v0.0.5.0 → v0.0.6.5
-
-如果你从 PyPI `manmankan==0.0.5.0` 升级到 v0.0.6.5,以下变更需了解:
-
-1. **License** · MIT → Parity 7.0.0 · 个人自用无变化 · 商业 / SaaS / 二次开发卖出请先 review LICENSE+NOTICE
-2. **新命令** · `kan find` (条件选股) · `kan group` (多分组管理 · v0.0.6.1) · `kan move` (跨组移动) · `kan export` (CSV 导出)
-3. **现有命令加 `--group` flag** · 老用户零感知 · 不带 flag 走 default 组「自选」
-4. **数据源架构升级** · 用户可注入自定义 `KlineSource` / `ThemeConstituentSource` (Wind / 通达信本地 .blk / 自建数据库) · 详见 README「自定义数据源」段
-5. **Public Python API** · `from kan.api import scan, low, high, trend, fetch, from_flags, WatchlistSet, ...` · 脚本化使用
-6. **OOP 框架** · `StockSet` Protocol + 4 实现 (WatchlistSet/HotRankSet/ThemeSet/IndustrySet)
-7. **storage v2 schema** · `~/.manmankan/watchlist.json` 自动迁移 v1 → v2 default 组「自选」· 用户零感知
-
-### Added (v0.0.6.1 · 多分组管理)
-
-不止自选股 · 用户可建「持仓」「短线池」「长线池」等多个自定义组 · 每组独立扫描。
-
-- **storage v2 schema** · `watchlist.json` 升级为 `{version: 2, default: "自选", groups: {<name>: {stocks: [...]}}}` · 老 v1 schema 加载时自动迁移到 v2 default 组「自选」· 写回磁盘 · 用户零感知
-- **`kan group` 子命令组** · 6 子命令 (`create / list / rename / delete / default / copy`) · default 组保护 (不可删 · 重命名时指针同步) · 组名 32 字符上限 + 特殊字符拒绝
-- **`kan move <symbol> <src> <dst>`** · 跨组移动单股 · src/dst 必须都存在 (不自动建组 · 防 typo 灾难) · 支持名称模糊搜 · 同股已在 dst 时只从 src 删除不重复添加
-- **`kan export [--group X | --all]`** · CSV 导出到 stdout (重定向 `>pos.csv`) · `--all` 输出列含 `group` 前缀
-- **现有命令加 `--group` flag** · `add / remove / list / clear / import / scan / low / high / trend / fetch` 全部支持 · 不带 flag 走 default 组 (老用户零感知) · `kan list --all` 列所有组拼起来
-- **同股可同时在多组** · 「自选」盯所有 + 「持仓」只看实买 = 常见场景 · 各 `added_at` 独立反映"加到该组的日期"
-- **`WatchlistSet(group=)`** · OOP 层支持 · `from_flags(watchlist_group=)` 透传 · Python API 可写 `WatchlistSet(group="持仓").pairs()`
-- **0o600 + 0o700 权限延续** · 持仓画像隐私底线 (***REMOVED***) 在 v2 schema 不变
-- **测试覆盖 +73** · `test_watchlist_groups.py` (38) + `test_groups_cli.py` (35) · 830 → 903 全 green
-
-### Added (v0.0.6 · 数据源架构 · 适配器 + 责任链)
-
-数据源层重构 · 把 `fetcher.py` 硬编码 if-chain + `boards.py` 散布式 try-except fallback 统一到「适配器 + 责任链」架构。**用户可注入自定义数据源** (Wind / 通达信本地 .blk / 自建数据库 / ...) · chain 自动按 priority sort + fallback · 与内置 5 源 (K 线) / 2 源 (题材成分股) 同等对待。
-
-**Phase 1 · K 线领域 Chain**
-- `kan/data/protocols.py` · `KlineSource` Protocol (runtime_checkable · name/priority/is_available/fetch)
-- `kan/data/source_chain.py` · `KlineSourceChain` + 通用 `_run_chain[T]` generic helper (priority sort + 同 priority race + 异常防御)
-- `kan/data/_builtin_sources.py` · 内置 5 源工厂 + 用户运行时注册表
-- 5 个 `*KlineSource` class (Tushare/Baostock/Eastmoney/Sina/Tencent) · thin wrapper 调原 `_fetch_*` (SOT 保留)
-- 内置 priority 约定 (按稳定性 · 不显式标价格):
-  - **10**  TushareKlineSource    · 配 token 时顶档 · `is_available()` 含 token 检查 · 未配则 chain 直接 skip (不浪费 fetch 调用)
-  - **20**  BaostockKlineSource   · 独立服务器最稳
-  - **30**  EastmoneyKlineSource + SinaKlineSource · 同 priority 自动 ThreadPool race (复刻旧 `_fetch_via_akshare` 语义)
-  - **40**  TencentKlineSource    · 兜底 · volume/amount 已 drop
-  - **50-89** 留给用户自定义源 · **90-99** 兜底保留
-
-**Phase 2 · 题材成分股 Chain**
-- `kan/data/theme_constituents.py` · `ThemeConstituentSource` Protocol + `ThemeConstituentSourceChain` + `Ths/EmConstituentSource` 2 内置
-- `boards.get_theme_constituents` 改走 chain · 内部 -84 行 · 保留 cache 编排 + 熔断器 inspect 决定 error 文案
-
-**Phase 3 · public API (kan.api 新增 8 符号)**
-- `KlineSource` / `ThemeConstituentSource` Protocol (用户写自定义源时 typing 提示)
-- `register_kline_source(src)` / `register_theme_constituent_source(src)` · 用户注册自定义源
-- `clear_user_kline_sources()` / `clear_user_theme_constituent_sources()` · 清空用户源 (测试 / 切换场景)
-- `kline_chain()` / `theme_constituent_chain()` · inspect 当前 default chain (调试)
-- README 新增「自定义数据源」段 + Wind / 通达信集成示例
-
-**测试 · 60 新 + 0 break**
-- `tests/test_source_chain.py` · 22 新 (priority sort / race / fallback / 异常防御 / 注册表)
-- `tests/test_theme_constituent_chain.py` · 19 新 (chain + sources + boards 集成 + 熔断 error 文案)
-- `tests/test_api.py` · 6 新 surface 守护 + KlineSource/ThemeConstituentSource Protocol 鸭子验证
-- `tests/test_fetcher.py` · monkeypatch 路径从 fetcher namespace 迁到 SOT (sources/tushare) · 行为不变
-- 总 baseline 773 → **820 passed** (`-m "not network"`) · ruff clean
-
-**已知边界**
-- `theme_leaderboard.py` 内的 TuShare batch vs adata EM 并发**仍是两条独立路径**而非 chain (两路径执行算法差距 60×: 60 次 HTTP batch vs 391 题材并发 · 不该硬塞同形 chain)
-- `boards.fetch_industry_kline` / `fetch_theme_kline` / `hot.fetch_hot_list` 仍是单源 · 未来加 fallback 时可同形抽 chain (现阶段单源无意义)
-
-### Added (v0.0.5.7)
-
-- **`kan theme trend`** · 题材连续涨跌榜 · 按 `abs(streak)` 降序 · 配 TuShare token 时走 `ths_daily` batch · 否则走 adata EM
-  - flag:`--up N` / `--down N` / `--latest N` / `--candle` / `--limit N` / `--all` / `--force` / `--format md|json`
-  - 默认 `--limit 30` · `--up`/`--down` 单边过滤(2-30 · 互斥)· 沿用 `kan trend` 语义
-- 测试基线 722 → 768 passed(+46 · 0 regression)
-
-### Added (Public API surface · v0.0.5.4)
-
-- **`kan.api` · 公开 Python API 入口** · 一个稳定 import 收口 OOP 框架
-  - `from kan.api import WatchlistSet, ThemeSet, HotRankSet, IndustrySet, StockSet`
-  - `from kan.api import scan, low, high, trend, fetch, from_flags`
-  - 文档化于 `kan/api.py` 模块 docstring(完整用例 · 自定义 StockSet 示例)
-  - 6 个新单元测试 (test_api.py) 守护 surface 稳定性 · `kan.api.__all__` 锁定符号集
-  - README 新增 ## Python API (脚本化使用) 段 · 4 类 StockSet × 5 verb 矩阵 + 3 用例
-  - 内部模块 (`kan.core.stock_set` / `kan.core.verbs`) 可继续小版本重构 · 用户脚本不破
-
-### Changed (内部架构 · v0.0.5.4 cleanup)
-
-- **`pipeline.run_data_pipeline` 简化为 StockSet 单签名** · 移除 v0.0.5.3 的双签名重载 + 鸭子判别
-  - 调用方必须先 `from_flags(...)` 构造 StockSet · 再传 `run_data_pipeline(stock_set, ...)`
-  - 4 个 CLI 命令早已用 StockSet 签名 · 0 实际 caller 被破坏
-- **删除 `pipeline.resolve_targets_or_exit`** · v0.0.5.3 留作"老 caller 兼容"的函数现在彻底移除 · CLI 全走 `resolve_stock_set_or_exit`
-- **`test_pipeline.py` 重写** · 7 个 `resolve_targets_or_exit` 测试替换为对等的 `resolve_stock_set_or_exit` 测试 (覆盖 5 类 source 错误 → typer.Exit) · 6 个 `run_data_pipeline` 测试改用 fake StockSet 注入 · `freshness_of` (10) + `render_freshness_warning` (5) 测试不变
-- 测试基线 692 → **698 passed** (净 +6 测试 · 删 13 老 + 加 19 新 · 含 6 个 `test_api.py` 公开 surface 守护测试)
-
-### Added (Python API · OOP 视角)
-
-- **`kan.core.stock_set` · 股票集合抽象** · 把"一组股票"抽象成对象,让 verb 统一处理
-  - `StockSet` Protocol(`runtime_checkable` · 鸭子类型 · 不强制继承)
-  - 4 个具体实现:`WatchlistSet`(自选)/ `HotRankSet`(热榜 rank/surge)/ `ThemeSet`(题材)/ `IndustrySet`(行业)
-  - `from_flags(industry=, hot=, theme=)` factory · 三者互斥校验 + 默认走 `WatchlistSet`
-  - 用户可扩展自定义集合(SectorSet / ETFBasket / 等),直接被 verbs 接受
-- **`kan.core.verbs` · 统一 verb 入口** · 接受任何 StockSet
-  - `verbs.scan(set, mode="low")` / `verbs.low(set, periods=)` / `verbs.high(set, periods=)` / `verbs.trend(set, candle=)` / `verbs.fetch(set, days=)`
-  - 例:
-    ```python
-    from kan.core.stock_set import WatchlistSet, ThemeSet, HotRankSet
-    from kan.core import verbs
-    verbs.low(WatchlistSet())                  # 自选股筛低位
-    verbs.scan(ThemeSet("新能源"), mode="high")  # 新能源题材高位
-    verbs.trend(HotRankSet(mode="surge"))      # 飙升榜连续涨跌
-    ```
-  - Python 脚本化 / cron / 出 markdown 报告等场景的入口
-- 49 个新单元测试覆盖 stock_set + verbs(Protocol 契约 / 4 实现 lazy resolution / factory 互斥 / verbs facade 路由)
-
-### Changed (内部架构)
-
-- **`kan/` 平铺 38 文件 → 6 子包**:`cli/`(14)/ `core/`(7)/ `data/`(6)/ `render/`(3)/ `storage/`(4)/ `infra/`(5)
-  - 入口契约不变(pyproject `kan = "kan.cli:cli_main"` 通过 `kan/cli/__init__.py` re-export 保留 · CLI 用户零感知)
-  - typer 单例 `kan/app.py` 位置不变
-  - 内部 imports / 测试 imports 全更新到子包路径(`from kan.data.fetcher` 取代 `from kan.fetcher`)
-- **CLI 4 命令完整迁移到 StockSet** · `scan / low / high / trend / fetch` 全部用 `from_flags()` 构造 StockSet + 调 `run_data_pipeline(stock_set, ...)` 新签名
-  - StockSet 升级:加 `meta()` method + `watchlist_pairs` + `only_watchlist` 字段 · highlight / rank_map / index_kline / ∩ filter 全部沉降为 Set 内部职责
-  - `BoardMeta / HotMeta / ThemeMeta` 三个 dataclass 迁到 `kan/core/models.py`(跟 `Board / Theme` 同地存放) · `kan/core/scan_targets.py` 保留 re-export 不破坏老 caller
-  - `resolve_scan_targets()` 退化为 thin wrapper(走 `from_flags()`)· 测试 + 第三方脚本仍可调
-  - `run_data_pipeline()` 升级为双签名重载:第一个 positional arg 是 StockSet 走新路径 · 是 `str / None` 走老路径(`test_pipeline.py` 31 个测试零破坏)
-  - 新增 `resolve_stock_set_or_exit()` · StockSet 版的错误统一处理(上游异常 → typer.Exit)
-- 测试基线 651 passed → 692 passed(+10 stock_set meta 行为测试 · 零 functional regression)
-- StockSet `Protocol.meta` 用 method 不用 `@property` · 让 `isinstance(x, StockSet)` 的 `hasattr` 探测不触发 lazy IO(Pythonic + offline 测试友好)
-
-### Removed (公开 docs 精简)
-
-- 公开 `docs/` 从 11 → 6 文件(-45%) · maintainer 内部 SOP / 历史设计稿迁回总部私有归档
-- 保留 `docs/{roadmap, compliance, reviews/, README}.md`(用户可见 / 合规必读 / 版本回顾)
-- 极简原则:开源用户用 root README + CHANGELOG 就能用 · maintainer SOP 不需要 expose
+- License 变更（个人自用无影响 · 商业 / 二次开发请先看 LICENSE + NOTICE）
+- 新增 `kan find` / `kan group` / `kan move` / `kan export`
+- 现有命令新增 `--group`（不带 flag 走默认组「自选」）
+- `watchlist.json` 自动迁移 v1 → v2
 
 ## [0.0.5.1] - 2026-05-24
 
-### Fixed (UX)
+### Fixed
 
-- **升级期间显示进度 spinner** · 之前 `kan` 检测到新版后用户选 `y` 立即升级,从「✅ 偏好已保存 · 立即升级中...」到结果之间是完全的黑屏静默(实测 10-30s · 上限 120s),用户感知为"卡死"
-  - 根因:`updater.run_upgrade()` 用 `subprocess.run(capture_output=True)` 把 `uv tool install` / `pipx install` 的原生输出全部吞掉
-  - 修法:rich `Console.status` 包 subprocess 调用 · 主升级阶段「下载并安装中... (uv tool)」+ smoke 阶段「验证安装...」两段 spinner
-  - 非 TTY (pipe / CI) 自动退化静默 · 不污染 `kan scan | jq` 等 stdout pipe
-  - 影响入口:`kan` atexit auto-upgrade(场景 A 首次选 y / 场景 B auto_update=True)+ `kan update` 命令
+- 升级期间显示进度 spinner · 之前选「立即升级」后到结果之间是黑屏静默（10-30s）· 易被误判为卡死 · 非 TTY 环境自动静默不污染 pipe
 
 ## [0.0.5.0] - 2026-05-23
 
 ### Added
 
-- **东方财富热榜扫描** · `--hot rank|surge` 把人气榜 / 飙升榜作"临时自选股"标的来源
-  - 加到 scan / low / high / trend / fetch 5 个命令
-  - 热榜模式表格新增"榜"列(实时名次)
-  - `--only-watchlist` 支持自选 ∩ 热榜(过滤出"你的自选里也在热榜上的股")
-  - JSON cache 1h TTL · 减少接口压力
-- **TuShare Pro 可选数据源**(不配 token 行为零变化)
-  - 新命令组 `kan config get/set/unset` 管理用户配置
-  - 配置 `tushare-token`(在 https://tushare.pro 申请)+ `tushare-endpoint`(可选 · 默认 https://api.tushare.pro · 可填自部署镜像)
-  - 环境变量 `TUSHARE_TOKEN` / `TUSHARE_ENDPOINT` 在运行时覆盖 config.json
-  - 配 token 后 TuShare Pro 顶替 baostock 作 `fetch_kline` 主路径
-  - `kan config get` 自动 mask token(仅显示末 4 位)· token 永不进入 logs / exceptions
-- **题材位置扫描** · 9 个命令支持 `--theme=<题材名>`
-  - 7 个只读命令 `scan / low / high / trend / info / list / fetch` 支持 `--theme`(其中 5 个支持 `--only-watchlist`)
-  - 2 个破坏性命令 `add / remove` 支持 `--theme` · 必经二次确认 · `--yes` 跳过(慎用)
-  - 题材发现入口 `kan theme list [--all]` / `kan theme search 关键词`
-  - 数据源:同花顺 catalog/成分股 + 东方财富 K 线/反查 + 东财备份 fallback · 零 token 零配置
-  - 上游数据源限流时自动 5 分钟冷却 · 不重复打挂数据源
-- 新数据源 `adata>=2.9,<3` 主依赖(零 token · 多源融合)
-
-### Changed (用户可见)
-
-- **成交量异动标签从 2 档扩为 5 档对称**(scan 表 / `kan info` 详情)
-  - 明显放大(≥2.0x)/ 温和放大(1.5-2.0x)/ 量能平稳(0.67-1.5x)/ 温和萎缩(0.5-0.67x)/ 明显萎缩(<0.5x)
-  - 边界对数对称 · 修旧版"涨停日 1.73× 误标量能平稳"
-  - 阈值表见 `kan info --help`
-- **`kan --help` 速记表补齐 v0.0.5.0 全命令面**:compare / --format / --industry / --hot / --theme / kan theme / kan config
-- **`kan compare --format md` 表头统一为「名称 代码」** · 跟 terminal / scan / info / list 对齐(脚本 parse 用户注意)
-- 题材线 disclaimer 比 `--industry` 强一档:"题材跟风风险高于行业 · 题材分类各家口径不同"
-
-### Changed (内部架构 · 不影响用户行为)
-
-- 新模块 `kan/_pipeline.py` 编排器 · scan/trend 统一 resolve → fetch → compute → freshness 流水线
-- 新模块 `kan/render_terminal.py`(448 行)· 终端表格构建器统一 · scan/extreme/info/compare/trend 5 个 builder 复用
-- `cli_scan_cmds` 大文件拆为 5 个 per-command-group 文件(scan/extreme/info/compare/fetch · 单一职责)
-- `cli_watchlist_cmds` god-file 拆出 `cli_help.py`(help_cmd 速记 cheat-sheet 90 行独立 · watchlist 减 87 行 · help 文案变更不再触发 watchlist 编辑冲突)
-- `fetcher.py` 拆出 `kan/data_sources.py`(4 个数据源 fetcher + akshare 双源并发集中管理 · fetcher 保留 cache + 编排 + 公开 API · 数据获取与缓存编排解耦 · fetcher 613 → 384 行)
-- 公开仓内部注释清扫 · 注释中性化(整库 zero 残留)
-
-### Tests
-
-- baseline 525 → 648+ passed(+120 新 case)· 网络冒烟用 `@pytest.mark.network` marker 默认 CI 跳
+- **东方财富热榜扫描** · `--hot rank|surge` 作临时标的来源 · 加到 scan / low / high / trend / fetch · `--only-watchlist` 取自选 ∩ 热榜
+- **TuShare Pro 可选数据源** · `kan config get/set/unset` · 配 token 后顶替 baostock 主路径 · token 自动 mask · 不配 token 行为零变化
+- **题材位置扫描** · 9 命令支持 `--theme` · `kan theme list/search` 发现入口
+- 成交量异动标签从 2 档扩为 5 档对称（scan 表 / `kan info`）
 
 ### Known Issues
 
-- **题材成分股数据源动态不稳定**:同花顺 / 东方财富接口受上游限流 / 反爬 / 端点变化影响,可能阶段性不可用 · 触发时给友好提示"题材数据源暂不可用 · 行业扫描可用(`--industry`)"
-- **Apple Silicon arm64 + adata 间接依赖 `py_mini_racer`**:某些题材数据路径在 arm64 上 dylib 缺失会有 noise · 题材扫描已绕开主路径 · 影响仅在 debug log · M1+ Mac 用户题材出错时改用 `--industry` 替代
+- 题材成分股数据源受上游限流 / 接口变更影响可能阶段性不可用 · 触发时给友好提示 · 行业扫描（`--industry`）可用
+- Apple Silicon arm64 上某些题材数据路径有 dylib 噪音 · 仅影响 debug log · 可改用 `--industry`
 
 ## [0.0.4.8] - 2026-05-16
 
 ### Added
-
-- `kan/_log.py` 统一 debug_log helper · `KAN_DEBUG` env var 控制可见 · 21 处 broad except 加诊断 (***REMOVED***)
-- `kan/_time.py` `today()` SoT helper · 集中 `datetime.now().date()` 3 处避免漂移 (***REMOVED***)
-- fetched_at 凌晨/晚间日界提示 · 当天 00:00-04:59 显示 "今晨 01:00" · 昨天 22:00-23:59 显示 "昨晚 23:50" (***REMOVED***)
-- spinner ✅/❌ emoji + 累计失败数 · `⏳ 补数据 169 只 · ✅ 茅台` / `❌ 中铝… · 失败 3` 80 列不折行 (***REMOVED*** · 含 v0.0.4.8 finalize ***REMOVED*** 视觉宽收紧)
-- `kan add` 无参中文友好 · 不再 typer 英文 "Missing argument 'SYMBOLS...'" ***REMOVED***)
-- `kan remove` / `kan info` 同款散户中文 · 兑现 U-2 承诺到全命令组 ***REMOVED***)
-- 错误消息加"下一步引导" · `未找到... · 试 kan list 看自选 / 用代码精确加 kan add 600519` ***REMOVED***)
-- 命令速记表加版本号 · `慢慢看 · v0.0.4.8 · 命令速记` (***REMOVED***)
-- install.sh / install.ps1 SHA256 在 release notes 公布 (***REMOVED*** 短期 · 文化层防御)
+- 子命令 `--help` 信息密度提升 · 错误消息加「下一步引导」
+- 凌晨 / 晚间日界提示（「今晨 01:00」/「昨晚 23:50」）防误判数据日期
+- 批量补数据进度条加 ✅/❌ + 累计失败数
+- install.sh / install.ps1 SHA256 在 release notes 公布
 
 ### Changed
-
-- 涨跌停状态警告改纯状态描述 · 删 "可能回落/可能回升/都是正常波动" 预测性词 (***REMOVED*** + ***REMOVED*** cross-validated AGENTS.md §6 红线)
-- README 新手专区 default open + Verify before bash 段套 `<details>` 折叠 · 真小白默认不见 Verify (B.4 + B.5 ***REMOVED***)
-- 21 处 `except Exception` 加 `debug_log` 调用 (15 silent path · 6 已 user-visible 不改)
-- 收紧 `pandas>=2.0,<3` 防 pandas 3.0 read_parquet schema 严格化破坏 (***REMOVED*** maintainer Option C)
-- `debug_log` best-effort redact `/Users/<user>` + `token=<redacted>` 防 issue 截图 PII leak (***REMOVED***)
+- 涨跌停状态警告改纯状态描述 · 删除预测性措辞
+- 收紧 `pandas>=2.0,<3` 防 pandas 3.0 的 read_parquet 行为变更
+- debug 日志脱敏本地路径 + token
 
 ### Fixed
-
-- bootstrap-test 作弊 7 处 → CliRunner runtime 真测 (***REMOVED*** LOCKED 5-12)
-  - `tests/test_auto_workers.py` TestD1MigrationTextRemoved 3 case → TestD1RuntimeBehavior (mock rich.Console/Progress)
-  - `tests/test_cli_helpers_format.py` TestNoLegacyTextInWarnings 3 case 删除 → trend/scan runtime 共 6 case 替代
-  - `tests/test_cr4_coverage.py` docstring 更新
-- CLI 命令组覆盖率提升 (***REMOVED***)
-  - 新 `tests/test_watchlist_cli.py` · 11 case 覆盖 add/remove/list/clear (含 U-1 LOCKED 多匹配真测)
-  - 扩展 `tests/test_scan_cli.py` · 8 case 覆盖 scan/low/high/info + 3 warning runtime case
-- 296 → 345 tests passed (net +49 · 0 regression) · ruff clean
-
-### Governance (总部级 · 不影响 PyPI 包)
-
-- status.md auto-check hook 落地 (跨子项目治理 · ***REMOVED*** 欠 3 版上限触顶 hard gate)
-- v0.0.4.7 commit body 隐私 leak rebase reword (8 commits) + force-push main + retag v0.0.4.7 / v0.0.4.7.1 (***REMOVED*** LOCKED 闭环)
-- 7 角色 ***REMOVED*** v1.0 第 4 次实施 · 45 finding · 8 P0 (62% 单角色独家)
-- ***REMOVED***016 中性化 SELF_EXCLUDES 加 `projects/<name>/reviews/` (合法包含 finding 字面值)
-
-### Deferred to v0.0.4.9 / v0.0.5.0
-
-- v0.0.4.8.1 hotfix: install.sh / install.ps1 散户化文案 5 项 (***REMOVED*** LOCKED 分发资产独立 patch)
-- v0.0.4.9: 子命令 --help 信息密度提升 ***REMOVED*** sub-agent 自降级) + ***REMOVED*** pip-audit CI step + ***REMOVED*** rebase-note 内部审计
-- v0.0.5.0: `_log.py` + `_time.py` → `_util.py` 合并 · scan_runner fixture 参数化 · sigstore PEP 740 attestation + cosign sign
+- 测试改用真实 CLI runtime · 提升 CLI 命令组覆盖率
 
 ## [0.0.4.7.1] - 2026-05-14
 
-### Fixed · "检查缓存" spinner 进度可见 hotfix (真用户反馈触发)
-
-**主诉 case**：用户升级 v0.0.4.7 后跑 `kan scan` · 169 只自选股 + 冷启动 · `⏳ 检查缓存 ...` spinner 5-30s 沉默无任何子进度 · 真小白误判工具卡死。
-
-**根因**：v0.0.4.7 之前的 `_auto_fetch_stale` 第一个 spinner 是单句"检查缓存..." · 内部干 3 件事(lazy import akshare/pandas · 遍历 169 只调 is_fresh · 首次 latest_trade_date 可能拉 akshare)但全在同一 spinner 文字下 · 用户看不到任何 sub-progress。
-
-**修复方案**（B+C 组合 · 3 阶段 spinner）：
-
-- **Stage 1** `⏳ 加载数据模块...` (akshare/pandas import 阶段 · 1-3s)
-- **Stage 2** `⏳ 加载交易日历 · 169 只自选股待检查...` (explicit pre-warm `latest_trade_date()` · 防 ticking 阶段第 1 只时 latent 触发 akshare 5-15s 拉取)
-- **Stage 3** `⏳ 检查缓存 · 80/169 只 · 已发现 N 只 stale` (数字 ticking + 已发现 stale 数 · 每 5% update 一次 spinner · 防闪烁)
-
-不给精确 ETA (精度差容易让用户失望) · 用 "首次稍慢 · 后续秒级" 诚实表达 · 首次扫描会刷新全市场交易日历是一次性。
-
-**影响范围**：
-
-- 所有 v0.0.4.7 升级用户首次 `kan scan` / `kan trend` / `kan low` / `kan high` 都会受益(任何走 `_auto_fetch_stale` 的命令)
-- 30 只自选股第一次 scan 约 5-10s 看到 ticking · 169 只约 10-30s · 千只约 30-60s
-- 第二次起 ticking 极快(akshare 已 warm + trade_dates 已 cached)
-- ⚠️ 注:首次 scan 仍有总 30-60s 等待 · 但用户看得见进度 · 不再误判卡死
-
-**升级**：
-
-```bash
-uv tool install --upgrade manmankan
-```
-
-无需手动操作 · 自动生效。
-
-**测试**：
-
-- 新增 `tests/test_spinner_check_cache_progress.py` 3 case (覆盖 1 只 / 169 只 / 0 只边界)
-- 全套 292 passed (291 + 1 新)
-- ruff clean · privacy clean
+### Fixed
+- 「检查缓存」阶段分 3 段 spinner · 之前 169 只冷启动时单句提示 5-30s 无反馈 · 易被误判卡死 · 现显示 加载模块 → 交易日历预热 → 数字进度
 
 ## [0.0.4.7] - 2026-05-14
 
-### Added · 分发资产 + 散户友好
+### Added
+- 🌱 新手专区 + 一键安装脚本（install.sh / install.ps1）· mac / Windows 复制粘贴 2 步装好
+- `KAN_DATA_AVAIL_OFFSET_MIN`（跨时区 / WSL2 UTC）+ `KAN_WORKERS`（手动降并发）env var
 
-- **🌱 新手专区 + 一键安装脚本**：mac / Windows 第一次用命令行的散户复制粘贴 2 步装好
-  - `scripts/install.sh`（mac / Linux）：检测 / 装 uv → 装 manmankan → smoke verify · 全程中文 · 失败给 fallback
-  - `scripts/install.ps1`（Windows）：同等流程 + PowerShell ExecutionPolicy 友好提示
-  - README 顶部 `<details>` 折叠"新手专区"（不打扰老用户）· 含 mac / Win 各 2 步 + 装好后示例 + FAQ
-  - 调用：`curl -LsSf https://raw.githubusercontent.com/piklen/manmankan/main/scripts/install.sh | bash`
+### Changed
+- 日期格式压缩（同年隐藏年份 / 当天只显示时间）· 80 列窄屏不溢出
+- stale / 盘中警告改散户语言 · 显式算「滞后 N 天」
+- 补数据并发数自适应（cpu_count*2 · 上限 12）
 
-### Added · 防御纵深 + 故障可观察
-
-- **`KAN_DATA_AVAIL_OFFSET_MIN` env var**：跨时区 / WSL2 UTC / Docker 容器用户自救
-  - 默认 15:30 北京时间 · 设 `KAN_DATA_AVAIL_OFFSET_MIN=510` → WSL2 UTC 也能识别盘后
-- **`KAN_WORKERS` env var**：弱网 / 限流时手动降并发
-  - 默认 `min(cpu_count*2, 12)` · 设 `KAN_WORKERS=3` → 强制 3 并发
-- **故障 debug 日志**：`_read_cutoff_from_parquet` 异常路径加 debug logging ·
-  用户开 `KAN_DEBUG=1` 才显示
-
-### Changed · UX 散户化
-
-- **日期格式压缩**：scan / trend / info / low / high 5 处 title
-  - 同年隐藏 year：`数据截止 05-12 收盘`（旧 `2026-05-12`）
-  - 当天 fetched_at 只显示时间：`16:35 拉取`（旧 `2026-05-13 16:35`）
-  - 节省 ~16 char title 长度 · 80 列窄屏不溢出
-- **stale 警告改散户语言**：
-  - 旧：`数据截止 X · 应有最近交易日 Y · 建议 kan fetch --force 更新`
-  - 新：`当前缓存到 X 收盘 · 最近交易日是 Y · 数据滞后 N 天 / 运行 kan fetch --force 拉取最新数据`
-  - 关键升级：显式算"滞后 N 天" · 散户秒懂
-- **盘中警告改散户语言**：
-  - 旧：`当前盘中 · 数据持续变动 · 涨跌停标记可能瞬时反转`
-  - 新：`当前盘中 · 数据每秒变动 · 现在标的『涨停』可能下一秒打开 / 建议盘后 15:30 后再看(数据 final)`
-- **双警告互斥渲染**：`if/if` → `if/elif` · stale 状态下 fetch 后会重判 intraday · 减少噪音
-- **数据补全 UX 改善**：
-  - 移除 v0.0.4.5 一次性迁移文案（对老用户冗余）
-  - spinner description 加 stale 总数：`⏳ 补数据 · 169 只 stale · 最近: 寒武纪`
-  - 用户看到"169 只"立刻明白为什么这么多只在拉
-- **并发数自适应**：max_workers 硬编码 5 → `min(cpu_count*2, 12)` 启发式
-  - 8 核 Mac：5 → 12 并发（首次补全 169 只时间减半）
-  - 16 核 Mac Studio：cap 12 防 akshare 限流
-  - akshare 是 I/O bound · `cpu_count*2` 比 `cpu-1` 更合理
-
-### Fixed · 交易日历防御纵深
-
-- **`latest_trade_date()` 不再抛 RuntimeError**：akshare 失败 + cache 损坏双失败时
-  退化 weekday 启发式 + stderr warning
-- **缓存内容 sanity check**：三 invariant（count > 5000 · year < 2010 · max date > today-30）·
-  失败 cache miss
-- **`chmod 0o600` 真校验**：不再静默 `contextlib.suppress(OSError)` ·
-  失败 stderr warn + 显示实际 mode
-- **akshare 返回值校验**：DataFrame 空 / 缺列 / count 过少都触发 sanity 失败
-- **`_read_cache` except 缩窄**：`except Exception` →
-  `except (JSONDecodeError, ValueError, OSError)` + stderr warn
-- **`_trade_dates_memo` 加锁**：threading.Lock + double-checked locking ·
-  防 fetch_batch 多 worker 并发首调
-
-### Tests
-
-- `tests/test_trading_calendar.py` · 17 case（production 故障 + sanity 边界 + env var override + thread-safety）
-- `tests/test_cli_helpers_format.py` · 11 case（compact helpers + 文案 grep + if/elif）
-- `tests/test_auto_workers.py` · 12 case（auto cpu_count + KAN_WORKERS env + 文案 grep）
-- `tests/test_cr4_coverage.py` · 2 case（lex sort）
-- **全套 290 passed**（260 baseline + 30 新 · 0 regression）
-- ruff check kan/ tests/ · All checks passed
-
-### Migration
-
-升级方式：
-```bash
-uv tool install --upgrade manmankan   # uv 用户
-pipx upgrade manmankan                 # pipx 用户
-pip install -U manmankan               # pip 用户
-```
-
-或者用一键脚本 (mac / Linux):
-```bash
-curl -LsSf https://raw.githubusercontent.com/piklen/manmankan/main/scripts/install.sh | bash
-```
-
-跨时区用户:
-```bash
-export KAN_DATA_AVAIL_OFFSET_MIN=510   # WSL2 UTC 系统 (中国 23:30 = UTC 15:30)
-```
-
-弱网或自定并发:
-```bash
-export KAN_WORKERS=3   # 手动降到 3 并发
-```
-
-升级后无需任何手动操作 · 自动生效。
+### Fixed
+- 交易日历容错 · akshare 失败 + cache 损坏时退化为 weekday 启发式
+- 缓存内容 sanity check · 权限校验 · 异常 except 收窄
 
 ## [0.0.4.6] - 2026-05-13
 
-### Fixed · zsh/bash 命令补全报错 hotfix
-
-**主诉 case**：用户输入 `kan upd<Tab>` 触发 zsh 命令补全时报错：
-```
-_arguments:comparguments:327: invalid argument: 是否启用「以后自动升级」
-```
-
-**根因**：v0.0.4.5 发布后，已升级用户 config 中 `auto_update` 仍是 `None`（默认值，
-从未选过偏好）。zsh 补全调用 `kan` 子进程拿候选项时触发 `_check_updates_atexit` hook：
-
-1. typer 注入的补全脚本调用：
-   `eval $(env _TYPER_COMPLETE_ARGS="kan upd" _KAN_COMPLETE=complete_zsh kan)`
-2. 该 `kan` 子进程的 stdout 被 zsh `eval $(...)` 捕获，当 `_arguments` spec 解析
-3. Python 退出时跑 atexit，检测到新版本 + `auto_update is None` → 进入"首次询问"
-   分支，调 `typer.prompt(...)`
-4. prompt 文本「是否启用「以后自动升级」 [y/n/skip]:」默认写到 stdout → 被 zsh
-   `eval` 抓走 → `_arguments` 把这串中文当 spec 解析 → 报错
-
-**第二道护栏失效**：旧 isatty 判定用 `or`（`stdout.isatty() or stderr.isatty()`），
-补全场景 stdout 被 pipe（非 tty）但 stderr 仍是 tty，hook 错误判为"还是可交互"没跳过。
-
-**修复方案**（双护栏冗余）：
-- **新增 `_is_shell_completion_run()`**：检测 `_KAN_COMPLETE` / `_TYPER_COMPLETE_ARGS`
-  任一被设置 → 两个 atexit hook 立即 return，不输出任何字符。
-- **isatty 判定从 `or` 改为 `and`**：抽象为 `_is_interactive_session()`，stdout 和
-  stderr 都是 tty 才算可交互；pipe 场景（包括 `kan info | grep`）也不弹 prompt。
-- **`_auto_install_completion` 同步加 completion 护栏**：补全子调用绝不允许写
-  shell rc 文件（用户没主动 `kan completion install`）。
-
-**影响范围**：
-- v0.0.4.5 用户升级后第一次 Tab 补全必复现（auto_update 偏好未保存）
-- v0.0.4.6 完全静默补全调用，主流程 prompt 行为不变（交互式终端仍可询问）
-- 测试：新增 `tests/test_atexit_completion_isolation.py` 7 个回归测试 + 全量 248 绿
-
-**自查 / 复测命令**：
-```bash
-# 升级前复现（v0.0.4.5）：
-kan upd<Tab>
-# → _arguments:comparguments:327: invalid argument: 是否启用「以后自动升级」
-
-# 升级后（v0.0.4.6）：
-kan upd<Tab>
-# → 干净显示候选项 update · 无报错
-```
+### Fixed
+- zsh/bash 命令补全报错 hotfix · 补全子进程触发 atexit 询问 prompt 写到 stdout 被 shell 误解析 · 现补全场景完全静默 · isatty 判定从 `or` 改为 `and`
 
 ## [0.0.4.5] - 2026-05-13
 
-### Fixed · 数据时效性核心修复（v0.0.4.4 及之前用户必装）
-
-**主诉 case**：用户跑 `kan scan` 看到大族激光 002008 / 长电科技 / 风华高科等股票显示
-"涨停"标签 · 但实际今天这些股票并未涨停。
-
-**根因**：凌晨 02:55 跑过一次 `kan fetch` 后，缓存文件 `mtime` 日期已经是"今天"，
-但 K 线数据实际只到"昨天"（A 股 15:00 才收盘）。旧的 `_is_cache_fresh()` 判定
-`mtime_date == today()` 为 True · 整天不再触发刷新 · `scan` 显示的"涨停"是昨日
-真实涨停名单 + UI 标题错配为"今日更新"。
-
-**修复方案**：
-- **缓存新鲜度判据从 mtime → K 线 date 列**：`_is_cache_fresh` 改为读 parquet
-  最后一行 `date` 列 · 对比"应有最近交易日"（基于 A 股交易日历 + 收盘时段）。
-- **新增 `kan/trading_calendar.py` 模块**：封装 akshare 交易日历（7 天本地缓存）+
-  市场相位判定（pre/intraday/post/closed_day）+ `latest_trade_date(now)` 工具函数。
-- **标题分离展示"数据截止 X 收盘 · Y 拉取"**：scan / info / low / high / trend 全部
-  改为双字段展示 —— "数据截止"是 K 线 cutoff 日期 · "拉取"是文件 mtime · 严格分离
-  语义，用户一眼分辨数据时效性。
-- **盘中相位警告**：盘中（9:30-15:00）跑 scan 时显示 "⚠️ 当前盘中 · 数据持续变动 ·
-  涨跌停标记可能瞬时反转"，防止用户基于实时变动数据做决策。
-- **stale 警告升级**：缓存数据 cutoff 落后应有交易日时显示 "⚠️ 数据截止 X · 应有
-  最近交易日 Y · 建议 `kan fetch --force` 更新"。
-
-### Changed · 升级体验
-
-- **首次升级到 v0.0.4.5 时第一次 scan 会全量刷新缓存**（30-60s · 一次性）· 因为旧
-  缓存按新判据全部判 stale · `_auto_fetch_stale` 自动触发。之后每天只补 1-2 只
-  增量。这是预期行为 · 不是性能回退。
-
-### Tests
-
-- 新增 `tests/test_data_freshness.py` · 17 个 case 覆盖 5 类场景：
-  - 凌晨 02:55 反模式 smoking gun（mtime 今天 + K 线昨天 → 必须判 stale）
-  - 盘后 16:00 / 盘中 14:00 / 盘前 09:00 三相位
-  - 周六周日 → 期望周五
-  - 长假后第一天 → 期望节前最后交易日
-  - 15:30 阈值边界（前后 1 分钟）
-- 全套 241 测试通过 · 0.7s · ruff clean。
+### Fixed
+- **数据时效性核心修复（强烈建议升级）** · 凌晨拉数据后缓存 mtime 是「今天」但 K 线只到「昨天」· 导致 scan 整天显示昨日涨停名单。缓存新鲜度判据由 mtime 改为 K 线 date 列（对比 A 股交易日历）
+- 新增交易日历模块 + 市场相位判定（盘前 / 盘中 / 盘后）· 标题分离「数据截止 X 收盘」与「拉取时间」· 盘中相位警告
 
 ## [0.0.4.4] - 2026-05-12
 
-### Fixed · ***REMOVED***溃修复（升级用户必装）
+### Fixed
+- **安装后导入失败修复（强烈建议升级）** · 依赖加 SemVer 上限防拉到不兼容大版本 · 升级改 force-reinstall 避免老 `.so` cache 不重链 · 升级后跑 import smoke test · `scanner.py` 改 lazy import · 顶层 ImportError 兜底给 reinstall 引导
+- `kan add` 无效输入不再静默失败 · `kan info` 涨跌符号一致（▼绿 / ▲红）
 
-- **依赖版本范围加严**：typer / rich / pandas / numpy / pydantic / akshare / pyarrow / baostock
-  全部加上 SemVer 上限，防止用户从 PyPI 安装时拉到未来不兼容的大版本。
-  v0.0.4.3 ***REMOVED***溃就是这个原因（用户拿到 pandas 3.0 / typer 0.25 / rich 15
-  这些跟当前代码不兼容的版本）。
-- **升级走 force-reinstall**：`kan update` 之前用 `uv tool upgrade` / `pipx upgrade` /
-  `pip install --upgrade`，遇到老的本地缓存 `.so` 文件不会重新下载，macOS
-  Gatekeeper 会拒载老的缓存文件。现在统一改为 `--reinstall` / `--force` /
-  `--force-reinstall`，每次升级都是完整重装。
-- **升级后跑导入烟雾测试**：升级文件下载成功不代表装得起来。现在 `kan update`
-  在升级成功后跑一次 `import kan; from kan import scanner, fetcher, watchlist`
-  smoke test，import 失败会显示 "升级文件已下载但导入失败 · 建议手动 reinstall"。
-- **scanner.py 模块改 lazy import**：把 pandas 从顶层 import 改为函数体内 lazy
-  import，避免任意路径意外加载 pandas 时跳出 spinner 保护。
-- **顶层 ImportError catch + 行动建议**：`kan` 主入口包了一层 ImportError 处理，
-  装机不完整时不再抛 60+ 行 traceback，而是显示：
-  ```
-  ❌ kan 安装文件不完整 (...)
-  这通常发生在 kan update 升级中途被打断 · 或上游 deps 版本错位。
-  请运行：uv tool install manmankan --reinstall （或 pipx install manmankan --force）
-  ```
+### Security
+- 用户数据目录 0700 · `watchlist.json` / `config.json` 0600（防多账户环境他人读取持仓画像）
+- CI workflow 显式声明最小权限 · 加禁词扫描 job
 
-### Fixed · 用户体验一致性
-
-- **kan add 错误输入不再静默**：`kan add 999999`（无效代码）/ `kan add 不存在的名字`
-  （未找到）/ `kan add 科技`（多匹配）以前是屏幕空白 + Exit 0 静默失败，现在
-  显示错误信息并 exit 1。
-- **kan info 涨跌符号一致性**：之前 "跌 1 天 · 累计 0.85%" 是正数 + 负方向语义
-  冲突，现在跌显示 `▼0.85%`（绿）/ 涨显示 `▲0.85%`（红），跟 `kan trend` 命令
-  的详情列对齐。
-- **升级成功后建议开新终端**：`kan update` 完成时追加 "建议开新终端窗口跑下次命令 ·
-  当前终端有旧进程缓存" 提示，避免同一 shell 进程 .pyc cache 残留导致的长尾问题。
-
-### Security · 用户数据 + 发版门禁加固
-
-- **用户数据文件权限收紧**：`~/.local/share/kan/` 目录 mode 0700，`watchlist.json` /
-  `config.json` 文件 mode 0600。之前 mode 0644 在共享 macOS / 多账户 Linux 上
-  其他用户可读取用户的自选股清单（金融持仓画像）。
-- **CI workflow permissions 显式声明**：test.yml + release.yml 加 `permissions: contents: read`
-  防 supply chain 攻击链（fork PR 中恶意 dep 借继承的 GITHUB_TOKEN 写仓库）。
-- **CI 加 privacy scan job**：`bash scripts/check-privacy-leaks.sh` 作为必绿 job ·
-  之前依赖本地 pre-commit hook（`--no-verify` 可绕开）。
-- **CONTRIBUTING.md 明示 `git config core.hooksPath .githooks`**：贡献者必须激活
-  本地 pre-commit hook 才能拦住隐私词泄漏。
-
-### Added · CI 防回归 hard gate
-
-- **release.yml 加 post-publish smoke matrix**：发版后 sleep 60s 等 PyPI CDN 同步，
-  在 ubuntu/macos × uv/pip × python3.11/3.12 矩阵跑 clean install + `kan scan --help`
-  等核心命令，验证 entry point + import chain。**直接挡住 v0.0.4.3 类***REMOVED*** ship**。
-- **test.yml 加 tty-test job**：用 `script -q -c "..."` 在 PTY 下跑
-  `tests/test_cli_silent_period.py`，覆盖之前 CI `-m "not tty"` 排除的真 wrapper 路径。
-
-### Tests
-
-- 新增 `_maybe_print_boot_banner` 4 个参数化测试：白名单 + TTY / 白名单外 /
-  `--help` / `KAN_NO_BOOT_BANNER=1` env，覆盖所有分支。
-- 新增 cold-start invariant: `import kan.scanner` 时 pandas/numpy 不应出现在
-  sys.modules（subprocess 隔离验证）。
-
-### Docs
-
-- README 第 14 行版本横幅同步到 v0.0.4.4（v0.0.4.3 因***REMOVED***溃已 yank）。
-- README 30 秒上手块前加 uv 安装提示（`curl -LsSf https://astral.sh/uv/install.sh | sh`）。
-- README 加"故障排查 FAQ"段（装坏了 / 升级失败 → `uv tool install --reinstall` 引导）。
+### Added
+- release 后 PyPI clean-install smoke matrix（ubuntu/macos × uv/pip × py3.11/3.12）
 
 ## [0.0.4.3] - 2026-05-12 [YANKED]
 
-> ⚠️ **本版本已从 PyPI yank** · 用户端装机即崩（numpy C-extension macOS 代码签名 +
-> typer / rich / pandas 版本错位 + 顶层 `import pandas` 跳出 spinner 保护）。
-> 请直接升级到 v0.0.4.4：`uv tool install manmankan --reinstall`
+> ⚠️ **本版本已从 PyPI yank** · 安装后即崩溃（依赖版本错位 + 顶层 `import pandas`）。请直接升级到 v0.0.4.4：`uv tool install manmankan --reinstall`
 
-### Fixed · 测试基线校准
-
-- `tests/test_cli_silent_period.py` 改用真实 `kan` 入口测试（`os.execvpe`）。
-  之前用 `python -c bootstrap` 启动跳过了 wrapper 和 entry point 开销，导致测试
-  数据偏低。
-- 测试基线从 200ms 调整为 400ms（200ms 保留为理想目标，真实 wrapper 路径
-  受 Python 启动物理开销约束）。
-- 新增 `scripts/measure_slo.py`，统一用真实 `kan` 命令测启动延迟。
-
-### Performance · 启动反馈
-
-- `kan add/scan/fetch/low/high/info/trend` 在 TTY 下先输出 `⏳ 启动中...` 到
-  stderr，避免按回车后空屏。真实 wrapper 路径下首个可见反馈约 10-20ms。
-- 支持 `KAN_NO_BOOT_BANNER=1` 关闭该早期提示。
+### Performance
+- 启动阶段先输出 `⏳ 启动中...` 到 stderr 避免空屏 · `KAN_NO_BOOT_BANNER=1` 可关
 
 ## [0.0.4.2] - 2026-05-12
 
-### Changed · 启动阶段反馈细化
-
-- 数据命令启动分阶段提示：`⏳ 加载数据模块...` → `⏳ 检查缓存...` → `⏳ 拉取数据...`，
-  让长 watchlist 用户的等待阶段更可见。
-- `kan fetch` / `kan info` 的单只拉取也进入 stderr spinner。
-- 批量自动更新进度条文案改为 `⏳ 拉取数据 · 最近: <名称>`。
-
-### Fixed · 数据源切换可见化
-
-- A 股代码表主源 baostock 失败时显式提示正在切换 akshare 备用源，避免首次
-  `kan add` 因 fallback 变慢而看起来无解释。
-
-### Docs
-
-- 新增 `docs/reviews/v0.0.4.md` 记录启动反馈实测数据。
+### Changed
+- 启动分阶段提示（加载数据模块 → 检查缓存 → 拉取数据）· 单只拉取也进 spinner
+- A 股代码表主源失败时显式提示切换备用源
 
 ## [0.0.4.1] - 2026-05-12
 
-### Fixed · 启动反馈覆盖全数据命令
-
-- `kan fetch` / `kan low` / `kan high` / `kan info` / `kan trend` 在加载
-  `fetcher` / `scanner` / `render` 等数据模块前先显示 stderr spinner，避免按
-  回车后到第一帧输出之间空屏。
-- 测试覆盖扩展到上述命令的首帧延迟。
+### Fixed
+- `kan fetch / low / high / info / trend` 加载数据模块前先显示 spinner · 避免空屏
 
 ## [0.0.4.0] - 2026-05-12
 
-### Fixed · 数据命令启动反馈缺失
-
-- `kan/fetcher.py` 顶层不再 import `akshare` / `pandas`，改为函数体内按需加载，
-  避免 `kan` 启动时一次性付掉数据模块全部加载成本。
-- 新增 `_with_heavy_imports_spinner(console, message)` 统一封装，在重模块加载前
-  打开 `console.status(...)` 避免空屏。
-- `kan scan` 入口用 stderr spinner 包住 `fetcher` / `scanner` / `render` 等模块的
-  按需加载，首次反馈从约 500-700ms 提前到 200ms 内。
-
-### Docs
-
-- 新增 `docs/reviews/v0.0.3.md` 记录 v0.0.3 启动反馈实测和遗漏分析。
-
-### Docs
-
-- 新增 `docs/reviews/v0.0.3.md` 记录 v0.0.3 启动反馈审计和漏修原因。
+### Fixed
+- 数据命令启动反馈缺失 · `fetcher.py` 顶层不再 import akshare/pandas（改按需加载）· 重模块加载前打开 spinner · 首帧反馈从约 500-700ms 提前到 200ms 内
 
 ## [0.0.3] - 2026-05-11
 
-### Changed · 内部重构（零行为变更）
+### Changed
+- 内部重构（零行为变更）· `cli.py` 拆分为八个职责单一的子模块 · 命令组之间零耦合
 
-`kan/cli.py` **1512 → 44 行**八文件拆分，业务逻辑切到独立子模块：
-
-- `kan/app.py`: `typer.Typer` 单例 + version / main callback（避免循环 import）
-- `kan/cli_helpers.py`: 12 个共享 helper（错误脱敏 / 网络异常友好化 / 进度反馈 /
-  argv normalize / shell 检测 / install 检测 / watchlist 加载 / auto fetch）
-- `kan/cli_watchlist_cmds.py`: `help` / `add` / `remove` / `list` / `import` / `clear`
-- `kan/cli_scan_cmds.py`: `fetch` / `scan` / `low` / `high` / `info`
-- `kan/cli_trend_cmds.py`: `trend`
-- `kan/cli_meta_cmds.py`: `update` / `uninstall` / `completion`
-- `kan/cli_atexit.py`: 自动补全 + 自动更新 atexit hooks
-- `kan/cli.py`: 极薄 entry · `cli_main` + 末尾 import 触发 `@app.command` 注册
-
-共享 helper `_auto_fetch_stale` / `_get_watchlist_pairs` 被 5 个命令组（scan / trend /
-low / high / info）复用，挪到 `cli_helpers.py` 让命令组之间 **0 耦合**。
-
-### Added · 测试守护
-
-- `tests/test_cli_registration.py`: import-side-effect canary（命令数 + 命令名
-  集合断言 · 锁定 15 命令）· 任何子模块漏 import 立刻红
-- pytest 全套从 207 → **209**
-
-### Fixed · CI Lint
-
-- 5 类 7 处 ruff lint 一并清掉（SIM105 `contextlib.suppress` 替代 try/except pass ·
-  RUF100 / I001 / RUF059）
-- 顺手清 `kan/updater.py` SIM105（pre-existing on main · 熵减）
-
-### Docs
-
-- 删除过时的 `docs/publish-v0.0.2.md` 本地 publish runbook（v0.0.2 实际已通过
-  tag-trigger workflow 自动 publish）
-- 新增 `docs/publish-template.md`: Trusted Publisher OIDC + tag-trigger 工作流
-  标准 checklist · 每次发版照此走
+### Added
+- 命令注册守护测试（锁定命令集）
 
 ## [0.0.2] - 2026-05-11
 
-### Performance · 冷启动延迟修复
+### Performance
+- 冷启动延迟修复 · `akshare` 改 lazy import（仅 fallback 时才付加载成本）· 用轻量 paths 先决策再 import 重模块 · 启动反馈从约 10s 提前到立即可见
 
-**根因（v0.0.1 实测）**：`kan/watchlist.py` 顶层 `import akshare as ak` 把
-pandas / numpy / bs4 / requests 整窝拖入启动路径。单个 akshare import
-占 watchlist 模块加载成本 85%（热启动 229ms / 冷启动约 8s）。
-用户视角：按回车后 silent ~10s 才看到 ⏳ 加载提示。
-
-**修复**：
-- `akshare` 改 lazy import（仅在 baostock 主路径失败 fallback 时才付 import 成本）
-- 新增 `kan.paths.is_stock_names_cache_fresh()` + `NAMES_CACHE_MAX_AGE_DAYS`，
-  让 CLI 在 import 重模块前用极轻 paths（~370μs）先决策
-- `kan/cli.py` 抽 `_load_names_with_optional_spinner` helper，
-  spinner 提前到 watchlist 重模块 import 之前显示
-- `kan add` 用户视角：按回车后 0 启动反馈 · ⏳ 加载提示立即可见
-
-**实测收益**（首次添加股票场景）：
-- 冷启动 启动反馈 ~10s → 0s（spinner 立即可见）
-- baostock 主路径不再触发 pandas / numpy / bs4 / requests 等间接依赖
-
-### Added · 自动更新机制
-
-**核心**：
-- `kan update` 命令 · 检查并升级到最新版本（`-y` 跳过 confirm · `--check` 仅查不升）
-- 启动 atexit hook 自动检查（主命令完成后才查 · 不阻塞主流程）
-- 首次发现新版本 prompt y/n/skip 询问偏好 · 偏好持久化 `~/.local/share/kan/config.json`
-
-**5 个交互场景**：
-- 首次发现新版 + TTY → prompt 询问 auto_update 偏好
-- 选 y → 后续自动调对应包管理器 upgrade
-- 选 n → 每周限流 hint + `kan update` 命令引导
-- 网络失败 / PyPI 不可达 → 静默跳过 · 不破坏主命令
-- 非 TTY / `KAN_NO_UPDATE_CHECK=1` → 完全静默
-
-**安装方式自动检测**：通过 `sys.executable` 路径模式判 uv tool / pipx / pip venv
-
-**性能 + 隐私**：daily cache（同一天再启动跳过 PyPI 请求）· 3s timeout · 失败静默
-
-### Internal
-- `kan/paths.py`：`is_stock_names_cache_fresh()` + `NAMES_CACHE_MAX_AGE_DAYS` 常量
-- `kan/watchlist.py`：移除顶层 `import akshare as ak` · 保留 re-export 兼容
-- `kan/config.py`（新）· schema 持久化 + 损坏自愈 + atomic write
-- `kan/updater.py`（新）· PyPI 查询 + 包管理器派发 + 版本对比
-- `kan/cli.py`：抽 `_load_names_with_optional_spinner` helper + 新 `kan update` 命令 + atexit register `_check_updates_atexit`
-- `tests/test_paths.py`：4 case 守护 fresh 检查
-- `tests/test_watchlist.py::TestColdStartInvariants`：subprocess + monkeypatch 双重防 akshare 顶层 import 回归
-- `tests/test_config.py`（新）· 10 case 守护配置持久化（损坏自愈 + Unicode + atomic）
-- `tests/test_updater.py`（新）· 27 case 守护 PyPI / cache / 派发 / 升级各路径
+### Added
+- **自动更新机制** · `kan update`（`-y` 跳确认 / `--check` 仅查）· 启动 atexit 检查（不阻塞主流程）· 首次发现新版 prompt 询问偏好 · 安装方式自动检测（uv tool / pipx / pip）· daily cache + 3s timeout + 失败静默
 
 ## [0.0.1] - 2026-05-10
 
 ### Added · 首次公开发布
-
-**位置扫描** `kan scan`
-- 多周期位置扫描（3/5/7/10/15/30/60/90/120/180 日）
-- `--high` 高点模式 / `-S --signal` 仅显示有共振信号 / `--diff` 增量模式
-- `--exclude-st` 排除 ST/*ST
-- 多周期共振信号自动高亮（×N 标记）
-- 终端宽度自适应（130+ 列 10 周期 · 100 列 6 周期 · 80 列 4 周期 · 共振列始终可见）
-
-**筛选模式**
-- `kan low N [N2 ...]` / `kan high N [N2 ...]` 触及阈值筛选（≤5% 低点 / ≥95% 高点 · 支持多周期）
-
-**连续涨跌看板** `kan trend`
-- `--latest N` 近 N 天走势
-- `--down N` / `--up N` 筛选连续涨/跌（N 范围 2-30）
-- `--candle` 阳线阴线口径
-- 涨跌停自动标记
-- 跨板块差异化涨跌停限制（按 2026-07-06 政策日期切换）
-
-**单只详情**
-- `kan info <代码>` 全周期位置 + 涨跌 + 共振统计
-
-**自选股管理**
-- `kan add` 支持代码 + 名称搜索 + 批量
-- `kan remove` 支持名称 + 批量
-- `kan list` / `kan import` / `kan clear`
-- `kan uninstall` 一次清数据 + 输出包卸载命令（自动检测 uv tool / pipx / pip）
-
-**数据层**
-- 多源 K 线 fallback：`baostock → 新浪 → 东财 → 腾讯`
-- 本地 Parquet 缓存（`~/.local/share/kan/data/` · XDG 规范）
-- 7 天 A 股代码-名称缓存 + 自动过期更新
-- `kan fetch [--force]` 手动刷新
-
-**Shell 集成**
-- `kan completion install [shell]` 一键启用 zsh / bash / fish / powershell 命令前缀补全
-- 任意命令首次启动自动启用补全（`KAN_NO_COMPLETION_AUTOINSTALL=1` 可关闭 · 非 TTY 跳过）
-
-**合规与隐私**
-- 强制风险提示 + 关键词黑名单（无买卖建议 / 无目标价 / 无评级）
-- 所有数据本地存储 · 不上传任何用户数据
-- `CONTRIBUTING.md` + `SECURITY.md` + 公开输出语言纪律
+- **位置扫描** `kan scan` · 多周期（3/5/7/10/15/30/60/90/120/180 日）· `--high` / `-S` / `--diff` / `--exclude-st` · 共振 ×N 标记 · 终端宽度自适应
+- **筛选** `kan low N` / `kan high N`（≤5% 低点 / ≥95% 高点 · 多周期）
+- **连续涨跌看板** `kan trend` · `--latest` / `--down` / `--up` / `--candle` · 涨跌停跨板块差异化标记
+- **单只详情** `kan info` · **自选股管理** `kan add/remove/list/import/clear` · **`kan uninstall`** 一键清数据 + 输出卸载命令
+- **数据层** · 多源 K 线 fallback（baostock → 新浪 → 东财 → 腾讯）· 本地 Parquet 缓存（XDG 规范）· 7 天代码-名称缓存
+- **Shell 补全** · zsh / bash / fish / powershell
+- **合规与隐私** · 强制风险提示 + 关键词黑名单（无买卖建议 / 无目标价 / 无评级）· 数据全本地
 
 [Unreleased]: https://github.com/piklen/manmankan/compare/v0.0.6.5...HEAD
 [0.0.6.5]: https://github.com/piklen/manmankan/compare/v0.0.5.1...v0.0.6.5

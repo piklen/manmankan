@@ -116,7 +116,7 @@ class TestPostTushareApi:
             mock.json.return_value = self.SAMPLE_RESPONSE
             return mock
 
-        # ***REMOVED*** 后用 _get_session() · monkeypatch 改为 inject fake session
+        # 用 _get_session() · monkeypatch 改为 inject fake session
         class _FakeSession:
             def post(self, url, json, timeout):
                 return fake_post(url, json, timeout)
@@ -277,7 +277,7 @@ class TestFetchTushare:
             mock.json.return_value = sample
             return mock
 
-        # ***REMOVED*** 后用 _get_session() · monkeypatch 改为 inject fake session
+        # 用 _get_session() · monkeypatch 改为 inject fake session
         class _FakeSession:
             def post(self, url, json, timeout):
                 return fake_post(url, json, timeout)

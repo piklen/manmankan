@@ -51,7 +51,7 @@ def _print_token(cfg: dict, *, raw: bool = False) -> None:
         else:
             typer.echo(f"tushare_token: {masked}   (set via config)")
     else:
-        # 未配置时给散户引导***REMOVED***)· 而不是无声跳过该行
+        # 未配置时给引导 · 而不是无声跳过该行
         typer.echo(
             "tushare_token: 未配置 · "
             "用 `kan config set tushare-token <你的_token>` "

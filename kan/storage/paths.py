@@ -67,7 +67,7 @@ def atomic_write_parquet(df, path: Path) -> None:
     guarantee (Python 3.3+)。所有 parquet 写入统一走此 helper · 保持
     paths.py 轻量 (df 不加 pd.DataFrame 注解 · 不顶层 import pandas)。
 
-    v0.0.5.1 ***REMOVED***: 加 chmod 0o600 防持仓画像跨备份(Time Machine / iCloud)/
+    加 chmod 0o600 防持仓画像跨备份(Time Machine / iCloud)/
     跨容器逃逸 / 跨 FS(SMB/NFS)被同机其他用户读。父目录 0o700 是中度防御 ·
     0o600 是最后一道线。
     """
@@ -80,7 +80,7 @@ def atomic_write_parquet(df, path: Path) -> None:
 
 
 def atomic_write_json(path: Path, data: object, **dumps_kw) -> None:
-    """atomic 写入 JSON + chmod 0o600(***REMOVED*** · 持仓画像保护)。
+    """atomic 写入 JSON + chmod 0o600(持仓画像保护)。
 
     替代 path.write_text(json.dumps(...)) · 所有 cache/snapshot 写入应走此 helper:
     - boards.py / hot.py / circuit_breaker.py 等 cache 文件

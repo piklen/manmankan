@@ -53,7 +53,7 @@ class TushareApiError:
 
 
 def _make_session() -> requests.Session:
-    """带连接池 + 1 次自动重试的 Session(***REMOVED***)。
+    """带连接池 + 1 次自动重试的 Session。
 
     架构考量:
     - 付费 token 用户主动配置 TuShare Pro 当主路径 · 期望 production 级

@@ -10,7 +10,7 @@
 
 lazy import 模式保留 · 顶层只 import 极轻的 stdlib + typer · rich/akshare 等重模块函数体内 lazy。
 
-Helper 适用矩阵(***REMOVED*** · 防 6 命令使用漂移):
+Helper 适用矩阵(防 6 命令使用漂移):
   helper                          scan trend low high info compare fetch
   _auto_fetch_stale                ✓   ✓    ✓   ✓   ✓    ✓       —
   _get_watchlist_pairs             ✓   ✓    ✓   ✓   —    —       ✓
@@ -20,8 +20,7 @@ Helper 适用矩阵(***REMOVED*** · 防 6 命令使用漂移):
   _network_error_msg               —   ✓    —   —   ✓    ✓       ✓
   format_date_compact              ✓   ✓    ✓   ✓   ✓    ✓       —
   format_fetched_at_compact        ✓   ✓    ✓   ✓   ✓    ✓       —
-  pipeline.render_freshness_warning ✓ ✓   —   —   —    —       —   ← v0.0.5.1 计划推 4/6
-"""
+  pipeline.render_freshness_warning ✓ ✓   —   —   —    —       —"""
 import contextlib
 import os
 import re as _re
@@ -231,8 +230,8 @@ def _auto_fetch_stale(pairs: list[tuple[str, str]]) -> None:
     console = Console(stderr=True)
     n_total = len(pairs)
 
-    # v0.0.4.7.1 hotfix: "检查缓存" 3 阶段 spinner (B+C 组合 · 真用户反馈触发)
-    # 旧: 单句 "⏳ 检查缓存..." · 169 只 + akshare 冷启动可能 5-30s 沉默 · 真小白误判卡死
+    # "检查缓存" 分 3 阶段 spinner
+    # 旧实现单句 "⏳ 检查缓存..." · 169 只 + akshare 冷启动可能 5-30s 无反馈 · 易被误判为卡死
     # 新: import → trade_dates warm → ticking 数字进度 · 用户每秒看到工具在动
     with console.status(
         "[yellow]⏳ 加载数据模块...[/yellow]",

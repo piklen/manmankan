@@ -22,7 +22,7 @@ jobs:
           python-version: '3.12'
       - name: Build
         run: uv build
-      - name: Compute install.sh / install.ps1 SHA256 (v0.0.4.8 ***REMOVED***)
+      - name: Compute install.sh / install.ps1 SHA256
         run: |
           echo "## install scripts SHA256 (for Verify before bash · 用户校验用)" >> "$GITHUB_STEP_SUMMARY"
           echo '```' >> "$GITHUB_STEP_SUMMARY"
@@ -33,10 +33,9 @@ jobs:
         uses: pypa/gh-action-pypi-publish@cef221092ed1bacb1cc03d23a2d87d1d172e277b  # release/v1 (pinned 2026-02-18)
         with:
           packages-dir: dist/
-          attestations: true  # ***REMOVED*** 显式开启 sigstore PEP 740 attestation (v0.0.6.5)
+          attestations: true  # sigstore PEP 740 attestation
 
-  # v0.0.4.4 架构师 Finding ***REMOVED*** + 代码 CR Finding ***REMOVED*** (P0):
-  # 发版前 CI 测试 != 装回来跑命令 · v0.0.4.3 ***REMOVED***根因之一
+  # 发版前 CI 测试 ≠ 装回来跑命令 · 历史上是安装后导入失败的成因之一
   # 这个 job 模拟用户视角: PyPI clean install → 跑 kan 核心命令 → 验证 import chain
   post-publish-smoke:
     name: Smoke test from PyPI (clean install)

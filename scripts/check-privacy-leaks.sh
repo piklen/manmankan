@@ -115,7 +115,7 @@ DENY_TERMS=(
   "***REMOVED***"
   "***REMOVED***"
   "***REMOVED***"
-  # v0.0.4.4: 内部 mental model / OKR 节奏代号（安全审计 Finding S-6）
+  # 内部规划 / 节奏相关代号
   # 防社工攻击者用同款话术构造钓鱼 PR / issue
   "***REMOVED***"
   "***REMOVED***"
@@ -126,10 +126,15 @@ DENY_TERMS=(
   "***REMOVED***"
   "***REMOVED***"
   "***REMOVED***"
-  # v0.0.5.0: 内部 spec / 任务卡代号(neutral-expression 公开仓硬规则)
+  # 内部 spec / 任务卡代号
   "***REMOVED***"
   "***REMOVED***"
   "***REMOVED*** "
+  "***REMOVED***"
+  "***REMOVED***"
+  # 内部评审 / 治理叙事
+  "***REMOVED***"
+  "***REMOVED***"
   "***REMOVED***"
   "***REMOVED***"
 )
@@ -168,6 +173,32 @@ for term in "${DENY_TERMS[@]}"; do
 
   if [ -n "$matches" ]; then
     echo "❌ 命中禁用词「${term}」:"
+    echo "$matches" | sed 's/^/   /'
+    echo ""
+    LEAKS=$((LEAKS + 1))
+    HITS_FOUND="yes"
+  fi
+done
+
+# 内部任务卡 / 评审代号扫描 (正则补充 · DENY_TERMS 是固定串 · 这里扫带编号的代号)
+# 防 ***REMOVED*** / ***REMOVED*** / ***REMOVED*** / ***REMOVED*** / ***REMOVED*** / ***REMOVED*** / ***REMOVED***) / ***REMOVED***016 等内部代号回流公开档案
+TASK_CODE_PATTERNS=(
+  '架-[0-9]'
+  '安-[0-9]'
+  '合-[0-9]'
+  'CR-[0-9]'
+  'UX-[0-9]'
+  'PM-[0-9]'
+  'ADR-[0-9]'
+  '[（(]U-[0-9]'
+)
+for pat in "${TASK_CODE_PATTERNS[@]}"; do
+  matches=$(scan_files_z | xargs -0 grep -nEH "$pat" 2>/dev/null || true)
+  for self in "${SELF_EXCLUDES[@]}"; do
+    matches=$(echo "$matches" | grep -v "^${self}:" || true)
+  done
+  if [ -n "$matches" ]; then
+    echo "❌ 命中内部代号模式「${pat}」:"
     echo "$matches" | sed 's/^/   /'
     echo ""
     LEAKS=$((LEAKS + 1))

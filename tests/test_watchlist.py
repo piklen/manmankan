@@ -370,7 +370,7 @@ class TestColdStartInvariants:
     def test_scanner_top_level_does_not_load_pandas(self):
         """import kan.core.scanner 时 pandas/numpy 不应出现在 sys.modules（v0.0.4.4 加）。
 
-        v0.0.4.3 ***REMOVED***根因之一：scanner.py:8 顶层 `import pandas as pd`
+        早期版本安装后导入失败的成因之一：scanner.py 顶层 `import pandas as pd`
         触发 numpy C-extension load · macOS Gatekeeper 拒载老 .so cache。
         v0.0.4.4 改为 `if TYPE_CHECKING: import pandas` + 函数体 lazy。
         """

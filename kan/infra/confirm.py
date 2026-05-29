@@ -7,7 +7,7 @@
   - n / 回车 / Ctrl-C → False
   - y/Y → True
 
-跟 ***REMOVED***010 backup 协议精神一致 · 不可逆操作 + summary + 确认。
+不可逆操作前先打印影响 summary 再确认。
 """
 from __future__ import annotations
 

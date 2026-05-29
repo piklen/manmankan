@@ -110,7 +110,7 @@ def find(
 
     console = Console()
 
-    # 0. Validate --limit (***REMOVED*** 防 silent data loss via Python 负切片)
+    # 0. Validate --limit · 防 Python 负切片导致的 silent data loss
     if limit <= 0:
         _print_err("❌ --limit 必须为正整数 (例 --limit 20)")
         raise typer.Exit(2)
