@@ -115,7 +115,7 @@ DENY_TERMS=(
   "雪球"
   "一鱼两吃"
   "监管整改"
-  # v0.0.4.4: 内部 mental model / OKR 节奏代号（安全审计 Finding S-6）
+  # 内部规划 / 节奏相关代号
   # 防社工攻击者用同款话术构造钓鱼 PR / issue
   "silent 期"
   "round 2"
@@ -126,12 +126,17 @@ DENY_TERMS=(
   ".dev-thinking/"
   "/tmp/adata-spike"
   "私密路线规划目录"
-  # v0.0.5.0: 内部 spec / 任务卡代号(neutral-expression 公开仓硬规则)
+  # 内部 spec / 任务卡代号
   "F11"
   "T6 熔断"
   "T16 "
   "Spec §"
   "card-"
+  # 内部评审 / 治理叙事
+  "release-review"
+  "总部仓"
+  "审计档案"
+  "装机崩"
 )
 
 # 扫描范围委托给 git: ls-files --cached --others --exclude-standard
@@ -168,6 +173,32 @@ for term in "${DENY_TERMS[@]}"; do
 
   if [ -n "$matches" ]; then
     echo "❌ 命中禁用词「${term}」:"
+    echo "$matches" | sed 's/^/   /'
+    echo ""
+    LEAKS=$((LEAKS + 1))
+    HITS_FOUND="yes"
+  fi
+done
+
+# 内部任务卡 / 评审代号扫描 (正则补充 · DENY_TERMS 是固定串 · 这里扫带编号的代号)
+# 防 CR-1 / 架-6 / 安-5 / UX-4 / PM-3 / 合-1 / (U-8) / ADR-0016 等内部代号回流公开档案
+TASK_CODE_PATTERNS=(
+  '架-[0-9]'
+  '安-[0-9]'
+  '合-[0-9]'
+  'CR-[0-9]'
+  'UX-[0-9]'
+  'PM-[0-9]'
+  'ADR-[0-9]'
+  '[（(]U-[0-9]'
+)
+for pat in "${TASK_CODE_PATTERNS[@]}"; do
+  matches=$(scan_files_z | xargs -0 grep -nEH "$pat" 2>/dev/null || true)
+  for self in "${SELF_EXCLUDES[@]}"; do
+    matches=$(echo "$matches" | grep -v "^${self}:" || true)
+  done
+  if [ -n "$matches" ]; then
+    echo "❌ 命中内部代号模式「${pat}」:"
     echo "$matches" | sed 's/^/   /'
     echo ""
     LEAKS=$((LEAKS + 1))

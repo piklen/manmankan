@@ -383,7 +383,7 @@ def test_high_command_with_period_runs(scan_runner, monkeypatch):
 
 
 def test_low_command_no_args_uses_default_periods(scan_runner, monkeypatch):
-    """U-3: `kan low` 无参 · 用默认 periods [30, 60, 120] 跑(不报错)"""
+    """`kan low` 无参 · 用默认 periods [30, 60, 120] 跑(不报错)"""
     from kan.app import app
     from kan.cli import extreme_cmds
 

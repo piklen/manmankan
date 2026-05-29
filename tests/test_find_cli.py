@@ -70,19 +70,19 @@ class TestFindCli:
         assert "PERIOD:OP:VAL" in out or "kan find" in out
 
     def test_limit_negative_exits_two(self):
-        """CR-1 P0 · v0.0.6.5 release-review · 防 Python 负切片 silent drop."""
+        """防 Python 负切片 silent drop."""
         ec, out = _run(["find", "--pos", "180:lt:5", "--limit", "-1"])
         assert ec == 2
         assert "--limit 必须为正整数" in out
 
     def test_limit_zero_exits_two(self):
-        """CR-1 P0 · v0.0.6.5 release-review · --limit 0 不能跟 '无命中' 分支混淆."""
+        """--limit 0 不能跟 '无命中' 分支混淆."""
         ec, out = _run(["find", "--pos", "180:lt:5", "--limit", "0"])
         assert ec == 2
         assert "--limit 必须为正整数" in out
 
     def test_dsl_errors_include_fix_hint(self):
-        """用-3 P0 · v0.0.6.5 release-review · DSL 错误信息必须含修复示例.
+        """DSL 错误信息必须含修复示例.
 
         Rich console 可能 soft-wrap "例: --pos 180:lt:5" 跨行,因此分开断言
         "例:" 和 "180:lt:5" 都在 stderr 出现就够了。

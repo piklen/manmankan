@@ -160,7 +160,7 @@ def scan(
         signal_only=signal,
         board_index_result=board_index_result,
     )
-    # U-7: 头部 1 行 disclaimer 呼应(自选 100+ 只表格 · 防底部 disclaimer 滚屏顶掉)
+    # 头部 1 行 disclaimer 呼应(自选 100+ 只表格 · 防底部 disclaimer 滚屏顶掉)
     console.print("[dim]💡 慢慢看是观察工具 · 不预测涨跌 · 详见底部免责[/dim]")
     console.print(table)
 

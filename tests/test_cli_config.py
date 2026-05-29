@@ -31,7 +31,7 @@ def app():
 class TestConfigGet:
 
     def test_get_empty_shows_default_endpoint_and_unconfigured_token(self, runner, app, isolated_env):
-        """U-8: 未配 token 时 get 显示「未配置 · 用 kan config set ...」引导 + 默认 endpoint"""
+        """未配 token 时 get 显示「未配置 · 用 kan config set ...」引导 + 默认 endpoint"""
         result = runner.invoke(app, ["config", "get"])
         assert result.exit_code == 0
         assert "tushare_endpoint" in result.stdout

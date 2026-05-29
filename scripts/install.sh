@@ -9,7 +9,7 @@
 #   less /tmp/install.sh
 #   bash /tmp/install.sh
 #
-# 设计原则：真小白可读 · 全程中文 · idempotent · 失败给 fallback · 不留半成品
+# 设计原则：命令行新手可读 · 全程中文 · idempotent · 失败给 fallback · 不留半成品
 
 set -euo pipefail
 
