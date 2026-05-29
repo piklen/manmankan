@@ -52,3 +52,6 @@ Thumbs.db
 # AI assistant private system prompts (not for public repo)
 CLAUDE.md
 .claude/
+
+# Local think/scratch dir — not tracked
+.think/
