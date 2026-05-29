@@ -22,7 +22,7 @@
 为什么不走 OOP `ThemeIndexSet` + `run_data_pipeline`:
 - `trend_batch` 现有契约是 `get_cached(symbol)` 个股缓存 · 改它兼容多源会破坏简单性
 - 题材榜 UX 跟 watchlist trend 差异大(进度条 / 全量 391 / 排名列)· 独立命令更干净
-- 拒绝过度工程(docs/roadmap.md "当前痛点没出现就不引入抽象")
+- 不引入额外抽象 · 当前没有第二个多源题材榜需求
 """
 from __future__ import annotations
 

@@ -99,7 +99,7 @@ def compare(
     table = terminal.compare_table(results, periods=period_list)
     console.print(table)
 
-    # UX-5: 窄屏 + 多列时给提示 · 80 列下 ≥5 只表头会折断或裁掉
+    # 窄屏 + 多列时给提示 · 80 列下 ≥5 只表头会折断或裁掉
     # 经验阈值:每只股大约要 12-14 列(名称 + 代码 + 现价 + N 周期位置)
     estimated_width_per_col = 14
     overhead = 12  # "指标" 列宽 + 表格边框

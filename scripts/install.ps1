@@ -3,7 +3,7 @@
 # 调用方式（用户复制粘贴一行 · PowerShell 里跑）：
 #   powershell -c "irm https://raw.githubusercontent.com/piklen/manmankan/main/scripts/install.ps1 | iex"
 #
-# 设计原则：真小白可读 · 全程中文 · idempotent · 失败给 fallback · 不留半成品
+# 设计原则：命令行新手可读 · 全程中文 · idempotent · 失败给 fallback · 不留半成品
 #
 # 注意 ExecutionPolicy：
 # 如果跑脚本被拦，先在 PowerShell 跑一行（只影响当前用户，安全）：

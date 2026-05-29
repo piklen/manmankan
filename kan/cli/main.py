@@ -39,7 +39,7 @@ def cli_main() -> None:
     buffer 竞争（用户可能看不到 spinner 动画的 corner case）。
 
     v0.0.4.4: 顶层 try/except (ImportError, ModuleNotFoundError) 兜底 ·
-    防 v0.0.4.3 装机崩抛 60+ 行 traceback 地狱 · 给用户清晰 reinstall 引导。
+    防安装不完整时抛 60+ 行 traceback · 给用户清晰 reinstall 引导。
     """
     import atexit
 

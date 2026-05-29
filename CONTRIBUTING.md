@@ -66,7 +66,7 @@ git config user.email "<your-id>+<github-username>@users.noreply.github.com"
 获取你的 noreply email:GitHub Settings → Emails → 启用 "Keep my email addresses private" · 页面会显示形如
 `12345+username@users.noreply.github.com`。
 
-**老 commits 不动**(force-push 风险 · v0.0.4.7 已有先例)· 新 commits 起用 noreply。
+**老 commits 不动**(避免 force-push 重写已发布历史)· 新 commits 起用 noreply。
 
 ## Commit Message 规范
 
