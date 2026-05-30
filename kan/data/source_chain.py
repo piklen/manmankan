@@ -36,7 +36,7 @@ from kan.infra.log import debug_log
 if TYPE_CHECKING:
     import pandas as pd
 
-    from kan.data.protocols import KlineSource
+    from kan.data.protocols import KlineSource, MetricsSource
 
 
 _RACE_TIMEOUT_SECONDS = 15
@@ -224,3 +224,75 @@ def reset_default_chain() -> None:
     """
     global _default_chain
     _default_chain = None
+
+
+# ══════════════════════════════════════════════════════════════════
+# 截面指标领域 MetricsSourceChain (地基-1) · 同形 KlineSourceChain · 复用 _run_chain
+# ══════════════════════════════════════════════════════════════════
+
+
+class MetricsSourceChain:
+    """截面指标源责任链 · fetch(trade_date, symbols) -> (df, source_name) | None。
+
+    与 KlineSourceChain 同形 (复用通用 _run_chain) · 区别仅 fetch 签名
+    (截面 trade_date+symbols vs 单只 symbol+start)。
+
+    使用:
+        chain = MetricsSourceChain([TushareMetricsSource()])
+        result = chain.fetch("20260529")
+        if result is None:
+            ...  # 全源失败 / 不可用
+        df, source_name = result
+
+    设计要点 (同 KlineSourceChain):
+    - 构造时按 priority 排序 · runtime fetch 走 _run_chain 通用算法
+    - 同 priority 自动 race · is_available()=False 的源完全跳过 (不浪费 fetch)
+    - 全失败返 None · 不抛 · 调用方决定文案
+    """
+
+    def __init__(self, sources: list[MetricsSource]) -> None:
+        """注册 sources · 按 priority 升序排序 · 同 priority 保持注册顺序 (race 候选)。"""
+        self._sources: list[MetricsSource] = sorted(sources, key=lambda s: s.priority)
+
+    @property
+    def sources(self) -> list[MetricsSource]:
+        """已注册 sources 的 snapshot (priority 排序后) · 调试 / 检查用。"""
+        return list(self._sources)
+
+    def fetch(
+        self, trade_date: str, symbols: list[str] | None = None,
+    ) -> tuple[pd.DataFrame, str] | None:
+        """按 priority 依次试 · 同 priority 多源并发 race · 全失败返 None。
+
+        Returns:
+            (raw_df, source_name) · raw_df 列名已 rename 但未 normalize (chain 不做)
+            None · 所有源都失败 / 不可用
+        """
+        return _run_chain(self._sources, lambda src: src.fetch(trade_date, symbols))
+
+
+# ── metrics default chain (lazy singleton · 注册新源后失效) ─────────────
+
+_default_metrics_chain: MetricsSourceChain | None = None
+
+
+def default_metrics_chain() -> MetricsSourceChain:
+    """内置截面指标源链 · TushareMetricsSource (priority 10) + 用户注册源。
+
+    地基-1 只有 tushare 一个源 (PublicMetricsSource 降级源留 §5 后续) ·
+    lazy singleton · register_metrics_source 后 reset 失效重建。
+    """
+    global _default_metrics_chain
+    if _default_metrics_chain is None:
+        from kan.data._builtin_sources import builtin_metrics_sources
+        _default_metrics_chain = MetricsSourceChain(builtin_metrics_sources())
+    return _default_metrics_chain
+
+
+def reset_default_metrics_chain() -> None:
+    """清 metrics default chain 单例 · 让下次 default_metrics_chain() 重建 (含新注册源)。
+
+    register_metrics_source 内部调此 · 测试也可用此重置。
+    """
+    global _default_metrics_chain
+    _default_metrics_chain = None
