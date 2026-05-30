@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **`kan history <代码或名称>`** · 单只股票位置百分位历史回溯 · 纯离线读每日扫描快照（`kan scan` 累积的 240 天归档）· `--period` 切周期（默认 30）· `--format terminal|md|json` · 单周期纵向时间线（新→旧）+ 每日多周期共振标记 · 只覆盖曾在自选且跑过 `kan scan` 的股票 · 不预测涨跌，只回看历史位置
+
 ## [0.0.6.5] - 2026-05-27
 
 > 自 v0.0.5.0 起累积的多个内部版本（v0.0.5.1 → v0.0.6.1）一次性发布到 PyPI。
