@@ -22,6 +22,7 @@ if TYPE_CHECKING:
         PeriodResult,
         StockScanResult,
         ThemeMeta,
+        ValuationContext,
         ValuationMetrics,
         VolumeState,
     )
@@ -247,11 +248,15 @@ def info_payload(
     fetched_at: str | None,
     stale: bool,
     valuation: ValuationMetrics | None = None,
+    valuation_context: ValuationContext | None = None,
 ) -> dict:
     """kan info --format json 的结构化 payload。
 
     valuation (地基-2):单股截面市场指标 · 量价 / 市值客观事实 (估值裸值不对外 ·
     见 _valuation_public_dict) · 无 token / 无数据时为 None (AI 消费契约仍成立)。
+
+    valuation_context (地基-3):估值位置对照 · 历史分位 + 行业内分位 + 行业中位 ·
+    **只出分位 + 中位参照 · 绝不出个股估值裸值** (compliance · PRD §6) · 无数据时 None。
     """
     return {
         "command": "info",
@@ -268,6 +273,9 @@ def info_payload(
         },
         "volume": volume.model_dump() if volume else None,
         "valuation": _valuation_public_dict(valuation),
+        "valuation_context": (
+            valuation_context.model_dump() if valuation_context else None
+        ),
     }
 
 
