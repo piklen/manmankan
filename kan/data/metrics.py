@@ -209,3 +209,78 @@ def fetch_metrics(
     df = _normalize_metrics(raw, source=source)
     atomic_write_parquet(df, cache)
     return _filter_symbols(df, symbols)
+
+
+# ── 估值历史时序 (地基-3) · 历史分位原料 (单股多日 · 与截面正交) ──────────
+
+_HISTORY_COLUMNS = ["trade_date", "pe_ttm", "pb", "ps_ttm", "dv_ttm"]
+_HISTORY_TTL = 20 * 3600
+"""估值历史 cache TTL · ~每日刷新 (历史段固定 · 仅追加最新交易日)。"""
+_DEFAULT_LOOKBACK_DAYS = 730  # 估值分位回看 ~2 年
+
+
+def _history_cache_path(symbol: str) -> Path:
+    if not _SYMBOL_PATTERN.match(symbol):
+        raise ValueError(f"非法股票代码: {symbol!r}")
+    return DATA_DIR / f"metrics_hist_{symbol}.parquet"
+
+
+def _empty_history_df() -> pd.DataFrame:
+    import pandas as pd
+    return pd.DataFrame(columns=_HISTORY_COLUMNS)
+
+
+def _normalize_history(df: pd.DataFrame) -> pd.DataFrame:
+    """归一化估值时序:补缺列 + trade_date → date + 数值清洗 + 去无效行。"""
+    import pandas as pd
+
+    for col in _HISTORY_COLUMNS:
+        if col not in df.columns:
+            df[col] = float("nan")
+    df = df[_HISTORY_COLUMNS].copy()
+    df["trade_date"] = pd.to_datetime(df["trade_date"], errors="coerce").dt.date
+    for col in ("pe_ttm", "pb", "ps_ttm", "dv_ttm"):
+        df[col], _bad = to_numeric_checked(df[col])
+    return df.dropna(subset=["trade_date"]).reset_index(drop=True)
+
+
+def fetch_valuation_history(
+    symbol: str,
+    lookback_days: int = _DEFAULT_LOOKBACK_DAYS,
+    force: bool = False,
+) -> pd.DataFrame:
+    """单股估值时序 (pe_ttm/pb/ps_ttm/dv_ttm) · 估值历史分位原料 (地基-3)。
+
+    走 tushare daily_basic (ts_code + start_date · 单股多日) · 单股 parquet 缓存。
+    无 token / 失败 / 非法 symbol → 空 DataFrame (不抛 · 分位维度缺失即降级)。
+
+    Args:
+        symbol: 6 位代码
+        lookback_days: 回看天数 (默认 ~2 年 · 分位样本)
+        force: 跳缓存强制重拉
+    """
+    from datetime import timedelta
+
+    from kan.core.trading_calendar import latest_trade_date
+    from kan.data.tushare import _fetch_tushare_metrics_history
+
+    if not _SYMBOL_PATTERN.match(symbol):
+        return _empty_history_df()
+    ensure_dirs()
+    cache = _history_cache_path(symbol)
+    if (
+        not force
+        and cache.exists()
+        and (time.time() - cache.stat().st_mtime) < _HISTORY_TTL
+    ):
+        loaded = _load_metrics_cache(cache)
+        if loaded is not None:
+            return loaded
+
+    start = (latest_trade_date() - timedelta(days=lookback_days)).strftime("%Y%m%d")
+    raw = _fetch_tushare_metrics_history(symbol, start)
+    if raw is None or raw.empty:
+        return _empty_history_df()
+    df = _normalize_history(raw)
+    atomic_write_parquet(df, cache)
+    return df

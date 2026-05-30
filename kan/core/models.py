@@ -63,6 +63,29 @@ class ValuationMetrics(BaseModel):
     source: str | None = None            # 数据源标注 (_source · 例 tushare_metrics)
 
 
+class ValuationContext(BaseModel):
+    """估值位置对照 · 输出层合规呈现 (地基-3)。
+
+    把个股估值比率 (pe_ttm / pb · 易误读裸值) 转成位置型表达 · 对外只出分位 + 行业
+    中位对照 · **绝不含个股估值裸值** (compliance · PRD §6 · 估值位置 = 价格位置同构延伸):
+    - *_pct_rank:     历史分位 (当前值在自身近 N 年序列的百分位 · temporal)
+    - *_industry_pct: 行业内分位 (当前值在申万一级同行的百分位 · cross-sectional · 50=中位)
+    - *_industry_median: 申万一级同行中位 (aggregate 参照值 · 非个股裸值)
+
+    所有字段可空 (无 token / 历史不足 / 行业样本不足 → None · 优雅降级)。
+    """
+
+    industry: str | None = None              # 申万一级行业名
+    lookback_days: int | None = None         # 历史分位回看天数
+    industry_sample: int | None = None       # 行业样本数 (分位/中位可信度)
+    pe_pct_rank: float | None = None         # PE 历史分位 (0-100)
+    pb_pct_rank: float | None = None         # PB 历史分位 (0-100)
+    pe_industry_pct: float | None = None     # PE 行业内分位 (0-100)
+    pb_industry_pct: float | None = None     # PB 行业内分位 (0-100)
+    pe_industry_median: float | None = None  # 申万一级 PE 中位 (参照)
+    pb_industry_median: float | None = None  # 申万一级 PB 中位 (参照)
+
+
 class EnrichedResult(StockScanResult):
     """StockScanResult + 按需挂载的多维指标 (lazy · 不强制全拉)。
 
