@@ -3,20 +3,61 @@
 # manmankan 公开输出隐私泄漏检查
 #
 # 用法:
-#   bash scripts/check-privacy-leaks.sh
+#   bash scripts/check-privacy-leaks.sh                  # 扫 git tracked 工作树 + 版本号一致性
+#   bash scripts/check-privacy-leaks.sh --commit-msg <file>   # commit-msg hook 用 · 扫单个 message 文件
 #
 # 退出码:
 #   0 = clean (无禁用词命中 + 版本号一致)
 #   1 = 发现禁用词命中或版本号撕裂 (打印命中位置)
 #
+# ─── 禁用词从哪来 ───────────────────────────────────────────────
+# 本脚本是公开档案 · 不能把私密词清单写进来 (否则脚本本身就是泄漏面)。
+#   · 公开词 (通用 AI 署名)        → 内联在本脚本 (PUBLIC_DENY_TERMS) · CI 也能拦
+#   · 私密词 / 内部代号 / 正则模式  → .ai/private/privacy-deny.txt (gitignored · 维护者自维护)
+# 私密清单缺失 (CI / 新 clone) → 自动降级只扫公开词 · 仍能拦 AI 署名。
+#
 # 详细规范见 CONTRIBUTING.md「公开输出语言规范」
 
 set -uo pipefail
 
-cd "$(git rev-parse --show-toplevel 2>/dev/null || echo .)"
+REPO_ROOT="$(git rev-parse --show-toplevel 2>/dev/null || echo .)"
+cd "$REPO_ROOT"
 
-# ─── 模式 1: --commit-msg <file> · 单独扫一个 commit message 文件 ───
+# ─── 公开禁用词 · 通用 AI 工具署名 (留在 tracked 脚本里是合法的 · 不暴露维护者隐私) ───
+# grep 用 -F (固定字符串) 避免正则误伤
+PUBLIC_DENY_TERMS=(
+  "Claude"
+  "Codex"
+  "Cursor 编辑器"
+  "Co-authored-by:"
+  "🤖 Generated"
+  "claude.com/claude-code"
+)
+
+# ─── 私密禁用词 + 模式 · 从 gitignored 文件动态读 ───
+# 文件格式: 一行一项 · `#` 开头 / 空行跳过 · `re:` 前缀 = 正则模式 (grep -E) · 其余 = 固定串 (grep -F)
+# 维护者自己维护 · 子仓没此文件就降级 (CI / fresh clone 正常)
+PRIVATE_DENY_FILE="${REPO_ROOT}/.ai/private/privacy-deny.txt"
+PRIVATE_TERMS=()
+PRIVATE_PATTERNS=()
+if [ -f "$PRIVATE_DENY_FILE" ]; then
+  while IFS= read -r line || [ -n "$line" ]; do
+    line="${line%$'\r'}"          # 去掉 CRLF 尾
+    [ -z "$line" ] && continue
+    case "$line" in
+      \#*) continue ;;
+      re:*) PRIVATE_PATTERNS+=("${line#re:}") ;;
+      *)    PRIVATE_TERMS+=("$line") ;;
+    esac
+  done < "$PRIVATE_DENY_FILE"
+fi
+
+PRIVATE_POINTER=".ai/private/privacy-deny.txt"
+
+# ════════════════════════════════════════════════════════════════
+# 模式 1: --commit-msg <file> · 单独扫一个 commit message 文件
 # 给 .githooks/commit-msg 调用 · 拦下 commit 阶段的内部代号 / 隐私词
+# ════════════════════════════════════════════════════════════════
 if [ "${1:-}" = "--commit-msg" ]; then
   COMMIT_MSG_FILE="${2:-}"
   if [ -z "$COMMIT_MSG_FILE" ] || [ ! -f "$COMMIT_MSG_FILE" ]; then
@@ -24,36 +65,35 @@ if [ "${1:-}" = "--commit-msg" ]; then
     exit 1
   fi
   COMMIT_MSG="$(cat "$COMMIT_MSG_FILE")"
-  # 跳过空 commit msg / merge commit / squash 模板
+  # 跳过空 commit msg / merge commit / squash 模板 (只剩 # 注释行)
   if [ -z "$(echo "$COMMIT_MSG" | grep -v '^#' | tr -d '[:space:]')" ]; then
     exit 0
   fi
-  # 简化扫描:对每个禁词跑 grep -F
-  # 用 array 累积命中行 + 跳过 nounset 局部问题
-  COMMIT_MSG_DENY=(
-    "Claude" "Codex" "Co-authored-by:" "🤖 Generated" "claude.com/claude-code"
-    "鼠鼠" "鼠哥" "所长" "章鱼哥" "韭菜实验室"
-    "youzi" "biemai" "stock-mbti" "zhiyan-stock"
-    "8w 韭菜" "¥8w" "北极星" "小红书" "雪球" "一鱼两吃"
-    "silent 期" "round 2" "round 3" "候选版" ".dev-thinking/"
-    "Spec §" "T6 熔断" "T16 " "card-" "F11"
-  )
+
   COMMIT_HITS=()
-  for t in "${COMMIT_MSG_DENY[@]}"; do
+  # 公开词 (命中可打印字面值 · 本就公开)
+  for t in "${PUBLIC_DENY_TERMS[@]}"; do
     if printf '%s' "$COMMIT_MSG" | grep -qF -- "$t"; then
-      COMMIT_HITS+=("  命中字面值: $t")
+      COMMIT_HITS+=("  命中公开禁词: $t")
     fi
   done
-  # 任务卡代号模式扫描(grep -E · 精确捕获)
-  COMMIT_MSG_PATTERNS=(
-    '\(U-[0-9]+\)' '\(UX-[0-9]+\)' '\(CR-[0-9]+\)'
-    '\(PM-[0-9]+\)' '\(架-[0-9]+\)' '\(安-[0-9]+\)' '\(合-[0-9]+\)'
-  )
-  for p in "${COMMIT_MSG_PATTERNS[@]}"; do
-    if printf '%s' "$COMMIT_MSG" | grep -qE -- "$p"; then
-      COMMIT_HITS+=("  命中模式: $p")
-    fi
-  done
+  # 私密词 (命中不回显字面值 · 防 log 二次泄漏)
+  if [ "${#PRIVATE_TERMS[@]}" -gt 0 ]; then
+    for t in "${PRIVATE_TERMS[@]}"; do
+      if printf '%s' "$COMMIT_MSG" | grep -qF -- "$t"; then
+        COMMIT_HITS+=("  命中私密禁词 (具体见 ${PRIVATE_POINTER})")
+      fi
+    done
+  fi
+  # 私密正则模式 (命中不回显)
+  if [ "${#PRIVATE_PATTERNS[@]}" -gt 0 ]; then
+    for p in "${PRIVATE_PATTERNS[@]}"; do
+      if printf '%s' "$COMMIT_MSG" | grep -qE -- "$p"; then
+        COMMIT_HITS+=("  命中私密模式 (具体见 ${PRIVATE_POINTER})")
+      fi
+    done
+  fi
+
   if [ "${#COMMIT_HITS[@]}" -gt 0 ]; then
     echo "❌ commit message 命中 ${#COMMIT_HITS[@]} 处禁词 / 内部代号:"
     printf '%s\n' "${COMMIT_HITS[@]}"
@@ -64,84 +104,13 @@ if [ "${1:-}" = "--commit-msg" ]; then
   exit 0
 fi
 
-# ─── 模式 2: 默认 · 扫 git tracked 工作树 + 版本号一致性 ───
-
-# 禁用词表
-# grep 用 -F (固定字符串) 避免正则误伤
-DENY_TERMS=(
-  # AI 工具自身署名
-  "Claude"
-  "Codex"
-  "Plan agent"
-  "Plan subagent"
-  "Explore agent"
-  "Cursor 编辑器"
-  "Co-authored-by:"
-  "🤖 Generated"
-  "claude.com/claude-code"
-  # AI 协作过程语境
-  "audit 漏判"
-  "audit-must-user-test"
-  "user-test 漏判"
-  "user-test"
-  "LOCKED 准则"
-  "LOCKED 工作流"
-  "合伙人 mode"
-  "subagent 产出"
-  "用户拍板"
-  "维护者拍板"
-  "鼠鼠拍板"
-  "和鼠鼠讨论"
-  "鼠鼠决定"
-  # 维护者私人称谓
-  "鼠鼠"
-  "鼠哥"
-  "所长"
-  "章鱼哥"
-  "五好青年"
-  "韭鼠"
-  "韭菜实验室"
-  # 维护者其他工作区 / 项目代号
-  "youzi"
-  "biemai"
-  "stock-mbti"
-  "zhiyan-stock"
-  # 维护者个人 / 账户
-  "8w 韭菜"
-  "¥8w"
-  "北极星"
-  # 跨项目语境
-  "小红书"
-  "雪球"
-  "一鱼两吃"
-  "监管整改"
-  # 内部规划 / 节奏相关代号
-  # 防社工攻击者用同款话术构造钓鱼 PR / issue
-  "silent 期"
-  "round 2"
-  "round 3"
-  "round 4"
-  "round 5"
-  "候选版"
-  ".dev-thinking/"
-  "/tmp/adata-spike"
-  "私密路线规划目录"
-  # 内部 spec / 任务卡代号
-  "F11"
-  "T6 熔断"
-  "T16 "
-  "Spec §"
-  "card-"
-  # 内部评审 / 治理叙事
-  "release-review"
-  "总部仓"
-  "审计档案"
-  "装机崩"
-)
+# ════════════════════════════════════════════════════════════════
+# 模式 2: 默认 · 扫 git tracked 工作树 + 版本号一致性
+# ════════════════════════════════════════════════════════════════
 
 # 扫描范围委托给 git: ls-files --cached --others --exclude-standard
 # 自动 respect .gitignore + .git/info/exclude + global gitignore
-# (旧 EXCLUDES 数组已删 · 不再手动维护两套排除规则 · 防 .coverage 等 ignored 文件误报)
+# (私密词文件 .ai/private/ 本身 gitignored · 不会被扫到 · 也不会进 git)
 #
 # 注: 用函数包装而非变量缓存 —— bash $(...) command substitution 会 strip NUL
 # bytes (POSIX shell 限制 · 不可 work around)。函数 + pipe 避开此坑 · 同时
@@ -154,25 +123,35 @@ scan_files_z() {
 SELF_EXCLUDES=(
   "scripts/check-privacy-leaks.sh"
   "CONTRIBUTING.md"
+  ".ai/private/"
 )
 
+# 过滤 SELF_EXCLUDES (git ls-files 输出不带 ./ 前缀)
+strip_self_excludes() {
+  local matches="$1"
+  local self
+  for self in "${SELF_EXCLUDES[@]}"; do
+    matches="$(echo "$matches" | grep -v "^${self}" || true)"
+  done
+  printf '%s' "$matches"
+}
+
 echo "🔍 manmankan 公开档案隐私泄漏自检 ..."
+if [ ! -f "$PRIVATE_DENY_FILE" ]; then
+  echo "   ⚠️ 私密词清单 ${PRIVATE_POINTER} 不存在 → 仅扫公开词 (CI / 新 clone 正常)"
+fi
+echo "   词清单: 公开 ${#PUBLIC_DENY_TERMS[@]} · 私密 ${#PRIVATE_TERMS[@]} · 私密模式 ${#PRIVATE_PATTERNS[@]}"
 echo ""
 
 LEAKS=0
 HITS_FOUND=""
 
-for term in "${DENY_TERMS[@]}"; do
-  # grep -F 固定字符串避免正则误伤 · -H 强制显示文件名前缀
+# ─── 公开词 (命中回显完整行 · 本就公开) ───
+for term in "${PUBLIC_DENY_TERMS[@]}"; do
   matches=$(scan_files_z | xargs -0 grep -nHF "$term" 2>/dev/null || true)
-
-  # 过滤自身 (git ls-files 输出不带 ./ 前缀)
-  for self in "${SELF_EXCLUDES[@]}"; do
-    matches=$(echo "$matches" | grep -v "^${self}:" || true)
-  done
-
+  matches=$(strip_self_excludes "$matches")
   if [ -n "$matches" ]; then
-    echo "❌ 命中禁用词「${term}」:"
+    echo "❌ 命中公开禁用词「${term}」:"
     echo "$matches" | sed 's/^/   /'
     echo ""
     LEAKS=$((LEAKS + 1))
@@ -180,41 +159,48 @@ for term in "${DENY_TERMS[@]}"; do
   fi
 done
 
-# 内部任务卡 / 评审代号扫描 (正则补充 · DENY_TERMS 是固定串 · 这里扫带编号的代号)
-# 防 CR-1 / 架-6 / 安-5 / UX-4 / PM-3 / 合-1 / (U-8) / ADR-0016 等内部代号回流公开档案
-TASK_CODE_PATTERNS=(
-  '架-[0-9]'
-  '安-[0-9]'
-  '合-[0-9]'
-  'CR-[0-9]'
-  'UX-[0-9]'
-  'PM-[0-9]'
-  'ADR-[0-9]'
-  '[（(]U-[0-9]'
-)
-for pat in "${TASK_CODE_PATTERNS[@]}"; do
-  matches=$(scan_files_z | xargs -0 grep -nEH "$pat" 2>/dev/null || true)
-  for self in "${SELF_EXCLUDES[@]}"; do
-    matches=$(echo "$matches" | grep -v "^${self}:" || true)
+# ─── 私密词 (命中只回显 路径:行号 · 不回显内容 / 不回显词 · 防二次泄漏) ───
+if [ "${#PRIVATE_TERMS[@]}" -gt 0 ]; then
+  for term in "${PRIVATE_TERMS[@]}"; do
+    matches=$(scan_files_z | xargs -0 grep -nHF "$term" 2>/dev/null || true)
+    matches=$(strip_self_excludes "$matches")
+    if [ -n "$matches" ]; then
+      locs=$(echo "$matches" | cut -d: -f1,2)
+      echo "❌ 命中私密禁用词 (具体词见 ${PRIVATE_POINTER}):"
+      echo "$locs" | sed 's/^/   /'
+      echo ""
+      LEAKS=$((LEAKS + 1))
+      HITS_FOUND="yes"
+    fi
   done
-  if [ -n "$matches" ]; then
-    echo "❌ 命中内部代号模式「${pat}」:"
-    echo "$matches" | sed 's/^/   /'
-    echo ""
-    LEAKS=$((LEAKS + 1))
-    HITS_FOUND="yes"
-  fi
-done
+fi
+
+# ─── 私密正则模式 (同样只回显 路径:行号) ───
+if [ "${#PRIVATE_PATTERNS[@]}" -gt 0 ]; then
+  for pat in "${PRIVATE_PATTERNS[@]}"; do
+    matches=$(scan_files_z | xargs -0 grep -nEH "$pat" 2>/dev/null || true)
+    matches=$(strip_self_excludes "$matches")
+    if [ -n "$matches" ]; then
+      locs=$(echo "$matches" | cut -d: -f1,2)
+      echo "❌ 命中私密内部代号模式 (具体见 ${PRIVATE_POINTER}):"
+      echo "$locs" | sed 's/^/   /'
+      echo ""
+      LEAKS=$((LEAKS + 1))
+      HITS_FOUND="yes"
+    fi
+  done
+fi
 
 if [ -n "$HITS_FOUND" ]; then
   echo "═══════════════════════════════════════════════════════════"
   echo "❌ 共 ${LEAKS} 类禁用词命中 · 修复后再 commit / push"
   echo "   规范详见 CONTRIBUTING.md「公开输出语言规范」"
+  echo "   私密词清单: ${PRIVATE_POINTER} (gitignored)"
   echo "═══════════════════════════════════════════════════════════"
   exit 1
 fi
 
-# ===========================================================
+# ════════════════════════════════════════════════════════════════
 # 版本号一致性检查 (堵文档与发版号撕裂的盲区)
 # 允许位置:
 #   - CHANGELOG.md / docs/reviews/ (历史回顾允许多版本号)
@@ -222,7 +208,7 @@ fi
 #   - scripts/check-version-bump.sh (本身是版本守门脚本 · docstring 含反例)
 #   - tests/test_check_version_bump.py (测试 fixture 含 fake 版本号合法)
 # 其他文件出现 v0.[1-9].x 或 v[1-9].x 字样视为撕裂
-# ===========================================================
+# ════════════════════════════════════════════════════════════════
 echo ""
 echo "🔍 版本号一致性检查 ..."
 
