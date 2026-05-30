@@ -14,15 +14,24 @@ from typing import TYPE_CHECKING
 if TYPE_CHECKING:
     from datetime import date
 
+    from kan.core.find_filter import FindMatch
     from kan.core.models import (
         BoardMeta,
+        EnrichedResult,
         HotMeta,
         PeriodResult,
         StockScanResult,
         ThemeMeta,
+        ValuationMetrics,
         VolumeState,
     )
+    from kan.core.pipeline import Freshness
     from kan.core.scanner import TrendResult
+
+# kan find AI 消费 JSON 的 schema 契约版本 (地基-2)。
+# 这是数据契约版本 (供外部 AI 判断字段集) · 与包版本 (__version__) 不同命名空间:
+# 字段集变更时才 bump · 加字段属向后兼容演进 (AI 见到更多字段 · 不破旧消费方)。
+FIND_SCHEMA_VERSION = "0.0.6.6"
 
 
 def _board_reference_kind(meta: BoardMeta | HotMeta | ThemeMeta | None) -> str:
@@ -237,8 +246,13 @@ def info_payload(
     data_cutoff: date | None,
     fetched_at: str | None,
     stale: bool,
+    valuation: ValuationMetrics | None = None,
 ) -> dict:
-    """kan info --format json 的结构化 payload。"""
+    """kan info --format json 的结构化 payload。
+
+    valuation (地基-2):单股截面市场指标 · 量价 / 市值客观事实 (估值裸值不对外 ·
+    见 _valuation_public_dict) · 无 token / 无数据时为 None (AI 消费契约仍成立)。
+    """
     return {
         "command": "info",
         "symbol": result.symbol,
@@ -253,6 +267,7 @@ def info_payload(
             "direction": trend.direction,
         },
         "volume": volume.model_dump() if volume else None,
+        "valuation": _valuation_public_dict(valuation),
     }
 
 
@@ -454,6 +469,150 @@ def compare_markdown(results: list[StockScanResult], *, periods: list[int]) -> s
     ])
     rows.append(["数据截止", *[r.scan_date.isoformat() for r in results]])
     return f"# 慢慢看 · 多股对比\n\n{md_table(headers, rows)}\n\n{_disclaimer_quote()}"
+
+
+# ── find (AI 消费入口 · 地基-2) ────────────────────────────────────────
+
+_TRIGGER_FLAG = {"pos": "--pos", "resonance": "--resonance"}
+"""TriggeredFilter.filter_type → DSL flag (JSON triggered_filters.filter 字段)。"""
+
+
+def _valuation_public_dict(v: ValuationMetrics | None) -> dict | None:
+    """ValuationMetrics → 对外 JSON 安全子集 (地基-2)。
+
+    合规 (compliance §2/§6/§7 · PRD §1.1/§6):
+    - 输出量价 / 市值客观事实 (close / turnover_rate / volume_ratio / total_mv /
+      circ_mv · 同 OHLCV 类客观行情 · compliance §2 安全区)
+    - 估值比率 (pe_ttm / pb / ps_ttm / dv_ttm) **不输出裸值** · 维护者反复明示
+      "估值用分位非裸值"(PRD §1.1/§6/§9)· 留地基-3 以历史分位 + 行业中位对照呈现。
+      数据层 (ValuationMetrics) 仍存原始值 (决策①)· 仅输出层过滤 (职责分离)。
+    """
+    if v is None:
+        return None
+    return {
+        "trade_date": v.trade_date.isoformat() if v.trade_date else None,
+        "close": v.close,
+        "turnover_rate": v.turnover_rate,
+        "volume_ratio": v.volume_ratio,
+        "total_mv": v.total_mv,
+        "circ_mv": v.circ_mv,
+        "source": v.source,
+    }
+
+
+def _find_disclaimer_quote() -> str:
+    """find 专属免责 → markdown 引用块 (compliance §5 · 衍生不可删)。"""
+    from kan.render.base import FIND_DISCLAIMER_TEXT
+
+    return "> " + FIND_DISCLAIMER_TEXT
+
+
+def _find_result_dict(match: FindMatch, enriched: EnrichedResult) -> dict:
+    """单只命中 → JSON 对象 (PRD §3.5 schema · 地基-2 扩 valuation + context)。"""
+    er = enriched
+    return {
+        "code": er.symbol,
+        "name": er.name.replace(" ", ""),
+        "price": er.current_price,
+        "data_time": er.scan_date.isoformat(),
+        "is_st": er.is_st,
+        "limit_up": er.limit_up,
+        "limit_down": er.limit_down,
+        "triggered_filters": [
+            {
+                "filter": _TRIGGER_FLAG.get(t.filter_type, t.filter_type),
+                "param": t.param,
+                "value": t.value,
+            }
+            for t in match.triggered
+        ],
+        "context": {
+            "low_resonance": er.low_resonance,
+            "high_resonance": er.high_resonance,
+            "positions": {
+                str(p.period): p.position_pct
+                for p in er.periods
+                if not p.insufficient
+            },
+        },
+        "valuation": _valuation_public_dict(er.valuation),
+    }
+
+
+def find_payload(
+    entries: list[tuple[FindMatch, EnrichedResult]],
+    *,
+    query_time: str,
+    pools: list[str],
+    filters: list[dict],
+    pool_size: int,
+    matched_total: int,
+    freshness: Freshness,
+) -> dict:
+    """kan find --format json 的结构化 payload (地基-2 · AI 消费入口)。
+
+    PRD §3.5 schema · 扩 context (位置/共振) + valuation (量价/市值客观事实)。
+
+    Args:
+        entries: 已 enrich + limit 后的 (FindMatch, EnrichedResult) 配对 · 顺序即输出序
+        query_time: 查询发起时间 (ISO · caller 注入 · 利于测试确定性)
+        pools: 候选池标识 (例 ["industry:半导体"] / ["watchlist"])
+        filters: rule.filters · 每项 {"name": "--pos", "param": "180:lt:5"}
+        pool_size: 池内总股票数 (筛前)
+        matched_total: limit 前的总命中数 (stats.matched · len(entries)=shown)
+        freshness: 数据新鲜度 (data_cutoff / stale)
+
+    强制 disclaimer 字段 (compliance §5/§7 · 衍生不可删 · 测试守护)。
+    """
+    from kan.render.base import FIND_DISCLAIMER_TEXT
+
+    return {
+        "schema_version": FIND_SCHEMA_VERSION,
+        "command": "find",
+        "query_time": query_time,
+        "rule": {"pools": pools, "filters": filters},
+        "results": [_find_result_dict(m, er) for m, er in entries],
+        "disclaimer": FIND_DISCLAIMER_TEXT,
+        "stats": {
+            "pool_size": pool_size,
+            "matched": matched_total,
+            "shown": len(entries),
+            "data_cutoff": (
+                freshness.data_cutoff.isoformat() if freshness.data_cutoff else None
+            ),
+            "stale": freshness.is_stale,
+        },
+    }
+
+
+def find_markdown(
+    entries: list[tuple[FindMatch, EnrichedResult]],
+    *,
+    title: str,
+    pool_size: int,
+    matched_total: int,
+) -> str:
+    """kan find --format md · 命中股票表 + 触发 filter + disclaimer (衍生不可删)。"""
+    headers = ["股票", "现价", "触发 filter", "低共振", "高共振"]
+    rows: list[list[str]] = []
+    for m, er in entries:
+        name_short = er.name.replace(" ", "")
+        tag = " 涨停" if er.limit_up else (" 跌停" if er.limit_down else "")
+        st = " ST" if er.is_st else ""
+        trigs = " · ".join(
+            f"{_TRIGGER_FLAG.get(t.filter_type, t.filter_type)}={t.param}@{t.value:g}"
+            for t in m.triggered
+        )
+        rows.append([
+            f"{name_short} {er.symbol}{tag}{st}",
+            f"{er.current_price:.2f}",
+            trigs or "—",
+            f"×{er.low_resonance}" if er.low_resonance else "—",
+            f"×{er.high_resonance}" if er.high_resonance else "—",
+        ])
+    head = f"# {title} · 命中 {matched_total} / {pool_size}"
+    body = md_table(headers, rows) if rows else "_无股票符合您设置的所有 filter_"
+    return f"{head}\n\n{body}\n\n{_find_disclaimer_quote()}"
 
 
 # ── history ───────────────────────────────────────────────────────────

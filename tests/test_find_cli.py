@@ -132,3 +132,59 @@ class TestFindCompliance:
         banned = ["推荐", "建议买入", "值得关注"]
         for word in banned:
             assert word not in out, f"compliance §3 violated in empty-filter error: '{word}'"
+
+
+def _run_isolated(args: list[str], tmp) -> tuple[int, str, str]:
+    """Run `kan ARGS` with isolated XDG (空 watchlist) + no token · 确定性 JSON 输出。"""
+    env = {
+        **os.environ,
+        "KAN_NO_BOOT_BANNER": "1",
+        "XDG_DATA_HOME": str(tmp),
+        "TUSHARE_TOKEN": "",
+    }
+    result = subprocess.run(
+        ["uv", "run", "kan", *args],
+        cwd=REPO_ROOT, env=env, capture_output=True, text=True, timeout=90,
+    )
+    return result.returncode, result.stdout, result.stderr
+
+
+class TestFindJsonOutput:
+    """地基-2 · --format json/md AI 消费入口 wiring (隔离 XDG 保证确定性)。"""
+
+    def test_no_filter_terminal_still_errors(self):
+        """无 filter + terminal(默认)→ exit 1 "至少需要一个 filter" · 人类 UX 不变。"""
+        ec, out = _run(["find"])
+        assert ec == 1
+        assert "至少需要一个 filter" in out
+
+    def test_no_filter_json_bypasses_filter_guard(self, tmp_path):
+        """无 filter + --format json = 取数模式 · 越过 filter 守卫。
+
+        空 watchlist (隔离 XDG) → 落到 watchlist 守卫(取数无源可取 · 合理 UX)·
+        关键:不再是 "至少需要一个 filter" 错误 → 证明 export 模式放开了空 filter。
+        """
+        _ec, out, err = _run_isolated(["find", "--format", "json"], tmp_path)
+        combined = out + err
+        assert "至少需要一个 filter" not in combined  # filter 守卫已对 export 放开
+        assert "自选列表为空" in combined  # 落到 watchlist 守卫 (空池无数可取)
+
+    @pytest.mark.skipif(
+        not os.environ.get("KAN_RUN_FIND_DATA_TEST"),
+        reason="needs watchlist + kline cache · set KAN_RUN_FIND_DATA_TEST=1 to run",
+    )
+    def test_json_emits_valid_schema_with_data(self):
+        """真数据 opt-in:--format json 出完整 schema + 强制 disclaimer + 估值裸值不出。"""
+        import json
+        result = subprocess.run(
+            ["uv", "run", "kan", "find", "--pos", "180:lte:100", "--format", "json"],
+            cwd=REPO_ROOT, env={**os.environ, "KAN_NO_BOOT_BANNER": "1"},
+            capture_output=True, text=True, timeout=120,
+        )
+        assert result.returncode == 0, result.stderr
+        payload = json.loads(result.stdout)
+        assert payload["command"] == "find"
+        assert payload["schema_version"]
+        assert "候选 ≠ 买入信号" in payload["disclaimer"]
+        for raw in ("pe_ttm", "pb", "ps_ttm", "dv_ttm"):
+            assert raw not in result.stdout, f"估值裸值 {raw} 不该出现在对外 JSON"
