@@ -53,5 +53,9 @@ Thumbs.db
 CLAUDE.md
 .claude/
 
+# Maintainer-private deny-list for the privacy scanner (never tracked)
+# scripts/check-privacy-leaks.sh reads this at runtime; absent in CI = scan public terms only
+.ai/private/
+
 # Local think/scratch dir — not tracked
 .think/
