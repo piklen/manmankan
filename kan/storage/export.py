@@ -454,3 +454,76 @@ def compare_markdown(results: list[StockScanResult], *, periods: list[int]) -> s
     ])
     rows.append(["数据截止", *[r.scan_date.isoformat() for r in results]])
     return f"# 慢慢看 · 多股对比\n\n{md_table(headers, rows)}\n\n{_disclaimer_quote()}"
+
+
+# ── history ───────────────────────────────────────────────────────────
+
+def _history_mark_label(res: int, direction: str) -> str:
+    """共振方向 → md/json 共用的中文标记 · 1-2 只方向词 · ≥3 加"多周期"。"""
+    if res == 0 or not direction:
+        return "—"
+    word = "低位" if direction == "low" else "高位"
+    return f"多周期{word}" if res >= 3 else word
+
+
+def history_payload(
+    symbol: str,
+    name: str,
+    entries: list,
+    *,
+    period: int,
+) -> dict:
+    """kan history --format json 的结构化 payload(新→旧)。"""
+    from kan.core.scanner import history_mark, history_resonance
+
+    series = []
+    for e in entries:
+        cell = e.periods.get(period)
+        low_res, high_res = history_resonance(e.periods)
+        res, direction = history_mark(e.periods)
+        series.append({
+            "date": e.snapshot_date.isoformat(),
+            "name": e.name,
+            "position_pct": cell["pct"] if cell else None,
+            "at_low": bool(cell["at_low"]) if cell else None,
+            "at_high": bool(cell["at_high"]) if cell else None,
+            "low_resonance": low_res,
+            "high_resonance": high_res,
+            "resonance": res,
+            "direction": direction or None,
+        })
+    return {
+        "command": "history",
+        "symbol": symbol,
+        "name": name,
+        "period": period,
+        "series": series,
+    }
+
+
+def history_markdown(
+    entries: list,
+    *,
+    period: int,
+    title: str,
+) -> str:
+    """kan history --format md · 单周期纵向时间线(新→旧)。"""
+    from kan.core.scanner import history_mark
+
+    headers = ["日期", f"{period}日位置", "共振", "标记"]
+    rows: list[list[str]] = []
+    for e in entries:
+        cell = e.periods.get(period)
+        if cell is None:
+            pct_str = "-"
+        else:
+            text = f"{cell['pct']:.0f}%"
+            pct_str = f"[{text}]" if (cell.get("at_low") or cell.get("at_high")) else text
+        res, direction = history_mark(e.periods)
+        rows.append([
+            e.snapshot_date.isoformat(),
+            pct_str,
+            f"×{res}" if res else "—",
+            _history_mark_label(res, direction),
+        ])
+    return f"# {title}\n\n{md_table(headers, rows)}\n\n{_disclaimer_quote()}"

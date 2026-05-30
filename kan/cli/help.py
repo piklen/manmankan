@@ -43,9 +43,10 @@ def help_cmd() -> None:
   kan low 30 60 120         多周期一次看
   kan high 30               谁在 30 日高点？
 
-[bold cyan]单只详情 / 多股对比[/bold cyan]
+[bold cyan]单只详情 / 多股对比 / 历史回溯[/bold cyan]
   kan info 600519                    单只股票全周期位置 + 涨跌 + 共振
   kan compare 600519 000858          多股横向对比（2-8 只 · -p 30,60,120）
+  kan history 600519                 位置历史回溯（-p 切周期 · 纯离线读每日快照）
 
 [bold cyan]连续涨跌[/bold cyan]
   kan trend                 连续涨跌看板（不筛选）
@@ -91,7 +92,7 @@ def help_cmd() -> None:
   kan scan --format json    JSON 结构化输出
   kan compare 600519 000858 --format md
 
-  [dim]--format 适用 scan / low / high / info / trend / compare[/dim]
+  [dim]--format 适用 scan / low / high / info / trend / compare / history[/dim]
 
 [bold cyan]数据管理[/bold cyan]
   kan fetch                 拉取数据（通常不需要，scan 自动更新）
