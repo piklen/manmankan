@@ -7,9 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.0.6.6] - 2026-05-30
+
 ### Added
 
 - **`kan history <代码或名称>`** · 单只股票位置百分位历史回溯 · 纯离线读每日扫描快照（`kan scan` 累积的 240 天归档）· `--period` 切周期（默认 30）· `--format terminal|md|json` · 单周期纵向时间线（新→旧）+ 每日多周期共振标记 · 只覆盖曾在自选且跑过 `kan scan` 的股票 · 不预测涨跌，只回看历史位置
+
+### Internal
+
+- 开发期隐私扫描工具改进（禁词清单外置到本地 gitignored 文件）+ 文档精简
 
 ## [0.0.6.5] - 2026-05-27
 
@@ -170,7 +176,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Shell 补全** · zsh / bash / fish / powershell
 - **合规与隐私** · 强制风险提示 + 关键词黑名单（无买卖建议 / 无目标价 / 无评级）· 数据全本地
 
-[Unreleased]: https://github.com/piklen/manmankan/compare/v0.0.6.5...HEAD
+[Unreleased]: https://github.com/piklen/manmankan/compare/v0.0.6.6...HEAD
+[0.0.6.6]: https://github.com/piklen/manmankan/compare/v0.0.6.5...v0.0.6.6
 [0.0.6.5]: https://github.com/piklen/manmankan/compare/v0.0.5.1...v0.0.6.5
 [0.0.5.1]: https://github.com/piklen/manmankan/compare/v0.0.5.0...v0.0.5.1
 [0.0.5.0]: https://github.com/piklen/manmankan/compare/v0.0.4.8...v0.0.5.0
