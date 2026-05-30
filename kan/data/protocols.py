@@ -88,3 +88,67 @@ class KlineSource(Protocol):
         - 不抛 ValueError 等业务异常 · 只用 None 表达失败
         """
         ...
+
+
+@runtime_checkable
+class MetricsSource(Protocol):
+    """截面式市场指标数据源 (适配器) · 按 trade_date 拉一批/全市场 · 责任链中的一档。
+
+    与 KlineSource 的本质区别 (签名各异 · 模式相同 · 各领域独立 Protocol 拒绝 god type):
+    - KlineSource.fetch(symbol, start):    单只股票时间序列 · 逐只历史 · 全市场代价高
+    - MetricsSource.fetch(trade_date, …):  单日截面多只 · 一次拉一批 · 全市场代价低
+
+    截面接口 (daily_basic / moneyflow / ...) 按交易日一次返回全市场 · 这是全市场筛
+    廉价的根本原因 (截面 vs K 线代价不对称)。
+
+    实现者契约 (同 KlineSource · 防腐层 ACL · domain model 永不感知数据源差异):
+    - is_available(): token / 软依赖 / 熔断器检查 · False 则 chain 跳过 (不计 fallback)
+    - fetch(trade_date, symbols): 拉数据 + 列名 rename 到标准 schema · 异常吞掉返 None
+    - source 不在内部填 _source / NaN · 由 chain + metrics._normalize_metrics 接管
+
+    截面源约定: fetch 接收 symbols 但实现上可总拉全市场 (截面接口一次全市场最划算 ·
+    利于缓存复用) · symbols 过滤交给编排层 metrics.fetch_metrics。
+
+    标准 schema (fetch 返回 DataFrame 必含 METRICS_REQUIRED · 其余编排层补):
+    - 必含: symbol (6 位代码 · ts_code 已 strip 交易所后缀)
+    - 推荐: trade_date / 各指标列 (pe_ttm / pb / dv_ttm / turnover_rate / ...)
+    - 不填: _source (chain 加)
+    """
+
+    name: str
+    """数据源唯一标识 · 熔断器 key + _source 标注 + debug_log prefix。
+
+    截面源与同数据商的 K 线源应用独立 name (例 tushare_metrics ≠ tushare) ·
+    避免不同接口 (daily_basic vs daily · 频率门槛各异) 共享熔断器互相误伤。
+    """
+
+    priority: int
+    """优先级 · 数字小优先 · 同值多源并发 race · 复用文件顶部 priority 约定。"""
+
+    def is_available(self) -> bool:
+        """运行时可用性 · False 时 chain 跳过此档 · 不计入 fallback 链。
+
+        必须 cheap (不做网络调用) · chain 在 fetch 前对所有源依次查。
+        典型实现: TushareMetricsSource: bool(token) + not breaker.is_down(name)。
+        """
+        ...
+
+    def fetch(
+        self, trade_date: str, symbols: list[str] | None = None,
+    ) -> pd.DataFrame | None:
+        """拉单日截面指标 · 失败返 None · 列名已 rename 到标准 schema。
+
+        Args:
+            trade_date: YYYYMMDD 交易日 (chain 已校验 · source 可信任)
+            symbols: 限定股票子集 (6 位代码) · None = 全市场 · 截面源可忽略此参数
+                     总拉全市场 (一次拉全 · 过滤交给编排层 · 利于缓存复用)
+
+        Returns:
+            DataFrame · 必含 symbol · 缺失列由编排层 _normalize_metrics 处理
+            None 表示本源失败 · chain 自动 fallback 下一档
+
+        实现注意 (同 KlineSource):
+        - broad except Exception → debug_log + 熔断器 record(ok=False) + return None
+        - 不让异常外泄到 chain · 不抛业务异常 · 只用 None 表达失败
+        """
+        ...

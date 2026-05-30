@@ -12,7 +12,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
-    from kan.data.protocols import KlineSource
+    from kan.data.protocols import KlineSource, MetricsSource
 
 
 _user_kline_sources: list[KlineSource] = []
@@ -71,3 +71,52 @@ def clear_user_kline_sources() -> None:
 
     _user_kline_sources.clear()
     reset_default_chain()
+
+
+# ══════════════════════════════════════════════════════════════════
+# 截面指标领域注册表 (地基-1) · 同形 K 线三件套 · default_metrics_chain 取此列表
+# ══════════════════════════════════════════════════════════════════
+
+_user_metrics_sources: list[MetricsSource] = []
+"""运行时用户注册的截面指标源 · 模块级 list · register_metrics_source append。"""
+
+
+def builtin_metrics_sources() -> list[MetricsSource]:
+    """内置截面指标源 + 用户注册源 · 给 default_metrics_chain 构造用。
+
+    地基-1 只含 TushareMetricsSource (daily_basic · priority 10) ·
+    PublicMetricsSource 降级源 (akshare / 东财公开接口) 留后续阶段。
+    """
+    from kan.data.tushare import TushareMetricsSource
+
+    return [
+        TushareMetricsSource(),
+        *_user_metrics_sources,
+    ]
+
+
+def register_metrics_source(source: MetricsSource) -> None:
+    """注册用户自定义截面指标源 · 自动 reset metrics default chain。
+
+    Args:
+        source: 实现 MetricsSource Protocol 的对象 (name / priority / is_available / fetch)。
+                建议 priority ∈ [50, 89] 避开内置 (10-49) / 兜底 (90-99)。
+                name 建议加 prefix (例 user_wind_metrics) 避免与内置撞名 (熔断器 key 共享)。
+
+    internal: 地基-1 暂不 export 到 kan.api (AI 入口契约 = 地基-2) · 测试 / 内部用。
+    """
+    from kan.data.source_chain import reset_default_metrics_chain
+
+    _user_metrics_sources.append(source)
+    reset_default_metrics_chain()
+
+
+def clear_user_metrics_sources() -> None:
+    """清空所有用户注册的截面指标源 · 自动 reset metrics default chain。
+
+    用途: 测试进入前清空避免污染 / 运行时换一组源。
+    """
+    from kan.data.source_chain import reset_default_metrics_chain
+
+    _user_metrics_sources.clear()
+    reset_default_metrics_chain()

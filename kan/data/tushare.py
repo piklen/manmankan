@@ -308,3 +308,118 @@ class TushareKlineSource:
 
     def fetch(self, symbol: str, start: str) -> pd.DataFrame | None:
         return _fetch_tushare(symbol, start)
+
+
+# ══════════════════════════════════════════════════════════════════
+# MetricsSource Protocol 适配 (地基-1) · 截面式市场指标 · daily_basic
+# ══════════════════════════════════════════════════════════════════
+
+_METRICS_FIELDS = (
+    "ts_code,trade_date,close,turnover_rate,volume_ratio,"
+    "pe_ttm,pb,ps_ttm,dv_ttm,total_mv,circ_mv"
+)
+"""daily_basic 拉取字段 · 估值 (PE/PB/PS/股息率) + 量价 (换手/量比) + 市值。
+
+分位 / 行业中位在输出层算 (地基-2/3) · 数据层只取原始指标 (compliance §6/§7)。
+"""
+
+
+def _strip_ts_suffix(ts_code: str) -> str:
+    """ts_code '600519.SH' → 6 位 '600519' (跟 manmankan symbol 标准对齐)。"""
+    return str(ts_code).split(".", 1)[0]
+
+
+def _to_metrics_df(data: dict | None) -> pd.DataFrame | None:
+    """TuShare daily_basic data 块 → DataFrame · ts_code → symbol (strip 后缀)。
+
+    不在此填 _source / 补缺列 / 数值清洗 (编排层 metrics._normalize_metrics 接管)。
+    """
+    import pandas as pd
+    if not data:
+        return None
+    fields = data.get("fields") or []
+    items = data.get("items") or []
+    if not items:
+        return None
+    df = pd.DataFrame(items, columns=fields)
+    if "ts_code" not in df.columns:
+        return None
+    df["symbol"] = df["ts_code"].map(_strip_ts_suffix)
+    return df.drop(columns=["ts_code"])
+
+
+def _fetch_tushare_metrics(
+    trade_date: str, symbols: list[str] | None = None,
+) -> pd.DataFrame | None:
+    """TuShare Pro daily_basic 单日截面入口 · MetricsSourceChain 顶档调用。
+
+    截面语义:按 trade_date 一次拉全市场 (一次 HTTP) · symbols 参数忽略
+    (过滤交给编排层 metrics.fetch_metrics · 全市场缓存利于复用)。
+
+    熔断器 key 'tushare_metrics' 独立于 K 线 'tushare':daily_basic 与 daily
+    是不同接口 / 频率门槛 · 一个失败不该误熔断另一个。
+
+    Args:
+      trade_date: YYYYMMDD 交易日
+      symbols:    Protocol 一致性保留 · 本实现忽略 (总拉全市场)
+
+    Returns:
+      DataFrame (含 symbol 列 + 各指标) 或 None (未配 token / 熔断 / 失败)。
+      失败时上游 MetricsSourceChain 会 fallback 下一档 (地基-1 暂无降级源)。
+    """
+    from kan.infra import circuit_breaker
+
+    token, endpoint = _resolve_config()
+    if not token:
+        return None
+
+    cb = circuit_breaker.get_breaker()
+    if cb.is_down("tushare_metrics"):
+        return None
+
+    try:
+        data, _err = _post_tushare_api(
+            endpoint=endpoint,
+            token=token,
+            api_name="daily_basic",
+            params={"trade_date": trade_date},
+            fields=_METRICS_FIELDS,
+        )
+        # error 已被 _post_tushare_api 写进 debug_log · 不上抛 caller
+        if data is None:
+            cb.record("tushare_metrics", ok=False)
+            return None
+        df = _to_metrics_df(data)
+        if df is None or df.empty:
+            cb.record("tushare_metrics", ok=False)
+            return None
+        cb.record("tushare_metrics", ok=True)
+        return df
+    except Exception as e:
+        debug_log(__name__, "fetch tushare metrics 失败", e)
+        cb.record("tushare_metrics", ok=False)
+        return None
+
+
+class TushareMetricsSource:
+    """TuShare Pro 截面指标源 · priority=10 · 配 token 时顶档优先 · daily_basic。
+
+    is_available 检查:token 配置 + 熔断器 (key 'tushare_metrics' 独立于 K 线)。
+    与 TushareKlineSource 同 priority 但不同领域 / 不同熔断 key · 互不干扰
+    (各领域独立 MetricsSourceChain / KlineSourceChain · priority 只在领域内比较)。
+    """
+
+    name = "tushare_metrics"
+    priority = 10
+
+    def is_available(self) -> bool:
+        token, _ = _resolve_config()
+        if not token:
+            return False
+        from kan.infra import circuit_breaker
+        return not circuit_breaker.get_breaker().is_down(self.name)
+
+    def fetch(
+        self, trade_date: str, symbols: list[str] | None = None,
+    ) -> pd.DataFrame | None:
+        return _fetch_tushare_metrics(trade_date, symbols)
