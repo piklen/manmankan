@@ -185,6 +185,27 @@ class ChipMetrics(BaseModel):
     source: str | None = None         # 数据源标注 (例 tushare_cyq)
 
 
+class ShareholderMetrics(BaseModel):
+    """单只股票股东·持股结构 · stk_holdernumber + top10_floatholders 衍生 · 季度披露 (整合-3)。
+
+    合规 (compliance §7 整合-3 守则):户数环比 / 前十大流通集中度 / 北向名义持有人占比
+    均为已披露客观事实的算术衍生 · 裸值可出 · 不输出"主力建仓 / 洗盘 / 控盘 / 高度控盘"
+    等判断词 (§3 信号化黑名单延伸)。filter 用户显式指定 (--holders / --top10 / --north)。
+
+    季度披露 (非日频)· None = 该期无披露 / 未进前十 (非故障 · 仿 SentimentMetrics None 语义)。
+    北向用"香港中央结算有限公司"季度名义持有人占流通比作代理 (hk_hold 日频 2024-08 断供 ·
+    tushare 实测核实) · 未进前十大流通 → north_hold_ratio None。逐股拉取 (--all 不支持)。
+    """
+
+    holder_end_date: date | None = None     # 户数最近报告期 (季度披露)
+    holder_num: float | None = None         # 最近期股东户数
+    holder_chg_pct: float | None = None     # 户数环比 % (相邻两次披露 · 负=户数减少)
+    top10_end_date: date | None = None      # 十大流通最近报告期
+    top10_float_ratio: float | None = None  # 前十大流通股东持股合计占流通比 %
+    north_hold_ratio: float | None = None   # 香港中央结算占流通比 % (北向季度代理)
+    source: str | None = None               # 数据源标注 (例 tushare_shareholder)
+
+
 class EnrichedResult(StockScanResult):
     """StockScanResult + 按需挂载的多维指标 (lazy · 不强制全拉)。
 
@@ -202,6 +223,7 @@ class EnrichedResult(StockScanResult):
     technical: TechnicalMetrics | None = None        # stk_factor_pro (MACD/KDJ/RSI · 整合-2)
     sentiment: SentimentMetrics | None = None        # limit_list_d (连板 / 炸板 · 整合-2)
     chip: ChipMetrics | None = None                  # cyq_perf (获利盘 · 整合-2)
+    shareholder: ShareholderMetrics | None = None    # 股东户数/十大流通/北向 (逐股 · 整合-3)
 
     @classmethod
     def from_scan(
@@ -213,6 +235,7 @@ class EnrichedResult(StockScanResult):
         technical: TechnicalMetrics | None = None,
         sentiment: SentimentMetrics | None = None,
         chip: ChipMetrics | None = None,
+        shareholder: ShareholderMetrics | None = None,
     ) -> EnrichedResult:
         """把 StockScanResult 提升为 EnrichedResult + 按需挂多维指标 (lazy 挂载入口)。
 
@@ -228,6 +251,7 @@ class EnrichedResult(StockScanResult):
             technical=technical,
             sentiment=sentiment,
             chip=chip,
+            shareholder=shareholder,
         )
 
 
