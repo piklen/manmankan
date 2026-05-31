@@ -95,20 +95,24 @@ def _normalize_symbol_to_ts(symbol: str) -> str:
     """6 位代码 → TuShare ts_code 格式。
 
     规则：
-    - 60xxxx / 68xxxx / 9xxxxx → .SH（上证主板 / 科创板 / B 股）
+    - 60xxxx / 68xxxx / 90xxxx → .SH（上证主板 / 科创板 / B 股）
     - 00xxxx / 30xxxx → .SZ（深证主板 / 创业板）
-    - 83xxxx / 43xxxx / 87xxxx / 82xxxx → .BJ（北交所 / 新三板精选）
+    - 920xxx / 83xxxx / 43xxxx / 87xxxx / 82xxxx → .BJ（北交所 · 含 2024 新启用 920 段）
     - 其他 → .SZ（防御性回退）
+
+    北交所 920 段必须**先于** 9 开头的 .SH 判断:否则 startswith("9") 会把
+    920xxx 误吞为上证（9 开头实际两类:90x 上证 B 股 .SH / 92x 北交所 .BJ）。
     """
     if not _SYMBOL_PATTERN.match(symbol):
         raise ValueError(f"必须是 6 位股票代码，实际收到: {symbol!r}")
+    # 北交所先判 (920 新段 + 83/43/87/82 老段) · 防 9 开头被后面 .SH 误吞
+    if symbol[:2] == "92" or symbol[:2] in ("83", "43", "87", "82"):
+        return f"{symbol}.BJ"
     p = symbol[0]
     if p == "6" or symbol[:2] in ("68", "90") or symbol.startswith("9"):
         return f"{symbol}.SH"
     if p in ("0", "3"):
         return f"{symbol}.SZ"
-    if symbol[:2] in ("83", "43", "87", "82"):
-        return f"{symbol}.BJ"
     return f"{symbol}.SZ"
 
 

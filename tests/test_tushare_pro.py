@@ -19,9 +19,10 @@ class TestNormalizeSymbolToTs:
         ("000001", "000001.SZ"),  # 深证主板
         ("002594", "002594.SZ"),
         ("300750", "300750.SZ"),  # 创业板
-        ("830799", "830799.BJ"),  # 北交所
+        ("830799", "830799.BJ"),  # 北交所 (老 83 段)
         ("430047", "430047.BJ"),  # 新三板精选
-        ("900901", "900901.SH"),  # 上证 B 股
+        ("920184", "920184.BJ"),  # 北交所 2024 新 920 段 · regression: 防 startswith("9") 误判 .SH
+        ("900901", "900901.SH"),  # 上证 B 股 (90 段仍 .SH · 不被 92 修复误伤)
     ])
     def test_normalizes_by_prefix(self, symbol, expected):
         assert tushare._normalize_symbol_to_ts(symbol) == expected

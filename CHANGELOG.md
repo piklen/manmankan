@@ -11,6 +11,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - **`kan find --all`** · 全市场截面取数 · 一次拉全市场估值 / 量价 / 市值 + 行业内分位 + 行业中位（估值用分位非裸值）· 供外部 AI 筛选 · `--format json|md` · 需 tushare token · 不含 K 线位置 / 共振（截面后置）· 排北交所 · 含 ST · disclaimer 强制
 
+### Fixed
+
+- 北交所 2024 新启用 `920xxx` 代码段被误判为上证（`.SH`）· 修正 `ts_code` 交易所后缀映射为 `.BJ`（影响北交所个股的 tushare K 线 / 截面拉取）
+
 ### Internal
 
 - 截面市场指标数据源接入（`MetricsSource` 责任链 + tushare `daily_basic`）· 估值 / 量价 / 市值维度原始指标 · 复用既有「适配器 + 责任链」架构 · 配 tushare token 可用 · 内部数据层骨架（暂无 CLI 变化）
