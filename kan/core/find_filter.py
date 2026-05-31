@@ -26,11 +26,17 @@ from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
 from kan.core.find_dsl import (
+    KdjJFilter,
+    MacdDifFilter,
+    MacdFilter,
     MoneyflowFilter,
     PeFilter,
     PosFilter,
     ResonanceFilter,
     RoeFilter,
+    RsiFilter,
+    StreakFilter,
+    WinnerFilter,
     apply_op,
 )
 
@@ -38,10 +44,13 @@ if TYPE_CHECKING:
     from kan.core.cross_section import CrossSectionRow
     from kan.core.find_dsl import ConditionSet
     from kan.core.models import (
+        ChipMetrics,
         EnrichedResult,
         FundamentalMetrics,
         MoneyflowMetrics,
+        SentimentMetrics,
         StockScanResult,
+        TechnicalMetrics,
         ValuationMetrics,
     )
 
@@ -144,6 +153,101 @@ def _match_moneyflow(
     return None
 
 
+# ─── 整合-2 技术/情绪/筹码匹配器 (吃子对象 · 缺失 → None · 同整合-1 范式) ───
+
+def _match_rsi(
+    filter: RsiFilter, technical: TechnicalMetrics | None
+) -> TriggeredFilter | None:
+    """Match RSI(6 日) filter against technical · rsi_6 缺失 → 不命中 (整合-2)。"""
+    if technical is None or technical.rsi_6 is None:
+        return None
+    if apply_op(filter.op, technical.rsi_6, filter.value):
+        return TriggeredFilter(
+            filter_type="rsi",
+            param=f"{filter.op}:{filter.value:g}",
+            value=technical.rsi_6,
+        )
+    return None
+
+
+def _match_macd_dif(
+    filter: MacdDifFilter, technical: TechnicalMetrics | None
+) -> TriggeredFilter | None:
+    """Match MACD DIF filter against technical · macd_dif 缺失 → 不命中 (整合-2)。"""
+    if technical is None or technical.macd_dif is None:
+        return None
+    if apply_op(filter.op, technical.macd_dif, filter.value):
+        return TriggeredFilter(
+            filter_type="macd_dif",
+            param=f"{filter.op}:{filter.value:g}",
+            value=technical.macd_dif,
+        )
+    return None
+
+
+def _match_macd(
+    filter: MacdFilter, technical: TechnicalMetrics | None
+) -> TriggeredFilter | None:
+    """Match MACD 柱 filter against technical · macd 缺失 → 不命中 (整合-2)。"""
+    if technical is None or technical.macd is None:
+        return None
+    if apply_op(filter.op, technical.macd, filter.value):
+        return TriggeredFilter(
+            filter_type="macd",
+            param=f"{filter.op}:{filter.value:g}",
+            value=technical.macd,
+        )
+    return None
+
+
+def _match_kdj_j(
+    filter: KdjJFilter, technical: TechnicalMetrics | None
+) -> TriggeredFilter | None:
+    """Match KDJ J filter against technical · kdj_j 缺失 → 不命中 (整合-2)。"""
+    if technical is None or technical.kdj_j is None:
+        return None
+    if apply_op(filter.op, technical.kdj_j, filter.value):
+        return TriggeredFilter(
+            filter_type="kdj_j",
+            param=f"{filter.op}:{filter.value:g}",
+            value=technical.kdj_j,
+        )
+    return None
+
+
+def _match_streak(
+    filter: StreakFilter, sentiment: SentimentMetrics | None
+) -> TriggeredFilter | None:
+    """Match 连板天数 filter against sentiment · limit_times 缺失 → 不命中 (整合-2)。
+
+    sentiment 为 None = 该股当日未涨跌停 (稀疏事件型) → 不命中 (非连板股不入选)。
+    """
+    if sentiment is None or sentiment.limit_times is None:
+        return None
+    if apply_op(filter.op, sentiment.limit_times, filter.value):
+        return TriggeredFilter(
+            filter_type="streak",
+            param=f"{filter.op}:{filter.value:g}",
+            value=sentiment.limit_times,
+        )
+    return None
+
+
+def _match_winner(
+    filter: WinnerFilter, chip: ChipMetrics | None
+) -> TriggeredFilter | None:
+    """Match 获利盘 filter against chip · winner_rate 缺失 → 不命中 (整合-2)。"""
+    if chip is None or chip.winner_rate is None:
+        return None
+    if apply_op(filter.op, chip.winner_rate, filter.value):
+        return TriggeredFilter(
+            filter_type="winner",
+            param=f"{filter.op}:{filter.value:g}",
+            value=chip.winner_rate,
+        )
+    return None
+
+
 def _match_all(
     filters: tuple,
     target: object,
@@ -168,7 +272,7 @@ def apply_conditions(
     For each stock (AND · 任一组不全命中即淘汰):
     1. ST drop (early reject if exclude_st and is_st)
     2. pos / resonance filters (K 线衍生 · 读 result)
-    3. pe / roe / moneyflow filters (整合-1 · 读 enrich 子对象 · 子对象缺失 → 不命中)
+    3. pe/roe/moneyflow/rsi/macd/kdj/streak/winner filters (整合-1/2 · 读 enrich 子对象 · 缺失 → 不命中)
 
     子对象用 getattr 安全提取:传 StockScanResult (未 enrich) 时 valuation 等为 None ·
     但 caller (find_cmds) 保证有截面/财务 filter 时已 enrich (见 PRD 数据流)。
@@ -189,13 +293,19 @@ def apply_conditions(
             continue
 
         # 表驱动:每行 = (一组 filter, 匹配目标, 匹配器) · pos/resonance 吃 result ·
-        # pe/roe/moneyflow 吃 enrich 子对象 (getattr 安全 · 未 enrich → None → 不命中)
+        # 截面/财务/技术/情绪/筹码 吃 enrich 子对象 (getattr 安全 · 未 enrich → None → 不命中)
         segments = [
             (conditions.pos_filters, r, _match_pos),
             (conditions.resonance_filters, r, _match_resonance),
             (conditions.pe_filters, getattr(r, "valuation", None), _match_pe),
             (conditions.roe_filters, getattr(r, "fundamentals", None), _match_roe),
             (conditions.moneyflow_filters, getattr(r, "moneyflow", None), _match_moneyflow),
+            (conditions.rsi_filters, getattr(r, "technical", None), _match_rsi),
+            (conditions.macd_dif_filters, getattr(r, "technical", None), _match_macd_dif),
+            (conditions.macd_filters, getattr(r, "technical", None), _match_macd),
+            (conditions.kdj_j_filters, getattr(r, "technical", None), _match_kdj_j),
+            (conditions.streak_filters, getattr(r, "sentiment", None), _match_streak),
+            (conditions.winner_filters, getattr(r, "chip", None), _match_winner),
         ]
         triggered: list[TriggeredFilter] = []
         all_match = True
@@ -224,25 +334,29 @@ def apply_cross_section_conditions(
     rows: list[CrossSectionRow],
     conditions: ConditionSet,
 ) -> list[tuple[CrossSectionRow, tuple[TriggeredFilter, ...]]]:
-    """截面行 (CrossSectionRow) 应用截面类 filter (pe + moneyflow · 整合-1 · --all 路径)。
+    """截面行 (CrossSectionRow) 应用截面类 filter (估值/资金/技术/情绪/筹码 · --all 路径)。
 
-    截面无 K 线衍生 (位置/共振) 也无 fundamentals (逐股太贵) · 只处理 pe/moneyflow ·
-    复用 _match_pe / _match_moneyflow (传 row.valuation / row.moneyflow)。AND 语义 ·
-    无 pe/moneyflow filter → 全量返回 (取数语义)。
+    截面无 K 线衍生 (位置/共振) 也无 fundamentals (逐股太贵) · 处理全部截面类 filter ·
+    复用 _match_* (传 row.valuation/moneyflow/technical/sentiment/chip)。AND 语义 ·
+    无截面 filter → 全量返回 (取数语义)。
 
     Returns:
         list[(CrossSectionRow, triggered)] · 按命中 filter 数倒序 · 然后 code 升序。
     """
-    pe_filters = conditions.pe_filters
-    mf_filters = conditions.moneyflow_filters
-    if not pe_filters and not mf_filters:
+    if not conditions.has_cross_section_filters():
         return [(r, ()) for r in rows]
 
     out: list[tuple[CrossSectionRow, tuple[TriggeredFilter, ...]]] = []
     for row in rows:
         segments = [
-            (pe_filters, row.valuation, _match_pe),
-            (mf_filters, row.moneyflow, _match_moneyflow),
+            (conditions.pe_filters, row.valuation, _match_pe),
+            (conditions.moneyflow_filters, row.moneyflow, _match_moneyflow),
+            (conditions.rsi_filters, row.technical, _match_rsi),
+            (conditions.macd_dif_filters, row.technical, _match_macd_dif),
+            (conditions.macd_filters, row.technical, _match_macd),
+            (conditions.kdj_j_filters, row.technical, _match_kdj_j),
+            (conditions.streak_filters, row.sentiment, _match_streak),
+            (conditions.winner_filters, row.chip, _match_winner),
         ]
         triggered: list[TriggeredFilter] = []
         all_match = True

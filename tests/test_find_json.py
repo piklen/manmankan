@@ -14,11 +14,14 @@ import json
 
 from kan.core.find_filter import FindMatch, TriggeredFilter
 from kan.core.models import (
+    ChipMetrics,
     EnrichedResult,
     FundamentalMetrics,
     MoneyflowMetrics,
     PeriodResult,
+    SentimentMetrics,
     StockScanResult,
+    TechnicalMetrics,
     ValuationMetrics,
 )
 from kan.storage import export
@@ -67,9 +70,41 @@ def _moneyflow() -> MoneyflowMetrics:
     )
 
 
-def _entry(symbol="600519", valuation=None, fundamentals=None, moneyflow=None, triggered=()):
+def _technical() -> TechnicalMetrics:
+    # 真实 MCP 值 (600519.SH 20260529 · 前复权)
+    return TechnicalMetrics(
+        trade_date=datetime.date(2026, 5, 29), close=1326.0,
+        macd_dif=-30.8, macd_dea=-30.8, macd=-0.08,
+        kdj_k=46.5, kdj_d=25.5, kdj_j=88.5,
+        rsi_6=57.3, rsi_12=46.7, rsi_24=43.3,
+        ma_5=1292.8, ma_10=1302.8, ma_20=1333.4, ma_60=1397.8,
+        boll_upper=1406.0, boll_mid=1333.4, boll_lower=1260.7,
+        source="tushare_factor",
+    )
+
+
+def _sentiment() -> SentimentMetrics:
+    return SentimentMetrics(
+        trade_date=datetime.date(2026, 5, 29), limit_times=3.0,
+        open_times=1.0, limit="U", up_stat="3/3", source="tushare_limit",
+    )
+
+
+def _chip() -> ChipMetrics:
+    # 真实 MCP 值 (600519.SH 20260529)
+    return ChipMetrics(
+        trade_date=datetime.date(2026, 5, 29), winner_rate=14.29,
+        cost_5pct=1280.4, cost_50pct=1425.6, cost_95pct=2098.8,
+        weight_avg=1494.39, source="tushare_cyq",
+    )
+
+
+def _entry(symbol="600519", valuation=None, fundamentals=None, moneyflow=None,
+           technical=None, sentiment=None, chip=None, triggered=()):
     scan = _scan(symbol)
-    er = EnrichedResult.from_scan(scan, valuation, fundamentals, moneyflow)
+    er = EnrichedResult.from_scan(
+        scan, valuation, fundamentals, moneyflow, technical, sentiment, chip,
+    )
     return FindMatch(result=scan, triggered=triggered), er
 
 
@@ -124,6 +159,40 @@ class TestFundamentalsMoneyflowDict:
     def test_none(self):
         assert export._fundamentals_public_dict(None) is None
         assert export._moneyflow_public_dict(None) is None
+
+
+class TestTechnicalSentimentChipDict:
+    """整合-2 新增 · technical / sentiment / chip 对外 dict (中性字段名 · 裸值 · 无判断词)。"""
+
+    def test_technical(self):
+        d = export._technical_public_dict(_technical())
+        assert d["rsi_6"] == 57.3
+        assert d["macd_dif"] == -30.8
+        assert d["macd"] == -0.08
+        assert d["kdj_j"] == 88.5
+        assert d["ma_20"] == 1333.4
+        assert d["boll_upper"] == 1406.0
+        assert d["source"] == "tushare_factor"
+
+    def test_sentiment(self):
+        d = export._sentiment_public_dict(_sentiment())
+        assert d["limit_times"] == 3.0
+        assert d["open_times"] == 1.0
+        assert d["limit"] == "U"
+        assert d["up_stat"] == "3/3"
+        assert d["source"] == "tushare_limit"
+
+    def test_chip(self):
+        d = export._chip_public_dict(_chip())
+        assert d["winner_rate"] == 14.29
+        assert d["cost_50pct"] == 1425.6
+        assert d["weight_avg"] == 1494.39
+        assert d["source"] == "tushare_cyq"
+
+    def test_none(self):
+        assert export._technical_public_dict(None) is None
+        assert export._sentiment_public_dict(None) is None
+        assert export._chip_public_dict(None) is None
 
 
 class TestFindPayload:
@@ -244,7 +313,8 @@ class TestFindCompliance:
         t = TriggeredFilter(filter_type="pos", param="180:lt:50", value=38.7)
         entries = [_entry(
             valuation=_valuation(), fundamentals=_fundamentals(),
-            moneyflow=_moneyflow(), triggered=(t,),
+            moneyflow=_moneyflow(), technical=_technical(),
+            sentiment=_sentiment(), chip=_chip(), triggered=(t,),
         )]
         return export.find_payload(
             entries, query_time="t", pools=["industry:半导体"], filters=[],
@@ -252,12 +322,18 @@ class TestFindCompliance:
         )
 
     def test_json_no_banned_words(self):
-        """§3 黑名单仍守 (整合-1 放开数值裸值 · 不放开判断词)。"""
+        """§3 黑名单仍守 (整合-1/2 放开数值裸值 · 不放开判断词 · 含技术/情绪/筹码全维度)。"""
         p = dict(self._payload())
         p.pop("disclaimer")  # 固定免责区豁免 · 扫可变数据区
         s = export.to_json(p)
         for w in _BANNED:
             assert w not in s, f"compliance §3 违规: '{w}' 出现在 find JSON 数据区"
+
+    def test_json_includes_new_dimension_keys(self):
+        """整合-2:技术/情绪/筹码裸值 key 出现在对外 JSON (中性原始名)。"""
+        s = export.to_json(self._payload())
+        assert '"rsi_6"' in s and '"macd_dif"' in s and '"kdj_j"' in s
+        assert '"limit_times"' in s and '"winner_rate"' in s
 
     def test_json_includes_estimation_raw_keys(self):
         """整合-1 拍板:估值裸值 key 现在出现在对外 JSON (推翻旧"裸值不出"守护)。"""

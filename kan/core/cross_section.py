@@ -26,7 +26,14 @@ if TYPE_CHECKING:
 
     import pandas as pd
 
-    from kan.core.models import MoneyflowMetrics, ValuationContext, ValuationMetrics
+    from kan.core.models import (
+        ChipMetrics,
+        MoneyflowMetrics,
+        SentimentMetrics,
+        TechnicalMetrics,
+        ValuationContext,
+        ValuationMetrics,
+    )
     from kan.core.stock_set import StockSet
 
 
@@ -34,14 +41,18 @@ if TYPE_CHECKING:
 class CrossSectionRow:
     """单只股票的截面取数结果 · code/name + 客观事实 valuation + 估值对照 context。
 
-    整合-1 加 moneyflow (主力资金截面 · 支持 --all --moneyflow filter · 同截面廉价)。
+    整合-1 加 moneyflow (主力资金截面)· 整合-2 加 technical/sentiment/chip (技术/情绪/
+    筹码截面 · 支持 --all --rsi/--macd-dif/--macd/--kdj-j/--streak/--winner filter)。
     """
 
     code: str
     name: str
     valuation: ValuationMetrics | None
     valuation_context: ValuationContext | None
-    moneyflow: MoneyflowMetrics | None = None  # 整合-1 · 主力资金截面 (None=无数据/早期)
+    moneyflow: MoneyflowMetrics | None = None    # 整合-1 · 主力资金截面 (None=无数据/早期)
+    technical: TechnicalMetrics | None = None    # 整合-2 · 技术面截面 (None=无数据)
+    sentiment: SentimentMetrics | None = None    # 整合-2 · 情绪截面 (None=当日未涨跌停)
+    chip: ChipMetrics | None = None              # 整合-2 · 筹码截面 (None=无数据)
 
 
 @dataclass(frozen=True)
@@ -87,14 +98,20 @@ def run_cross_section(
     """
     from kan.core.enrich import (
         _resolve_fallback_date,
+        _row_to_chip,
         _row_to_moneyflow,
+        _row_to_sentiment,
+        _row_to_technical,
         _row_to_valuation,
     )
     from kan.core.trading_calendar import latest_trade_date
     from kan.core.valuation_context import compute_cross_section_contexts
+    from kan.data.chip import fetch_chip
     from kan.data.industry_map import fetch_sw_l1_map
     from kan.data.metrics import _DEFAULT_LOOKBACK_DAYS, fetch_metrics
     from kan.data.moneyflow import fetch_moneyflow
+    from kan.data.sentiment import fetch_sentiment
+    from kan.data.technical import fetch_technical
 
     pairs = stock_set.pairs()
     pool_size = len(pairs)
@@ -124,18 +141,47 @@ def run_cross_section(
         else {}
     )
 
+    # 技术/情绪/筹码截面 (整合-2 · 同截面廉价 · 取数全维度 · 无条件挂 · 无数据/早期降级)
+    tech = fetch_technical(trade_date=trade_date, symbols=codes)
+    tech_by_symbol = (
+        {str(r.get("symbol", "")).strip(): r for _, r in tech.iterrows()}
+        if tech is not None and not tech.empty
+        else {}
+    )
+    senti = fetch_sentiment(trade_date=trade_date, symbols=codes)
+    senti_by_symbol = (
+        {str(r.get("symbol", "")).strip(): r for _, r in senti.iterrows()}
+        if senti is not None and not senti.empty
+        else {}
+    )
+    chip = fetch_chip(trade_date=trade_date, symbols=codes)
+    chip_by_symbol = (
+        {str(r.get("symbol", "")).strip(): r for _, r in chip.iterrows()}
+        if chip is not None and not chip.empty
+        else {}
+    )
+
     rows: list[CrossSectionRow] = []
     for code, name in pairs:
         row = by_symbol.get(code)
         valuation = _row_to_valuation(row, fallback_date) if row is not None else None
         mf_row = mf_by_symbol.get(code)
         moneyflow = _row_to_moneyflow(mf_row, fallback_date) if mf_row is not None else None
+        tech_row = tech_by_symbol.get(code)
+        technical = _row_to_technical(tech_row, fallback_date) if tech_row is not None else None
+        senti_row = senti_by_symbol.get(code)
+        sentiment = _row_to_sentiment(senti_row, fallback_date) if senti_row is not None else None
+        chip_row = chip_by_symbol.get(code)
+        chip_metrics = _row_to_chip(chip_row, fallback_date) if chip_row is not None else None
         rows.append(CrossSectionRow(
             code=code,
             name=name,
             valuation=valuation,
             valuation_context=contexts.get(code),
             moneyflow=moneyflow,
+            technical=technical,
+            sentiment=sentiment,
+            chip=chip_metrics,
         ))
 
     data_cutoff = _cross_data_cutoff(cross)

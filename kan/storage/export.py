@@ -18,12 +18,15 @@ if TYPE_CHECKING:
     from kan.core.find_filter import FindMatch, TriggeredFilter
     from kan.core.models import (
         BoardMeta,
+        ChipMetrics,
         EnrichedResult,
         FundamentalMetrics,
         HotMeta,
         MoneyflowMetrics,
         PeriodResult,
+        SentimentMetrics,
         StockScanResult,
+        TechnicalMetrics,
         ThemeMeta,
         ValuationContext,
         ValuationMetrics,
@@ -490,6 +493,12 @@ _TRIGGER_FLAG = {
     "pe": "--pe",
     "roe": "--roe",
     "moneyflow": "--moneyflow",
+    "rsi": "--rsi",
+    "macd_dif": "--macd-dif",
+    "macd": "--macd",
+    "kdj_j": "--kdj-j",
+    "streak": "--streak",
+    "winner": "--winner",
 }
 """TriggeredFilter.filter_type → DSL flag (JSON triggered_filters.filter 字段)。"""
 
@@ -554,6 +563,73 @@ def _moneyflow_public_dict(m: MoneyflowMetrics | None) -> dict | None:
     }
 
 
+def _technical_public_dict(t: TechnicalMetrics | None) -> dict | None:
+    """TechnicalMetrics → 对外 JSON (整合-2 · 前复权技术指标裸值)。
+
+    合规 (compliance §3/§7):原始指标名 (macd/kdj/rsi/ma/boll) · 不输出"超买/超卖/
+    金叉/死叉"判断词 · 只出裸值。filter 阈值用户主导 (--rsi 等)。
+    """
+    if t is None:
+        return None
+    return {
+        "trade_date": t.trade_date.isoformat() if t.trade_date else None,
+        "close": t.close,
+        "macd_dif": t.macd_dif,
+        "macd_dea": t.macd_dea,
+        "macd": t.macd,
+        "kdj_k": t.kdj_k,
+        "kdj_d": t.kdj_d,
+        "kdj_j": t.kdj_j,
+        "rsi_6": t.rsi_6,
+        "rsi_12": t.rsi_12,
+        "rsi_24": t.rsi_24,
+        "ma_5": t.ma_5,
+        "ma_10": t.ma_10,
+        "ma_20": t.ma_20,
+        "ma_60": t.ma_60,
+        "boll_upper": t.boll_upper,
+        "boll_mid": t.boll_mid,
+        "boll_lower": t.boll_lower,
+        "source": t.source,
+    }
+
+
+def _sentiment_public_dict(s: SentimentMetrics | None) -> dict | None:
+    """SentimentMetrics → 对外 JSON (整合-2 · 连板/炸板裸值)。
+
+    合规 (compliance §2/§3):连板天数 / 炸板次数是客观市场事实 · 不输出"妖股/强势"
+    判断词。s 为 None = 该股当日未涨跌停 (稀疏事件型 · 见 SentimentMetrics)。
+    """
+    if s is None:
+        return None
+    return {
+        "trade_date": s.trade_date.isoformat() if s.trade_date else None,
+        "limit_times": s.limit_times,
+        "open_times": s.open_times,
+        "limit": s.limit,
+        "up_stat": s.up_stat,
+        "source": s.source,
+    }
+
+
+def _chip_public_dict(c: ChipMetrics | None) -> dict | None:
+    """ChipMetrics → 对外 JSON (整合-2 · 获利盘/成本分布裸值)。
+
+    合规 (compliance §2/§7):获利盘比例 / 成本分位是客观计算值 · 不输出判断词。
+    """
+    if c is None:
+        return None
+    return {
+        "trade_date": c.trade_date.isoformat() if c.trade_date else None,
+        "winner_rate": c.winner_rate,
+        "cost_5pct": c.cost_5pct,
+        "cost_50pct": c.cost_50pct,
+        "cost_95pct": c.cost_95pct,
+        "weight_avg": c.weight_avg,
+        "source": c.source,
+    }
+
+
 def _find_disclaimer_quote() -> str:
     """find 专属免责 → markdown 引用块 (compliance §5 · 衍生不可删)。"""
     from kan.render.base import FIND_DISCLAIMER_TEXT
@@ -592,6 +668,9 @@ def _find_result_dict(match: FindMatch, enriched: EnrichedResult) -> dict:
         "valuation": _valuation_public_dict(er.valuation),
         "fundamentals": _fundamentals_public_dict(er.fundamentals),
         "moneyflow": _moneyflow_public_dict(er.moneyflow),
+        "technical": _technical_public_dict(er.technical),
+        "sentiment": _sentiment_public_dict(er.sentiment),
+        "chip": _chip_public_dict(er.chip),
     }
 
 
@@ -681,8 +760,8 @@ def _cross_section_result_dict(
 
     截面模式没有 K 线数据 (位置/共振/涨跌停/现价) · 只出截面真实有的:
     code/name + valuation (量价/市值 + 估值裸值 · 整合-1 放开) + valuation_context
-    (行业内分位 + 行业中位 · *_pct_rank 截面恒 None) + moneyflow (主力净额) +
-    triggered_filters (--pe/--moneyflow 命中审计 · 无 filter 取数时为 [])。
+    (行业内分位 + 行业中位 · *_pct_rank 截面恒 None) + moneyflow +
+    technical/sentiment/chip (整合-2) + triggered_filters (命中审计 · 无 filter 时 [])。
     """
     return {
         "code": row.code,
@@ -692,6 +771,9 @@ def _cross_section_result_dict(
             row.valuation_context.model_dump() if row.valuation_context else None
         ),
         "moneyflow": _moneyflow_public_dict(row.moneyflow),
+        "technical": _technical_public_dict(row.technical),
+        "sentiment": _sentiment_public_dict(row.sentiment),
+        "chip": _chip_public_dict(row.chip),
         "triggered_filters": [
             {
                 "filter": _TRIGGER_FLAG.get(t.filter_type, t.filter_type),
