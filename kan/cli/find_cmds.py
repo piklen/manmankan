@@ -80,6 +80,12 @@ def _find_filters(conditions: ConditionSet) -> list[dict]:
         out.append({"name": "--atr-pct", "param": f"{ap.op}:{ap.value:g}"})
     for ud in conditions.up_days_filters:
         out.append({"name": "--up-days", "param": f"{ud.op}:{ud.value:g}"})
+    for hd in conditions.holders_filters:
+        out.append({"name": "--holders", "param": f"{hd.op}:{hd.value:g}"})
+    for tt in conditions.top10_filters:
+        out.append({"name": "--top10", "param": f"{tt.op}:{tt.value:g}"})
+    for nt in conditions.north_filters:
+        out.append({"name": "--north", "param": f"{nt.op}:{nt.value:g}"})
     if conditions.exclude_st:
         out.append({"name": "--exclude-st"})
     return out
@@ -196,6 +202,27 @@ def find(
             help="连阳天数 filter OP:VAL 例 gte:3 (连续阳线数 · K 线池) · 可多次",
         ),
     ] = [],  # noqa: B006 · typer multi-option 需要 list 默认值
+    holders: Annotated[
+        list[str],
+        typer.Option(
+            "--holders",
+            help="股东 filter OP:VAL 例 lt:0 (户数环比减少) · 逐股 · --all 不支持 · 可多次",
+        ),
+    ] = [],  # noqa: B006 · typer multi-option 需要 list 默认值
+    top10: Annotated[
+        list[str],
+        typer.Option(
+            "--top10",
+            help="股东 filter OP:VAL 例 gte:50 (前十大流通集中度%) · 逐股 · --all 不支持 · 可多次",
+        ),
+    ] = [],  # noqa: B006 · typer multi-option 需要 list 默认值
+    north: Annotated[
+        list[str],
+        typer.Option(
+            "--north",
+            help="股东 filter OP:VAL 例 gte:3 (北向持股% · 香港中央结算季度代理) · 逐股 · --all 不支持 · 可多次",
+        ),
+    ] = [],  # noqa: B006 · typer multi-option 需要 list 默认值
     industry: Annotated[
         str | None,
         typer.Option("--industry", help="池: 申万行业 (例 半导体)"),
@@ -250,6 +277,7 @@ def find(
       kan find --industry 半导体 --pe lt:30 --moneyflow gt:0  # 估值+资金组合
       kan find --all --pe lt:20 --format json          # 全市场 PE<20 截面筛
       kan find --all --rsi lt:30 --streak gte:3 --format json  # 全市场 RSI<30 + 连板≥3
+      kan find --industry 半导体 --top10 gte:50 --format json  # 半导体里前十大流通集中度≥50%
 
     Filter:
       --pos PERIOD:OP:VAL    PERIOD 取 3/5/7/10/15/30/60/90/120/180 · OP 取 lt/lte/gt/gte/eq/ne
@@ -264,6 +292,9 @@ def find(
       --gain PERIOD:OP:VAL   近 N 日涨幅% · 例 30:gt:20 · K 线池 (--all 不支持)
       --atr-pct OP:VAL       ATR 波动率% · 例 lt:5 (atr/close · 裸值)
       --up-days OP:VAL       连阳天数 · 例 gte:3 · K 线池 (--all 不支持)
+      --holders OP:VAL       股东户数环比% · 例 lt:0 (户数减少) · 逐股 · --all 不支持 (整合-3)
+      --top10 OP:VAL         前十大流通集中度% · 例 gte:50 · 逐股 · --all 不支持 (整合-3)
+      --north OP:VAL         北向持股% · 例 gte:3 (香港中央结算季度代理) · 逐股 · --all 不支持 (整合-3)
       --exclude-st           排 ST (quiet · 不记 triggered)
 
     输出 (地基-2):
@@ -319,6 +350,9 @@ def find(
             gain=gain,
             atr_pct=atr_pct,
             up_days=up_days,
+            holders=holders,
+            top10=top10,
+            north=north,
             exclude_st=exclude_st,
         )
     except FilterParseError as e:
@@ -356,6 +390,12 @@ def find(
             _print_err(
                 "❌ --all 全市场截面不支持 --roe (fina_indicator 逐股 · 全市场 ~5500 只代价高)\n"
                 "   质量筛请缩小池 · 例 kan find --industry 半导体 --roe gte:15"
+            )
+            raise typer.Exit(2)
+        if conditions.needs_shareholder():
+            _print_err(
+                "❌ --all 全市场截面不支持 --holders/--top10/--north (股东数据逐股 · 全市场 ~5500 只代价高)\n"
+                "   持股结构筛请缩小池 · 例 kan find --industry 半导体 --top10 gte:50"
             )
             raise typer.Exit(2)
         if not is_export:
@@ -426,6 +466,7 @@ def find(
         is_export
         or conditions.has_cross_section_filters()
         or conditions.needs_fundamentals()
+        or conditions.needs_shareholder()
     )
     if need_enrich:
         pool_results = enrich_results(
@@ -439,6 +480,7 @@ def find(
             or (is_export and conditions.is_empty()),
             need_chip=conditions.needs_chip()
             or (is_export and conditions.is_empty()),
+            need_shareholder=conditions.needs_shareholder(),
         )
     else:
         pool_results = ctx.results

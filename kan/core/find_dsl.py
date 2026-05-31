@@ -291,6 +291,60 @@ class WinnerFilter:
         return cls(op=op, value=value)
 
 
+# ─── 整合-3 新增 filter (股东·持股结构 · OP:VAL 裸值阈值 · 逐股 · --all 不支持) ───
+# 合规:用户主导阈值 · 只筛已披露客观事实衍生 · 不输出主力建仓/洗盘/控盘等判断词。
+
+@dataclass(frozen=True)
+class HoldersFilter:
+    """股东户数环比 filter · 例 OP=lt VALUE=0 = 户数环比减少 (裸值筛 · 整合-3).
+
+    读 shareholder.holder_chg_pct (% · None → 不命中)· 相邻两次披露环比 · 季度级 ·
+    负=户数减少 · 客观事实衍生 · 不输出"主力建仓/控盘"判断词。
+    """
+
+    op: str
+    value: float
+
+    @classmethod
+    def parse(cls, raw: str) -> HoldersFilter:
+        op, value = _parse_op_val(raw, flag="--holders", example="lt:0")
+        return cls(op=op, value=value)
+
+
+@dataclass(frozen=True)
+class Top10Filter:
+    """前十大流通集中度 filter · 例 OP=gte VALUE=50 = 集中度 ≥ 50% (裸值筛 · 整合-3).
+
+    读 shareholder.top10_float_ratio (% · None → 不命中)· 前十大流通股东持股合计占
+    流通比 · 季度级 · 客观披露事实 · 不输出"高度控盘"判断词。
+    """
+
+    op: str
+    value: float
+
+    @classmethod
+    def parse(cls, raw: str) -> Top10Filter:
+        op, value = _parse_op_val(raw, flag="--top10", example="gte:50")
+        return cls(op=op, value=value)
+
+
+@dataclass(frozen=True)
+class NorthFilter:
+    """北向持股 filter · 例 OP=gte VALUE=3 = 北向 ≥ 3% (裸值筛 · 整合-3).
+
+    读 shareholder.north_hold_ratio (% · None → 不命中 / 未进前十)· "香港中央结算"
+    季度名义持有人占流通比代理 (hk_hold 日频 2024-08 断供 · 降级)· 客观披露事实。
+    """
+
+    op: str
+    value: float
+
+    @classmethod
+    def parse(cls, raw: str) -> NorthFilter:
+        op, value = _parse_op_val(raw, flag="--north", example="gte:3")
+        return cls(op=op, value=value)
+
+
 # ─── 趋势/动量扩展 filter (客观裸值 · 截面 ma_bias/atr_pct 全市场 + K 线衍生 gain/up_days) ───
 # 合规:乖离率/波动率/涨幅/连阳全部客观裸值 · 阈值用户主导 · 不判「多头排列/强势/加速末端」。
 
@@ -427,6 +481,7 @@ class ConditionSet:
     财务类 (整合-1):roe_filters · 走 fundamentals (逐股 · 全市场 --all 不支持)。
     技术/情绪/筹码类 (整合-2 · 全截面):rsi/macd_dif/macd/kdj_j/streak/winner ·
       走 enrich 子对象 (technical/sentiment/chip) · K 线池 + --all 两路都支持。
+    股东类 (整合-3):holders/top10/north · 走 shareholder (逐股 · --all 不支持 · 同 roe)。
     exclude_st:quiet filter (不记 triggered · 直接 drop)。
     """
 
@@ -441,6 +496,9 @@ class ConditionSet:
     kdj_j_filters: tuple[KdjJFilter, ...] = ()
     streak_filters: tuple[StreakFilter, ...] = ()
     winner_filters: tuple[WinnerFilter, ...] = ()
+    holders_filters: tuple[HoldersFilter, ...] = ()
+    top10_filters: tuple[Top10Filter, ...] = ()
+    north_filters: tuple[NorthFilter, ...] = ()
     ma_bias_filters: tuple[MaBiasFilter, ...] = ()
     gain_filters: tuple[GainFilter, ...] = ()
     atr_pct_filters: tuple[AtrPctFilter, ...] = ()
@@ -462,6 +520,9 @@ class ConditionSet:
         kdj_j: list[str] | None = None,
         streak: list[str] | None = None,
         winner: list[str] | None = None,
+        holders: list[str] | None = None,
+        top10: list[str] | None = None,
+        north: list[str] | None = None,
         ma_bias: list[str] | None = None,
         gain: list[str] | None = None,
         atr_pct: list[str] | None = None,
@@ -481,6 +542,9 @@ class ConditionSet:
             kdj_j_filters=tuple(KdjJFilter.parse(x) for x in (kdj_j or [])),
             streak_filters=tuple(StreakFilter.parse(x) for x in (streak or [])),
             winner_filters=tuple(WinnerFilter.parse(x) for x in (winner or [])),
+            holders_filters=tuple(HoldersFilter.parse(x) for x in (holders or [])),
+            top10_filters=tuple(Top10Filter.parse(x) for x in (top10 or [])),
+            north_filters=tuple(NorthFilter.parse(x) for x in (north or [])),
             ma_bias_filters=tuple(MaBiasFilter.parse(x) for x in (ma_bias or [])),
             gain_filters=tuple(GainFilter.parse(x) for x in (gain or [])),
             atr_pct_filters=tuple(AtrPctFilter.parse(x) for x in (atr_pct or [])),
@@ -501,6 +565,9 @@ class ConditionSet:
             or self.kdj_j_filters
             or self.streak_filters
             or self.winner_filters
+            or self.holders_filters
+            or self.top10_filters
+            or self.north_filters
             or self.ma_bias_filters
             or self.gain_filters
             or self.atr_pct_filters
@@ -554,6 +621,14 @@ class ConditionSet:
         """是否需挂 chip (--winner · 截面 · 整合-2)。"""
         return bool(self.winner_filters)
 
+    def needs_shareholder(self) -> bool:
+        """是否需挂 shareholder (--holders/--top10/--north · 逐股 · 全市场 --all 不支持)。"""
+        return bool(
+            self.holders_filters
+            or self.top10_filters
+            or self.north_filters
+        )
+
 
 _OP_FUNCS = {
     "lt": lambda a, b: a < b,
@@ -581,17 +656,20 @@ __all__ = [
     "ConditionSet",
     "FilterParseError",
     "GainFilter",
+    "HoldersFilter",
     "KdjJFilter",
     "MaBiasFilter",
     "MacdDifFilter",
     "MacdFilter",
     "MoneyflowFilter",
+    "NorthFilter",
     "PeFilter",
     "PosFilter",
     "ResonanceFilter",
     "RoeFilter",
     "RsiFilter",
     "StreakFilter",
+    "Top10Filter",
     "UpDaysFilter",
     "WinnerFilter",
     "apply_op",
