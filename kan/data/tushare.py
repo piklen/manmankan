@@ -423,3 +423,103 @@ class TushareMetricsSource:
         self, trade_date: str, symbols: list[str] | None = None,
     ) -> pd.DataFrame | None:
         return _fetch_tushare_metrics(trade_date, symbols)
+
+
+# ══════════════════════════════════════════════════════════════════
+# 估值历史时序 + 申万行业反查 (地基-3) · 估值分位 + 行业中位对照原料
+# ══════════════════════════════════════════════════════════════════
+
+_HISTORY_FIELDS = "trade_date,pe_ttm,pb,ps_ttm,dv_ttm"
+"""daily_basic 单股时序字段 · 估值历史分位用 (与截面正交:单股多日 vs 单日全市场)。"""
+
+
+def _fetch_tushare_metrics_history(
+    symbol: str, start_date: str,
+) -> pd.DataFrame | None:
+    """TuShare daily_basic 单股估值时序 (ts_code + start_date) · 历史分位原料 (地基-3)。
+
+    与截面 _fetch_tushare_metrics 正交:截面=单日全市场 · 时序=单股多日。
+    复用 'tushare_metrics' 熔断 key (同 daily_basic 接口 · 频率门槛一致)。
+
+    Returns:
+        DataFrame (trade_date + pe_ttm/pb/ps_ttm/dv_ttm) 或 None (未配 token / 熔断 / 失败)。
+    """
+    import pandas as pd
+
+    from kan.infra import circuit_breaker
+
+    token, endpoint = _resolve_config()
+    if not token:
+        return None
+    cb = circuit_breaker.get_breaker()
+    if cb.is_down("tushare_metrics"):
+        return None
+    try:
+        ts_code = _normalize_symbol_to_ts(symbol)
+    except ValueError:
+        return None
+    try:
+        data, _err = _post_tushare_api(
+            endpoint=endpoint, token=token, api_name="daily_basic",
+            params={"ts_code": ts_code, "start_date": start_date},
+            fields=_HISTORY_FIELDS,
+        )
+        if data is None:
+            cb.record("tushare_metrics", ok=False)
+            return None
+        fields = data.get("fields") or []
+        items = data.get("items") or []
+        if not items:
+            cb.record("tushare_metrics", ok=False)
+            return None
+        cb.record("tushare_metrics", ok=True)
+        return pd.DataFrame(items, columns=fields)
+    except Exception as e:
+        debug_log(__name__, "fetch tushare metrics history 失败", e)
+        cb.record("tushare_metrics", ok=False)
+        return None
+
+
+def _fetch_tushare_sw_l1_members() -> pd.DataFrame | None:
+    """TuShare index_member_all 申万成分 · symbol → 申万一级 (地基-3 行业中位反查)。
+
+    一次拉全市场最新成分 (is_new=Y) · 熔断 key 'tushare_sw' 独立于截面 daily_basic。
+
+    Returns:
+        DataFrame (symbol + l1_name · ts_code 已 strip) 或 None (未配 token / 熔断 / 失败)。
+    """
+    import pandas as pd
+
+    from kan.infra import circuit_breaker
+
+    token, endpoint = _resolve_config()
+    if not token:
+        return None
+    cb = circuit_breaker.get_breaker()
+    if cb.is_down("tushare_sw"):
+        return None
+    try:
+        data, _err = _post_tushare_api(
+            endpoint=endpoint, token=token, api_name="index_member_all",
+            params={"is_new": "Y"},
+            fields="l1_name,ts_code",
+        )
+        if data is None:
+            cb.record("tushare_sw", ok=False)
+            return None
+        fields = data.get("fields") or []
+        items = data.get("items") or []
+        if not items:
+            cb.record("tushare_sw", ok=False)
+            return None
+        df = pd.DataFrame(items, columns=fields)
+        if "ts_code" not in df.columns or "l1_name" not in df.columns:
+            cb.record("tushare_sw", ok=False)
+            return None
+        df["symbol"] = df["ts_code"].map(_strip_ts_suffix)
+        cb.record("tushare_sw", ok=True)
+        return df[["symbol", "l1_name"]]
+    except Exception as e:
+        debug_log(__name__, "fetch tushare sw members 失败", e)
+        cb.record("tushare_sw", ok=False)
+        return None
