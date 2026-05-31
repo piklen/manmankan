@@ -72,6 +72,14 @@ def _find_filters(conditions: ConditionSet) -> list[dict]:
         out.append({"name": "--streak", "param": f"{stk.op}:{stk.value:g}"})
     for wn in conditions.winner_filters:
         out.append({"name": "--winner", "param": f"{wn.op}:{wn.value:g}"})
+    for mb in conditions.ma_bias_filters:
+        out.append({"name": "--ma-bias", "param": f"{mb.period}:{mb.op}:{mb.value:g}"})
+    for gn in conditions.gain_filters:
+        out.append({"name": "--gain", "param": f"{gn.period}:{gn.op}:{gn.value:g}"})
+    for ap in conditions.atr_pct_filters:
+        out.append({"name": "--atr-pct", "param": f"{ap.op}:{ap.value:g}"})
+    for ud in conditions.up_days_filters:
+        out.append({"name": "--up-days", "param": f"{ud.op}:{ud.value:g}"})
     if conditions.exclude_st:
         out.append({"name": "--exclude-st"})
     return out
@@ -160,6 +168,34 @@ def find(
             help="筹码 filter OP:VAL 例 gte:50 (获利盘 ≥ 50%) · 可多次",
         ),
     ] = [],  # noqa: B006 · typer multi-option 需要 list 默认值
+    ma_bias: Annotated[
+        list[str],
+        typer.Option(
+            "--ma-bias",
+            help="乖离率 filter PERIOD:OP:VAL 例 20:gt:0 (收盘距 20 日线 % · 裸值) · 可多次",
+        ),
+    ] = [],  # noqa: B006 · typer multi-option 需要 list 默认值
+    gain: Annotated[
+        list[str],
+        typer.Option(
+            "--gain",
+            help="涨幅 filter PERIOD:OP:VAL 例 30:gt:20 (近 30 日涨幅 % · K 线池) · 可多次",
+        ),
+    ] = [],  # noqa: B006 · typer multi-option 需要 list 默认值
+    atr_pct: Annotated[
+        list[str],
+        typer.Option(
+            "--atr-pct",
+            help="波动率 filter OP:VAL 例 lt:5 (ATR/close % · 裸值) · 可多次",
+        ),
+    ] = [],  # noqa: B006 · typer multi-option 需要 list 默认值
+    up_days: Annotated[
+        list[str],
+        typer.Option(
+            "--up-days",
+            help="连阳天数 filter OP:VAL 例 gte:3 (连续阳线数 · K 线池) · 可多次",
+        ),
+    ] = [],  # noqa: B006 · typer multi-option 需要 list 默认值
     industry: Annotated[
         str | None,
         typer.Option("--industry", help="池: 申万行业 (例 半导体)"),
@@ -224,6 +260,10 @@ def find(
       --rsi/--macd-dif/--macd/--kdj-j OP:VAL  技术裸值筛 · 前复权 · 例 --rsi lt:30 (整合-2)
       --streak OP:VAL        连板天数 · 例 gte:3 · 不含 ST (整合-2)
       --winner OP:VAL        获利盘% · 例 gte:50 (整合-2)
+      --ma-bias PERIOD:OP:VAL  乖离率 · PERIOD 取 5/10/20/60 · 例 20:gt:0 (收盘距 20 日线)
+      --gain PERIOD:OP:VAL   近 N 日涨幅% · 例 30:gt:20 · K 线池 (--all 不支持)
+      --atr-pct OP:VAL       ATR 波动率% · 例 lt:5 (atr/close · 裸值)
+      --up-days OP:VAL       连阳天数 · 例 gte:3 · K 线池 (--all 不支持)
       --exclude-st           排 ST (quiet · 不记 triggered)
 
     输出 (地基-2):
@@ -275,6 +315,10 @@ def find(
             kdj_j=kdj_j,
             streak=streak,
             winner=winner,
+            ma_bias=ma_bias,
+            gain=gain,
+            atr_pct=atr_pct,
+            up_days=up_days,
             exclude_st=exclude_st,
         )
     except FilterParseError as e:

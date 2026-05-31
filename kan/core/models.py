@@ -27,6 +27,7 @@ class PeriodResult(BaseModel):
     at_high: bool
     insufficient: bool = False
     trend: str = ""  # ↑ 反弹 / ↓ 下行 / → 持平
+    gain_pct: float | None = None  # 近 period 日涨幅 % (K 线衍生 · 不足 period+1 根→None)
 
 
 class StockScanResult(BaseModel):
@@ -40,6 +41,7 @@ class StockScanResult(BaseModel):
     is_st: bool = False
     limit_up: bool = False
     limit_down: bool = False
+    up_days: int = 0  # 连阳天数 (candle 口径 · close>open 连续根数 · 当前非阳线=0)
 
 
 class ValuationMetrics(BaseModel):
@@ -143,10 +145,28 @@ class TechnicalMetrics(BaseModel):
     ma_10: float | None = None         # 10 日均线
     ma_20: float | None = None         # 20 日均线
     ma_60: float | None = None         # 60 日均线
+    atr: float | None = None           # ATR 波动率 (前复权 · 绝对值 · 趋势/动量扩展)
     boll_upper: float | None = None    # BOLL 上轨
     boll_mid: float | None = None      # BOLL 中轨
     boll_lower: float | None = None    # BOLL 下轨
     source: str | None = None          # 数据源标注 (例 tushare_factor)
+
+    def ma_bias(self, period: int) -> float | None:
+        """乖离率 = (close − ma_period) / ma_period × 100 · 客观技术指标 (BIAS)。
+
+        period ∈ {5,10,20,60} (对应已拉均线) · close / ma 缺失或 ma=0 → None。
+        裸值 · 不判断「多头排列 / 趋势」(compliance §7 · 判断权在用户/消费方)。
+        """
+        ma = {5: self.ma_5, 10: self.ma_10, 20: self.ma_20, 60: self.ma_60}.get(period)
+        if self.close is None or ma is None or ma == 0:
+            return None
+        return (self.close - ma) / ma * 100
+
+    def atr_pct(self) -> float | None:
+        """ATR 波动率百分比 = atr / close × 100 · 跨标的可比 · 缺失或 close=0 → None。"""
+        if self.atr is None or self.close is None or self.close == 0:
+            return None
+        return self.atr / self.close * 100
 
 
 class SentimentMetrics(BaseModel):

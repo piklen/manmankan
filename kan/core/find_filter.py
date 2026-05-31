@@ -26,7 +26,10 @@ from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
 from kan.core.find_dsl import (
+    AtrPctFilter,
+    GainFilter,
     KdjJFilter,
+    MaBiasFilter,
     MacdDifFilter,
     MacdFilter,
     MoneyflowFilter,
@@ -36,6 +39,7 @@ from kan.core.find_dsl import (
     RoeFilter,
     RsiFilter,
     StreakFilter,
+    UpDaysFilter,
     WinnerFilter,
     apply_op,
 )
@@ -248,6 +252,75 @@ def _match_winner(
     return None
 
 
+# ─── 趋势/动量扩展匹配器 (ma_bias/atr_pct 吃 technical · gain/up_days 吃 result) ───
+
+def _match_ma_bias(
+    filter: MaBiasFilter, technical: TechnicalMetrics | None
+) -> TriggeredFilter | None:
+    """Match 乖离率 filter against technical · ma_bias(period) 缺失 → 不命中。"""
+    if technical is None:
+        return None
+    bias = technical.ma_bias(filter.period)
+    if bias is None:
+        return None
+    if apply_op(filter.op, bias, filter.value):
+        return TriggeredFilter(
+            filter_type="ma_bias",
+            param=f"{filter.period}:{filter.op}:{filter.value:g}",
+            value=bias,
+        )
+    return None
+
+
+def _match_atr_pct(
+    filter: AtrPctFilter, technical: TechnicalMetrics | None
+) -> TriggeredFilter | None:
+    """Match ATR 波动率% filter against technical · atr_pct() 缺失 → 不命中。"""
+    if technical is None:
+        return None
+    atr_pct_val = technical.atr_pct()
+    if atr_pct_val is None:
+        return None
+    if apply_op(filter.op, atr_pct_val, filter.value):
+        return TriggeredFilter(
+            filter_type="atr_pct",
+            param=f"{filter.op}:{filter.value:g}",
+            value=atr_pct_val,
+        )
+    return None
+
+
+def _match_gain(
+    filter: GainFilter, result: StockScanResult
+) -> TriggeredFilter | None:
+    """Match 近 N 日涨幅 filter against scan result · period 不足/insufficient → 不命中。"""
+    for p in result.periods:
+        if p.period == filter.period:
+            if p.insufficient or p.gain_pct is None:
+                return None
+            if apply_op(filter.op, p.gain_pct, filter.value):
+                return TriggeredFilter(
+                    filter_type="gain",
+                    param=f"{filter.period}:{filter.op}:{filter.value:g}",
+                    value=p.gain_pct,
+                )
+            return None
+    return None
+
+
+def _match_up_days(
+    filter: UpDaysFilter, result: StockScanResult
+) -> TriggeredFilter | None:
+    """Match 连阳天数 filter against scan result · up_days 客观计数 (0 也参与比较)。"""
+    if apply_op(filter.op, result.up_days, filter.value):
+        return TriggeredFilter(
+            filter_type="up_days",
+            param=f"{filter.op}:{filter.value:g}",
+            value=float(result.up_days),
+        )
+    return None
+
+
 def _match_all(
     filters: tuple,
     target: object,
@@ -297,6 +370,8 @@ def apply_conditions(
         segments = [
             (conditions.pos_filters, r, _match_pos),
             (conditions.resonance_filters, r, _match_resonance),
+            (conditions.gain_filters, r, _match_gain),
+            (conditions.up_days_filters, r, _match_up_days),
             (conditions.pe_filters, getattr(r, "valuation", None), _match_pe),
             (conditions.roe_filters, getattr(r, "fundamentals", None), _match_roe),
             (conditions.moneyflow_filters, getattr(r, "moneyflow", None), _match_moneyflow),
@@ -304,6 +379,8 @@ def apply_conditions(
             (conditions.macd_dif_filters, getattr(r, "technical", None), _match_macd_dif),
             (conditions.macd_filters, getattr(r, "technical", None), _match_macd),
             (conditions.kdj_j_filters, getattr(r, "technical", None), _match_kdj_j),
+            (conditions.ma_bias_filters, getattr(r, "technical", None), _match_ma_bias),
+            (conditions.atr_pct_filters, getattr(r, "technical", None), _match_atr_pct),
             (conditions.streak_filters, getattr(r, "sentiment", None), _match_streak),
             (conditions.winner_filters, getattr(r, "chip", None), _match_winner),
         ]
@@ -355,6 +432,8 @@ def apply_cross_section_conditions(
             (conditions.macd_dif_filters, row.technical, _match_macd_dif),
             (conditions.macd_filters, row.technical, _match_macd),
             (conditions.kdj_j_filters, row.technical, _match_kdj_j),
+            (conditions.ma_bias_filters, row.technical, _match_ma_bias),
+            (conditions.atr_pct_filters, row.technical, _match_atr_pct),
             (conditions.streak_filters, row.sentiment, _match_streak),
             (conditions.winner_filters, row.chip, _match_winner),
         ]

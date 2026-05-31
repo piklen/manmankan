@@ -291,6 +291,133 @@ class WinnerFilter:
         return cls(op=op, value=value)
 
 
+# ─── 趋势/动量扩展 filter (客观裸值 · 截面 ma_bias/atr_pct 全市场 + K 线衍生 gain/up_days) ───
+# 合规:乖离率/波动率/涨幅/连阳全部客观裸值 · 阈值用户主导 · 不判「多头排列/强势/加速末端」。
+
+ALLOWED_MA = (5, 10, 20, 60)
+"""--ma-bias 支持的均线周期 (对应 stk_factor_pro 已拉 ma_5/10/20/60)。"""
+
+
+@dataclass(frozen=True)
+class MaBiasFilter:
+    """均线乖离率 filter · 例 PERIOD=20 OP=gt VALUE=0 = 收盘距 20 日线 > 0% (站上).
+
+    乖离率 = (close − ma_N) / ma_N × 100 · 读 technical.ma_bias(period) (纯算 · 现成均线)·
+    PERIOD ∈ {5,10,20,60} · 客观 BIAS · 不判「多头排列/趋势」· 全市场 --all 支持。
+    """
+
+    period: int
+    op: str
+    value: float
+
+    @classmethod
+    def parse(cls, raw: str) -> MaBiasFilter:
+        parts = raw.split(":")
+        if len(parts) != 3:
+            raise FilterParseError(
+                f"--ma-bias 格式错误 '{raw}' · 需要 PERIOD:OP:VAL 例 20:gt:0"
+            )
+        try:
+            period = int(parts[0])
+        except ValueError as e:
+            raise FilterParseError(
+                f"--ma-bias 周期非整数 '{parts[0]}' · 例: --ma-bias 20:gt:0"
+            ) from e
+        if period not in ALLOWED_MA:
+            raise FilterParseError(
+                f"--ma-bias 周期 {period} 不支持 · 仅 {list(ALLOWED_MA)} · 例: --ma-bias 20:gt:0"
+            )
+        op = parts[1].lower()
+        if op not in ALLOWED_OPS:
+            raise FilterParseError(
+                f"--ma-bias 运算符 '{op}' 不支持 · 仅 {list(ALLOWED_OPS)} · 例: --ma-bias 20:gt:0"
+            )
+        try:
+            value = float(parts[2])
+        except ValueError as e:
+            raise FilterParseError(
+                f"--ma-bias 数值非数字 '{parts[2]}' · 例: --ma-bias 20:gt:0"
+            ) from e
+        return cls(period=period, op=op, value=value)
+
+
+@dataclass(frozen=True)
+class GainFilter:
+    """近 N 日涨幅 filter · 例 PERIOD=30 OP=gt VALUE=20 = 近 30 日涨幅 > 20%.
+
+    读 StockScanResult.periods[N].gain_pct (K 线衍生 · 需 K 线池 · --all 不支持)·
+    客观涨幅 · 双关动量/涨速 (工具不判机会还是末端)· PERIOD ∈ ALLOWED_PERIODS (注意无 20)。
+    """
+
+    period: int
+    op: str
+    value: float
+
+    @classmethod
+    def parse(cls, raw: str) -> GainFilter:
+        parts = raw.split(":")
+        if len(parts) != 3:
+            raise FilterParseError(
+                f"--gain 格式错误 '{raw}' · 需要 PERIOD:OP:VAL 例 30:gt:20"
+            )
+        try:
+            period = int(parts[0])
+        except ValueError as e:
+            raise FilterParseError(
+                f"--gain 周期非整数 '{parts[0]}' · 例: --gain 30:gt:20"
+            ) from e
+        if period not in ALLOWED_PERIODS:
+            raise FilterParseError(
+                f"--gain 周期 {period} 不支持 · 仅 {list(ALLOWED_PERIODS)} · 例: --gain 30:gt:20"
+            )
+        op = parts[1].lower()
+        if op not in ALLOWED_OPS:
+            raise FilterParseError(
+                f"--gain 运算符 '{op}' 不支持 · 仅 {list(ALLOWED_OPS)} · 例: --gain 30:gt:20"
+            )
+        try:
+            value = float(parts[2])
+        except ValueError as e:
+            raise FilterParseError(
+                f"--gain 数值非数字 '{parts[2]}' · 例: --gain 30:gt:20"
+            ) from e
+        return cls(period=period, op=op, value=value)
+
+
+@dataclass(frozen=True)
+class AtrPctFilter:
+    """ATR 波动率百分比 filter · 例 OP=lt VALUE=5 = ATR/close < 5% (波动率裸值 · 风险数据).
+
+    读 technical.atr_pct() = atr / close × 100 (固定周期 · stk_factor_pro 截面)·
+    全市场 --all 支持 · 客观波动率 · 不判「高波动危险/低波动安全」。
+    """
+
+    op: str
+    value: float
+
+    @classmethod
+    def parse(cls, raw: str) -> AtrPctFilter:
+        op, value = _parse_op_val(raw, flag="--atr-pct", example="lt:5")
+        return cls(op=op, value=value)
+
+
+@dataclass(frozen=True)
+class UpDaysFilter:
+    """连阳天数 filter · 例 OP=gte VALUE=3 = 连续 ≥ 3 根阳线 (涨速/加速裸值).
+
+    读 StockScanResult.up_days (candle 口径 close>open · K 线衍生 · --all 不支持)·
+    客观连阳计数 · 不判「强势/妖股」· 区别于 --streak (连板天数 · 涨跌停口径)。
+    """
+
+    op: str
+    value: float
+
+    @classmethod
+    def parse(cls, raw: str) -> UpDaysFilter:
+        op, value = _parse_op_val(raw, flag="--up-days", example="gte:3")
+        return cls(op=op, value=value)
+
+
 @dataclass(frozen=True)
 class ConditionSet:
     """DSL 解析后的完整 filter 集合 · 多 filter 间 AND 语义.
@@ -314,6 +441,10 @@ class ConditionSet:
     kdj_j_filters: tuple[KdjJFilter, ...] = ()
     streak_filters: tuple[StreakFilter, ...] = ()
     winner_filters: tuple[WinnerFilter, ...] = ()
+    ma_bias_filters: tuple[MaBiasFilter, ...] = ()
+    gain_filters: tuple[GainFilter, ...] = ()
+    atr_pct_filters: tuple[AtrPctFilter, ...] = ()
+    up_days_filters: tuple[UpDaysFilter, ...] = ()
     exclude_st: bool = False
 
     @classmethod
@@ -331,6 +462,10 @@ class ConditionSet:
         kdj_j: list[str] | None = None,
         streak: list[str] | None = None,
         winner: list[str] | None = None,
+        ma_bias: list[str] | None = None,
+        gain: list[str] | None = None,
+        atr_pct: list[str] | None = None,
+        up_days: list[str] | None = None,
         exclude_st: bool = False,
     ) -> ConditionSet:
         """Build ConditionSet from CLI flag strings (raw user input)."""
@@ -346,6 +481,10 @@ class ConditionSet:
             kdj_j_filters=tuple(KdjJFilter.parse(x) for x in (kdj_j or [])),
             streak_filters=tuple(StreakFilter.parse(x) for x in (streak or [])),
             winner_filters=tuple(WinnerFilter.parse(x) for x in (winner or [])),
+            ma_bias_filters=tuple(MaBiasFilter.parse(x) for x in (ma_bias or [])),
+            gain_filters=tuple(GainFilter.parse(x) for x in (gain or [])),
+            atr_pct_filters=tuple(AtrPctFilter.parse(x) for x in (atr_pct or [])),
+            up_days_filters=tuple(UpDaysFilter.parse(x) for x in (up_days or [])),
             exclude_st=exclude_st,
         )
 
@@ -362,12 +501,21 @@ class ConditionSet:
             or self.kdj_j_filters
             or self.streak_filters
             or self.winner_filters
+            or self.ma_bias_filters
+            or self.gain_filters
+            or self.atr_pct_filters
+            or self.up_days_filters
             or self.exclude_st
         )
 
     def has_kline_filters(self) -> bool:
-        """K 线衍生 filter (位置/共振) · 截面模式 (--all) 不支持。"""
-        return bool(self.pos_filters or self.resonance_filters)
+        """K 线衍生 filter (位置/共振/涨幅/连阳) · 截面模式 (--all) 不支持。"""
+        return bool(
+            self.pos_filters
+            or self.resonance_filters
+            or self.gain_filters
+            or self.up_days_filters
+        )
 
     def has_cross_section_filters(self) -> bool:
         """截面类 filter (估值/资金/技术/情绪/筹码) · K 线池 + --all 两路都支持。"""
@@ -388,12 +536,14 @@ class ConditionSet:
         return bool(self.moneyflow_filters)
 
     def needs_technical(self) -> bool:
-        """是否需挂 technical (--rsi/--macd-dif/--macd/--kdj-j · 截面 · 整合-2)。"""
+        """是否需挂 technical (--rsi/--macd-dif/--macd/--kdj-j/--ma-bias/--atr-pct · 截面)。"""
         return bool(
             self.rsi_filters
             or self.macd_dif_filters
             or self.macd_filters
             or self.kdj_j_filters
+            or self.ma_bias_filters
+            or self.atr_pct_filters
         )
 
     def needs_sentiment(self) -> bool:
@@ -423,12 +573,16 @@ def apply_op(op: str, lhs: float, rhs: float) -> bool:
 
 
 __all__ = [
+    "ALLOWED_MA",
     "ALLOWED_OPS",
     "ALLOWED_PERIODS",
     "RESONANCE_LEVELS",
+    "AtrPctFilter",
     "ConditionSet",
     "FilterParseError",
+    "GainFilter",
     "KdjJFilter",
+    "MaBiasFilter",
     "MacdDifFilter",
     "MacdFilter",
     "MoneyflowFilter",
@@ -438,6 +592,7 @@ __all__ = [
     "RoeFilter",
     "RsiFilter",
     "StreakFilter",
+    "UpDaysFilter",
     "WinnerFilter",
     "apply_op",
 ]
