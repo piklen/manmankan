@@ -219,3 +219,109 @@ class TestInfoPayloadValuation:
             data_cutoff=None, fetched_at=None, stale=True,
         )
         assert p["valuation"] is None  # 未传 valuation → None (向后兼容)
+
+
+class TestCrossSectionPayload:
+    """kan find --all --format json 截面 payload (地基-3) · 守裸值不出 + disclaimer。"""
+
+    def _row(self, code="600519", name="贵州茅台", with_ctx=True):
+        from kan.core.cross_section import CrossSectionRow
+        from kan.core.models import ValuationContext
+        ctx = ValuationContext(
+            industry="食品饮料", lookback_days=730, industry_sample=12,
+            pe_pct_rank=None, pb_pct_rank=None,
+            pe_industry_pct=62.0, pb_industry_pct=55.0,
+            pe_industry_median=28.5, pb_industry_median=4.2,
+        ) if with_ctx else None
+        return CrossSectionRow(
+            code=code, name=name, valuation=_valuation(), valuation_context=ctx,
+        )
+
+    def test_schema_and_mode(self):
+        p = export.cross_section_payload(
+            [self._row()], query_time="2026-05-29T15:30:00+08:00",
+            pool_size=5500, data_cutoff=datetime.date(2026, 5, 29), stale=False,
+        )
+        assert p["schema_version"] == export.FIND_SCHEMA_VERSION
+        assert p["command"] == "find"
+        assert p["mode"] == "cross_section"
+        assert p["rule"]["pools"] == ["all"]
+        assert p["stats"] == {
+            "pool_size": 5500, "shown": 1,
+            "data_cutoff": "2026-05-29", "stale": False,
+        }
+        r0 = p["results"][0]
+        assert r0["code"] == "600519"
+        assert r0["valuation_context"]["pe_industry_pct"] == 62.0
+        assert r0["valuation_context"]["pe_industry_median"] == 28.5
+
+    def test_disclaimer_present(self):
+        p = export.cross_section_payload(
+            [self._row()], query_time="t", pool_size=1, data_cutoff=None, stale=True,
+        )
+        assert "候选 ≠ 买入信号" in p["disclaimer"]
+        assert "不构成任何形式的推荐或建议" in p["disclaimer"]
+
+    def test_valuation_omits_raw_estimation(self):
+        r0 = export.cross_section_payload(
+            [self._row()], query_time="t", pool_size=1, data_cutoff=None, stale=True,
+        )["results"][0]
+        # 个股估值裸值不出 (valuation 走 _valuation_public_dict)
+        for raw in ("pe_ttm", "pb", "ps_ttm", "dv_ttm"):
+            assert raw not in r0["valuation"]
+        # 客观量价/市值出 (compliance §2 安全区)
+        assert r0["valuation"]["turnover_rate"] == 0.61
+        assert r0["valuation"]["total_mv"] == 1.65e8
+
+    def test_full_json_no_individual_raw_values(self):
+        s = export.to_json(export.cross_section_payload(
+            [self._row()], query_time="t", pool_size=1, data_cutoff=None, stale=True,
+        ))
+        # 个股 PE/PB 裸值 (_valuation: 20.04 / 6.19) 不出。注意 valuation_context 的
+        # pb_industry_* 是行业分位/中位 (合规) · 故查裸值数值而非 "pb" 子串。
+        assert "20.04" not in s, "个股 PE 裸值不该出现"
+        assert "6.19" not in s, "个股 PB 裸值不该出现"
+        assert '"pe_ttm"' not in s
+        assert '"ps_ttm"' not in s
+
+    def test_no_banned_words(self):
+        p = dict(export.cross_section_payload(
+            [self._row()], query_time="t", pool_size=1, data_cutoff=None, stale=True,
+        ))
+        p.pop("disclaimer")  # 固定免责区豁免 · 扫可变数据区
+        s = export.to_json(p)
+        for w in _BANNED:
+            assert w not in s, f"compliance §3 违规: '{w}' 在截面 JSON 数据区"
+
+    def test_ctx_none_safe(self):
+        p = export.cross_section_payload(
+            [self._row(with_ctx=False)], query_time="t",
+            pool_size=1, data_cutoff=None, stale=True,
+        )
+        assert p["results"][0]["valuation_context"] is None
+
+    def test_empty_rows_valid(self):
+        p = export.cross_section_payload(
+            [], query_time="t", pool_size=5500, data_cutoff=None, stale=True,
+        )
+        assert p["results"] == []
+        assert p["stats"]["shown"] == 0
+        assert p["disclaimer"]  # 空命中也必带 disclaimer
+
+    def test_markdown_renders_with_disclaimer(self):
+        md = export.cross_section_markdown(
+            [self._row()], title="慢慢看 · kan find · A股全市场截面", pool_size=5500,
+        )
+        assert "全市场 5500 只" in md
+        assert "600519" in md
+        assert "食品饮料" in md          # 行业
+        assert "62%" in md               # PE 行业内分位 (62.0 → 62%)
+        assert "候选 ≠ 买入信号" in md   # disclaimer 衍生不可删
+        # 个股估值裸值不出 (PE 20.04 / PB 6.19)
+        assert "20.04" not in md
+        assert "6.19" not in md
+
+    def test_markdown_empty_rows(self):
+        md = export.cross_section_markdown([], title="kan find", pool_size=0)
+        assert "无截面数据" in md
+        assert "候选 ≠ 买入信号" in md

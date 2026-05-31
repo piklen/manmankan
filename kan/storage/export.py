@@ -14,6 +14,7 @@ from typing import TYPE_CHECKING
 if TYPE_CHECKING:
     from datetime import date
 
+    from kan.core.cross_section import CrossSectionRow
     from kan.core.find_filter import FindMatch
     from kan.core.models import (
         BoardMeta,
@@ -620,6 +621,105 @@ def find_markdown(
         ])
     head = f"# {title} · 命中 {matched_total} / {pool_size}"
     body = md_table(headers, rows) if rows else "_无股票符合您设置的所有 filter_"
+    return f"{head}\n\n{body}\n\n{_find_disclaimer_quote()}"
+
+
+# ── cross section (kan find --all 全市场截面取数 · 地基-3) ────────────────
+
+def _cross_section_result_dict(row: CrossSectionRow) -> dict:
+    """单只截面取数结果 → JSON 对象 (无 K 线衍生字段 · 估值裸值不出)。
+
+    截面模式没有 K 线数据 (位置/共振/涨跌停/现价) · 只出截面真实有的:
+    code/name + valuation (量价/市值客观事实 · _valuation_public_dict 过滤裸值) +
+    valuation_context (行业内分位 + 行业中位 · 无个股裸值 · *_pct_rank 截面恒 None)。
+    """
+    return {
+        "code": row.code,
+        "name": row.name.replace(" ", ""),
+        "valuation": _valuation_public_dict(row.valuation),
+        "valuation_context": (
+            row.valuation_context.model_dump() if row.valuation_context else None
+        ),
+    }
+
+
+def cross_section_payload(
+    rows: list[CrossSectionRow],
+    *,
+    query_time: str,
+    pool_size: int,
+    data_cutoff: date | None,
+    stale: bool,
+) -> dict:
+    """kan find --all --format json 截面取数 payload (地基-3 · AI 全市场取数)。
+
+    与 find_payload 区别 (维护者拍板新 schema · 不复用):全市场截面**不拉 K 线** ·
+    无 price/positions/resonance/triggered (那些是 K 线衍生 · 复用 find_payload 会被迫
+    填 price=0.0 等假值 · 撞诚实)。mode="cross_section" 标记形态供 AI 区分。
+
+    Args:
+        rows: CrossSectionRow 列表 (已 limit · 顺序即输出序)
+        query_time: 查询发起时间 (ISO · caller 注入 · 利于测试确定性)
+        pool_size: 池内总股票数 (筛前 · 全市场约 5500)
+        data_cutoff: 截面数据交易日 (date | None)
+        stale: 截面缓存是否滞后
+
+    强制 disclaimer 字段 (compliance §5/§7 · 衍生不可删 · 测试守护)。
+    """
+    from kan.render.base import FIND_DISCLAIMER_TEXT
+
+    return {
+        "schema_version": FIND_SCHEMA_VERSION,
+        "command": "find",
+        "mode": "cross_section",
+        "query_time": query_time,
+        "rule": {"pools": ["all"], "filters": []},
+        "results": [_cross_section_result_dict(r) for r in rows],
+        "disclaimer": FIND_DISCLAIMER_TEXT,
+        "stats": {
+            "pool_size": pool_size,
+            "shown": len(rows),
+            "data_cutoff": data_cutoff.isoformat() if data_cutoff else None,
+            "stale": stale,
+        },
+    }
+
+
+def cross_section_markdown(
+    rows: list[CrossSectionRow],
+    *,
+    title: str,
+    pool_size: int,
+) -> str:
+    """kan find --all --format md · 全市场截面简表 + disclaimer (衍生不可删)。
+
+    列:股票 / 申万行业 / PE 行业内分位 / PB 行业内分位 / 换手率 (估值裸值不出 ·
+    只分位 + 客观量价)。
+    """
+    headers = ["股票", "申万行业", "PE行业分位", "PB行业分位", "换手率%"]
+    md_rows: list[list[str]] = []
+    for r in rows:
+        ctx = r.valuation_context
+        val = r.valuation
+        ind = ctx.industry if ctx and ctx.industry else "—"
+        pe_pct = (
+            f"{ctx.pe_industry_pct:.0f}%"
+            if ctx and ctx.pe_industry_pct is not None else "—"
+        )
+        pb_pct = (
+            f"{ctx.pb_industry_pct:.0f}%"
+            if ctx and ctx.pb_industry_pct is not None else "—"
+        )
+        turnover = (
+            f"{val.turnover_rate:.2f}"
+            if val and val.turnover_rate is not None else "—"
+        )
+        md_rows.append([
+            f"{r.name.replace(' ', '')} {r.code}",
+            ind, pe_pct, pb_pct, turnover,
+        ])
+    head = f"# {title} · 全市场 {pool_size} 只"
+    body = md_table(headers, md_rows) if md_rows else "_无截面数据_"
     return f"{head}\n\n{body}\n\n{_find_disclaimer_quote()}"
 
 

@@ -161,4 +161,91 @@ def build_valuation_context(symbol: str) -> ValuationContext | None:
     return ctx
 
 
-__all__ = ["build_valuation_context", "compute_valuation_context", "pct_rank"]
+def compute_cross_section_contexts(
+    cross_section_df: pd.DataFrame,
+    l1_map: dict[str, str],
+    *,
+    lookback_days: int,
+) -> dict[str, ValuationContext]:
+    """批量算全市场每只股的行业内分位 + 行业中位 (O(N) · kan find --all 截面专用)。
+
+    等价于 compute_valuation_context 的 cross-sectional 部分 · 但预聚合每行业 pe/pb
+    序列一次 (替代逐股重过滤 cross 的 O(N²) · 全市场 ~5500 只必需) · 复用 pct_rank /
+    _median 原语 + _MIN_INDUSTRY 守门保证算法与单股版一致。
+
+    历史分位不算 (全市场逐股历史 HTTP 太贵 · PRD §3.2 代价不对称) · *_pct_rank 恒 None。
+
+    Args:
+        cross_section_df: 全市场截面 (fetch_metrics 出口 · 含 symbol / pe_ttm / pb)
+        l1_map: {symbol: 申万一级行业名}
+        lookback_days: 写入 ValuationContext.lookback_days (语义占位 · 历史分位未算)
+
+    Returns:
+        {symbol: ValuationContext} · 仅含有行业且行业样本足 (≥ _MIN_INDUSTRY) 的股 ·
+        其余股不入 dict (caller .get(symbol) → None · 优雅降级)。
+    """
+    import pandas as pd
+
+    from kan.core.models import ValuationContext
+
+    if cross_section_df is None or cross_section_df.empty or not l1_map:
+        return {}
+
+    # 1. 预聚合:每行业 pe/pb 有效序列 + 每股自身 pe/pb (一次遍历截面)
+    ind_pe: dict[str, list[float]] = {}
+    ind_pb: dict[str, list[float]] = {}
+    sym_pe: dict[str, float | None] = {}
+    sym_pb: dict[str, float | None] = {}
+    for _, row in cross_section_df.iterrows():
+        sym = str(row.get("symbol", "")).strip()
+        if not sym:
+            continue
+        pe_v = row.get("pe_ttm")
+        pb_v = row.get("pb")
+        pe = None if pe_v is None or pd.isna(pe_v) else float(pe_v)
+        pb = None if pb_v is None or pd.isna(pb_v) else float(pb_v)
+        sym_pe[sym] = pe
+        sym_pb[sym] = pb
+        ind = l1_map.get(sym)
+        if ind:
+            if pe is not None:
+                ind_pe.setdefault(ind, []).append(pe)
+            if pb is not None:
+                ind_pb.setdefault(ind, []).append(pb)
+
+    # 2. 预算行业中位 (一次 per 行业 · 逐股查表 · 避免重复 sort)
+    ind_pe_med = {ind: _median(vals) for ind, vals in ind_pe.items()}
+    ind_pb_med = {ind: _median(vals) for ind, vals in ind_pb.items()}
+
+    # 3. 逐股算行业内分位 (查预聚合表 · 复用 pct_rank · 守 _MIN_INDUSTRY)
+    out: dict[str, ValuationContext] = {}
+    for sym, ind in l1_map.items():
+        if sym not in sym_pe:  # 不在截面 (停牌 / 无数据) · 跳
+            continue
+        pe_peers = ind_pe.get(ind, [])
+        pb_peers = ind_pb.get(ind, [])
+        n = max(len(pe_peers), len(pb_peers))
+        if n < _MIN_INDUSTRY:
+            continue
+        pe_ok = len(pe_peers) >= _MIN_INDUSTRY
+        pb_ok = len(pb_peers) >= _MIN_INDUSTRY
+        out[sym] = ValuationContext(
+            industry=ind,
+            lookback_days=lookback_days,
+            industry_sample=n,
+            pe_pct_rank=None,  # 历史分位:全市场跳过 (逐股 HTTP 太贵)
+            pb_pct_rank=None,
+            pe_industry_pct=pct_rank(sym_pe.get(sym), pe_peers) if pe_ok else None,
+            pb_industry_pct=pct_rank(sym_pb.get(sym), pb_peers) if pb_ok else None,
+            pe_industry_median=ind_pe_med.get(ind) if pe_ok else None,
+            pb_industry_median=ind_pb_med.get(ind) if pb_ok else None,
+        )
+    return out
+
+
+__all__ = [
+    "build_valuation_context",
+    "compute_cross_section_contexts",
+    "compute_valuation_context",
+    "pct_rank",
+]

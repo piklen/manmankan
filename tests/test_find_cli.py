@@ -188,3 +188,29 @@ class TestFindJsonOutput:
         assert "候选 ≠ 买入信号" in payload["disclaimer"]
         for raw in ("pe_ttm", "pb", "ps_ttm", "dv_ttm"):
             assert raw not in result.stdout, f"估值裸值 {raw} 不该出现在对外 JSON"
+
+
+class TestFindAllCrossSection:
+    """kan find --all 全市场截面取数 CLI wiring (地基-3) · 校验均先于截面 fetch。"""
+
+    def test_all_with_pos_filter_exits_two(self):
+        ec, out = _run(["find", "--all", "--pos", "180:lt:5", "--format", "json"])
+        assert ec == 2
+        assert "不支持" in out
+
+    def test_all_with_industry_exits_two(self):
+        ec, out = _run(["find", "--all", "--industry", "半导体", "--format", "json"])
+        assert ec == 2
+        assert "互斥" in out
+
+    def test_all_terminal_exits_two(self):
+        ec, out = _run(["find", "--all"])
+        assert ec == 2
+        assert "json" in out
+
+    def test_all_no_token_friendly_error(self, tmp_path):
+        """--all + json + 无 token (隔离 XDG) → 友好报错 exit 1 · 不静默空。"""
+        ec, out, err = _run_isolated(["find", "--all", "--format", "json"], tmp_path)
+        combined = (out + err).lower()
+        assert ec == 1
+        assert "token" in combined or "tushare" in combined

@@ -11,6 +11,7 @@ from __future__ import annotations
 import pytest
 
 from kan.core.stock_set import (
+    AllStocksSet,
     HotRankSet,
     IndustrySet,
     StockSet,
@@ -361,3 +362,56 @@ def test_from_flags_hot_accepts_str_or_enum():
     s3 = from_flags(hot=HotList.SURGE)
     assert isinstance(s3, HotRankSet)
     assert s3.name == "东财飙升榜"
+
+
+# ─────────────── AllStocksSet · 地基-3 ───────────────
+
+
+def test_all_stocks_set_satisfies_protocol():
+    s = AllStocksSet(_pairs=[("600519", "贵州茅台")])
+    assert isinstance(s, StockSet)
+    assert s.name == "A股全市场"
+    assert s.codes() == ["600519"]
+    assert s.pairs() == [("600519", "贵州茅台")]
+
+
+def test_all_stocks_set_lazy_load(monkeypatch):
+    """构造 AllStocksSet 不触发 fetch_all_stocks · .codes()/.pairs() 才拉 · 走 cache。"""
+    calls = {"n": 0}
+
+    def fake_fetch(force=False):
+        calls["n"] += 1
+        return [("600519", "贵州茅台"), ("000001", "平安银行")]
+
+    monkeypatch.setattr("kan.data.universe.fetch_all_stocks", fake_fetch)
+    s = AllStocksSet()
+    assert calls["n"] == 0, "构造时不应 fetch"
+    assert s.codes() == ["600519", "000001"]
+    assert calls["n"] == 1
+    s.pairs()
+    assert calls["n"] == 1, "重复调用走 cache · 不再 fetch"
+
+
+def test_all_stocks_set_meta_none():
+    """AllStocksSet 无 meta (同 WatchlistSet · 全市场无 highlight/index_kline)。"""
+    assert AllStocksSet(_pairs=[]).meta() is None
+
+
+def test_all_stocks_set_len():
+    s = AllStocksSet(_pairs=[("600519", "贵州茅台"), ("000001", "平安银行")])
+    assert len(s) == 2
+
+
+def test_from_flags_all_stocks():
+    s = from_flags(all_stocks=True)
+    assert isinstance(s, AllStocksSet)
+
+
+@pytest.mark.parametrize("kwargs", [
+    {"all_stocks": True, "industry": "白酒"},
+    {"all_stocks": True, "hot": "rank"},
+    {"all_stocks": True, "theme": "AI"},
+])
+def test_from_flags_all_stocks_mutual_exclusion(kwargs):
+    with pytest.raises(ValueError, match="互斥"):
+        from_flags(**kwargs)
