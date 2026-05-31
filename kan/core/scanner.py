@@ -99,6 +99,13 @@ def scan_stock(
         at_low = position_pct <= 5.0
         at_high = position_pct >= 95.0
 
+        # 近 p 日涨幅 % (动量/涨速裸值 · 需 p+1 根:今收 vs p 日前收 · 不足 → None)
+        gain_pct: float | None = None
+        if total_rows >= p + 1:
+            base = float(df["close"].iloc[-(p + 1)])
+            if base > 0:
+                gain_pct = round((current_price - base) / base * 100, 2)
+
         # 趋势：跟前一天的位置比较
         trend = ""
         prev_pct = _calc_position(df, p, row_offset=1)
@@ -124,6 +131,7 @@ def scan_stock(
             at_low=at_low,
             at_high=at_high,
             trend=trend,
+            gain_pct=gain_pct,
         ))
 
     # ST 检测
@@ -139,6 +147,17 @@ def scan_stock(
             limit_up = change_pct >= threshold - 0.1
             limit_down = change_pct <= -(threshold - 0.1)
 
+    # 连阳天数 (candle 口径:close>open 连续根数 · 从最新往前数 · 当前非阳线=0)
+    # 涨速/加速裸值 · 区别于 limit_times 连板 (涨跌停口径) · 不判 "强势/妖股"。
+    up_days = 0
+    if "open" in df.columns:
+        for i in range(len(df) - 1, -1, -1):
+            o = df["open"].iloc[i]
+            c = df["close"].iloc[i]
+            if pd.isna(o) or pd.isna(c) or float(c) <= float(o):
+                break
+            up_days += 1
+
     return StockScanResult(
         symbol=symbol,
         name=name,
@@ -150,6 +169,7 @@ def scan_stock(
         is_st=is_st,
         limit_up=limit_up,
         limit_down=limit_down,
+        up_days=up_days,
     )
 
 

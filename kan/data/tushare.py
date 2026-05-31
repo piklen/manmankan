@@ -824,7 +824,7 @@ def _fetch_tushare_moneyflow(trade_date: str) -> pd.DataFrame | None:
 # ══════════════════════════════════════════════════════════════════
 
 _TECHNICAL_FIELDS = (
-    "ts_code,trade_date,close_qfq,"
+    "ts_code,trade_date,close_qfq,atr_qfq,"
     "macd_dif_qfq,macd_dea_qfq,macd_qfq,"
     "kdj_k_qfq,kdj_d_qfq,kdj_qfq,"
     "rsi_qfq_6,rsi_qfq_12,rsi_qfq_24,"
@@ -842,6 +842,7 @@ rename 去 _qfq 后缀成中性名。
 # 注意:tushare kdj_qfq = J 值 (K/D 是 kdj_k_qfq / kdj_d_qfq)。
 _TECHNICAL_RENAME = {
     "close_qfq": "close",
+    "atr_qfq": "atr",
     "macd_dif_qfq": "macd_dif",
     "macd_dea_qfq": "macd_dea",
     "macd_qfq": "macd",

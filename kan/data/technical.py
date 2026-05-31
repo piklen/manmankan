@@ -28,6 +28,7 @@ TECHNICAL_REQUIRED = ["symbol"]
 TECHNICAL_OPTIONAL = [
     "trade_date",
     "close",
+    "atr",
     "macd_dif",
     "macd_dea",
     "macd",
