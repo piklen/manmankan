@@ -70,6 +70,7 @@ def help_cmd() -> None:
   kan find --exclude-st --pos 180:lt:5         排 ST · 位置 filter
   kan find --industry 半导体 --pos 180:lt:10   行业池里筛跌透的
   kan find --pos 180:lt:5 --limit 20           自定义输出条数
+  kan find --industry 半导体 --format json     整池全维度 JSON(AI 取数 · 无 filter 即取数)
 
   [dim]PERIOD: 3/5/7/10/15/30/60/90/120/180 · OP: lt/lte/gt/gte/eq/ne · LEVEL: low/high[/dim]
   [dim]不告诉你买什么 · 帮你找到符合条件的(候选 ≠ 买入信号)[/dim]
@@ -92,7 +93,7 @@ def help_cmd() -> None:
   kan scan --format json    JSON 结构化输出
   kan compare 600519 000858 --format md
 
-  [dim]--format 适用 scan / low / high / info / trend / compare / history[/dim]
+  [dim]--format 适用 scan / low / high / info / trend / compare / history / find[/dim]
 
 [bold cyan]数据管理[/bold cyan]
   kan fetch                 拉取数据（通常不需要，scan 自动更新）

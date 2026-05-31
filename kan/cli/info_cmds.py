@@ -215,9 +215,12 @@ def info(
         from kan.core.trading_calendar import latest_trade_date
         is_stale = cutoff is None or cutoff < latest_trade_date()
         if fmt is export.OutputFormat.json:
+            # 地基-2:单股全维度 · enrich 截面市场指标 (无 token → valuation None · 优雅降级)
+            from kan.core.enrich import enrich_results
+            valuation = enrich_results([result])[0].valuation
             typer.echo(export.to_json(export.info_payload(
                 result, trend_result, volume=volume_state, data_cutoff=cutoff,
-                fetched_at=fetched_at or None, stale=is_stale,
+                fetched_at=fetched_at or None, stale=is_stale, valuation=valuation,
             )))
         else:
             typer.echo(export.info_markdown(

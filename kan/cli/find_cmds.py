@@ -1,16 +1,22 @@
-"""kan find · 用户主导的选股 DSL (v0.0.6.4 MVP)
+"""kan find · 用户主导的选股 DSL (v0.0.6.4 MVP · 地基-2 加 AI 消费 JSON)
 
 按用户输入条件 · 在自选/行业/题材/热榜池里筛符合的股票。
 "工具仅返回数据 · 不替你判断"
 
+地基-2 (AI 消费入口):
+- `--format json`:命中股票带全维度 metadata (triggered_filters + context + valuation)
+- `--format md`:markdown 表格
+- 无 filter + `--format json|md`:整池全维度 (= AI 取数环节 · 不带 filter = 数据 provider)
+- 强制 disclaimer 字段 (compliance §5/§7 · 衍生不可删 · 测试守护)
+
 合规(manmankan/docs/compliance.md §7):
 - 用户显式指定 filter · 不内置 preset
 - 输出 "符合条件的股票" · 不"推荐"
-- 强制 disclaimer · 衍生不可删
+- 估值裸值不对外 (量价/市值客观事实可出 · 见 export._valuation_public_dict)
 """
 from __future__ import annotations
 
-from typing import Annotated
+from typing import TYPE_CHECKING, Annotated
 
 import typer
 
@@ -22,11 +28,35 @@ from kan.cli.helpers import (
     _with_heavy_imports_spinner,
 )
 from kan.data.hot import HotList
+from kan.storage import export
 
-FIND_DISCLAIMER = (
-    "[bold dim]候选 ≠ 买入信号 · 工具仅返回符合您设置规则的股票数据 · "
-    "不构成任何形式的推荐或建议 · 用户自行评估[/bold dim]"
-)
+if TYPE_CHECKING:
+    from kan.core.find_dsl import ConditionSet
+
+
+def _find_pools(
+    industry: str | None, hot: HotList | None, theme: str | None, group: str | None,
+) -> list[str]:
+    """构造 rule.pools 机器标识 (JSON 输出 · 例 ["industry:半导体"] / ["watchlist"])。"""
+    if industry is not None:
+        return [f"industry:{industry}"]
+    if hot is not None:
+        return [f"hot:{getattr(hot, 'value', hot)}"]
+    if theme is not None:
+        return [f"theme:{theme}"]
+    return [f"watchlist:{group}"] if group else ["watchlist"]
+
+
+def _find_filters(conditions: ConditionSet) -> list[dict]:
+    """构造 rule.filters (JSON 输出 · 复刻用户输入的 DSL · 利于 AI 审计)。"""
+    out: list[dict] = []
+    for p in conditions.pos_filters:
+        out.append({"name": "--pos", "param": f"{p.period}:{p.op}:{p.value:g}"})
+    for r in conditions.resonance_filters:
+        out.append({"name": "--resonance", "param": f"{r.level}:{r.op}:{r.value}"})
+    if conditions.exclude_st:
+        out.append({"name": "--exclude-st"})
+    return out
 
 
 @app.command()
@@ -76,8 +106,12 @@ def find(
         int,
         typer.Option("--limit", help="输出条数上限 (默认 50)"),
     ] = 50,
+    fmt: Annotated[
+        export.OutputFormat,
+        typer.Option("--format", help="输出格式:terminal(默认)/ md / json(AI 消费)"),
+    ] = export.OutputFormat.terminal,
 ) -> None:
-    """按你的规则筛股 · 不替你定规则 (v0.0.6.4 MVP)
+    """按你的规则筛股 · 不替你定规则 (v0.0.6.4 MVP · 地基-2 加 JSON)
 
     示例:
       kan find --pos 180:lt:5                          # 180 日位置 < 5%
@@ -85,30 +119,41 @@ def find(
       kan find --pos 60:lt:10 --resonance low:gte:2    # 多条件 AND
       kan find --industry 半导体 --pos 180:lt:10       # 半导体里 180 日跌透
       kan find --exclude-st --pos 180:lt:5             # 排 ST + 位置 filter
+      kan find --industry 半导体 --format json         # 整池全维度 JSON(AI 取数)
 
     Filter MVP (v0.0.6.4):
       --pos PERIOD:OP:VAL    PERIOD 取 3/5/7/10/15/30/60/90/120/180 · OP 取 lt/lte/gt/gte/eq/ne
       --resonance LEVEL:OP:VAL   LEVEL 取 low/high · OP 同上 · VAL 取 [0, 10]
       --exclude-st           排 ST (quiet · 不记 triggered)
 
+    输出 (地基-2):
+      --format terminal  默认 · Rich 表格 (需至少一个 filter)
+      --format json      AI 友好 · 命中带 metadata · 无 filter = 整池取数
+      --format md        markdown 表格
+
     池 selector (跟 kan scan 一致 · 三者互斥):
       --industry NAME / --hot rank|surge / --theme NAME (不指定默认自选)
       --only-watchlist (需配合 pool · 取交集)
       --group GROUP (选自选股具名组)
     """
+    from datetime import datetime
+
     from rich.console import Console
 
     status_console = Console(stderr=True)
     with _with_heavy_imports_spinner(status_console, "⏳ 加载数据模块..."):
+        from kan.core.enrich import enrich_results
         from kan.core.find_dsl import ConditionSet, FilterParseError
         from kan.core.find_filter import apply_conditions
         from kan.core.pipeline import render_freshness_warning, run_data_pipeline
         from kan.core.scanner import scan_batch
         from kan.core.stock_set import from_flags
         from kan.render import terminal
-        from kan.render.base import responsive_periods
+        from kan.render.base import FIND_DISCLAIMER_TEXT, responsive_periods
 
     console = Console()
+    find_disclaimer = f"[bold dim]{FIND_DISCLAIMER_TEXT}[/bold dim]"
+    is_export = fmt is not export.OutputFormat.terminal
 
     # 0. Validate --limit · 防 Python 负切片导致的 silent data loss
     if limit <= 0:
@@ -126,10 +171,13 @@ def find(
         _print_err(f"❌ {e}")
         raise typer.Exit(2) from e
 
-    if conditions.is_empty():
+    # 无 filter:terminal 默认报错引导 (人类 UX 不变 · 测试守护);
+    # json/md 放开 = AI 取数环节 (整池全维度 · PRD §5 "不带 filter = 数据 provider")。
+    if conditions.is_empty() and not is_export:
         _print_err(
             "❌ 至少需要一个 filter (--pos / --resonance / --exclude-st)\n"
-            "💡 例: kan find --pos 180:lt:5 (找 180 日位置 < 5% 的股票)"
+            "💡 例: kan find --pos 180:lt:5 (找 180 日位置 < 5% 的股票)\n"
+            "💡 取数模式: kan find --industry 半导体 --format json (整池全维度)"
         )
         raise typer.Exit(1)
 
@@ -157,17 +205,41 @@ def find(
 
     # 4. Fetch + scan (复用 pipeline · low mode 算位置 + 共振)
     ctx = run_data_pipeline(stock_set, compute=scan_batch, mode="low")
-    if not ctx.results:
+    if not ctx.results and not is_export:
         _print_err("无缓存数据 · 请先 `kan fetch` 拉取数据")
         raise typer.Exit(1)
 
-    # 5. Apply conditions
+    # 5. Apply conditions (空 conditions → apply_conditions 返回整池 · 取数语义)
     matches = apply_conditions(ctx.results, conditions)
-
-    # 6. Limit output
     matches_limited = matches[:limit]
 
-    # 7. Render
+    # 6. Export 分发 (json/md) · 命中 enrich 截面市场指标 → 全维度 metadata
+    if is_export:
+        enriched = enrich_results([m.result for m in matches_limited])
+        entries = list(zip(matches_limited, enriched, strict=True))
+        pools = _find_pools(industry, hot, theme, group)
+        filters = _find_filters(conditions)
+        query_time = datetime.now().astimezone().isoformat(timespec="seconds")
+        if fmt is export.OutputFormat.json:
+            typer.echo(export.to_json(export.find_payload(
+                entries,
+                query_time=query_time,
+                pools=pools,
+                filters=filters,
+                pool_size=len(ctx.results),
+                matched_total=len(matches),
+                freshness=ctx.freshness,
+            )))
+        else:  # md
+            typer.echo(export.find_markdown(
+                entries,
+                title=f"慢慢看 · kan find · {stock_set.name}",
+                pool_size=len(ctx.results),
+                matched_total=len(matches),
+            ))
+        return
+
+    # 7. Terminal 渲染 (默认 · 复用 scan_table 视觉一致)
     console.print(
         f"\n[bold]🔍 kan find · {stock_set.name} · "
         f"命中 {len(matches)} / {len(ctx.results)} 只"
@@ -181,10 +253,9 @@ def find(
         )
         render_freshness_warning(ctx.freshness, console)
         console.print()
-        console.print(FIND_DISCLAIMER)
+        console.print(find_disclaimer)
         return
 
-    # Reuse scan_table for visual consistency
     results_only = [m.result for m in matches_limited]
     display_periods = responsive_periods(console.width)
     table = terminal.scan_table(
@@ -220,4 +291,4 @@ def find(
 
     render_freshness_warning(ctx.freshness, console)
     console.print()
-    console.print(FIND_DISCLAIMER)
+    console.print(find_disclaimer)
