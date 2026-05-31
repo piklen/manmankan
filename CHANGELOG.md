@@ -9,7 +9,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
-- **`kan find --all`** · 全市场截面取数 · 一次拉全市场估值 / 量价 / 市值 + 行业内分位 + 行业中位（估值用分位非裸值）· 供外部 AI 筛选 · `--format json|md` · 需 tushare token · 不含 K 线位置 / 共振（截面后置）· 排北交所 · 含 ST · disclaimer 强制
+- **`kan find --pe / --roe / --moneyflow`** · 估值 + 质量（ROE / 净利·营收增速）+ 资金（主力净额）filter · K 线池（`--industry` / 自选）与全市场 `--all` 截面两路支持（`--roe` 逐股 · `--all` 不支持）· 按用户 filter 输出原始值 · `--format json|md` 带 triggered 审计 · disclaimer 强制
+- **`kan find --all`** · 全市场截面取数 · 一次拉全市场估值 / 量价 / 市值 + 行业内分位 + 行业中位对照 · 供外部 AI 筛选 · `--format json|md` · 需 tushare token · 不含 K 线位置 / 共振（截面后置）· 排北交所 · 含 ST · disclaimer 强制
 
 ### Fixed
 

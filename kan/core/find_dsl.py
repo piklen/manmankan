@@ -114,18 +114,97 @@ class ResonanceFilter:
         return cls(level=level, op=op, value=value)  # type: ignore[arg-type]
 
 
+# ─── 整合-1 新增 filter (OP:VAL · 裸值/净额阈值 · 复用 apply_op) ───
+
+def _parse_op_val(raw: str, *, flag: str, example: str) -> tuple[str, float]:
+    """Parse 'OP:VAL' string (整合-1 · pe/roe/moneyflow 共用)· 例 'lt:20'.
+
+    不卡数值范围 (PE 可负 / ROE 可负 / 资金净额量级跨度大 · 硬卡范围误伤合理输入)·
+    仅校验 op 合法 + 数值有限 (排 NaN / inf)。
+    """
+    import math
+
+    parts = raw.split(":")
+    if len(parts) != 2:
+        raise FilterParseError(f"{flag} 格式错误 '{raw}' · 需要 OP:VAL 例 {example}")
+    op = parts[0].lower()
+    if op not in ALLOWED_OPS:
+        raise FilterParseError(
+            f"{flag} 运算符 '{op}' 不支持 · 仅 {list(ALLOWED_OPS)} · 例: {example}"
+        )
+    try:
+        value = float(parts[1])
+    except ValueError as e:
+        raise FilterParseError(f"{flag} 数值非数字 '{parts[1]}' · 例: {example}") from e
+    if not math.isfinite(value):
+        raise FilterParseError(f"{flag} 数值 '{parts[1]}' 非有限数 · 例: {example}")
+    return op, value
+
+
+@dataclass(frozen=True)
+class PeFilter:
+    """市盈率 filter · 例 OP=lt VALUE=20 = PE TTM < 20 (裸值筛 · 整合-1).
+
+    裸 PE 阈值由用户显式指定 · 不做行业分位 (拍板:分位主观性强 · 后续优化)·
+    读 valuation.pe_ttm (None → 不命中)。
+    """
+
+    op: str
+    value: float
+
+    @classmethod
+    def parse(cls, raw: str) -> PeFilter:
+        op, value = _parse_op_val(raw, flag="--pe", example="lt:20")
+        return cls(op=op, value=value)
+
+
+@dataclass(frozen=True)
+class RoeFilter:
+    """净资产收益率 filter · 例 OP=gte VALUE=15 = ROE ≥ 15% (裸值筛 · 整合-1).
+
+    读 fundamentals.roe (None → 不命中)· ROE 单向正向因子 · 裸值可筛可回显。
+    """
+
+    op: str
+    value: float
+
+    @classmethod
+    def parse(cls, raw: str) -> RoeFilter:
+        op, value = _parse_op_val(raw, flag="--roe", example="gte:15")
+        return cls(op=op, value=value)
+
+
+@dataclass(frozen=True)
+class MoneyflowFilter:
+    """主力净额 filter · 例 OP=gt VALUE=0 = 主力净流入 (整合-1).
+
+    读 moneyflow.net_amount (东财口径 · 单位万元 · None → 不命中)· 客观资金事实。
+    """
+
+    op: str
+    value: float
+
+    @classmethod
+    def parse(cls, raw: str) -> MoneyflowFilter:
+        op, value = _parse_op_val(raw, flag="--moneyflow", example="gt:0")
+        return cls(op=op, value=value)
+
+
 @dataclass(frozen=True)
 class ConditionSet:
     """DSL 解析后的完整 filter 集合 · 多 filter 间 AND 语义.
 
-    MVP (v0.0.6.4):
-    - pos_filters: tuple[PosFilter, ...]
-    - resonance_filters: tuple[ResonanceFilter, ...]
-    - exclude_st: bool
+    K 线类 (位置/共振):pos_filters / resonance_filters · 走 scan 衍生字段。
+    截面类 (估值/资金 · 整合-1):pe_filters / moneyflow_filters · 走 enrich 子对象。
+    财务类 (整合-1):roe_filters · 走 fundamentals (逐股 · 全市场 --all 不支持)。
+    exclude_st:quiet filter (不记 triggered · 直接 drop)。
     """
 
     pos_filters: tuple[PosFilter, ...] = ()
     resonance_filters: tuple[ResonanceFilter, ...] = ()
+    pe_filters: tuple[PeFilter, ...] = ()
+    roe_filters: tuple[RoeFilter, ...] = ()
+    moneyflow_filters: tuple[MoneyflowFilter, ...] = ()
     exclude_st: bool = False
 
     @classmethod
@@ -134,23 +213,46 @@ class ConditionSet:
         *,
         pos: list[str] | None = None,
         resonance: list[str] | None = None,
+        pe: list[str] | None = None,
+        roe: list[str] | None = None,
+        moneyflow: list[str] | None = None,
         exclude_st: bool = False,
     ) -> ConditionSet:
         """Build ConditionSet from CLI flag strings (raw user input)."""
-        pos_parsed = tuple(PosFilter.parse(p) for p in (pos or []))
-        res_parsed = tuple(ResonanceFilter.parse(r) for r in (resonance or []))
         return cls(
-            pos_filters=pos_parsed,
-            resonance_filters=res_parsed,
+            pos_filters=tuple(PosFilter.parse(p) for p in (pos or [])),
+            resonance_filters=tuple(ResonanceFilter.parse(r) for r in (resonance or [])),
+            pe_filters=tuple(PeFilter.parse(p) for p in (pe or [])),
+            roe_filters=tuple(RoeFilter.parse(r) for r in (roe or [])),
+            moneyflow_filters=tuple(MoneyflowFilter.parse(m) for m in (moneyflow or [])),
             exclude_st=exclude_st,
         )
 
     def is_empty(self) -> bool:
-        return (
-            not self.pos_filters
-            and not self.resonance_filters
-            and not self.exclude_st
+        return not (
+            self.pos_filters
+            or self.resonance_filters
+            or self.pe_filters
+            or self.roe_filters
+            or self.moneyflow_filters
+            or self.exclude_st
         )
+
+    def has_kline_filters(self) -> bool:
+        """K 线衍生 filter (位置/共振) · 截面模式 (--all) 不支持。"""
+        return bool(self.pos_filters or self.resonance_filters)
+
+    def has_cross_section_filters(self) -> bool:
+        """截面类 filter (估值/资金 · 整合-1) · K 线池 + --all 两路都支持。"""
+        return bool(self.pe_filters or self.moneyflow_filters)
+
+    def needs_fundamentals(self) -> bool:
+        """是否需挂 fundamentals (--roe · 逐股 · 全市场 --all 不支持)。"""
+        return bool(self.roe_filters)
+
+    def needs_moneyflow(self) -> bool:
+        """是否需挂 moneyflow (--moneyflow · 截面)。"""
+        return bool(self.moneyflow_filters)
 
 
 _OP_FUNCS = {
@@ -176,7 +278,10 @@ __all__ = [
     "RESONANCE_LEVELS",
     "ConditionSet",
     "FilterParseError",
+    "MoneyflowFilter",
+    "PeFilter",
     "PosFilter",
     "ResonanceFilter",
+    "RoeFilter",
     "apply_op",
 ]

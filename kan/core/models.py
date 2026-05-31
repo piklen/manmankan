@@ -45,9 +45,11 @@ class StockScanResult(BaseModel):
 class ValuationMetrics(BaseModel):
     """单只股票截面市场指标 · daily_basic 衍生 · 原始指标值。
 
-    合规 (compliance §6/§7):字段用原始指标名 · 不含评分 / 评级 / 判断词 ·
-    分位 / 行业中位对照在输出层 (地基-2/3 有全市场池后) 呈现 · 数据层只承载
-    防腐层出口的原始数据 (同构 K 线层存裸 OHLC · 展示层才算"位置%")。
+    合规 (compliance §6/§7 · 整合-1 拍板更新):字段用原始指标名 · 不含评分 / 评级 /
+    判断词。估值裸值 (pe_ttm / pb / ps_ttm / dv_ttm) 自整合-1 起**可对外输出** ——
+    filter 阈值由用户显式指定 (--pe 是用户主导的数据筛选 · 非工具荐股) · 行业分位
+    主观性强 (回看窗口 / 行业划分皆为选择) · 裸值反而客观。输出过滤见 export
+    (_valuation_public_dict 不再删裸值 · 推翻"估值不给裸值"旧设计 · 见 compliance §7)。
     """
 
     trade_date: date
@@ -86,6 +88,35 @@ class ValuationContext(BaseModel):
     pb_industry_median: float | None = None  # 申万一级 PB 中位 (参照)
 
 
+class FundamentalMetrics(BaseModel):
+    """单只股票财务质量·成长指标 · fina_indicator 衍生 · 最新一期报告原始值 (整合-1)。
+
+    合规 (compliance §6/§7):原始指标名 · 不含评分 / 判断词。ROE / 增速是单向正向
+    因子 (越高越好 · 无"贵/便宜"双向误导) · 裸值可对外 (用户主导 --roe filter)。
+    逐股 fina_indicator 拉取 (全市场代价高 · 只在小池按需 · PRD §3.2)。
+    """
+
+    end_date: date | None = None        # 报告期 (季度末日期)
+    roe: float | None = None            # 净资产收益率 (%)
+    netprofit_yoy: float | None = None  # 净利润同比增速 (%)
+    or_yoy: float | None = None         # 营业收入同比增速 (%)
+    source: str | None = None           # 数据源标注 (例 tushare_fina)
+
+
+class MoneyflowMetrics(BaseModel):
+    """单只股票主力资金截面指标 · moneyflow_dc 衍生 · 原始净额 (整合-1)。
+
+    合规 (compliance §2):主力净额是客观资金事实 (同 OHLCV 安全区) · 裸值可出。
+    截面 (trade_date) 维度 · 数据从 20230911 起 (早期 None · 优雅降级)。
+    """
+
+    trade_date: date | None = None       # 资金流向交易日
+    net_amount: float | None = None      # 主力净额 (东财口径 · 单位万元)
+    buy_elg_amount: float | None = None  # 超大单净额 (万元)
+    buy_lg_amount: float | None = None   # 大单净额 (万元)
+    source: str | None = None            # 数据源标注 (例 tushare_moneyflow)
+
+
 class EnrichedResult(StockScanResult):
     """StockScanResult + 按需挂载的多维指标 (lazy · 不强制全拉)。
 
@@ -93,26 +124,35 @@ class EnrichedResult(StockScanResult):
     (r.symbol / r.valuation.pe_ttm) · JSON 序列化时 scan 字段与子对象平铺 ·
     供 AI 消费友好 (地基-2 kan find --format json)。
 
-    地基-1 只挂 valuation · fundamentals / moneyflow / sentiment 后续阶段补 ·
+    整合-1 挂 valuation / fundamentals / moneyflow · sentiment 后续阶段补 ·
     字段膨胀风险靠"按需挂载 (None 默认) + 输出层只序列化已 enrich 维度"控制。
     """
 
     valuation: ValuationMetrics | None = None
+    fundamentals: FundamentalMetrics | None = None  # fina_indicator (ROE / 增速 · 整合-1)
+    moneyflow: MoneyflowMetrics | None = None        # moneyflow_dc (主力资金 · 整合-1)
     # 后续阶段预留 (本期不实现 · PRD §4 维度地图):
-    # fundamentals: FundamentalMetrics | None = None  # fina_indicator (ROE / 增速)
-    # moneyflow:    MoneyflowMetrics   | None = None  # moneyflow_dc (主力资金)
     # sentiment:    SentimentMetrics   | None = None  # limit_list_d (连板 / 炸板)
 
     @classmethod
     def from_scan(
-        cls, scan: StockScanResult, valuation: ValuationMetrics | None = None,
+        cls,
+        scan: StockScanResult,
+        valuation: ValuationMetrics | None = None,
+        fundamentals: FundamentalMetrics | None = None,
+        moneyflow: MoneyflowMetrics | None = None,
     ) -> EnrichedResult:
-        """把 StockScanResult 提升为 EnrichedResult + 挂 valuation (lazy 挂载入口)。
+        """把 StockScanResult 提升为 EnrichedResult + 按需挂多维指标 (lazy 挂载入口)。
 
         model_dump() 拷贝 scan 全字段后重新构造 (periods 深拷 · 不共享引用) ·
-        地基-2 整合时 pipeline 用此入口把 scan 结果按需 enrich 各维度。
+        各维度 (valuation / fundamentals / moneyflow) 按需传入 · None 表该维度未 enrich。
         """
-        return cls(**scan.model_dump(), valuation=valuation)
+        return cls(
+            **scan.model_dump(),
+            valuation=valuation,
+            fundamentals=fundamentals,
+            moneyflow=moneyflow,
+        )
 
 
 class VolumeState(BaseModel):

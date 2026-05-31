@@ -54,6 +54,12 @@ def _find_filters(conditions: ConditionSet) -> list[dict]:
         out.append({"name": "--pos", "param": f"{p.period}:{p.op}:{p.value:g}"})
     for r in conditions.resonance_filters:
         out.append({"name": "--resonance", "param": f"{r.level}:{r.op}:{r.value}"})
+    for pe in conditions.pe_filters:
+        out.append({"name": "--pe", "param": f"{pe.op}:{pe.value:g}"})
+    for roe in conditions.roe_filters:
+        out.append({"name": "--roe", "param": f"{roe.op}:{roe.value:g}"})
+    for mf in conditions.moneyflow_filters:
+        out.append({"name": "--moneyflow", "param": f"{mf.op}:{mf.value:g}"})
     if conditions.exclude_st:
         out.append({"name": "--exclude-st"})
     return out
@@ -79,6 +85,27 @@ def find(
         bool,
         typer.Option("--exclude-st", help="排除 ST/*ST 股票"),
     ] = False,
+    pe: Annotated[
+        list[str],
+        typer.Option(
+            "--pe",
+            help="估值 filter OP:VAL 例 lt:20 (PE TTM < 20 · 裸值筛) · 可多次",
+        ),
+    ] = [],  # noqa: B006 · typer multi-option 需要 list 默认值
+    roe: Annotated[
+        list[str],
+        typer.Option(
+            "--roe",
+            help="质量 filter OP:VAL 例 gte:15 (ROE ≥ 15%) · 逐股 · --all 不支持 · 可多次",
+        ),
+    ] = [],  # noqa: B006 · typer multi-option 需要 list 默认值
+    moneyflow: Annotated[
+        list[str],
+        typer.Option(
+            "--moneyflow",
+            help="主力资金 filter OP:VAL 例 gt:0 (主力净流入 · 单位万元) · 可多次",
+        ),
+    ] = [],  # noqa: B006 · typer multi-option 需要 list 默认值
     industry: Annotated[
         str | None,
         typer.Option("--industry", help="池: 申万行业 (例 半导体)"),
@@ -130,11 +157,15 @@ def find(
       kan find --industry 半导体 --pos 180:lt:10       # 半导体里 180 日跌透
       kan find --exclude-st --pos 180:lt:5             # 排 ST + 位置 filter
       kan find --industry 半导体 --format json         # 整池全维度 JSON(AI 取数)
-      kan find --all --format json                     # 全市场截面取数(估值/量价/行业分位)
+      kan find --industry 半导体 --pe lt:30 --moneyflow gt:0  # 估值+资金组合
+      kan find --all --pe lt:20 --format json          # 全市场 PE<20 截面筛
 
-    Filter MVP (v0.0.6.4):
+    Filter:
       --pos PERIOD:OP:VAL    PERIOD 取 3/5/7/10/15/30/60/90/120/180 · OP 取 lt/lte/gt/gte/eq/ne
       --resonance LEVEL:OP:VAL   LEVEL 取 low/high · OP 同上 · VAL 取 [0, 10]
+      --pe OP:VAL            PE TTM 裸值筛 · 例 lt:20 (整合-1)
+      --roe OP:VAL           ROE % 裸值筛 · 例 gte:15 · 逐股 · --all 不支持 (整合-1)
+      --moneyflow OP:VAL     主力净额(万元) · 例 gt:0 净流入 (整合-1)
       --exclude-st           排 ST (quiet · 不记 triggered)
 
     输出 (地基-2):
@@ -155,7 +186,7 @@ def find(
     with _with_heavy_imports_spinner(status_console, "⏳ 加载数据模块..."):
         from kan.core.enrich import enrich_results
         from kan.core.find_dsl import ConditionSet, FilterParseError
-        from kan.core.find_filter import apply_conditions
+        from kan.core.find_filter import apply_conditions, apply_cross_section_conditions
         from kan.core.pipeline import render_freshness_warning, run_data_pipeline
         from kan.core.scanner import scan_batch
         from kan.core.stock_set import from_flags
@@ -177,6 +208,9 @@ def find(
         conditions = ConditionSet.from_flags(
             pos=pos,
             resonance=resonance,
+            pe=pe,
+            roe=roe,
+            moneyflow=moneyflow,
             exclude_st=exclude_st,
         )
     except FilterParseError as e:
@@ -204,11 +238,16 @@ def find(
         if source_mode:
             _print_err("❌ --all 与 --industry / --hot / --theme 互斥")
             raise typer.Exit(2)
-        if not conditions.is_empty():
+        if conditions.has_kline_filters() or conditions.exclude_st:
             _print_err(
-                "❌ --all 全市场截面取数不支持 K 线 filter "
-                "(--pos / --resonance / --exclude-st)\n"
-                "   截面只含市场客观事实 + 行业分位 · 位置筛请缩小池 (--industry 等)"
+                "❌ --all 全市场截面不支持 K 线 filter (--pos / --resonance / --exclude-st)\n"
+                "   截面只含市场客观事实 + 估值/资金/行业分位 · 位置筛请缩小池 (--industry 等)"
+            )
+            raise typer.Exit(2)
+        if conditions.needs_fundamentals():
+            _print_err(
+                "❌ --all 全市场截面不支持 --roe (fina_indicator 逐股 · 全市场 ~5500 只代价高)\n"
+                "   质量筛请缩小池 · 例 kan find --industry 半导体 --roe gte:15"
             )
             raise typer.Exit(2)
         if not is_export:
@@ -224,22 +263,25 @@ def find(
         if not cs.rows:
             _print_err(
                 "❌ 全市场截面无数据 · 需配置 tushare token\n"
-                "   (估值/量价/行业分位依赖 tushare · 设 TUSHARE_TOKEN 或 kan config)"
+                "   (估值/量价/资金/行业分位依赖 tushare · 设 TUSHARE_TOKEN 或 kan config)"
             )
             raise typer.Exit(1)
-        cs_rows = cs.rows if limit is None else cs.rows[:limit]
+        # 截面类 filter (pe / moneyflow) · 无 filter → 全量返回 (取数语义)
+        cs_matched = apply_cross_section_conditions(cs.rows, conditions)
+        cs_limited = cs_matched if limit is None else cs_matched[:limit]
         query_time = datetime.now().astimezone().isoformat(timespec="seconds")
         if fmt is export.OutputFormat.json:
             typer.echo(export.to_json(export.cross_section_payload(
-                cs_rows,
+                cs_limited,
                 query_time=query_time,
                 pool_size=cs.pool_size,
                 data_cutoff=cs.data_cutoff,
                 stale=cs.stale,
+                filters=_find_filters(conditions),
             )))
         else:  # md
             typer.echo(export.cross_section_markdown(
-                cs_rows,
+                [r for r, _ in cs_limited],
                 title="慢慢看 · kan find · A股全市场截面",
                 pool_size=cs.pool_size,
             ))
@@ -268,16 +310,30 @@ def find(
         _print_err("无缓存数据 · 请先 `kan fetch` 拉取数据")
         raise typer.Exit(1)
 
-    # 5. Apply conditions (空 conditions → apply_conditions 返回整池 · 取数语义)
+    # 5. Enrich (按需 · 截面/财务 filter 依赖数据 → filter 前 enrich) + apply conditions
+    # valuation/moneyflow 截面廉价 (全池=命中 同一次 HTTP) · fundamentals 逐股 (仅 --roe)。
     # limit 哨兵:K 线模式 None → 50 (截面 --all 已在 step 2.5 早返回)。
     effective_limit = limit if limit is not None else 50
-    matches = apply_conditions(ctx.results, conditions)
+    need_enrich = (
+        is_export
+        or conditions.has_cross_section_filters()
+        or conditions.needs_fundamentals()
+    )
+    if need_enrich:
+        pool_results = enrich_results(
+            ctx.results,
+            need_fundamentals=conditions.needs_fundamentals(),
+            need_moneyflow=conditions.needs_moneyflow()
+            or (is_export and conditions.is_empty()),
+        )
+    else:
+        pool_results = ctx.results
+    matches = apply_conditions(pool_results, conditions)
     matches_limited = matches[:effective_limit]
 
-    # 6. Export 分发 (json/md) · 命中 enrich 截面市场指标 → 全维度 metadata
+    # 6. Export 分发 (json/md) · m.result 已按需 enrich (is_export → need_enrich) → 全维度
     if is_export:
-        enriched = enrich_results([m.result for m in matches_limited])
-        entries = list(zip(matches_limited, enriched, strict=True))
+        entries = [(m, m.result) for m in matches_limited]
         pools = _find_pools(industry, hot, theme, group)
         filters = _find_filters(conditions)
         query_time = datetime.now().astimezone().isoformat(timespec="seconds")
