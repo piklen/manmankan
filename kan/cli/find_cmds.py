@@ -60,6 +60,18 @@ def _find_filters(conditions: ConditionSet) -> list[dict]:
         out.append({"name": "--roe", "param": f"{roe.op}:{roe.value:g}"})
     for mf in conditions.moneyflow_filters:
         out.append({"name": "--moneyflow", "param": f"{mf.op}:{mf.value:g}"})
+    for rsi in conditions.rsi_filters:
+        out.append({"name": "--rsi", "param": f"{rsi.op}:{rsi.value:g}"})
+    for md in conditions.macd_dif_filters:
+        out.append({"name": "--macd-dif", "param": f"{md.op}:{md.value:g}"})
+    for mc in conditions.macd_filters:
+        out.append({"name": "--macd", "param": f"{mc.op}:{mc.value:g}"})
+    for kj in conditions.kdj_j_filters:
+        out.append({"name": "--kdj-j", "param": f"{kj.op}:{kj.value:g}"})
+    for stk in conditions.streak_filters:
+        out.append({"name": "--streak", "param": f"{stk.op}:{stk.value:g}"})
+    for wn in conditions.winner_filters:
+        out.append({"name": "--winner", "param": f"{wn.op}:{wn.value:g}"})
     if conditions.exclude_st:
         out.append({"name": "--exclude-st"})
     return out
@@ -106,6 +118,48 @@ def find(
             help="主力资金 filter OP:VAL 例 gt:0 (主力净流入 · 单位万元) · 可多次",
         ),
     ] = [],  # noqa: B006 · typer multi-option 需要 list 默认值
+    rsi: Annotated[
+        list[str],
+        typer.Option(
+            "--rsi",
+            help="技术 filter OP:VAL 例 lt:30 (RSI 6 日 · 前复权裸值) · 可多次",
+        ),
+    ] = [],  # noqa: B006 · typer multi-option 需要 list 默认值
+    macd_dif: Annotated[
+        list[str],
+        typer.Option(
+            "--macd-dif",
+            help="技术 filter OP:VAL 例 gt:0 (MACD DIF 快线) · 可多次",
+        ),
+    ] = [],  # noqa: B006 · typer multi-option 需要 list 默认值
+    macd: Annotated[
+        list[str],
+        typer.Option(
+            "--macd",
+            help="技术 filter OP:VAL 例 gt:0 (MACD 柱 · 柱>0=DIF 在 DEA 上方) · 可多次",
+        ),
+    ] = [],  # noqa: B006 · typer multi-option 需要 list 默认值
+    kdj_j: Annotated[
+        list[str],
+        typer.Option(
+            "--kdj-j",
+            help="技术 filter OP:VAL 例 lt:20 (KDJ J 值) · 可多次",
+        ),
+    ] = [],  # noqa: B006 · typer multi-option 需要 list 默认值
+    streak: Annotated[
+        list[str],
+        typer.Option(
+            "--streak",
+            help="情绪 filter OP:VAL 例 gte:3 (连板天数 ≥ 3 · 不含 ST) · 可多次",
+        ),
+    ] = [],  # noqa: B006 · typer multi-option 需要 list 默认值
+    winner: Annotated[
+        list[str],
+        typer.Option(
+            "--winner",
+            help="筹码 filter OP:VAL 例 gte:50 (获利盘 ≥ 50%) · 可多次",
+        ),
+    ] = [],  # noqa: B006 · typer multi-option 需要 list 默认值
     industry: Annotated[
         str | None,
         typer.Option("--industry", help="池: 申万行业 (例 半导体)"),
@@ -140,7 +194,7 @@ def find(
         bool,
         typer.Option(
             "--all",
-            help="全市场截面取数 ~5500 只 (估值/量价/行业分位 · 需 token · 不支持 K 线 filter)",
+            help="全市场截面取数 ~5500 只 (估值/量价/资金/技术/情绪/筹码 · 需 token · 不支持 K 线 filter)",
         ),
     ] = False,
     fmt: Annotated[
@@ -159,6 +213,7 @@ def find(
       kan find --industry 半导体 --format json         # 整池全维度 JSON(AI 取数)
       kan find --industry 半导体 --pe lt:30 --moneyflow gt:0  # 估值+资金组合
       kan find --all --pe lt:20 --format json          # 全市场 PE<20 截面筛
+      kan find --all --rsi lt:30 --streak gte:3 --format json  # 全市场 RSI<30 + 连板≥3
 
     Filter:
       --pos PERIOD:OP:VAL    PERIOD 取 3/5/7/10/15/30/60/90/120/180 · OP 取 lt/lte/gt/gte/eq/ne
@@ -166,6 +221,9 @@ def find(
       --pe OP:VAL            PE TTM 裸值筛 · 例 lt:20 (整合-1)
       --roe OP:VAL           ROE % 裸值筛 · 例 gte:15 · 逐股 · --all 不支持 (整合-1)
       --moneyflow OP:VAL     主力净额(万元) · 例 gt:0 净流入 (整合-1)
+      --rsi/--macd-dif/--macd/--kdj-j OP:VAL  技术裸值筛 · 前复权 · 例 --rsi lt:30 (整合-2)
+      --streak OP:VAL        连板天数 · 例 gte:3 · 不含 ST (整合-2)
+      --winner OP:VAL        获利盘% · 例 gte:50 (整合-2)
       --exclude-st           排 ST (quiet · 不记 triggered)
 
     输出 (地基-2):
@@ -211,6 +269,12 @@ def find(
             pe=pe,
             roe=roe,
             moneyflow=moneyflow,
+            rsi=rsi,
+            macd_dif=macd_dif,
+            macd=macd,
+            kdj_j=kdj_j,
+            streak=streak,
+            winner=winner,
             exclude_st=exclude_st,
         )
     except FilterParseError as e:
@@ -324,6 +388,12 @@ def find(
             ctx.results,
             need_fundamentals=conditions.needs_fundamentals(),
             need_moneyflow=conditions.needs_moneyflow()
+            or (is_export and conditions.is_empty()),
+            need_technical=conditions.needs_technical()
+            or (is_export and conditions.is_empty()),
+            need_sentiment=conditions.needs_sentiment()
+            or (is_export and conditions.is_empty()),
+            need_chip=conditions.needs_chip()
             or (is_export and conditions.is_empty()),
         )
     else:

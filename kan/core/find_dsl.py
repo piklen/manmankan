@@ -190,6 +190,107 @@ class MoneyflowFilter:
         return cls(op=op, value=value)
 
 
+# ─── 整合-2 新增 filter (技术/情绪/筹码 · OP:VAL 裸值阈值 · 全截面) ───
+# 合规:全部用户主导阈值 (同 --pe) · 只筛裸值 · 不内置金叉/超买等信号 preset。
+
+@dataclass(frozen=True)
+class RsiFilter:
+    """RSI (6 日) filter · 例 OP=lt VALUE=30 = RSI < 30 (裸值筛 · 整合-2).
+
+    读 technical.rsi_6 (前复权 · None → 不命中)· 用户主导阈值 · 不输出"超买/超卖"判断。
+    """
+
+    op: str
+    value: float
+
+    @classmethod
+    def parse(cls, raw: str) -> RsiFilter:
+        op, value = _parse_op_val(raw, flag="--rsi", example="lt:30")
+        return cls(op=op, value=value)
+
+
+@dataclass(frozen=True)
+class MacdDifFilter:
+    """MACD DIF 快线 filter · 例 OP=gt VALUE=0 = DIF > 0 (裸值筛 · 整合-2).
+
+    读 technical.macd_dif (前复权 · None → 不命中)· 不做金叉/死叉 (跨日 + 信号订阅红线)。
+    """
+
+    op: str
+    value: float
+
+    @classmethod
+    def parse(cls, raw: str) -> MacdDifFilter:
+        op, value = _parse_op_val(raw, flag="--macd-dif", example="gt:0")
+        return cls(op=op, value=value)
+
+
+@dataclass(frozen=True)
+class MacdFilter:
+    """MACD 柱 filter · 例 OP=gt VALUE=0 = 柱 > 0 (当前 DIF 在 DEA 上方 · 整合-2).
+
+    读 technical.macd (= (DIF-DEA)×2 · None → 不命中)· 柱正负 = 当日多空状态 ·
+    非"金叉"(金叉是状态切换瞬间 · 需跨日对比 · 截面单日算不出)。
+    """
+
+    op: str
+    value: float
+
+    @classmethod
+    def parse(cls, raw: str) -> MacdFilter:
+        op, value = _parse_op_val(raw, flag="--macd", example="gt:0")
+        return cls(op=op, value=value)
+
+
+@dataclass(frozen=True)
+class KdjJFilter:
+    """KDJ J 值 filter · 例 OP=lt VALUE=20 = J < 20 (裸值筛 · 整合-2).
+
+    读 technical.kdj_j (前复权 · None → 不命中)· 用户主导阈值 · 不输出超买超卖判断。
+    """
+
+    op: str
+    value: float
+
+    @classmethod
+    def parse(cls, raw: str) -> KdjJFilter:
+        op, value = _parse_op_val(raw, flag="--kdj-j", example="lt:20")
+        return cls(op=op, value=value)
+
+
+@dataclass(frozen=True)
+class StreakFilter:
+    """连板天数 filter · 例 OP=gte VALUE=3 = 连板 ≥ 3 (裸值筛 · 整合-2).
+
+    读 sentiment.limit_times (None → 不命中 · 即该股当日未涨跌停)· 客观事实 ·
+    不输出"妖股/强势"判断词。
+    """
+
+    op: str
+    value: float
+
+    @classmethod
+    def parse(cls, raw: str) -> StreakFilter:
+        op, value = _parse_op_val(raw, flag="--streak", example="gte:3")
+        return cls(op=op, value=value)
+
+
+@dataclass(frozen=True)
+class WinnerFilter:
+    """获利盘 filter · 例 OP=gte VALUE=50 = 获利盘 ≥ 50% (裸值筛 · 整合-2).
+
+    读 chip.winner_rate (% · None → 不命中)· 客观计算值 · 不输出判断词。
+    """
+
+    op: str
+    value: float
+
+    @classmethod
+    def parse(cls, raw: str) -> WinnerFilter:
+        op, value = _parse_op_val(raw, flag="--winner", example="gte:50")
+        return cls(op=op, value=value)
+
+
 @dataclass(frozen=True)
 class ConditionSet:
     """DSL 解析后的完整 filter 集合 · 多 filter 间 AND 语义.
@@ -197,6 +298,8 @@ class ConditionSet:
     K 线类 (位置/共振):pos_filters / resonance_filters · 走 scan 衍生字段。
     截面类 (估值/资金 · 整合-1):pe_filters / moneyflow_filters · 走 enrich 子对象。
     财务类 (整合-1):roe_filters · 走 fundamentals (逐股 · 全市场 --all 不支持)。
+    技术/情绪/筹码类 (整合-2 · 全截面):rsi/macd_dif/macd/kdj_j/streak/winner ·
+      走 enrich 子对象 (technical/sentiment/chip) · K 线池 + --all 两路都支持。
     exclude_st:quiet filter (不记 triggered · 直接 drop)。
     """
 
@@ -205,6 +308,12 @@ class ConditionSet:
     pe_filters: tuple[PeFilter, ...] = ()
     roe_filters: tuple[RoeFilter, ...] = ()
     moneyflow_filters: tuple[MoneyflowFilter, ...] = ()
+    rsi_filters: tuple[RsiFilter, ...] = ()
+    macd_dif_filters: tuple[MacdDifFilter, ...] = ()
+    macd_filters: tuple[MacdFilter, ...] = ()
+    kdj_j_filters: tuple[KdjJFilter, ...] = ()
+    streak_filters: tuple[StreakFilter, ...] = ()
+    winner_filters: tuple[WinnerFilter, ...] = ()
     exclude_st: bool = False
 
     @classmethod
@@ -216,6 +325,12 @@ class ConditionSet:
         pe: list[str] | None = None,
         roe: list[str] | None = None,
         moneyflow: list[str] | None = None,
+        rsi: list[str] | None = None,
+        macd_dif: list[str] | None = None,
+        macd: list[str] | None = None,
+        kdj_j: list[str] | None = None,
+        streak: list[str] | None = None,
+        winner: list[str] | None = None,
         exclude_st: bool = False,
     ) -> ConditionSet:
         """Build ConditionSet from CLI flag strings (raw user input)."""
@@ -225,6 +340,12 @@ class ConditionSet:
             pe_filters=tuple(PeFilter.parse(p) for p in (pe or [])),
             roe_filters=tuple(RoeFilter.parse(r) for r in (roe or [])),
             moneyflow_filters=tuple(MoneyflowFilter.parse(m) for m in (moneyflow or [])),
+            rsi_filters=tuple(RsiFilter.parse(x) for x in (rsi or [])),
+            macd_dif_filters=tuple(MacdDifFilter.parse(x) for x in (macd_dif or [])),
+            macd_filters=tuple(MacdFilter.parse(x) for x in (macd or [])),
+            kdj_j_filters=tuple(KdjJFilter.parse(x) for x in (kdj_j or [])),
+            streak_filters=tuple(StreakFilter.parse(x) for x in (streak or [])),
+            winner_filters=tuple(WinnerFilter.parse(x) for x in (winner or [])),
             exclude_st=exclude_st,
         )
 
@@ -235,6 +356,12 @@ class ConditionSet:
             or self.pe_filters
             or self.roe_filters
             or self.moneyflow_filters
+            or self.rsi_filters
+            or self.macd_dif_filters
+            or self.macd_filters
+            or self.kdj_j_filters
+            or self.streak_filters
+            or self.winner_filters
             or self.exclude_st
         )
 
@@ -243,8 +370,14 @@ class ConditionSet:
         return bool(self.pos_filters or self.resonance_filters)
 
     def has_cross_section_filters(self) -> bool:
-        """截面类 filter (估值/资金 · 整合-1) · K 线池 + --all 两路都支持。"""
-        return bool(self.pe_filters or self.moneyflow_filters)
+        """截面类 filter (估值/资金/技术/情绪/筹码) · K 线池 + --all 两路都支持。"""
+        return bool(
+            self.pe_filters
+            or self.moneyflow_filters
+            or self.needs_technical()
+            or self.needs_sentiment()
+            or self.needs_chip()
+        )
 
     def needs_fundamentals(self) -> bool:
         """是否需挂 fundamentals (--roe · 逐股 · 全市场 --all 不支持)。"""
@@ -253,6 +386,23 @@ class ConditionSet:
     def needs_moneyflow(self) -> bool:
         """是否需挂 moneyflow (--moneyflow · 截面)。"""
         return bool(self.moneyflow_filters)
+
+    def needs_technical(self) -> bool:
+        """是否需挂 technical (--rsi/--macd-dif/--macd/--kdj-j · 截面 · 整合-2)。"""
+        return bool(
+            self.rsi_filters
+            or self.macd_dif_filters
+            or self.macd_filters
+            or self.kdj_j_filters
+        )
+
+    def needs_sentiment(self) -> bool:
+        """是否需挂 sentiment (--streak · 截面稀疏 · 整合-2)。"""
+        return bool(self.streak_filters)
+
+    def needs_chip(self) -> bool:
+        """是否需挂 chip (--winner · 截面 · 整合-2)。"""
+        return bool(self.winner_filters)
 
 
 _OP_FUNCS = {
@@ -278,10 +428,16 @@ __all__ = [
     "RESONANCE_LEVELS",
     "ConditionSet",
     "FilterParseError",
+    "KdjJFilter",
+    "MacdDifFilter",
+    "MacdFilter",
     "MoneyflowFilter",
     "PeFilter",
     "PosFilter",
     "ResonanceFilter",
     "RoeFilter",
+    "RsiFilter",
+    "StreakFilter",
+    "WinnerFilter",
     "apply_op",
 ]

@@ -117,6 +117,74 @@ class MoneyflowMetrics(BaseModel):
     source: str | None = None            # 数据源标注 (例 tushare_moneyflow)
 
 
+class TechnicalMetrics(BaseModel):
+    """单只股票技术面因子 · stk_factor_pro 衍生 · 前复权 (_qfq) 原始指标值 (整合-2)。
+
+    合规 (compliance §3/§7):原始指标名 (macd/kdj/rsi/ma/boll) · 不含"超买/超卖/
+    金叉/死叉"等信号判断词 · 只出裸值让用户自判。filter 阈值用户显式指定
+    (--rsi lt:30 同 --pe 逻辑 · 非工具信号订阅)。截面 (trade_date) 维度。
+
+    复权:技术分析标准用前复权 (_qfq) · 对外字段去 _qfq 后缀中性命名。金叉/死叉
+    不做 (需跨日对比 · 截面单日算不出 + 踩信号订阅红线 · 见 PRD 整合-2)。
+    """
+
+    trade_date: date | None = None     # 因子交易日
+    close: float | None = None         # 前复权收盘价
+    macd_dif: float | None = None      # MACD DIF 快线
+    macd_dea: float | None = None      # MACD DEA 慢线 (信号线)
+    macd: float | None = None          # MACD 柱 = (DIF - DEA) × 2
+    kdj_k: float | None = None         # KDJ K 值
+    kdj_d: float | None = None         # KDJ D 值
+    kdj_j: float | None = None         # KDJ J 值
+    rsi_6: float | None = None         # RSI 6 日
+    rsi_12: float | None = None        # RSI 12 日
+    rsi_24: float | None = None        # RSI 24 日
+    ma_5: float | None = None          # 5 日均线
+    ma_10: float | None = None         # 10 日均线
+    ma_20: float | None = None         # 20 日均线
+    ma_60: float | None = None         # 60 日均线
+    boll_upper: float | None = None    # BOLL 上轨
+    boll_mid: float | None = None      # BOLL 中轨
+    boll_lower: float | None = None    # BOLL 下轨
+    source: str | None = None          # 数据源标注 (例 tushare_factor)
+
+
+class SentimentMetrics(BaseModel):
+    """单只股票情绪面 · limit_list_d 衍生 · 涨跌停/连板原始事实 (整合-2)。
+
+    合规 (compliance §2/§3):连板天数 / 炸板次数是客观市场事实 · 不输出"妖股/
+    强势"判断词 · 只出裸值。filter 用户显式指定 (--streak gte:3 = 连板 ≥ 3)。
+
+    稀疏事件型:limit_list_d 只返回当日有涨跌停/炸板的票 · 不在榜的股票
+    SentimentMetrics 为 None (语义 = "该股当日未涨跌停" · 非数据缺失) · 不含 ST 股
+    (接口本身不统计 ST) · 数据从 2020 起。
+    """
+
+    trade_date: date | None = None    # 事件交易日
+    limit_times: float | None = None  # 连板天数 (连续涨/跌停板数)
+    open_times: float | None = None   # 炸板/开板次数 (盘中打开板的次数)
+    limit: str | None = None          # 涨跌停类型 (U 涨停 / D 跌停 / Z 炸板)
+    up_stat: str | None = None        # 涨停统计 (例 "3/3" = 几天几板)
+    source: str | None = None         # 数据源标注 (例 tushare_limit)
+
+
+class ChipMetrics(BaseModel):
+    """单只股票筹码分布 · cyq_perf 衍生 · 获利盘/成本分布原始值 (整合-2)。
+
+    合规 (compliance §2/§7):获利盘比例 / 成本分位是客观计算值 · 不输出判断词 ·
+    只出裸值。filter 用户显式指定 (--winner gte:50 = 获利盘 ≥ 50%)。
+    截面 (trade_date) 维度 · 数据从 2018 起 (早期 None · 优雅降级)。
+    """
+
+    trade_date: date | None = None    # 筹码交易日
+    winner_rate: float | None = None  # 获利盘比例 (%)
+    cost_5pct: float | None = None    # 5 分位成本 (低位筹码)
+    cost_50pct: float | None = None   # 50 分位成本 (中位筹码)
+    cost_95pct: float | None = None   # 95 分位成本 (高位筹码)
+    weight_avg: float | None = None   # 加权平均成本
+    source: str | None = None         # 数据源标注 (例 tushare_cyq)
+
+
 class EnrichedResult(StockScanResult):
     """StockScanResult + 按需挂载的多维指标 (lazy · 不强制全拉)。
 
@@ -131,8 +199,9 @@ class EnrichedResult(StockScanResult):
     valuation: ValuationMetrics | None = None
     fundamentals: FundamentalMetrics | None = None  # fina_indicator (ROE / 增速 · 整合-1)
     moneyflow: MoneyflowMetrics | None = None        # moneyflow_dc (主力资金 · 整合-1)
-    # 后续阶段预留 (本期不实现 · PRD §4 维度地图):
-    # sentiment:    SentimentMetrics   | None = None  # limit_list_d (连板 / 炸板)
+    technical: TechnicalMetrics | None = None        # stk_factor_pro (MACD/KDJ/RSI · 整合-2)
+    sentiment: SentimentMetrics | None = None        # limit_list_d (连板 / 炸板 · 整合-2)
+    chip: ChipMetrics | None = None                  # cyq_perf (获利盘 · 整合-2)
 
     @classmethod
     def from_scan(
@@ -141,17 +210,24 @@ class EnrichedResult(StockScanResult):
         valuation: ValuationMetrics | None = None,
         fundamentals: FundamentalMetrics | None = None,
         moneyflow: MoneyflowMetrics | None = None,
+        technical: TechnicalMetrics | None = None,
+        sentiment: SentimentMetrics | None = None,
+        chip: ChipMetrics | None = None,
     ) -> EnrichedResult:
         """把 StockScanResult 提升为 EnrichedResult + 按需挂多维指标 (lazy 挂载入口)。
 
-        model_dump() 拷贝 scan 全字段后重新构造 (periods 深拷 · 不共享引用) ·
-        各维度 (valuation / fundamentals / moneyflow) 按需传入 · None 表该维度未 enrich。
+        model_dump() 拷贝 scan 全字段后重新构造 (periods 深拷 · 不共享引用) · 各维度
+        (valuation / fundamentals / moneyflow / technical / sentiment / chip) 按需传入 ·
+        None 表该维度未 enrich。
         """
         return cls(
             **scan.model_dump(),
             valuation=valuation,
             fundamentals=fundamentals,
             moneyflow=moneyflow,
+            technical=technical,
+            sentiment=sentiment,
+            chip=chip,
         )
 
 

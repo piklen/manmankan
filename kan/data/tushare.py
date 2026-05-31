@@ -708,3 +708,247 @@ def _fetch_tushare_moneyflow(trade_date: str) -> pd.DataFrame | None:
         debug_log(__name__, "fetch tushare moneyflow 失败", e)
         cb.record("tushare_moneyflow", ok=False)
         return None
+
+
+# ══════════════════════════════════════════════════════════════════
+# 技术面 (整合-2) · stk_factor_pro 截面 · MACD/KDJ/RSI/均线/BOLL (前复权)
+# ══════════════════════════════════════════════════════════════════
+
+_TECHNICAL_FIELDS = (
+    "ts_code,trade_date,close_qfq,"
+    "macd_dif_qfq,macd_dea_qfq,macd_qfq,"
+    "kdj_k_qfq,kdj_d_qfq,kdj_qfq,"
+    "rsi_qfq_6,rsi_qfq_12,rsi_qfq_24,"
+    "ma_qfq_5,ma_qfq_10,ma_qfq_20,ma_qfq_60,"
+    "boll_upper_qfq,boll_mid_qfq,boll_lower_qfq"
+)
+"""stk_factor_pro 拉取字段 · 前复权 (_qfq) 技术指标。
+
+⚠️ stk_factor_pro 默认返回上百字段 · 必须显式 fields (否则 trade_date 截面 =
+全市场 ~5500 只 × 上百列 · 拉爆)。取前复权 (技术分析标准) · _to_technical_df
+rename 去 _qfq 后缀成中性名。
+"""
+
+# stk_factor_pro 原始 _qfq 字段 → manmankan 中性字段名 (去复权后缀)。
+# 注意:tushare kdj_qfq = J 值 (K/D 是 kdj_k_qfq / kdj_d_qfq)。
+_TECHNICAL_RENAME = {
+    "close_qfq": "close",
+    "macd_dif_qfq": "macd_dif",
+    "macd_dea_qfq": "macd_dea",
+    "macd_qfq": "macd",
+    "kdj_k_qfq": "kdj_k",
+    "kdj_d_qfq": "kdj_d",
+    "kdj_qfq": "kdj_j",
+    "rsi_qfq_6": "rsi_6",
+    "rsi_qfq_12": "rsi_12",
+    "rsi_qfq_24": "rsi_24",
+    "ma_qfq_5": "ma_5",
+    "ma_qfq_10": "ma_10",
+    "ma_qfq_20": "ma_20",
+    "ma_qfq_60": "ma_60",
+    "boll_upper_qfq": "boll_upper",
+    "boll_mid_qfq": "boll_mid",
+    "boll_lower_qfq": "boll_lower",
+}
+
+
+def _to_technical_df(data: dict | None) -> pd.DataFrame | None:
+    """TuShare stk_factor_pro data 块 → DataFrame · ts_code → symbol + 去 _qfq 后缀。
+
+    不在此填 _source / 数值清洗 (编排层 technical._normalize_technical 接管)。
+    """
+    import pandas as pd
+    if not data:
+        return None
+    fields = data.get("fields") or []
+    items = data.get("items") or []
+    if not items:
+        return None
+    df = pd.DataFrame(items, columns=fields)
+    if "ts_code" not in df.columns:
+        return None
+    df["symbol"] = df["ts_code"].map(_strip_ts_suffix)
+    df = df.drop(columns=["ts_code"])
+    return df.rename(columns=_TECHNICAL_RENAME)
+
+
+def _fetch_tushare_technical(trade_date: str) -> pd.DataFrame | None:
+    """TuShare stk_factor_pro 单日截面 · 技术面因子 (前复权 · 整合-2)。
+
+    截面语义:按 trade_date 一次拉全市场 (一次 HTTP · 同 daily_basic 截面廉价)。
+    熔断 key 'tushare_factor' 独立 (stk_factor_pro 接口 / 频率门槛不同)。
+
+    Returns:
+        DataFrame (symbol + macd/kdj/rsi/ma/boll 中性名) 或 None
+        (未配 token / 熔断 / 失败)。
+    """
+    from kan.infra import circuit_breaker
+
+    token, endpoint = _resolve_config()
+    if not token:
+        return None
+    cb = circuit_breaker.get_breaker()
+    if cb.is_down("tushare_factor"):
+        return None
+    try:
+        data, _err = _post_tushare_api(
+            endpoint=endpoint, token=token, api_name="stk_factor_pro",
+            params={"trade_date": trade_date},
+            fields=_TECHNICAL_FIELDS,
+        )
+        if data is None:
+            cb.record("tushare_factor", ok=False)
+            return None
+        df = _to_technical_df(data)
+        if df is None or df.empty:
+            cb.record("tushare_factor", ok=False)
+            return None
+        cb.record("tushare_factor", ok=True)
+        return df
+    except Exception as e:
+        debug_log(__name__, "fetch tushare technical 失败", e)
+        cb.record("tushare_factor", ok=False)
+        return None
+
+
+# ══════════════════════════════════════════════════════════════════
+# 情绪 (整合-2) · limit_list_d 截面 · 涨跌停/连板 (稀疏事件型)
+# ══════════════════════════════════════════════════════════════════
+
+_SENTIMENT_FIELDS = "ts_code,trade_date,limit_times,open_times,limit,up_stat"
+"""limit_list_d 拉取字段 · 连板天数 + 炸板次数 + 涨跌停类型 + 涨停统计。
+
+稀疏事件型:只返回当日有涨跌停/炸板的票 (不在榜 = 未涨跌停) · 不含 ST ·
+数据从 2020 起。客观市场事实 (compliance §2 安全区 · 裸值可出)。
+"""
+
+
+def _to_sentiment_df(data: dict | None) -> pd.DataFrame | None:
+    """TuShare limit_list_d data 块 → DataFrame · ts_code → symbol (strip 后缀)。
+
+    不在此填 _source / 数值清洗 (编排层 sentiment._normalize_sentiment 接管)。
+    """
+    import pandas as pd
+    if not data:
+        return None
+    fields = data.get("fields") or []
+    items = data.get("items") or []
+    if not items:
+        return None
+    df = pd.DataFrame(items, columns=fields)
+    if "ts_code" not in df.columns:
+        return None
+    df["symbol"] = df["ts_code"].map(_strip_ts_suffix)
+    return df.drop(columns=["ts_code"])
+
+
+def _fetch_tushare_sentiment(trade_date: str) -> pd.DataFrame | None:
+    """TuShare limit_list_d 单日截面 · 涨跌停/连板情绪 (整合-2)。
+
+    截面语义:按 trade_date 一次拉当日涨跌停榜 (稀疏 · 只有涨跌停票 · 截面廉价)。
+    熔断 key 'tushare_limit' 独立。数据从 2020 起 · 不含 ST (接口本身不统计)。
+
+    Returns:
+        DataFrame (symbol + limit_times / open_times / limit / up_stat) 或 None
+        (未配 token / 熔断 / 失败 / 当日无涨跌停)。
+    """
+    from kan.infra import circuit_breaker
+
+    token, endpoint = _resolve_config()
+    if not token:
+        return None
+    cb = circuit_breaker.get_breaker()
+    if cb.is_down("tushare_limit"):
+        return None
+    try:
+        data, _err = _post_tushare_api(
+            endpoint=endpoint, token=token, api_name="limit_list_d",
+            params={"trade_date": trade_date},
+            fields=_SENTIMENT_FIELDS,
+        )
+        if data is None:
+            cb.record("tushare_limit", ok=False)
+            return None
+        df = _to_sentiment_df(data)
+        if df is None or df.empty:
+            cb.record("tushare_limit", ok=False)
+            return None
+        cb.record("tushare_limit", ok=True)
+        return df
+    except Exception as e:
+        debug_log(__name__, "fetch tushare sentiment 失败", e)
+        cb.record("tushare_limit", ok=False)
+        return None
+
+
+# ══════════════════════════════════════════════════════════════════
+# 筹码 (整合-2) · cyq_perf 截面 · 获利盘/成本分布
+# ══════════════════════════════════════════════════════════════════
+
+_CYQ_FIELDS = "ts_code,trade_date,winner_rate,cost_5pct,cost_50pct,cost_95pct,weight_avg"
+"""cyq_perf 拉取字段 · 获利盘比例 + 成本分位 + 加权平均成本。
+
+截面 (trade_date) 维度 · 数据从 2018 起 · 单次上限 5000 条 (A股 ~5500 · 可能截断
+少数票 → 该票降级 None)。客观计算值 (compliance §2/§7 · 裸值可出)。
+"""
+
+
+def _to_cyq_df(data: dict | None) -> pd.DataFrame | None:
+    """TuShare cyq_perf data 块 → DataFrame · ts_code → symbol (strip 后缀)。
+
+    不在此填 _source / 数值清洗 (编排层 chip._normalize_chip 接管)。
+    """
+    import pandas as pd
+    if not data:
+        return None
+    fields = data.get("fields") or []
+    items = data.get("items") or []
+    if not items:
+        return None
+    df = pd.DataFrame(items, columns=fields)
+    if "ts_code" not in df.columns:
+        return None
+    df["symbol"] = df["ts_code"].map(_strip_ts_suffix)
+    return df.drop(columns=["ts_code"])
+
+
+def _fetch_tushare_cyq(trade_date: str) -> pd.DataFrame | None:
+    """TuShare cyq_perf 单日截面 · 筹码获利盘/成本分布 (整合-2)。
+
+    截面语义:按 trade_date 一次拉全市场 (官方支持 trade_date 截面 · 单次上限 5000)。
+    熔断 key 'tushare_cyq' 独立。数据从 2018 起。
+
+    若实测 cyq_perf 不支持 trade_date 截面 (需 ts_code) → 改逐股 (params={ts_code})
+    + 编排层 chip.py 仿 fundamentals.py · 见 PRD 整合-2。
+
+    Returns:
+        DataFrame (symbol + winner_rate / cost_5pct / cost_50pct / cost_95pct /
+        weight_avg) 或 None (未配 token / 熔断 / 失败)。
+    """
+    from kan.infra import circuit_breaker
+
+    token, endpoint = _resolve_config()
+    if not token:
+        return None
+    cb = circuit_breaker.get_breaker()
+    if cb.is_down("tushare_cyq"):
+        return None
+    try:
+        data, _err = _post_tushare_api(
+            endpoint=endpoint, token=token, api_name="cyq_perf",
+            params={"trade_date": trade_date},
+            fields=_CYQ_FIELDS,
+        )
+        if data is None:
+            cb.record("tushare_cyq", ok=False)
+            return None
+        df = _to_cyq_df(data)
+        if df is None or df.empty:
+            cb.record("tushare_cyq", ok=False)
+            return None
+        cb.record("tushare_cyq", ok=True)
+        return df
+    except Exception as e:
+        debug_log(__name__, "fetch tushare cyq 失败", e)
+        cb.record("tushare_cyq", ok=False)
+        return None
