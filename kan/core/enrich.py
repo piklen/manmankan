@@ -29,6 +29,7 @@ if TYPE_CHECKING:
         FundamentalMetrics,
         MoneyflowMetrics,
         SentimentMetrics,
+        ShareholderMetrics,
         StockScanResult,
         TechnicalMetrics,
         ValuationMetrics,
@@ -186,6 +187,33 @@ def _row_to_chip(row: pd.Series, fallback_date: date) -> ChipMetrics:
     )
 
 
+def _row_to_shareholder(row: pd.Series) -> ShareholderMetrics:
+    """单股股东·持股结构衍生 Series → ShareholderMetrics (逐股 · 整合-3)。
+
+    row 来自 fetch_shareholder (已 normalize · 日期是 date · 数值已清洗)。季度披露 ·
+    各字段独立可空 (未披露 / 未进前十 → None · 优雅降级)。
+    """
+    import pandas as pd
+
+    from kan.core.models import ShareholderMetrics
+
+    h_end = row.get("holder_end_date")
+    if h_end is None or (not hasattr(h_end, "isoformat")) or pd.isna(h_end):
+        h_end = None
+    t_end = row.get("top10_end_date")
+    if t_end is None or (not hasattr(t_end, "isoformat")) or pd.isna(t_end):
+        t_end = None
+    return ShareholderMetrics(
+        holder_end_date=h_end,
+        holder_num=_opt_float(row.get("holder_num")),
+        holder_chg_pct=_opt_float(row.get("holder_chg_pct")),
+        top10_end_date=t_end,
+        top10_float_ratio=_opt_float(row.get("top10_float_ratio")),
+        north_hold_ratio=_opt_float(row.get("north_hold_ratio")),
+        source=row.get("_source") if isinstance(row.get("_source"), str) else None,
+    )
+
+
 def enrich_results(
     results: list[StockScanResult],
     *,
@@ -195,6 +223,7 @@ def enrich_results(
     need_technical: bool = False,
     need_sentiment: bool = False,
     need_chip: bool = False,
+    need_shareholder: bool = False,
 ) -> list[EnrichedResult]:
     """给 scan 结果按需挂多维指标 · 返回 EnrichedResult 列表 (原序)。
 
@@ -210,6 +239,8 @@ def enrich_results(
         need_technical: True 时拉 stk_factor_pro 截面 (--rsi/--macd-dif/--macd/--kdj-j · 整合-2)
         need_sentiment: True 时拉 limit_list_d 截面 (--streak · 稀疏事件型 · 整合-2)
         need_chip: True 时拉 cyq_perf 截面 (--winner · 整合-2)
+        need_shareholder: True 时逐股拉 stk_holdernumber + top10_floatholders
+            (--holders/--top10/--north filter · 逐股 · 全市场 --all 不支持 · 整合-3)
 
     Returns:
         list[EnrichedResult] · 与 results 等长同序 · 每只按需挂各维度 (无数据时 None)。
@@ -263,6 +294,13 @@ def enrich_results(
         chip_df = fetch_chip(trade_date=trade_date, symbols=symbols)
         chip_by_symbol = _index_chip(chip_df, fallback_date)
 
+    sh_by_symbol: dict[str, ShareholderMetrics] = {}
+    if need_shareholder:
+        from kan.data.shareholder import fetch_shareholder
+
+        for sym, row in fetch_shareholder(symbols).items():
+            sh_by_symbol[sym] = _row_to_shareholder(row)
+
     return [
         EnrichedResult.from_scan(
             r,
@@ -272,6 +310,7 @@ def enrich_results(
             technical=tech_by_symbol.get(r.symbol),
             sentiment=senti_by_symbol.get(r.symbol),
             chip=chip_by_symbol.get(r.symbol),
+            shareholder=sh_by_symbol.get(r.symbol),
         )
         for r in results
     ]

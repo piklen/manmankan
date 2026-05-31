@@ -25,6 +25,7 @@ if TYPE_CHECKING:
         MoneyflowMetrics,
         PeriodResult,
         SentimentMetrics,
+        ShareholderMetrics,
         StockScanResult,
         TechnicalMetrics,
         ThemeMeta,
@@ -499,6 +500,9 @@ _TRIGGER_FLAG = {
     "kdj_j": "--kdj-j",
     "streak": "--streak",
     "winner": "--winner",
+    "holders": "--holders",
+    "top10": "--top10",
+    "north": "--north",
 }
 """TriggeredFilter.filter_type → DSL flag (JSON triggered_filters.filter 字段)。"""
 
@@ -630,6 +634,26 @@ def _chip_public_dict(c: ChipMetrics | None) -> dict | None:
     }
 
 
+def _shareholder_public_dict(s: ShareholderMetrics | None) -> dict | None:
+    """ShareholderMetrics → 对外 JSON (整合-3 · 户数环比/集中度/北向裸值)。
+
+    合规 (compliance §7 整合-3 守则):户数环比 / 前十大流通集中度 / 北向占比是已披露
+    客观事实衍生 · 不输出"主力建仓/洗盘/控盘/高度控盘"判断词。季度披露 · 各字段独立
+    可空 (未披露 / 未进前十 → None)。北向用"香港中央结算"季度名义持有人代理。
+    """
+    if s is None:
+        return None
+    return {
+        "holder_end_date": s.holder_end_date.isoformat() if s.holder_end_date else None,
+        "holder_num": s.holder_num,
+        "holder_chg_pct": s.holder_chg_pct,
+        "top10_end_date": s.top10_end_date.isoformat() if s.top10_end_date else None,
+        "top10_float_ratio": s.top10_float_ratio,
+        "north_hold_ratio": s.north_hold_ratio,
+        "source": s.source,
+    }
+
+
 def _find_disclaimer_quote() -> str:
     """find 专属免责 → markdown 引用块 (compliance §5 · 衍生不可删)。"""
     from kan.render.base import FIND_DISCLAIMER_TEXT
@@ -671,6 +695,7 @@ def _find_result_dict(match: FindMatch, enriched: EnrichedResult) -> dict:
         "technical": _technical_public_dict(er.technical),
         "sentiment": _sentiment_public_dict(er.sentiment),
         "chip": _chip_public_dict(er.chip),
+        "shareholder": _shareholder_public_dict(er.shareholder),
     }
 
 

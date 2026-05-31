@@ -26,16 +26,19 @@ from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
 from kan.core.find_dsl import (
+    HoldersFilter,
     KdjJFilter,
     MacdDifFilter,
     MacdFilter,
     MoneyflowFilter,
+    NorthFilter,
     PeFilter,
     PosFilter,
     ResonanceFilter,
     RoeFilter,
     RsiFilter,
     StreakFilter,
+    Top10Filter,
     WinnerFilter,
     apply_op,
 )
@@ -49,6 +52,7 @@ if TYPE_CHECKING:
         FundamentalMetrics,
         MoneyflowMetrics,
         SentimentMetrics,
+        ShareholderMetrics,
         StockScanResult,
         TechnicalMetrics,
         ValuationMetrics,
@@ -248,6 +252,53 @@ def _match_winner(
     return None
 
 
+# ─── 整合-3 股东·持股结构匹配器 (吃 shareholder 子对象 · 缺失/未进前十 → None) ───
+
+def _match_holders(
+    filter: HoldersFilter, shareholder: ShareholderMetrics | None
+) -> TriggeredFilter | None:
+    """Match 户数环比 filter against shareholder · holder_chg_pct 缺失 → 不命中 (整合-3)。"""
+    if shareholder is None or shareholder.holder_chg_pct is None:
+        return None
+    if apply_op(filter.op, shareholder.holder_chg_pct, filter.value):
+        return TriggeredFilter(
+            filter_type="holders",
+            param=f"{filter.op}:{filter.value:g}",
+            value=shareholder.holder_chg_pct,
+        )
+    return None
+
+
+def _match_top10(
+    filter: Top10Filter, shareholder: ShareholderMetrics | None
+) -> TriggeredFilter | None:
+    """Match 前十大流通集中度 filter against shareholder · top10_float_ratio 缺失 → 不命中 (整合-3)。"""
+    if shareholder is None or shareholder.top10_float_ratio is None:
+        return None
+    if apply_op(filter.op, shareholder.top10_float_ratio, filter.value):
+        return TriggeredFilter(
+            filter_type="top10",
+            param=f"{filter.op}:{filter.value:g}",
+            value=shareholder.top10_float_ratio,
+        )
+    return None
+
+
+def _match_north(
+    filter: NorthFilter, shareholder: ShareholderMetrics | None
+) -> TriggeredFilter | None:
+    """Match 北向持股 filter against shareholder · north_hold_ratio 缺失/未进前十 → 不命中 (整合-3)。"""
+    if shareholder is None or shareholder.north_hold_ratio is None:
+        return None
+    if apply_op(filter.op, shareholder.north_hold_ratio, filter.value):
+        return TriggeredFilter(
+            filter_type="north",
+            param=f"{filter.op}:{filter.value:g}",
+            value=shareholder.north_hold_ratio,
+        )
+    return None
+
+
 def _match_all(
     filters: tuple,
     target: object,
@@ -306,6 +357,9 @@ def apply_conditions(
             (conditions.kdj_j_filters, getattr(r, "technical", None), _match_kdj_j),
             (conditions.streak_filters, getattr(r, "sentiment", None), _match_streak),
             (conditions.winner_filters, getattr(r, "chip", None), _match_winner),
+            (conditions.holders_filters, getattr(r, "shareholder", None), _match_holders),
+            (conditions.top10_filters, getattr(r, "shareholder", None), _match_top10),
+            (conditions.north_filters, getattr(r, "shareholder", None), _match_north),
         ]
         triggered: list[TriggeredFilter] = []
         all_match = True

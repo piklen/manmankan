@@ -640,6 +640,115 @@ def _fetch_tushare_fundamentals(symbol: str) -> pd.DataFrame | None:
 
 
 # ══════════════════════════════════════════════════════════════════
+# 股东·持股结构 (整合-3) · stk_holdernumber + top10_floatholders 逐股 · 季度披露
+# ══════════════════════════════════════════════════════════════════
+
+_HOLDERNUM_FIELDS = "ann_date,end_date,holder_num"
+"""stk_holdernumber 拉取字段 · 股东户数 (季度定期披露 · 同 end_date 可能多 ann_date)。
+
+逐股 (ts_code) 维度 · 不传 period 返回全历史报告期 · 编排层 shareholder._derive_holders
+去重 + 取相邻两期算环比。已披露客观事实 (compliance §7 整合-3 守则 · 裸值衍生可出)。
+"""
+
+_TOP10FLOAT_FIELDS = "end_date,holder_name,hold_ratio"
+"""top10_floatholders 拉取字段 · 十大流通股东持股占流通比 + 持有人名 (季度披露)。
+
+逐股 (ts_code · 接口 required · 无截面全市场拉法) · 不传 period 返回全历史报告期 ×
+每期 ≤10 行 · 编排层取最新一期算集中度 (求和) + 北向代理 (筛"香港中央结算")。
+"""
+
+
+def _fetch_tushare_holdernumber(symbol: str) -> pd.DataFrame | None:
+    """TuShare stk_holdernumber 单股股东户数 (季度披露 · 逐股 · 整合-3)。
+
+    逐股 (ts_code) 全历史报告期 (无截面全市场拉法 · 全市场逐股代价高 · 同 fina_indicator)。
+    熔断 key 'tushare_holdernum' 独立 (接口 / 频率门槛不同)。编排层 shareholder 去重
+    (同 end_date 多 ann_date) + 取相邻两期算环比。
+
+    Returns:
+        DataFrame (ann_date / end_date / holder_num · 多报告期) 或 None
+        (未配 token / 熔断 / 失败 / 无披露)。
+    """
+    from kan.infra import circuit_breaker
+
+    token, endpoint = _resolve_config()
+    if not token:
+        return None
+    cb = circuit_breaker.get_breaker()
+    if cb.is_down("tushare_holdernum"):
+        return None
+    try:
+        ts_code = _normalize_symbol_to_ts(symbol)
+    except ValueError:
+        return None
+    try:
+        data, _err = _post_tushare_api(
+            endpoint=endpoint, token=token, api_name="stk_holdernumber",
+            params={"ts_code": ts_code},
+            fields=_HOLDERNUM_FIELDS,
+        )
+        if data is None:
+            cb.record("tushare_holdernum", ok=False)
+            return None
+        fields = data.get("fields") or []
+        items = data.get("items") or []
+        if not items:
+            cb.record("tushare_holdernum", ok=False)
+            return None
+        cb.record("tushare_holdernum", ok=True)
+        return pd.DataFrame(items, columns=fields)
+    except Exception as e:
+        debug_log(__name__, "fetch tushare holdernumber 失败", e)
+        cb.record("tushare_holdernum", ok=False)
+        return None
+
+
+def _fetch_tushare_top10float(symbol: str) -> pd.DataFrame | None:
+    """TuShare top10_floatholders 单股十大流通股东 (季度披露 · 逐股 · 整合-3)。
+
+    逐股 (ts_code · 接口 required) 全历史报告期 × 每期 ≤10 行。熔断 key
+    'tushare_top10float' 独立。编排层 shareholder._derive_top10 取最新一期算集中度
+    (hold_ratio 求和) + 北向代理 (筛"香港中央结算" · hk_hold 日频 2024-08 断供后降级)。
+
+    Returns:
+        DataFrame (end_date / holder_name / hold_ratio · 多期×≤10) 或 None
+        (未配 token / 熔断 / 失败 / 无披露)。
+    """
+    from kan.infra import circuit_breaker
+
+    token, endpoint = _resolve_config()
+    if not token:
+        return None
+    cb = circuit_breaker.get_breaker()
+    if cb.is_down("tushare_top10float"):
+        return None
+    try:
+        ts_code = _normalize_symbol_to_ts(symbol)
+    except ValueError:
+        return None
+    try:
+        data, _err = _post_tushare_api(
+            endpoint=endpoint, token=token, api_name="top10_floatholders",
+            params={"ts_code": ts_code},
+            fields=_TOP10FLOAT_FIELDS,
+        )
+        if data is None:
+            cb.record("tushare_top10float", ok=False)
+            return None
+        fields = data.get("fields") or []
+        items = data.get("items") or []
+        if not items:
+            cb.record("tushare_top10float", ok=False)
+            return None
+        cb.record("tushare_top10float", ok=True)
+        return pd.DataFrame(items, columns=fields)
+    except Exception as e:
+        debug_log(__name__, "fetch tushare top10float 失败", e)
+        cb.record("tushare_top10float", ok=False)
+        return None
+
+
+# ══════════════════════════════════════════════════════════════════
 # 主力资金 (整合-1) · moneyflow_dc 截面 · 主力净额
 # ══════════════════════════════════════════════════════════════════
 
