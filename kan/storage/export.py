@@ -15,11 +15,13 @@ if TYPE_CHECKING:
     from datetime import date
 
     from kan.core.cross_section import CrossSectionRow
-    from kan.core.find_filter import FindMatch
+    from kan.core.find_filter import FindMatch, TriggeredFilter
     from kan.core.models import (
         BoardMeta,
         EnrichedResult,
+        FundamentalMetrics,
         HotMeta,
+        MoneyflowMetrics,
         PeriodResult,
         StockScanResult,
         ThemeMeta,
@@ -482,30 +484,73 @@ def compare_markdown(results: list[StockScanResult], *, periods: list[int]) -> s
 
 # ── find (AI 消费入口 · 地基-2) ────────────────────────────────────────
 
-_TRIGGER_FLAG = {"pos": "--pos", "resonance": "--resonance"}
+_TRIGGER_FLAG = {
+    "pos": "--pos",
+    "resonance": "--resonance",
+    "pe": "--pe",
+    "roe": "--roe",
+    "moneyflow": "--moneyflow",
+}
 """TriggeredFilter.filter_type → DSL flag (JSON triggered_filters.filter 字段)。"""
 
 
 def _valuation_public_dict(v: ValuationMetrics | None) -> dict | None:
-    """ValuationMetrics → 对外 JSON 安全子集 (地基-2)。
+    """ValuationMetrics → 对外 JSON (整合-1 拍板:放开估值裸值)。
 
-    合规 (compliance §2/§6/§7 · PRD §1.1/§6):
-    - 输出量价 / 市值客观事实 (close / turnover_rate / volume_ratio / total_mv /
-      circ_mv · 同 OHLCV 类客观行情 · compliance §2 安全区)
-    - 估值比率 (pe_ttm / pb / ps_ttm / dv_ttm) **不输出裸值** · 维护者反复明示
-      "估值用分位非裸值"(PRD §1.1/§6/§9)· 留地基-3 以历史分位 + 行业中位对照呈现。
-      数据层 (ValuationMetrics) 仍存原始值 (决策①)· 仅输出层过滤 (职责分离)。
+    合规 (compliance §2/§7 · 整合-1 2026-05-31 拍板 · 推翻"估值不给裸值"旧设计):
+    - 量价 / 市值客观事实 (close / turnover_rate / volume_ratio / total_mv / circ_mv)
+      + 估值裸值 (pe_ttm / pb / ps_ttm / dv_ttm) 一并输出。
+    - 放开理由:filter 由用户显式指定 (--pe 是用户主导的数据筛选 · 非工具荐股) ·
+      行业分位主观性强 (回看窗口 / 行业划分皆为选择) · 裸值反而客观 (维护者拍板)。
+    - 仍守:不评分 / 不评级 / 不判断词 (compliance §3 黑名单 · find JSON 守护测试不动)。
     """
     if v is None:
         return None
     return {
         "trade_date": v.trade_date.isoformat() if v.trade_date else None,
         "close": v.close,
+        "pe_ttm": v.pe_ttm,
+        "pb": v.pb,
+        "ps_ttm": v.ps_ttm,
+        "dv_ttm": v.dv_ttm,
         "turnover_rate": v.turnover_rate,
         "volume_ratio": v.volume_ratio,
         "total_mv": v.total_mv,
         "circ_mv": v.circ_mv,
         "source": v.source,
+    }
+
+
+def _fundamentals_public_dict(f: FundamentalMetrics | None) -> dict | None:
+    """FundamentalMetrics → 对外 JSON (整合-1 · ROE/增速裸值)。
+
+    合规 (compliance §7):ROE / 增速是单向正向因子 (无"贵/便宜"双向误导)· 原始
+    指标名 · 不评分 / 不判断词 · 裸值可出 (用户主导 --roe filter)。
+    """
+    if f is None:
+        return None
+    return {
+        "end_date": f.end_date.isoformat() if f.end_date else None,
+        "roe": f.roe,
+        "netprofit_yoy": f.netprofit_yoy,
+        "or_yoy": f.or_yoy,
+        "source": f.source,
+    }
+
+
+def _moneyflow_public_dict(m: MoneyflowMetrics | None) -> dict | None:
+    """MoneyflowMetrics → 对外 JSON (整合-1 · 主力净额裸值)。
+
+    合规 (compliance §2):主力净额是客观资金事实 (同 OHLCV 安全区)· 裸值可出。
+    """
+    if m is None:
+        return None
+    return {
+        "trade_date": m.trade_date.isoformat() if m.trade_date else None,
+        "net_amount": m.net_amount,
+        "buy_elg_amount": m.buy_elg_amount,
+        "buy_lg_amount": m.buy_lg_amount,
+        "source": m.source,
     }
 
 
@@ -545,6 +590,8 @@ def _find_result_dict(match: FindMatch, enriched: EnrichedResult) -> dict:
             },
         },
         "valuation": _valuation_public_dict(er.valuation),
+        "fundamentals": _fundamentals_public_dict(er.fundamentals),
+        "moneyflow": _moneyflow_public_dict(er.moneyflow),
     }
 
 
@@ -626,12 +673,16 @@ def find_markdown(
 
 # ── cross section (kan find --all 全市场截面取数 · 地基-3) ────────────────
 
-def _cross_section_result_dict(row: CrossSectionRow) -> dict:
-    """单只截面取数结果 → JSON 对象 (无 K 线衍生字段 · 估值裸值不出)。
+def _cross_section_result_dict(
+    row: CrossSectionRow,
+    triggered: tuple[TriggeredFilter, ...] = (),
+) -> dict:
+    """单只截面取数结果 → JSON 对象 (整合-1 · 估值裸值放开 + moneyflow + triggered)。
 
     截面模式没有 K 线数据 (位置/共振/涨跌停/现价) · 只出截面真实有的:
-    code/name + valuation (量价/市值客观事实 · _valuation_public_dict 过滤裸值) +
-    valuation_context (行业内分位 + 行业中位 · 无个股裸值 · *_pct_rank 截面恒 None)。
+    code/name + valuation (量价/市值 + 估值裸值 · 整合-1 放开) + valuation_context
+    (行业内分位 + 行业中位 · *_pct_rank 截面恒 None) + moneyflow (主力净额) +
+    triggered_filters (--pe/--moneyflow 命中审计 · 无 filter 取数时为 [])。
     """
     return {
         "code": row.code,
@@ -640,29 +691,42 @@ def _cross_section_result_dict(row: CrossSectionRow) -> dict:
         "valuation_context": (
             row.valuation_context.model_dump() if row.valuation_context else None
         ),
+        "moneyflow": _moneyflow_public_dict(row.moneyflow),
+        "triggered_filters": [
+            {
+                "filter": _TRIGGER_FLAG.get(t.filter_type, t.filter_type),
+                "param": t.param,
+                "value": t.value,
+            }
+            for t in triggered
+        ],
     }
 
 
 def cross_section_payload(
-    rows: list[CrossSectionRow],
+    entries: list[tuple[CrossSectionRow, tuple[TriggeredFilter, ...]]],
     *,
     query_time: str,
     pool_size: int,
     data_cutoff: date | None,
     stale: bool,
+    filters: list[dict] | None = None,
 ) -> dict:
-    """kan find --all --format json 截面取数 payload (地基-3 · AI 全市场取数)。
+    """kan find --all --format json 截面取数/筛选 payload (地基-3 + 整合-1 截面 filter)。
 
     与 find_payload 区别 (维护者拍板新 schema · 不复用):全市场截面**不拉 K 线** ·
-    无 price/positions/resonance/triggered (那些是 K 线衍生 · 复用 find_payload 会被迫
-    填 price=0.0 等假值 · 撞诚实)。mode="cross_section" 标记形态供 AI 区分。
+    无 price/positions/resonance (那些是 K 线衍生 · 复用 find_payload 会被迫填
+    price=0.0 等假值 · 撞诚实)。mode="cross_section" 标记形态供 AI 区分。整合-1 起
+    支持截面类 filter (--pe / --moneyflow) · entries 带 triggered · rule.filters 反映输入。
 
     Args:
-        rows: CrossSectionRow 列表 (已 limit · 顺序即输出序)
+        entries: (CrossSectionRow, triggered) 配对列表 (已筛 + limit · 顺序即输出序 ·
+            无 filter 取数时 triggered 为 ())
         query_time: 查询发起时间 (ISO · caller 注入 · 利于测试确定性)
         pool_size: 池内总股票数 (筛前 · 全市场约 5500)
         data_cutoff: 截面数据交易日 (date | None)
         stale: 截面缓存是否滞后
+        filters: rule.filters (--pe/--moneyflow 的 DSL · None=取数无 filter)
 
     强制 disclaimer 字段 (compliance §5/§7 · 衍生不可删 · 测试守护)。
     """
@@ -673,12 +737,12 @@ def cross_section_payload(
         "command": "find",
         "mode": "cross_section",
         "query_time": query_time,
-        "rule": {"pools": ["all"], "filters": []},
-        "results": [_cross_section_result_dict(r) for r in rows],
+        "rule": {"pools": ["all"], "filters": filters or []},
+        "results": [_cross_section_result_dict(r, t) for r, t in entries],
         "disclaimer": FIND_DISCLAIMER_TEXT,
         "stats": {
             "pool_size": pool_size,
-            "shown": len(rows),
+            "shown": len(entries),
             "data_cutoff": data_cutoff.isoformat() if data_cutoff else None,
             "stale": stale,
         },
@@ -693,30 +757,29 @@ def cross_section_markdown(
 ) -> str:
     """kan find --all --format md · 全市场截面简表 + disclaimer (衍生不可删)。
 
-    列:股票 / 申万行业 / PE 行业内分位 / PB 行业内分位 / 换手率 (估值裸值不出 ·
-    只分位 + 客观量价)。
+    列:股票 / 申万行业 / PE / PE 行业内分位 / 换手率% / 主力净额 (整合-1 · 裸 PE 放开
+    + 换手率 + 主力净额 · PE 分位作对照 · 全字段 (PB/资金明细) 见 --format json)。
     """
-    headers = ["股票", "申万行业", "PE行业分位", "PB行业分位", "换手率%"]
+    headers = ["股票", "申万行业", "PE", "PE行业分位", "换手率%", "主力净额(万)"]
     md_rows: list[list[str]] = []
     for r in rows:
         ctx = r.valuation_context
         val = r.valuation
+        mf = r.moneyflow
         ind = ctx.industry if ctx and ctx.industry else "—"
+        pe = f"{val.pe_ttm:.2f}" if val and val.pe_ttm is not None else "—"
         pe_pct = (
             f"{ctx.pe_industry_pct:.0f}%"
             if ctx and ctx.pe_industry_pct is not None else "—"
-        )
-        pb_pct = (
-            f"{ctx.pb_industry_pct:.0f}%"
-            if ctx and ctx.pb_industry_pct is not None else "—"
         )
         turnover = (
             f"{val.turnover_rate:.2f}"
             if val and val.turnover_rate is not None else "—"
         )
+        net = f"{mf.net_amount:,.0f}" if mf and mf.net_amount is not None else "—"
         md_rows.append([
             f"{r.name.replace(' ', '')} {r.code}",
-            ind, pe_pct, pb_pct, turnover,
+            ind, pe, pe_pct, turnover, net,
         ])
     head = f"# {title} · 全市场 {pool_size} 只"
     body = md_table(headers, md_rows) if md_rows else "_无截面数据_"

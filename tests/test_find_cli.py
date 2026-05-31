@@ -186,8 +186,8 @@ class TestFindJsonOutput:
         assert payload["command"] == "find"
         assert payload["schema_version"]
         assert "候选 ≠ 买入信号" in payload["disclaimer"]
-        for raw in ("pe_ttm", "pb", "ps_ttm", "dv_ttm"):
-            assert raw not in result.stdout, f"估值裸值 {raw} 不该出现在对外 JSON"
+        # 整合-1 拍板:估值裸值现在对外输出 (推翻旧"裸值不出")
+        assert '"pe_ttm"' in result.stdout
 
 
 class TestFindAllCrossSection:
@@ -211,6 +211,21 @@ class TestFindAllCrossSection:
     def test_all_no_token_friendly_error(self, tmp_path):
         """--all + json + 无 token (隔离 XDG) → 友好报错 exit 1 · 不静默空。"""
         ec, out, err = _run_isolated(["find", "--all", "--format", "json"], tmp_path)
+        combined = (out + err).lower()
+        assert ec == 1
+        assert "token" in combined or "tushare" in combined
+
+    def test_all_with_roe_exits_two(self):
+        """整合-1 · --all + --roe → exit 2 (fina 逐股 · 全市场太贵 · 引导缩小池)。"""
+        ec, out = _run(["find", "--all", "--roe", "gte:15", "--format", "json"])
+        assert ec == 2
+        assert "roe" in out.lower() or "缩小池" in out
+
+    def test_all_with_pe_no_token_friendly_error(self, tmp_path):
+        """整合-1 · --all + --pe (截面 filter 放开) + 无 token → 友好报错 exit 1。"""
+        ec, out, err = _run_isolated(
+            ["find", "--all", "--pe", "lt:20", "--format", "json"], tmp_path,
+        )
         combined = (out + err).lower()
         assert ec == 1
         assert "token" in combined or "tushare" in combined

@@ -26,18 +26,22 @@ if TYPE_CHECKING:
 
     import pandas as pd
 
-    from kan.core.models import ValuationContext, ValuationMetrics
+    from kan.core.models import MoneyflowMetrics, ValuationContext, ValuationMetrics
     from kan.core.stock_set import StockSet
 
 
 @dataclass(frozen=True)
 class CrossSectionRow:
-    """单只股票的截面取数结果 · code/name + 客观事实 valuation + 估值对照 context。"""
+    """单只股票的截面取数结果 · code/name + 客观事实 valuation + 估值对照 context。
+
+    整合-1 加 moneyflow (主力资金截面 · 支持 --all --moneyflow filter · 同截面廉价)。
+    """
 
     code: str
     name: str
     valuation: ValuationMetrics | None
     valuation_context: ValuationContext | None
+    moneyflow: MoneyflowMetrics | None = None  # 整合-1 · 主力资金截面 (None=无数据/早期)
 
 
 @dataclass(frozen=True)
@@ -81,11 +85,16 @@ def run_cross_section(
         CrossSectionCtx · rows 顺序跟随 stock_set.pairs()。
         无 token / 空池 / 无截面 → rows 空 (caller 按空判断报错 · 优雅降级)。
     """
-    from kan.core.enrich import _resolve_fallback_date, _row_to_valuation
+    from kan.core.enrich import (
+        _resolve_fallback_date,
+        _row_to_moneyflow,
+        _row_to_valuation,
+    )
     from kan.core.trading_calendar import latest_trade_date
     from kan.core.valuation_context import compute_cross_section_contexts
     from kan.data.industry_map import fetch_sw_l1_map
     from kan.data.metrics import _DEFAULT_LOOKBACK_DAYS, fetch_metrics
+    from kan.data.moneyflow import fetch_moneyflow
 
     pairs = stock_set.pairs()
     pool_size = len(pairs)
@@ -107,15 +116,26 @@ def run_cross_section(
     fallback_date = _resolve_fallback_date(trade_date, latest_trade_date)
     by_symbol = {str(r.get("symbol", "")).strip(): r for _, r in cross.iterrows()}
 
+    # 主力资金截面 (整合-1 · 同截面廉价一次 HTTP · 支持 --all --moneyflow · 早期/无数据降级)
+    mf = fetch_moneyflow(trade_date=trade_date, symbols=codes)
+    mf_by_symbol = (
+        {str(r.get("symbol", "")).strip(): r for _, r in mf.iterrows()}
+        if mf is not None and not mf.empty
+        else {}
+    )
+
     rows: list[CrossSectionRow] = []
     for code, name in pairs:
         row = by_symbol.get(code)
         valuation = _row_to_valuation(row, fallback_date) if row is not None else None
+        mf_row = mf_by_symbol.get(code)
+        moneyflow = _row_to_moneyflow(mf_row, fallback_date) if mf_row is not None else None
         rows.append(CrossSectionRow(
             code=code,
             name=name,
             valuation=valuation,
             valuation_context=contexts.get(code),
+            moneyflow=moneyflow,
         ))
 
     data_cutoff = _cross_data_cutoff(cross)

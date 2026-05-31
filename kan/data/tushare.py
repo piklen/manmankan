@@ -580,3 +580,131 @@ def _fetch_tushare_stock_basic_all() -> pd.DataFrame | None:
         debug_log(__name__, "fetch tushare stock_basic 失败", e)
         cb.record("tushare_basic", ok=False)
         return None
+
+
+# ══════════════════════════════════════════════════════════════════
+# 质量·成长 (整合-1) · fina_indicator 逐股财务指标 · ROE / 增速
+# ══════════════════════════════════════════════════════════════════
+
+_FUNDAMENTALS_FIELDS = "end_date,roe,netprofit_yoy,or_yoy"
+"""fina_indicator 拉取字段 · 净资产收益率 ROE + 净利同比 + 营收同比增速 (%)。
+
+逐股 (ts_code) 维度 · 不传 period 返回全历史报告期 · 编排层取最新一期
+(fundamentals.fetch_fundamentals)。原始指标值 · 命名中性 (compliance §6/§7)。
+"""
+
+
+def _fetch_tushare_fundamentals(symbol: str) -> pd.DataFrame | None:
+    """TuShare fina_indicator 单股财务指标 (ROE / 增速) · 逐股质量维度 (整合-1)。
+
+    与截面 daily_basic 正交:fina_indicator 按 ts_code 拉单股全历史报告期 (无截面
+    全市场拉法 · 全市场逐股代价高 · PRD §3.2)。熔断 key 'tushare_fina' 独立
+    (fina_indicator 接口 / 频率门槛不同于 daily_basic)。
+
+    Returns:
+        DataFrame (end_date + roe / netprofit_yoy / or_yoy · 多报告期) 或 None
+        (未配 token / 熔断 / 失败)。编排层 fetch_fundamentals 取最新一期。
+    """
+    from kan.infra import circuit_breaker
+
+    token, endpoint = _resolve_config()
+    if not token:
+        return None
+    cb = circuit_breaker.get_breaker()
+    if cb.is_down("tushare_fina"):
+        return None
+    try:
+        ts_code = _normalize_symbol_to_ts(symbol)
+    except ValueError:
+        return None
+    try:
+        data, _err = _post_tushare_api(
+            endpoint=endpoint, token=token, api_name="fina_indicator",
+            params={"ts_code": ts_code},
+            fields=_FUNDAMENTALS_FIELDS,
+        )
+        if data is None:
+            cb.record("tushare_fina", ok=False)
+            return None
+        fields = data.get("fields") or []
+        items = data.get("items") or []
+        if not items:
+            cb.record("tushare_fina", ok=False)
+            return None
+        cb.record("tushare_fina", ok=True)
+        return pd.DataFrame(items, columns=fields)
+    except Exception as e:
+        debug_log(__name__, "fetch tushare fundamentals 失败", e)
+        cb.record("tushare_fina", ok=False)
+        return None
+
+
+# ══════════════════════════════════════════════════════════════════
+# 主力资金 (整合-1) · moneyflow_dc 截面 · 主力净额
+# ══════════════════════════════════════════════════════════════════
+
+_MONEYFLOW_FIELDS = "ts_code,trade_date,net_amount,buy_elg_amount,buy_lg_amount"
+"""moneyflow_dc 拉取字段 · 主力净额 + 超大单 / 大单净额 (东财口径 · 单位万元)。
+
+截面 (trade_date) 维度 · 一次拉全市场 · 数据从 20230911 起 (早期缺失)。
+客观资金事实 (compliance §2 安全区 · 同 OHLCV · 裸值可出)。
+"""
+
+
+def _to_moneyflow_df(data: dict | None) -> pd.DataFrame | None:
+    """TuShare moneyflow_dc data 块 → DataFrame · ts_code → symbol (strip 后缀)。
+
+    不在此填 _source / 数值清洗 (编排层 moneyflow._normalize_moneyflow 接管)。
+    """
+    import pandas as pd
+    if not data:
+        return None
+    fields = data.get("fields") or []
+    items = data.get("items") or []
+    if not items:
+        return None
+    df = pd.DataFrame(items, columns=fields)
+    if "ts_code" not in df.columns:
+        return None
+    df["symbol"] = df["ts_code"].map(_strip_ts_suffix)
+    return df.drop(columns=["ts_code"])
+
+
+def _fetch_tushare_moneyflow(trade_date: str) -> pd.DataFrame | None:
+    """TuShare moneyflow_dc 单日截面 · 主力资金净额 (整合-1)。
+
+    截面语义:按 trade_date 一次拉全市场 (一次 HTTP · 同 daily_basic 截面廉价)。
+    熔断 key 'tushare_moneyflow' 独立 (moneyflow_dc 接口 / 频率门槛不同)。
+    数据从 20230911 起 · 早期交易日返回空 (编排层降级)。
+
+    Returns:
+        DataFrame (symbol + net_amount / buy_elg_amount / buy_lg_amount) 或 None
+        (未配 token / 熔断 / 失败 / 早期无数据)。
+    """
+    from kan.infra import circuit_breaker
+
+    token, endpoint = _resolve_config()
+    if not token:
+        return None
+    cb = circuit_breaker.get_breaker()
+    if cb.is_down("tushare_moneyflow"):
+        return None
+    try:
+        data, _err = _post_tushare_api(
+            endpoint=endpoint, token=token, api_name="moneyflow_dc",
+            params={"trade_date": trade_date},
+            fields=_MONEYFLOW_FIELDS,
+        )
+        if data is None:
+            cb.record("tushare_moneyflow", ok=False)
+            return None
+        df = _to_moneyflow_df(data)
+        if df is None or df.empty:
+            cb.record("tushare_moneyflow", ok=False)
+            return None
+        cb.record("tushare_moneyflow", ok=True)
+        return df
+    except Exception as e:
+        debug_log(__name__, "fetch tushare moneyflow 失败", e)
+        cb.record("tushare_moneyflow", ok=False)
+        return None

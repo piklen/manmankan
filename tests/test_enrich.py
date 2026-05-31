@@ -103,3 +103,58 @@ class TestEnrichResults:
         monkeypatch.setattr("kan.data.metrics.fetch_metrics", lambda **_kw: df)
         out = enrich.enrich_results([_scan()])  # trade_date=None → latest
         assert out[0].valuation.trade_date == datetime.date(2026, 6, 1)
+
+
+class TestEnrichFundamentalsMoneyflow:
+    """整合-1 · 按需挂 fundamentals (逐股) / moneyflow (截面)。"""
+
+    _VAL_DF = pd.DataFrame([{
+        "symbol": "600519", "trade_date": datetime.date(2026, 5, 29), "pe_ttm": 20.0,
+    }])
+
+    def test_need_false_skips_extra_fetch(self, monkeypatch):
+        monkeypatch.setattr("kan.data.metrics.fetch_metrics", lambda **_kw: self._VAL_DF)
+        fund_calls = {"n": 0}
+        mf_calls = {"n": 0}
+        monkeypatch.setattr(
+            "kan.data.fundamentals.fetch_fundamentals",
+            lambda *a, **k: fund_calls.__setitem__("n", fund_calls["n"] + 1) or {},
+        )
+        monkeypatch.setattr(
+            "kan.data.moneyflow.fetch_moneyflow",
+            lambda **k: mf_calls.__setitem__("n", mf_calls["n"] + 1) or pd.DataFrame(),
+        )
+        out = enrich.enrich_results([_scan()], trade_date="20260529")
+        assert out[0].fundamentals is None
+        assert out[0].moneyflow is None
+        assert fund_calls["n"] == 0  # need_fundamentals 默认 False · 逐股贵 · 不拉
+        assert mf_calls["n"] == 0
+
+    def test_need_fundamentals_attaches(self, monkeypatch):
+        monkeypatch.setattr("kan.data.metrics.fetch_metrics", lambda **_kw: self._VAL_DF)
+        fund_row = pd.Series({
+            "end_date": datetime.date(2025, 12, 31), "roe": 15.2,
+            "netprofit_yoy": 8.5, "or_yoy": 12.1,
+        })
+        monkeypatch.setattr(
+            "kan.data.fundamentals.fetch_fundamentals", lambda syms, **k: {"600519": fund_row},
+        )
+        out = enrich.enrich_results(
+            [_scan()], trade_date="20260529", need_fundamentals=True,
+        )
+        assert out[0].fundamentals.roe == 15.2
+        assert out[0].fundamentals.source == "tushare_fina"
+
+    def test_need_moneyflow_attaches(self, monkeypatch):
+        monkeypatch.setattr("kan.data.metrics.fetch_metrics", lambda **_kw: self._VAL_DF)
+        mf_df = pd.DataFrame([{
+            "symbol": "600519", "trade_date": datetime.date(2026, 5, 29),
+            "net_amount": 5000.0, "buy_elg_amount": 3000.0, "buy_lg_amount": 2000.0,
+            "_source": "tushare_moneyflow",
+        }])
+        monkeypatch.setattr("kan.data.moneyflow.fetch_moneyflow", lambda **k: mf_df)
+        out = enrich.enrich_results(
+            [_scan()], trade_date="20260529", need_moneyflow=True,
+        )
+        assert out[0].moneyflow.net_amount == 5000.0
+        assert out[0].moneyflow.source == "tushare_moneyflow"
