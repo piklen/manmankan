@@ -103,9 +103,19 @@ def find(
         typer.Option("--group", "-g", help="自选股分组 (默认 default 组)"),
     ] = None,
     limit: Annotated[
-        int,
-        typer.Option("--limit", help="输出条数上限 (默认 50)"),
-    ] = 50,
+        int | None,
+        typer.Option(
+            "--limit",
+            help="输出条数上限 (默认 K 线模式 50 · --all 截面模式全量)",
+        ),
+    ] = None,
+    all_stocks: Annotated[
+        bool,
+        typer.Option(
+            "--all",
+            help="全市场截面取数 ~5500 只 (估值/量价/行业分位 · 需 token · 不支持 K 线 filter)",
+        ),
+    ] = False,
     fmt: Annotated[
         export.OutputFormat,
         typer.Option("--format", help="输出格式:terminal(默认)/ md / json(AI 消费)"),
@@ -120,6 +130,7 @@ def find(
       kan find --industry 半导体 --pos 180:lt:10       # 半导体里 180 日跌透
       kan find --exclude-st --pos 180:lt:5             # 排 ST + 位置 filter
       kan find --industry 半导体 --format json         # 整池全维度 JSON(AI 取数)
+      kan find --all --format json                     # 全市场截面取数(估值/量价/行业分位)
 
     Filter MVP (v0.0.6.4):
       --pos PERIOD:OP:VAL    PERIOD 取 3/5/7/10/15/30/60/90/120/180 · OP 取 lt/lte/gt/gte/eq/ne
@@ -156,7 +167,8 @@ def find(
     is_export = fmt is not export.OutputFormat.terminal
 
     # 0. Validate --limit · 防 Python 负切片导致的 silent data loss
-    if limit <= 0:
+    # limit=None 哨兵:K 线模式后续解析为 50 · 截面模式 (--all) 为全量。
+    if limit is not None and limit <= 0:
         _print_err("❌ --limit 必须为正整数 (例 --limit 20)")
         raise typer.Exit(2)
 
@@ -173,7 +185,7 @@ def find(
 
     # 无 filter:terminal 默认报错引导 (人类 UX 不变 · 测试守护);
     # json/md 放开 = AI 取数环节 (整池全维度 · PRD §5 "不带 filter = 数据 provider")。
-    if conditions.is_empty() and not is_export:
+    if conditions.is_empty() and not is_export and not all_stocks:
         _print_err(
             "❌ 至少需要一个 filter (--pos / --resonance / --exclude-st)\n"
             "💡 例: kan find --pos 180:lt:5 (找 180 日位置 < 5% 的股票)\n"
@@ -186,6 +198,53 @@ def find(
         _print_err("❌ --industry / --hot / --theme 三者互斥")
         raise typer.Exit(2)
     source_mode = industry is not None or hot is not None or theme is not None
+
+    # 2.5 全市场截面取数 (--all) · 不走 K 线管线 (截面专用路径 · PRD §3.2) · 早返回不读自选
+    if all_stocks:
+        if source_mode:
+            _print_err("❌ --all 与 --industry / --hot / --theme 互斥")
+            raise typer.Exit(2)
+        if not conditions.is_empty():
+            _print_err(
+                "❌ --all 全市场截面取数不支持 K 线 filter "
+                "(--pos / --resonance / --exclude-st)\n"
+                "   截面只含市场客观事实 + 行业分位 · 位置筛请缩小池 (--industry 等)"
+            )
+            raise typer.Exit(2)
+        if not is_export:
+            _print_err(
+                "❌ --all 截面取数请配 --format json 或 --format md\n"
+                "   (全市场 ~5500 只 · terminal 表格不适合 · json 供 AI 消费)"
+            )
+            raise typer.Exit(2)
+        from kan.core.cross_section import run_cross_section
+        from kan.core.stock_set import AllStocksSet
+
+        cs = run_cross_section(AllStocksSet())
+        if not cs.rows:
+            _print_err(
+                "❌ 全市场截面无数据 · 需配置 tushare token\n"
+                "   (估值/量价/行业分位依赖 tushare · 设 TUSHARE_TOKEN 或 kan config)"
+            )
+            raise typer.Exit(1)
+        cs_rows = cs.rows if limit is None else cs.rows[:limit]
+        query_time = datetime.now().astimezone().isoformat(timespec="seconds")
+        if fmt is export.OutputFormat.json:
+            typer.echo(export.to_json(export.cross_section_payload(
+                cs_rows,
+                query_time=query_time,
+                pool_size=cs.pool_size,
+                data_cutoff=cs.data_cutoff,
+                stale=cs.stale,
+            )))
+        else:  # md
+            typer.echo(export.cross_section_markdown(
+                cs_rows,
+                title="慢慢看 · kan find · A股全市场截面",
+                pool_size=cs.pool_size,
+            ))
+        return
+
     watchlist_pairs = (
         _load_watchlist_pairs(group) if source_mode else _get_watchlist_pairs(group)
     )
@@ -210,8 +269,10 @@ def find(
         raise typer.Exit(1)
 
     # 5. Apply conditions (空 conditions → apply_conditions 返回整池 · 取数语义)
+    # limit 哨兵:K 线模式 None → 50 (截面 --all 已在 step 2.5 早返回)。
+    effective_limit = limit if limit is not None else 50
     matches = apply_conditions(ctx.results, conditions)
-    matches_limited = matches[:limit]
+    matches_limited = matches[:effective_limit]
 
     # 6. Export 分发 (json/md) · 命中 enrich 截面市场指标 → 全维度 metadata
     if is_export:
@@ -243,7 +304,7 @@ def find(
     console.print(
         f"\n[bold]🔍 kan find · {stock_set.name} · "
         f"命中 {len(matches)} / {len(ctx.results)} 只"
-        f"{f' · 限 {limit} 显示' if len(matches) > limit else ''}[/bold]"
+        f"{f' · 限 {effective_limit} 显示' if len(matches) > effective_limit else ''}[/bold]"
     )
 
     if not matches_limited:

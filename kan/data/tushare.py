@@ -523,3 +523,56 @@ def _fetch_tushare_sw_l1_members() -> pd.DataFrame | None:
         debug_log(__name__, "fetch tushare sw members 失败", e)
         cb.record("tushare_sw", ok=False)
         return None
+
+
+# ══════════════════════════════════════════════════════════════════
+# 全市场股票列表 (地基-3) · AllStocksSet 截面池原料 · stock_basic
+# ══════════════════════════════════════════════════════════════════
+
+
+def _fetch_tushare_stock_basic_all() -> pd.DataFrame | None:
+    """TuShare stock_basic 全市场上市股 · AllStocksSet 截面池原料 (地基-3)。
+
+    一次拉全部 list_status=L 上市股 (symbol + name + market) · 熔断 key
+    'tushare_basic' 独立于截面 daily_basic / 申万 (不同接口 / 频率门槛)。
+
+    market 字段供 universe.fetch_all_stocks 排北交所 (真数据 920xxx 段统一
+    market="北交所" · 比代码段正则稳 · 详见 universe.py)。
+
+    Returns:
+        DataFrame (含 symbol / name / market 列) 或 None (未配 token / 熔断 / 失败)。
+    """
+    import pandas as pd
+
+    from kan.infra import circuit_breaker
+
+    token, endpoint = _resolve_config()
+    if not token:
+        return None
+    cb = circuit_breaker.get_breaker()
+    if cb.is_down("tushare_basic"):
+        return None
+    try:
+        data, _err = _post_tushare_api(
+            endpoint=endpoint, token=token, api_name="stock_basic",
+            params={"list_status": "L"},
+            fields="ts_code,symbol,name,market,list_status",
+        )
+        if data is None:
+            cb.record("tushare_basic", ok=False)
+            return None
+        fields = data.get("fields") or []
+        items = data.get("items") or []
+        if not items:
+            cb.record("tushare_basic", ok=False)
+            return None
+        df = pd.DataFrame(items, columns=fields)
+        if "symbol" not in df.columns or "market" not in df.columns:
+            cb.record("tushare_basic", ok=False)
+            return None
+        cb.record("tushare_basic", ok=True)
+        return df
+    except Exception as e:
+        debug_log(__name__, "fetch tushare stock_basic 失败", e)
+        cb.record("tushare_basic", ok=False)
+        return None

@@ -286,6 +286,39 @@ class IndustrySet:
         return len(self.pairs())
 
 
+@dataclass
+class AllStocksSet:
+    """A 股全市场集合 · tushare stock_basic 全部上市股 (排北交所 · 含 ST)。
+
+    kan find --all 的截面池 · 走截面专用路径 (core.cross_section.run_cross_section) ·
+    不走 K 线管线 (全市场逐股 auto-fetch K 线 = 灾难 · PRD §3.2)。lazy:.pairs() 才
+    拉 universe。meta() → None (同 WatchlistSet · highlight/index_kline 对全市场无意义)。
+    """
+
+    name: str = "A股全市场"
+    _pairs: list[tuple[str, str]] | None = None
+
+    def _resolve(self) -> list[tuple[str, str]]:
+        if self._pairs is None:
+            from kan.data.universe import fetch_all_stocks
+
+            self._pairs = fetch_all_stocks()
+        return self._pairs
+
+    def codes(self) -> list[str]:
+        return [c for c, _ in self._resolve()]
+
+    def pairs(self) -> list[tuple[str, str]]:
+        return list(self._resolve())
+
+    def meta(self) -> None:
+        """全市场集合无 meta (highlight/index_kline/rank_map 仅对 industry/hot/theme 有意义)。"""
+        return None
+
+    def __len__(self) -> int:
+        return len(self._resolve())
+
+
 # ───────────────────── factory ─────────────────────
 
 
@@ -297,9 +330,11 @@ def from_flags(
     watchlist_pairs: list[tuple[str, str]] | None = None,
     only_watchlist: bool = False,
     watchlist_group: str | None = None,
+    all_stocks: bool = False,
 ) -> StockSet:
     """从 CLI flags 构造对应 StockSet (一类 factory)。
 
+    - all_stocks=True → AllStocksSet (全市场截面池 · 与 industry/hot/theme 互斥)
     - 三者全 None → WatchlistSet · 走 watchlist_group 指定组 (不指定走 default)
     - 任一非 None → 对应 Set · 同时把 watchlist_pairs + only_watchlist 注入 (算 highlight + filter)
     - 任意两个或三个同时非 None → ValueError (互斥)
@@ -309,7 +344,14 @@ def from_flags(
         watchlist_pairs: 自选股 pairs · 用来算 meta.highlight (industry/hot/theme 集合 ∩ 自选)
         only_watchlist: True 时 set.pairs() = source 集合 ∩ 自选 (要求 watchlist_pairs 非空)
         watchlist_group: 选 WatchlistSet 的具名组 (None 走 default · 等价 v0.0.6 行为)
+        all_stocks: True → AllStocksSet (全市场 · 与 industry/hot/theme 互斥)
     """
+    if all_stocks:
+        if any(x is not None for x in (industry, hot, theme)):
+            raise ValueError(
+                "all_stocks 与 industry / hot / theme 互斥 · 同时只能指定一个池"
+            )
+        return AllStocksSet()
     given = sum(1 for x in (industry, hot, theme) if x is not None)
     if given > 1:
         raise ValueError(
@@ -338,6 +380,7 @@ def from_flags(
 
 
 __all__ = [
+    "AllStocksSet",
     "HotRankSet",
     "IndustrySet",
     "StockSet",
