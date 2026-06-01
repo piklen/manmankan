@@ -30,6 +30,17 @@ class PeriodResult(BaseModel):
     gain_pct: float | None = None  # 近 period 日涨幅 % (K 线衍生 · 不足 period+1 根→None)
 
 
+class CorporateActionMarker(BaseModel):
+    """除权除息事件标记 · 只承载客观事件与参考价,不做解释性判断。"""
+
+    ex_date: date                    # 除权除息日
+    record_date: date | None = None  # 股权登记日
+    cash_div_tax: float | None = None  # 每股税前现金分红
+    stk_div: float | None = None       # 每股送转
+    reference_price: float | None = None  # 按前一交易日收盘与分红送转粗算的除权除息参考价
+    source: str | None = None
+
+
 class StockScanResult(BaseModel):
     symbol: str
     name: str
@@ -42,6 +53,13 @@ class StockScanResult(BaseModel):
     limit_up: bool = False
     limit_down: bool = False
     up_days: int = 0  # 连阳天数 (candle 口径 · close>open 连续根数 · 当前非阳线=0)
+    ma_10: float | None = None        # 10 日均线 (前复权价格口径)
+    ma_20: float | None = None        # 20 日均线 (前复权价格口径)
+    recent_low_20: float | None = None  # 近 20 日最低价 (客观价位 · 非信号)
+    pe_ttm: float | None = None       # PE TTM (scan 行内联裸值 · 无数据为 None)
+    moneyflow_5d_net_amount: float | None = None  # 近 5 个交易日主力净额合计 (万元)
+    moneyflow_5d_end_date: date | None = None
+    corporate_action: CorporateActionMarker | None = None
 
 
 class ValuationMetrics(BaseModel):

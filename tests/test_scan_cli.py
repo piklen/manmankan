@@ -448,6 +448,76 @@ def test_scan_format_md(scan_runner):
     assert "600519" in result.output
 
 
+def test_scan_codes_filters_to_explicit_pool(scan_runner, monkeypatch):
+    """`kan scan --codes` 只把显式代码池喂给 scan_batch,不读自选。"""
+    import json as _json
+    from datetime import date
+
+    from kan.app import app
+    from kan.core.models import PeriodResult, StockScanResult
+
+    pairs = [("600519", "贵州茅台"), ("000858", "五粮液")]
+    monkeypatch.setattr(
+        "kan.cli.scan_cmds._resolve_code_pairs",
+        lambda raw, command: pairs,
+    )
+    monkeypatch.setattr(
+        "kan.cli.scan_cmds._get_watchlist_pairs",
+        lambda group=None: (_ for _ in ()).throw(AssertionError("不应读取自选")),
+    )
+
+    captured = {}
+
+    def _fake_scan(input_pairs, mode="low"):
+        captured["pairs"] = input_pairs
+        return [
+            StockScanResult(
+                symbol=s, name=n, current_price=100.0, scan_date=date(2026, 5, 14),
+                periods=[PeriodResult(
+                    period=3, n_low=90.0, n_high=110.0, position_pct=50.0,
+                    at_low=False, at_high=False,
+                )],
+                low_resonance=0, high_resonance=0,
+            )
+            for s, n in input_pairs
+        ]
+
+    monkeypatch.setattr("kan.core.scanner.scan_batch", _fake_scan)
+    result = scan_runner.invoke(app, ["scan", "--codes", "600519,000858", "--format", "json"])
+    assert result.exit_code == 0, result.output
+    assert captured["pairs"] == pairs
+    data = _json.loads(result.output[result.output.index("{"):])
+    assert [r["symbol"] for r in data["results"]] == ["600519", "000858"]
+
+
+def test_scan_positional_codes_supported(scan_runner, monkeypatch):
+    from kan.app import app
+
+    captured = {}
+
+    def fake_resolve(raw, command):
+        captured["raw"] = raw
+        captured["command"] = command
+        return [("600519", "贵州茅台")]
+
+    monkeypatch.setattr("kan.cli.scan_cmds._resolve_code_pairs", fake_resolve)
+    result = scan_runner.invoke(app, ["scan", "600519,000858", "--format", "json"])
+    assert result.exit_code == 0, result.output
+    assert captured == {"raw": "600519,000858", "command": "kan scan"}
+
+
+def test_scan_codes_rejects_diff(scan_runner, monkeypatch):
+    from kan.app import app
+
+    monkeypatch.setattr(
+        "kan.cli.scan_cmds._resolve_code_pairs",
+        lambda raw, command: [("600519", "贵州茅台")],
+    )
+    result = scan_runner.invoke(app, ["scan", "--codes", "600519", "--diff"])
+    assert result.exit_code == 2
+    assert "--diff" in result.output
+
+
 def test_low_format_json(scan_runner):
     """`kan low 30 --format json` · 不 crash · 输出合法 JSON"""
     import json as _json

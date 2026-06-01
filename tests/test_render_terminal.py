@@ -51,6 +51,18 @@ def _stock(symbol="600519", name="贵州茅台", **kw):
     return StockScanResult(**defaults)
 
 
+def _stock_with_context(**kw):
+    defaults = {
+        "pe_ttm": 20.4,
+        "moneyflow_5d_net_amount": 12345.0,
+        "ma_10": 101.23,
+        "ma_20": 98.76,
+        "recent_low_20": 90.12,
+    }
+    defaults.update(kw)
+    return _stock(**defaults)
+
+
 def _freshness(cutoff=date(2026, 5, 21), fetched_at="2026-05-21 23:00:00"):
     return Freshness(
         data_cutoff=cutoff,
@@ -158,6 +170,24 @@ def test_scan_table_basic_columns_and_row():
     col_headers = [c.header for c in table.columns]
     assert col_headers == ["股票", "现价", "30日", "60日", "180日", "共振"]
     assert table.row_count == 1
+
+
+def test_scan_table_context_columns():
+    table = terminal.scan_table(
+        _ctx(),
+        [_stock_with_context()],
+        display_periods=[30],
+        high_mode=False,
+        show_context=True,
+    )
+    col_headers = [c.header for c in table.columns]
+    assert col_headers == [
+        "股票", "现价", "PE", "5日主力(万)", "10日线", "20日线", "20日低",
+        "除权除息", "30日", "共振",
+    ]
+    assert table.columns[2]._cells == ["20.4"]
+    assert table.columns[3]._cells == ["12,345"]
+    assert table.columns[4]._cells == ["101.23"]
 
 
 def test_scan_table_hot_adds_rank_column_and_value():

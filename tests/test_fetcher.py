@@ -61,9 +61,13 @@ def test_fetch_kline_normalizes_columns(temp_data_dir, force_eastmoney_path, fak
     with patch("akshare.stock_zh_a_hist", return_value=fake_akshare_df):
         df = fetcher.fetch_kline("600519", days=180, force=True)
 
-    assert set(df.columns) == {"date", "open", "high", "low", "close", "volume", "amount", "_source"}
+    assert set(df.columns) == {
+        "date", "open", "high", "low", "close",
+        "volume", "amount", "_source", "_adjust",
+    }
     assert len(df) == 3
     assert (df["_source"] == "eastmoney").all()  # force_eastmoney_path fixture 走东财路径
+    assert (df["_adjust"] == "qfq").all()
 
 
 def test_fetch_kline_writes_cache(temp_data_dir, force_eastmoney_path, fake_akshare_df):
@@ -109,6 +113,34 @@ def test_is_fresh_yesterday_cache(temp_data_dir):
     import os
     os.utime(cache, (yesterday, yesterday))
     assert not fetcher.is_fresh("600519")
+
+
+def test_is_fresh_legacy_tushare_raw_cache_is_stale(temp_data_dir):
+    """旧版 TuShare daily 缓存没有 _adjust=qfq 标记 · 即使日期新也要重拉。"""
+    cache = temp_data_dir / "600519.parquet"
+    pd.DataFrame({
+        "date": [datetime(2026, 5, 8).date()],
+        "open": [100.0], "high": [101.0], "low": [99.0], "close": [100.5],
+        "_source": ["tushare"],
+    }).to_parquet(cache, index=False)
+
+    assert not fetcher.is_fresh("600519")
+
+
+def test_is_fresh_tushare_qfq_cache_can_be_fresh(temp_data_dir, monkeypatch):
+    cache = temp_data_dir / "600519.parquet"
+    pd.DataFrame({
+        "date": [datetime(2026, 5, 8).date()],
+        "open": [100.0], "high": [101.0], "low": [99.0], "close": [100.5],
+        "_source": ["tushare"], "_adjust": ["qfq"],
+    }).to_parquet(cache, index=False)
+    monkeypatch.setattr(
+        trading_calendar, "latest_trade_date",
+        lambda *a, **kw: date(2026, 5, 8),
+    )
+    trading_calendar.clear_memo()
+
+    assert fetcher.is_fresh("600519")
 
 
 def test_get_cached_returns_none_when_missing(temp_data_dir):
@@ -165,6 +197,7 @@ def test_get_cached_fills_missing_optional_columns(temp_data_dir):
     assert pd.isna(df["volume"].iloc[0])
     assert pd.isna(df["amount"].iloc[0])
     assert df["_source"].iloc[0] == "unknown"  # migration 行为
+    assert df["_adjust"].iloc[0] == "unknown"
 
 
 # --- _normalize_kline ---
@@ -181,6 +214,7 @@ class TestNormalizeKline:
         assert df["close"].dtype == "float64"
         assert df["date"].iloc[0].__class__.__name__ == "date"
         assert df["_source"].iloc[0] == "test"
+        assert df["_adjust"].iloc[0] == "unknown"
 
     def test_fills_missing_optional_columns(self):
         raw = pd.DataFrame({
@@ -190,6 +224,7 @@ class TestNormalizeKline:
         df = fetcher._normalize_kline(raw)
         assert "volume" in df.columns
         assert pd.isna(df["volume"].iloc[0])
+        assert df["_adjust"].iloc[0] == "unknown"
 
     def test_raises_on_missing_required_column(self):
         raw = pd.DataFrame({"date": ["2026-05-08"], "open": [100]})
@@ -412,7 +447,9 @@ def test_load_with_migration_legacy_adds_unknown(temp_data_dir):
 
     df = fetcher._load_with_migration(cache)
     assert "_source" in df.columns
+    assert "_adjust" in df.columns
     assert (df["_source"] == "unknown").all()
+    assert (df["_adjust"] == "unknown").all()
     assert len(df) == len(old_df)  # zero-loss
 
 
@@ -438,6 +475,7 @@ def test_load_with_migration_writes_back_atomic(temp_data_dir, monkeypatch):
     assert len(calls) == 1
     reloaded = pd.read_parquet(cache)
     assert "_source" in reloaded.columns
+    assert "_adjust" in reloaded.columns
 
 
 def test_load_with_migration_idempotent(temp_data_dir, monkeypatch):
@@ -446,7 +484,8 @@ def test_load_with_migration_idempotent(temp_data_dir, monkeypatch):
     df_with_source = pd.DataFrame({
         "date": [datetime(2026, 5, 8).date()],
         "open": [100.0], "high": [101.0], "low": [99.0], "close": [100.5],
-        "volume": [10000.0], "amount": [1e6], "_source": ["baostock"],
+        "volume": [10000.0], "amount": [1e6],
+        "_source": ["baostock"], "_adjust": ["qfq"],
     })
     df_with_source.to_parquet(cache, index=False)
 
@@ -472,6 +511,7 @@ def test_get_cached_triggers_migration(temp_data_dir):
     df = fetcher.get_cached("600519")
     assert df is not None
     assert df["_source"].iloc[0] == "unknown"
+    assert df["_adjust"].iloc[0] == "unknown"
 
 
 def test_read_cutoff_unaffected_by_migration(temp_data_dir):
@@ -558,3 +598,4 @@ class TestTushareProDispatch:
         df = fetcher.fetch_kline("600519", force=True)
         assert not baostock_called["hit"]
         assert (df["_source"] == "tushare").all()
+        assert (df["_adjust"] == "qfq").all()

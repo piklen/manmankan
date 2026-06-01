@@ -158,3 +158,56 @@ class TestEnrichFundamentalsMoneyflow:
         )
         assert out[0].moneyflow.net_amount == 5000.0
         assert out[0].moneyflow.source == "tushare_moneyflow"
+
+
+class TestEnrichScanRows:
+    def test_attaches_pe_moneyflow_5d_and_corporate_action(self, monkeypatch):
+        dates = [datetime.date(2026, 5, d) for d in [25, 26, 27, 28, 29]]
+        monkeypatch.setattr(enrich, "_recent_trade_dates", lambda end, count: dates)
+        monkeypatch.setattr(
+            "kan.data.metrics.fetch_metrics",
+            lambda **_kw: pd.DataFrame([{
+                "symbol": "600519",
+                "trade_date": datetime.date(2026, 5, 29),
+                "pe_ttm": 20.04,
+                "_source": "tushare_metrics",
+            }]),
+        )
+
+        def fake_moneyflow(trade_date=None, symbols=None, force=False):
+            value = int(trade_date[-2:]) * 10.0
+            return pd.DataFrame([{
+                "symbol": "600519",
+                "trade_date": datetime.date(2026, 5, int(trade_date[-2:])),
+                "net_amount": value,
+                "_source": "tushare_moneyflow",
+            }])
+
+        monkeypatch.setattr("kan.data.moneyflow.fetch_moneyflow", fake_moneyflow)
+        kline = pd.DataFrame({
+            "date": [datetime.date(2026, 5, 27), datetime.date(2026, 5, 28), datetime.date(2026, 5, 29)],
+            "open": [10.0, 10.0, 9.8],
+            "high": [11.0, 10.5, 10.2],
+            "low": [9.5, 9.7, 9.6],
+            "close": [10.0, 10.2, 10.1],
+        })
+        monkeypatch.setattr("kan.data.fetcher.get_cached", lambda _sym: kline)
+        monkeypatch.setattr(
+            "kan.data.dividend.latest_event_between",
+            lambda symbol, start, end: {
+                "ex_date": datetime.date(2026, 5, 29),
+                "record_date": datetime.date(2026, 5, 28),
+                "cash_div_tax": 0.2,
+                "cash_div": 0.18,
+                "stk_div": 0.0,
+                "_source": "tushare_dividend",
+            },
+        )
+
+        out = enrich.enrich_scan_rows([_scan()], data_cutoff=datetime.date(2026, 5, 29))
+        row = out[0]
+        assert row.pe_ttm == 20.04
+        assert row.moneyflow_5d_net_amount == 1350.0
+        assert row.moneyflow_5d_end_date == datetime.date(2026, 5, 29)
+        assert row.corporate_action.ex_date == datetime.date(2026, 5, 29)
+        assert row.corporate_action.reference_price == 10.0

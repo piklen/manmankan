@@ -38,7 +38,7 @@ if TYPE_CHECKING:
 # 新增列只需追加到 KLINE_OPTIONAL · 下游按列名读取 · 不受影响。
 
 KLINE_REQUIRED = ["date", "open", "high", "low", "close"]
-KLINE_OPTIONAL = ["volume", "amount", "_source"]
+KLINE_OPTIONAL = ["volume", "amount", "_source", "_adjust"]
 KLINE_COLUMNS = KLINE_REQUIRED + KLINE_OPTIONAL
 
 # 6 位纯数字股票代码 · 防止 path traversal
@@ -62,7 +62,12 @@ def _normalize_kline(
 
     for col in KLINE_OPTIONAL:
         if col not in df.columns:
-            df[col] = float("nan") if col != "_source" else source
+            if col == "_source":
+                df[col] = source
+            elif col == "_adjust":
+                df[col] = _default_adjustment(source)
+            else:
+                df[col] = float("nan")
 
     df = df[KLINE_COLUMNS].copy()
     df["date"] = pd.to_datetime(df["date"], errors="coerce").dt.date
@@ -79,10 +84,18 @@ def _normalize_kline(
             "数据源 %s K线含无法解析的数值 · 已置 NaN: %s%s", source, detail, sym_tag
         )
     df["_source"] = source
+    df["_adjust"] = df["_adjust"].fillna(_default_adjustment(source)).astype(str)
 
     df = df.sort_values("date").reset_index(drop=True)
     df = df.dropna(subset=["date", "close"])
     return df
+
+
+def _default_adjustment(source: str) -> str:
+    """内置 K 线源的价格复权口径标记 · 用于缓存迁移与排查。"""
+    if source in {"tushare", "baostock", "eastmoney", "sina", "tencent"}:
+        return "qfq"
+    return "unknown"
 
 
 # ── 通用工具 ─────────────────────────────────────────────────────────
@@ -138,11 +151,43 @@ def _load_with_migration(path: Path) -> pd.DataFrame:
     from kan.storage.paths import atomic_write_parquet
 
     df = pd.read_parquet(path)
+    changed = False
+    log_notes: list[str] = []
     if "_source" not in df.columns:
         df["_source"] = "unknown"
+        changed = True
+        log_notes.append("legacy → _source=unknown")
+    if "_adjust" not in df.columns:
+        sources = df["_source"].dropna() if "_source" in df.columns else []
+        source = str(sources.iloc[0]) if len(sources) else "unknown"
+        df["_adjust"] = _default_adjustment(source)
+        value = df["_adjust"].iloc[0] if not df.empty else "unknown"
+        changed = True
+        log_notes.append(f"legacy → _adjust={value}")
+    if changed:
         atomic_write_parquet(df, path)
-        debug_log(__name__, f"_load_with_migration({path.name})", "legacy → _source=unknown")
+        debug_log(__name__, f"_load_with_migration({path.name})", "; ".join(log_notes))
     return df
+
+
+def _is_legacy_tushare_raw_cache(path: Path) -> bool:
+    """旧版 TuShare daily 未复权缓存识别 · 返回 True 时强制重新 fetch。"""
+    try:
+        import pandas as pd
+
+        try:
+            df = pd.read_parquet(path, columns=["_source", "_adjust"])
+        except Exception:
+            df = pd.read_parquet(path, columns=["_source"])
+            df["_adjust"] = "unknown"
+        if df.empty:
+            return False
+        source = df["_source"].astype(str).str.lower()
+        adjust = df["_adjust"].astype(str).str.lower()
+        return bool(((source == "tushare") & (adjust != "qfq")).any())
+    except Exception as e:
+        debug_log(__name__, f"_is_legacy_tushare_raw_cache({path.name})", e)
+        return False
 
 
 def _is_cache_fresh(path: Path) -> bool:
@@ -153,6 +198,13 @@ def _is_cache_fresh(path: Path) -> bool:
     误判为"今日数据齐了"整天不刷新 · scan 显示昨日涨停名单。
     """
     if not path.exists():
+        return False
+    if _is_legacy_tushare_raw_cache(path):
+        debug_log(
+            __name__,
+            f"_is_cache_fresh({path.name})",
+            "legacy tushare daily cache → stale",
+        )
         return False
     last_date = _read_cutoff_from_parquet(path)
     if last_date is None:

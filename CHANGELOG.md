@@ -12,6 +12,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **`kan find --pe / --roe / --moneyflow`** · 估值 + 质量（ROE / 净利·营收增速）+ 资金（主力净额）filter · K 线池（`--industry` / 自选）与全市场 `--all` 截面两路支持（`--roe` 逐股 · `--all` 不支持）· 按用户 filter 输出原始值 · `--format json|md` 带 triggered 审计 · disclaimer 强制
 - **`kan find --all`** · 全市场截面取数 · 一次拉全市场估值 / 量价 / 市值 + 行业内分位 + 行业中位对照 · 供外部 AI 筛选 · `--format json|md` · 需 tushare token · 排北交所 · 含 ST · disclaimer 强制
 - **`kan find --codes`** · 支持逗号 / 空格 / 换行分隔的自定义代码池,`--codes -` 可从 stdin 读取 · 外部候选集可回传后继续叠加位置 / 共振 / 估值 / 资金 / 技术过滤
+- **`kan scan --codes` / `kan scan <codes>`** · 支持指定 1-N 只代码直接扫描 · 输出仅包含显式代码池 · 不写入自选扫描快照
+- **scan 行内联 AI 消费字段** · 每行增加 PE TTM、近 5 个交易日主力净额合计、10/20 日线、近 20 日低价与除权除息事件标记(有数据时显示)
 - **`kan find --all` K 线预计算筛选** · 全市场模式新增位置 / 共振 / 区间涨幅 / 连阳裸值快照,支持 `--pos` / `--resonance` / `--gain` / `--up-days` / `--exclude-st` 与截面 filter 组合
 - **`kan board rank`** · 板块级榜单 · 支持行业 / 题材按主力净额、区间涨幅、位置百分位排序 · `--format json|md`
 - **`kan theme trend --min-streak / --sort`** · 题材连续涨跌榜开放 1 天阈值,新增按最新单日涨幅 / 题材资金排序
@@ -20,6 +22,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - 北交所 2024 新启用 `920xxx` 代码段被误判为上证（`.SH`）· 修正 `ts_code` 交易所后缀映射为 `.BJ`（影响北交所个股的 tushare K 线 / 截面拉取）
 - `kan compare` 不再在超过 8 只时直接拒绝 · 终端自动按 8 只一页展示,JSON / Markdown 保留全量输出
+- TuShare K 线顶档源改用 `stk_factor_pro` 前复权 OHLC,并给 K 线缓存写入 `_adjust=qfq`;旧版 TuShare 未复权缓存会自动判 stale 重新拉取,避免除权除息日前后位置跳变
 
 ### Internal
 

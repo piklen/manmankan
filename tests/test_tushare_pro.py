@@ -241,6 +241,21 @@ class TestToKlineDf:
         assert tushare._to_kline_df(None) is None
         assert tushare._to_kline_df({}) is None
 
+    def test_maps_qfq_fields(self):
+        data = {
+            "fields": [
+                "trade_date", "open_qfq", "high_qfq", "low_qfq", "close_qfq",
+                "vol", "amount",
+            ],
+            "items": [
+                ["20260102", 1490.0, 1520.0, 1480.0, 1510.0, 100000.0, 150000000.0],
+            ],
+        }
+        df = tushare._to_qfq_kline_df(data)
+        assert list(df.columns) == ["date", "open", "high", "low", "close", "volume", "amount"]
+        assert df.iloc[0]["open"] == 1490.0
+        assert df.iloc[0]["close"] == 1510.0
+
 
 class TestFetchTushare:
     """_fetch_tushare 集成：resolver + circuit_breaker + client + DataFrame"""
@@ -267,12 +282,20 @@ class TestFetchTushare:
         sample = {
             "code": 0,
             "data": {
-                "fields": ["trade_date", "open", "high", "low", "close", "vol", "amount"],
-                "items": [["20260102", 1500.0, 1520.0, 1490.0, 1510.0, 100000.0, 150000000.0]],
+                "fields": [
+                    "trade_date", "open_qfq", "high_qfq", "low_qfq", "close_qfq",
+                    "vol", "amount",
+                ],
+                "items": [[
+                    "20260102", 1490.0, 1520.0, 1480.0, 1510.0,
+                    100000.0, 150000000.0,
+                ]],
             },
         }
+        captured = {}
 
         def fake_post(url, json, timeout):
+            captured["json"] = json
             mock = MagicMock()
             mock.status_code = 200
             mock.json.return_value = sample
@@ -288,7 +311,10 @@ class TestFetchTushare:
         assert df is not None
         assert "date" in df.columns
         assert "volume" in df.columns
+        assert df.iloc[0]["low"] == 1480.0
         assert len(df) == 1
+        assert captured["json"]["api_name"] == "stk_factor_pro"
+        assert "open_qfq" in captured["json"]["fields"]
 
     def test_circuit_breaker_skips_when_down(self, temp_env, monkeypatch):
         from kan.infra import circuit_breaker

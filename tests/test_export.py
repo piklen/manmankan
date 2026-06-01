@@ -110,6 +110,24 @@ def test_scan_markdown_limit_up_tag():
     assert "涨停" in md
 
 
+def test_scan_markdown_context_columns():
+    md = scan_markdown(
+        [_result(
+            pe_ttm=20.4,
+            moneyflow_5d_net_amount=12345.0,
+            ma_10=101.23,
+            ma_20=98.76,
+            recent_low_20=90.12,
+        )],
+        periods=[3],
+        mode="low",
+        title="t",
+        show_context=True,
+    )
+    assert "| 股票 | 现价 | PE | 5日主力(万) | 10日线 | 20日线 | 20日低 | 除权除息 | 3日 | 共振 |" in md
+    assert "| 贵州茅台 600519 | 100.00 | 20.4 | 12,345 | 101.23 | 98.76 | 90.12 | - | 50% | ×1 |" in md
+
+
 def _fake_trend(**kw):
     defaults = {"streak": -2, "streak_pct": 1.5, "direction": "跌2天"}
     defaults.update(kw)

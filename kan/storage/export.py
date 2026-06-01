@@ -124,14 +124,28 @@ def scan_markdown(
     periods: list[int],
     mode: str,
     title: str,
+    show_context: bool = False,
 ) -> str:
     """kan scan --format md · 全周期(导出不做终端宽度裁剪)。"""
-    headers = ["股票", "现价", *[f"{p}日" for p in periods], "共振"]
+    headers = ["股票", "现价"]
+    if show_context:
+        headers += ["PE", "5日主力(万)", "10日线", "20日线", "20日低", "除权除息"]
+    headers += [f"{p}日" for p in periods]
+    headers.append("共振")
     rows: list[list[str]] = []
     for r in results:
         name_short = r.name.replace(" ", "")
         tag = " 涨停" if r.limit_up else (" 跌停" if r.limit_down else "")
         cells = [f"{name_short} {r.symbol}{tag}", f"{r.current_price:.2f}"]
+        if show_context:
+            cells += [
+                _scan_num(getattr(r, "pe_ttm", None), digits=1),
+                _money_wan(getattr(r, "moneyflow_5d_net_amount", None)),
+                _scan_num(getattr(r, "ma_10", None)),
+                _scan_num(getattr(r, "ma_20", None)),
+                _scan_num(getattr(r, "recent_low_20", None)),
+                _corporate_action_cell(getattr(r, "corporate_action", None)),
+            ]
         for p in periods:
             pr = next((x for x in r.periods if x.period == p), None)
             cells.append("-" if pr is None else _pct_cell(pr, mode=mode))
@@ -139,6 +153,23 @@ def scan_markdown(
         cells.append(f"×{resonance}" if resonance else "")
         rows.append(cells)
     return f"# {title}\n\n{md_table(headers, rows)}\n\n{_disclaimer_quote()}"
+
+
+def _scan_num(value: float | None, *, digits: int = 2) -> str:
+    return "-" if value is None else f"{value:.{digits}f}"
+
+
+def _money_wan(value: float | None) -> str:
+    return "-" if value is None else f"{value:,.0f}"
+
+
+def _corporate_action_cell(action) -> str:
+    if action is None:
+        return "-"
+    text = action.ex_date.isoformat()
+    if action.reference_price is not None:
+        text += f" @{action.reference_price:.2f}"
+    return text
 
 
 # ── low / high ────────────────────────────────────────────────────────

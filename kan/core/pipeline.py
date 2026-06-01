@@ -205,6 +205,7 @@ class DataCtx:
       - meta:     BoardMeta / HotMeta / ThemeMeta / None (无 source 时)
       - results:  compute(targets, **kwargs) 的原始返回 (未做命令侧过滤)
       - freshness: 基于 results 的 symbols 聚合的 Freshness
+      - source_name: StockSet 展示名 (自选股 / 自定义代码池等)
 
     frozen=True · 命令侧从 ctx 解构后做 filter / format · 不回填到 ctx。
     """
@@ -213,6 +214,7 @@ class DataCtx:
     meta: BoardMeta | HotMeta | ThemeMeta | None
     results: list
     freshness: Freshness
+    source_name: str = ""
 
 
 def run_data_pipeline(
@@ -250,4 +252,10 @@ def run_data_pipeline(
     _auto_fetch_stale(targets)
     results = compute(targets, **compute_kwargs)
     freshness = freshness_of(r.symbol for r in results)
-    return DataCtx(targets=targets, meta=meta, results=results, freshness=freshness)
+    return DataCtx(
+        targets=targets,
+        meta=meta,
+        results=results,
+        freshness=freshness,
+        source_name=getattr(stock_set, "name", ""),
+    )

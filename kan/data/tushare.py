@@ -232,15 +232,48 @@ def _to_kline_df(data: dict | None) -> pd.DataFrame | None:
     return df
 
 
+_QFQ_KLINE_FIELDS = "trade_date,open_qfq,high_qfq,low_qfq,close_qfq,vol,amount"
+"""stk_factor_pro 前复权 K 线字段 · 用于 TuShare KlineSource 顶档。
+
+daily 接口返回未复权价格,会在除权除息日前后制造位置百分位跳变;scan/fetch 的
+K 线缓存必须保持前复权口径,与 baostock / akshare qfq fallback 对齐。
+"""
+
+_QFQ_FIELD_MAP = {
+    "trade_date": "date",
+    "open_qfq": "open",
+    "high_qfq": "high",
+    "low_qfq": "low",
+    "close_qfq": "close",
+    "vol": "volume",
+}
+
+
+def _to_qfq_kline_df(data: dict | None) -> pd.DataFrame | None:
+    """TuShare stk_factor_pro data 块 → manmankan KLINE 标准列 (前复权)。"""
+    import pandas as pd
+
+    if not data:
+        return None
+    fields = data.get("fields") or []
+    items = data.get("items") or []
+    if not items:
+        return None
+    df = pd.DataFrame(items, columns=fields)
+    if "trade_date" not in df.columns:
+        return None
+    return df.rename(columns=_QFQ_FIELD_MAP)
+
+
 def _fetch_tushare(symbol: str, start: str) -> pd.DataFrame | None:
-    """TuShare Pro 日 K 入口 · fetch_kline 顶优先调用。
+    """TuShare Pro 前复权日 K 入口 · fetch_kline 顶优先调用。
 
     Args:
       symbol: 6 位股票代码
       start:  YYYYMMDD 起始日期（与 fetcher.py 其它 _fetch_* 函数一致）
 
     Returns:
-      DataFrame（manmankan KLINE 标准列）或 None（未配 token / 熔断 / 失败）。
+      DataFrame（manmankan KLINE 标准列,前复权）或 None（未配 token / 熔断 / 失败）。
       失败时上游 fetch_kline 会 fallback 到 baostock → akshare → 腾讯。
     """
     from kan.infra import circuit_breaker
@@ -262,16 +295,16 @@ def _fetch_tushare(symbol: str, start: str) -> pd.DataFrame | None:
         data, _err = _post_tushare_api(
             endpoint=endpoint,
             token=token,
-            api_name="daily",
+            api_name="stk_factor_pro",
             params={"ts_code": ts_code, "start_date": start},
-            fields="trade_date,open,high,low,close,vol,amount",
+            fields=_QFQ_KLINE_FIELDS,
         )
         # 个股 daily 走多源 fallback chain (TuShare → baostock → akshare → 腾讯)
         # · error 已被 _post_tushare_api 写进 debug_log · 不上抛 caller
         if data is None:
             cb.record("tushare", ok=False)
             return None
-        df = _to_kline_df(data)
+        df = _to_qfq_kline_df(data)
         if df is None or df.empty:
             cb.record("tushare", ok=False)
             return None
@@ -283,12 +316,12 @@ def _fetch_tushare(symbol: str, start: str) -> pd.DataFrame | None:
         return None
 
 
-_DAILY_BARS_FIELDS = "ts_code,trade_date,open,high,low,close,vol,amount"
-"""daily 按交易日拉全市场日 K 字段 · 供 --all K 线类 filter 的批量预计算缓存。"""
+_DAILY_BARS_FIELDS = "ts_code,trade_date,open_qfq,high_qfq,low_qfq,close_qfq,vol,amount"
+"""stk_factor_pro 按交易日拉全市场前复权日 K 字段 · 供 --all K 线类 filter 的批量预计算缓存。"""
 
 
 def _to_daily_bars_df(data: dict | None) -> pd.DataFrame | None:
-    """TuShare daily(trade_date=...) data 块 → 标准日 K 截面 DataFrame。"""
+    """TuShare stk_factor_pro(trade_date=...) data 块 → 标准日 K 截面 DataFrame。"""
     import pandas as pd
 
     if not data:
@@ -301,12 +334,12 @@ def _to_daily_bars_df(data: dict | None) -> pd.DataFrame | None:
     if "ts_code" not in df.columns:
         return None
     df["symbol"] = df["ts_code"].map(_strip_ts_suffix)
-    df = df.drop(columns=["ts_code"]).rename(columns=_FIELD_MAP)
+    df = df.drop(columns=["ts_code"]).rename(columns=_QFQ_FIELD_MAP)
     return df
 
 
 def _fetch_tushare_daily_bars(trade_date: str) -> pd.DataFrame | None:
-    """TuShare daily 单日全市场日 K 截面 · `kan find --all` 时序预计算原料。
+    """TuShare 前复权单日全市场日 K 截面 · `kan find --all` 时序预计算原料。
 
     与 `_fetch_tushare(symbol, start)` 不同:这里按 trade_date 一次拉全市场 OHLC，
     用于批量计算位置 / 涨幅 / 连阳等裸值。熔断 key 独立，避免影响逐股 K 线源。
@@ -325,7 +358,7 @@ def _fetch_tushare_daily_bars(trade_date: str) -> pd.DataFrame | None:
         data, _err = _post_tushare_api(
             endpoint=endpoint,
             token=token,
-            api_name="daily",
+            api_name="stk_factor_pro",
             params={"trade_date": trade_date},
             fields=_DAILY_BARS_FIELDS,
         )
@@ -877,6 +910,70 @@ def _fetch_tushare_moneyflow(trade_date: str) -> pd.DataFrame | None:
     except Exception as e:
         debug_log(__name__, "fetch tushare moneyflow 失败", e)
         cb.record("tushare_moneyflow", ok=False)
+        return None
+
+
+# ══════════════════════════════════════════════════════════════════
+# 分红送股 · 除权除息事件标记 (P1 scan context)
+# ══════════════════════════════════════════════════════════════════
+
+_DIVIDEND_FIELDS = "ts_code,record_date,ex_date,cash_div_tax,cash_div,stk_div,div_proc"
+"""dividend 拉取字段 · 用于 scan 标记除权除息事件。
+
+cash_div_tax=每股税前分红;stk_div=每股送转。输出只做事件标记与参考价粗算,
+不做分红流程解释或未来日历推断。
+"""
+
+
+def _to_dividend_df(data: dict | None) -> pd.DataFrame | None:
+    """TuShare dividend data 块 → DataFrame · ts_code → symbol。"""
+    import pandas as pd
+
+    if not data:
+        return None
+    fields = data.get("fields") or []
+    items = data.get("items") or []
+    if not items:
+        return None
+    df = pd.DataFrame(items, columns=fields)
+    if "ts_code" not in df.columns:
+        return None
+    df["symbol"] = df["ts_code"].map(_strip_ts_suffix)
+    return df.drop(columns=["ts_code"])
+
+
+def _fetch_tushare_dividend(symbol: str) -> pd.DataFrame | None:
+    """TuShare dividend 单股分红送股事件 · 无 token / 失败时 None。"""
+    from kan.infra import circuit_breaker
+
+    token, endpoint = _resolve_config()
+    if not token:
+        return None
+    cb = circuit_breaker.get_breaker()
+    if cb.is_down("tushare_dividend"):
+        return None
+    try:
+        ts_code = _normalize_symbol_to_ts(symbol)
+    except ValueError:
+        return None
+    try:
+        data, _err = _post_tushare_api(
+            endpoint=endpoint, token=token, api_name="dividend",
+            params={"ts_code": ts_code},
+            fields=_DIVIDEND_FIELDS,
+        )
+        if data is None:
+            cb.record("tushare_dividend", ok=False)
+            return None
+        df = _to_dividend_df(data)
+        if df is None:
+            cb.record("tushare_dividend", ok=False)
+            return None
+        cb.record("tushare_dividend", ok=True)
+        return df
+    except Exception as e:
+        debug_log(__name__, "fetch tushare dividend 失败", e)
+        cb.record("tushare_dividend", ok=False)
         return None
 
 
