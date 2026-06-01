@@ -13,6 +13,7 @@ K 线接口 get_market_concept_east 走 datacenter HTTP · 不在反爬名单 ·
 """
 from __future__ import annotations
 
+from enum import StrEnum
 from typing import Annotated
 
 import typer
@@ -30,6 +31,12 @@ app.add_typer(theme_app, name="theme")
 
 _DEFAULT_LIST_TOP = 30
 _DEFAULT_TREND_LIMIT = 30  # 跟 list 默认值对齐 · 散户单屏可读
+
+
+class ThemeTrendSort(StrEnum):
+    streak = "streak"
+    latest = "latest"
+    moneyflow = "moneyflow"
 
 
 def _render_failure_diagnosis(diagnosis) -> list[str]:
@@ -181,12 +188,20 @@ def search_cmd(
 def trend_cmd(
     up: Annotated[
         int | None,
-        typer.Option("--up", help="只看连涨≥N天的题材(2-30)"),
+        typer.Option("--up", help="只看连涨≥N天的题材(1-30)"),
     ] = None,
     down: Annotated[
         int | None,
-        typer.Option("--down", help="只看连跌≥N天的题材(2-30)"),
+        typer.Option("--down", help="只看连跌≥N天的题材(1-30)"),
     ] = None,
+    min_streak: Annotated[
+        int | None,
+        typer.Option("--min-streak", help="只看连续涨跌绝对天数 ≥ N 的题材(1-30)"),
+    ] = None,
+    sort: Annotated[
+        ThemeTrendSort,
+        typer.Option("--sort", help="排序口径: streak(连续天数) / latest(最新单日涨幅) / moneyflow(主力净额)"),
+    ] = ThemeTrendSort.streak,
     latest: Annotated[
         int | None,
         typer.Option("--latest", "-l", help="展示近 N 天每日 ▲▼ 明细(1-30)", min=1, max=30),
@@ -216,7 +231,10 @@ def trend_cmd(
 
     示例:
       kan theme trend                # 默认前 30 题材 · 收盘价口径
+      kan theme trend --min-streak 1 # 展示刚启动的 1 天连续题材
       kan theme trend --up 3         # 只看连涨 ≥ 3 天
+      kan theme trend --sort latest  # 按最新单日涨幅排序
+      kan theme trend --sort moneyflow  # 按题材成分股主力净额合计排序
       kan theme trend --down 3       # 只看连跌 ≥ 3 天
       kan theme trend --latest 5     # 近 5 天每日 ▲▼ 明细列
       kan theme trend --all          # 全部 ~391 题材
@@ -233,9 +251,12 @@ def trend_cmd(
         _print_err("❌ --up 和 --down 不能同时使用")
         raise typer.Exit(1)
     for name, val in [("--up", up), ("--down", down)]:
-        if val is not None and not (2 <= val <= 30):
-            _print_err(f"❌ {name} 的值必须在 2-30 之间(当前:{val})")
+        if val is not None and not (1 <= val <= 30):
+            _print_err(f"❌ {name} 的值必须在 1-30 之间(当前:{val})")
             raise typer.Exit(1)
+    if min_streak is not None and not (1 <= min_streak <= 30):
+        _print_err(f"❌ --min-streak 的值必须在 1-30 之间(当前:{min_streak})")
+        raise typer.Exit(1)
 
     from rich.console import Console
 
@@ -268,10 +289,24 @@ def trend_cmd(
             _print_err(line)
         raise typer.Exit(1)
 
+    moneyflow_map = None
+    if sort is ThemeTrendSort.moneyflow:
+        from kan.core.models import Theme
+        from kan.data.board_leaderboard import theme_moneyflow_map
+
+        with status_console.status("[yellow]⏳ 聚合题材资金...[/yellow]", spinner="dots"):
+            moneyflow_map = theme_moneyflow_map(
+                [Theme(code=r.symbol, name=r.name, source="ths") for r in all_results],
+                force=force,
+            )
+
     sorted_results = sort_leaderboard(
         all_results,
         up_filter=up,
         down_filter=down,
+        min_streak=min_streak,
+        sort_by=sort.value,
+        moneyflow=moneyflow_map,
     )
 
     if not sorted_results:
@@ -291,6 +326,11 @@ def trend_cmd(
         filter_label = f" · 连涨≥{up}天"
     elif down is not None:
         filter_label = f" · 连跌≥{down}天"
+    if min_streak is not None:
+        filter_label += f" · 连续≥{min_streak}天"
+    if sort is not ThemeTrendSort.streak:
+        sort_label = "最新单日涨幅" if sort is ThemeTrendSort.latest else "主力净额"
+        filter_label += f" · 按{sort_label}排序"
 
     if fmt is export.OutputFormat.json:
         payload = export.theme_leaderboard_payload(

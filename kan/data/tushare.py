@@ -283,6 +283,67 @@ def _fetch_tushare(symbol: str, start: str) -> pd.DataFrame | None:
         return None
 
 
+_DAILY_BARS_FIELDS = "ts_code,trade_date,open,high,low,close,vol,amount"
+"""daily 按交易日拉全市场日 K 字段 · 供 --all K 线类 filter 的批量预计算缓存。"""
+
+
+def _to_daily_bars_df(data: dict | None) -> pd.DataFrame | None:
+    """TuShare daily(trade_date=...) data 块 → 标准日 K 截面 DataFrame。"""
+    import pandas as pd
+
+    if not data:
+        return None
+    fields = data.get("fields") or []
+    items = data.get("items") or []
+    if not items:
+        return None
+    df = pd.DataFrame(items, columns=fields)
+    if "ts_code" not in df.columns:
+        return None
+    df["symbol"] = df["ts_code"].map(_strip_ts_suffix)
+    df = df.drop(columns=["ts_code"]).rename(columns=_FIELD_MAP)
+    return df
+
+
+def _fetch_tushare_daily_bars(trade_date: str) -> pd.DataFrame | None:
+    """TuShare daily 单日全市场日 K 截面 · `kan find --all` 时序预计算原料。
+
+    与 `_fetch_tushare(symbol, start)` 不同:这里按 trade_date 一次拉全市场 OHLC，
+    用于批量计算位置 / 涨幅 / 连阳等裸值。熔断 key 独立，避免影响逐股 K 线源。
+    """
+    from kan.infra import circuit_breaker
+
+    token, endpoint = _resolve_config()
+    if not token:
+        return None
+
+    cb = circuit_breaker.get_breaker()
+    if cb.is_down("tushare_daily_bars"):
+        return None
+
+    try:
+        data, _err = _post_tushare_api(
+            endpoint=endpoint,
+            token=token,
+            api_name="daily",
+            params={"trade_date": trade_date},
+            fields=_DAILY_BARS_FIELDS,
+        )
+        if data is None:
+            cb.record("tushare_daily_bars", ok=False)
+            return None
+        df = _to_daily_bars_df(data)
+        if df is None or df.empty:
+            cb.record("tushare_daily_bars", ok=False)
+            return None
+        cb.record("tushare_daily_bars", ok=True)
+        return df
+    except Exception as e:
+        debug_log(__name__, "fetch tushare daily bars 失败", e)
+        cb.record("tushare_daily_bars", ok=False)
+        return None
+
+
 # ══════════════════════════════════════════════════════════════════
 # KlineSource Protocol 适配 (v0.0.6) · 顶档付费源 · is_available 含 token 检查
 # ══════════════════════════════════════════════════════════════════

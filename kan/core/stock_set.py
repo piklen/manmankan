@@ -9,6 +9,7 @@ else watchlist 分支分发。
 - HotRankSet:    东方财富热榜 (人气榜 / 飙升榜 · meta = HotMeta)
 - ThemeSet:      题材股 (同花顺概念板块成分股 · meta = ThemeMeta)
 - IndustrySet:   行业股 (东财行业分类 · meta = BoardMeta)
+- CodeListSet:   用户传入的代码列表 (CLI `kan find --codes` / stdin)
 
 设计选择:
 - Protocol-based · 任何带 name / codes() / pairs() / meta 的对象都可扮演 StockSet
@@ -319,6 +320,36 @@ class AllStocksSet:
         return len(self._resolve())
 
 
+@dataclass
+class CodeListSet:
+    """用户显式传入的代码池 · 给 `kan find --codes` / stdin 管线复用。
+
+    pairs 由 CLI 层完成解析、去重、名称补全后注入。这里保持纯容器职责:
+    - 不读自选、不触外部 catalog
+    - meta() 为 None (无高亮 / 板块指数 / 榜单名次)
+    - name 带数量，便于终端和 JSON 审计识别池来源
+    """
+
+    pairs_input: list[tuple[str, str]]
+    label: str = "自定义代码池"
+
+    @property
+    def name(self) -> str:
+        return f"{self.label}({len(self.pairs_input)}只)"
+
+    def codes(self) -> list[str]:
+        return [c for c, _ in self.pairs_input]
+
+    def pairs(self) -> list[tuple[str, str]]:
+        return list(self.pairs_input)
+
+    def meta(self) -> None:
+        return None
+
+    def __len__(self) -> int:
+        return len(self.pairs_input)
+
+
 # ───────────────────── factory ─────────────────────
 
 
@@ -381,6 +412,7 @@ def from_flags(
 
 __all__ = [
     "AllStocksSet",
+    "CodeListSet",
     "HotRankSet",
     "IndustrySet",
     "StockSet",

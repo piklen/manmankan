@@ -81,6 +81,8 @@ def test_root_help_lists_v0050_batch_sources_and_theme_watchlist_commands() -> N
     assert "kan fetch --hot rank" in output
     assert "kan fetch --theme AI" in output
     assert "kan compare 600519 000858 --format md" in output
+    assert "kan find --codes 600519,000858" in output
+    assert "kan board rank --kind industry --by moneyflow" in output
 
 
 def test_subcommand_help_unaffected() -> None:
@@ -112,8 +114,17 @@ def test_subcommand_help_unaffected() -> None:
         ("scan", [], True, True, False),
         # case 5: theme 子命令组 + TTY → 应写 (v0.0.6.5 补 · 防 banner 漏 theme 子命令组的 cold-start 黑屏回归)
         ("theme", [], False, True, True),
+        # case 6: board 子命令组 + TTY → 应写
+        ("board", [], False, True, True),
     ],
-    ids=["whitelist+tty", "non-whitelist", "with-help", "env-suppressed", "theme-whitelisted"],
+    ids=[
+        "whitelist+tty",
+        "non-whitelist",
+        "with-help",
+        "env-suppressed",
+        "theme-whitelisted",
+        "board-whitelisted",
+    ],
 )
 def test_maybe_print_boot_banner(
     command: str,

@@ -478,6 +478,7 @@ class TrendResult:
         self.streak = streak  # 正=连涨 负=连跌
         self.streak_pct = streak_pct
         self.daily_changes = daily_changes  # [(date_str, change_pct), ...]
+        self.moneyflow_net: float | None = None
 
     @property
     def direction(self) -> str:

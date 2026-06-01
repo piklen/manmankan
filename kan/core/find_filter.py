@@ -378,6 +378,10 @@ def _match_all(
     matcher: Callable[..., TriggeredFilter | None],
 ) -> list[TriggeredFilter] | None:
     """一组同类 filter 全部匹配 target · 任一不命中返 None (AND short-circuit)。"""
+    if not filters:
+        return []
+    if target is None:
+        return None
     out: list[TriggeredFilter] = []
     for f in filters:
         t = matcher(f, target)
@@ -465,21 +469,27 @@ def apply_cross_section_conditions(
     rows: list[CrossSectionRow],
     conditions: ConditionSet,
 ) -> list[tuple[CrossSectionRow, tuple[TriggeredFilter, ...]]]:
-    """截面行 (CrossSectionRow) 应用截面类 filter (估值/资金/技术/情绪/筹码 · --all 路径)。
+    """截面行 (CrossSectionRow) 应用 filter (`--all` 路径)。
 
-    截面无 K 线衍生 (位置/共振) 也无 fundamentals (逐股太贵) · 处理全部截面类 filter ·
-    复用 _match_* (传 row.valuation/moneyflow/technical/sentiment/chip)。AND 语义 ·
-    无截面 filter → 全量返回 (取数语义)。
+    `run_cross_section(..., need_kline=True)` 可挂载 row.scan,于是位置/共振/
+    涨幅/连阳也能像 K 线池一样复用 _match_*。fundamentals / shareholder 仍是
+    逐股维度,由 CLI 在 --all 下拦截。AND 语义 · 无 filter → 全量返回 (取数语义)。
 
     Returns:
         list[(CrossSectionRow, triggered)] · 按命中 filter 数倒序 · 然后 code 升序。
     """
-    if not conditions.has_cross_section_filters():
+    if conditions.is_empty():
         return [(r, ()) for r in rows]
 
     out: list[tuple[CrossSectionRow, tuple[TriggeredFilter, ...]]] = []
     for row in rows:
+        if conditions.exclude_st and ("ST" in row.name or "*ST" in row.name):
+            continue
         segments = [
+            (conditions.pos_filters, row.scan, _match_pos),
+            (conditions.resonance_filters, row.scan, _match_resonance),
+            (conditions.gain_filters, row.scan, _match_gain),
+            (conditions.up_days_filters, row.scan, _match_up_days),
             (conditions.pe_filters, row.valuation, _match_pe),
             (conditions.moneyflow_filters, row.moneyflow, _match_moneyflow),
             (conditions.rsi_filters, row.technical, _match_rsi),

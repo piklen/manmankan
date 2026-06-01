@@ -112,9 +112,44 @@ def test_trend_up_down_mutual_exclusion(monkeypatch):
 def test_trend_up_out_of_range(monkeypatch):
     _stub_leaderboard(monkeypatch)
     runner = CliRunner()
-    result = runner.invoke(app, ["theme", "trend", "--up", "1"])
+    result = runner.invoke(app, ["theme", "trend", "--up", "0"])
     assert result.exit_code == 1
-    assert "2-30" in result.output
+    assert "1-30" in result.output
+
+
+def test_trend_min_streak_one(monkeypatch):
+    results = [
+        TrendResult("886108", "AI应用", 100.0, 1, 1.2, []),
+        TrendResult("886109", "平盘题材", 100.0, 0, 0.0, []),
+    ]
+    _stub_leaderboard(monkeypatch, results=results, errors=[])
+    result = CliRunner().invoke(app, ["theme", "trend", "--min-streak", "1"])
+    assert result.exit_code == 0
+    assert "AI应用" in result.output
+    assert "平盘题材" not in result.output
+
+
+def test_trend_sort_latest(monkeypatch):
+    _stub_leaderboard(monkeypatch)
+    result = CliRunner().invoke(app, ["theme", "trend", "--sort", "latest", "--limit", "1"])
+    assert result.exit_code == 0
+    # stub 中 latest 单日涨幅最大的是数据要素(1.5%)
+    assert "数据要素" in result.output
+
+
+def test_trend_sort_moneyflow_json(monkeypatch):
+    _stub_leaderboard(monkeypatch)
+    monkeypatch.setattr(
+        "kan.data.board_leaderboard.theme_moneyflow_map",
+        lambda themes, force=False: {"886112": 300.0, "886108": 100.0},
+    )
+    result = CliRunner().invoke(
+        app, ["theme", "trend", "--sort", "moneyflow", "--format", "json", "--limit", "1"]
+    )
+    assert result.exit_code == 0
+    payload = json.loads(result.output)
+    assert payload["results"][0]["symbol"] == "886112"
+    assert payload["results"][0]["moneyflow_net"] == 300.0
 
 
 def test_trend_limit(monkeypatch):

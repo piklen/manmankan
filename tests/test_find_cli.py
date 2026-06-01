@@ -4,8 +4,10 @@ Uses subprocess (not typer.CliRunner) to avoid sys.argv shenanigans with
 the root @app.callback() that checks `len(sys.argv) == 1`.
 """
 
+import io
 import os
 import subprocess
+import sys
 
 import pytest
 
@@ -68,6 +70,42 @@ class TestFindCli:
         # exit_code may be 0 (typer help)
         assert ec in (0, 2)
         assert "PERIOD:OP:VAL" in out or "kan find" in out
+
+    def test_parse_codes_normalizes_and_dedupes(self):
+        from kan.cli.find_cmds import _parse_codes
+
+        codes, invalid = _parse_codes("sh600519, 000858\n600519 300750.SZ")
+        assert codes == ["600519", "000858", "300750"]
+        assert invalid == []
+
+    def test_resolve_codes_reads_stdin_and_fills_names(self, monkeypatch):
+        from kan.cli.find_cmds import _resolve_code_pairs
+
+        monkeypatch.setattr(sys, "stdin", io.StringIO("600519\n000858"))
+        monkeypatch.setattr(
+            "kan.storage.watchlist.preload_stock_names",
+            lambda: {"600519": "贵州茅台"},
+        )
+        assert _resolve_code_pairs("-") == [("600519", "贵州茅台"), ("000858", "000858")]
+
+    def test_kline_snapshot_periods_only_uses_needed_windows(self):
+        from kan.cli.find_cmds import _kline_snapshot_periods
+        from kan.core.find_dsl import ConditionSet
+
+        assert _kline_snapshot_periods(ConditionSet.from_flags(up_days=["gte:3"])) == [3]
+        assert _kline_snapshot_periods(ConditionSet.from_flags(pos=["30:lt:20"])) == [30]
+
+    def test_codes_invalid_exits_two(self):
+        ec, out = _run(["find", "--codes", "600519,bad", "--pos", "180:lt:5"])
+        assert ec == 2
+        assert "--codes 含非法代码" in out
+
+    def test_codes_mutex_with_industry_exits_two(self):
+        ec, out = _run([
+            "find", "--codes", "600519", "--industry", "半导体", "--pos", "180:lt:5"
+        ])
+        assert ec == 2
+        assert "互斥" in out
 
     def test_limit_negative_exits_two(self):
         """防 Python 负切片 silent drop."""
@@ -193,10 +231,13 @@ class TestFindJsonOutput:
 class TestFindAllCrossSection:
     """kan find --all 全市场截面取数 CLI wiring (地基-3) · 校验均先于截面 fetch。"""
 
-    def test_all_with_pos_filter_exits_two(self):
-        ec, out = _run(["find", "--all", "--pos", "180:lt:5", "--format", "json"])
-        assert ec == 2
-        assert "不支持" in out
+    def test_all_with_pos_filter_no_token_friendly_error(self, tmp_path):
+        ec, out, err = _run_isolated(
+            ["find", "--all", "--pos", "180:lt:5", "--format", "json"], tmp_path,
+        )
+        combined = (out + err).lower()
+        assert ec == 1
+        assert "token" in combined or "tushare" in combined
 
     def test_all_with_industry_exits_two(self):
         ec, out = _run(["find", "--all", "--industry", "半导体", "--format", "json"])
