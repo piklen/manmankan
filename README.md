@@ -20,7 +20,7 @@
 It deliberately stops there: **no buy/sell advice, no ratings, no price targets, no "AI stock picking."** Just objective price-position data, fully local — no login, no account, no telemetry. Data is delayed end-of-day K-line from the AKShare ecosystem (baostock primary). `pip install manmankan` · Python 3.11+ · [Parity Public License 7.0.0](LICENSE) · A-share only (no HK / US / futures).
 </details>
 
-> **当前 v0.0.6.5**(Alpha · API 在 1.0 前可能调整)· `uv tool install manmankan` 即装即用
+> **当前 v0.0.6.6**(Alpha · API 在 1.0 前可能调整)· `uv tool install manmankan` 即装即用
 > **100% 本地** · 不登录 · 不上传自选 · 不推送 · 不遥测 · 数据存 `~/.local/share/kan/`(XDG 规范)
 > **延时数据** · 盘后批量拉取前复权日 K 线 · 不适合分钟级短线
 > **许可** · 个人散户日常自用完全免费;商业使用见 [许可证](#许可证)

@@ -12,6 +12,7 @@ def isolated_env(tmp_path, monkeypatch):
     monkeypatch.setattr(config, "CONFIG_PATH", tmp_path / "config.json")
     monkeypatch.delenv("TUSHARE_TOKEN", raising=False)
     monkeypatch.delenv("TUSHARE_ENDPOINT", raising=False)
+    monkeypatch.delenv("KAN_ALLOW_INSECURE_TUSHARE", raising=False)
     return tmp_path
 
 
@@ -71,6 +72,7 @@ class TestConfigSet:
         result = runner.invoke(app, ["config", "set", "tushare-token", "tk_new_token_1234"])
         assert result.exit_code == 0
         assert "✅" in result.stdout or "已保存" in result.stdout
+        assert str(config.CONFIG_PATH) in result.stdout
         assert "tk_new_token_1234" not in result.stdout
         assert "***1234" in result.stdout
         assert config.load()["tushare_token"] == "tk_new_token_1234"
@@ -78,7 +80,23 @@ class TestConfigSet:
     def test_set_endpoint_writes_config(self, runner, app, isolated_env):
         result = runner.invoke(app, ["config", "set", "tushare-endpoint", "https://my.host"])
         assert result.exit_code == 0
+        assert str(config.CONFIG_PATH) in result.stdout
         assert config.load()["tushare_endpoint"] == "https://my.host"
+
+    def test_set_http_endpoint_rejected_by_default(self, runner, app, isolated_env):
+        result = runner.invoke(app, ["config", "set", "tushare-endpoint", "http://my.host"])
+        assert result.exit_code == 2
+        assert "http://" in result.stdout
+        assert "KAN_ALLOW_INSECURE_TUSHARE" in result.stdout
+        assert config.load()["tushare_endpoint"] is None
+
+    def test_set_http_endpoint_allowed_with_explicit_opt_in(
+        self, runner, app, isolated_env, monkeypatch,
+    ):
+        monkeypatch.setenv("KAN_ALLOW_INSECURE_TUSHARE", "1")
+        result = runner.invoke(app, ["config", "set", "tushare-endpoint", "http://my.host"])
+        assert result.exit_code == 0
+        assert config.load()["tushare_endpoint"] == "http://my.host"
 
     def test_set_empty_token_rejected(self, runner, app, isolated_env):
         result = runner.invoke(app, ["config", "set", "tushare-token", "   "])

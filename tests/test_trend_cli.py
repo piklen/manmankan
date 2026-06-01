@@ -163,6 +163,7 @@ def test_trend_format_json(runner: CliRunner) -> None:
     out = result.stdout
     data = _json.loads(out[out.index("{"):])
     assert data["command"] == "trend"
+    assert "disclaimer" in data
     assert len(data["results"]) == 3
     assert data["results"][0]["symbol"] == "600519"
 

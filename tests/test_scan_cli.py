@@ -436,6 +436,7 @@ def test_scan_format_json(scan_runner):
     out = result.output
     data = _json.loads(out[out.index("{"):])
     assert data["command"] == "scan"
+    assert "disclaimer" in data
     assert data["results"][0]["symbol"] == "600519"
 
 
@@ -487,6 +488,7 @@ def test_scan_codes_filters_to_explicit_pool(scan_runner, monkeypatch):
     assert result.exit_code == 0, result.output
     assert captured["pairs"] == pairs
     data = _json.loads(result.output[result.output.index("{"):])
+    assert "disclaimer" in data
     assert [r["symbol"] for r in data["results"]] == ["600519", "000858"]
 
 
@@ -528,6 +530,7 @@ def test_low_format_json(scan_runner):
     out = result.output
     data = _json.loads(out[out.index("{"):])
     assert data["command"] == "low"
+    assert "disclaimer" in data
     assert "results_by_period" in data
 
 

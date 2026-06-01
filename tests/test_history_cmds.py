@@ -197,6 +197,7 @@ def test_format_json_structure(snap_dir, runner):
     assert payload["command"] == "history"
     assert payload["symbol"] == "600519"
     assert payload["period"] == 30
+    assert "disclaimer" in payload
     assert len(payload["series"]) == 1
     row = payload["series"][0]
     assert row["date"] == "2026-05-23"

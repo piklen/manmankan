@@ -497,8 +497,10 @@ def remove(
         cleaned = _re.sub(r"^(sh|sz|SH|SZ)", "", sym.strip())
         if _re.match(r"^\d{6}$", cleaned):
             try:
-                _, msg = wl.remove(sym, group=group)
+                removed, msg = wl.remove(cleaned, group=group)
                 typer.echo(f"  {msg}")
+                if not removed:
+                    fail_count += 1
             except GroupNotFoundError as e:
                 _print_err(f"❌ {e}")
                 raise typer.Exit(2) from None
@@ -514,8 +516,12 @@ def remove(
             matches = [(s.symbol, s.name) for s in current.stocks if sym in s.name.replace(" ", "")]
             if len(matches) == 1:
                 code, name = matches[0]
-                _, msg = wl.remove(code, group=group)
-                typer.echo(f"  已移除 {name.replace(' ', '')} ({code})")
+                removed, msg = wl.remove(code, group=group)
+                if removed:
+                    typer.echo(f"  已移除 {name.replace(' ', '')} ({code})")
+                else:
+                    typer.echo(f"  ❌ {msg}", err=True)
+                    fail_count += 1
             elif len(matches) == 0:
                 typer.echo(
                     f"  ❌ {in_label}中没有包含「{sym}」的股票",

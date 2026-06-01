@@ -5,6 +5,7 @@ the root @app.callback() that checks `len(sys.argv) == 1`.
 """
 
 import io
+import json
 import os
 import subprocess
 import sys
@@ -237,6 +238,9 @@ class TestFindAllCrossSection:
         )
         combined = (out + err).lower()
         assert ec == 1
+        payload = json.loads(out)
+        assert payload["ok"] is False
+        assert payload["error"]["code"] == "data_unavailable"
         assert "token" in combined or "tushare" in combined
 
     def test_all_with_industry_exits_two(self):
@@ -254,6 +258,9 @@ class TestFindAllCrossSection:
         ec, out, err = _run_isolated(["find", "--all", "--format", "json"], tmp_path)
         combined = (out + err).lower()
         assert ec == 1
+        payload = json.loads(out)
+        assert payload["ok"] is False
+        assert payload["error"]["code"] == "data_unavailable"
         assert "token" in combined or "tushare" in combined
 
     def test_all_with_roe_exits_two(self):
@@ -269,4 +276,7 @@ class TestFindAllCrossSection:
         )
         combined = (out + err).lower()
         assert ec == 1
+        payload = json.loads(out)
+        assert payload["ok"] is False
+        assert payload["error"]["code"] == "data_unavailable"
         assert "token" in combined or "tushare" in combined

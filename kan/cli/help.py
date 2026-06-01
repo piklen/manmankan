@@ -68,7 +68,7 @@ def help_cmd() -> None:
   kan find --resonance low:gte:3               共振 filter · 低点共振 ≥ 3 周期
   kan find --pos 60:lt:10 --resonance low:gte:2  多条件 AND
   kan find --exclude-st --pos 180:lt:5         排 ST · 位置 filter
-  kan find --industry 半导体 --pos 180:lt:10   行业池里筛跌透的
+  kan find --industry 半导体 --pos 180:lt:10   行业池里筛 180 日位置 < 10%
   kan find --codes 600519,000858 --gain 30:gt:10  任意代码池里筛近 30 日涨幅
   cat codes.txt | kan find --codes - --pos 60:lt:20  stdin 代码池
   kan find --all --up-days gte:3               全市场截面筛连涨天数

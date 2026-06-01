@@ -79,6 +79,41 @@ def _disclaimer_quote() -> str:
     return "> " + DISCLAIMER.strip()
 
 
+def _disclaimer_text() -> str:
+    """通用 stock-data JSON 顶层免责声明。"""
+    from kan.render.base import DISCLAIMER
+
+    return DISCLAIMER.strip()
+
+
+def error_payload(
+    command: str,
+    *,
+    code: str,
+    message: str,
+    hint: str | None = None,
+) -> dict:
+    """机器消费错误 envelope · 避免 json 模式把业务失败落成纯文本。"""
+    payload: dict = {
+        "ok": False,
+        "command": command,
+        "error": {
+            "code": code,
+            "message": message,
+        },
+    }
+    if hint:
+        payload["error"]["hint"] = hint
+    if command == "find":
+        from kan.render.base import FIND_DISCLAIMER_TEXT
+
+        payload["schema_version"] = FIND_SCHEMA_VERSION
+        payload["disclaimer"] = FIND_DISCLAIMER_TEXT
+    else:
+        payload["disclaimer"] = _disclaimer_text()
+    return payload
+
+
 # ── scan ──────────────────────────────────────────────────────────────
 
 def _pct_cell(
@@ -111,6 +146,7 @@ def scan_payload(
     return {
         "command": "scan",
         "mode": mode,
+        "disclaimer": _disclaimer_text(),
         "data_cutoff": data_cutoff.isoformat() if data_cutoff else None,
         "fetched_at": fetched_at or None,
         "stale": stale,
@@ -189,6 +225,7 @@ def extreme_payload(
     """
     payload: dict = {
         "command": mode,  # "low" / "high"
+        "disclaimer": _disclaimer_text(),
         "results_by_period": {
             str(n): [r.model_dump(mode="json") for r, _ in hits]
             for n, hits in results_by_period.items()
@@ -300,6 +337,7 @@ def info_payload(
         "command": "info",
         "symbol": result.symbol,
         "name": result.name,
+        "disclaimer": _disclaimer_text(),
         "data_cutoff": data_cutoff.isoformat() if data_cutoff else None,
         "fetched_at": fetched_at or None,
         "stale": stale,
@@ -387,6 +425,7 @@ def trend_payload(
     return {
         "command": "trend",
         "mode": "candle" if candle else "close",
+        "disclaimer": _disclaimer_text(),
         "data_cutoff": data_cutoff.isoformat() if data_cutoff else None,
         "fetched_at": fetched_at or None,
         "stale": stale,
@@ -407,6 +446,7 @@ def theme_leaderboard_payload(
     return {
         "command": "theme_trend",
         "mode": "candle" if candle else "close",
+        "disclaimer": _disclaimer_text(),
         "total_themes": total_themes,
         "shown": len(results),
         "errors_count": errors_count,
@@ -499,6 +539,7 @@ def compare_payload(results: list[StockScanResult], *, periods: list[int]) -> di
     return {
         "command": "compare",
         "periods": periods,
+        "disclaimer": _disclaimer_text(),
         "results": [r.model_dump(mode="json") for r in results],
     }
 
@@ -1015,6 +1056,7 @@ def history_payload(
         "symbol": symbol,
         "name": name,
         "period": period,
+        "disclaimer": _disclaimer_text(),
         "series": series,
     }
 
