@@ -13,8 +13,11 @@
 
 ## 验证
 
-- [ ] `uv run pytest` 全绿
+- [ ] `uv lock --check` 通过
+- [ ] `uv run pytest -q -m "not tty and not network"` 全绿
 - [ ] `uv run ruff check kan/ tests/` 无新增 F/E/B/N 类真技术债
+- [ ] `bash scripts/check-privacy-leaks.sh` 全绿
+- [ ] `uv build --clear` 可生成 wheel + sdist
 - [ ] **实际跑过 CLI** 验证（不仅看代码 · 见 CONTRIBUTING.md）
 
 ## 合规自检（金融工具必须）

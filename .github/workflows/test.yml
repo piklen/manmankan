@@ -6,64 +6,170 @@ on:
       - main
       - 'feat/**'
       - 'fix/**'
-    paths-ignore:
-      - '**.md'
+      - 'chore/**'
       - 'docs/**'
+      - 'refactor/**'
+      - 'test/**'
+      - 'codex/**'
+      - 'dependabot/**'
   pull_request:
     branches: [main]
+  workflow_dispatch:
 
 # v0.0.4.4: 显式声明最小权限 · 防 supply chain 投毒链
 # (fork PR 中恶意 dep 借继承的 GITHUB_TOKEN 写仓库内容触发 release.yml)
 permissions:
   contents: read
 
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+env:
+  KAN_NO_COMPLETION_AUTOINSTALL: "1"
+  KAN_NO_UPDATE_CHECK: "1"
+
 jobs:
+  quality-gates:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6 (pinned 2026-05-27)
+      - uses: astral-sh/setup-uv@08807647e7069bb48b6ef5acd8ec9567f424441b  # pinned 2026-05-27
+        with:
+          python-version: '3.12'
+          enable-cache: true
+      - name: Lockfile is current
+        run: uv lock --check
+      - name: Install dependencies
+        run: uv sync --locked --all-groups --all-extras
+      - name: Privacy / public archive scan
+        run: bash scripts/check-privacy-leaks.sh
+      - name: Lint source and tests
+        run: uv run ruff check kan/ tests/
+      - name: Tracked package sanity
+        run: |
+          python - <<'PY'
+          import subprocess
+          import sys
+
+          tracked = set(subprocess.check_output(["git", "ls-files"], text=True).splitlines())
+          required = {
+              "kan/data/__init__.py",
+              "kan/cli/__init__.py",
+              "kan/storage/export.py",
+              "tests/test_ci_dependency_isolation.py",
+              "uv.lock",
+          }
+          missing = sorted(required - tracked)
+          if missing:
+              print("Missing tracked package/test paths:")
+              for path in missing:
+                  print(f"  - {path}")
+              sys.exit(1)
+          PY
+      - name: Build wheel and sdist
+        run: |
+          uv build --clear
+          python - <<'PY'
+          from pathlib import Path
+          import sys
+
+          dist = sorted(Path("dist").iterdir())
+          has_wheel = any(p.suffix == ".whl" for p in dist)
+          has_sdist = any(p.name.endswith(".tar.gz") for p in dist)
+          if not has_wheel or not has_sdist:
+              print("dist/ must contain both wheel and sdist:")
+              for p in dist:
+                  print(f"  - {p.name}")
+              sys.exit(1)
+          PY
+
+  # 保留独立 job 名，避免已有 branch protection 仍绑定旧检查名时被误断。
+  privacy-scan:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6 (pinned 2026-05-27)
+      - name: Privacy / public archive scan
+        run: bash scripts/check-privacy-leaks.sh
+
   test:
     runs-on: ${{ matrix.os }}
+    timeout-minutes: 35
     strategy:
       fail-fast: false
       matrix:
         os: [ubuntu-latest, macos-latest]
         python-version: ['3.11', '3.12']
     steps:
-      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v4 (pinned 2025-11-13)
-      - uses: astral-sh/setup-uv@08807647e7069bb48b6ef5acd8ec9567f424441b  # v4 (pinned 2024-11-30)
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6 (pinned 2026-05-27)
+      - uses: astral-sh/setup-uv@08807647e7069bb48b6ef5acd8ec9567f424441b  # pinned 2026-05-27
         with:
           python-version: ${{ matrix.python-version }}
           enable-cache: true
       - name: Install dependencies
-        run: uv sync --all-extras
+        run: uv sync --locked --all-groups --all-extras
       - name: Run tests
         run: uv run pytest -q -m "not tty and not network"
-      - name: Lint
-        run: uv run ruff check kan/
 
-  # CI 兜底跑禁词扫描 · 即使本地 pre-commit hook 未激活也能拦住
-  privacy-scan:
+  package-smoke:
     runs-on: ubuntu-latest
+    timeout-minutes: 25
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ['3.11', '3.12']
     steps:
-      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
-      - name: Privacy / mental-model leaks scan
-        run: bash scripts/check-privacy-leaks.sh
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6 (pinned 2026-05-27)
+      - uses: astral-sh/setup-uv@08807647e7069bb48b6ef5acd8ec9567f424441b  # pinned 2026-05-27
+        with:
+          python-version: ${{ matrix.python-version }}
+          enable-cache: true
+      - name: Build package
+        run: uv build --clear
+      - name: Install wheel in clean environment
+        run: |
+          uv venv /tmp/manmankan-smoke --python ${{ matrix.python-version }}
+          uv pip install --python /tmp/manmankan-smoke/bin/python dist/*.whl
+      - name: Smoke installed entry points
+        run: |
+          /tmp/manmankan-smoke/bin/kan --version
+          /tmp/manmankan-smoke/bin/kan --help
+          /tmp/manmankan-smoke/bin/kan scan --help
+          /tmp/manmankan-smoke/bin/kan find --help
+          /tmp/manmankan-smoke/bin/kan board rank --help
+          /tmp/manmankan-smoke/bin/kan history --help
+          /tmp/manmankan-smoke/bin/python - <<'PY'
+          import kan
+          from kan.api import WatchlistSet, fetch, from_flags, scan
+
+          assert kan.__version__
+          assert WatchlistSet().name
+          assert callable(scan)
+          assert callable(fetch)
+          assert callable(from_flags)
+          PY
 
   # CI -m "not tty" 会排除 TTY 真测 · 补一个 TTY job 覆盖
   # spinner / Live Display first-frame SLO + 真 entry point 调用
   tty-test:
     runs-on: ${{ matrix.os }}
+    timeout-minutes: 25
     strategy:
       fail-fast: false
       matrix:
         os: [ubuntu-latest, macos-latest]
         python-version: ['3.11', '3.12']
     steps:
-      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
-      - uses: astral-sh/setup-uv@08807647e7069bb48b6ef5acd8ec9567f424441b
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6 (pinned 2026-05-27)
+      - uses: astral-sh/setup-uv@08807647e7069bb48b6ef5acd8ec9567f424441b  # pinned 2026-05-27
         with:
           python-version: ${{ matrix.python-version }}
           enable-cache: true
       - name: Install dependencies + manmankan as tool
         run: |
-          uv sync --all-extras
+          uv sync --locked --all-groups --all-extras
           uv tool install --reinstall .
       # v0.0.4.x catch-up fix: BSD script (macOS) vs util-linux script (Linux) 参数语法不兼容
       # Linux util-linux: script -q -c "<cmd>" <file>
