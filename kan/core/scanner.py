@@ -158,6 +158,15 @@ def scan_stock(
                 break
             up_days += 1
 
+    def _ma(days: int) -> float | None:
+        if len(df) < days:
+            return None
+        return round(float(df["close"].tail(days).mean()), 2)
+
+    recent_low_20 = None
+    if len(df) >= 20:
+        recent_low_20 = round(float(df["low"].tail(20).min()), 2)
+
     return StockScanResult(
         symbol=symbol,
         name=name,
@@ -170,6 +179,9 @@ def scan_stock(
         limit_up=limit_up,
         limit_down=limit_down,
         up_days=up_days,
+        ma_10=_ma(10),
+        ma_20=_ma(20),
+        recent_low_20=recent_low_20,
     )
 
 

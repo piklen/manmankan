@@ -45,6 +45,18 @@ class TestToMetricsDf:
         assert tushare._to_metrics_df({}) is None
 
 
+class TestToDailyBarsDf:
+    def test_maps_qfq_daily_bars(self):
+        sample = {
+            "fields": ["ts_code", "trade_date", "open_qfq", "high_qfq", "low_qfq", "close_qfq"],
+            "items": [["600519.SH", "20260529", 10.0, 11.0, 9.0, 10.5]],
+        }
+        df = tushare._to_daily_bars_df(sample)
+        assert list(df[["symbol", "date", "open", "high", "low", "close"]].iloc[0]) == [
+            "600519", "20260529", 10.0, 11.0, 9.0, 10.5,
+        ]
+
+
 class TestFetchTushareMetrics:
     @pytest.fixture
     def temp_env(self, tmp_path, monkeypatch):

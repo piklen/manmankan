@@ -5,6 +5,7 @@
 - 安装检测：_detect_install_method
 - shell 检测：_detect_shell_fallback / _VALID_SHELLS
 - argv 预处理：_normalize_streak_args / _normalize_help_args
+- 代码池解析：_parse_codes / _resolve_code_pairs
 - 自选股 / 数据加载：_load_names_with_optional_spinner / _get_watchlist_pairs / _auto_fetch_stale
 - 杂项：_NoopContext / _human_size
 
@@ -55,6 +56,53 @@ def _print_err(msg: str) -> None:
     """
     from rich.console import Console
     Console(stderr=True).print(msg)
+
+
+def _parse_codes(raw: str) -> tuple[list[str], list[str]]:
+    """解析逗号 / 空格 / 换行分隔代码 · 返回 (去重 codes, invalid tokens)。"""
+    codes: list[str] = []
+    invalid: list[str] = []
+    seen: set[str] = set()
+    prefix_re = _re.compile(r"^(SH|SZ|BJ)[.:]?", _re.I)
+    suffix_re = _re.compile(r"[.:]?(SH|SZ|BJ)$", _re.I)
+    for token in _re.split(r"[\s,，;；]+", raw.strip()):
+        if not token:
+            continue
+        code = prefix_re.sub("", token.strip())
+        code = suffix_re.sub("", code)
+        if not _re.fullmatch(r"\d{6}", code):
+            invalid.append(token)
+            continue
+        if code in seen:
+            continue
+        seen.add(code)
+        if code not in codes:
+            codes.append(code)
+    return codes, invalid
+
+
+def _resolve_code_pairs(raw: str, *, command: str) -> list[tuple[str, str]]:
+    """CLI `--codes`/位置参数 → [(code, name)] · 名称表不可用时用代码兜底。"""
+    import sys
+
+    text = sys.stdin.read() if raw == "-" else raw
+    codes, invalid = _parse_codes(text)
+    if invalid:
+        preview = ", ".join(invalid[:5])
+        suffix = "..." if len(invalid) > 5 else ""
+        _print_err(f"❌ --codes 含非法代码: {preview}{suffix} · 需 6 位 A 股代码")
+        raise typer.Exit(2)
+    if not codes:
+        _print_err(f"❌ --codes 为空 · 例: {command} --codes 600519,000858")
+        raise typer.Exit(2)
+    try:
+        from kan.storage.watchlist import preload_stock_names
+
+        names = preload_stock_names()
+    except Exception as e:
+        debug_log(__name__, "preload stock names for --codes", e)
+        names = {}
+    return [(code, names.get(code, code)) for code in codes]
 
 
 def confirm_destructive(summary: str, *, yes: bool) -> bool:

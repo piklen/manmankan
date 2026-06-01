@@ -16,8 +16,6 @@
 """
 from __future__ import annotations
 
-import re
-import sys
 from math import ceil
 from typing import TYPE_CHECKING, Annotated
 
@@ -30,6 +28,12 @@ from kan.cli.helpers import (
     _print_err,
     _with_heavy_imports_spinner,
 )
+from kan.cli.helpers import (
+    _parse_codes as _shared_parse_codes,
+)
+from kan.cli.helpers import (
+    _resolve_code_pairs as _shared_resolve_code_pairs,
+)
 from kan.data.hot import HotList
 from kan.storage import export
 
@@ -37,63 +41,17 @@ if TYPE_CHECKING:
     from kan.core.find_dsl import ConditionSet
 
 
-_CODE_SPLIT_RE = re.compile(r"[\s,，;；]+")
-_MARKET_PREFIX_RE = re.compile(r"^(SH|SZ|BJ)[.:]?", re.I)
-_MARKET_SUFFIX_RE = re.compile(r"[.:]?(SH|SZ|BJ)$", re.I)
-
-
-def _normalize_code_token(raw: str) -> str | None:
-    """把 sh600519 / 600519.SH / 600519 归一成 6 位代码；非法返 None。"""
-    token = raw.strip()
-    if not token:
-        return None
-    token = _MARKET_PREFIX_RE.sub("", token)
-    token = _MARKET_SUFFIX_RE.sub("", token)
-    return token if re.fullmatch(r"\d{6}", token) else None
-
-
 def _parse_codes(raw: str) -> tuple[list[str], list[str]]:
-    """解析逗号 / 空格 / 换行分隔代码 · 返回 (去重 codes, invalid tokens)。"""
-    codes: list[str] = []
-    invalid: list[str] = []
-    seen: set[str] = set()
-    for token in _CODE_SPLIT_RE.split(raw.strip()):
-        if not token:
-            continue
-        code = _normalize_code_token(token)
-        if code is None:
-            invalid.append(token)
-            continue
-        if code in seen:
-            continue
-        seen.add(code)
-        codes.append(code)
-    return codes, invalid
+    """兼容旧测试 import path · 实现移到 cli.helpers 供 scan/find 共用。"""
+    return _shared_parse_codes(raw)
 
 
 def _resolve_code_pairs(raw: str) -> list[tuple[str, str]]:
-    """`--codes` 原始输入 → [(code, name)] · 名称表不可用时用 code 兜底。"""
-    if raw.strip() == "-":
-        raw = sys.stdin.read()
-    codes, invalid = _parse_codes(raw)
-    if invalid:
-        preview = ", ".join(invalid[:8])
-        suffix = f" 等 {len(invalid)} 项" if len(invalid) > 8 else ""
-        _print_err(f"❌ --codes 含非法代码: {preview}{suffix} · 需 6 位 A 股代码")
-        raise typer.Exit(2)
-    if not codes:
-        _print_err("❌ --codes 为空 · 例: kan find --codes 600519,000858 --pos 180:lt:5")
-        raise typer.Exit(2)
-
-    names: dict[str, str] = {}
-    try:
-        from kan.storage.watchlist import preload_stock_names
-
-        names = preload_stock_names()
-    except Exception:
-        # 名称补全失败不应阻断外部候选集流水线；后续数据源仍会按代码拉 K 线。
-        names = {}
-    return [(code, names.get(code, code)) for code in codes]
+    """兼容旧测试 import path · 实现移到 cli.helpers 供 scan/find 共用。"""
+    return _shared_resolve_code_pairs(
+        raw,
+        command="kan find",
+    )
 
 
 def _find_pools(

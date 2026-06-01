@@ -82,8 +82,9 @@ def scan_title(
             f"慢慢看 · {meta.theme.name} 题材位置扫描"
             f" · {'高点' if high_mode else '低点'}模式"
         )
+    source_name = getattr(ctx, "source_name", "") or "自选股"
     title = (
-        f"慢慢看 · 自选股位置扫描 · "
+        f"慢慢看 · {source_name}位置扫描 · "
         f"{'高点' if high_mode else '低点'}模式"
     )
     if signal_only:
@@ -103,6 +104,7 @@ def scan_table(
     high_mode: bool,
     signal_only: bool = False,
     board_index_result: StockScanResult | None = None,
+    show_context: bool = False,
 ) -> Table:
     """kan scan 10-周期全景表 · 支持板块指数 row + 热榜名次 + 自选 ⭐ 高亮。
 
@@ -133,6 +135,13 @@ def scan_table(
         table.add_column("榜", justify="right", style="cyan", min_width=3)
     table.add_column("股票", style="white", no_wrap=True)
     table.add_column("现价", justify="right", style="white", min_width=8)
+    if show_context:
+        table.add_column("PE", justify="right", min_width=6)
+        table.add_column("5日主力(万)", justify="right", min_width=10)
+        table.add_column("10日线", justify="right", min_width=8)
+        table.add_column("20日线", justify="right", min_width=8)
+        table.add_column("20日低", justify="right", min_width=8)
+        table.add_column("除权除息", justify="right", min_width=10)
     for p in display_periods:
         table.add_column(f"{p}日", justify="right", min_width=6)
     table.add_column("共振", justify="center")
@@ -142,6 +151,8 @@ def scan_table(
             _board_reference_label(board_index_result.name, meta),
         ]
         brow.append(f"{board_index_result.current_price:.2f}")
+        if show_context:
+            brow.extend(["-", "-", "-", "-", "-", "-"])
         for p in display_periods:
             pr = next(
                 (x for x in board_index_result.periods if x.period == p), None,
@@ -168,6 +179,15 @@ def scan_table(
         star = "⭐ " if r.symbol in highlight else ""
         row.append(f"{star}{name_short} {r.symbol}{tag}")
         row.append(f"{r.current_price:.2f}")
+        if show_context:
+            row.extend([
+                _fmt_scan_number(getattr(r, "pe_ttm", None), digits=1),
+                _fmt_money_wan(getattr(r, "moneyflow_5d_net_amount", None)),
+                _fmt_scan_number(getattr(r, "ma_10", None)),
+                _fmt_scan_number(getattr(r, "ma_20", None)),
+                _fmt_scan_number(getattr(r, "recent_low_20", None)),
+                _fmt_corporate_action(getattr(r, "corporate_action", None)),
+            ])
 
         for p in display_periods:
             pr = next((x for x in r.periods if x.period == p), None)
@@ -187,6 +207,27 @@ def scan_table(
         table.add_row(*row)
 
     return table
+
+
+def _fmt_scan_number(value: float | None, *, digits: int = 2) -> str:
+    if value is None:
+        return "-"
+    return f"{value:.{digits}f}"
+
+
+def _fmt_money_wan(value: float | None) -> str:
+    if value is None:
+        return "-"
+    return f"{value:,.0f}"
+
+
+def _fmt_corporate_action(action) -> str:
+    if action is None:
+        return "-"
+    text = action.ex_date.strftime("%m-%d")
+    if action.reference_price is not None:
+        text += f"@{action.reference_price:.2f}"
+    return text
 
 
 # ── low / high ────────────────────────────────────────────────────────

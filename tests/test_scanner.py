@@ -93,6 +93,17 @@ def test_resonance_count():
     assert result.high_resonance == 0
 
 
+def test_scan_stock_computes_key_price_levels():
+    """scan 行输出 10/20 日均线与近 20 日低价 · 供挂单/外部消费使用。"""
+    closes = [float(i) for i in range(1, 31)]
+    lows = [c - 0.5 for c in closes]
+    df = _make_df(closes, lows=lows)
+    result = scan_stock(df, "000001", "测试股")
+    assert result.ma_10 == 25.5
+    assert result.ma_20 == 20.5
+    assert result.recent_low_20 == 10.5
+
+
 def test_high_low_uses_correct_columns():
     """n_low 用 low 列、n_high 用 high 列（不是 close）"""
     closes = [15.0] * 10
