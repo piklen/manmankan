@@ -459,7 +459,7 @@ class AtrPctFilter:
 class UpDaysFilter:
     """连阳天数 filter · 例 OP=gte VALUE=3 = 连续 ≥ 3 根阳线 (涨速/加速裸值).
 
-    读 StockScanResult.up_days (candle 口径 close>open · K 线衍生 · --all 不支持)·
+    读 StockScanResult.up_days (candle 口径 close>open · K 线衍生 · --all 走预计算快照)·
     客观连阳计数 · 不判「强势/妖股」· 区别于 --streak (连板天数 · 涨跌停口径)。
     """
 
@@ -576,7 +576,7 @@ class ConditionSet:
         )
 
     def has_kline_filters(self) -> bool:
-        """K 线衍生 filter (位置/共振/涨幅/连阳) · 截面模式 (--all) 不支持。"""
+        """K 线衍生 filter (位置/共振/涨幅/连阳) · --all 走预计算快照。"""
         return bool(
             self.pos_filters
             or self.resonance_filters

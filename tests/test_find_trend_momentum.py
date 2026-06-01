@@ -284,6 +284,34 @@ class TestCrossSectionTrend:
         )
         assert len(out) == 1
 
+    def test_pos_gain_up_days_cross_section_from_scan_snapshot(self):
+        scan = _mk_result(gains={30: 12.0}, up_days=4)
+        row = CrossSectionRow(
+            code="600519",
+            name="贵州茅台",
+            valuation=None,
+            valuation_context=None,
+            scan=scan,
+        )
+        out = apply_cross_section_conditions(
+            [row],
+            ConditionSet.from_flags(
+                pos=["30:lt:60"],
+                gain=["30:gt:10"],
+                up_days=["gte:3"],
+            ),
+        )
+        assert len(out) == 1
+        assert [t.filter_type for t in out[0][1]] == ["pos", "gain", "up_days"]
+
+    def test_exclude_st_cross_section(self):
+        rows = [
+            CrossSectionRow(code="600519", name="贵州茅台", valuation=None, valuation_context=None),
+            CrossSectionRow(code="600000", name="*ST 测试", valuation=None, valuation_context=None),
+        ]
+        out = apply_cross_section_conditions(rows, ConditionSet.from_flags(exclude_st=True))
+        assert [r.code for r, _ in out] == ["600519"]
+
 
 # ──────────────── scanner.scan_stock 衍生（gain_pct / up_days）────────────────
 

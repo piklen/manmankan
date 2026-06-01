@@ -382,7 +382,11 @@ def theme_leaderboard_payload(
         "data_cutoff": data_cutoff.isoformat() if data_cutoff else None,
         "fetched_at": fetched_at or None,
         "results": [
-            {**_trend_dict(r), "rank": idx}
+            {
+                **_trend_dict(r),
+                "rank": idx,
+                "moneyflow_net": getattr(r, "moneyflow_net", None),
+            }
             for idx, r in enumerate(results, start=1)
         ],
     }
@@ -393,6 +397,9 @@ def theme_leaderboard_markdown(
 ) -> str:
     """kan theme trend --format md · 题材榜 · 排名列 + 可选近 N 天明细 · v0.0.5.7。"""
     headers = ["排名", "题材", "现价", "连续", "累计"]
+    show_moneyflow = any(getattr(r, "moneyflow_net", None) is not None for r in results)
+    if show_moneyflow:
+        headers.append("主力净额(万)")
     n_dates = 0
     if latest and results:
         n_dates = min(latest, len(results[0].daily_changes))
@@ -406,6 +413,9 @@ def theme_leaderboard_markdown(
             r.direction,
             f"{abs(r.streak_pct):.2f}%",
         ]
+        if show_moneyflow:
+            mf = getattr(r, "moneyflow_net", None)
+            cells.append(f"{mf:,.0f}" if mf is not None else "—")
         if n_dates:
             for _, chg in r.daily_changes[:n_dates]:
                 if chg > 0:
@@ -503,6 +513,10 @@ _TRIGGER_FLAG = {
     "holders": "--holders",
     "top10": "--top10",
     "north": "--north",
+    "ma_bias": "--ma-bias",
+    "gain": "--gain",
+    "atr_pct": "--atr-pct",
+    "up_days": "--up-days",
 }
 """TriggeredFilter.filter_type → DSL flag (JSON triggered_filters.filter 字段)。"""
 
@@ -591,6 +605,14 @@ def _technical_public_dict(t: TechnicalMetrics | None) -> dict | None:
         "ma_10": t.ma_10,
         "ma_20": t.ma_20,
         "ma_60": t.ma_60,
+        "atr": t.atr,
+        "atr_pct": t.atr_pct(),
+        "ma_bias": {
+            "5": t.ma_bias(5),
+            "10": t.ma_bias(10),
+            "20": t.ma_bias(20),
+            "60": t.ma_bias(60),
+        },
         "boll_upper": t.boll_upper,
         "boll_mid": t.boll_mid,
         "boll_lower": t.boll_lower,
@@ -777,20 +799,48 @@ def find_markdown(
 
 # ── cross section (kan find --all 全市场截面取数 · 地基-3) ────────────────
 
+def _scan_context_public_dict(scan: StockScanResult | None) -> dict | None:
+    """`--all` K 线快照上下文 → JSON 裸值。
+
+    只有 `kan find --all` 搭配位置 / 共振 / 涨幅 / 连阳 filter 时才会挂载 scan。
+    无 K 线快照时返回 None,让调用方能区分"没请求/没数据"和"有快照但裸值为空"。
+    """
+    if scan is None:
+        return None
+    positions = {
+        str(p.period): p.position_pct
+        for p in scan.periods
+        if not p.insufficient
+    }
+    gains = {
+        str(p.period): p.gain_pct
+        for p in scan.periods
+        if not p.insufficient and p.gain_pct is not None
+    }
+    return {
+        "low_resonance": scan.low_resonance,
+        "high_resonance": scan.high_resonance,
+        "up_days": scan.up_days,
+        "positions": positions,
+        "gains": gains,
+    }
+
+
 def _cross_section_result_dict(
     row: CrossSectionRow,
     triggered: tuple[TriggeredFilter, ...] = (),
 ) -> dict:
     """单只截面取数结果 → JSON 对象 (整合-1 · 估值裸值放开 + moneyflow + triggered)。
 
-    截面模式没有 K 线数据 (位置/共振/涨跌停/现价) · 只出截面真实有的:
-    code/name + valuation (量价/市值 + 估值裸值 · 整合-1 放开) + valuation_context
-    (行业内分位 + 行业中位 · *_pct_rank 截面恒 None) + moneyflow +
-    technical/sentiment/chip (整合-2) + triggered_filters (命中审计 · 无 filter 时 [])。
+    基础截面输出:code/name + valuation (量价/市值 + 估值裸值) + valuation_context
+    (行业内分位 + 行业中位 · *_pct_rank 截面恒 None) + moneyflow + technical/
+    sentiment/chip + triggered_filters。需要 K 线类 filter 时,row.scan 额外挂载
+    预计算位置 / 共振 / 涨幅 / 连阳裸值到 context。
     """
     return {
         "code": row.code,
         "name": row.name.replace(" ", ""),
+        "context": _scan_context_public_dict(row.scan),
         "valuation": _valuation_public_dict(row.valuation),
         "valuation_context": (
             row.valuation_context.model_dump() if row.valuation_context else None
@@ -821,10 +871,10 @@ def cross_section_payload(
 ) -> dict:
     """kan find --all --format json 截面取数/筛选 payload (地基-3 + 整合-1 截面 filter)。
 
-    与 find_payload 区别 (维护者拍板新 schema · 不复用):全市场截面**不拉 K 线** ·
-    无 price/positions/resonance (那些是 K 线衍生 · 复用 find_payload 会被迫填
-    price=0.0 等假值 · 撞诚实)。mode="cross_section" 标记形态供 AI 区分。整合-1 起
-    支持截面类 filter (--pe / --moneyflow) · entries 带 triggered · rule.filters 反映输入。
+    与 find_payload 区别 (维护者拍板新 schema · 不复用):全市场基础截面不逐股拉 K,
+    只在请求 K 线类 filter 时挂载批量预计算 context。mode="cross_section" 标记
+    形态供 AI 区分。整合-1 起支持截面类 filter (--pe / --moneyflow) · entries
+    带 triggered · rule.filters 反映输入。
 
     Args:
         entries: (CrossSectionRow, triggered) 配对列表 (已筛 + limit · 顺序即输出序 ·

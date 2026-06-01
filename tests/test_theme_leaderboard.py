@@ -121,6 +121,41 @@ def test_filter_up_keeps_only_long_rises():
     assert [r.name for r in sorted_] == ["甲", "丁"]
 
 
+def test_min_streak_keeps_early_starters():
+    results = [
+        _make_tr("A", "甲", 1, 1.5),
+        _make_tr("B", "乙", 0, 0.0),
+        _make_tr("C", "丙", -2, -3.0),
+    ]
+    sorted_ = theme_leaderboard.sort_leaderboard(results, min_streak=1)
+    assert [r.name for r in sorted_] == ["丙", "甲"]
+
+
+def test_sort_by_latest_single_day_gain():
+    results = [
+        _make_tr("A", "甲", 5, 10.0),
+        _make_tr("B", "乙", 2, 3.0),
+    ]
+    results[0].daily_changes = [("2026-05-29", 0.5)]
+    results[1].daily_changes = [("2026-05-29", 3.0)]
+    sorted_ = theme_leaderboard.sort_leaderboard(results, sort_by="latest")
+    assert [r.name for r in sorted_] == ["乙", "甲"]
+
+
+def test_sort_by_moneyflow_attaches_value():
+    results = [
+        _make_tr("A", "甲", 5, 10.0),
+        _make_tr("B", "乙", 2, 3.0),
+    ]
+    sorted_ = theme_leaderboard.sort_leaderboard(
+        results,
+        sort_by="moneyflow",
+        moneyflow={"A": 100.0, "B": 300.0},
+    )
+    assert [r.name for r in sorted_] == ["乙", "甲"]
+    assert sorted_[0].moneyflow_net == 300.0
+
+
 def test_filter_down_keeps_only_long_falls():
     results = [
         _make_tr("A", "甲", -6, -12.0),

@@ -233,12 +233,18 @@ def sort_leaderboard(
     *,
     up_filter: int | None = None,
     down_filter: int | None = None,
+    min_streak: int | None = None,
+    sort_by: str = "streak",
+    moneyflow: dict[str, float] | None = None,
 ) -> list[TrendResult]:
-    """按 streak 绝对值降序 + streak_pct 绝对值降序 · 跟 trend_batch 排序口径一致。
+    """过滤 + 排序题材榜。
 
     Args:
         up_filter: 只保留 streak >= up_filter(连涨过滤)· None 时不过滤。
         down_filter: 只保留 streak <= -down_filter(连跌过滤)· None 时不过滤。
+        min_streak: 只保留 abs(streak) >= min_streak · None 时不过滤。
+        sort_by: "streak" / "latest" / "moneyflow"。
+        moneyflow: sort_by="moneyflow" 时的 {theme_code: net_amount}。
 
     Returns: 过滤 + 排序后的 list[TrendResult] · 原 list 不变。
     """
@@ -247,7 +253,26 @@ def sort_leaderboard(
         filtered = [r for r in filtered if r.streak >= up_filter]
     elif down_filter is not None:
         filtered = [r for r in filtered if r.streak <= -down_filter]
+    if min_streak is not None:
+        filtered = [r for r in filtered if abs(r.streak) >= min_streak]
 
+    if sort_by == "latest":
+        return sorted(
+            filtered,
+            key=lambda r: (-(r.daily_changes[0][1] if r.daily_changes else 0.0), -abs(r.streak)),
+        )
+    if sort_by == "moneyflow":
+        moneyflow = moneyflow or {}
+        for r in filtered:
+            r.moneyflow_net = moneyflow.get(r.symbol)
+        return sorted(
+            filtered,
+            key=lambda r: (
+                r.moneyflow_net is None,
+                -(r.moneyflow_net or 0.0),
+                -abs(r.streak),
+            ),
+        )
     return sorted(filtered, key=lambda r: (-abs(r.streak), -abs(r.streak_pct)))
 
 

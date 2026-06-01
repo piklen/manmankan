@@ -16,6 +16,9 @@
 """
 from __future__ import annotations
 
+import re
+import sys
+from math import ceil
 from typing import TYPE_CHECKING, Annotated
 
 import typer
@@ -34,10 +37,75 @@ if TYPE_CHECKING:
     from kan.core.find_dsl import ConditionSet
 
 
+_CODE_SPLIT_RE = re.compile(r"[\s,，;；]+")
+_MARKET_PREFIX_RE = re.compile(r"^(SH|SZ|BJ)[.:]?", re.I)
+_MARKET_SUFFIX_RE = re.compile(r"[.:]?(SH|SZ|BJ)$", re.I)
+
+
+def _normalize_code_token(raw: str) -> str | None:
+    """把 sh600519 / 600519.SH / 600519 归一成 6 位代码；非法返 None。"""
+    token = raw.strip()
+    if not token:
+        return None
+    token = _MARKET_PREFIX_RE.sub("", token)
+    token = _MARKET_SUFFIX_RE.sub("", token)
+    return token if re.fullmatch(r"\d{6}", token) else None
+
+
+def _parse_codes(raw: str) -> tuple[list[str], list[str]]:
+    """解析逗号 / 空格 / 换行分隔代码 · 返回 (去重 codes, invalid tokens)。"""
+    codes: list[str] = []
+    invalid: list[str] = []
+    seen: set[str] = set()
+    for token in _CODE_SPLIT_RE.split(raw.strip()):
+        if not token:
+            continue
+        code = _normalize_code_token(token)
+        if code is None:
+            invalid.append(token)
+            continue
+        if code in seen:
+            continue
+        seen.add(code)
+        codes.append(code)
+    return codes, invalid
+
+
+def _resolve_code_pairs(raw: str) -> list[tuple[str, str]]:
+    """`--codes` 原始输入 → [(code, name)] · 名称表不可用时用 code 兜底。"""
+    if raw.strip() == "-":
+        raw = sys.stdin.read()
+    codes, invalid = _parse_codes(raw)
+    if invalid:
+        preview = ", ".join(invalid[:8])
+        suffix = f" 等 {len(invalid)} 项" if len(invalid) > 8 else ""
+        _print_err(f"❌ --codes 含非法代码: {preview}{suffix} · 需 6 位 A 股代码")
+        raise typer.Exit(2)
+    if not codes:
+        _print_err("❌ --codes 为空 · 例: kan find --codes 600519,000858 --pos 180:lt:5")
+        raise typer.Exit(2)
+
+    names: dict[str, str] = {}
+    try:
+        from kan.storage.watchlist import preload_stock_names
+
+        names = preload_stock_names()
+    except Exception:
+        # 名称补全失败不应阻断外部候选集流水线；后续数据源仍会按代码拉 K 线。
+        names = {}
+    return [(code, names.get(code, code)) for code in codes]
+
+
 def _find_pools(
-    industry: str | None, hot: HotList | None, theme: str | None, group: str | None,
+    industry: str | None,
+    hot: HotList | None,
+    theme: str | None,
+    group: str | None,
+    code_pairs: list[tuple[str, str]] | None = None,
 ) -> list[str]:
     """构造 rule.pools 机器标识 (JSON 输出 · 例 ["industry:半导体"] / ["watchlist"])。"""
+    if code_pairs is not None:
+        return [f"codes:{len(code_pairs)}"]
     if industry is not None:
         return [f"industry:{industry}"]
     if hot is not None:
@@ -89,6 +157,24 @@ def _find_filters(conditions: ConditionSet) -> list[dict]:
     if conditions.exclude_st:
         out.append({"name": "--exclude-st"})
     return out
+
+
+def _kline_snapshot_periods(conditions: ConditionSet) -> list[int] | None:
+    """`--all` K 线快照只取 filter 需要的周期,避免轻量条件拉 181 天。"""
+    if not conditions.has_kline_filters():
+        return None
+
+    from kan.core.scanner import PERIODS
+
+    periods: set[int] = set()
+    periods.update(f.period for f in conditions.pos_filters)
+    periods.update(f.period for f in conditions.gain_filters)
+    if conditions.resonance_filters:
+        periods.update(PERIODS)
+    if conditions.up_days_filters:
+        max_days = max(1, max(ceil(f.value) for f in conditions.up_days_filters))
+        periods.add(min(max_days, max(PERIODS)))
+    return sorted(periods or PERIODS)
 
 
 @app.command()
@@ -257,9 +343,16 @@ def find(
         bool,
         typer.Option(
             "--all",
-            help="全市场截面取数 ~5500 只 (估值/量价/资金/技术/情绪/筹码 · 需 token · 不支持 K 线 filter)",
+            help="全市场截面取数 ~5500 只 (估值/资金/技术/位置/涨幅/连阳 · 需 token)",
         ),
     ] = False,
+    codes: Annotated[
+        str | None,
+        typer.Option(
+            "--codes",
+            help="池: 自定义代码列表 (逗号/空格/换行分隔；传 - 从 stdin 读)",
+        ),
+    ] = None,
     fmt: Annotated[
         export.OutputFormat,
         typer.Option("--format", help="输出格式:terminal(默认)/ md / json(AI 消费)"),
@@ -276,6 +369,8 @@ def find(
       kan find --industry 半导体 --format json         # 整池全维度 JSON(AI 取数)
       kan find --industry 半导体 --pe lt:30 --moneyflow gt:0  # 估值+资金组合
       kan find --all --pe lt:20 --format json          # 全市场 PE<20 截面筛
+      kan find --codes 600519,000858 --pos 180:lt:20   # 自定义代码池里筛位置
+      printf "600519\n000858\n" | kan find --codes - --gain 30:gt:10
       kan find --all --rsi lt:30 --streak gte:3 --format json  # 全市场 RSI<30 + 连板≥3
       kan find --industry 半导体 --top10 gte:50 --format json  # 半导体里前十大流通集中度≥50%
 
@@ -289,9 +384,9 @@ def find(
       --streak OP:VAL        连板天数 · 例 gte:3 · 不含 ST (整合-2)
       --winner OP:VAL        获利盘% · 例 gte:50 (整合-2)
       --ma-bias PERIOD:OP:VAL  乖离率 · PERIOD 取 5/10/20/60 · 例 20:gt:0 (收盘距 20 日线)
-      --gain PERIOD:OP:VAL   近 N 日涨幅% · 例 30:gt:20 · K 线池 (--all 不支持)
+      --gain PERIOD:OP:VAL   近 N 日涨幅% · 例 30:gt:20 · K 线池/--all 预计算快照
       --atr-pct OP:VAL       ATR 波动率% · 例 lt:5 (atr/close · 裸值)
-      --up-days OP:VAL       连阳天数 · 例 gte:3 · K 线池 (--all 不支持)
+      --up-days OP:VAL       连阳天数 · 例 gte:3 · K 线池/--all 预计算快照
       --holders OP:VAL       股东户数环比% · 例 lt:0 (户数减少) · 逐股 · --all 不支持 (整合-3)
       --top10 OP:VAL         前十大流通集中度% · 例 gte:50 · 逐股 · --all 不支持 (整合-3)
       --north OP:VAL         北向持股% · 例 gte:3 (香港中央结算季度代理) · 逐股 · --all 不支持 (整合-3)
@@ -304,6 +399,7 @@ def find(
 
     池 selector (跟 kan scan 一致 · 三者互斥):
       --industry NAME / --hot rank|surge / --theme NAME (不指定默认自选)
+      --codes LIST (逗号/空格/换行分隔 · `--codes -` 从 stdin 读)
       --only-watchlist (需配合 pool · 取交集)
       --group GROUP (选自选股具名组)
     """
@@ -370,21 +466,22 @@ def find(
         raise typer.Exit(1)
 
     # 2. Validate pool flags (复用 scan 互斥校验)
-    if sum(1 for x in (industry, hot, theme) if x is not None) > 1:
-        _print_err("❌ --industry / --hot / --theme 三者互斥")
+    if sum(1 for x in (industry, hot, theme, codes) if x is not None) > 1:
+        _print_err("❌ --industry / --hot / --theme / --codes 四者互斥")
         raise typer.Exit(2)
-    source_mode = industry is not None or hot is not None or theme is not None
+    source_mode = industry is not None or hot is not None or theme is not None or codes is not None
+    if codes is not None and only_watchlist:
+        _print_err("❌ --codes 与 --only-watchlist 不能同时使用")
+        raise typer.Exit(2)
+    if codes is not None and group is not None:
+        _print_err("❌ --codes 已显式指定候选池 · 不再叠加 --group")
+        raise typer.Exit(2)
+    code_pairs = _resolve_code_pairs(codes) if codes is not None else None
 
     # 2.5 全市场截面取数 (--all) · 不走 K 线管线 (截面专用路径 · PRD §3.2) · 早返回不读自选
     if all_stocks:
         if source_mode:
-            _print_err("❌ --all 与 --industry / --hot / --theme 互斥")
-            raise typer.Exit(2)
-        if conditions.has_kline_filters() or conditions.exclude_st:
-            _print_err(
-                "❌ --all 全市场截面不支持 K 线 filter (--pos / --resonance / --exclude-st)\n"
-                "   截面只含市场客观事实 + 估值/资金/行业分位 · 位置筛请缩小池 (--industry 等)"
-            )
+            _print_err("❌ --all 与 --industry / --hot / --theme / --codes 互斥")
             raise typer.Exit(2)
         if conditions.needs_fundamentals():
             _print_err(
@@ -407,7 +504,11 @@ def find(
         from kan.core.cross_section import run_cross_section
         from kan.core.stock_set import AllStocksSet
 
-        cs = run_cross_section(AllStocksSet())
+        cs = run_cross_section(
+            AllStocksSet(),
+            need_kline=conditions.has_kline_filters(),
+            kline_periods=_kline_snapshot_periods(conditions),
+        )
         if not cs.rows:
             _print_err(
                 "❌ 全市场截面无数据 · 需配置 tushare token\n"
@@ -436,21 +537,28 @@ def find(
         return
 
     watchlist_pairs = (
-        _load_watchlist_pairs(group) if source_mode else _get_watchlist_pairs(group)
+        [] if code_pairs is not None else (
+            _load_watchlist_pairs(group) if source_mode else _get_watchlist_pairs(group)
+        )
     )
     if only_watchlist and not source_mode:
         _print_err("❌ --only-watchlist 需配合 --industry/--hot/--theme")
         raise typer.Exit(1)
 
     # 3. Build StockSet · 复用 from_flags
-    stock_set = from_flags(
-        industry=industry,
-        hot=hot,
-        theme=theme,
-        watchlist_pairs=watchlist_pairs,
-        only_watchlist=only_watchlist,
-        watchlist_group=group,
-    )
+    if code_pairs is not None:
+        from kan.core.stock_set import CodeListSet
+
+        stock_set = CodeListSet(code_pairs)
+    else:
+        stock_set = from_flags(
+            industry=industry,
+            hot=hot,
+            theme=theme,
+            watchlist_pairs=watchlist_pairs,
+            only_watchlist=only_watchlist,
+            watchlist_group=group,
+        )
 
     # 4. Fetch + scan (复用 pipeline · low mode 算位置 + 共振)
     ctx = run_data_pipeline(stock_set, compute=scan_batch, mode="low")
@@ -490,7 +598,7 @@ def find(
     # 6. Export 分发 (json/md) · m.result 已按需 enrich (is_export → need_enrich) → 全维度
     if is_export:
         entries = [(m, m.result) for m in matches_limited]
-        pools = _find_pools(industry, hot, theme, group)
+        pools = _find_pools(industry, hot, theme, group, code_pairs)
         filters = _find_filters(conditions)
         query_time = datetime.now().astimezone().isoformat(timespec="seconds")
         if fmt is export.OutputFormat.json:

@@ -381,7 +381,7 @@ class TestInfoPayloadValuation:
 class TestCrossSectionPayload:
     """kan find --all --format json 截面 payload (地基-3 + 整合-1) · 裸值放开 + moneyflow。"""
 
-    def _row(self, code="600519", name="贵州茅台", with_ctx=True, with_mf=True):
+    def _row(self, code="600519", name="贵州茅台", with_ctx=True, with_mf=True, scan=None):
         from kan.core.cross_section import CrossSectionRow
         from kan.core.models import ValuationContext
         ctx = ValuationContext(
@@ -393,7 +393,7 @@ class TestCrossSectionPayload:
         mf = _moneyflow() if with_mf else None
         return CrossSectionRow(
             code=code, name=name, valuation=_valuation(),
-            valuation_context=ctx, moneyflow=mf,
+            valuation_context=ctx, moneyflow=mf, scan=scan,
         )
 
     def _entries(self, *rows, triggered=()):
@@ -483,6 +483,29 @@ class TestCrossSectionPayload:
             pool_size=1, data_cutoff=None, stale=True,
         )
         assert p["results"][0]["moneyflow"] is None
+
+    def test_scan_context_serialized_when_present(self):
+        scan = StockScanResult(
+            symbol="600519", name="贵州茅台", current_price=1326.0,
+            scan_date=datetime.date(2026, 5, 29),
+            periods=[
+                PeriodResult(period=30, n_low=1200.0, n_high=1400.0,
+                             position_pct=63.0, at_low=False, at_high=False,
+                             gain_pct=8.5),
+                PeriodResult(period=60, n_low=0.0, n_high=0.0,
+                             position_pct=0.0, at_low=False, at_high=False,
+                             insufficient=True),
+            ],
+            low_resonance=1, high_resonance=0, up_days=4,
+        )
+        p = export.cross_section_payload(
+            self._entries(self._row(scan=scan)), query_time="t",
+            pool_size=1, data_cutoff=None, stale=True,
+        )
+        ctx = p["results"][0]["context"]
+        assert ctx["up_days"] == 4
+        assert ctx["positions"] == {"30": 63.0}
+        assert ctx["gains"] == {"30": 8.5}
 
     def test_empty_entries_valid(self):
         p = export.cross_section_payload(

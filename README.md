@@ -117,6 +117,7 @@ uv tool install manmankan           # 一行装好
 kan add 600519 茅台 601318          # 代码 / 名称混搭
 kan scan                            # 一屏看完位置 + 共振信号
 kan find --pos 180:lt:5 --limit 5   # 按你的规则筛:180 日位置 < 5%
+kan find --codes 600519,000858 --gain 30:gt:10  # 任意代码池里筛
 ```
 
 第一次跑会有两次「看起来卡住」的时刻,**都是正常的**:
@@ -213,6 +214,9 @@ kan find --pos 180:lt:5                       # 180 日位置 < 5%
 kan find --resonance low:gte:3                # 低点共振 ≥ 3 个周期
 kan find --pos 60:lt:10 --resonance low:gte:2 # 多条件(filter 间 AND)
 kan find --industry 半导体 --pos 180:lt:10    # 行业池里筛(也支持 --hot / --theme / --group)
+kan find --codes 600519,000858 --pos 180:lt:20 # 自定义代码池筛选
+printf "600519\n000858\n" | kan find --codes - --gain 30:gt:10
+kan find --all --up-days gte:3 --format json   # 全市场截面 + K 线预计算裸值筛
 kan find --pos 180:lt:5 --limit 20            # 输出条数上限(默认 50)
 ```
 
@@ -226,9 +230,18 @@ kan scan --hot rank            # 东财人气榜(rank)· 也支持 surge 飙升�
 kan scan --theme AI应用        # 扫某题材全成分股
 kan scan --theme AI应用 --only-watchlist   # 只看自选 ∩ 题材
 kan theme search 数据要素      # 模糊搜题材名(theme list 列清单)
+kan theme trend --min-streak 1 --sort latest # 题材连涨/连跌榜 · 看刚启动题材
+kan board rank --kind industry --by moneyflow # 行业板块主力净额榜
+kan board rank --kind theme --by pos -p 60    # 题材板块 N 日位置榜(N=3-180)
 ```
 
 > `--industry` / `--hot` / `--theme` 三者互斥 · `--only-watchlist` 需配合其一。题材分类来自上游数据源口径,不是慢慢看的判断。
+
+股票池选择口径:
+
+- `kan scan/low/high/trend/fetch` 默认看自选股 default 组,`--group` 切换自选分组。
+- `--industry` / `--theme` / `--hot` 会把池切到对应行业 / 题材 / 热榜;`--only-watchlist` 取自选交集。
+- `kan find --codes` 接外部候选代码池;`kan find --all` 是全市场截面池,不是所有命令的通用 `--all` 分组。
 
 **导出 / 数据 / 配置 / 维护**
 
@@ -284,6 +297,16 @@ for period, stocks in hits.items():
 **跨板块涨跌停**:`kan scan` / `kan trend --latest` 自动标记,按板块差异化——主板 ±10% / 创业板 · 科创板 ±20% / 北交所 ±30% / ST · *ST ±5%(2026-07-06 起 ±10%,来自交易所公告,代码内置自动切换)。
 
 **隐私**:完全本地运行,**不上传任何用户数据**。不登录、不注册、不上传自选、不向第三方推送查询行为、不做遥测。装过早期版本(`~/.kan/`)首次启动会自动迁移到 XDG 路径。详见 [`SECURITY.md`](SECURITY.md)。
+
+---
+
+## 数据能力边界
+
+慢慢看当前定位是**本地行情位置 + 用户主导筛选器**。它可以把自选、行业、题材、热榜、全市场或外部传入的代码池接到同一组位置 / 共振 / 量价 / 资金 / 技术 / 部分基本面过滤上,适合做流水线里的数据过滤环节。
+
+已覆盖:多周期位置、共振、涨幅、连阳、成交量、估值裸值(PE/PB/PS/股息率)、ROE/净利增速/营收增速、主力净额、RSI/MACD/KDJ/均线/ATR/BOLL、连板、筹码、股东户数/十大流通/北向季度代理。
+
+明确不覆盖:完整财报数据库、公告解读、分红登记日 / 除息日 / 派息日流程、实时行情、港美股、目标价、评级、策略 preset。股息相关当前只提供 `dv_ttm` 股息率裸值;分红日历请组合交易所公告、公司公告或其它专业数据源。
 
 ---
 

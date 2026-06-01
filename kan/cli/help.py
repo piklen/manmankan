@@ -45,7 +45,7 @@ def help_cmd() -> None:
 
 [bold cyan]单只详情 / 多股对比 / 历史回溯[/bold cyan]
   kan info 600519                    单只股票全周期位置 + 涨跌 + 共振
-  kan compare 600519 000858          多股横向对比（2-8 只 · -p 30,60,120）
+  kan compare 600519 000858          多股横向对比（2-30 只 · 终端自动分页）
   kan history 600519                 位置历史回溯（-p 切周期 · 纯离线读每日快照）
 
 [bold cyan]连续涨跌[/bold cyan]
@@ -69,6 +69,9 @@ def help_cmd() -> None:
   kan find --pos 60:lt:10 --resonance low:gte:2  多条件 AND
   kan find --exclude-st --pos 180:lt:5         排 ST · 位置 filter
   kan find --industry 半导体 --pos 180:lt:10   行业池里筛跌透的
+  kan find --codes 600519,000858 --gain 30:gt:10  任意代码池里筛近 30 日涨幅
+  cat codes.txt | kan find --codes - --pos 60:lt:20  stdin 代码池
+  kan find --all --up-days gte:3               全市场截面筛连涨天数
   kan find --pos 180:lt:5 --limit 20           自定义输出条数
   kan find --industry 半导体 --format json     整池全维度 JSON(AI 取数 · 无 filter 即取数)
 
@@ -84,16 +87,21 @@ def help_cmd() -> None:
   kan info --industry 半导体      查看行业板块档案
   kan theme list                  列出热门题材（top 30）
   kan theme search 数据要素       模糊搜题材
+  kan theme trend --min-streak 1  题材连涨榜阈值下探到 1 天
+  kan theme trend --sort latest   按最新单日涨幅排序
+  kan board rank --kind industry --by moneyflow  行业资金净额榜
+  kan board rank --kind theme --by pos -p 30      题材位置分位榜
 
   [dim]scan / low / high / trend / fetch 全部支持 --industry / --hot / --theme 自由切换[/dim]
-  [dim]--industry / --hot / --theme 三者互斥 · 加 --only-watchlist 取自选交集[/dim]
+  [dim]find 支持 --industry / --hot / --theme / --all / --codes 候选池 · 池参数互斥[/dim]
 
 [bold cyan]导出格式[/bold cyan]
   kan scan --format md      markdown 表格输出
   kan scan --format json    JSON 结构化输出
   kan compare 600519 000858 --format md
+  kan board rank --kind industry --by gain --format json
 
-  [dim]--format 适用 scan / low / high / info / trend / compare / history / find[/dim]
+  [dim]--format 适用 scan / low / high / info / trend / compare / history / find / board rank[/dim]
 
 [bold cyan]数据管理[/bold cyan]
   kan fetch                 拉取数据（通常不需要，scan 自动更新）

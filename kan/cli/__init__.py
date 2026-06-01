@@ -11,6 +11,7 @@
 from kan.app import app
 from kan.cli import (
     atexit,
+    board_cmds,
     compare_cmds,
     config_cmds,
     extreme_cmds,

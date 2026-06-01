@@ -571,6 +571,9 @@ def theme_leaderboard_table(
     table.add_column("现价", justify="right", style="white")
     table.add_column("连续", justify="center")
     table.add_column("累计", justify="right")
+    show_moneyflow = any(getattr(r, "moneyflow_net", None) is not None for r in results)
+    if show_moneyflow:
+        table.add_column("主力净额(万)", justify="right")
 
     if latest and results:
         ref = results[0]
@@ -598,6 +601,9 @@ def theme_leaderboard_table(
             streak_text,
             cum_text,
         ]
+        if show_moneyflow:
+            mf = getattr(r, "moneyflow_net", None)
+            row.append(f"{mf:,.0f}" if mf is not None else "—")
 
         if latest:
             for _, chg in r.daily_changes[:latest]:

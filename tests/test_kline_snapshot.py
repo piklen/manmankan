@@ -1,0 +1,43 @@
+"""kan.data.kline_snapshot · 全市场 K 线预计算快照测试。"""
+
+from __future__ import annotations
+
+from datetime import date, timedelta
+
+import pandas as pd
+
+from kan.data import kline_snapshot
+
+
+def _daily(d: date, close: float) -> pd.DataFrame:
+    return pd.DataFrame([{
+        "symbol": "600519",
+        "date": d,
+        "open": close - 1,
+        "high": close + 1,
+        "low": close - 2,
+        "close": close,
+        "volume": 1000,
+        "amount": 10000,
+    }])
+
+
+def test_fetch_kline_snapshot_builds_position_gain_and_up_days(monkeypatch, tmp_path):
+    monkeypatch.setattr("kan.storage.paths.DATA_DIR", tmp_path)
+    monkeypatch.setattr(kline_snapshot, "DATA_DIR", tmp_path)
+    days = [date(2026, 5, 25) + timedelta(days=i) for i in range(6)]
+    monkeypatch.setattr(kline_snapshot, "_recent_trade_dates", lambda _end, _count: days)
+
+    def fake_daily(td, *, symbols=None, force=False):
+        d = date.fromisoformat(f"{td[:4]}-{td[4:6]}-{td[6:]}")
+        idx = days.index(d)
+        return _daily(d, 100.0 + idx * 2)
+
+    monkeypatch.setattr(kline_snapshot, "fetch_daily_bars", fake_daily)
+    out = kline_snapshot.fetch_kline_snapshot("20260530", periods=[3, 5])
+    assert len(out) == 1
+    row = out.iloc[0]
+    assert row["symbol"] == "600519"
+    assert row["pos_3"] is not None
+    assert row["gain_3"] > 0
+    assert row["up_days"] == 6

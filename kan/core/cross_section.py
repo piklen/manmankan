@@ -1,10 +1,10 @@
 """全市场截面取数编排 (地基-3 · kan find --all 截面专用路径)。
 
 与 K 线管线 (pipeline.run_data_pipeline + scan_batch) 正交:K 线管线逐股
-auto-fetch 历史 K 线 (全市场 ~5500 只 = 灾难) · 本模块走截面 (按 trade_date
-一次拉全市场 daily_basic · 一次 HTTP) · 只算"市场客观事实 + 行业内分位 + 行业
-中位" · **不带** K 线位置/共振 · **不带**历史估值分位 (逐股 HTTP 太贵 ·
-PRD §3.2 截面 vs K 线代价不对称)。
+auto-fetch 历史 K 线 (全市场 ~5500 只 = 灾难) · 本模块主路径走截面 (按 trade_date
+一次拉全市场 daily_basic) · 只算"市场客观事实 + 行业内分位 + 行业中位"。
+需要位置/共振/涨幅/连阳时,通过 `need_kline=True` 额外挂载每日批量 K 线快照,
+仍避免逐股拉 K。历史估值分位暂不做 (逐股 HTTP 太贵 · PRD §3.2 截面 vs K 线代价不对称)。
 
 数据流 (全部复用现成):
   stock_set.pairs()                    → [(code, name)] 骨架 (name 来源)
@@ -29,7 +29,9 @@ if TYPE_CHECKING:
     from kan.core.models import (
         ChipMetrics,
         MoneyflowMetrics,
+        PeriodResult,
         SentimentMetrics,
+        StockScanResult,
         TechnicalMetrics,
         ValuationContext,
         ValuationMetrics,
@@ -53,6 +55,7 @@ class CrossSectionRow:
     technical: TechnicalMetrics | None = None    # 整合-2 · 技术面截面 (None=无数据)
     sentiment: SentimentMetrics | None = None    # 整合-2 · 情绪截面 (None=当日未涨跌停)
     chip: ChipMetrics | None = None              # 整合-2 · 筹码截面 (None=无数据)
+    scan: StockScanResult | None = None          # --all K 线裸值快照 (pos/gain/up_days)
 
 
 @dataclass(frozen=True)
@@ -81,16 +84,81 @@ def _cross_data_cutoff(cross: pd.DataFrame) -> date | None:
     return max(vals) if vals else None
 
 
+def _max_date_from_series(values) -> date | None:
+    """从 pandas Series / iterable 里取最大 date · 空或全 NaT 返回 None。"""
+    import pandas as pd
+
+    vals = [d for d in values if d is not None and not pd.isna(d)]
+    return max(vals) if vals else None
+
+
+def _snapshot_row_to_scan(row, name: str, periods: list[int]) -> StockScanResult | None:
+    """kline_snapshot 一行 → StockScanResult · 复用现有 matcher/export context。"""
+    import pandas as pd
+
+    from kan.core.models import PeriodResult, StockScanResult
+
+    symbol = str(row.get("symbol", "")).strip()
+    trade_date = row.get("trade_date")
+    close = row.get("close")
+    if not symbol or trade_date is None or pd.isna(trade_date) or close is None or pd.isna(close):
+        return None
+    trade_date = pd.Timestamp(trade_date).date()
+    period_results: list[PeriodResult] = []
+    for p in periods:
+        insufficient = bool(row.get(f"insufficient_{p}", True))
+        pos = row.get(f"pos_{p}")
+        low = row.get(f"low_{p}")
+        high = row.get(f"high_{p}")
+        gain = row.get(f"gain_{p}")
+        if insufficient or pos is None or pd.isna(pos):
+            period_results.append(PeriodResult(
+                period=p,
+                n_low=0.0,
+                n_high=0.0,
+                position_pct=0.0,
+                at_low=False,
+                at_high=False,
+                insufficient=True,
+                gain_pct=None if gain is None or pd.isna(gain) else float(gain),
+            ))
+            continue
+        period_results.append(PeriodResult(
+            period=p,
+            n_low=0.0 if low is None or pd.isna(low) else round(float(low), 2),
+            n_high=0.0 if high is None or pd.isna(high) else round(float(high), 2),
+            position_pct=float(pos),
+            at_low=float(pos) <= 5.0,
+            at_high=float(pos) >= 95.0,
+            gain_pct=None if gain is None or pd.isna(gain) else float(gain),
+        ))
+    return StockScanResult(
+        symbol=symbol,
+        name=name,
+        current_price=round(float(close), 2),
+        scan_date=trade_date,
+        periods=period_results,
+        low_resonance=int(row.get("low_resonance", 0) or 0),
+        high_resonance=int(row.get("high_resonance", 0) or 0),
+        is_st=("ST" in name or "*ST" in name),
+        up_days=int(row.get("up_days", 0) or 0),
+    )
+
+
 def run_cross_section(
     stock_set: StockSet,
     *,
     trade_date: str | None = None,
+    need_kline: bool = False,
+    kline_periods: list[int] | None = None,
 ) -> CrossSectionCtx:
     """全市场截面编排 · 不走 run_data_pipeline (K 线管线) · 截面一次拉全市场。
 
     Args:
         stock_set: 任意 StockSet (--all 传 AllStocksSet · name 来源 + 池范围)
         trade_date: YYYYMMDD 截面日 · None → 最近交易日 (fetch_metrics 内部解析)
+        need_kline: True 时额外挂载每日 K 线预计算快照 (位置/涨幅/连阳/共振)
+        kline_periods: 快照需要计算的周期 · None 时默认全周期 PERIODS
 
     Returns:
         CrossSectionCtx · rows 顺序跟随 stock_set.pairs()。
@@ -120,18 +188,27 @@ def run_cross_section(
 
     codes = [c for c, _ in pairs]
     cross = fetch_metrics(trade_date=trade_date, symbols=codes)
-    if cross is None or cross.empty:
+    cross_empty = cross is None or cross.empty
+    if cross_empty and not need_kline:
         # 无 token / 无截面 → 全空 (caller 报错引导配 token)
         return CrossSectionCtx(
             rows=[], pool_size=pool_size, data_cutoff=None, stale=True,
         )
 
     l1_map = fetch_sw_l1_map()
-    contexts = compute_cross_section_contexts(
-        cross, l1_map, lookback_days=_DEFAULT_LOOKBACK_DAYS,
+    contexts = (
+        {}
+        if cross_empty
+        else compute_cross_section_contexts(
+            cross, l1_map, lookback_days=_DEFAULT_LOOKBACK_DAYS,
+        )
     )
     fallback_date = _resolve_fallback_date(trade_date, latest_trade_date)
-    by_symbol = {str(r.get("symbol", "")).strip(): r for _, r in cross.iterrows()}
+    by_symbol = (
+        {}
+        if cross_empty
+        else {str(r.get("symbol", "")).strip(): r for _, r in cross.iterrows()}
+    )
 
     # 主力资金截面 (整合-1 · 同截面廉价一次 HTTP · 支持 --all --moneyflow · 早期/无数据降级)
     mf = fetch_moneyflow(trade_date=trade_date, symbols=codes)
@@ -160,6 +237,30 @@ def run_cross_section(
         if chip is not None and not chip.empty
         else {}
     )
+    from kan.core.scanner import PERIODS
+
+    scan_periods = sorted(set(kline_periods or PERIODS))
+    if need_kline:
+        from kan.data.kline_snapshot import fetch_kline_snapshot
+
+        snap = fetch_kline_snapshot(trade_date=trade_date, symbols=codes, periods=scan_periods)
+        scan_by_symbol = (
+            {
+                str(r.get("symbol", "")).strip(): r
+                for _, r in snap.iterrows()
+            }
+            if snap is not None and not snap.empty
+            else {}
+        )
+    else:
+        snap = None
+        scan_by_symbol = {}
+
+    if cross_empty and not scan_by_symbol:
+        # 无 token / 无截面 / 无 K 线快照 → 全空 (caller 报错引导配 token)
+        return CrossSectionCtx(
+            rows=[], pool_size=pool_size, data_cutoff=None, stale=True,
+        )
 
     rows: list[CrossSectionRow] = []
     for code, name in pairs:
@@ -173,6 +274,11 @@ def run_cross_section(
         sentiment = _row_to_sentiment(senti_row, fallback_date) if senti_row is not None else None
         chip_row = chip_by_symbol.get(code)
         chip_metrics = _row_to_chip(chip_row, fallback_date) if chip_row is not None else None
+        scan_row = scan_by_symbol.get(code)
+        scan = (
+            _snapshot_row_to_scan(scan_row, name, scan_periods)
+            if scan_row is not None else None
+        )
         rows.append(CrossSectionRow(
             code=code,
             name=name,
@@ -182,9 +288,18 @@ def run_cross_section(
             technical=technical,
             sentiment=sentiment,
             chip=chip_metrics,
+            scan=scan,
         ))
 
-    data_cutoff = _cross_data_cutoff(cross)
+    cutoffs = []
+    data_cutoff = None if cross_empty else _cross_data_cutoff(cross)
+    if data_cutoff is not None:
+        cutoffs.append(data_cutoff)
+    if snap is not None and not snap.empty and "trade_date" in snap.columns:
+        snap_cutoff = _max_date_from_series(snap["trade_date"])
+        if snap_cutoff is not None:
+            cutoffs.append(snap_cutoff)
+    data_cutoff = max(cutoffs) if cutoffs else None
     stale = data_cutoff is None or data_cutoff < latest_trade_date()
     return CrossSectionCtx(
         rows=rows, pool_size=pool_size, data_cutoff=data_cutoff, stale=stale,

@@ -9,12 +9,13 @@ from kan.app import app
 from kan.cli.helpers import _print_err, _safe_error_msg, _with_heavy_imports_spinner
 from kan.storage import export
 
-MAX_COMPARE_SYMBOLS = 8
+MAX_COMPARE_SYMBOLS = 30
+COMPARE_PAGE_SIZE = 8
 
 
 @app.command()
 def compare(
-    symbols: Annotated[list[str], typer.Argument(help="股票代码或名称（2-8 只）")],
+    symbols: Annotated[list[str], typer.Argument(help="股票代码或名称（2-30 只）")],
     periods: Annotated[
         str,
         typer.Option(
@@ -34,7 +35,7 @@ def compare(
     if len(symbols) > MAX_COMPARE_SYMBOLS:
         _print_err(
             f"❌ 最多对比 {MAX_COMPARE_SYMBOLS} 只 · 当前 {len(symbols)} 只 · "
-            "表格太宽看不清"
+            "请分批输入或导出 CSV 后拆分"
         )
         raise typer.Exit(2)
 
@@ -96,17 +97,25 @@ def compare(
         typer.echo(export.compare_markdown(results, periods=period_list))
         return
 
-    table = terminal.compare_table(results, periods=period_list)
-    console.print(table)
+    pages = [
+        results[i:i + COMPARE_PAGE_SIZE]
+        for i in range(0, len(results), COMPARE_PAGE_SIZE)
+    ]
+    for idx, page in enumerate(pages, start=1):
+        if len(pages) > 1:
+            console.print(f"\n[bold]kan compare · 第 {idx}/{len(pages)} 页[/bold]")
+        table = terminal.compare_table(page, periods=period_list)
+        console.print(table)
 
     # 窄屏 + 多列时给提示 · 80 列下 ≥5 只表头会折断或裁掉
     # 经验阈值:每只股大约要 12-14 列(名称 + 代码 + 现价 + N 周期位置)
     estimated_width_per_col = 14
     overhead = 12  # "指标" 列宽 + 表格边框
-    needed = overhead + len(symbols) * estimated_width_per_col
+    widest_page = max((len(p) for p in pages), default=0)
+    needed = overhead + widest_page * estimated_width_per_col
     if console.width < needed:
         console.print(
-            f"\n[dim]💡 窄屏模式 · 终端 {console.width} 列 / 建议 ≥ {needed} 列容 {len(symbols)} 只"
-            f" · 太窄时名称/代码会被裁 · 试 4 只以内 / 加宽终端 / 用 --format md 看完整表[/dim]"
+            f"\n[dim]💡 窄屏模式 · 终端 {console.width} 列 / 建议 ≥ {needed} 列容 {widest_page} 只"
+            f" · 太窄时名称/代码会被裁 · 降低每次输入数量 / 加宽终端 / 用 --format md 看完整表[/dim]"
         )
     console.print(DISCLAIMER, style="dim")
