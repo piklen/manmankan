@@ -8,20 +8,55 @@ on:
 permissions:
   contents: read
 
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+env:
+  KAN_NO_COMPLETION_AUTOINSTALL: "1"
+  KAN_NO_UPDATE_CHECK: "1"
+
 jobs:
   build-and-publish:
     name: Build and publish to PyPI
     runs-on: ubuntu-latest
+    timeout-minutes: 30
     permissions:
       id-token: write  # trusted publisher OIDC
       contents: read
     steps:
-      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v4 (pinned 2025-11-13)
-      - uses: astral-sh/setup-uv@08807647e7069bb48b6ef5acd8ec9567f424441b  # v4 (pinned 2024-11-30)
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6 (pinned 2026-05-27)
+      - uses: astral-sh/setup-uv@08807647e7069bb48b6ef5acd8ec9567f424441b  # pinned 2026-05-27
         with:
           python-version: '3.12'
+          enable-cache: true
+      - name: Lockfile is current
+        run: uv lock --check
+      - name: Install dependencies
+        run: uv sync --locked --all-groups --all-extras
+      - name: Release privacy gate
+        run: bash scripts/check-privacy-leaks.sh
+      - name: Release test gate
+        run: |
+          uv run ruff check kan/ tests/
+          uv run pytest -q -m "not tty and not network"
       - name: Build
-        run: uv build
+        run: uv build --clear
+      - name: Verify dist artifacts
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          import sys
+
+          dist = sorted(Path("dist").iterdir())
+          has_wheel = any(p.suffix == ".whl" for p in dist)
+          has_sdist = any(p.name.endswith(".tar.gz") for p in dist)
+          if not has_wheel or not has_sdist:
+              print("dist/ must contain both wheel and sdist:")
+              for p in dist:
+                  print(f"  - {p.name}")
+              sys.exit(1)
+          PY
       - name: Compute install.sh / install.ps1 SHA256
         run: |
           echo "## install scripts SHA256 (for Verify before bash · 用户校验用)" >> "$GITHUB_STEP_SUMMARY"
@@ -30,7 +65,7 @@ jobs:
           shasum -a 256 scripts/install.ps1 >> "$GITHUB_STEP_SUMMARY"
           echo '```' >> "$GITHUB_STEP_SUMMARY"
       - name: Publish to PyPI
-        uses: pypa/gh-action-pypi-publish@cef221092ed1bacb1cc03d23a2d87d1d172e277b  # release/v1 (pinned 2026-02-18)
+        uses: pypa/gh-action-pypi-publish@106e0b0b7c337fa67ed433972f777c6357f78598  # pinned 2026-06-02
         with:
           packages-dir: dist/
           attestations: true  # sigstore PEP 740 attestation
@@ -41,6 +76,7 @@ jobs:
     name: Smoke test from PyPI (clean install)
     needs: build-and-publish
     runs-on: ${{ matrix.os }}
+    timeout-minutes: 20
     strategy:
       fail-fast: false
       matrix:
@@ -51,16 +87,16 @@ jobs:
       - name: Wait for PyPI CDN propagation
         run: sleep 60  # PyPI index 同步需要 30-60s
       - name: Setup Python
-        uses: actions/setup-python@v6
+        uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405  # pinned 2026-06-02
         with:
           python-version: ${{ matrix.python }}
+      - uses: astral-sh/setup-uv@08807647e7069bb48b6ef5acd8ec9567f424441b  # pinned 2026-05-27
       - name: Install manmankan from PyPI (${{ matrix.manager }})
         run: |
           # ref_name 形如 v0.0.4.4 → manmankan==0.0.4.4
           VERSION="${GITHUB_REF_NAME#v}"
           case "${{ matrix.manager }}" in
             uv)
-              pip install uv
               uv tool install "manmankan==${VERSION}" --reinstall
               ;;
             pip)
@@ -74,5 +110,8 @@ jobs:
           kan --version
           KAN_NO_UPDATE_CHECK=1 kan --help
           KAN_NO_UPDATE_CHECK=1 kan scan --help
+          KAN_NO_UPDATE_CHECK=1 kan find --help
+          KAN_NO_UPDATE_CHECK=1 kan board rank --help
           KAN_NO_UPDATE_CHECK=1 kan trend --help
           KAN_NO_UPDATE_CHECK=1 kan info --help
+          KAN_NO_UPDATE_CHECK=1 kan history --help
