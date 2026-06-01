@@ -50,6 +50,7 @@ class TestResolveConfig:
         monkeypatch.setattr(config, "CONFIG_PATH", tmp_path / "config.json")
         monkeypatch.delenv("TUSHARE_TOKEN", raising=False)
         monkeypatch.delenv("TUSHARE_ENDPOINT", raising=False)
+        monkeypatch.delenv("KAN_ALLOW_INSECURE_TUSHARE", raising=False)
         return tmp_path
 
     def test_no_config_no_env_returns_none_token_default_endpoint(self, temp_config):
@@ -88,6 +89,17 @@ class TestResolveConfig:
         monkeypatch.setenv("TUSHARE_ENDPOINT", "not-a-url")
         _, endpoint = tushare._resolve_config()
         assert endpoint == self.DEFAULT_ENDPOINT
+
+    def test_http_endpoint_falls_back_without_opt_in(self, temp_config):
+        config.save({**config.DEFAULT_CONFIG, "tushare_endpoint": "http://mirror.local"})
+        _, endpoint = tushare._resolve_config()
+        assert endpoint == self.DEFAULT_ENDPOINT
+
+    def test_http_endpoint_allowed_with_opt_in(self, temp_config, monkeypatch):
+        monkeypatch.setenv("KAN_ALLOW_INSECURE_TUSHARE", "1")
+        config.save({**config.DEFAULT_CONFIG, "tushare_endpoint": "http://mirror.local"})
+        _, endpoint = tushare._resolve_config()
+        assert endpoint == "http://mirror.local"
 
 
 class TestPostTushareApi:

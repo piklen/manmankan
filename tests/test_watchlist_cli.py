@@ -140,7 +140,7 @@ def test_remove_command_existing_stock(cli_runner):
 def test_remove_command_nonexistent_stock(cli_runner):
     """`kan remove 600519` 自选列表为空 · 应给提示"""
     result = cli_runner.invoke(app, ["remove", "600519"])
-    assert result.exit_code == 0
+    assert result.exit_code == 1
     # 应给"未找到 / 不在 / 没有"等用户友好提示
     output = result.output.lower()
     assert "未找到" in result.output or "不在" in result.output or "no" in output

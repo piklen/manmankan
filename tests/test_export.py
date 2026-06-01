@@ -9,6 +9,7 @@ from kan.storage.export import (
     OutputFormat,
     compare_markdown,
     compare_payload,
+    error_payload,
     extreme_markdown,
     extreme_payload,
     info_markdown,
@@ -73,6 +74,7 @@ def test_scan_payload_shape():
     assert payload["command"] == "scan"
     assert payload["mode"] == "low"
     assert payload["data_cutoff"] == "2026-05-21"
+    assert "disclaimer" in payload
     assert payload["stale"] is False
     assert len(payload["results"]) == 1
     assert payload["results"][0]["symbol"] == "600519"
@@ -138,6 +140,7 @@ def test_extreme_payload_shape():
     rbp = {30: [(_result(), _result().periods[1])]}
     payload = extreme_payload(rbp, mode="low")
     assert payload["command"] == "low"
+    assert "disclaimer" in payload
     assert "30" in payload["results_by_period"]
     assert payload["results_by_period"]["30"][0]["symbol"] == "600519"
     assert "reference" not in payload  # 未传 board → 不含 reference 字段(向后兼容)
@@ -280,6 +283,7 @@ def test_info_payload_shape():
     )
     assert payload["command"] == "info"
     assert payload["symbol"] == "600519"
+    assert "disclaimer" in payload
     assert payload["trend"]["direction"] == "跌2天"
     assert payload["result"]["low_resonance"] == 1
     assert payload["volume"] is None
@@ -323,6 +327,7 @@ def test_trend_payload_shape():
     )
     assert payload["command"] == "trend"
     assert payload["mode"] == "close"
+    assert "disclaimer" in payload
     assert payload["results"][0]["symbol"] == "600519"
     assert payload["results"][0]["daily_changes"][0] == ["2026-05-08", -2.0]
 
@@ -356,8 +361,24 @@ def test_compare_payload_shape():
     )
     assert payload["command"] == "compare"
     assert payload["periods"] == [30]
+    assert "disclaimer" in payload
     assert len(payload["results"]) == 2
     assert payload["results"][1]["symbol"] == "000858"
+
+
+def test_error_payload_find_machine_readable():
+    payload = error_payload(
+        "find",
+        code="data_unavailable",
+        message="全市场截面无数据",
+        hint="配置 tushare token",
+    )
+    assert payload["ok"] is False
+    assert payload["command"] == "find"
+    assert payload["schema_version"]
+    assert payload["error"]["code"] == "data_unavailable"
+    assert payload["error"]["hint"] == "配置 tushare token"
+    assert "候选" in payload["disclaimer"]
 
 
 def test_compare_markdown_transposed():

@@ -84,6 +84,14 @@ def test_theme_search_not_found(monkeypatch, _isolate):
     assert "未找到" in result.output or "0 个" in result.output
 
 
+def test_theme_search_blank_rejected(monkeypatch, _isolate):
+    _stub_catalog(monkeypatch)
+    runner = CliRunner()
+    result = runner.invoke(app, ["theme", "search", "   "])
+    assert result.exit_code == 2
+    assert "关键词不能为空" in result.output
+
+
 def test_theme_list_disclaimer(monkeypatch, _isolate):
     _stub_catalog(monkeypatch)
     runner = CliRunner()

@@ -22,7 +22,7 @@
 
 ## P1(P0 稳定后启动)
 
-- **`kan history` 历史位置回溯**:`snapshots/YYYY-MM-DD` 按日归档已预埋,加查询命令即可。
+- **AI JSON 契约稳定化**:保持 `scan` / `info` / `find` / `history` 等 JSON 顶层 disclaimer、错误 envelope、字段向后兼容,让外部 AI 能低 context 成本消费结构化数据。
 - **数据组合边界**:继续增强 CLI / JSON 数据过滤能力,但不内置财报解读、分红日历或策略 preset;需要完整基本面研究时,用 `kan find --format json` 与外部公告 / 财报 / 分红数据源组合。
 
 ---

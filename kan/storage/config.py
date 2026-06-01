@@ -24,7 +24,7 @@ DEFAULT_CONFIG: dict[str, Any] = {
     "latest_seen_version": None,  # 上次发现的最新版本号字符串
     "last_hint_date": None,       # 选 False 后 hint 限流 (每周一次)
     "tushare_token": None,        # v0.0.5: TuShare Pro API token (None=未配置 → 跳过 TS 分支)
-    "tushare_endpoint": None,     # v0.0.5: TuShare Pro 端点 (None=用 http://api.tushare.pro 默认)
+    "tushare_endpoint": None,     # v0.0.5: TuShare Pro 端点 (None=用 https://api.tushare.pro 默认)
 }
 
 

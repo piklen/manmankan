@@ -1,7 +1,7 @@
 """TuShare Pro 数据源 · 自写轻量 HTTP client（POST JSON 协议）。
 
-不依赖官方 tushare SDK：SDK `DataApi.__init__(token, timeout)` 把端点写死
-在私有 `__http_url = 'http://api.tushare.pro'` 属性,要替端点只能 monkey-patch
+不依赖官方 tushare SDK：旧 SDK `DataApi.__init__(token, timeout)` 把端点写死
+在私有 `__http_url` 属性,要替端点只能 monkey-patch
 `_DataApi__http_url`。自写 client 反而更简单、无 transitive deps、风格统一。
 
 配 token 即顶优先（替 baostock 主路径），未配 token 行为零变化。
@@ -25,6 +25,7 @@ if TYPE_CHECKING:
 _SYMBOL_PATTERN = re.compile(r"^\d{6}$")
 
 DEFAULT_ENDPOINT = "https://api.tushare.pro"
+ALLOW_INSECURE_ENDPOINT_ENV = "KAN_ALLOW_INSECURE_TUSHARE"
 
 _TIMEOUT_SECONDS = 30
 
@@ -85,6 +86,17 @@ def _get_session() -> requests.Session:
         _session = _make_session()
     return _session
 
+
+def _allow_insecure_endpoint() -> bool:
+    """是否允许 http:// TuShare endpoint · 仅给内网/自建无 token 镜像显式开关。"""
+    return os.environ.get(ALLOW_INSECURE_ENDPOINT_ENV, "").lower() in {
+        "1",
+        "true",
+        "yes",
+        "on",
+    }
+
+
 _FIELD_MAP = {
     "trade_date": "date",
     "vol": "volume",
@@ -140,13 +152,20 @@ def _resolve_config() -> tuple[str | None, str]:
     if not endpoint.startswith(("http://", "https://")):
         endpoint = DEFAULT_ENDPOINT
     elif endpoint.startswith("http://"):
-        # 自部署镜像 / 内网测试走 http 是合法选择 · 但默认必须 https
-        # 这里 warn · 提醒用户明文传 token 风险(咖啡店 wifi / 透明代理 / ISP 镜像)
-        debug_log(
-            __name__,
-            "endpoint 走明文 HTTP · token 可能被中间节点截获 · 推荐改 https",
-            RuntimeWarning(endpoint),
-        )
+        if _allow_insecure_endpoint():
+            # 自部署镜像 / 内网测试可显式 opt-in；默认仍拒绝明文传 token。
+            debug_log(
+                __name__,
+                "endpoint 走明文 HTTP · 已由 KAN_ALLOW_INSECURE_TUSHARE 显式放行",
+                RuntimeWarning(endpoint),
+            )
+        else:
+            debug_log(
+                __name__,
+                "拒绝明文 HTTP TuShare endpoint · 已回退官方 HTTPS",
+                RuntimeWarning(endpoint),
+            )
+            endpoint = DEFAULT_ENDPOINT
 
     return token, endpoint
 

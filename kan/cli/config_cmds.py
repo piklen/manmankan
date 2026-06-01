@@ -2,7 +2,7 @@
 
 支持字段（封闭集合）：
 - tushare-token     (TuShare Pro API token)
-- tushare-endpoint  (TuShare Pro API 端点 · 默认 http://api.tushare.pro)
+- tushare-endpoint  (TuShare Pro API 端点 · 默认 https://api.tushare.pro)
 
 环境变量 TUSHARE_TOKEN / TUSHARE_ENDPOINT 在运行时覆盖 config.json。
 `kan config get` 会显式提示哪些字段被 env 覆盖。
@@ -14,7 +14,7 @@ import os
 import typer
 
 from kan.app import app
-from kan.data.tushare import DEFAULT_ENDPOINT
+from kan.data.tushare import ALLOW_INSECURE_ENDPOINT_ENV, DEFAULT_ENDPOINT
 from kan.storage import config
 from kan.storage.config import mask_token
 
@@ -30,6 +30,15 @@ _KEY_MAP = {
     "tushare-token": "tushare_token",
     "tushare-endpoint": "tushare_endpoint",
 }
+
+
+def _allow_insecure_endpoint() -> bool:
+    return os.environ.get(ALLOW_INSECURE_ENDPOINT_ENV, "").lower() in {
+        "1",
+        "true",
+        "yes",
+        "on",
+    }
 
 
 def _print_token(cfg: dict, *, raw: bool = False) -> None:
@@ -117,7 +126,7 @@ def set_cmd(
     key: str = typer.Argument(..., help="配置项名（tushare-token / tushare-endpoint）"),
     value: str = typer.Argument(..., help="配置值"),
 ) -> None:
-    """设置一项配置（原子写入 ~/.local/share/kan/config.json）。"""
+    """设置一项配置（原子写入 kan config.json）。"""
     if key not in _KEY_MAP:
         typer.echo(
             f"❌ 未知配置项: {key}\n"
@@ -138,15 +147,26 @@ def set_cmd(
             "   例: kan config set tushare-endpoint https://api.tushare.pro",
         )
         raise typer.Exit(code=2)
+    if (
+        internal_key == "tushare_endpoint"
+        and cleaned.startswith("http://")
+        and not _allow_insecure_endpoint()
+    ):
+        typer.echo(
+            "❌ 默认拒绝 http:// TuShare endpoint，避免 token 明文传输\n"
+            "   请改用 https://，或仅在可信内网/无 token 镜像下设置 "
+            f"{ALLOW_INSECURE_ENDPOINT_ENV}=1 后重试",
+        )
+        raise typer.Exit(code=2)
 
     cfg = config.load()
     cfg[internal_key] = cleaned
     config.save(cfg)
 
     if internal_key == "tushare_token":
-        typer.echo(f"✅ 已保存 tushare_token ({mask_token(cleaned)}) 到 ~/.local/share/kan/config.json")
+        typer.echo(f"✅ 已保存 tushare_token ({mask_token(cleaned)}) 到 {config.CONFIG_PATH}")
     else:
-        typer.echo(f"✅ 已保存 {internal_key}={cleaned} 到 ~/.local/share/kan/config.json")
+        typer.echo(f"✅ 已保存 {internal_key}={cleaned} 到 {config.CONFIG_PATH}")
 
 
 @config_app.command("unset")

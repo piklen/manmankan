@@ -162,6 +162,13 @@ def search_cmd(
     """模糊搜题材 · 列所有命中候选。"""
     from kan.data.boards import normalize_theme_name
 
+    if not keyword or not keyword.strip():
+        typer.echo(
+            "❌ 题材关键词不能为空 · 例: kan theme search AI · 看全部: kan theme list",
+            err=True,
+        )
+        raise typer.Exit(2)
+
     try:
         catalog = boards.load_theme_catalog()
     except boards.ThemeDataUnavailableError as e:

@@ -12,7 +12,7 @@
 合规(manmankan/docs/compliance.md §7):
 - 用户显式指定 filter · 不内置 preset
 - 输出 "符合条件的股票" · 不"推荐"
-- 估值裸值不对外 (量价/市值客观事实可出 · 见 export._valuation_public_dict)
+- 估值/质量/资金/技术/股东等裸值可按用户 filter 输出
 """
 from __future__ import annotations
 
@@ -39,6 +39,7 @@ from kan.storage import export
 
 if TYPE_CHECKING:
     from kan.core.find_dsl import ConditionSet
+    from kan.core.models import EnrichedResult
 
 
 def _parse_codes(raw: str) -> tuple[list[str], list[str]]:
@@ -133,6 +134,92 @@ def _kline_snapshot_periods(conditions: ConditionSet) -> list[int] | None:
         max_days = max(1, max(ceil(f.value) for f in conditions.up_days_filters))
         periods.add(min(max_days, max(PERIODS)))
     return sorted(periods or PERIODS)
+
+
+def _exit_find_error(
+    fmt: export.OutputFormat,
+    *,
+    code: str,
+    message: str,
+    hint: str | None = None,
+    exit_code: int = 1,
+) -> None:
+    """find 专用错误出口 · json 模式输出机器可读 envelope。"""
+    if fmt is export.OutputFormat.json:
+        typer.echo(export.to_json(export.error_payload(
+            "find",
+            code=code,
+            message=message,
+            hint=hint,
+        )))
+    else:
+        text = f"❌ {message}"
+        if hint:
+            text += f"\n   {hint}"
+        _print_err(text)
+    raise typer.Exit(exit_code)
+
+
+def _any_metric(results: list[EnrichedResult], attr: str, fields: tuple[str, ...]) -> bool:
+    """任一股票有目标子对象字段值即视为该维度可用。"""
+    for r in results:
+        obj = getattr(r, attr, None)
+        if obj is None:
+            continue
+        if any(getattr(obj, field, None) is not None for field in fields):
+            return True
+    return False
+
+
+def _any_technical_for_filters(
+    results: list[EnrichedResult],
+    conditions: ConditionSet,
+) -> bool:
+    """按请求的技术 filter 判断 technical 数据是否真的可用。"""
+    for r in results:
+        t = getattr(r, "technical", None)
+        if t is None:
+            continue
+        if conditions.rsi_filters and getattr(t, "rsi_6", None) is not None:
+            return True
+        if conditions.macd_dif_filters and getattr(t, "macd_dif", None) is not None:
+            return True
+        if conditions.macd_filters and getattr(t, "macd", None) is not None:
+            return True
+        if conditions.kdj_j_filters and getattr(t, "kdj_j", None) is not None:
+            return True
+        if conditions.atr_pct_filters and t.atr_pct() is not None:
+            return True
+        if any(t.ma_bias(f.period) is not None for f in conditions.ma_bias_filters):
+            return True
+    return False
+
+
+def _find_data_gap(
+    conditions: ConditionSet,
+    results: list[EnrichedResult],
+) -> tuple[str, str, str] | None:
+    """识别“上游数据不可用”而不是让 filter 静默变成 0 命中。"""
+    if not results:
+        return None
+    token_hint = "配置 tushare token 后重试，或去掉对应 filter"
+    if conditions.pe_filters and not _any_metric(results, "valuation", ("pe_ttm",)):
+        return ("data_unavailable", "当前候选池缺少估值数据，无法执行 --pe filter", token_hint)
+    if conditions.moneyflow_filters and not _any_metric(results, "moneyflow", ("net_amount",)):
+        return ("data_unavailable", "当前候选池缺少资金流数据，无法执行 --moneyflow filter", token_hint)
+    if conditions.roe_filters and not _any_metric(results, "fundamentals", ("roe",)):
+        return ("data_unavailable", "当前候选池缺少财务数据，无法执行 --roe filter", token_hint)
+    if conditions.needs_technical() and not _any_technical_for_filters(results, conditions):
+        return ("data_unavailable", "当前候选池缺少技术指标数据，无法执行技术 filter", token_hint)
+    if conditions.winner_filters and not _any_metric(results, "chip", ("winner_rate",)):
+        return ("data_unavailable", "当前候选池缺少筹码数据，无法执行 --winner filter", token_hint)
+    if conditions.needs_shareholder() and not _any_metric(
+        results,
+        "shareholder",
+        ("holder_chg_pct", "top10_float_ratio", "north_hold_ratio"),
+    ):
+        return ("data_unavailable", "当前候选池缺少股东持股结构数据，无法执行股东 filter", token_hint)
+    return None
 
 
 @app.command()
@@ -322,7 +409,7 @@ def find(
       kan find --pos 180:lt:5                          # 180 日位置 < 5%
       kan find --resonance low:gte:3                   # 低点共振 ≥ 3 周期
       kan find --pos 60:lt:10 --resonance low:gte:2    # 多条件 AND
-      kan find --industry 半导体 --pos 180:lt:10       # 半导体里 180 日跌透
+      kan find --industry 半导体 --pos 180:lt:10       # 半导体里 180 日位置 < 10%
       kan find --exclude-st --pos 180:lt:5             # 排 ST + 位置 filter
       kan find --industry 半导体 --format json         # 整池全维度 JSON(AI 取数)
       kan find --industry 半导体 --pe lt:30 --moneyflow gt:0  # 估值+资金组合
@@ -468,11 +555,15 @@ def find(
             kline_periods=_kline_snapshot_periods(conditions),
         )
         if not cs.rows:
-            _print_err(
-                "❌ 全市场截面无数据 · 需配置 tushare token\n"
-                "   (估值/量价/资金/行业分位依赖 tushare · 设 TUSHARE_TOKEN 或 kan config)"
+            _exit_find_error(
+                fmt,
+                code="data_unavailable",
+                message="全市场截面无数据",
+                hint=(
+                    "估值/量价/资金/行业分位依赖 tushare；"
+                    "设 TUSHARE_TOKEN 或运行 kan config set tushare-token <你的_token>"
+                ),
             )
-            raise typer.Exit(1)
         # 截面类 filter (pe / moneyflow) · 无 filter → 全量返回 (取数语义)
         cs_matched = apply_cross_section_conditions(cs.rows, conditions)
         cs_limited = cs_matched if limit is None else cs_matched[:limit]
@@ -520,6 +611,13 @@ def find(
 
     # 4. Fetch + scan (复用 pipeline · low mode 算位置 + 共振)
     ctx = run_data_pipeline(stock_set, compute=scan_batch, mode="low")
+    if not ctx.targets and only_watchlist:
+        _exit_find_error(
+            fmt,
+            code="empty_intersection",
+            message="自选股与当前候选池没有交集",
+            hint="去掉 --only-watchlist，或先把目标股票加进自选",
+        )
     if not ctx.results and not is_export:
         _print_err("无缓存数据 · 请先 `kan fetch` 拉取数据")
         raise typer.Exit(1)
@@ -550,6 +648,10 @@ def find(
         )
     else:
         pool_results = ctx.results
+    gap = _find_data_gap(conditions, pool_results)
+    if gap is not None:
+        code, message, hint = gap
+        _exit_find_error(fmt, code=code, message=message, hint=hint)
     matches = apply_conditions(pool_results, conditions)
     matches_limited = matches[:effective_limit]
 
