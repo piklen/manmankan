@@ -29,7 +29,7 @@ REPO_ROOT = Path(__file__).resolve().parents[1]
 # - cli_meta_cmds (3):      update / uninstall / completion
 # - cli_move_export_cmds (2): move / export   (v0.0.6.1 多分组管理)
 # - cli_find_cmds (1):      find             (v0.0.6.4 选股 DSL)
-# - cli_history_cmds (1):   history          (v0.0.6.6 位置历史回溯)
+# - cli_history_cmds (1):   history          (位置历史回溯)
 # 注:`kan group`/`kan config`/`kan theme` 是 sub-Typer (app.add_typer) · 不进 registered_commands · 不需 canary。
 _EXPECTED_COMMANDS = {
     "help",

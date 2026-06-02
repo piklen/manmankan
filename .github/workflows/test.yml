@@ -138,6 +138,8 @@ jobs:
           /tmp/manmankan-smoke/bin/kan --help
           /tmp/manmankan-smoke/bin/kan scan --help
           /tmp/manmankan-smoke/bin/kan find --help
+          /tmp/manmankan-smoke/bin/kan find --help | grep -- "--compact"
+          /tmp/manmankan-smoke/bin/kan find --help | grep -- "--fields"
           /tmp/manmankan-smoke/bin/kan board rank --help
           /tmp/manmankan-smoke/bin/kan history --help
           /tmp/manmankan-smoke/bin/python - <<'PY'

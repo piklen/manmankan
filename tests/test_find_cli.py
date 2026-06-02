@@ -120,6 +120,22 @@ class TestFindCli:
         assert ec == 2
         assert "--limit 必须为正整数" in out
 
+    def test_compact_requires_json_format(self):
+        ec, out = _run(["find", "--pos", "180:lt:5", "--compact"])
+        assert ec == 2
+        assert "--compact 仅支持 --format json" in out
+
+    def test_fields_requires_json_format(self):
+        ec, out = _run(["find", "--pos", "180:lt:5", "--fields", "code,name"])
+        assert ec == 2
+        assert "--fields 仅支持 --format json" in out
+
+    def test_help_includes_compact_option(self):
+        ec, out = _run(["find", "--help"])
+        assert ec in (0, 2)
+        assert "--compact" in out
+        assert "--fields" in out
+
     def test_dsl_errors_include_fix_hint(self):
         """DSL 错误信息必须含修复示例.
 
@@ -280,3 +296,24 @@ class TestFindAllCrossSection:
         assert payload["ok"] is False
         assert payload["error"]["code"] == "data_unavailable"
         assert "token" in combined or "tushare" in combined
+
+    def test_fields_unknown_json_error(self, tmp_path):
+        ec, out, _err = _run_isolated(
+            ["find", "--format", "json", "--fields", "code,valuation.nope"], tmp_path,
+        )
+        assert ec == 2
+        payload = json.loads(out)
+        assert payload["ok"] is False
+        assert payload["error"]["code"] == "invalid_fields"
+        assert "valuation.nope" in payload["error"]["message"]
+
+    def test_all_fields_reject_unsupported_dimension_before_fetch(self, tmp_path):
+        ec, out, _err = _run_isolated(
+            ["find", "--all", "--format", "json", "--fields", "code,fundamentals.roe"],
+            tmp_path,
+        )
+        assert ec == 2
+        payload = json.loads(out)
+        assert payload["ok"] is False
+        assert payload["error"]["code"] == "invalid_fields"
+        assert "fundamentals" in payload["error"]["message"]

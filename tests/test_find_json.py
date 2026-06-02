@@ -13,6 +13,11 @@ import datetime
 import json
 
 from kan.core.find_filter import FindMatch, TriggeredFilter
+from kan.core.find_registry import (
+    dimensions_from_fields,
+    fields_need_kline,
+    parse_find_fields,
+)
 from kan.core.models import (
     ChipMetrics,
     EnrichedResult,
@@ -114,6 +119,14 @@ def _freshness():
         data_cutoff=datetime.date(2026, 5, 29), fetched_at=None,
         expected_cutoff=datetime.date(2026, 5, 29), is_stale=False, phase="closed",
     )
+
+
+def _json_field_count(value) -> int:
+    if isinstance(value, dict):
+        return len(value) + sum(_json_field_count(v) for v in value.values())
+    if isinstance(value, list):
+        return sum(_json_field_count(v) for v in value)
+    return 0
 
 
 class TestValuationPublicDict:
@@ -274,6 +287,115 @@ class TestFindPayload:
         ))
         assert "半导体" in s  # ensure_ascii=False
         assert json.loads(s)["command"] == "find"
+
+    def test_data_availability_counts_candidate_pool(self):
+        """data_availability 用候选池统计,不是 limit 后 shown 统计。"""
+        _m1, er1 = _entry(valuation=_valuation(), moneyflow=_moneyflow())
+        _m2, er2 = _entry(symbol="000858", valuation=None, moneyflow=None)
+        p = export.find_payload(
+            [(FindMatch(result=er1, triggered=()), er1)],
+            query_time="t",
+            pools=["watchlist"],
+            filters=[{"name": "--moneyflow", "param": "gt:0"}],
+            pool_size=2,
+            matched_total=1,
+            freshness=_freshness(),
+            availability_results=[er1, er2],
+            included_dimensions={"valuation", "moneyflow"},
+        )
+        assert p["data_availability"]["basis"] == "candidate_pool"
+        assert p["data_availability"]["pool_size"] == 2
+        assert p["data_availability"]["valuation"] == {
+            "status": "included", "available": 1, "missing": 1,
+        }
+        assert p["data_availability"]["moneyflow"] == {
+            "status": "included", "available": 1, "missing": 1,
+        }
+        assert p["data_availability"]["technical"]["status"] == "not_requested"
+
+    def test_compact_payload_keeps_core_and_requested_summaries(self):
+        tpe = TriggeredFilter(filter_type="pe", param="lt:30", value=20.04)
+        tmf = TriggeredFilter(filter_type="moneyflow", param="gt:0", value=5000.0)
+        entries = [_entry(
+            valuation=_valuation(), moneyflow=_moneyflow(), technical=_technical(),
+            triggered=(tpe, tmf),
+        )]
+        full = export.find_payload(
+            entries, query_time="t", pools=["watchlist"], filters=[],
+            pool_size=1, matched_total=1, freshness=_freshness(),
+            availability_results=[entries[0][1]],
+            included_dimensions={"valuation", "moneyflow", "technical"},
+        )
+        compact = export.find_payload(
+            entries, query_time="t", pools=["watchlist"],
+            filters=[
+                {"name": "--pe", "param": "lt:30"},
+                {"name": "--moneyflow", "param": "gt:0"},
+            ],
+            pool_size=1, matched_total=1, freshness=_freshness(),
+            compact=True,
+            availability_results=[entries[0][1]],
+            included_dimensions={"valuation", "moneyflow", "technical"},
+            compact_dimensions={"valuation", "moneyflow"},
+        )
+        r0 = compact["results"][0]
+        assert compact["result_schema"] == "compact"
+        assert r0["code"] == "600519"
+        assert r0["price"] == 1326.0
+        assert r0["positions"] == {"60": 81.5, "180": 38.7}
+        assert r0["low_resonance"] == 2
+        assert r0["valuation"]["pe_ttm"] == 20.04
+        assert r0["moneyflow"]["net_amount"] == 5000.0
+        assert "technical" not in r0
+        assert "context" not in r0
+        full_json = export.to_json(full)
+        compact_json = export.to_json(compact)
+        assert len(compact_json) < len(full_json)
+        assert _json_field_count(compact) < _json_field_count(full)
+
+    def test_fields_payload_uses_whitelist_and_nested_shape(self):
+        tpe = TriggeredFilter(filter_type="pe", param="lt:30", value=20.04)
+        entries = [_entry(
+            valuation=_valuation(), moneyflow=_moneyflow(), technical=_technical(),
+            triggered=(tpe,),
+        )]
+        p = export.find_payload(
+            entries, query_time="t", pools=["watchlist"],
+            filters=[{"name": "--pe", "param": "lt:30"}],
+            pool_size=1, matched_total=1, freshness=_freshness(),
+            availability_results=[entries[0][1]],
+            included_dimensions={"valuation", "moneyflow", "technical"},
+            fields=("code", "name", "context.positions", "valuation.pe_ttm", "moneyflow.net_amount"),
+        )
+        r0 = p["results"][0]
+        assert p["result_schema"] == "fields"
+        assert r0 == {
+            "code": "600519",
+            "name": "贵州茅台",
+            "context": {"positions": {"60": 81.5, "180": 38.7}},
+            "valuation": {"pe_ttm": 20.04},
+            "moneyflow": {"net_amount": 5000.0},
+        }
+
+
+class TestFindRegistry:
+    def test_parse_fields_dedupes_and_accepts_comma_or_space(self):
+        fields = parse_find_fields([
+            "code,name context.positions",
+            "valuation.pe_ttm,code",
+        ])
+        assert fields == ("code", "name", "context.positions", "valuation.pe_ttm")
+        assert dimensions_from_fields(fields) == {"valuation"}
+        assert fields_need_kline(fields) is True
+
+    def test_parse_fields_rejects_unknown_path(self):
+        try:
+            parse_find_fields(["code,valuation.nope"])
+        except ValueError as e:
+            assert "valuation.nope" in str(e)
+            assert "valuation.pe_ttm" in str(e)
+        else:
+            raise AssertionError("unknown field should raise")
 
 
 class TestFindMarkdown:
@@ -506,6 +628,55 @@ class TestCrossSectionPayload:
         assert ctx["up_days"] == 4
         assert ctx["positions"] == {"30": 63.0}
         assert ctx["gains"] == {"30": 8.5}
+
+    def test_compact_schema_and_data_availability(self):
+        scan = StockScanResult(
+            symbol="600519", name="贵州茅台", current_price=1326.0,
+            scan_date=datetime.date(2026, 5, 29),
+            periods=[
+                PeriodResult(period=30, n_low=1200.0, n_high=1400.0,
+                             position_pct=63.0, at_low=False, at_high=False,
+                             gain_pct=8.5),
+            ],
+            low_resonance=1, high_resonance=0, up_days=4,
+        )
+        row_with_data = self._row(scan=scan)
+        row_without_mf = self._row(code="000858", with_mf=False)
+        p = export.cross_section_payload(
+            self._entries(row_with_data), query_time="t",
+            pool_size=2, data_cutoff=datetime.date(2026, 5, 29), stale=False,
+            filters=[{"name": "--pe", "param": "lt:30"}],
+            compact=True,
+            availability_rows=[row_with_data, row_without_mf],
+            included_dimensions={"valuation", "moneyflow", "technical", "sentiment", "chip"},
+            compact_dimensions={"valuation"},
+        )
+        r0 = p["results"][0]
+        assert p["result_schema"] == "compact"
+        assert r0["code"] == "600519"
+        assert r0["positions"] == {"30": 63.0}
+        assert r0["gains"] == {"30": 8.5}
+        assert r0["valuation"]["pe_ttm"] == 20.04
+        assert "moneyflow" not in r0
+        assert p["data_availability"]["moneyflow"] == {
+            "status": "included", "available": 1, "missing": 1,
+        }
+        assert p["data_availability"]["fundamentals"]["status"] == "not_supported"
+
+    def test_fields_schema_for_cross_section(self):
+        p = export.cross_section_payload(
+            self._entries(self._row()), query_time="t",
+            pool_size=1, data_cutoff=datetime.date(2026, 5, 29), stale=False,
+            fields=("code", "price", "valuation.pe_ttm", "valuation_context.industry"),
+            included_dimensions={"valuation", "moneyflow", "technical", "sentiment", "chip"},
+        )
+        assert p["result_schema"] == "fields"
+        assert p["results"][0] == {
+            "code": "600519",
+            "price": 1326.0,
+            "valuation": {"pe_ttm": 20.04},
+            "valuation_context": {"industry": "食品饮料"},
+        }
 
     def test_empty_entries_valid(self):
         p = export.cross_section_payload(

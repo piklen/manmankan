@@ -311,7 +311,7 @@ def test_trend_failure_diagnosis_with_tushare_self_hosted_proxy(monkeypatch):
 
 
 def test_trend_failure_diagnosis_passes_server_msg_through(monkeypatch):
-    """v0.0.6.6 核心: server 返的 msg 透传给用户 · code/msg 都在输出里。
+    """核心: server 返的 msg 透传给用户 · code/msg 都在输出里。
 
     场景: 8000 积分官方 endpoint · ths_daily 仍 1次/小时 · 频率超限 40203。
     用户必须直接看到 TuShare 原话 "频率超限(1次/小时)" · 不靠我们脑补。

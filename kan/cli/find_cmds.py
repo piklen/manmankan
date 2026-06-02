@@ -34,6 +34,12 @@ from kan.cli.helpers import (
 from kan.cli.helpers import (
     _resolve_code_pairs as _shared_resolve_code_pairs,
 )
+from kan.core.find_registry import (
+    DIMENSIONS_UNSUPPORTED_IN_ALL,
+    dimensions_from_fields,
+    fields_need_kline,
+    parse_find_fields,
+)
 from kan.data.hot import HotList
 from kan.storage import export
 
@@ -222,6 +228,59 @@ def _find_data_gap(
     return None
 
 
+def _condition_dimensions(conditions: ConditionSet) -> set[str]:
+    dims: set[str] = set()
+    if conditions.pe_filters:
+        dims.add("valuation")
+    if conditions.needs_fundamentals():
+        dims.add("fundamentals")
+    if conditions.needs_moneyflow():
+        dims.add("moneyflow")
+    if conditions.needs_technical():
+        dims.add("technical")
+    if conditions.needs_sentiment():
+        dims.add("sentiment")
+    if conditions.needs_chip():
+        dims.add("chip")
+    if conditions.needs_shareholder():
+        dims.add("shareholder")
+    return dims
+
+
+def _availability_dimensions(
+    conditions: ConditionSet,
+    *,
+    is_export: bool,
+    field_dimensions: set[str] | None = None,
+    fields_mode: bool = False,
+) -> set[str]:
+    """本次 find 实际尝试取数的维度,用于 data_availability 统计。"""
+    dims = _condition_dimensions(conditions)
+    dims.update(field_dimensions or set())
+    if fields_mode:
+        return dims
+    if is_export:
+        dims.add("valuation")
+    if conditions.needs_moneyflow() or (is_export and conditions.is_empty()):
+        dims.add("moneyflow")
+    if conditions.needs_technical() or (is_export and conditions.is_empty()):
+        dims.add("technical")
+    if conditions.needs_sentiment() or (is_export and conditions.is_empty()):
+        dims.add("sentiment")
+    if conditions.needs_chip() or (is_export and conditions.is_empty()):
+        dims.add("chip")
+    if conditions.needs_shareholder():
+        dims.add("shareholder")
+    return dims
+
+
+def _compact_dimensions(conditions: ConditionSet, *, is_export: bool) -> set[str]:
+    """compact 结果里应该内联摘要的维度。"""
+    if is_export and conditions.is_empty():
+        return {"valuation", "moneyflow", "technical", "sentiment", "chip"}
+    return _condition_dimensions(conditions)
+
+
 @app.command()
 def find(
     pos: Annotated[
@@ -402,6 +461,20 @@ def find(
         export.OutputFormat,
         typer.Option("--format", help="输出格式:terminal(默认)/ md / json(AI 消费)"),
     ] = export.OutputFormat.terminal,
+    compact: Annotated[
+        bool,
+        typer.Option(
+            "--compact",
+            help="仅用于 --format json:输出低字段量结果 + data_availability",
+        ),
+    ] = False,
+    fields: Annotated[
+        list[str],
+        typer.Option(
+            "--fields",
+            help="仅用于 --format json:字段白名单,例 code,name,price,context.positions,valuation.pe_ttm",
+        ),
+    ] = [],  # noqa: B006 · typer multi-option 需要 list 默认值
 ) -> None:
     """按你的规则筛股 · 不替你定规则 (v0.0.6.4 MVP · 地基-2 加 JSON)
 
@@ -440,6 +513,8 @@ def find(
     输出 (地基-2):
       --format terminal  默认 · Rich 表格 (需至少一个 filter)
       --format json      AI 友好 · 命中带 metadata · 无 filter = 整池取数
+      --compact          json 低字段量输出 · 适合脚本/外部模型首轮筛选
+      --fields LIST      json 字段白名单 · 例 code,name,price,context.positions,valuation.pe_ttm
       --format md        markdown 表格
 
     池 selector (跟 kan scan 一致 · 三者互斥):
@@ -466,6 +541,31 @@ def find(
     console = Console()
     find_disclaimer = f"[bold dim]{FIND_DISCLAIMER_TEXT}[/bold dim]"
     is_export = fmt is not export.OutputFormat.terminal
+    if compact and fmt is not export.OutputFormat.json:
+        _print_err("❌ --compact 仅支持 --format json")
+        raise typer.Exit(2)
+    if fields and fmt is not export.OutputFormat.json:
+        _print_err("❌ --fields 仅支持 --format json")
+        raise typer.Exit(2)
+    if compact and fields:
+        _exit_find_error(
+            fmt,
+            code="invalid_fields",
+            message="--fields 与 --compact 不能同时使用",
+            hint="二者都定义结果字段形态；需要显式字段时只用 --fields",
+            exit_code=2,
+        )
+    try:
+        field_paths = parse_find_fields(fields)
+    except ValueError as e:
+        _exit_find_error(
+            fmt,
+            code="invalid_fields",
+            message=str(e),
+            hint="例: --fields code,name,price,context.positions,valuation.pe_ttm",
+            exit_code=2,
+        )
+    field_dimensions = dimensions_from_fields(field_paths)
 
     # 0. Validate --limit · 防 Python 负切片导致的 silent data loss
     # limit=None 哨兵:K 线模式后续解析为 50 · 截面模式 (--all) 为全量。
@@ -540,6 +640,18 @@ def find(
                 "   持股结构筛请缩小池 · 例 kan find --industry 半导体 --top10 gte:50"
             )
             raise typer.Exit(2)
+        unsupported_fields = field_dimensions & DIMENSIONS_UNSUPPORTED_IN_ALL
+        if unsupported_fields:
+            _exit_find_error(
+                fmt,
+                code="invalid_fields",
+                message=(
+                    "--all 全市场截面不支持这些 --fields 维度: "
+                    + ", ".join(sorted(unsupported_fields))
+                ),
+                hint="去掉逐股维度字段,或缩小候选池后再查",
+                exit_code=2,
+            )
         if not is_export:
             _print_err(
                 "❌ --all 截面取数请配 --format json 或 --format md\n"
@@ -551,7 +663,7 @@ def find(
 
         cs = run_cross_section(
             AllStocksSet(),
-            need_kline=conditions.has_kline_filters(),
+            need_kline=conditions.has_kline_filters() or compact or fields_need_kline(field_paths),
             kline_periods=_kline_snapshot_periods(conditions),
         )
         if not cs.rows:
@@ -576,6 +688,11 @@ def find(
                 data_cutoff=cs.data_cutoff,
                 stale=cs.stale,
                 filters=_find_filters(conditions),
+                compact=compact,
+                availability_rows=cs.rows,
+                included_dimensions={"valuation", "moneyflow", "technical", "sentiment", "chip"},
+                compact_dimensions=_compact_dimensions(conditions, is_export=is_export),
+                fields=field_paths,
             )))
         else:  # md
             typer.echo(export.cross_section_markdown(
@@ -627,24 +744,31 @@ def find(
     # limit 哨兵:K 线模式 None → 50 (截面 --all 已在 step 2.5 早返回)。
     effective_limit = limit if limit is not None else 50
     need_enrich = (
-        is_export
+        (is_export and not field_paths)
         or conditions.has_cross_section_filters()
         or conditions.needs_fundamentals()
         or conditions.needs_shareholder()
+        or bool(field_dimensions)
     )
     if need_enrich:
         pool_results = enrich_results(
             ctx.results,
-            need_fundamentals=conditions.needs_fundamentals(),
+            need_fundamentals=conditions.needs_fundamentals()
+            or ("fundamentals" in field_dimensions),
             need_moneyflow=conditions.needs_moneyflow()
-            or (is_export and conditions.is_empty()),
+            or (is_export and conditions.is_empty() and not field_paths)
+            or ("moneyflow" in field_dimensions),
             need_technical=conditions.needs_technical()
-            or (is_export and conditions.is_empty()),
+            or (is_export and conditions.is_empty() and not field_paths)
+            or ("technical" in field_dimensions),
             need_sentiment=conditions.needs_sentiment()
-            or (is_export and conditions.is_empty()),
+            or (is_export and conditions.is_empty() and not field_paths)
+            or ("sentiment" in field_dimensions),
             need_chip=conditions.needs_chip()
-            or (is_export and conditions.is_empty()),
-            need_shareholder=conditions.needs_shareholder(),
+            or (is_export and conditions.is_empty() and not field_paths)
+            or ("chip" in field_dimensions),
+            need_shareholder=conditions.needs_shareholder()
+            or ("shareholder" in field_dimensions),
         )
     else:
         pool_results = ctx.results
@@ -670,6 +794,16 @@ def find(
                 pool_size=len(ctx.results),
                 matched_total=len(matches),
                 freshness=ctx.freshness,
+                compact=compact,
+                availability_results=pool_results,
+                included_dimensions=_availability_dimensions(
+                    conditions,
+                    is_export=is_export,
+                    field_dimensions=field_dimensions,
+                    fields_mode=bool(field_paths),
+                ),
+                compact_dimensions=_compact_dimensions(conditions, is_export=is_export),
+                fields=field_paths,
             )))
         else:  # md
             typer.echo(export.find_markdown(

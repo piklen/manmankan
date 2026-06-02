@@ -111,6 +111,8 @@ jobs:
           KAN_NO_UPDATE_CHECK=1 kan --help
           KAN_NO_UPDATE_CHECK=1 kan scan --help
           KAN_NO_UPDATE_CHECK=1 kan find --help
+          KAN_NO_UPDATE_CHECK=1 kan find --help | grep -- "--compact"
+          KAN_NO_UPDATE_CHECK=1 kan find --help | grep -- "--fields"
           KAN_NO_UPDATE_CHECK=1 kan board rank --help
           KAN_NO_UPDATE_CHECK=1 kan trend --help
           KAN_NO_UPDATE_CHECK=1 kan info --help
