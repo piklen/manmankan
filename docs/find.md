@@ -111,16 +111,23 @@ kan find --industry 半导体 --format json \
 | filter | 数据源 | 需要 token | `--all` | 频率 | 缺数据语义 |
 |---|---|---:|---:|---|---|
 | `--pos` | 小池走本地日 K 缓存;`--all` 走全市场 K 线快照 | 小池否;`--all` 是 | 是 | 日频 | 周期不足为不命中;全市场快照不可用时返回 `data_unavailable` |
-| `--resonance` | 同 `--pos` | 小池否;`--all` 是 | 是 | 日频 | 由位置结果计算;周期不足不计入共振 |
-| `--gain` | 同 `--pos` | 小池否;`--all` 是 | 是 | 日频 | 周期不足或缺少前值为不命中 |
-| `--up-days` | 同 `--pos` | 小池否;`--all` 是 | 是 | 日频 | 非连续阳线可为 `0`,不是缺数据 |
+| `--resonance` | 小池走本地日 K 缓存;`--all` 走全市场 K 线快照 | 小池否;`--all` 是 | 是 | 日频 | 由位置结果计算;周期不足不计入共振 |
+| `--gain` | 小池走本地日 K 缓存;`--all` 走全市场 K 线快照 | 小池否;`--all` 是 | 是 | 日频 | 周期不足或缺少前值为不命中 |
+| `--up-days` | 小池走本地日 K 缓存;`--all` 走全市场 K 线快照 | 小池否;`--all` 是 | 是 | 日频 | 非连续阳线可为 `0`,不是缺数据 |
 | `--pe` | TuShare `daily_basic` 衍生截面指标 | 是 | 是 | 日频 | 指标为空为缺数据;整池缺失时返回 `data_unavailable` |
+| `--roe` | TuShare `fina_indicator` 最新报告期 | 是 | 否 | 季度/报告期 | 指标为空为缺数据;整池缺失时返回 `data_unavailable` |
 | `--moneyflow` | TuShare `moneyflow_dc` 衍生主力净额 | 是 | 是 | 日频 | 指标为空为缺数据;整池缺失时返回 `data_unavailable` |
-| `--roe` | TuShare `fina_indicator` 最新报告期 | 是 | 否 | 季度/报告期 | 小池逐股取数;整池缺失时返回 `data_unavailable` |
-| `--rsi` / `--macd-dif` / `--macd` / `--kdj-j` / `--ma-bias` / `--atr-pct` | TuShare `stk_factor_pro` 衍生技术指标 | 是 | 是 | 日频 | 指标为空为缺数据;整池缺失时返回 `data_unavailable` |
+| `--rsi` | TuShare `stk_factor_pro` 衍生技术指标 | 是 | 是 | 日频 | 指标为空为缺数据;整池缺失时返回 `data_unavailable` |
+| `--macd-dif` | TuShare `stk_factor_pro` 衍生技术指标 | 是 | 是 | 日频 | 指标为空为缺数据;整池缺失时返回 `data_unavailable` |
+| `--macd` | TuShare `stk_factor_pro` 衍生技术指标 | 是 | 是 | 日频 | 指标为空为缺数据;整池缺失时返回 `data_unavailable` |
+| `--kdj-j` | TuShare `stk_factor_pro` 衍生技术指标 | 是 | 是 | 日频 | 指标为空为缺数据;整池缺失时返回 `data_unavailable` |
+| `--ma-bias` | TuShare `stk_factor_pro` 衍生技术指标 | 是 | 是 | 日频 | 指标为空为缺数据;整池缺失时返回 `data_unavailable` |
+| `--atr-pct` | TuShare `stk_factor_pro` 衍生技术指标 | 是 | 是 | 日频 | 指标为空为缺数据;整池缺失时返回 `data_unavailable` |
 | `--streak` | TuShare `limit_list_d` 涨跌停事件表 | 是 | 是 | 日频 | 稀疏事件;未出现在事件表通常表示当日未涨跌停 |
 | `--winner` | TuShare `cyq_perf` 筹码分布 | 是 | 是 | 日频 | 指标为空为缺数据;整池缺失时返回 `data_unavailable` |
-| `--holders` / `--top10` / `--north` | TuShare `stk_holdernumber` + `top10_floatholders` 衍生 | 是 | 否 | 季度/披露期 | 未披露或未进前十大流通可为 `None`;整池缺失时返回 `data_unavailable` |
+| `--holders` | TuShare `stk_holdernumber` + `top10_floatholders` 衍生 | 是 | 否 | 季度/披露期 | 未披露或未进前十大流通可为 `None`;整池缺失时返回 `data_unavailable` |
+| `--top10` | TuShare `stk_holdernumber` + `top10_floatholders` 衍生 | 是 | 否 | 季度/披露期 | 未披露或未进前十大流通可为 `None`;整池缺失时返回 `data_unavailable` |
+| `--north` | TuShare `stk_holdernumber` + `top10_floatholders` 衍生 | 是 | 否 | 季度/披露期 | 未披露或未进前十大流通可为 `None`;整池缺失时返回 `data_unavailable` |
 | `--exclude-st` | 股票名称 / 候选池元数据 | 否 | 是 | 随候选池 | 静默过滤,不写入 `triggered_filters` |
 
 ## 候选池

@@ -39,6 +39,7 @@ from kan.core.find_registry import (
     dimensions_from_fields,
     fields_need_kline,
     fields_need_valuation_context,
+    format_find_field_presets,
     parse_find_fields,
 )
 from kan.data.hot import HotList
@@ -518,7 +519,10 @@ def find(
         list[str],
         typer.Option(
             "--fields",
-            help="仅用于 --format json:字段白名单或 @preset,例 @core,@valuation",
+            help=(
+                "仅用于 --format json:字段白名单或 @preset,"
+                f"可用 {format_find_field_presets()}"
+            ),
         ),
     ] = [],  # noqa: B006 · typer multi-option 需要 list 默认值
 ) -> None:
