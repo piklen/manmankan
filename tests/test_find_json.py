@@ -11,11 +11,16 @@ from __future__ import annotations
 
 import datetime
 import json
+from pathlib import Path
 
 from kan.core.find_filter import FindMatch, TriggeredFilter
 from kan.core.find_registry import (
+    FILTER_SPECS,
+    FIND_FIELD_PRESETS,
+    FIND_FIELD_SPECS,
     dimensions_from_fields,
     fields_need_kline,
+    fields_need_valuation_context,
     parse_find_fields,
 )
 from kan.core.models import (
@@ -353,6 +358,26 @@ class TestFindPayload:
         assert len(compact_json) < len(full_json)
         assert _json_field_count(compact) < _json_field_count(full)
 
+    def test_compact_payload_can_omit_context(self):
+        tpe = TriggeredFilter(filter_type="pe", param="lt:30", value=20.04)
+        entries = [_entry(valuation=_valuation(), triggered=(tpe,))]
+        compact = export.find_payload(
+            entries, query_time="t", pools=["watchlist"],
+            filters=[{"name": "--pe", "param": "lt:30"}],
+            pool_size=1, matched_total=1, freshness=_freshness(),
+            compact=True,
+            availability_results=[entries[0][1]],
+            included_dimensions={"valuation"},
+            compact_dimensions={"valuation"},
+            compact_context=False,
+        )
+        r0 = compact["results"][0]
+        assert "positions" not in r0
+        assert "low_resonance" not in r0
+        assert "high_resonance" not in r0
+        assert "gains" not in r0
+        assert r0["valuation"]["pe_ttm"] == 20.04
+
     def test_fields_payload_uses_whitelist_and_nested_shape(self):
         tpe = TriggeredFilter(filter_type="pe", param="lt:30", value=20.04)
         entries = [_entry(
@@ -388,6 +413,22 @@ class TestFindRegistry:
         assert dimensions_from_fields(fields) == {"valuation"}
         assert fields_need_kline(fields) is True
 
+    def test_parse_fields_expands_presets_and_dedupes(self):
+        fields = parse_find_fields(["@core,@valuation", "valuation.pe_ttm"])
+        assert fields[:5] == ("code", "name", "price", "data_time", "triggered_filters")
+        assert "valuation.pe_ttm" in fields
+        assert fields.count("valuation.pe_ttm") == 1
+        assert dimensions_from_fields(fields) == {"valuation"}
+
+    def test_parse_fields_rejects_unknown_preset(self):
+        try:
+            parse_find_fields(["@core,@score"])
+        except ValueError as e:
+            assert "@score" in str(e)
+            assert "@core" in str(e)
+        else:
+            raise AssertionError("unknown preset should raise")
+
     def test_parse_fields_rejects_unknown_path(self):
         try:
             parse_find_fields(["code,valuation.nope"])
@@ -396,6 +437,32 @@ class TestFindRegistry:
             assert "valuation.pe_ttm" in str(e)
         else:
             raise AssertionError("unknown field should raise")
+
+    def test_field_presets_reference_only_whitelisted_fields(self):
+        for preset, fields in FIND_FIELD_PRESETS.items():
+            assert preset.startswith("@")
+            assert fields
+            for field in fields:
+                assert field in FIND_FIELD_SPECS
+
+    def test_field_presets_stay_neutral(self):
+        banned = ["推荐", "评分", "评级", "优选", "强势", "低估", "看好", "看空"]
+        for preset, fields in FIND_FIELD_PRESETS.items():
+            joined = preset + " " + " ".join(fields)
+            for word in banned:
+                assert word not in joined
+
+    def test_fields_need_valuation_context_tracks_registry(self):
+        fields = parse_find_fields(["@valuation_context"])
+        assert fields_need_valuation_context(fields) is True
+        assert fields_need_valuation_context(parse_find_fields(["@valuation"])) is False
+
+    def test_docs_list_registry_filters_and_presets(self):
+        docs = (Path(__file__).resolve().parents[1] / "docs" / "find.md").read_text()
+        for spec in FILTER_SPECS.values():
+            assert spec.flag in docs
+        for preset in FIND_FIELD_PRESETS:
+            assert preset in docs
 
 
 class TestFindMarkdown:
@@ -662,6 +729,34 @@ class TestCrossSectionPayload:
             "status": "included", "available": 1, "missing": 1,
         }
         assert p["data_availability"]["fundamentals"]["status"] == "not_supported"
+
+    def test_compact_schema_can_omit_scan_context(self):
+        scan = StockScanResult(
+            symbol="600519", name="贵州茅台", current_price=1326.0,
+            scan_date=datetime.date(2026, 5, 29),
+            periods=[
+                PeriodResult(period=30, n_low=1200.0, n_high=1400.0,
+                             position_pct=63.0, at_low=False, at_high=False,
+                             gain_pct=8.5),
+            ],
+            low_resonance=1, high_resonance=0, up_days=4,
+        )
+        p = export.cross_section_payload(
+            self._entries(self._row(scan=scan)), query_time="t",
+            pool_size=1, data_cutoff=datetime.date(2026, 5, 29), stale=False,
+            compact=True,
+            availability_rows=[self._row(scan=scan)],
+            included_dimensions={"valuation"},
+            compact_dimensions={"valuation"},
+            compact_context=False,
+        )
+        r0 = p["results"][0]
+        assert "positions" not in r0
+        assert "low_resonance" not in r0
+        assert "high_resonance" not in r0
+        assert "gains" not in r0
+        assert "up_days" not in r0
+        assert r0["valuation"]["pe_ttm"] == 20.04
 
     def test_fields_schema_for_cross_section(self):
         p = export.cross_section_payload(

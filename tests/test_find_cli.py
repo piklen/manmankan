@@ -141,7 +141,19 @@ class TestFindCli:
         assert ec in (0, 2)
         plain = _strip_ansi(out)
         assert "--compact" in plain
+        assert "--no-compact-context" in plain
         assert "--fields" in plain
+        assert "@core" in plain
+        assert "@valuation" in plain
+
+    def test_no_compact_context_requires_compact(self, tmp_path):
+        ec, out, _err = _run_isolated(
+            ["find", "--format", "json", "--no-compact-context"], tmp_path,
+        )
+        assert ec == 2
+        payload = json.loads(out)
+        assert payload["ok"] is False
+        assert payload["error"]["code"] == "invalid_compact_context"
 
     def test_dsl_errors_include_fix_hint(self):
         """DSL 错误信息必须含修复示例.

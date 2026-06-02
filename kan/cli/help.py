@@ -75,7 +75,8 @@ def help_cmd() -> None:
   kan find --pos 180:lt:5 --limit 20           自定义输出条数
   kan find --industry 半导体 --format json     整池全维度 JSON(AI 取数 · 无 filter 即取数)
   kan find --all --pe lt:20 --format json --compact  低字段量 JSON
-  kan find --industry 半导体 --format json --fields code,name,price,context.positions
+  kan find --all --pe lt:20 --format json --compact --no-compact-context  省略 K 线上下文
+  kan find --industry 半导体 --format json --fields @core,@valuation
 
   [dim]PERIOD: 3/5/7/10/15/30/60/90/120/180 · OP: lt/lte/gt/gte/eq/ne · LEVEL: low/high[/dim]
   [dim]不告诉你买什么 · 帮你找到符合条件的(候选 ≠ 买入信号)[/dim]

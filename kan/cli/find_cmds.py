@@ -10,7 +10,7 @@
 - 强制 disclaimer 字段 (compliance §5/§7 · 衍生不可删 · 测试守护)
 
 合规(manmankan/docs/compliance.md §7):
-- 用户显式指定 filter · 不内置 preset
+- 用户显式指定 filter · 不内置筛选策略 preset
 - 输出 "符合条件的股票" · 不"推荐"
 - 估值/质量/资金/技术/股东等裸值可按用户 filter 输出
 """
@@ -38,6 +38,7 @@ from kan.core.find_registry import (
     DIMENSIONS_UNSUPPORTED_IN_ALL,
     dimensions_from_fields,
     fields_need_kline,
+    fields_need_valuation_context,
     parse_find_fields,
 )
 from kan.data.hot import HotList
@@ -281,6 +282,44 @@ def _compact_dimensions(conditions: ConditionSet, *, is_export: bool) -> set[str
     return _condition_dimensions(conditions)
 
 
+def _cross_section_dimensions(
+    conditions: ConditionSet,
+    *,
+    fmt: export.OutputFormat,
+    compact: bool,
+    field_dimensions: set[str],
+    fields_mode: bool,
+) -> set[str]:
+    """`--all` 本次实际需要的截面维度,反向驱动取数和 data_availability。"""
+    dims = {"valuation"}  # 基础价格、data_cutoff、PE filter 都来自 daily_basic 截面。
+    dims.update(_condition_dimensions(conditions))
+    if fields_mode:
+        dims.update(field_dimensions)
+        return dims
+    if fmt is export.OutputFormat.md:
+        dims.add("moneyflow")  # markdown 表格固定展示主力净额列。
+        return dims
+    if compact:
+        dims.update(_compact_dimensions(conditions, is_export=True))
+        return dims
+    dims.update({"moneyflow", "technical", "sentiment", "chip"})
+    return dims
+
+
+def _cross_section_needs_valuation_context(
+    fmt: export.OutputFormat,
+    *,
+    compact: bool,
+    fields: tuple[str, ...],
+) -> bool:
+    """行业内分位/中位只在输出形态真的需要时计算。"""
+    if fmt is export.OutputFormat.md:
+        return True
+    if fields:
+        return fields_need_valuation_context(fields)
+    return fmt is export.OutputFormat.json and not compact
+
+
 @app.command()
 def find(
     pos: Annotated[
@@ -468,11 +507,18 @@ def find(
             help="仅用于 --format json:输出低字段量结果 + data_availability",
         ),
     ] = False,
+    compact_context: Annotated[
+        bool,
+        typer.Option(
+            "--compact-context/--no-compact-context",
+            help="仅用于 --format json --compact:是否输出位置/共振 K 线上下文",
+        ),
+    ] = True,
     fields: Annotated[
         list[str],
         typer.Option(
             "--fields",
-            help="仅用于 --format json:字段白名单,例 code,name,price,context.positions,valuation.pe_ttm",
+            help="仅用于 --format json:字段白名单或 @preset,例 @core,@valuation",
         ),
     ] = [],  # noqa: B006 · typer multi-option 需要 list 默认值
 ) -> None:
@@ -487,6 +533,8 @@ def find(
       kan find --industry 半导体 --format json         # 整池全维度 JSON(AI 取数)
       kan find --industry 半导体 --pe lt:30 --moneyflow gt:0  # 估值+资金组合
       kan find --all --pe lt:20 --format json          # 全市场 PE<20 截面筛
+      kan find --all --pe lt:20 --format json --compact --no-compact-context
+      kan find --all --pe lt:20 --format json --fields @core,@valuation
       kan find --codes 600519,000858 --pos 180:lt:20   # 自定义代码池里筛位置
       printf "600519\n000858\n" | kan find --codes - --gain 30:gt:10
       kan find --all --rsi lt:30 --streak gte:3 --format json  # 全市场 RSI<30 + 连板≥3
@@ -514,7 +562,8 @@ def find(
       --format terminal  默认 · Rich 表格 (需至少一个 filter)
       --format json      AI 友好 · 命中带 metadata · 无 filter = 整池取数
       --compact          json 低字段量输出 · 适合脚本/外部模型首轮筛选
-      --fields LIST      json 字段白名单 · 例 code,name,price,context.positions,valuation.pe_ttm
+      --no-compact-context  compact 不输出 positions/resonance,避免无 K 线 filter 时取快照
+      --fields LIST      json 字段白名单或 @preset · 例 @core,@valuation
       --format md        markdown 表格
 
     池 selector (跟 kan scan 一致 · 三者互斥):
@@ -544,6 +593,14 @@ def find(
     if compact and fmt is not export.OutputFormat.json:
         _print_err("❌ --compact 仅支持 --format json")
         raise typer.Exit(2)
+    if not compact_context and not compact:
+        _exit_find_error(
+            fmt,
+            code="invalid_compact_context",
+            message="--no-compact-context 只能和 --format json --compact 一起使用",
+            hint="例: kan find --all --pe lt:20 --format json --compact --no-compact-context",
+            exit_code=2,
+        )
     if fields and fmt is not export.OutputFormat.json:
         _print_err("❌ --fields 仅支持 --format json")
         raise typer.Exit(2)
@@ -562,7 +619,7 @@ def find(
             fmt,
             code="invalid_fields",
             message=str(e),
-            hint="例: --fields code,name,price,context.positions,valuation.pe_ttm",
+            hint="例: --fields @core,@valuation 或 --fields code,name,price",
             exit_code=2,
         )
     field_dimensions = dimensions_from_fields(field_paths)
@@ -661,10 +718,27 @@ def find(
         from kan.core.cross_section import run_cross_section
         from kan.core.stock_set import AllStocksSet
 
+        included_dimensions = _cross_section_dimensions(
+            conditions,
+            fmt=fmt,
+            compact=compact,
+            field_dimensions=field_dimensions,
+            fields_mode=bool(field_paths),
+        )
         cs = run_cross_section(
             AllStocksSet(),
-            need_kline=conditions.has_kline_filters() or compact or fields_need_kline(field_paths),
+            need_kline=(
+                conditions.has_kline_filters()
+                or (compact and compact_context)
+                or fields_need_kline(field_paths)
+            ),
             kline_periods=_kline_snapshot_periods(conditions),
+            included_dimensions=included_dimensions,
+            need_valuation_context=_cross_section_needs_valuation_context(
+                fmt,
+                compact=compact,
+                fields=field_paths,
+            ),
         )
         if not cs.rows:
             _exit_find_error(
@@ -690,9 +764,10 @@ def find(
                 filters=_find_filters(conditions),
                 compact=compact,
                 availability_rows=cs.rows,
-                included_dimensions={"valuation", "moneyflow", "technical", "sentiment", "chip"},
+                included_dimensions=included_dimensions,
                 compact_dimensions=_compact_dimensions(conditions, is_export=is_export),
                 fields=field_paths,
+                compact_context=compact_context,
             )))
         else:  # md
             typer.echo(export.cross_section_markdown(
@@ -804,6 +879,7 @@ def find(
                 ),
                 compact_dimensions=_compact_dimensions(conditions, is_export=is_export),
                 fields=field_paths,
+                compact_context=compact_context,
             )))
         else:  # md
             typer.echo(export.find_markdown(

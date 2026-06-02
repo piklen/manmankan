@@ -48,7 +48,7 @@ if TYPE_CHECKING:
 # kan find AI 消费 JSON 的 schema 契约版本 (地基-2)。
 # 这是数据契约版本 (供外部 AI 判断字段集) · 与包版本 (__version__) 不同命名空间:
 # 字段集变更时才 bump · 加字段属向后兼容演进 (AI 见到更多字段 · 不破旧消费方)。
-FIND_SCHEMA_VERSION = "0.0.6.7"
+FIND_SCHEMA_VERSION = "0.0.6.8"
 
 
 def _board_reference_kind(meta: BoardMeta | HotMeta | ThemeMeta | None) -> str:
@@ -870,6 +870,7 @@ def _find_result_compact_dict(
     enriched: EnrichedResult,
     *,
     included_dimensions: set[str],
+    include_context: bool = True,
 ) -> dict:
     """单只命中 → compact JSON 对象.
 
@@ -884,15 +885,18 @@ def _find_result_compact_dict(
         "price": er.current_price,
         "data_time": er.scan_date.isoformat(),
         "triggered_filters": _triggered_filters_public(match),
-        "positions": _positions_dict(er),
-        "low_resonance": er.low_resonance,
-        "high_resonance": er.high_resonance,
     }
-    gains = _gains_dict(er)
-    if gains:
-        result["gains"] = gains
-    if er.up_days:
-        result["up_days"] = er.up_days
+    if include_context:
+        result.update({
+            "positions": _positions_dict(er),
+            "low_resonance": er.low_resonance,
+            "high_resonance": er.high_resonance,
+        })
+        gains = _gains_dict(er)
+        if gains:
+            result["gains"] = gains
+        if er.up_days:
+            result["up_days"] = er.up_days
     if er.is_st:
         result["is_st"] = True
     if er.limit_up:
@@ -1002,6 +1006,7 @@ def find_payload(
     included_dimensions: set[str] | None = None,
     compact_dimensions: set[str] | None = None,
     fields: tuple[str, ...] = (),
+    compact_context: bool = True,
 ) -> dict:
     """kan find --format json 的结构化 payload (地基-2 · AI 消费入口)。
 
@@ -1041,7 +1046,12 @@ def find_payload(
             _select_find_fields(_find_result_field_source(m, er), fields)
             if fields
             else (
-                _find_result_compact_dict(m, er, included_dimensions=result_dimensions)
+                _find_result_compact_dict(
+                    m,
+                    er,
+                    included_dimensions=result_dimensions,
+                    include_context=compact_context,
+                )
                 if compact else _find_result_dict(m, er)
             )
             for m, er in entries
@@ -1143,6 +1153,7 @@ def _cross_section_result_compact_dict(
     triggered: tuple[TriggeredFilter, ...] = (),
     *,
     included_dimensions: set[str],
+    include_context: bool = True,
 ) -> dict:
     """单只截面取数结果 → compact JSON 对象."""
     result: dict = {
@@ -1159,7 +1170,7 @@ def _cross_section_result_compact_dict(
             for t in triggered
         ],
     }
-    if row.scan is not None:
+    if include_context and row.scan is not None:
         result.update({
             "positions": _positions_dict(row.scan),
             "low_resonance": row.scan.low_resonance,
@@ -1234,6 +1245,7 @@ def cross_section_payload(
     included_dimensions: set[str] | None = None,
     compact_dimensions: set[str] | None = None,
     fields: tuple[str, ...] = (),
+    compact_context: bool = True,
 ) -> dict:
     """kan find --all --format json 截面取数/筛选 payload (地基-3 + 整合-1 截面 filter)。
 
@@ -1277,7 +1289,12 @@ def cross_section_payload(
             _select_find_fields(_cross_section_result_field_source(r, t), fields)
             if fields
             else (
-                _cross_section_result_compact_dict(r, t, included_dimensions=result_dimensions)
+                _cross_section_result_compact_dict(
+                    r,
+                    t,
+                    included_dimensions=result_dimensions,
+                    include_context=compact_context,
+                )
                 if compact else _cross_section_result_dict(r, t)
             )
             for r, t in entries

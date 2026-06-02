@@ -156,10 +156,23 @@ class FindFieldSpec:
     output_path: tuple[str, ...]
     dimension: str | None = None
     needs_kline: bool = False
+    needs_valuation_context: bool = False
 
 
-def _field(path: str, *, dimension: str | None = None, needs_kline: bool = False) -> FindFieldSpec:
-    return FindFieldSpec(path, tuple(path.split(".")), dimension=dimension, needs_kline=needs_kline)
+def _field(
+    path: str,
+    *,
+    dimension: str | None = None,
+    needs_kline: bool = False,
+    needs_valuation_context: bool = False,
+) -> FindFieldSpec:
+    return FindFieldSpec(
+        path,
+        tuple(path.split(".")),
+        dimension=dimension,
+        needs_kline=needs_kline,
+        needs_valuation_context=needs_valuation_context,
+    )
 
 
 _VALUATION_FIELDS = (
@@ -208,7 +221,14 @@ FIND_FIELD_SPECS = {
     for spec in (
         *_BASE_FIELD_SPECS,
         *(_field(f"valuation.{name}", dimension="valuation") for name in _VALUATION_FIELDS),
-        *(_field(f"valuation_context.{name}", dimension="valuation") for name in _VALUATION_CONTEXT_FIELDS),
+        *(
+            _field(
+                f"valuation_context.{name}",
+                dimension="valuation",
+                needs_valuation_context=True,
+            )
+            for name in _VALUATION_CONTEXT_FIELDS
+        ),
         *(_field(f"fundamentals.{name}", dimension="fundamentals") for name in _FUNDAMENTALS_FIELDS),
         *(_field(f"moneyflow.{name}", dimension="moneyflow") for name in _MONEYFLOW_FIELDS),
         *(_field(f"technical.{name}", dimension="technical") for name in _TECHNICAL_FIELDS),
@@ -218,12 +238,55 @@ FIND_FIELD_SPECS = {
     )
 }
 
+FIND_FIELD_PRESETS = {
+    "@core": (
+        "code", "name", "price", "data_time", "triggered_filters",
+    ),
+    "@context": (
+        "context.positions", "context.low_resonance", "context.high_resonance",
+    ),
+    "@valuation": (
+        "valuation.trade_date", "valuation.close", "valuation.pe_ttm", "valuation.pb",
+        "valuation.ps_ttm", "valuation.dv_ttm", "valuation.turnover_rate",
+        "valuation.volume_ratio", "valuation.total_mv", "valuation.circ_mv",
+        "valuation.source",
+    ),
+    "@valuation_context": (
+        "valuation_context.industry", "valuation_context.industry_sample",
+        "valuation_context.pe_industry_pct", "valuation_context.pb_industry_pct",
+        "valuation_context.pe_industry_median", "valuation_context.pb_industry_median",
+    ),
+    "@moneyflow": (
+        "moneyflow.trade_date", "moneyflow.net_amount", "moneyflow.buy_elg_amount",
+        "moneyflow.buy_lg_amount", "moneyflow.source",
+    ),
+    "@technical": (
+        "technical.trade_date", "technical.rsi_6", "technical.macd_dif",
+        "technical.macd_dea", "technical.macd", "technical.kdj_j",
+        "technical.ma_5", "technical.ma_10", "technical.ma_20", "technical.ma_60",
+        "technical.atr_pct", "technical.ma_bias", "technical.source",
+    ),
+    "@sentiment": (
+        "sentiment.trade_date", "sentiment.limit_times", "sentiment.open_times",
+        "sentiment.limit", "sentiment.up_stat", "sentiment.source",
+    ),
+    "@chip": (
+        "chip.trade_date", "chip.winner_rate", "chip.cost_5pct", "chip.cost_50pct",
+        "chip.cost_95pct", "chip.weight_avg", "chip.source",
+    ),
+    "@shareholder": (
+        "shareholder.holder_end_date", "shareholder.holder_chg_pct",
+        "shareholder.top10_end_date", "shareholder.top10_float_ratio",
+        "shareholder.north_hold_ratio", "shareholder.source",
+    ),
+}
+
 
 def parse_find_fields(raw_values: list[str] | None) -> tuple[str, ...]:
     """Parse --fields values against FIND_FIELD_SPECS.
 
-    Accepted syntax is comma and/or whitespace separated exact field paths:
-    `--fields code,name,price,context.positions,valuation.pe_ttm`.
+    Accepted syntax is comma and/or whitespace separated exact field paths or
+    registry presets: `--fields @core,@valuation,context.positions`.
     """
     if not raw_values:
         return ()
@@ -235,6 +298,16 @@ def parse_find_fields(raw_values: list[str] | None) -> tuple[str, ...]:
             field = part.strip()
             if not field:
                 continue
+            if field.startswith("@"):
+                preset = FIND_FIELD_PRESETS.get(field)
+                if preset is None:
+                    unknown.append(field)
+                    continue
+                for preset_field in preset:
+                    if preset_field not in seen:
+                        seen.add(preset_field)
+                        out.append(preset_field)
+                continue
             if field not in FIND_FIELD_SPECS:
                 unknown.append(field)
                 continue
@@ -242,10 +315,10 @@ def parse_find_fields(raw_values: list[str] | None) -> tuple[str, ...]:
                 seen.add(field)
                 out.append(field)
     if unknown:
-        allowed = ", ".join(sorted(FIND_FIELD_SPECS))
+        allowed = ", ".join([*sorted(FIND_FIELD_PRESETS), *sorted(FIND_FIELD_SPECS)])
         raise ValueError(f"不支持的 --fields 字段: {', '.join(unknown)} · 可用字段: {allowed}")
     if not out:
-        raise ValueError("--fields 不能为空 · 例: --fields code,name,price,context.positions")
+        raise ValueError("--fields 不能为空 · 例: --fields @core,context.positions")
     return tuple(out)
 
 
@@ -269,15 +342,21 @@ def fields_need_kline(fields: tuple[str, ...]) -> bool:
     return any(FIND_FIELD_SPECS[field].needs_kline for field in fields)
 
 
+def fields_need_valuation_context(fields: tuple[str, ...]) -> bool:
+    return any(FIND_FIELD_SPECS[field].needs_valuation_context for field in fields)
+
+
 __all__ = [
     "DATA_DIMENSIONS",
     "DIMENSIONS_UNSUPPORTED_IN_ALL",
     "DIMENSION_DATA_FIELDS",
     "FILTER_SPECS",
+    "FIND_FIELD_PRESETS",
     "FIND_FIELD_SPECS",
     "TRIGGER_FLAG",
     "dimensions_from_fields",
     "dimensions_from_filters",
     "fields_need_kline",
+    "fields_need_valuation_context",
     "parse_find_fields",
 ]

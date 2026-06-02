@@ -34,6 +34,16 @@ def _fixed_latest(monkeypatch):
     )
 
 
+@pytest.fixture(autouse=True)
+def _empty_optional_dimensions(monkeypatch):
+    """默认不让可选截面维度触网;需要断言调用的测试单独覆盖。"""
+    empty = lambda **_kw: pd.DataFrame()  # noqa: E731
+    monkeypatch.setattr("kan.data.moneyflow.fetch_moneyflow", empty)
+    monkeypatch.setattr("kan.data.technical.fetch_technical", empty)
+    monkeypatch.setattr("kan.data.sentiment.fetch_sentiment", empty)
+    monkeypatch.setattr("kan.data.chip.fetch_chip", empty)
+
+
 def _cross_df(rows):
     return pd.DataFrame(rows)
 
@@ -129,3 +139,71 @@ def test_preserves_pairs_order(monkeypatch):
     )
     # 输出顺序跟随 pairs · 不被 df 行顺序打乱
     assert [r.code for r in ctx.rows] == ["600519", "000001"]
+
+
+def test_selective_dimensions_skip_unrequested_fetches(monkeypatch):
+    df = _cross_df([{
+        "symbol": "600519", "trade_date": datetime.date(2026, 5, 29),
+        "close": 1326.0, "pe_ttm": 20.0,
+    }])
+    monkeypatch.setattr("kan.data.metrics.fetch_metrics", lambda **_kw: df.copy())
+
+    def _unexpected(*_args, **_kwargs):
+        raise AssertionError("unrequested dimension fetch should not run")
+
+    monkeypatch.setattr("kan.data.industry_map.fetch_sw_l1_map", _unexpected)
+    monkeypatch.setattr("kan.data.moneyflow.fetch_moneyflow", _unexpected)
+    monkeypatch.setattr("kan.data.technical.fetch_technical", _unexpected)
+    monkeypatch.setattr("kan.data.sentiment.fetch_sentiment", _unexpected)
+    monkeypatch.setattr("kan.data.chip.fetch_chip", _unexpected)
+
+    ctx = cross_section.run_cross_section(
+        _FakeSet([("600519", "贵州茅台")]),
+        included_dimensions={"valuation"},
+        need_valuation_context=False,
+    )
+    assert len(ctx.rows) == 1
+    row = ctx.rows[0]
+    assert row.valuation is not None
+    assert row.valuation_context is None
+    assert row.moneyflow is None
+    assert row.technical is None
+    assert row.sentiment is None
+    assert row.chip is None
+
+
+def test_selective_dimensions_fetch_only_requested_dimension(monkeypatch):
+    df = _cross_df([{
+        "symbol": "600519", "trade_date": datetime.date(2026, 5, 29),
+        "close": 1326.0, "pe_ttm": 20.0,
+    }])
+    mf = _cross_df([{
+        "symbol": "600519", "trade_date": datetime.date(2026, 5, 29),
+        "net_amount": 5000.0, "buy_elg_amount": 3000.0,
+        "buy_lg_amount": 2000.0, "_source": "tushare_moneyflow",
+    }])
+    calls = {"moneyflow": 0}
+    monkeypatch.setattr("kan.data.metrics.fetch_metrics", lambda **_kw: df.copy())
+    monkeypatch.setattr("kan.data.industry_map.fetch_sw_l1_map", lambda: {})
+
+    def _moneyflow(**_kw):
+        calls["moneyflow"] += 1
+        return mf.copy()
+
+    def _unexpected(*_args, **_kwargs):
+        raise AssertionError("unrequested dimension fetch should not run")
+
+    monkeypatch.setattr("kan.data.moneyflow.fetch_moneyflow", _moneyflow)
+    monkeypatch.setattr("kan.data.technical.fetch_technical", _unexpected)
+    monkeypatch.setattr("kan.data.sentiment.fetch_sentiment", _unexpected)
+    monkeypatch.setattr("kan.data.chip.fetch_chip", _unexpected)
+
+    ctx = cross_section.run_cross_section(
+        _FakeSet([("600519", "贵州茅台")]),
+        included_dimensions={"valuation", "moneyflow"},
+        need_valuation_context=False,
+    )
+    assert calls["moneyflow"] == 1
+    assert ctx.rows[0].moneyflow is not None
+    assert ctx.rows[0].moneyflow.net_amount == 5000.0
+    assert ctx.rows[0].technical is None

@@ -151,6 +151,8 @@ def run_cross_section(
     trade_date: str | None = None,
     need_kline: bool = False,
     kline_periods: list[int] | None = None,
+    included_dimensions: set[str] | None = None,
+    need_valuation_context: bool = True,
 ) -> CrossSectionCtx:
     """全市场截面编排 · 不走 run_data_pipeline (K 线管线) · 截面一次拉全市场。
 
@@ -159,6 +161,9 @@ def run_cross_section(
         trade_date: YYYYMMDD 截面日 · None → 最近交易日 (fetch_metrics 内部解析)
         need_kline: True 时额外挂载每日 K 线预计算快照 (位置/涨幅/连阳/共振)
         kline_periods: 快照需要计算的周期 · None 时默认全周期 PERIODS
+        included_dimensions: None 保持历史全维度取数;传 set 时只取对应截面维度。
+            valuation 截面仍作为基础价格/截止日来源由本函数固定读取。
+        need_valuation_context: True 时计算行业内分位/中位;fields/compact 可关闭。
 
     Returns:
         CrossSectionCtx · rows 顺序跟随 stock_set.pairs()。
@@ -173,13 +178,13 @@ def run_cross_section(
         _row_to_valuation,
     )
     from kan.core.trading_calendar import latest_trade_date
-    from kan.core.valuation_context import compute_cross_section_contexts
-    from kan.data.chip import fetch_chip
-    from kan.data.industry_map import fetch_sw_l1_map
     from kan.data.metrics import _DEFAULT_LOOKBACK_DAYS, fetch_metrics
-    from kan.data.moneyflow import fetch_moneyflow
-    from kan.data.sentiment import fetch_sentiment
-    from kan.data.technical import fetch_technical
+
+    dims = (
+        {"valuation", "moneyflow", "technical", "sentiment", "chip"}
+        if included_dimensions is None
+        else set(included_dimensions)
+    )
 
     pairs = stock_set.pairs()
     pool_size = len(pairs)
@@ -195,14 +200,16 @@ def run_cross_section(
             rows=[], pool_size=pool_size, data_cutoff=None, stale=True,
         )
 
-    l1_map = fetch_sw_l1_map()
-    contexts = (
-        {}
-        if cross_empty
-        else compute_cross_section_contexts(
+    if need_valuation_context and not cross_empty:
+        from kan.core.valuation_context import compute_cross_section_contexts
+        from kan.data.industry_map import fetch_sw_l1_map
+
+        l1_map = fetch_sw_l1_map()
+        contexts = compute_cross_section_contexts(
             cross, l1_map, lookback_days=_DEFAULT_LOOKBACK_DAYS,
         )
-    )
+    else:
+        contexts = {}
     fallback_date = _resolve_fallback_date(trade_date, latest_trade_date)
     by_symbol = (
         {}
@@ -210,33 +217,54 @@ def run_cross_section(
         else {str(r.get("symbol", "")).strip(): r for _, r in cross.iterrows()}
     )
 
-    # 主力资金截面 (整合-1 · 同截面廉价一次 HTTP · 支持 --all --moneyflow · 早期/无数据降级)
-    mf = fetch_moneyflow(trade_date=trade_date, symbols=codes)
-    mf_by_symbol = (
-        {str(r.get("symbol", "")).strip(): r for _, r in mf.iterrows()}
-        if mf is not None and not mf.empty
-        else {}
-    )
+    # 这些维度由 CLI 的 fields/compact/filter 反向驱动;未请求则不触发远端截面取数。
+    if "moneyflow" in dims:
+        from kan.data.moneyflow import fetch_moneyflow
 
-    # 技术/情绪/筹码截面 (整合-2 · 同截面廉价 · 取数全维度 · 无条件挂 · 无数据/早期降级)
-    tech = fetch_technical(trade_date=trade_date, symbols=codes)
-    tech_by_symbol = (
-        {str(r.get("symbol", "")).strip(): r for _, r in tech.iterrows()}
-        if tech is not None and not tech.empty
-        else {}
-    )
-    senti = fetch_sentiment(trade_date=trade_date, symbols=codes)
-    senti_by_symbol = (
-        {str(r.get("symbol", "")).strip(): r for _, r in senti.iterrows()}
-        if senti is not None and not senti.empty
-        else {}
-    )
-    chip = fetch_chip(trade_date=trade_date, symbols=codes)
-    chip_by_symbol = (
-        {str(r.get("symbol", "")).strip(): r for _, r in chip.iterrows()}
-        if chip is not None and not chip.empty
-        else {}
-    )
+        mf = fetch_moneyflow(trade_date=trade_date, symbols=codes)
+        mf_by_symbol = (
+            {str(r.get("symbol", "")).strip(): r for _, r in mf.iterrows()}
+            if mf is not None and not mf.empty
+            else {}
+        )
+    else:
+        mf_by_symbol = {}
+
+    if "technical" in dims:
+        from kan.data.technical import fetch_technical
+
+        tech = fetch_technical(trade_date=trade_date, symbols=codes)
+        tech_by_symbol = (
+            {str(r.get("symbol", "")).strip(): r for _, r in tech.iterrows()}
+            if tech is not None and not tech.empty
+            else {}
+        )
+    else:
+        tech_by_symbol = {}
+
+    if "sentiment" in dims:
+        from kan.data.sentiment import fetch_sentiment
+
+        senti = fetch_sentiment(trade_date=trade_date, symbols=codes)
+        senti_by_symbol = (
+            {str(r.get("symbol", "")).strip(): r for _, r in senti.iterrows()}
+            if senti is not None and not senti.empty
+            else {}
+        )
+    else:
+        senti_by_symbol = {}
+
+    if "chip" in dims:
+        from kan.data.chip import fetch_chip
+
+        chip = fetch_chip(trade_date=trade_date, symbols=codes)
+        chip_by_symbol = (
+            {str(r.get("symbol", "")).strip(): r for _, r in chip.iterrows()}
+            if chip is not None and not chip.empty
+            else {}
+        )
+    else:
+        chip_by_symbol = {}
     from kan.core.scanner import PERIODS
 
     scan_periods = sorted(set(kline_periods or PERIODS))
