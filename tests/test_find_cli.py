@@ -7,17 +7,23 @@ the root @app.callback() that checks `len(sys.argv) == 1`.
 import io
 import json
 import os
+import re
 import subprocess
 import sys
 
 import pytest
 
 REPO_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+_ANSI_RE = re.compile(r"\x1b\[[0-9;]*m")
+
+
+def _strip_ansi(text: str) -> str:
+    return _ANSI_RE.sub("", text)
 
 
 def _run(args: list[str]) -> tuple[int, str]:
     """Run `kan find ARGS` via uv subprocess · returns (exit_code, combined output)."""
-    env = {**os.environ, "KAN_NO_BOOT_BANNER": "1"}
+    env = {**os.environ, "KAN_NO_BOOT_BANNER": "1", "NO_COLOR": "1"}
     result = subprocess.run(
         ["uv", "run", "kan", *args],
         cwd=REPO_ROOT,
@@ -133,8 +139,9 @@ class TestFindCli:
     def test_help_includes_compact_option(self):
         ec, out = _run(["find", "--help"])
         assert ec in (0, 2)
-        assert "--compact" in out
-        assert "--fields" in out
+        plain = _strip_ansi(out)
+        assert "--compact" in plain
+        assert "--fields" in plain
 
     def test_dsl_errors_include_fix_hint(self):
         """DSL 错误信息必须含修复示例.
