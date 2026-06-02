@@ -8,6 +8,22 @@ increment `D` unless the maintainer explicitly approves a larger bump.
 
 ## [Unreleased]
 
+## [0.0.6.8] - 2026-06-02
+
+### Added
+
+- **`kan find --format json --compact --no-compact-context`** · compact 可显式省略 `positions` / `low_resonance` / `high_resonance` / `gains` / `up_days`;`--all` 无 K 线 filter 时不再为 compact 输出主动取全市场 K 线快照
+- **`kan find --format json --fields @preset`** · 字段 preset 支持 `@core` / `@context` / `@valuation` / `@valuation_context` / `@moneyflow` / `@technical` / `@sentiment` / `@chip` / `@shareholder`,仅展开客观字段集合,不改变筛选规则或排序
+
+### Changed
+
+- `kan find --all --format json --compact|--fields` 现在按 filter、compact 摘要和字段白名单反向驱动截面维度取数;未请求的 moneyflow / technical / sentiment / chip 不再无条件拉取,`data_availability` 对应维度显示 `not_requested`
+- `kan find` JSON schema version 升至 `0.0.6.8`
+
+### Internal
+
+- 增加 find registry → docs / CLI help / field schema 一致性测试,降低 filter 元数据、字段白名单、文档和 help 漂移风险
+
 ## [0.0.6.7] - 2026-06-02
 
 ### Added
@@ -202,7 +218,8 @@ increment `D` unless the maintainer explicitly approves a larger bump.
 - **Shell 补全** · zsh / bash / fish / powershell
 - **合规与隐私** · 强制风险提示 + 关键词黑名单（无买卖建议 / 无目标价 / 无评级）· 数据全本地
 
-[Unreleased]: https://github.com/piklen/manmankan/compare/v0.0.6.7...HEAD
+[Unreleased]: https://github.com/piklen/manmankan/compare/v0.0.6.8...HEAD
+[0.0.6.8]: https://github.com/piklen/manmankan/compare/v0.0.6.7...v0.0.6.8
 [0.0.6.7]: https://github.com/piklen/manmankan/compare/v0.0.6.6...v0.0.6.7
 [0.0.6.6]: https://github.com/piklen/manmankan/compare/v0.0.6.5...v0.0.6.6
 [0.0.6.5]: https://github.com/piklen/manmankan/compare/v0.0.5.1...v0.0.6.5

@@ -20,7 +20,7 @@
 It deliberately stops there: **no buy/sell advice, no ratings, no price targets, no "AI stock picking."** Just objective price-position data, fully local — no login, no account, no telemetry. Data is delayed end-of-day K-line from the AKShare ecosystem (baostock primary). `pip install manmankan` · Python 3.11+ · [Parity Public License 7.0.0](LICENSE) · A-share only (no HK / US / futures).
 </details>
 
-> **当前 v0.0.6.7**(Alpha · API 在 1.0 前可能调整)· `uv tool install manmankan` 即装即用
+> **当前 v0.0.6.8**(Alpha · API 在 1.0 前可能调整)· `uv tool install manmankan` 即装即用
 > **100% 本地** · 不登录 · 不上传自选 · 不推送 · 不遥测 · 数据存 `~/.local/share/kan/`(XDG 规范)
 > **延时数据** · 盘后批量拉取前复权日 K 线 · 不适合分钟级短线
 > **许可** · 个人散户日常自用完全免费;商业使用见 [许可证](#许可证)
@@ -220,11 +220,12 @@ kan find --codes 600519,000858 --pos 180:lt:20 # 自定义代码池筛选
 printf "600519\n000858\n" | kan find --codes - --gain 30:gt:10
 kan find --all --up-days gte:3 --format json   # 全市场截面 + K 线预计算裸值筛
 kan find --all --pe lt:20 --format json --compact # 低字段量 JSON + 数据可用性统计
-kan find --industry 半导体 --format json --fields code,name,price,context.positions,valuation.pe_ttm
+kan find --all --pe lt:20 --format json --compact --no-compact-context # 省略 K 线上下文
+kan find --industry 半导体 --format json --fields @core,@valuation
 kan find --pos 180:lt:5 --limit 20            # 输出条数上限(默认 50)
 ```
 
-> 语法:`--pos PERIOD:OP:VAL`(PERIOD ∈ 3/5/7/10/15/30/60/90/120/180,OP ∈ lt/lte/gt/gte/eq/ne)· `--resonance low|high:OP:VAL` · `--exclude-st`。`kan find` 是**用户主导的条件筛选器**:规则由你显式指定,**无内置 preset、无评分、无评级、无推荐**,只返回符合你规则的股票。JSON schema、数据来源和缺数据语义见 [`docs/find.md`](docs/find.md);合规细则见 [`docs/compliance.md` §7](docs/compliance.md)。
+> 语法:`--pos PERIOD:OP:VAL`(PERIOD ∈ 3/5/7/10/15/30/60/90/120/180,OP ∈ lt/lte/gt/gte/eq/ne)· `--resonance low|high:OP:VAL` · `--exclude-st`。`kan find` 是**用户主导的条件筛选器**:规则由你显式指定,**无内置筛选策略 preset、无评分、无评级、无推荐**,只返回符合你规则的股票。JSON schema、数据来源和缺数据语义见 [`docs/find.md`](docs/find.md);合规细则见 [`docs/compliance.md` §7](docs/compliance.md)。
 
 **行业 / 热榜 / 题材**
 

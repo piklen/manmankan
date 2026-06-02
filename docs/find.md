@@ -8,7 +8,8 @@
 kan find --industry 半导体 --pos 180:lt:10 --format json
 kan find --industry 半导体 --pos 180:lt:10 --format json --compact
 kan find --all --pe lt:20 --format json --compact
-kan find --industry 半导体 --format json --fields code,name,price,context.positions,valuation.pe_ttm
+kan find --all --pe lt:20 --format json --compact --no-compact-context
+kan find --industry 半导体 --format json --fields @core,@valuation
 ```
 
 两种 JSON 共享顶层字段:
@@ -39,6 +40,14 @@ kan find --industry 半导体 --format json --fields code,name,price,context.pos
 
 compact 不等于改变筛选规则,只改变 JSON 字段量。需要完整字段时去掉 `--compact`。
 
+默认 compact 会包含 `positions` / `low_resonance` / `high_resonance`;在 `--all` 下这需要全市场 K 线快照。若首轮只需要截面指标,可加 `--no-compact-context`:
+
+```bash
+kan find --all --pe lt:20 --format json --compact --no-compact-context
+```
+
+该开关只影响 compact 输出里的位置/共振/涨幅/连阳上下文;若命令本身带 `--pos`、`--resonance`、`--gain`、`--up-days` 等 K 线 filter,仍会取快照用于筛选。
+
 ### fields
 
 `--format json --fields LIST` 是 `result_schema=fields`:只输出白名单里显式请求的字段,适合把结果继续交给外部程序或模型时控制上下文成本。
@@ -46,19 +55,33 @@ compact 不等于改变筛选规则,只改变 JSON 字段量。需要完整字�
 字段语法:
 
 - `LIST` 支持逗号或空白分隔,可多次传入,会去重并保持首次出现顺序
-- 只接受白名单字段,不做动态嵌套路径解析
+- 只接受白名单字段或 registry preset,不做动态嵌套路径解析
 - 可用字段示例:`code`、`name`、`price`、`data_time`、`triggered_filters`、`context.positions`、`context.low_resonance`、`valuation.pe_ttm`、`moneyflow.net_amount`、`technical.rsi_6`
 - `--fields` 不能和 `--compact` 同时使用;二者都定义结果字段形态
 - `--all` 不支持逐股高成本维度字段,例如 `fundamentals.*`、`shareholder.*`
+
+字段 preset 是客观维度包,只负责展开字段列表,不改变筛选、排序或解释:
+
+| preset | 展开内容 |
+|---|---|
+| `@core` | `code` / `name` / `price` / `data_time` / `triggered_filters` |
+| `@context` | `context.positions` / `context.low_resonance` / `context.high_resonance` |
+| `@valuation` | `valuation.*` 常用估值、量价、市值字段 |
+| `@valuation_context` | 行业、行业样本、PE/PB 行业内分位和中位 |
+| `@moneyflow` | 主力净额和大单/超大单字段 |
+| `@technical` | RSI、MACD、KDJ、均线、ATR%、乖离率字段 |
+| `@sentiment` | 连板/开板/涨跌停事件字段 |
+| `@chip` | 获利盘和成本分布字段 |
+| `@shareholder` | 股东户数、前十大流通集中度、北向持股字段;`--all` 不支持 |
 
 示例:
 
 ```bash
 kan find --industry 半导体 --format json \
-  --fields code,name,price,context.positions,valuation.pe_ttm,moneyflow.net_amount
+  --fields @core,@context,valuation.pe_ttm,moneyflow.net_amount
 ```
 
-未知字段会返回 `invalid_fields`。`--fields` 请求某个维度时,该维度会计入 `data_availability`;未请求的维度仍是 `not_requested`。
+未知字段或未知 preset 会返回 `invalid_fields`。`--fields` 请求某个维度时,该维度会计入 `data_availability`;未请求的维度仍是 `not_requested`。在 `--all` 下,`--fields` 也会反向驱动截面取数,未请求的 moneyflow / technical / sentiment / chip 不会主动拉取。
 
 ### data_availability
 
@@ -120,7 +143,7 @@ kan find --industry 半导体 --format json \
 {
   "ok": false,
   "command": "find",
-  "schema_version": "0.0.6.7",
+  "schema_version": "0.0.6.8",
   "error": {"code": "data_unavailable", "message": "...", "hint": "..."},
   "disclaimer": "..."
 }
@@ -133,3 +156,4 @@ kan find --industry 半导体 --format json \
 | `data_unavailable` | 该 filter 依赖的数据源在当前候选池不可用 |
 | `empty_intersection` | `--only-watchlist` 后候选池为空 |
 | `invalid_fields` | `--fields` 字段未知、为空、与 `--compact` 冲突,或当前模式不支持该维度 |
+| `invalid_compact_context` | `--no-compact-context` 未与 `--format json --compact` 一起使用 |
