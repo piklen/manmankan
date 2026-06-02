@@ -11,6 +11,15 @@ import json
 from enum import StrEnum
 from typing import TYPE_CHECKING
 
+from kan.core.find_registry import (
+    DATA_DIMENSIONS,
+    DIMENSION_DATA_FIELDS,
+    DIMENSIONS_UNSUPPORTED_IN_ALL,
+    FIND_FIELD_SPECS,
+    TRIGGER_FLAG,
+    dimensions_from_filters,
+)
+
 if TYPE_CHECKING:
     from datetime import date
 
@@ -39,7 +48,7 @@ if TYPE_CHECKING:
 # kan find AI 消费 JSON 的 schema 契约版本 (地基-2)。
 # 这是数据契约版本 (供外部 AI 判断字段集) · 与包版本 (__version__) 不同命名空间:
 # 字段集变更时才 bump · 加字段属向后兼容演进 (AI 见到更多字段 · 不破旧消费方)。
-FIND_SCHEMA_VERSION = "0.0.6.6"
+FIND_SCHEMA_VERSION = "0.0.6.7"
 
 
 def _board_reference_kind(meta: BoardMeta | HotMeta | ThemeMeta | None) -> str:
@@ -570,29 +579,6 @@ def compare_markdown(results: list[StockScanResult], *, periods: list[int]) -> s
 
 # ── find (AI 消费入口 · 地基-2) ────────────────────────────────────────
 
-_TRIGGER_FLAG = {
-    "pos": "--pos",
-    "resonance": "--resonance",
-    "pe": "--pe",
-    "roe": "--roe",
-    "moneyflow": "--moneyflow",
-    "rsi": "--rsi",
-    "macd_dif": "--macd-dif",
-    "macd": "--macd",
-    "kdj_j": "--kdj-j",
-    "streak": "--streak",
-    "winner": "--winner",
-    "holders": "--holders",
-    "top10": "--top10",
-    "north": "--north",
-    "ma_bias": "--ma-bias",
-    "gain": "--gain",
-    "atr_pct": "--atr-pct",
-    "up_days": "--up-days",
-}
-"""TriggeredFilter.filter_type → DSL flag (JSON triggered_filters.filter 字段)。"""
-
-
 def _valuation_public_dict(v: ValuationMetrics | None) -> dict | None:
     """ValuationMetrics → 对外 JSON (整合-1 拍板:放开估值裸值)。
 
@@ -768,7 +754,7 @@ def _find_result_dict(match: FindMatch, enriched: EnrichedResult) -> dict:
         "limit_down": er.limit_down,
         "triggered_filters": [
             {
-                "filter": _TRIGGER_FLAG.get(t.filter_type, t.filter_type),
+                "filter": TRIGGER_FLAG.get(t.filter_type, t.filter_type),
                 "param": t.param,
                 "value": t.value,
             }
@@ -783,14 +769,223 @@ def _find_result_dict(match: FindMatch, enriched: EnrichedResult) -> dict:
                 if not p.insufficient
             },
         },
-        "valuation": _valuation_public_dict(er.valuation),
-        "fundamentals": _fundamentals_public_dict(er.fundamentals),
-        "moneyflow": _moneyflow_public_dict(er.moneyflow),
-        "technical": _technical_public_dict(er.technical),
-        "sentiment": _sentiment_public_dict(er.sentiment),
-        "chip": _chip_public_dict(er.chip),
-        "shareholder": _shareholder_public_dict(er.shareholder),
+        "valuation": _valuation_public_dict(getattr(er, "valuation", None)),
+        "fundamentals": _fundamentals_public_dict(getattr(er, "fundamentals", None)),
+        "moneyflow": _moneyflow_public_dict(getattr(er, "moneyflow", None)),
+        "technical": _technical_public_dict(getattr(er, "technical", None)),
+        "sentiment": _sentiment_public_dict(getattr(er, "sentiment", None)),
+        "chip": _chip_public_dict(getattr(er, "chip", None)),
+        "shareholder": _shareholder_public_dict(getattr(er, "shareholder", None)),
     }
+
+
+def _triggered_filters_public(match: FindMatch) -> list[dict]:
+    """TriggeredFilter tuple → JSON public audit trail."""
+    return [
+        {
+            "filter": TRIGGER_FLAG.get(t.filter_type, t.filter_type),
+            "param": t.param,
+            "value": t.value,
+        }
+        for t in match.triggered
+    ]
+
+
+def _positions_dict(result: StockScanResult) -> dict:
+    """StockScanResult.periods → compact positions dict."""
+    return {
+        str(p.period): p.position_pct
+        for p in result.periods
+        if not p.insufficient
+    }
+
+
+def _gains_dict(result: StockScanResult) -> dict:
+    """StockScanResult.periods → compact gains dict (only populated values)."""
+    return {
+        str(p.period): p.gain_pct
+        for p in result.periods
+        if not p.insufficient and p.gain_pct is not None
+    }
+
+
+def _pick_non_null(data: dict | None, keys: tuple[str, ...]) -> dict | None:
+    """Select keys and drop all-null dimension summaries."""
+    if data is None:
+        return None
+    picked = {k: data.get(k) for k in keys if k in data}
+    def has_value(value: object) -> bool:
+        if isinstance(value, dict):
+            return any(has_value(v) for v in value.values())
+        return value is not None
+
+    return picked if any(has_value(v) for v in picked.values()) else None
+
+
+def _compact_dimension_summary(dim: str, obj: object | None) -> dict | None:
+    """Full dimension object → compact summary used by --compact."""
+    if dim == "valuation":
+        return _pick_non_null(
+            _valuation_public_dict(obj),  # type: ignore[arg-type]
+            ("trade_date", "pe_ttm", "pb", "ps_ttm", "dv_ttm", "turnover_rate", "total_mv", "source"),
+        )
+    if dim == "fundamentals":
+        return _pick_non_null(
+            _fundamentals_public_dict(obj),  # type: ignore[arg-type]
+            ("end_date", "roe", "netprofit_yoy", "or_yoy", "source"),
+        )
+    if dim == "moneyflow":
+        return _pick_non_null(
+            _moneyflow_public_dict(obj),  # type: ignore[arg-type]
+            ("trade_date", "net_amount", "source"),
+        )
+    if dim == "technical":
+        return _pick_non_null(
+            _technical_public_dict(obj),  # type: ignore[arg-type]
+            ("trade_date", "rsi_6", "macd_dif", "macd", "kdj_j", "ma_bias", "atr_pct", "source"),
+        )
+    if dim == "sentiment":
+        return _pick_non_null(
+            _sentiment_public_dict(obj),  # type: ignore[arg-type]
+            ("trade_date", "limit_times", "open_times", "limit", "source"),
+        )
+    if dim == "chip":
+        return _pick_non_null(
+            _chip_public_dict(obj),  # type: ignore[arg-type]
+            ("trade_date", "winner_rate", "source"),
+        )
+    if dim == "shareholder":
+        return _pick_non_null(
+            _shareholder_public_dict(obj),  # type: ignore[arg-type]
+            (
+                "holder_end_date", "holder_chg_pct", "top10_end_date",
+                "top10_float_ratio", "north_hold_ratio", "source",
+            ),
+        )
+    return None
+
+
+def _find_result_compact_dict(
+    match: FindMatch,
+    enriched: EnrichedResult,
+    *,
+    included_dimensions: set[str],
+) -> dict:
+    """单只命中 → compact JSON 对象.
+
+    compact 只保留首轮筛选常用字段:身份、价格、触发 filter、位置/共振,
+    以及本次已取数维度的少量摘要。维度被请求但无数据时保留 None,让调用方
+    区分“缺数据”和“未请求”。
+    """
+    er = enriched
+    result: dict = {
+        "code": er.symbol,
+        "name": er.name.replace(" ", ""),
+        "price": er.current_price,
+        "data_time": er.scan_date.isoformat(),
+        "triggered_filters": _triggered_filters_public(match),
+        "positions": _positions_dict(er),
+        "low_resonance": er.low_resonance,
+        "high_resonance": er.high_resonance,
+    }
+    gains = _gains_dict(er)
+    if gains:
+        result["gains"] = gains
+    if er.up_days:
+        result["up_days"] = er.up_days
+    if er.is_st:
+        result["is_st"] = True
+    if er.limit_up:
+        result["limit_up"] = True
+    if er.limit_down:
+        result["limit_down"] = True
+    for dim in DATA_DIMENSIONS:
+        if dim in included_dimensions:
+            result[dim] = _compact_dimension_summary(dim, getattr(er, dim, None))
+    return result
+
+
+def _object_has_dimension_data(dim: str, obj: object | None) -> bool:
+    """Return True when the dimension object carries at least one useful value."""
+    if obj is None:
+        return False
+    return any(getattr(obj, field, None) is not None for field in DIMENSION_DATA_FIELDS[dim])
+
+
+def _infer_included_dimensions(items: list[object]) -> set[str]:
+    """Fallback for direct unit calls that do not pass included_dimensions."""
+    dims: set[str] = set()
+    for item in items:
+        for dim in DATA_DIMENSIONS:
+            if getattr(item, dim, None) is not None:
+                dims.add(dim)
+    return dims
+
+
+def _data_availability(
+    items: list[object],
+    *,
+    included_dimensions: set[str] | None = None,
+    unsupported_dimensions: set[str] | None = None,
+    basis: str = "candidate_pool",
+) -> dict:
+    """Build top-level data_availability stats for machine consumers.
+
+    Counts are only meaningful for dimensions attempted by this command. Dimensions
+    not fetched are marked not_requested; dimensions unsupported by the current mode
+    are marked not_supported instead of being mistaken for zero facts.
+    """
+    included = included_dimensions if included_dimensions is not None else _infer_included_dimensions(items)
+    unsupported = unsupported_dimensions or set()
+    total = len(items)
+    out: dict = {"basis": basis, "pool_size": total}
+    for dim in DATA_DIMENSIONS:
+        if dim in unsupported:
+            out[dim] = {"status": "not_supported", "available": None, "missing": None}
+            continue
+        if dim not in included:
+            out[dim] = {"status": "not_requested", "available": None, "missing": None}
+            continue
+        available = sum(1 for item in items if _object_has_dimension_data(dim, getattr(item, dim, None)))
+        out[dim] = {
+            "status": "included",
+            "available": available,
+            "missing": total - available,
+        }
+    return out
+
+
+def _nested_get(source: dict, path: tuple[str, ...]) -> object:
+    current: object = source
+    for part in path:
+        if not isinstance(current, dict) or part not in current:
+            return None
+        current = current[part]
+    return current
+
+
+def _nested_set(target: dict, path: tuple[str, ...], value: object) -> None:
+    current = target
+    for part in path[:-1]:
+        current = current.setdefault(part, {})
+    current[path[-1]] = value
+
+
+def _select_find_fields(source: dict, fields: tuple[str, ...]) -> dict:
+    """Select whitelisted result fields while preserving nested output paths."""
+    out: dict = {}
+    for field in fields:
+        spec = FIND_FIELD_SPECS[field]
+        _nested_set(out, spec.output_path, _nested_get(source, spec.output_path))
+    return out
+
+
+def _find_result_field_source(match: FindMatch, enriched: EnrichedResult) -> dict:
+    """Full source dict used by --fields for normal find results."""
+    source = _find_result_dict(match, enriched)
+    source["context"]["gains"] = _gains_dict(enriched)
+    source["context"]["up_days"] = enriched.up_days
+    return source
 
 
 def find_payload(
@@ -802,6 +997,11 @@ def find_payload(
     pool_size: int,
     matched_total: int,
     freshness: Freshness,
+    compact: bool = False,
+    availability_results: list[EnrichedResult] | None = None,
+    included_dimensions: set[str] | None = None,
+    compact_dimensions: set[str] | None = None,
+    fields: tuple[str, ...] = (),
 ) -> dict:
     """kan find --format json 的结构化 payload (地基-2 · AI 消费入口)。
 
@@ -820,13 +1020,37 @@ def find_payload(
     """
     from kan.render.base import FIND_DISCLAIMER_TEXT
 
+    availability_source = availability_results if availability_results is not None else [
+        er for _, er in entries
+    ]
+    result_dimensions = (
+        compact_dimensions
+        if compact_dimensions is not None
+        else dimensions_from_filters(filters)
+    )
+    if compact and not result_dimensions and compact_dimensions is None:
+        result_dimensions = _infer_included_dimensions(availability_source)
+
     return {
         "schema_version": FIND_SCHEMA_VERSION,
         "command": "find",
+        "result_schema": "fields" if fields else ("compact" if compact else "full"),
         "query_time": query_time,
         "rule": {"pools": pools, "filters": filters},
-        "results": [_find_result_dict(m, er) for m, er in entries],
+        "results": [
+            _select_find_fields(_find_result_field_source(m, er), fields)
+            if fields
+            else (
+                _find_result_compact_dict(m, er, included_dimensions=result_dimensions)
+                if compact else _find_result_dict(m, er)
+            )
+            for m, er in entries
+        ],
         "disclaimer": FIND_DISCLAIMER_TEXT,
+        "data_availability": _data_availability(
+            availability_source,
+            included_dimensions=included_dimensions,
+        ),
         "stats": {
             "pool_size": pool_size,
             "matched": matched_total,
@@ -854,7 +1078,7 @@ def find_markdown(
         tag = " 涨停" if er.limit_up else (" 跌停" if er.limit_down else "")
         st = " ST" if er.is_st else ""
         trigs = " · ".join(
-            f"{_TRIGGER_FLAG.get(t.filter_type, t.filter_type)}={t.param}@{t.value:g}"
+            f"{TRIGGER_FLAG.get(t.filter_type, t.filter_type)}={t.param}@{t.value:g}"
             for t in m.triggered
         )
         rows.append([
@@ -898,6 +1122,71 @@ def _scan_context_public_dict(scan: StockScanResult | None) -> dict | None:
     }
 
 
+def _row_price(row: CrossSectionRow) -> float | None:
+    if row.scan is not None:
+        return row.scan.current_price
+    return row.valuation.close if row.valuation is not None else None
+
+
+def _row_data_time(row: CrossSectionRow) -> str | None:
+    if row.scan is not None:
+        return row.scan.scan_date.isoformat()
+    for obj in (row.valuation, row.moneyflow, row.technical, row.sentiment, row.chip):
+        trade_date = getattr(obj, "trade_date", None)
+        if trade_date is not None:
+            return trade_date.isoformat()
+    return None
+
+
+def _cross_section_result_compact_dict(
+    row: CrossSectionRow,
+    triggered: tuple[TriggeredFilter, ...] = (),
+    *,
+    included_dimensions: set[str],
+) -> dict:
+    """单只截面取数结果 → compact JSON 对象."""
+    result: dict = {
+        "code": row.code,
+        "name": row.name.replace(" ", ""),
+        "price": _row_price(row),
+        "data_time": _row_data_time(row),
+        "triggered_filters": [
+            {
+                "filter": TRIGGER_FLAG.get(t.filter_type, t.filter_type),
+                "param": t.param,
+                "value": t.value,
+            }
+            for t in triggered
+        ],
+    }
+    if row.scan is not None:
+        result.update({
+            "positions": _positions_dict(row.scan),
+            "low_resonance": row.scan.low_resonance,
+            "high_resonance": row.scan.high_resonance,
+        })
+        gains = _gains_dict(row.scan)
+        if gains:
+            result["gains"] = gains
+        if row.scan.up_days:
+            result["up_days"] = row.scan.up_days
+    for dim in DATA_DIMENSIONS:
+        if dim in included_dimensions and hasattr(row, dim):
+            result[dim] = _compact_dimension_summary(dim, getattr(row, dim))
+    return result
+
+
+def _cross_section_result_field_source(
+    row: CrossSectionRow,
+    triggered: tuple[TriggeredFilter, ...] = (),
+) -> dict:
+    """Full source dict used by --fields for cross-section results."""
+    source = _cross_section_result_dict(row, triggered)
+    source["price"] = _row_price(row)
+    source["data_time"] = _row_data_time(row)
+    return source
+
+
 def _cross_section_result_dict(
     row: CrossSectionRow,
     triggered: tuple[TriggeredFilter, ...] = (),
@@ -923,7 +1212,7 @@ def _cross_section_result_dict(
         "chip": _chip_public_dict(row.chip),
         "triggered_filters": [
             {
-                "filter": _TRIGGER_FLAG.get(t.filter_type, t.filter_type),
+                "filter": TRIGGER_FLAG.get(t.filter_type, t.filter_type),
                 "param": t.param,
                 "value": t.value,
             }
@@ -940,6 +1229,11 @@ def cross_section_payload(
     data_cutoff: date | None,
     stale: bool,
     filters: list[dict] | None = None,
+    compact: bool = False,
+    availability_rows: list[CrossSectionRow] | None = None,
+    included_dimensions: set[str] | None = None,
+    compact_dimensions: set[str] | None = None,
+    fields: tuple[str, ...] = (),
 ) -> dict:
     """kan find --all --format json 截面取数/筛选 payload (地基-3 + 整合-1 截面 filter)。
 
@@ -961,14 +1255,39 @@ def cross_section_payload(
     """
     from kan.render.base import FIND_DISCLAIMER_TEXT
 
+    rows_for_availability = availability_rows if availability_rows is not None else [
+        row for row, _ in entries
+    ]
+    result_dimensions = (
+        compact_dimensions
+        if compact_dimensions is not None
+        else dimensions_from_filters(filters or [])
+    )
+    if compact and not result_dimensions and compact_dimensions is None:
+        result_dimensions = _infer_included_dimensions(rows_for_availability)
+
     return {
         "schema_version": FIND_SCHEMA_VERSION,
         "command": "find",
         "mode": "cross_section",
+        "result_schema": "fields" if fields else ("compact" if compact else "full"),
         "query_time": query_time,
         "rule": {"pools": ["all"], "filters": filters or []},
-        "results": [_cross_section_result_dict(r, t) for r, t in entries],
+        "results": [
+            _select_find_fields(_cross_section_result_field_source(r, t), fields)
+            if fields
+            else (
+                _cross_section_result_compact_dict(r, t, included_dimensions=result_dimensions)
+                if compact else _cross_section_result_dict(r, t)
+            )
+            for r, t in entries
+        ],
         "disclaimer": FIND_DISCLAIMER_TEXT,
+        "data_availability": _data_availability(
+            rows_for_availability,
+            included_dimensions=included_dimensions,
+            unsupported_dimensions=DIMENSIONS_UNSUPPORTED_IN_ALL,
+        ),
         "stats": {
             "pool_size": pool_size,
             "shown": len(entries),

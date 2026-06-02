@@ -111,6 +111,15 @@ jobs:
           KAN_NO_UPDATE_CHECK=1 kan --help
           KAN_NO_UPDATE_CHECK=1 kan scan --help
           KAN_NO_UPDATE_CHECK=1 kan find --help
+          NO_COLOR=1 KAN_NO_UPDATE_CHECK=1 kan find --help > /tmp/kan-find-help.txt
+          python - <<'PY'
+          import re
+          from pathlib import Path
+
+          text = re.sub(r"\x1b\[[0-9;]*m", "", Path("/tmp/kan-find-help.txt").read_text())
+          assert "--compact" in text
+          assert "--fields" in text
+          PY
           KAN_NO_UPDATE_CHECK=1 kan board rank --help
           KAN_NO_UPDATE_CHECK=1 kan trend --help
           KAN_NO_UPDATE_CHECK=1 kan info --help

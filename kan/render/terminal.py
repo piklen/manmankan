@@ -661,7 +661,7 @@ def theme_leaderboard_table(
     return table
 
 
-# ── 历史位置回溯(`kan history`)· v0.0.6.6 ─────────────────────────────
+# ── 历史位置回溯(`kan history`)───────────────────────────────────────
 
 
 class _HistCell:

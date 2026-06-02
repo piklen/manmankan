@@ -138,6 +138,15 @@ jobs:
           /tmp/manmankan-smoke/bin/kan --help
           /tmp/manmankan-smoke/bin/kan scan --help
           /tmp/manmankan-smoke/bin/kan find --help
+          NO_COLOR=1 /tmp/manmankan-smoke/bin/kan find --help > /tmp/kan-find-help.txt
+          python - <<'PY'
+          import re
+          from pathlib import Path
+
+          text = re.sub(r"\x1b\[[0-9;]*m", "", Path("/tmp/kan-find-help.txt").read_text())
+          assert "--compact" in text
+          assert "--fields" in text
+          PY
           /tmp/manmankan-smoke/bin/kan board rank --help
           /tmp/manmankan-smoke/bin/kan history --help
           /tmp/manmankan-smoke/bin/python - <<'PY'

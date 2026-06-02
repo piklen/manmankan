@@ -7,17 +7,23 @@ the root @app.callback() that checks `len(sys.argv) == 1`.
 import io
 import json
 import os
+import re
 import subprocess
 import sys
 
 import pytest
 
 REPO_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+_ANSI_RE = re.compile(r"\x1b\[[0-9;]*m")
+
+
+def _strip_ansi(text: str) -> str:
+    return _ANSI_RE.sub("", text)
 
 
 def _run(args: list[str]) -> tuple[int, str]:
     """Run `kan find ARGS` via uv subprocess · returns (exit_code, combined output)."""
-    env = {**os.environ, "KAN_NO_BOOT_BANNER": "1"}
+    env = {**os.environ, "KAN_NO_BOOT_BANNER": "1", "NO_COLOR": "1"}
     result = subprocess.run(
         ["uv", "run", "kan", *args],
         cwd=REPO_ROOT,
@@ -119,6 +125,23 @@ class TestFindCli:
         ec, out = _run(["find", "--pos", "180:lt:5", "--limit", "0"])
         assert ec == 2
         assert "--limit 必须为正整数" in out
+
+    def test_compact_requires_json_format(self):
+        ec, out = _run(["find", "--pos", "180:lt:5", "--compact"])
+        assert ec == 2
+        assert "--compact 仅支持 --format json" in out
+
+    def test_fields_requires_json_format(self):
+        ec, out = _run(["find", "--pos", "180:lt:5", "--fields", "code,name"])
+        assert ec == 2
+        assert "--fields 仅支持 --format json" in out
+
+    def test_help_includes_compact_option(self):
+        ec, out = _run(["find", "--help"])
+        assert ec in (0, 2)
+        plain = _strip_ansi(out)
+        assert "--compact" in plain
+        assert "--fields" in plain
 
     def test_dsl_errors_include_fix_hint(self):
         """DSL 错误信息必须含修复示例.
@@ -280,3 +303,24 @@ class TestFindAllCrossSection:
         assert payload["ok"] is False
         assert payload["error"]["code"] == "data_unavailable"
         assert "token" in combined or "tushare" in combined
+
+    def test_fields_unknown_json_error(self, tmp_path):
+        ec, out, _err = _run_isolated(
+            ["find", "--format", "json", "--fields", "code,valuation.nope"], tmp_path,
+        )
+        assert ec == 2
+        payload = json.loads(out)
+        assert payload["ok"] is False
+        assert payload["error"]["code"] == "invalid_fields"
+        assert "valuation.nope" in payload["error"]["message"]
+
+    def test_all_fields_reject_unsupported_dimension_before_fetch(self, tmp_path):
+        ec, out, _err = _run_isolated(
+            ["find", "--all", "--format", "json", "--fields", "code,fundamentals.roe"],
+            tmp_path,
+        )
+        assert ec == 2
+        payload = json.loads(out)
+        assert payload["ok"] is False
+        assert payload["error"]["code"] == "invalid_fields"
+        assert "fundamentals" in payload["error"]["message"]

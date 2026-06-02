@@ -8,6 +8,8 @@ increment `D` unless the maintainer explicitly approves a larger bump.
 
 ## [Unreleased]
 
+## [0.0.6.7] - 2026-06-02
+
 ### Added
 
 - **`kan find --pe / --roe / --moneyflow`** · 估值 + 质量（ROE / 净利·营收增速）+ 资金（主力净额）filter · K 线池（`--industry` / 自选）与全市场 `--all` 截面两路支持（`--roe` 逐股 · `--all` 不支持）· 按用户 filter 输出原始值 · `--format json|md` 带 triggered 审计 · disclaimer 强制
@@ -18,6 +20,8 @@ increment `D` unless the maintainer explicitly approves a larger bump.
 - **`kan find --all` K 线预计算筛选** · 全市场模式新增位置 / 共振 / 区间涨幅 / 连阳裸值快照,支持 `--pos` / `--resonance` / `--gain` / `--up-days` / `--exclude-st` 与截面 filter 组合
 - **`kan board rank`** · 板块级榜单 · 支持行业 / 题材按主力净额、区间涨幅、位置百分位排序 · `--format json|md`
 - **`kan theme trend --min-streak / --sort`** · 题材连续涨跌榜开放 1 天阈值,新增按最新单日涨幅 / 题材资金排序
+- **`kan find --format json --compact` / `--fields`** · 低字段量 JSON 输出和字段白名单 · 保留代码/名称/价格、触发 filter、位置/共振和已请求维度摘要;full / compact / fields JSON 均新增 `data_availability` 顶层统计,区分缺数据、未请求和当前模式不支持
+- **find filter / field registry** · 集中登记 filter 数据源、频率、`--all` 支持度、缺数据语义和 `--fields` 白名单,避免 CLI / export / docs 的字段契约继续散落
 
 ### Fixed
 
@@ -198,7 +202,8 @@ increment `D` unless the maintainer explicitly approves a larger bump.
 - **Shell 补全** · zsh / bash / fish / powershell
 - **合规与隐私** · 强制风险提示 + 关键词黑名单（无买卖建议 / 无目标价 / 无评级）· 数据全本地
 
-[Unreleased]: https://github.com/piklen/manmankan/compare/v0.0.6.6...HEAD
+[Unreleased]: https://github.com/piklen/manmankan/compare/v0.0.6.7...HEAD
+[0.0.6.7]: https://github.com/piklen/manmankan/compare/v0.0.6.6...v0.0.6.7
 [0.0.6.6]: https://github.com/piklen/manmankan/compare/v0.0.6.5...v0.0.6.6
 [0.0.6.5]: https://github.com/piklen/manmankan/compare/v0.0.5.1...v0.0.6.5
 [0.0.5.1]: https://github.com/piklen/manmankan/compare/v0.0.5.0...v0.0.5.1

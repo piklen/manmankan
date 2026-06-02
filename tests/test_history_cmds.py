@@ -1,4 +1,4 @@
-"""kan history · 位置历史回溯测试 (v0.0.6.6)。
+"""kan history · 位置历史回溯测试。
 
 两层:
 - reader 层 (load_symbol_history / snapshot_symbol_names / history_mark) · 直接喂快照文件
