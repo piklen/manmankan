@@ -85,6 +85,21 @@ def test_root_help_lists_v0050_batch_sources_and_theme_watchlist_commands() -> N
     assert "kan board rank --kind industry --by moneyflow" in output
 
 
+def test_root_help_lists_find_registry_flags_and_presets() -> None:
+    """root 速记页的 find 面必须覆盖 registry 里登记的 filter / preset."""
+    from kan.core.find_registry import FILTER_SPECS, FIND_FIELD_PRESETS
+
+    runner = CliRunner()
+    result = runner.invoke(app, ["help"])
+    assert result.exit_code == 0
+    output = result.stdout
+
+    for spec in FILTER_SPECS.values():
+        assert spec.flag in output
+    for preset in FIND_FIELD_PRESETS:
+        assert preset in output
+
+
 def test_subcommand_help_unaffected() -> None:
     """子命令 --help 仍走 typer 默认"""
     runner = CliRunner()

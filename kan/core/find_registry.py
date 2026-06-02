@@ -142,12 +142,121 @@ FILTER_SPECS = {
         "tushare_stk_holdernumber_and_top10_floatholders", "quarterly_disclosure",
         "undisclosed_or_not_in_top10_can_be_null",
     ),
+    "exclude_st": FindFilterSpec(
+        "exclude_st", "--exclude-st", None, True,
+        "candidate_pool_metadata", "pool_metadata",
+        "quiet_filter_not_triggered",
+    ),
 }
 
 TRIGGER_FLAG = {k: spec.flag for k, spec in FILTER_SPECS.items()}
 FILTER_DIMENSIONS_BY_FLAG = {
     spec.flag: spec.dimension for spec in FILTER_SPECS.values() if spec.dimension is not None
 }
+
+
+@dataclass(frozen=True)
+class FindFilterDocsRow:
+    flags: str
+    source: str
+    needs_token: str
+    supports_all: str
+    frequency: str
+    missing_semantics: str
+
+
+_SOURCE_LABELS = {
+    "local_kline_or_kline_snapshot": "小池走本地日 K 缓存;`--all` 走全市场 K 线快照",
+    "tushare_daily_basic": "TuShare `daily_basic` 衍生截面指标",
+    "tushare_fina_indicator": "TuShare `fina_indicator` 最新报告期",
+    "tushare_moneyflow_dc": "TuShare `moneyflow_dc` 衍生主力净额",
+    "tushare_stk_factor_pro": "TuShare `stk_factor_pro` 衍生技术指标",
+    "tushare_limit_list_d": "TuShare `limit_list_d` 涨跌停事件表",
+    "tushare_cyq_perf": "TuShare `cyq_perf` 筹码分布",
+    "tushare_stk_holdernumber_and_top10_floatholders": (
+        "TuShare `stk_holdernumber` + `top10_floatholders` 衍生"
+    ),
+    "candidate_pool_metadata": "股票名称 / 候选池元数据",
+}
+
+_TOKEN_LABELS = {
+    "local_kline_or_kline_snapshot": "小池否;`--all` 是",
+    "tushare_daily_basic": "是",
+    "tushare_fina_indicator": "是",
+    "tushare_moneyflow_dc": "是",
+    "tushare_stk_factor_pro": "是",
+    "tushare_limit_list_d": "是",
+    "tushare_cyq_perf": "是",
+    "tushare_stk_holdernumber_and_top10_floatholders": "是",
+    "candidate_pool_metadata": "否",
+}
+
+_FREQUENCY_LABELS = {
+    "daily": "日频",
+    "quarterly_report": "季度/报告期",
+    "quarterly_disclosure": "季度/披露期",
+    "pool_metadata": "随候选池",
+}
+
+_MISSING_SEMANTICS_LABELS = {
+    "insufficient_window_or_missing_snapshot": (
+        "周期不足为不命中;全市场快照不可用时返回 `data_unavailable`"
+    ),
+    "derived_from_position_windows": "由位置结果计算;周期不足不计入共振",
+    "insufficient_window": "周期不足或缺少前值为不命中",
+    "zero_is_valid_fact": "非连续阳线可为 `0`,不是缺数据",
+    "metric_null_or_data_unavailable": (
+        "指标为空为缺数据;整池缺失时返回 `data_unavailable`"
+    ),
+    "sparse_event_absence_is_valid_fact": (
+        "稀疏事件;未出现在事件表通常表示当日未涨跌停"
+    ),
+    "undisclosed_or_not_in_top10_can_be_null": (
+        "未披露或未进前十大流通可为 `None`;整池缺失时返回 `data_unavailable`"
+    ),
+    "quiet_filter_not_triggered": "静默过滤,不写入 `triggered_filters`",
+}
+
+
+def format_find_filter_flags() -> str:
+    """Return registry filter flags for short help text."""
+    return " / ".join(spec.flag for spec in FILTER_SPECS.values())
+
+
+def format_find_field_presets() -> str:
+    """Return registry field presets for short help text."""
+    return " / ".join(FIND_FIELD_PRESETS)
+
+
+def find_filter_docs_rows() -> tuple[FindFilterDocsRow, ...]:
+    """Human-readable filter metadata rows derived from FILTER_SPECS."""
+    return tuple(
+        FindFilterDocsRow(
+            flags=spec.flag,
+            source=_SOURCE_LABELS[spec.source],
+            needs_token=_TOKEN_LABELS[spec.source],
+            supports_all="是" if spec.supports_all else "否",
+            frequency=_FREQUENCY_LABELS[spec.frequency],
+            missing_semantics=_MISSING_SEMANTICS_LABELS[spec.missing_semantics],
+        )
+        for spec in FILTER_SPECS.values()
+    )
+
+
+def render_find_filter_docs_table() -> str:
+    """Render the docs/find.md filter-source table from registry metadata."""
+    lines = [
+        "| filter | 数据源 | 需要 token | `--all` | 频率 | 缺数据语义 |",
+        "|---|---|---:|---:|---|---|",
+    ]
+    lines.extend(
+        (
+            f"| `{row.flags}` | {row.source} | {row.needs_token} | "
+            f"{row.supports_all} | {row.frequency} | {row.missing_semantics} |"
+        )
+        for row in find_filter_docs_rows()
+    )
+    return "\n".join(lines)
 
 
 @dataclass(frozen=True)
@@ -358,5 +467,9 @@ __all__ = [
     "dimensions_from_filters",
     "fields_need_kline",
     "fields_need_valuation_context",
+    "find_filter_docs_rows",
+    "format_find_field_presets",
+    "format_find_filter_flags",
     "parse_find_fields",
+    "render_find_filter_docs_table",
 ]

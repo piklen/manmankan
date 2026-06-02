@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import datetime
 import json
+from dataclasses import fields as dataclass_fields
 from pathlib import Path
 
 from kan.core.find_filter import FindMatch, TriggeredFilter
@@ -18,10 +19,13 @@ from kan.core.find_registry import (
     FILTER_SPECS,
     FIND_FIELD_PRESETS,
     FIND_FIELD_SPECS,
+    TRIGGER_FLAG,
     dimensions_from_fields,
     fields_need_kline,
     fields_need_valuation_context,
+    find_filter_docs_rows,
     parse_find_fields,
+    render_find_filter_docs_table,
 )
 from kan.core.models import (
     ChipMetrics,
@@ -463,6 +467,34 @@ class TestFindRegistry:
             assert spec.flag in docs
         for preset in FIND_FIELD_PRESETS:
             assert preset in docs
+
+    def test_docs_filter_source_table_matches_registry(self):
+        docs = (Path(__file__).resolve().parents[1] / "docs" / "find.md").read_text()
+        assert render_find_filter_docs_table() in docs
+
+    def test_filter_docs_rows_cover_registry(self):
+        rows = find_filter_docs_rows()
+        assert len(rows) == len(FILTER_SPECS)
+        assert tuple(row.flags for row in rows) == tuple(
+            spec.flag for spec in FILTER_SPECS.values()
+        )
+        for row in rows:
+            assert row.source
+            assert row.needs_token in {"是", "否", "小池否;`--all` 是"}
+            assert row.supports_all in {"是", "否"}
+            assert row.frequency
+            assert row.missing_semantics
+
+    def test_filter_registry_matches_condition_set_and_trigger_flags(self):
+        from kan.core.find_dsl import ConditionSet
+
+        condition_fields = {field.name for field in dataclass_fields(ConditionSet)}
+        for filter_type in FILTER_SPECS:
+            if filter_type == "exclude_st":
+                assert "exclude_st" in condition_fields
+            else:
+                assert f"{filter_type}_filters" in condition_fields
+        assert set(TRIGGER_FLAG) == set(FILTER_SPECS)
 
 
 class TestFindMarkdown:

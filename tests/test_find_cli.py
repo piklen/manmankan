@@ -137,12 +137,16 @@ class TestFindCli:
         assert "--fields 仅支持 --format json" in out
 
     def test_help_includes_compact_option(self):
+        from kan.core.find_registry import FILTER_SPECS
+
         ec, out = _run(["find", "--help"])
         assert ec in (0, 2)
         plain = _strip_ansi(out)
         assert "--compact" in plain
         assert "--no-compact-context" in plain
         assert "--fields" in plain
+        for spec in FILTER_SPECS.values():
+            assert spec.flag in plain
         assert "@core" in plain
         assert "@valuation" in plain
 

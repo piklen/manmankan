@@ -14,6 +14,10 @@ def help_cmd() -> None:
     from rich.console import Console
 
     from kan import __version__
+    from kan.core.find_registry import format_find_field_presets, format_find_filter_flags
+
+    find_filter_flags = format_find_filter_flags()
+    find_field_presets = format_find_field_presets()
 
     # 速记表顶部加版本号 · issue 复现成本下降
     Console().print(f"""[bold]慢慢看 · v{__version__} · 命令速记[/bold]
@@ -79,6 +83,8 @@ def help_cmd() -> None:
   kan find --industry 半导体 --format json --fields @core,@valuation
 
   [dim]PERIOD: 3/5/7/10/15/30/60/90/120/180 · OP: lt/lte/gt/gte/eq/ne · LEVEL: low/high[/dim]
+  [dim]可用 filter: {find_filter_flags}[/dim]
+  [dim]可用 fields preset: {find_field_presets}[/dim]
   [dim]不告诉你买什么 · 帮你找到符合条件的(候选 ≠ 买入信号)[/dim]
 
 [bold cyan]行业 / 热榜 / 题材扫描[/bold cyan]
