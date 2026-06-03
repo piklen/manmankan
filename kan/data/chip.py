@@ -1,11 +1,11 @@
-"""筹码 (获利盘/成本分布) 截面拉取编排 · cache + 公开 API (整合-2)。
+"""筹码 (获利盘/成本分布) 截面拉取编排 · cache + 公开 API (技术/情绪/筹码维度)。
 
 仿 moneyflow.py 的截面缓存机制 (cache key = trade_date · parquet · 历史日永鲜 /
 最新日 TTL) · 单源直调 _fetch_tushare_cyq (cyq_perf 仅 tushare 一源)。
 
 截面 (trade_date) 维度 · 官方支持 trade_date 全市场拉 (单次上限 5000 条 · A股 ~5500
 可能截断少数票 → 该票 None 降级)。若实测 cyq_perf 不支持截面 (需 ts_code) → 改逐股
-(仿 fundamentals.py)· 见 PRD 整合-2。获利盘是客观计算值 (compliance §2/§7 · 裸值可出)。
+(仿 fundamentals.py)· 见 PRD 技术/情绪/筹码维度。获利盘是客观计算值 (compliance §2/§7 · 裸值可出)。
 """
 from __future__ import annotations
 

@@ -1,4 +1,4 @@
-"""主力资金截面拉取编排 · cache + 公开 API (整合-1)。
+"""主力资金截面拉取编排 · cache + 公开 API (估值/质量/资金维度)。
 
 仿 metrics.py 的截面缓存机制 (cache key = trade_date · parquet · 历史日永鲜 /
 最新日 TTL) · 但单源直调 _fetch_tushare_moneyflow (不走责任链:moneyflow_dc 仅

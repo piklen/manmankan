@@ -1,4 +1,4 @@
-"""技术面因子截面拉取编排 · cache + 公开 API (整合-2)。
+"""技术面因子截面拉取编排 · cache + 公开 API (技术/情绪/筹码维度)。
 
 仿 moneyflow.py 的截面缓存机制 (cache key = trade_date · parquet · 历史日永鲜 /
 最新日 TTL) · 单源直调 _fetch_tushare_technical (不走责任链:stk_factor_pro 仅

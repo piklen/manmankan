@@ -1,4 +1,4 @@
-"""把 scan 结果按需 enrich 多维指标 (地基-2 AI 消费入口 + 整合-1 质量/资金)。
+"""把 scan 结果按需 enrich 多维指标。
 
 `StockScanResult` (K 线衍生位置 / 共振) + 按需挂载的截面/财务子对象 → `EnrichedResult`:
 - valuation (daily_basic 截面 · 总挂 · 一次 HTTP 拉全市场切子集)
@@ -11,8 +11,8 @@
 - 优雅降级:无 token / 失败 → 对应子对象 None · AI 消费契约仍成立 (结构 + disclaimer 在)
 - 顺序保持:返回顺序与入参 results 一致 (find 命中排序不被打乱)
 
-合规 (compliance §6/§7 · PRD §6 · 整合-1 拍板):本层只把原始指标值挂到对象上 · 不算
-分位 / 不判断 · 估值/财务/资金裸值自整合-1 起对外输出 (输出过滤见 export · 不再删裸值)。
+合规 (compliance §6/§7):本层只把原始指标值挂到对象上 · 不算分位 / 不判断。
+输出层负责把已请求维度序列化为 JSON / Markdown。
 """
 from __future__ import annotations
 
@@ -78,7 +78,7 @@ def _row_to_valuation(row: pd.Series, fallback_date: date) -> ValuationMetrics:
 
 
 def _row_to_fundamentals(row: pd.Series) -> FundamentalMetrics:
-    """单股最新一期财务 Series → FundamentalMetrics (整合-1)。
+    """单股最新一期财务 Series → FundamentalMetrics (估值/质量/资金维度)。
 
     row 来自 fetch_fundamentals (已 normalize · end_date 是 date · 数值已清洗)。
     """
@@ -99,7 +99,7 @@ def _row_to_fundamentals(row: pd.Series) -> FundamentalMetrics:
 
 
 def _row_to_moneyflow(row: pd.Series, fallback_date: date) -> MoneyflowMetrics:
-    """单行主力资金截面 → MoneyflowMetrics · NaN 数值置 None (整合-1)。"""
+    """单行主力资金截面 → MoneyflowMetrics · NaN 数值置 None (估值/质量/资金维度)。"""
     import pandas as pd
 
     from kan.core.models import MoneyflowMetrics
@@ -117,7 +117,7 @@ def _row_to_moneyflow(row: pd.Series, fallback_date: date) -> MoneyflowMetrics:
 
 
 def _row_to_technical(row: pd.Series, fallback_date: date) -> TechnicalMetrics:
-    """单行技术面截面 → TechnicalMetrics · NaN 数值置 None (整合-2 · adapter 已 rename 中性名)。"""
+    """单行技术面截面 → TechnicalMetrics · NaN 数值置 None。"""
     import pandas as pd
 
     from kan.core.models import TechnicalMetrics
@@ -131,6 +131,7 @@ def _row_to_technical(row: pd.Series, fallback_date: date) -> TechnicalMetrics:
         macd_dif=_opt_float(row.get("macd_dif")),
         macd_dea=_opt_float(row.get("macd_dea")),
         macd=_opt_float(row.get("macd")),
+        atr=_opt_float(row.get("atr")),
         kdj_k=_opt_float(row.get("kdj_k")),
         kdj_d=_opt_float(row.get("kdj_d")),
         kdj_j=_opt_float(row.get("kdj_j")),
@@ -149,7 +150,7 @@ def _row_to_technical(row: pd.Series, fallback_date: date) -> TechnicalMetrics:
 
 
 def _row_to_sentiment(row: pd.Series, fallback_date: date) -> SentimentMetrics:
-    """单行情绪截面 → SentimentMetrics · 数值 NaN 置 None · limit/up_stat 保 str (整合-2)。"""
+    """单行情绪截面 → SentimentMetrics · 数值 NaN 置 None · limit/up_stat 保 str (技术/情绪/筹码维度)。"""
     import pandas as pd
 
     from kan.core.models import SentimentMetrics
@@ -168,7 +169,7 @@ def _row_to_sentiment(row: pd.Series, fallback_date: date) -> SentimentMetrics:
 
 
 def _row_to_chip(row: pd.Series, fallback_date: date) -> ChipMetrics:
-    """单行筹码截面 → ChipMetrics · NaN 数值置 None (整合-2)。"""
+    """单行筹码截面 → ChipMetrics · NaN 数值置 None (技术/情绪/筹码维度)。"""
     import pandas as pd
 
     from kan.core.models import ChipMetrics
@@ -188,7 +189,7 @@ def _row_to_chip(row: pd.Series, fallback_date: date) -> ChipMetrics:
 
 
 def _row_to_shareholder(row: pd.Series) -> ShareholderMetrics:
-    """单股股东·持股结构衍生 Series → ShareholderMetrics (逐股 · 整合-3)。
+    """单股股东·持股结构衍生 Series → ShareholderMetrics (逐股 · 股东持股维度)。
 
     row 来自 fetch_shareholder (已 normalize · 日期是 date · 数值已清洗)。季度披露 ·
     各字段独立可空 (未披露 / 未进前十 → None · 优雅降级)。
@@ -236,11 +237,11 @@ def enrich_results(
         trade_date: YYYYMMDD 截面日 · None → 最近交易日 (fetch 内部解析)
         need_fundamentals: True 时逐股拉 fina_indicator (--roe filter · 全市场代价高)
         need_moneyflow: True 时拉 moneyflow_dc 截面 (--moneyflow filter · 截面廉价)
-        need_technical: True 时拉 stk_factor_pro 截面 (--rsi/--macd-dif/--macd/--kdj-j · 整合-2)
-        need_sentiment: True 时拉 limit_list_d 截面 (--streak · 稀疏事件型 · 整合-2)
-        need_chip: True 时拉 cyq_perf 截面 (--winner · 整合-2)
+        need_technical: True 时拉 stk_factor_pro 截面 (--rsi/--macd-dif/--macd/--kdj-j · 技术/情绪/筹码维度)
+        need_sentiment: True 时拉 limit_list_d 截面 (--streak · 稀疏事件型 · 技术/情绪/筹码维度)
+        need_chip: True 时拉 cyq_perf 截面 (--winner · 技术/情绪/筹码维度)
         need_shareholder: True 时逐股拉 stk_holdernumber + top10_floatholders
-            (--holders/--top10/--north filter · 逐股 · 全市场 --all 不支持 · 整合-3)
+            (--holders/--top10/--north filter · 逐股 · 全市场 --all 不支持 · 股东持股维度)
 
     Returns:
         list[EnrichedResult] · 与 results 等长同序 · 每只按需挂各维度 (无数据时 None)。
@@ -509,7 +510,7 @@ def _index_valuations(df: pd.DataFrame, fallback_date: date) -> dict[str, Valuat
 
 
 def _index_moneyflow(df: pd.DataFrame, fallback_date: date) -> dict[str, MoneyflowMetrics]:
-    """主力资金截面 DataFrame → {symbol: MoneyflowMetrics} · 空 df 返空 dict (整合-1)。"""
+    """主力资金截面 DataFrame → {symbol: MoneyflowMetrics} · 空 df 返空 dict (估值/质量/资金维度)。"""
     if df is None or df.empty:
         return {}
     out: dict[str, MoneyflowMetrics] = {}
@@ -521,7 +522,7 @@ def _index_moneyflow(df: pd.DataFrame, fallback_date: date) -> dict[str, Moneyfl
 
 
 def _index_technical(df: pd.DataFrame, fallback_date: date) -> dict[str, TechnicalMetrics]:
-    """技术面截面 DataFrame → {symbol: TechnicalMetrics} · 空 df 返空 dict (整合-2)。"""
+    """技术面截面 DataFrame → {symbol: TechnicalMetrics} · 空 df 返空 dict (技术/情绪/筹码维度)。"""
     if df is None or df.empty:
         return {}
     out: dict[str, TechnicalMetrics] = {}
@@ -533,7 +534,7 @@ def _index_technical(df: pd.DataFrame, fallback_date: date) -> dict[str, Technic
 
 
 def _index_sentiment(df: pd.DataFrame, fallback_date: date) -> dict[str, SentimentMetrics]:
-    """情绪截面 DataFrame → {symbol: SentimentMetrics} · 空 df 返空 dict (整合-2 · 稀疏)。"""
+    """情绪截面 DataFrame → {symbol: SentimentMetrics} · 空 df 返空 dict (技术/情绪/筹码维度 · 稀疏)。"""
     if df is None or df.empty:
         return {}
     out: dict[str, SentimentMetrics] = {}
@@ -545,7 +546,7 @@ def _index_sentiment(df: pd.DataFrame, fallback_date: date) -> dict[str, Sentime
 
 
 def _index_chip(df: pd.DataFrame, fallback_date: date) -> dict[str, ChipMetrics]:
-    """筹码截面 DataFrame → {symbol: ChipMetrics} · 空 df 返空 dict (整合-2)。"""
+    """筹码截面 DataFrame → {symbol: ChipMetrics} · 空 df 返空 dict (技术/情绪/筹码维度)。"""
     if df is None or df.empty:
         return {}
     out: dict[str, ChipMetrics] = {}

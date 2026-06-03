@@ -45,7 +45,7 @@ if TYPE_CHECKING:
     from kan.core.pipeline import Freshness
     from kan.core.scanner import TrendResult
 
-# kan find AI 消费 JSON 的 schema 契约版本 (地基-2)。
+# kan find AI 消费 JSON 的 schema 契约版本。
 # 这是数据契约版本 (供外部 AI 判断字段集) · 与包版本 (__version__) 不同命名空间:
 # 字段集变更时才 bump · 加字段属向后兼容演进 (AI 见到更多字段 · 不破旧消费方)。
 FIND_SCHEMA_VERSION = "0.0.6.8"
@@ -336,11 +336,11 @@ def info_payload(
 ) -> dict:
     """kan info --format json 的结构化 payload。
 
-    valuation (地基-2):单股截面市场指标 · 量价 / 市值客观事实 (估值裸值不对外 ·
-    见 _valuation_public_dict) · 无 token / 无数据时为 None (AI 消费契约仍成立)。
+    valuation:单股截面市场指标 · 量价 / 市值 / 估值客观裸值 · 无 token / 无数据时
+    为 None (AI 消费契约仍成立)。
 
-    valuation_context (地基-3):估值位置对照 · 历史分位 + 行业内分位 + 行业中位 ·
-    **只出分位 + 中位参照 · 绝不出个股估值裸值** (compliance · PRD §6) · 无数据时 None。
+    valuation_context (全市场截面层):估值位置对照 · 历史分位 + 行业内分位 + 行业中位 ·
+    只承载分位 + 中位参照,不重复承载个股估值裸值 · 无数据时 None。
     """
     return {
         "command": "info",
@@ -577,12 +577,12 @@ def compare_markdown(results: list[StockScanResult], *, periods: list[int]) -> s
     return f"# 慢慢看 · 多股对比\n\n{md_table(headers, rows)}\n\n{_disclaimer_quote()}"
 
 
-# ── find (AI 消费入口 · 地基-2) ────────────────────────────────────────
+# ── find (AI 消费入口 · AI JSON 层) ────────────────────────────────────────
 
 def _valuation_public_dict(v: ValuationMetrics | None) -> dict | None:
-    """ValuationMetrics → 对外 JSON (整合-1 拍板:放开估值裸值)。
+    """ValuationMetrics → 对外 JSON。
 
-    合规 (compliance §2/§7 · 整合-1 2026-05-31 拍板 · 推翻"估值不给裸值"旧设计):
+    合规 (compliance §2/§7):
     - 量价 / 市值客观事实 (close / turnover_rate / volume_ratio / total_mv / circ_mv)
       + 估值裸值 (pe_ttm / pb / ps_ttm / dv_ttm) 一并输出。
     - 放开理由:filter 由用户显式指定 (--pe 是用户主导的数据筛选 · 非工具荐股) ·
@@ -607,7 +607,7 @@ def _valuation_public_dict(v: ValuationMetrics | None) -> dict | None:
 
 
 def _fundamentals_public_dict(f: FundamentalMetrics | None) -> dict | None:
-    """FundamentalMetrics → 对外 JSON (整合-1 · ROE/增速裸值)。
+    """FundamentalMetrics → 对外 JSON (估值/质量/资金维度 · ROE/增速裸值)。
 
     合规 (compliance §7):ROE / 增速是单向正向因子 (无"贵/便宜"双向误导)· 原始
     指标名 · 不评分 / 不判断词 · 裸值可出 (用户主导 --roe filter)。
@@ -624,7 +624,7 @@ def _fundamentals_public_dict(f: FundamentalMetrics | None) -> dict | None:
 
 
 def _moneyflow_public_dict(m: MoneyflowMetrics | None) -> dict | None:
-    """MoneyflowMetrics → 对外 JSON (整合-1 · 主力净额裸值)。
+    """MoneyflowMetrics → 对外 JSON (估值/质量/资金维度 · 主力净额裸值)。
 
     合规 (compliance §2):主力净额是客观资金事实 (同 OHLCV 安全区)· 裸值可出。
     """
@@ -640,7 +640,7 @@ def _moneyflow_public_dict(m: MoneyflowMetrics | None) -> dict | None:
 
 
 def _technical_public_dict(t: TechnicalMetrics | None) -> dict | None:
-    """TechnicalMetrics → 对外 JSON (整合-2 · 前复权技术指标裸值)。
+    """TechnicalMetrics → 对外 JSON (技术/情绪/筹码维度 · 前复权技术指标裸值)。
 
     合规 (compliance §3/§7):原始指标名 (macd/kdj/rsi/ma/boll) · 不输出"超买/超卖/
     金叉/死叉"判断词 · 只出裸值。filter 阈值用户主导 (--rsi 等)。
@@ -679,7 +679,7 @@ def _technical_public_dict(t: TechnicalMetrics | None) -> dict | None:
 
 
 def _sentiment_public_dict(s: SentimentMetrics | None) -> dict | None:
-    """SentimentMetrics → 对外 JSON (整合-2 · 连板/炸板裸值)。
+    """SentimentMetrics → 对外 JSON (技术/情绪/筹码维度 · 连板/炸板裸值)。
 
     合规 (compliance §2/§3):连板天数 / 炸板次数是客观市场事实 · 不输出"妖股/强势"
     判断词。s 为 None = 该股当日未涨跌停 (稀疏事件型 · 见 SentimentMetrics)。
@@ -697,7 +697,7 @@ def _sentiment_public_dict(s: SentimentMetrics | None) -> dict | None:
 
 
 def _chip_public_dict(c: ChipMetrics | None) -> dict | None:
-    """ChipMetrics → 对外 JSON (整合-2 · 获利盘/成本分布裸值)。
+    """ChipMetrics → 对外 JSON (技术/情绪/筹码维度 · 获利盘/成本分布裸值)。
 
     合规 (compliance §2/§7):获利盘比例 / 成本分位是客观计算值 · 不输出判断词。
     """
@@ -715,9 +715,9 @@ def _chip_public_dict(c: ChipMetrics | None) -> dict | None:
 
 
 def _shareholder_public_dict(s: ShareholderMetrics | None) -> dict | None:
-    """ShareholderMetrics → 对外 JSON (整合-3 · 户数环比/集中度/北向裸值)。
+    """ShareholderMetrics → 对外 JSON (股东持股维度 · 户数环比/集中度/北向裸值)。
 
-    合规 (compliance §7 整合-3 守则):户数环比 / 前十大流通集中度 / 北向占比是已披露
+    合规 (compliance §7 股东持股维度 守则):户数环比 / 前十大流通集中度 / 北向占比是已披露
     客观事实衍生 · 不输出"主力建仓/洗盘/控盘/高度控盘"判断词。季度披露 · 各字段独立
     可空 (未披露 / 未进前十 → None)。北向用"香港中央结算"季度名义持有人代理。
     """
@@ -742,7 +742,7 @@ def _find_disclaimer_quote() -> str:
 
 
 def _find_result_dict(match: FindMatch, enriched: EnrichedResult) -> dict:
-    """单只命中 → JSON 对象 (PRD §3.5 schema · 地基-2 扩 valuation + context)。"""
+    """单只命中 → JSON 对象 (find JSON schema · AI JSON 层扩 valuation + context)。"""
     er = enriched
     return {
         "code": er.symbol,
@@ -1008,9 +1008,9 @@ def find_payload(
     fields: tuple[str, ...] = (),
     compact_context: bool = True,
 ) -> dict:
-    """kan find --format json 的结构化 payload (地基-2 · AI 消费入口)。
+    """kan find --format json 的结构化 payload (AI JSON 层 · AI 消费入口)。
 
-    PRD §3.5 schema · 扩 context (位置/共振) + valuation (量价/市值客观事实)。
+    find JSON schema · 扩 context (位置/共振) + valuation (量价/市值客观事实)。
 
     Args:
         entries: 已 enrich + limit 后的 (FindMatch, EnrichedResult) 配对 · 顺序即输出序
@@ -1037,6 +1037,7 @@ def find_payload(
         result_dimensions = _infer_included_dimensions(availability_source)
 
     return {
+        "ok": True,
         "schema_version": FIND_SCHEMA_VERSION,
         "command": "find",
         "result_schema": "fields" if fields else ("compact" if compact else "full"),
@@ -1103,7 +1104,7 @@ def find_markdown(
     return f"{head}\n\n{body}\n\n{_find_disclaimer_quote()}"
 
 
-# ── cross section (kan find --all 全市场截面取数 · 地基-3) ────────────────
+# ── cross section (kan find --all 全市场截面取数 · 全市场截面层) ────────────────
 
 def _scan_context_public_dict(scan: StockScanResult | None) -> dict | None:
     """`--all` K 线快照上下文 → JSON 裸值。
@@ -1202,7 +1203,7 @@ def _cross_section_result_dict(
     row: CrossSectionRow,
     triggered: tuple[TriggeredFilter, ...] = (),
 ) -> dict:
-    """单只截面取数结果 → JSON 对象 (整合-1 · 估值裸值放开 + moneyflow + triggered)。
+    """单只截面取数结果 → JSON 对象 (估值/质量/资金维度 · 估值裸值放开 + moneyflow + triggered)。
 
     基础截面输出:code/name + valuation (量价/市值 + 估值裸值) + valuation_context
     (行业内分位 + 行业中位 · *_pct_rank 截面恒 None) + moneyflow + technical/
@@ -1247,11 +1248,11 @@ def cross_section_payload(
     fields: tuple[str, ...] = (),
     compact_context: bool = True,
 ) -> dict:
-    """kan find --all --format json 截面取数/筛选 payload (地基-3 + 整合-1 截面 filter)。
+    """kan find --all --format json 截面取数/筛选 payload (全市场截面层 + 估值/质量/资金维度 截面 filter)。
 
     与 find_payload 区别 (项目决策的新 schema · 不复用):全市场基础截面不逐股拉 K,
     只在请求 K 线类 filter 时挂载批量预计算 context。mode="cross_section" 标记
-    形态供 AI 区分。整合-1 起支持截面类 filter (--pe / --moneyflow) · entries
+    形态供 AI 区分。当前契约支持截面类 filter (--pe / --moneyflow) · entries
     带 triggered · rule.filters 反映输入。
 
     Args:
@@ -1279,6 +1280,7 @@ def cross_section_payload(
         result_dimensions = _infer_included_dimensions(rows_for_availability)
 
     return {
+        "ok": True,
         "schema_version": FIND_SCHEMA_VERSION,
         "command": "find",
         "mode": "cross_section",
@@ -1322,7 +1324,7 @@ def cross_section_markdown(
 ) -> str:
     """kan find --all --format md · 全市场截面简表 + disclaimer (衍生不可删)。
 
-    列:股票 / 申万行业 / PE / PE 行业内分位 / 换手率% / 主力净额 (整合-1 · 裸 PE 放开
+    列:股票 / 申万行业 / PE / PE 行业内分位 / 换手率% / 主力净额 (估值/质量/资金维度 · 裸 PE 放开
     + 换手率 + 主力净额 · PE 分位作对照 · 全字段 (PB/资金明细) 见 --format json)。
     """
     headers = ["股票", "申万行业", "PE", "PE行业分位", "换手率%", "主力净额(万)"]

@@ -230,6 +230,7 @@ class TestFindPayload:
             filters=[{"name": "--pos", "param": "180:lt:50"}],
             pool_size=87, matched_total=1, freshness=_freshness(),
         )
+        assert p["ok"] is True
         assert p["schema_version"] == export.FIND_SCHEMA_VERSION
         assert p["command"] == "find"
         assert "候选 ≠ 买入信号" in p["disclaimer"]
@@ -626,6 +627,7 @@ class TestCrossSectionPayload:
             self._entries(self._row()), query_time="2026-05-29T15:30:00+08:00",
             pool_size=5500, data_cutoff=datetime.date(2026, 5, 29), stale=False,
         )
+        assert p["ok"] is True
         assert p["schema_version"] == export.FIND_SCHEMA_VERSION
         assert p["command"] == "find"
         assert p["mode"] == "cross_section"

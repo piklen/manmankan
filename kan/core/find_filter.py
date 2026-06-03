@@ -1,15 +1,15 @@
-"""Filter functions for `kan find` · v0.0.6.4 MVP + 整合-1 截面/财务 filter
+"""Filter functions for `kan find`.
 
 Apply ConditionSet to scan / cross-section results · return matching subset + audit trail.
 
 设计原则:
 - 复用 scan_batch / enrich 输出 · 不重做位置/共振/截面算法
-- 每个 _match_* 独立 · pure function · **吃子对象不吃整个 result** (整合-1) ·
+- 每个 _match_* 独立 · pure function · **吃子对象不吃整个 result** (估值/质量/资金维度) ·
   让 K 线池 (EnrichedResult) 与截面 (CrossSectionRow) 两路共享同一匹配逻辑
 - 返回 FindMatch (含 triggered filters list) · AI 友好 metadata
 - AND 语义 · 多 filter 全部命中才入选
 
-整合-1 新增三类 filter:
+估值/质量/资金维度 新增三类 filter:
 - pe (估值 · 读 valuation.pe_ttm) / moneyflow (资金 · 读 moneyflow.net_amount):
   K 线池 + 截面 (--all) 两路都支持
 - roe (质量 · 读 fundamentals.roe):逐股 · 仅 K 线池 / 小池 (全市场 --all 不支持)
@@ -17,7 +17,7 @@ Apply ConditionSet to scan / cross-section results · return matching subset + a
 合规边界(manmankan/docs/compliance.md §7):
 - 输出 "符合条件的股票" · 不评分 / 不推荐
 - 排序按命中 filter 数倒序 · 不混合"综合得分"
-- triggered 记录原始 DSL string + 实际命中值 (含估值/财务裸值 · 整合-1 拍板放开) · 供用户审计
+- triggered 记录原始 DSL string + 实际命中值 (含估值/财务裸值 · 当前契约允许输出) · 供用户审计
 """
 from __future__ import annotations
 
@@ -69,7 +69,7 @@ class TriggeredFilter:
 
     filter_type: str  # "pos" / "resonance" / "pe" / "roe" / "moneyflow"
     param: str        # original DSL string e.g. "180:lt:5" / "lt:20"
-    value: float      # actual measured value (含估值/财务裸值 · 整合-1 拍板放开)
+    value: float      # actual measured value (含估值/财务裸值 · 当前契约允许输出)
 
 
 @dataclass(frozen=True)
@@ -130,7 +130,7 @@ def _match_resonance(
 def _match_pe(
     filter: PeFilter, valuation: ValuationMetrics | None
 ) -> TriggeredFilter | None:
-    """Match PE filter against valuation · valuation/pe_ttm 缺失 → 不命中 (整合-1)。"""
+    """Match PE filter against valuation · valuation/pe_ttm 缺失 → 不命中 (估值/质量/资金维度)。"""
     if valuation is None or valuation.pe_ttm is None:
         return None
     if apply_op(filter.op, valuation.pe_ttm, filter.value):
@@ -145,7 +145,7 @@ def _match_pe(
 def _match_roe(
     filter: RoeFilter, fundamentals: FundamentalMetrics | None
 ) -> TriggeredFilter | None:
-    """Match ROE filter against fundamentals · fundamentals/roe 缺失 → 不命中 (整合-1)。"""
+    """Match ROE filter against fundamentals · fundamentals/roe 缺失 → 不命中 (估值/质量/资金维度)。"""
     if fundamentals is None or fundamentals.roe is None:
         return None
     if apply_op(filter.op, fundamentals.roe, filter.value):
@@ -160,7 +160,7 @@ def _match_roe(
 def _match_moneyflow(
     filter: MoneyflowFilter, moneyflow: MoneyflowMetrics | None
 ) -> TriggeredFilter | None:
-    """Match 主力净额 filter against moneyflow · net_amount 缺失 → 不命中 (整合-1)。"""
+    """Match 主力净额 filter against moneyflow · net_amount 缺失 → 不命中 (估值/质量/资金维度)。"""
     if moneyflow is None or moneyflow.net_amount is None:
         return None
     if apply_op(filter.op, moneyflow.net_amount, filter.value):
@@ -172,12 +172,12 @@ def _match_moneyflow(
     return None
 
 
-# ─── 整合-2 技术/情绪/筹码匹配器 (吃子对象 · 缺失 → None · 同整合-1 范式) ───
+# ─── 技术/情绪/筹码维度 技术/情绪/筹码匹配器 (吃子对象 · 缺失 → None · 同估值/质量/资金维度 范式) ───
 
 def _match_rsi(
     filter: RsiFilter, technical: TechnicalMetrics | None
 ) -> TriggeredFilter | None:
-    """Match RSI(6 日) filter against technical · rsi_6 缺失 → 不命中 (整合-2)。"""
+    """Match RSI(6 日) filter against technical · rsi_6 缺失 → 不命中 (技术/情绪/筹码维度)。"""
     if technical is None or technical.rsi_6 is None:
         return None
     if apply_op(filter.op, technical.rsi_6, filter.value):
@@ -192,7 +192,7 @@ def _match_rsi(
 def _match_macd_dif(
     filter: MacdDifFilter, technical: TechnicalMetrics | None
 ) -> TriggeredFilter | None:
-    """Match MACD DIF filter against technical · macd_dif 缺失 → 不命中 (整合-2)。"""
+    """Match MACD DIF filter against technical · macd_dif 缺失 → 不命中 (技术/情绪/筹码维度)。"""
     if technical is None or technical.macd_dif is None:
         return None
     if apply_op(filter.op, technical.macd_dif, filter.value):
@@ -207,7 +207,7 @@ def _match_macd_dif(
 def _match_macd(
     filter: MacdFilter, technical: TechnicalMetrics | None
 ) -> TriggeredFilter | None:
-    """Match MACD 柱 filter against technical · macd 缺失 → 不命中 (整合-2)。"""
+    """Match MACD 柱 filter against technical · macd 缺失 → 不命中 (技术/情绪/筹码维度)。"""
     if technical is None or technical.macd is None:
         return None
     if apply_op(filter.op, technical.macd, filter.value):
@@ -222,7 +222,7 @@ def _match_macd(
 def _match_kdj_j(
     filter: KdjJFilter, technical: TechnicalMetrics | None
 ) -> TriggeredFilter | None:
-    """Match KDJ J filter against technical · kdj_j 缺失 → 不命中 (整合-2)。"""
+    """Match KDJ J filter against technical · kdj_j 缺失 → 不命中 (技术/情绪/筹码维度)。"""
     if technical is None or technical.kdj_j is None:
         return None
     if apply_op(filter.op, technical.kdj_j, filter.value):
@@ -237,7 +237,7 @@ def _match_kdj_j(
 def _match_streak(
     filter: StreakFilter, sentiment: SentimentMetrics | None
 ) -> TriggeredFilter | None:
-    """Match 连板天数 filter against sentiment · limit_times 缺失 → 不命中 (整合-2)。
+    """Match 连板天数 filter against sentiment · limit_times 缺失 → 不命中 (技术/情绪/筹码维度)。
 
     sentiment 为 None = 该股当日未涨跌停 (稀疏事件型) → 不命中 (非连板股不入选)。
     """
@@ -255,7 +255,7 @@ def _match_streak(
 def _match_winner(
     filter: WinnerFilter, chip: ChipMetrics | None
 ) -> TriggeredFilter | None:
-    """Match 获利盘 filter against chip · winner_rate 缺失 → 不命中 (整合-2)。"""
+    """Match 获利盘 filter against chip · winner_rate 缺失 → 不命中 (技术/情绪/筹码维度)。"""
     if chip is None or chip.winner_rate is None:
         return None
     if apply_op(filter.op, chip.winner_rate, filter.value):
@@ -336,12 +336,12 @@ def _match_up_days(
     return None
 
 
-# ─── 整合-3 股东·持股结构匹配器 (吃 shareholder 子对象 · 缺失/未进前十 → None) ───
+# ─── 股东持股维度 股东·持股结构匹配器 (吃 shareholder 子对象 · 缺失/未进前十 → None) ───
 
 def _match_holders(
     filter: HoldersFilter, shareholder: ShareholderMetrics | None
 ) -> TriggeredFilter | None:
-    """Match 户数环比 filter against shareholder · holder_chg_pct 缺失 → 不命中 (整合-3)。"""
+    """Match 户数环比 filter against shareholder · holder_chg_pct 缺失 → 不命中 (股东持股维度)。"""
     if shareholder is None or shareholder.holder_chg_pct is None:
         return None
     if apply_op(filter.op, shareholder.holder_chg_pct, filter.value):
@@ -356,7 +356,7 @@ def _match_holders(
 def _match_top10(
     filter: Top10Filter, shareholder: ShareholderMetrics | None
 ) -> TriggeredFilter | None:
-    """Match 前十大流通集中度 filter against shareholder · top10_float_ratio 缺失 → 不命中 (整合-3)。"""
+    """Match 前十大流通集中度 filter against shareholder · top10_float_ratio 缺失 → 不命中 (股东持股维度)。"""
     if shareholder is None or shareholder.top10_float_ratio is None:
         return None
     if apply_op(filter.op, shareholder.top10_float_ratio, filter.value):
@@ -371,7 +371,7 @@ def _match_top10(
 def _match_north(
     filter: NorthFilter, shareholder: ShareholderMetrics | None
 ) -> TriggeredFilter | None:
-    """Match 北向持股 filter against shareholder · north_hold_ratio 缺失/未进前十 → 不命中 (整合-3)。"""
+    """Match 北向持股 filter against shareholder · north_hold_ratio 缺失/未进前十 → 不命中 (股东持股维度)。"""
     if shareholder is None or shareholder.north_hold_ratio is None:
         return None
     if apply_op(filter.op, shareholder.north_hold_ratio, filter.value):
@@ -463,7 +463,7 @@ def apply_conditions(
     For each stock (AND · 任一组不全命中即淘汰):
     1. ST drop (early reject if exclude_st and is_st)
     2. pos / resonance filters (K 线衍生 · 读 result)
-    3. pe/roe/moneyflow/rsi/macd/kdj/streak/winner filters (整合-1/2 · 读 enrich 子对象 · 缺失 → 不命中)
+    3. pe/roe/moneyflow/rsi/macd/kdj/streak/winner filters (估值/资金与技术维度 · 读 enrich 子对象 · 缺失 → 不命中)
 
     子对象用 getattr 安全提取:传 StockScanResult (未 enrich) 时 valuation 等为 None ·
     但 caller (find_cmds) 保证有截面/财务 filter 时已 enrich (见 PRD 数据流)。

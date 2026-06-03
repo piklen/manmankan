@@ -215,7 +215,7 @@ def info(
         from kan.core.trading_calendar import latest_trade_date
         is_stale = cutoff is None or cutoff < latest_trade_date()
         if fmt is export.OutputFormat.json:
-            # 地基-2:enrich 截面市场指标 · 地基-3:估值位置对照 (历史分位+行业中位)
+            # AI JSON 层:enrich 截面市场指标 · 全市场截面层:估值位置对照 (历史分位+行业中位)
             # 无 token → 均 None · 优雅降级 (info 仍出位置/涨跌/量能)
             from kan.core.enrich import enrich_results
             from kan.core.valuation_context import build_valuation_context

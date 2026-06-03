@@ -16,6 +16,7 @@ kan find --industry 半导体 --format json --fields @core,@valuation
 
 | 字段 | 含义 |
 |---|---|
+| `ok` | 成功时为 `true`;业务错误 envelope 中为 `false` |
 | `schema_version` | `kan find` JSON 契约版本,与包版本不同 |
 | `command` | 固定为 `find` |
 | `mode` | 仅 `--all` 路径为 `cross_section` |
