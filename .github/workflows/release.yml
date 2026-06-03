@@ -65,7 +65,7 @@ jobs:
           shasum -a 256 scripts/install.ps1 >> "$GITHUB_STEP_SUMMARY"
           echo '```' >> "$GITHUB_STEP_SUMMARY"
       - name: Publish to PyPI
-        uses: pypa/gh-action-pypi-publish@106e0b0b7c337fa67ed433972f777c6357f78598  # pinned 2026-06-02
+        uses: pypa/gh-action-pypi-publish@ed0c53931b1dc9bd32cbe73a98c7f6766f8a527e  # pinned 2026-06-02
         with:
           packages-dir: dist/
           attestations: true  # sigstore PEP 740 attestation
