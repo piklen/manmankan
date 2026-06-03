@@ -49,6 +49,47 @@ def _load_cache(path: Path) -> list[tuple[str, str]] | None:
         return None
 
 
+def _fetch_tushare_stock_basic_all():
+    """TuShare stock_basic 全市场上市股 adapter · 独立熔断 key `tushare_basic`."""
+    import pandas as pd
+
+    from kan.data.tushare import _post_tushare_api, _resolve_config
+    from kan.infra import circuit_breaker
+
+    token, endpoint = _resolve_config()
+    if not token:
+        return None
+    cb = circuit_breaker.get_breaker()
+    if cb.is_down("tushare_basic"):
+        return None
+    try:
+        data, _err = _post_tushare_api(
+            endpoint=endpoint,
+            token=token,
+            api_name="stock_basic",
+            params={"list_status": "L"},
+            fields="ts_code,symbol,name,market,list_status",
+        )
+        if data is None:
+            cb.record("tushare_basic", ok=False)
+            return None
+        fields = data.get("fields") or []
+        items = data.get("items") or []
+        if not items:
+            cb.record("tushare_basic", ok=False)
+            return None
+        df = pd.DataFrame(items, columns=fields)
+        if "symbol" not in df.columns or "market" not in df.columns:
+            cb.record("tushare_basic", ok=False)
+            return None
+        cb.record("tushare_basic", ok=True)
+        return df
+    except Exception as e:
+        debug_log(__name__, "fetch tushare stock_basic 失败", e)
+        cb.record("tushare_basic", ok=False)
+        return None
+
+
 def fetch_all_stocks(force: bool = False) -> list[tuple[str, str]]:
     """全市场 [(symbol, name)] · 主板+创业板+科创板+含 ST · 排北交所 · 24h JSON cache。
 
@@ -60,8 +101,6 @@ def fetch_all_stocks(force: bool = False) -> list[tuple[str, str]]:
         cached = _load_cache(cache)
         if cached is not None:
             return cached
-
-    from kan.data.tushare import _fetch_tushare_stock_basic_all
 
     df = _fetch_tushare_stock_basic_all()
     if df is None or df.empty:

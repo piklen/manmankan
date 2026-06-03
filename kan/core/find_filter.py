@@ -84,6 +84,17 @@ class FindMatch:
     triggered: tuple[TriggeredFilter, ...]
 
 
+@dataclass(frozen=True)
+class MatchSegmentSpec:
+    """One ConditionSet field and its target object/matcher binding."""
+
+    filter_type: str
+    condition_attr: str
+    target_attr: str
+    matcher: Callable[..., TriggeredFilter | None]
+    supports_cross_section: bool = True
+
+
 # ─── 单 filter 匹配器 (统一签名 (filter, target) → TriggeredFilter | None) ───
 
 def _match_pos(filter: PosFilter, result: StockScanResult) -> TriggeredFilter | None:
@@ -372,6 +383,58 @@ def _match_north(
     return None
 
 
+FIND_MATCH_SEGMENTS: tuple[MatchSegmentSpec, ...] = (
+    MatchSegmentSpec("pos", "pos_filters", "result", _match_pos),
+    MatchSegmentSpec("resonance", "resonance_filters", "result", _match_resonance),
+    MatchSegmentSpec("gain", "gain_filters", "result", _match_gain),
+    MatchSegmentSpec("up_days", "up_days_filters", "result", _match_up_days),
+    MatchSegmentSpec("pe", "pe_filters", "valuation", _match_pe),
+    MatchSegmentSpec("roe", "roe_filters", "fundamentals", _match_roe, supports_cross_section=False),
+    MatchSegmentSpec("moneyflow", "moneyflow_filters", "moneyflow", _match_moneyflow),
+    MatchSegmentSpec("rsi", "rsi_filters", "technical", _match_rsi),
+    MatchSegmentSpec("macd_dif", "macd_dif_filters", "technical", _match_macd_dif),
+    MatchSegmentSpec("macd", "macd_filters", "technical", _match_macd),
+    MatchSegmentSpec("kdj_j", "kdj_j_filters", "technical", _match_kdj_j),
+    MatchSegmentSpec("ma_bias", "ma_bias_filters", "technical", _match_ma_bias),
+    MatchSegmentSpec("atr_pct", "atr_pct_filters", "technical", _match_atr_pct),
+    MatchSegmentSpec("streak", "streak_filters", "sentiment", _match_streak),
+    MatchSegmentSpec("winner", "winner_filters", "chip", _match_winner),
+    MatchSegmentSpec(
+        "holders",
+        "holders_filters",
+        "shareholder",
+        _match_holders,
+        supports_cross_section=False,
+    ),
+    MatchSegmentSpec(
+        "top10",
+        "top10_filters",
+        "shareholder",
+        _match_top10,
+        supports_cross_section=False,
+    ),
+    MatchSegmentSpec(
+        "north",
+        "north_filters",
+        "shareholder",
+        _match_north,
+        supports_cross_section=False,
+    ),
+)
+
+
+def _result_target(result: object, target_attr: str) -> object:
+    if target_attr == "result":
+        return result
+    return getattr(result, target_attr, None)
+
+
+def _cross_section_target(row: CrossSectionRow, target_attr: str) -> object:
+    if target_attr == "result":
+        return row.scan
+    return getattr(row, target_attr, None)
+
+
 def _match_all(
     filters: tuple,
     target: object,
@@ -420,31 +483,12 @@ def apply_conditions(
         if conditions.exclude_st and r.is_st:
             continue
 
-        # 表驱动:每行 = (一组 filter, 匹配目标, 匹配器) · pos/resonance 吃 result ·
-        # 截面/财务/技术/情绪/筹码 吃 enrich 子对象 (getattr 安全 · 未 enrich → None → 不命中)
-        segments = [
-            (conditions.pos_filters, r, _match_pos),
-            (conditions.resonance_filters, r, _match_resonance),
-            (conditions.gain_filters, r, _match_gain),
-            (conditions.up_days_filters, r, _match_up_days),
-            (conditions.pe_filters, getattr(r, "valuation", None), _match_pe),
-            (conditions.roe_filters, getattr(r, "fundamentals", None), _match_roe),
-            (conditions.moneyflow_filters, getattr(r, "moneyflow", None), _match_moneyflow),
-            (conditions.rsi_filters, getattr(r, "technical", None), _match_rsi),
-            (conditions.macd_dif_filters, getattr(r, "technical", None), _match_macd_dif),
-            (conditions.macd_filters, getattr(r, "technical", None), _match_macd),
-            (conditions.kdj_j_filters, getattr(r, "technical", None), _match_kdj_j),
-            (conditions.ma_bias_filters, getattr(r, "technical", None), _match_ma_bias),
-            (conditions.atr_pct_filters, getattr(r, "technical", None), _match_atr_pct),
-            (conditions.streak_filters, getattr(r, "sentiment", None), _match_streak),
-            (conditions.winner_filters, getattr(r, "chip", None), _match_winner),
-            (conditions.holders_filters, getattr(r, "shareholder", None), _match_holders),
-            (conditions.top10_filters, getattr(r, "shareholder", None), _match_top10),
-            (conditions.north_filters, getattr(r, "shareholder", None), _match_north),
-        ]
         triggered: list[TriggeredFilter] = []
         all_match = True
-        for filters, target, matcher in segments:
+        for segment in FIND_MATCH_SEGMENTS:
+            filters = getattr(conditions, segment.condition_attr)
+            target = _result_target(r, segment.target_attr)
+            matcher = segment.matcher
             seg = _match_all(filters, target, matcher)
             if seg is None:
                 all_match = False
@@ -485,25 +529,14 @@ def apply_cross_section_conditions(
     for row in rows:
         if conditions.exclude_st and ("ST" in row.name or "*ST" in row.name):
             continue
-        segments = [
-            (conditions.pos_filters, row.scan, _match_pos),
-            (conditions.resonance_filters, row.scan, _match_resonance),
-            (conditions.gain_filters, row.scan, _match_gain),
-            (conditions.up_days_filters, row.scan, _match_up_days),
-            (conditions.pe_filters, row.valuation, _match_pe),
-            (conditions.moneyflow_filters, row.moneyflow, _match_moneyflow),
-            (conditions.rsi_filters, row.technical, _match_rsi),
-            (conditions.macd_dif_filters, row.technical, _match_macd_dif),
-            (conditions.macd_filters, row.technical, _match_macd),
-            (conditions.kdj_j_filters, row.technical, _match_kdj_j),
-            (conditions.ma_bias_filters, row.technical, _match_ma_bias),
-            (conditions.atr_pct_filters, row.technical, _match_atr_pct),
-            (conditions.streak_filters, row.sentiment, _match_streak),
-            (conditions.winner_filters, row.chip, _match_winner),
-        ]
         triggered: list[TriggeredFilter] = []
         all_match = True
-        for filters, target, matcher in segments:
+        for segment in FIND_MATCH_SEGMENTS:
+            if not segment.supports_cross_section:
+                continue
+            filters = getattr(conditions, segment.condition_attr)
+            target = _cross_section_target(row, segment.target_attr)
+            matcher = segment.matcher
             seg = _match_all(filters, target, matcher)
             if seg is None:
                 all_match = False
@@ -517,7 +550,9 @@ def apply_cross_section_conditions(
 
 
 __all__ = [
+    "FIND_MATCH_SEGMENTS",
     "FindMatch",
+    "MatchSegmentSpec",
     "TriggeredFilter",
     "apply_conditions",
     "apply_cross_section_conditions",

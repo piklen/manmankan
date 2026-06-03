@@ -586,7 +586,7 @@ def _valuation_public_dict(v: ValuationMetrics | None) -> dict | None:
     - 量价 / 市值客观事实 (close / turnover_rate / volume_ratio / total_mv / circ_mv)
       + 估值裸值 (pe_ttm / pb / ps_ttm / dv_ttm) 一并输出。
     - 放开理由:filter 由用户显式指定 (--pe 是用户主导的数据筛选 · 非工具荐股) ·
-      行业分位主观性强 (回看窗口 / 行业划分皆为选择) · 裸值反而客观 (维护者拍板)。
+      行业分位主观性强 (回看窗口 / 行业划分皆为选择) · 裸值反而客观 (项目决策)。
     - 仍守:不评分 / 不评级 / 不判断词 (compliance §3 黑名单 · find JSON 守护测试不动)。
     """
     if v is None:
@@ -1249,7 +1249,7 @@ def cross_section_payload(
 ) -> dict:
     """kan find --all --format json 截面取数/筛选 payload (地基-3 + 整合-1 截面 filter)。
 
-    与 find_payload 区别 (维护者拍板新 schema · 不复用):全市场基础截面不逐股拉 K,
+    与 find_payload 区别 (项目决策的新 schema · 不复用):全市场基础截面不逐股拉 K,
     只在请求 K 线类 filter 时挂载批量预计算 context。mode="cross_section" 标记
     形态供 AI 区分。整合-1 起支持截面类 filter (--pe / --moneyflow) · entries
     带 triggered · rule.filters 反映输入。

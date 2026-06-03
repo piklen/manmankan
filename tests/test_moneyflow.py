@@ -35,7 +35,7 @@ def _raw():
 
 class TestFetchMoneyflow:
     def test_fetch_and_normalize(self, _isolate, monkeypatch):
-        monkeypatch.setattr("kan.data.tushare._fetch_tushare_moneyflow", lambda td: _raw())
+        monkeypatch.setattr("kan.data.moneyflow._fetch_tushare_moneyflow", lambda td: _raw())
         df = moneyflow.fetch_moneyflow(trade_date="20260101")  # 历史日永鲜
         assert set(df["symbol"]) == {"600519", "000001"}
         row = df[df["symbol"] == "600519"].iloc[0]
@@ -44,12 +44,12 @@ class TestFetchMoneyflow:
         assert row["_source"] == "tushare_moneyflow"
 
     def test_symbols_filter(self, _isolate, monkeypatch):
-        monkeypatch.setattr("kan.data.tushare._fetch_tushare_moneyflow", lambda td: _raw())
+        monkeypatch.setattr("kan.data.moneyflow._fetch_tushare_moneyflow", lambda td: _raw())
         df = moneyflow.fetch_moneyflow(trade_date="20260101", symbols=["600519"])
         assert list(df["symbol"]) == ["600519"]
 
     def test_no_data_empty_schema(self, _isolate, monkeypatch):
-        monkeypatch.setattr("kan.data.tushare._fetch_tushare_moneyflow", lambda td: None)
+        monkeypatch.setattr("kan.data.moneyflow._fetch_tushare_moneyflow", lambda td: None)
         df = moneyflow.fetch_moneyflow(trade_date="20230101")  # 早期无数据
         assert df.empty
         assert list(df.columns) == moneyflow.MONEYFLOW_COLUMNS
@@ -60,7 +60,7 @@ class TestFetchMoneyflow:
         def _f(td):
             calls["n"] += 1
             return _raw()
-        monkeypatch.setattr("kan.data.tushare._fetch_tushare_moneyflow", _f)
+        monkeypatch.setattr("kan.data.moneyflow._fetch_tushare_moneyflow", _f)
         moneyflow.fetch_moneyflow(trade_date="20260101")  # 历史日 < latest → 永鲜
         moneyflow.fetch_moneyflow(trade_date="20260101")
         assert calls["n"] == 1

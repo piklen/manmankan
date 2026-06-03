@@ -28,7 +28,7 @@ def _raw(roe=15.2):
 class TestFetchFundamentals:
     def test_latest_period_picked(self, _isolate, monkeypatch):
         monkeypatch.setattr(
-            "kan.data.tushare._fetch_tushare_fundamentals", lambda s: _raw(),
+            "kan.data.fundamentals._fetch_tushare_fundamentals", lambda s: _raw(),
         )
         out = fundamentals.fetch_fundamentals(["600519"])
         assert "600519" in out
@@ -36,7 +36,7 @@ class TestFetchFundamentals:
 
     def test_no_token_degrades(self, _isolate, monkeypatch):
         monkeypatch.setattr(
-            "kan.data.tushare._fetch_tushare_fundamentals", lambda s: None,
+            "kan.data.fundamentals._fetch_tushare_fundamentals", lambda s: None,
         )
         assert fundamentals.fetch_fundamentals(["600519"]) == {}
 
@@ -46,7 +46,7 @@ class TestFetchFundamentals:
         def _f(s):
             calls["n"] += 1
             return _raw()
-        monkeypatch.setattr("kan.data.tushare._fetch_tushare_fundamentals", _f)
+        monkeypatch.setattr("kan.data.fundamentals._fetch_tushare_fundamentals", _f)
         assert fundamentals.fetch_fundamentals([]) == {}
         assert calls["n"] == 0
 
@@ -56,13 +56,13 @@ class TestFetchFundamentals:
         def _f(s):
             calls["n"] += 1
             return _raw()
-        monkeypatch.setattr("kan.data.tushare._fetch_tushare_fundamentals", _f)
+        monkeypatch.setattr("kan.data.fundamentals._fetch_tushare_fundamentals", _f)
         fundamentals.fetch_fundamentals(["600519"])
         fundamentals.fetch_fundamentals(["600519"])
         assert calls["n"] == 1  # 第二次走 90d 缓存
 
     def test_bad_symbol_skipped(self, _isolate, monkeypatch):
         monkeypatch.setattr(
-            "kan.data.tushare._fetch_tushare_fundamentals", lambda s: _raw(),
+            "kan.data.fundamentals._fetch_tushare_fundamentals", lambda s: _raw(),
         )
         assert fundamentals.fetch_fundamentals(["bad"]) == {}  # 非 6 位 → 跳

@@ -33,6 +33,7 @@ DIVIDEND_COLUMNS = [
 _SYMBOL_PATTERN = re.compile(r"^\d{6}$")
 _DIVIDEND_TTL = 7 * 24 * 3600
 _SOURCE = "tushare_dividend"
+_TUSHARE_DIVIDEND_FIELDS = "ts_code,record_date,ex_date,cash_div_tax,cash_div,stk_div,div_proc"
 
 
 def _cache_path(symbol: str) -> Path:
@@ -78,10 +79,65 @@ def _load_cache(path: Path) -> pd.DataFrame | None:
         return None
 
 
+def _to_tushare_dividend_df(data: dict | None) -> pd.DataFrame | None:
+    """TuShare dividend data block -> raw dividend DataFrame with `symbol`."""
+    import pandas as pd
+
+    from kan.data.tushare import _strip_ts_suffix
+
+    if not data:
+        return None
+    fields = data.get("fields") or []
+    items = data.get("items") or []
+    if not items:
+        return None
+    df = pd.DataFrame(items, columns=fields)
+    if "ts_code" not in df.columns:
+        return None
+    df["symbol"] = df["ts_code"].map(_strip_ts_suffix)
+    return df.drop(columns=["ts_code"])
+
+
+def _fetch_tushare_dividend(symbol: str) -> pd.DataFrame | None:
+    """TuShare dividend 单股事件 adapter · 独立熔断 key `tushare_dividend`."""
+    from kan.data.tushare import _normalize_symbol_to_ts, _post_tushare_api, _resolve_config
+    from kan.infra import circuit_breaker
+
+    token, endpoint = _resolve_config()
+    if not token:
+        return None
+    cb = circuit_breaker.get_breaker()
+    if cb.is_down("tushare_dividend"):
+        return None
+    try:
+        ts_code = _normalize_symbol_to_ts(symbol)
+    except ValueError:
+        return None
+    try:
+        data, _err = _post_tushare_api(
+            endpoint=endpoint,
+            token=token,
+            api_name="dividend",
+            params={"ts_code": ts_code},
+            fields=_TUSHARE_DIVIDEND_FIELDS,
+        )
+        if data is None:
+            cb.record("tushare_dividend", ok=False)
+            return None
+        df = _to_tushare_dividend_df(data)
+        if df is None:
+            cb.record("tushare_dividend", ok=False)
+            return None
+        cb.record("tushare_dividend", ok=True)
+        return df
+    except Exception as e:
+        debug_log(__name__, "fetch tushare dividend 失败", e)
+        cb.record("tushare_dividend", ok=False)
+        return None
+
+
 def fetch_dividends(symbol: str, *, force: bool = False) -> pd.DataFrame:
     """取单股分红送股事件 · 无 token/无数据返回空表,不抛业务异常。"""
-    from kan.data.tushare import _fetch_tushare_dividend
-
     if not _SYMBOL_PATTERN.match(symbol):
         return _empty_df()
     ensure_dirs()

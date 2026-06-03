@@ -33,12 +33,13 @@ jobs:
       - name: Lockfile is current
         run: uv lock --check
       - name: Install dependencies
-        run: uv sync --locked --all-groups --all-extras
+        run: uv sync --frozen --all-groups --all-extras
       - name: Release privacy gate
         run: bash scripts/check-privacy-leaks.sh
       - name: Release test gate
         run: |
           uv run ruff check kan/ tests/
+          uv run mypy
           uv run pytest -q -m "not tty and not network"
       - name: Build
         run: uv build --clear

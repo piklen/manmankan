@@ -87,7 +87,7 @@ def builtin_metrics_sources() -> list[MetricsSource]:
     地基-1 只含 TushareMetricsSource (daily_basic · priority 10) ·
     PublicMetricsSource 降级源 (akshare / 东财公开接口) 留后续阶段。
     """
-    from kan.data.tushare import TushareMetricsSource
+    from kan.data.metrics import TushareMetricsSource
 
     return [
         TushareMetricsSource(),

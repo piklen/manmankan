@@ -427,815 +427,100 @@ class TushareKlineSource:
         return _fetch_tushare(symbol, start)
 
 
-# ══════════════════════════════════════════════════════════════════
-# MetricsSource Protocol 适配 (地基-1) · 截面式市场指标 · daily_basic
-# ══════════════════════════════════════════════════════════════════
-
-_METRICS_FIELDS = (
-    "ts_code,trade_date,close,turnover_rate,volume_ratio,"
-    "pe_ttm,pb,ps_ttm,dv_ttm,total_mv,circ_mv"
-)
-"""daily_basic 拉取字段 · 估值 (PE/PB/PS/股息率) + 量价 (换手/量比) + 市值。
-
-分位 / 行业中位在输出层算 (地基-2/3) · 数据层只取原始指标 (compliance §6/§7)。
-"""
-
-
 def _strip_ts_suffix(ts_code: str) -> str:
     """ts_code '600519.SH' → 6 位 '600519' (跟 manmankan symbol 标准对齐)。"""
     return str(ts_code).split(".", 1)[0]
 
 
 def _to_metrics_df(data: dict | None) -> pd.DataFrame | None:
-    """TuShare daily_basic data 块 → DataFrame · ts_code → symbol (strip 后缀)。
-
-    不在此填 _source / 补缺列 / 数值清洗 (编排层 metrics._normalize_metrics 接管)。
-    """
-    import pandas as pd
-    if not data:
-        return None
-    fields = data.get("fields") or []
-    items = data.get("items") or []
-    if not items:
-        return None
-    df = pd.DataFrame(items, columns=fields)
-    if "ts_code" not in df.columns:
-        return None
-    df["symbol"] = df["ts_code"].map(_strip_ts_suffix)
-    return df.drop(columns=["ts_code"])
+    """Compatibility shim. Implementation lives in `kan.data.metrics`."""
+    from kan.data.metrics import _to_tushare_metrics_df
+    return _to_tushare_metrics_df(data)
 
 
 def _fetch_tushare_metrics(
     trade_date: str, symbols: list[str] | None = None,
 ) -> pd.DataFrame | None:
-    """TuShare Pro daily_basic 单日截面入口 · MetricsSourceChain 顶档调用。
-
-    截面语义:按 trade_date 一次拉全市场 (一次 HTTP) · symbols 参数忽略
-    (过滤交给编排层 metrics.fetch_metrics · 全市场缓存利于复用)。
-
-    熔断器 key 'tushare_metrics' 独立于 K 线 'tushare':daily_basic 与 daily
-    是不同接口 / 频率门槛 · 一个失败不该误熔断另一个。
-
-    Args:
-      trade_date: YYYYMMDD 交易日
-      symbols:    Protocol 一致性保留 · 本实现忽略 (总拉全市场)
-
-    Returns:
-      DataFrame (含 symbol 列 + 各指标) 或 None (未配 token / 熔断 / 失败)。
-      失败时上游 MetricsSourceChain 会 fallback 下一档 (地基-1 暂无降级源)。
-    """
-    from kan.infra import circuit_breaker
-
-    token, endpoint = _resolve_config()
-    if not token:
-        return None
-
-    cb = circuit_breaker.get_breaker()
-    if cb.is_down("tushare_metrics"):
-        return None
-
-    try:
-        data, _err = _post_tushare_api(
-            endpoint=endpoint,
-            token=token,
-            api_name="daily_basic",
-            params={"trade_date": trade_date},
-            fields=_METRICS_FIELDS,
-        )
-        # error 已被 _post_tushare_api 写进 debug_log · 不上抛 caller
-        if data is None:
-            cb.record("tushare_metrics", ok=False)
-            return None
-        df = _to_metrics_df(data)
-        if df is None or df.empty:
-            cb.record("tushare_metrics", ok=False)
-            return None
-        cb.record("tushare_metrics", ok=True)
-        return df
-    except Exception as e:
-        debug_log(__name__, "fetch tushare metrics 失败", e)
-        cb.record("tushare_metrics", ok=False)
-        return None
+    """Compatibility shim. Implementation lives in `kan.data.metrics`."""
+    from kan.data.metrics import _fetch_tushare_metrics as _impl
+    return _impl(trade_date, symbols)
 
 
 class TushareMetricsSource:
-    """TuShare Pro 截面指标源 · priority=10 · 配 token 时顶档优先 · daily_basic。
+    """Compatibility shim. Use `kan.data.metrics.TushareMetricsSource`."""
 
-    is_available 检查:token 配置 + 熔断器 (key 'tushare_metrics' 独立于 K 线)。
-    与 TushareKlineSource 同 priority 但不同领域 / 不同熔断 key · 互不干扰
-    (各领域独立 MetricsSourceChain / KlineSourceChain · priority 只在领域内比较)。
-    """
-
-    name = "tushare_metrics"
-    priority = 10
-
-    def is_available(self) -> bool:
-        token, _ = _resolve_config()
-        if not token:
-            return False
-        from kan.infra import circuit_breaker
-        return not circuit_breaker.get_breaker().is_down(self.name)
-
-    def fetch(
-        self, trade_date: str, symbols: list[str] | None = None,
-    ) -> pd.DataFrame | None:
-        return _fetch_tushare_metrics(trade_date, symbols)
+    def __new__(cls):
+        from kan.data.metrics import TushareMetricsSource as _Impl
+        return _Impl()
 
 
 # ══════════════════════════════════════════════════════════════════
 # 估值历史时序 + 申万行业反查 (地基-3) · 估值分位 + 行业中位对照原料
 # ══════════════════════════════════════════════════════════════════
 
-_HISTORY_FIELDS = "trade_date,pe_ttm,pb,ps_ttm,dv_ttm"
-"""daily_basic 单股时序字段 · 估值历史分位用 (与截面正交:单股多日 vs 单日全市场)。"""
-
-
 def _fetch_tushare_metrics_history(
     symbol: str, start_date: str,
 ) -> pd.DataFrame | None:
-    """TuShare daily_basic 单股估值时序 (ts_code + start_date) · 历史分位原料 (地基-3)。
-
-    与截面 _fetch_tushare_metrics 正交:截面=单日全市场 · 时序=单股多日。
-    复用 'tushare_metrics' 熔断 key (同 daily_basic 接口 · 频率门槛一致)。
-
-    Returns:
-        DataFrame (trade_date + pe_ttm/pb/ps_ttm/dv_ttm) 或 None (未配 token / 熔断 / 失败)。
-    """
-    import pandas as pd
-
-    from kan.infra import circuit_breaker
-
-    token, endpoint = _resolve_config()
-    if not token:
-        return None
-    cb = circuit_breaker.get_breaker()
-    if cb.is_down("tushare_metrics"):
-        return None
-    try:
-        ts_code = _normalize_symbol_to_ts(symbol)
-    except ValueError:
-        return None
-    try:
-        data, _err = _post_tushare_api(
-            endpoint=endpoint, token=token, api_name="daily_basic",
-            params={"ts_code": ts_code, "start_date": start_date},
-            fields=_HISTORY_FIELDS,
-        )
-        if data is None:
-            cb.record("tushare_metrics", ok=False)
-            return None
-        fields = data.get("fields") or []
-        items = data.get("items") or []
-        if not items:
-            cb.record("tushare_metrics", ok=False)
-            return None
-        cb.record("tushare_metrics", ok=True)
-        return pd.DataFrame(items, columns=fields)
-    except Exception as e:
-        debug_log(__name__, "fetch tushare metrics history 失败", e)
-        cb.record("tushare_metrics", ok=False)
-        return None
+    """Compatibility shim. Implementation lives in `kan.data.metrics`."""
+    from kan.data.metrics import _fetch_tushare_metrics_history as _impl
+    return _impl(symbol, start_date)
 
 
 def _fetch_tushare_sw_l1_members() -> pd.DataFrame | None:
-    """TuShare index_member_all 申万成分 · symbol → 申万一级 (地基-3 行业中位反查)。
-
-    一次拉全市场最新成分 (is_new=Y) · 熔断 key 'tushare_sw' 独立于截面 daily_basic。
-
-    Returns:
-        DataFrame (symbol + l1_name · ts_code 已 strip) 或 None (未配 token / 熔断 / 失败)。
-    """
-    import pandas as pd
-
-    from kan.infra import circuit_breaker
-
-    token, endpoint = _resolve_config()
-    if not token:
-        return None
-    cb = circuit_breaker.get_breaker()
-    if cb.is_down("tushare_sw"):
-        return None
-    try:
-        data, _err = _post_tushare_api(
-            endpoint=endpoint, token=token, api_name="index_member_all",
-            params={"is_new": "Y"},
-            fields="l1_name,ts_code",
-        )
-        if data is None:
-            cb.record("tushare_sw", ok=False)
-            return None
-        fields = data.get("fields") or []
-        items = data.get("items") or []
-        if not items:
-            cb.record("tushare_sw", ok=False)
-            return None
-        df = pd.DataFrame(items, columns=fields)
-        if "ts_code" not in df.columns or "l1_name" not in df.columns:
-            cb.record("tushare_sw", ok=False)
-            return None
-        df["symbol"] = df["ts_code"].map(_strip_ts_suffix)
-        cb.record("tushare_sw", ok=True)
-        return df[["symbol", "l1_name"]]
-    except Exception as e:
-        debug_log(__name__, "fetch tushare sw members 失败", e)
-        cb.record("tushare_sw", ok=False)
-        return None
-
-
-# ══════════════════════════════════════════════════════════════════
-# 全市场股票列表 (地基-3) · AllStocksSet 截面池原料 · stock_basic
-# ══════════════════════════════════════════════════════════════════
+    """Compatibility shim. Implementation lives in `kan.data.industry_map`."""
+    from kan.data.industry_map import _fetch_tushare_sw_l1_members as _impl
+    return _impl()
 
 
 def _fetch_tushare_stock_basic_all() -> pd.DataFrame | None:
-    """TuShare stock_basic 全市场上市股 · AllStocksSet 截面池原料 (地基-3)。
-
-    一次拉全部 list_status=L 上市股 (symbol + name + market) · 熔断 key
-    'tushare_basic' 独立于截面 daily_basic / 申万 (不同接口 / 频率门槛)。
-
-    market 字段供 universe.fetch_all_stocks 排北交所 (真数据 920xxx 段统一
-    market="北交所" · 比代码段正则稳 · 详见 universe.py)。
-
-    Returns:
-        DataFrame (含 symbol / name / market 列) 或 None (未配 token / 熔断 / 失败)。
-    """
-    import pandas as pd
-
-    from kan.infra import circuit_breaker
-
-    token, endpoint = _resolve_config()
-    if not token:
-        return None
-    cb = circuit_breaker.get_breaker()
-    if cb.is_down("tushare_basic"):
-        return None
-    try:
-        data, _err = _post_tushare_api(
-            endpoint=endpoint, token=token, api_name="stock_basic",
-            params={"list_status": "L"},
-            fields="ts_code,symbol,name,market,list_status",
-        )
-        if data is None:
-            cb.record("tushare_basic", ok=False)
-            return None
-        fields = data.get("fields") or []
-        items = data.get("items") or []
-        if not items:
-            cb.record("tushare_basic", ok=False)
-            return None
-        df = pd.DataFrame(items, columns=fields)
-        if "symbol" not in df.columns or "market" not in df.columns:
-            cb.record("tushare_basic", ok=False)
-            return None
-        cb.record("tushare_basic", ok=True)
-        return df
-    except Exception as e:
-        debug_log(__name__, "fetch tushare stock_basic 失败", e)
-        cb.record("tushare_basic", ok=False)
-        return None
-
-
-# ══════════════════════════════════════════════════════════════════
-# 质量·成长 (整合-1) · fina_indicator 逐股财务指标 · ROE / 增速
-# ══════════════════════════════════════════════════════════════════
-
-_FUNDAMENTALS_FIELDS = "end_date,roe,netprofit_yoy,or_yoy"
-"""fina_indicator 拉取字段 · 净资产收益率 ROE + 净利同比 + 营收同比增速 (%)。
-
-逐股 (ts_code) 维度 · 不传 period 返回全历史报告期 · 编排层取最新一期
-(fundamentals.fetch_fundamentals)。原始指标值 · 命名中性 (compliance §6/§7)。
-"""
+    """Compatibility shim. Implementation lives in `kan.data.universe`."""
+    from kan.data.universe import _fetch_tushare_stock_basic_all as _impl
+    return _impl()
 
 
 def _fetch_tushare_fundamentals(symbol: str) -> pd.DataFrame | None:
-    """TuShare fina_indicator 单股财务指标 (ROE / 增速) · 逐股质量维度 (整合-1)。
-
-    与截面 daily_basic 正交:fina_indicator 按 ts_code 拉单股全历史报告期 (无截面
-    全市场拉法 · 全市场逐股代价高 · PRD §3.2)。熔断 key 'tushare_fina' 独立
-    (fina_indicator 接口 / 频率门槛不同于 daily_basic)。
-
-    Returns:
-        DataFrame (end_date + roe / netprofit_yoy / or_yoy · 多报告期) 或 None
-        (未配 token / 熔断 / 失败)。编排层 fetch_fundamentals 取最新一期。
-    """
-    from kan.infra import circuit_breaker
-
-    token, endpoint = _resolve_config()
-    if not token:
-        return None
-    cb = circuit_breaker.get_breaker()
-    if cb.is_down("tushare_fina"):
-        return None
-    try:
-        ts_code = _normalize_symbol_to_ts(symbol)
-    except ValueError:
-        return None
-    try:
-        data, _err = _post_tushare_api(
-            endpoint=endpoint, token=token, api_name="fina_indicator",
-            params={"ts_code": ts_code},
-            fields=_FUNDAMENTALS_FIELDS,
-        )
-        if data is None:
-            cb.record("tushare_fina", ok=False)
-            return None
-        fields = data.get("fields") or []
-        items = data.get("items") or []
-        if not items:
-            cb.record("tushare_fina", ok=False)
-            return None
-        cb.record("tushare_fina", ok=True)
-        return pd.DataFrame(items, columns=fields)
-    except Exception as e:
-        debug_log(__name__, "fetch tushare fundamentals 失败", e)
-        cb.record("tushare_fina", ok=False)
-        return None
-
-
-# ══════════════════════════════════════════════════════════════════
-# 股东·持股结构 (整合-3) · stk_holdernumber + top10_floatholders 逐股 · 季度披露
-# ══════════════════════════════════════════════════════════════════
-
-_HOLDERNUM_FIELDS = "ann_date,end_date,holder_num"
-"""stk_holdernumber 拉取字段 · 股东户数 (季度定期披露 · 同 end_date 可能多 ann_date)。
-
-逐股 (ts_code) 维度 · 不传 period 返回全历史报告期 · 编排层 shareholder._derive_holders
-去重 + 取相邻两期算环比。已披露客观事实 (compliance §7 整合-3 守则 · 裸值衍生可出)。
-"""
-
-_TOP10FLOAT_FIELDS = "end_date,holder_name,hold_ratio"
-"""top10_floatholders 拉取字段 · 十大流通股东持股占流通比 + 持有人名 (季度披露)。
-
-逐股 (ts_code · 接口 required · 无截面全市场拉法) · 不传 period 返回全历史报告期 ×
-每期 ≤10 行 · 编排层取最新一期算集中度 (求和) + 北向代理 (筛"香港中央结算")。
-"""
+    """Compatibility shim. Implementation lives in `kan.data.fundamentals`."""
+    from kan.data.fundamentals import _fetch_tushare_fundamentals as _impl
+    return _impl(symbol)
 
 
 def _fetch_tushare_holdernumber(symbol: str) -> pd.DataFrame | None:
-    """TuShare stk_holdernumber 单股股东户数 (季度披露 · 逐股 · 整合-3)。
-
-    逐股 (ts_code) 全历史报告期 (无截面全市场拉法 · 全市场逐股代价高 · 同 fina_indicator)。
-    熔断 key 'tushare_holdernum' 独立 (接口 / 频率门槛不同)。编排层 shareholder 去重
-    (同 end_date 多 ann_date) + 取相邻两期算环比。
-
-    Returns:
-        DataFrame (ann_date / end_date / holder_num · 多报告期) 或 None
-        (未配 token / 熔断 / 失败 / 无披露)。
-    """
-    from kan.infra import circuit_breaker
-
-    token, endpoint = _resolve_config()
-    if not token:
-        return None
-    cb = circuit_breaker.get_breaker()
-    if cb.is_down("tushare_holdernum"):
-        return None
-    try:
-        ts_code = _normalize_symbol_to_ts(symbol)
-    except ValueError:
-        return None
-    try:
-        data, _err = _post_tushare_api(
-            endpoint=endpoint, token=token, api_name="stk_holdernumber",
-            params={"ts_code": ts_code},
-            fields=_HOLDERNUM_FIELDS,
-        )
-        if data is None:
-            cb.record("tushare_holdernum", ok=False)
-            return None
-        fields = data.get("fields") or []
-        items = data.get("items") or []
-        if not items:
-            cb.record("tushare_holdernum", ok=False)
-            return None
-        cb.record("tushare_holdernum", ok=True)
-        return pd.DataFrame(items, columns=fields)
-    except Exception as e:
-        debug_log(__name__, "fetch tushare holdernumber 失败", e)
-        cb.record("tushare_holdernum", ok=False)
-        return None
+    """Compatibility shim. Implementation lives in `kan.data.shareholder`."""
+    from kan.data.shareholder import _fetch_tushare_holdernumber as _impl
+    return _impl(symbol)
 
 
 def _fetch_tushare_top10float(symbol: str) -> pd.DataFrame | None:
-    """TuShare top10_floatholders 单股十大流通股东 (季度披露 · 逐股 · 整合-3)。
-
-    逐股 (ts_code · 接口 required) 全历史报告期 × 每期 ≤10 行。熔断 key
-    'tushare_top10float' 独立。编排层 shareholder._derive_top10 取最新一期算集中度
-    (hold_ratio 求和) + 北向代理 (筛"香港中央结算" · hk_hold 日频 2024-08 断供后降级)。
-
-    Returns:
-        DataFrame (end_date / holder_name / hold_ratio · 多期×≤10) 或 None
-        (未配 token / 熔断 / 失败 / 无披露)。
-    """
-    from kan.infra import circuit_breaker
-
-    token, endpoint = _resolve_config()
-    if not token:
-        return None
-    cb = circuit_breaker.get_breaker()
-    if cb.is_down("tushare_top10float"):
-        return None
-    try:
-        ts_code = _normalize_symbol_to_ts(symbol)
-    except ValueError:
-        return None
-    try:
-        data, _err = _post_tushare_api(
-            endpoint=endpoint, token=token, api_name="top10_floatholders",
-            params={"ts_code": ts_code},
-            fields=_TOP10FLOAT_FIELDS,
-        )
-        if data is None:
-            cb.record("tushare_top10float", ok=False)
-            return None
-        fields = data.get("fields") or []
-        items = data.get("items") or []
-        if not items:
-            cb.record("tushare_top10float", ok=False)
-            return None
-        cb.record("tushare_top10float", ok=True)
-        return pd.DataFrame(items, columns=fields)
-    except Exception as e:
-        debug_log(__name__, "fetch tushare top10float 失败", e)
-        cb.record("tushare_top10float", ok=False)
-        return None
-
-
-# ══════════════════════════════════════════════════════════════════
-# 主力资金 (整合-1) · moneyflow_dc 截面 · 主力净额
-# ══════════════════════════════════════════════════════════════════
-
-_MONEYFLOW_FIELDS = "ts_code,trade_date,net_amount,buy_elg_amount,buy_lg_amount"
-"""moneyflow_dc 拉取字段 · 主力净额 + 超大单 / 大单净额 (东财口径 · 单位万元)。
-
-截面 (trade_date) 维度 · 一次拉全市场 · 数据从 20230911 起 (早期缺失)。
-客观资金事实 (compliance §2 安全区 · 同 OHLCV · 裸值可出)。
-"""
-
-
-def _to_moneyflow_df(data: dict | None) -> pd.DataFrame | None:
-    """TuShare moneyflow_dc data 块 → DataFrame · ts_code → symbol (strip 后缀)。
-
-    不在此填 _source / 数值清洗 (编排层 moneyflow._normalize_moneyflow 接管)。
-    """
-    import pandas as pd
-    if not data:
-        return None
-    fields = data.get("fields") or []
-    items = data.get("items") or []
-    if not items:
-        return None
-    df = pd.DataFrame(items, columns=fields)
-    if "ts_code" not in df.columns:
-        return None
-    df["symbol"] = df["ts_code"].map(_strip_ts_suffix)
-    return df.drop(columns=["ts_code"])
+    """Compatibility shim. Implementation lives in `kan.data.shareholder`."""
+    from kan.data.shareholder import _fetch_tushare_top10float as _impl
+    return _impl(symbol)
 
 
 def _fetch_tushare_moneyflow(trade_date: str) -> pd.DataFrame | None:
-    """TuShare moneyflow_dc 单日截面 · 主力资金净额 (整合-1)。
-
-    截面语义:按 trade_date 一次拉全市场 (一次 HTTP · 同 daily_basic 截面廉价)。
-    熔断 key 'tushare_moneyflow' 独立 (moneyflow_dc 接口 / 频率门槛不同)。
-    数据从 20230911 起 · 早期交易日返回空 (编排层降级)。
-
-    Returns:
-        DataFrame (symbol + net_amount / buy_elg_amount / buy_lg_amount) 或 None
-        (未配 token / 熔断 / 失败 / 早期无数据)。
-    """
-    from kan.infra import circuit_breaker
-
-    token, endpoint = _resolve_config()
-    if not token:
-        return None
-    cb = circuit_breaker.get_breaker()
-    if cb.is_down("tushare_moneyflow"):
-        return None
-    try:
-        data, _err = _post_tushare_api(
-            endpoint=endpoint, token=token, api_name="moneyflow_dc",
-            params={"trade_date": trade_date},
-            fields=_MONEYFLOW_FIELDS,
-        )
-        if data is None:
-            cb.record("tushare_moneyflow", ok=False)
-            return None
-        df = _to_moneyflow_df(data)
-        if df is None or df.empty:
-            cb.record("tushare_moneyflow", ok=False)
-            return None
-        cb.record("tushare_moneyflow", ok=True)
-        return df
-    except Exception as e:
-        debug_log(__name__, "fetch tushare moneyflow 失败", e)
-        cb.record("tushare_moneyflow", ok=False)
-        return None
-
-
-# ══════════════════════════════════════════════════════════════════
-# 分红送股 · 除权除息事件标记 (P1 scan context)
-# ══════════════════════════════════════════════════════════════════
-
-_DIVIDEND_FIELDS = "ts_code,record_date,ex_date,cash_div_tax,cash_div,stk_div,div_proc"
-"""dividend 拉取字段 · 用于 scan 标记除权除息事件。
-
-cash_div_tax=每股税前分红;stk_div=每股送转。输出只做事件标记与参考价粗算,
-不做分红流程解释或未来日历推断。
-"""
-
-
-def _to_dividend_df(data: dict | None) -> pd.DataFrame | None:
-    """TuShare dividend data 块 → DataFrame · ts_code → symbol。"""
-    import pandas as pd
-
-    if not data:
-        return None
-    fields = data.get("fields") or []
-    items = data.get("items") or []
-    if not items:
-        return None
-    df = pd.DataFrame(items, columns=fields)
-    if "ts_code" not in df.columns:
-        return None
-    df["symbol"] = df["ts_code"].map(_strip_ts_suffix)
-    return df.drop(columns=["ts_code"])
+    """Compatibility shim. Implementation lives in `kan.data.moneyflow`."""
+    from kan.data.moneyflow import _fetch_tushare_moneyflow as _impl
+    return _impl(trade_date)
 
 
 def _fetch_tushare_dividend(symbol: str) -> pd.DataFrame | None:
-    """TuShare dividend 单股分红送股事件 · 无 token / 失败时 None。"""
-    from kan.infra import circuit_breaker
-
-    token, endpoint = _resolve_config()
-    if not token:
-        return None
-    cb = circuit_breaker.get_breaker()
-    if cb.is_down("tushare_dividend"):
-        return None
-    try:
-        ts_code = _normalize_symbol_to_ts(symbol)
-    except ValueError:
-        return None
-    try:
-        data, _err = _post_tushare_api(
-            endpoint=endpoint, token=token, api_name="dividend",
-            params={"ts_code": ts_code},
-            fields=_DIVIDEND_FIELDS,
-        )
-        if data is None:
-            cb.record("tushare_dividend", ok=False)
-            return None
-        df = _to_dividend_df(data)
-        if df is None:
-            cb.record("tushare_dividend", ok=False)
-            return None
-        cb.record("tushare_dividend", ok=True)
-        return df
-    except Exception as e:
-        debug_log(__name__, "fetch tushare dividend 失败", e)
-        cb.record("tushare_dividend", ok=False)
-        return None
-
-
-# ══════════════════════════════════════════════════════════════════
-# 技术面 (整合-2) · stk_factor_pro 截面 · MACD/KDJ/RSI/均线/BOLL (前复权)
-# ══════════════════════════════════════════════════════════════════
-
-_TECHNICAL_FIELDS = (
-    "ts_code,trade_date,close_qfq,atr_qfq,"
-    "macd_dif_qfq,macd_dea_qfq,macd_qfq,"
-    "kdj_k_qfq,kdj_d_qfq,kdj_qfq,"
-    "rsi_qfq_6,rsi_qfq_12,rsi_qfq_24,"
-    "ma_qfq_5,ma_qfq_10,ma_qfq_20,ma_qfq_60,"
-    "boll_upper_qfq,boll_mid_qfq,boll_lower_qfq"
-)
-"""stk_factor_pro 拉取字段 · 前复权 (_qfq) 技术指标。
-
-⚠️ stk_factor_pro 默认返回上百字段 · 必须显式 fields (否则 trade_date 截面 =
-全市场 ~5500 只 × 上百列 · 拉爆)。取前复权 (技术分析标准) · _to_technical_df
-rename 去 _qfq 后缀成中性名。
-"""
-
-# stk_factor_pro 原始 _qfq 字段 → manmankan 中性字段名 (去复权后缀)。
-# 注意:tushare kdj_qfq = J 值 (K/D 是 kdj_k_qfq / kdj_d_qfq)。
-_TECHNICAL_RENAME = {
-    "close_qfq": "close",
-    "atr_qfq": "atr",
-    "macd_dif_qfq": "macd_dif",
-    "macd_dea_qfq": "macd_dea",
-    "macd_qfq": "macd",
-    "kdj_k_qfq": "kdj_k",
-    "kdj_d_qfq": "kdj_d",
-    "kdj_qfq": "kdj_j",
-    "rsi_qfq_6": "rsi_6",
-    "rsi_qfq_12": "rsi_12",
-    "rsi_qfq_24": "rsi_24",
-    "ma_qfq_5": "ma_5",
-    "ma_qfq_10": "ma_10",
-    "ma_qfq_20": "ma_20",
-    "ma_qfq_60": "ma_60",
-    "boll_upper_qfq": "boll_upper",
-    "boll_mid_qfq": "boll_mid",
-    "boll_lower_qfq": "boll_lower",
-}
-
-
-def _to_technical_df(data: dict | None) -> pd.DataFrame | None:
-    """TuShare stk_factor_pro data 块 → DataFrame · ts_code → symbol + 去 _qfq 后缀。
-
-    不在此填 _source / 数值清洗 (编排层 technical._normalize_technical 接管)。
-    """
-    import pandas as pd
-    if not data:
-        return None
-    fields = data.get("fields") or []
-    items = data.get("items") or []
-    if not items:
-        return None
-    df = pd.DataFrame(items, columns=fields)
-    if "ts_code" not in df.columns:
-        return None
-    df["symbol"] = df["ts_code"].map(_strip_ts_suffix)
-    df = df.drop(columns=["ts_code"])
-    return df.rename(columns=_TECHNICAL_RENAME)
+    """Compatibility shim. Implementation lives in `kan.data.dividend`."""
+    from kan.data.dividend import _fetch_tushare_dividend as _impl
+    return _impl(symbol)
 
 
 def _fetch_tushare_technical(trade_date: str) -> pd.DataFrame | None:
-    """TuShare stk_factor_pro 单日截面 · 技术面因子 (前复权 · 整合-2)。
-
-    截面语义:按 trade_date 一次拉全市场 (一次 HTTP · 同 daily_basic 截面廉价)。
-    熔断 key 'tushare_factor' 独立 (stk_factor_pro 接口 / 频率门槛不同)。
-
-    Returns:
-        DataFrame (symbol + macd/kdj/rsi/ma/boll 中性名) 或 None
-        (未配 token / 熔断 / 失败)。
-    """
-    from kan.infra import circuit_breaker
-
-    token, endpoint = _resolve_config()
-    if not token:
-        return None
-    cb = circuit_breaker.get_breaker()
-    if cb.is_down("tushare_factor"):
-        return None
-    try:
-        data, _err = _post_tushare_api(
-            endpoint=endpoint, token=token, api_name="stk_factor_pro",
-            params={"trade_date": trade_date},
-            fields=_TECHNICAL_FIELDS,
-        )
-        if data is None:
-            cb.record("tushare_factor", ok=False)
-            return None
-        df = _to_technical_df(data)
-        if df is None or df.empty:
-            cb.record("tushare_factor", ok=False)
-            return None
-        cb.record("tushare_factor", ok=True)
-        return df
-    except Exception as e:
-        debug_log(__name__, "fetch tushare technical 失败", e)
-        cb.record("tushare_factor", ok=False)
-        return None
-
-
-# ══════════════════════════════════════════════════════════════════
-# 情绪 (整合-2) · limit_list_d 截面 · 涨跌停/连板 (稀疏事件型)
-# ══════════════════════════════════════════════════════════════════
-
-_SENTIMENT_FIELDS = "ts_code,trade_date,limit_times,open_times,limit,up_stat"
-"""limit_list_d 拉取字段 · 连板天数 + 炸板次数 + 涨跌停类型 + 涨停统计。
-
-稀疏事件型:只返回当日有涨跌停/炸板的票 (不在榜 = 未涨跌停) · 不含 ST ·
-数据从 2020 起。客观市场事实 (compliance §2 安全区 · 裸值可出)。
-"""
-
-
-def _to_sentiment_df(data: dict | None) -> pd.DataFrame | None:
-    """TuShare limit_list_d data 块 → DataFrame · ts_code → symbol (strip 后缀)。
-
-    不在此填 _source / 数值清洗 (编排层 sentiment._normalize_sentiment 接管)。
-    """
-    import pandas as pd
-    if not data:
-        return None
-    fields = data.get("fields") or []
-    items = data.get("items") or []
-    if not items:
-        return None
-    df = pd.DataFrame(items, columns=fields)
-    if "ts_code" not in df.columns:
-        return None
-    df["symbol"] = df["ts_code"].map(_strip_ts_suffix)
-    return df.drop(columns=["ts_code"])
+    """Compatibility shim. Implementation lives in `kan.data.technical`."""
+    from kan.data.technical import _fetch_tushare_technical as _impl
+    return _impl(trade_date)
 
 
 def _fetch_tushare_sentiment(trade_date: str) -> pd.DataFrame | None:
-    """TuShare limit_list_d 单日截面 · 涨跌停/连板情绪 (整合-2)。
-
-    截面语义:按 trade_date 一次拉当日涨跌停榜 (稀疏 · 只有涨跌停票 · 截面廉价)。
-    熔断 key 'tushare_limit' 独立。数据从 2020 起 · 不含 ST (接口本身不统计)。
-
-    Returns:
-        DataFrame (symbol + limit_times / open_times / limit / up_stat) 或 None
-        (未配 token / 熔断 / 失败 / 当日无涨跌停)。
-    """
-    from kan.infra import circuit_breaker
-
-    token, endpoint = _resolve_config()
-    if not token:
-        return None
-    cb = circuit_breaker.get_breaker()
-    if cb.is_down("tushare_limit"):
-        return None
-    try:
-        data, _err = _post_tushare_api(
-            endpoint=endpoint, token=token, api_name="limit_list_d",
-            params={"trade_date": trade_date},
-            fields=_SENTIMENT_FIELDS,
-        )
-        if data is None:
-            cb.record("tushare_limit", ok=False)
-            return None
-        df = _to_sentiment_df(data)
-        if df is None or df.empty:
-            cb.record("tushare_limit", ok=False)
-            return None
-        cb.record("tushare_limit", ok=True)
-        return df
-    except Exception as e:
-        debug_log(__name__, "fetch tushare sentiment 失败", e)
-        cb.record("tushare_limit", ok=False)
-        return None
-
-
-# ══════════════════════════════════════════════════════════════════
-# 筹码 (整合-2) · cyq_perf 截面 · 获利盘/成本分布
-# ══════════════════════════════════════════════════════════════════
-
-_CYQ_FIELDS = "ts_code,trade_date,winner_rate,cost_5pct,cost_50pct,cost_95pct,weight_avg"
-"""cyq_perf 拉取字段 · 获利盘比例 + 成本分位 + 加权平均成本。
-
-截面 (trade_date) 维度 · 数据从 2018 起 · 单次上限 5000 条 (A股 ~5500 · 可能截断
-少数票 → 该票降级 None)。客观计算值 (compliance §2/§7 · 裸值可出)。
-"""
-
-
-def _to_cyq_df(data: dict | None) -> pd.DataFrame | None:
-    """TuShare cyq_perf data 块 → DataFrame · ts_code → symbol (strip 后缀)。
-
-    不在此填 _source / 数值清洗 (编排层 chip._normalize_chip 接管)。
-    """
-    import pandas as pd
-    if not data:
-        return None
-    fields = data.get("fields") or []
-    items = data.get("items") or []
-    if not items:
-        return None
-    df = pd.DataFrame(items, columns=fields)
-    if "ts_code" not in df.columns:
-        return None
-    df["symbol"] = df["ts_code"].map(_strip_ts_suffix)
-    return df.drop(columns=["ts_code"])
+    """Compatibility shim. Implementation lives in `kan.data.sentiment`."""
+    from kan.data.sentiment import _fetch_tushare_sentiment as _impl
+    return _impl(trade_date)
 
 
 def _fetch_tushare_cyq(trade_date: str) -> pd.DataFrame | None:
-    """TuShare cyq_perf 单日截面 · 筹码获利盘/成本分布 (整合-2)。
-
-    截面语义:按 trade_date 一次拉全市场 (官方支持 trade_date 截面 · 单次上限 5000)。
-    熔断 key 'tushare_cyq' 独立。数据从 2018 起。
-
-    若实测 cyq_perf 不支持 trade_date 截面 (需 ts_code) → 改逐股 (params={ts_code})
-    + 编排层 chip.py 仿 fundamentals.py · 见 PRD 整合-2。
-
-    Returns:
-        DataFrame (symbol + winner_rate / cost_5pct / cost_50pct / cost_95pct /
-        weight_avg) 或 None (未配 token / 熔断 / 失败)。
-    """
-    from kan.infra import circuit_breaker
-
-    token, endpoint = _resolve_config()
-    if not token:
-        return None
-    cb = circuit_breaker.get_breaker()
-    if cb.is_down("tushare_cyq"):
-        return None
-    try:
-        data, _err = _post_tushare_api(
-            endpoint=endpoint, token=token, api_name="cyq_perf",
-            params={"trade_date": trade_date},
-            fields=_CYQ_FIELDS,
-        )
-        if data is None:
-            cb.record("tushare_cyq", ok=False)
-            return None
-        df = _to_cyq_df(data)
-        if df is None or df.empty:
-            cb.record("tushare_cyq", ok=False)
-            return None
-        cb.record("tushare_cyq", ok=True)
-        return df
-    except Exception as e:
-        debug_log(__name__, "fetch tushare cyq 失败", e)
-        cb.record("tushare_cyq", ok=False)
-        return None
+    """Compatibility shim. Implementation lives in `kan.data.chip`."""
+    from kan.data.chip import _fetch_tushare_cyq as _impl
+    return _impl(trade_date)

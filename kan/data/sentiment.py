@@ -45,6 +45,7 @@ _TRADE_DATE_PATTERN = re.compile(r"^\d{8}$")
 _SENTIMENT_TTL = 6 * 3600
 """最新交易日截面 mtime TTL (同 moneyflow) · 历史交易日截面固定 · 永鲜。"""
 _SENTIMENT_SOURCE = "tushare_limit"
+_TUSHARE_SENTIMENT_FIELDS = "ts_code,trade_date,limit_times,open_times,limit,up_stat"
 
 
 # ── 归一化 ───────────────────────────────────────────────────────────
@@ -134,6 +135,59 @@ def _filter_symbols(df: pd.DataFrame, symbols: list[str] | None) -> pd.DataFrame
     return df[df["symbol"].isin(wanted)].reset_index(drop=True)
 
 
+def _to_tushare_sentiment_df(data: dict | None) -> pd.DataFrame | None:
+    """TuShare limit_list_d data block -> raw sentiment DataFrame with `symbol`."""
+    import pandas as pd
+
+    from kan.data.tushare import _strip_ts_suffix
+
+    if not data:
+        return None
+    fields = data.get("fields") or []
+    items = data.get("items") or []
+    if not items:
+        return None
+    df = pd.DataFrame(items, columns=fields)
+    if "ts_code" not in df.columns:
+        return None
+    df["symbol"] = df["ts_code"].map(_strip_ts_suffix)
+    return df.drop(columns=["ts_code"])
+
+
+def _fetch_tushare_sentiment(trade_date: str) -> pd.DataFrame | None:
+    """TuShare limit_list_d 单日截面 adapter · 独立熔断 key `tushare_limit`."""
+    from kan.data.tushare import _post_tushare_api, _resolve_config
+    from kan.infra import circuit_breaker
+
+    token, endpoint = _resolve_config()
+    if not token:
+        return None
+    cb = circuit_breaker.get_breaker()
+    if cb.is_down("tushare_limit"):
+        return None
+    try:
+        data, _err = _post_tushare_api(
+            endpoint=endpoint,
+            token=token,
+            api_name="limit_list_d",
+            params={"trade_date": trade_date},
+            fields=_TUSHARE_SENTIMENT_FIELDS,
+        )
+        if data is None:
+            cb.record("tushare_limit", ok=False)
+            return None
+        df = _to_tushare_sentiment_df(data)
+        if df is None or df.empty:
+            cb.record("tushare_limit", ok=False)
+            return None
+        cb.record("tushare_limit", ok=True)
+        return df
+    except Exception as e:
+        debug_log(__name__, "fetch tushare sentiment 失败", e)
+        cb.record("tushare_limit", ok=False)
+        return None
+
+
 # ── 公开 API ─────────────────────────────────────────────────────────
 
 def fetch_sentiment(
@@ -155,8 +209,6 @@ def fetch_sentiment(
         DataFrame · 标准列 SENTIMENT_COLUMNS。无 token / 失败 / 当日无涨跌停 →
         空 DataFrame (列齐 · 0 行 · 不抛 · 调用方按行数判断)。
     """
-    from kan.data.tushare import _fetch_tushare_sentiment
-
     td = _validate_trade_date(trade_date or _latest_trade_date_str())
     ensure_dirs()
     cache = _cache_path(td)

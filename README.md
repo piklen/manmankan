@@ -2,6 +2,7 @@
 
 > A 股自选股 CLI · **不告诉你买什么 · 只帮你找到符合条件的**
 > 多周期位置百分位 · 共振信号 · 用户主导的条件筛选 · 100% 本地。
+> Alpha 活跃发版中 · Parity 7.0.0 授权：个人自用免费，商用 / 对外运营 / 衍生软件受 copyleft 贡献义务约束。
 
 [![License: Parity 7.0.0](https://img.shields.io/badge/License-Parity_7.0.0-orange.svg)](https://paritylicense.com/versions/7.0.0.html)
 [![Python 3.11+](https://img.shields.io/badge/python-3.11+-blue.svg)](https://www.python.org/downloads/)
@@ -10,7 +11,7 @@
 [![Tests](https://github.com/piklen/manmankan/actions/workflows/test.yml/badge.svg)](https://github.com/piklen/manmankan/actions/workflows/test.yml)
 [![Status: Alpha](https://img.shields.io/badge/status-alpha-orange.svg)](https://github.com/piklen/manmankan/releases)
 
-慢慢看是一个**纯命令行**的 A 股自选股位置工具。它把你的自选股在 3 / 5 / 7 / 10 / 15 / 30 / 60 / 90 / 120 / 180 日窗口内的**位置百分位**一屏显示,并标出同时触及多个低点(或高点)的**共振信号**。它只呈现客观的价格位置数据——是否据此操作,由你自己判断。
+慢慢看是一个**纯命令行**的 A 股自选股位置工具。它把你的自选股在 3 / 5 / 7 / 10 / 15 / 30 / 60 / 90 / 120 / 180 日窗口内的**位置百分位**一屏显示,并标出同时触及多个低点(或高点)的**共振信号**。它交付的是经中性化的事实,不是行情解读；是否看懂、如何操作,由你自己判断。
 
 <details>
 <summary><b>🌐 English summary</b></summary>

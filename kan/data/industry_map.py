@@ -33,6 +33,48 @@ def _load_cache(path) -> dict[str, str] | None:
         return None
 
 
+def _fetch_tushare_sw_l1_members():
+    """TuShare index_member_all 申万成分 adapter · 独立熔断 key `tushare_sw`."""
+    import pandas as pd
+
+    from kan.data.tushare import _post_tushare_api, _resolve_config, _strip_ts_suffix
+    from kan.infra import circuit_breaker
+
+    token, endpoint = _resolve_config()
+    if not token:
+        return None
+    cb = circuit_breaker.get_breaker()
+    if cb.is_down("tushare_sw"):
+        return None
+    try:
+        data, _err = _post_tushare_api(
+            endpoint=endpoint,
+            token=token,
+            api_name="index_member_all",
+            params={"is_new": "Y"},
+            fields="l1_name,ts_code",
+        )
+        if data is None:
+            cb.record("tushare_sw", ok=False)
+            return None
+        fields = data.get("fields") or []
+        items = data.get("items") or []
+        if not items:
+            cb.record("tushare_sw", ok=False)
+            return None
+        df = pd.DataFrame(items, columns=fields)
+        if "ts_code" not in df.columns or "l1_name" not in df.columns:
+            cb.record("tushare_sw", ok=False)
+            return None
+        df["symbol"] = df["ts_code"].map(_strip_ts_suffix)
+        cb.record("tushare_sw", ok=True)
+        return df[["symbol", "l1_name"]]
+    except Exception as e:
+        debug_log(__name__, "fetch tushare sw members 失败", e)
+        cb.record("tushare_sw", ok=False)
+        return None
+
+
 def fetch_sw_l1_map(force: bool = False) -> dict[str, str]:
     """全市场 {symbol: 申万一级行业名} · 24h JSON cache · 行业中位反查。
 
@@ -44,8 +86,6 @@ def fetch_sw_l1_map(force: bool = False) -> dict[str, str]:
         cached = _load_cache(cache)
         if cached is not None:
             return cached
-
-    from kan.data.tushare import _fetch_tushare_sw_l1_members
 
     df = _fetch_tushare_sw_l1_members()
     if df is None or df.empty:

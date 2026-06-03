@@ -51,7 +51,8 @@ class StockSet(Protocol):
     - `__len__`: 元素个数 (默认走 len(codes()))
     """
 
-    name: str
+    @property
+    def name(self) -> str: ...
 
     def codes(self) -> list[str]: ...
     def pairs(self) -> list[tuple[str, str]]: ...

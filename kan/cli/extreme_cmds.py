@@ -171,7 +171,7 @@ def _filter_extreme_cmd(
 
     if is_hot:
         console.print(
-            "[dim]  榜 = 东方财富热榜实时名次 · 非慢慢看观点 · 热榜为实时榜单\n  💡 涨停 / 强势股天然在区间高位 · [100%] 是数学结果 不是 「过热信号」[/dim]"
+            "[dim]  榜 = 东方财富热榜实时名次 · 非慢慢看观点 · 热榜为实时榜单\n  💡 涨停 / 大幅上涨个股天然在区间高位 · [100%] 是数学结果 不是 「过热信号」[/dim]"
         )
     if isinstance(board_meta, ThemeMeta):
         from kan.render.theme import render_theme_disclaimer
@@ -214,7 +214,7 @@ def low(
         typer.Option("--group", "-g", help="选自选股分组 (默认 default 组)"),
     ] = None,
 ) -> None:
-    """筛选 N 日低点的自选股(--group 切换分组 · 默认 30/60/120 三段)"""
+    """筛选 N 日低点的自选股 · find --pos 低位快捷入口(默认 30/60/120 三段)."""
     _filter_extreme_cmd(
         periods or _DEFAULT_PERIODS, mode="low", fmt=fmt,
         industry=industry, only_watchlist=only_watchlist, hot=hot, theme=theme,
@@ -253,7 +253,7 @@ def high(
         typer.Option("--group", "-g", help="选自选股分组 (默认 default 组)"),
     ] = None,
 ) -> None:
-    """筛选 N 日高点的自选股(--group 切换分组 · 默认 30/60/120 三段)"""
+    """筛选 N 日高点的自选股 · find --pos 高位快捷入口(默认 30/60/120 三段)."""
     _filter_extreme_cmd(
         periods or _DEFAULT_PERIODS, mode="high", fmt=fmt,
         industry=industry, only_watchlist=only_watchlist, hot=hot, theme=theme,

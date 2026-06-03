@@ -22,7 +22,7 @@ class TestFetchValuationHistory:
 
     def test_no_token_empty_df(self, temp_env, monkeypatch):
         monkeypatch.setattr(
-            "kan.data.tushare._fetch_tushare_metrics_history", lambda s, st: None,
+            "kan.data.metrics._fetch_tushare_metrics_history", lambda s, st: None,
         )
         df = metrics.fetch_valuation_history("600519")
         assert list(df.columns) == metrics._HISTORY_COLUMNS
@@ -37,7 +37,7 @@ class TestFetchValuationHistory:
             "pe_ttm": [20.0, 20.1], "pb": [6.0, 6.1],
         })
         monkeypatch.setattr(
-            "kan.data.tushare._fetch_tushare_metrics_history",
+            "kan.data.metrics._fetch_tushare_metrics_history",
             lambda s, st: raw.copy(),
         )
         df = metrics.fetch_valuation_history("600519")
@@ -53,7 +53,7 @@ class TestFetchValuationHistory:
         def _f(s, st):
             calls["n"] += 1
             return raw.copy()
-        monkeypatch.setattr("kan.data.tushare._fetch_tushare_metrics_history", _f)
+        monkeypatch.setattr("kan.data.metrics._fetch_tushare_metrics_history", _f)
         metrics.fetch_valuation_history("600519")
         metrics.fetch_valuation_history("600519")
         assert calls["n"] == 1  # 第二次走缓存
@@ -61,7 +61,7 @@ class TestFetchValuationHistory:
     def test_bad_numeric_coerced(self, temp_env, monkeypatch):
         raw = pd.DataFrame({"trade_date": ["20260529"], "pe_ttm": ["N/A"], "pb": [6.0]})
         monkeypatch.setattr(
-            "kan.data.tushare._fetch_tushare_metrics_history", lambda s, st: raw.copy(),
+            "kan.data.metrics._fetch_tushare_metrics_history", lambda s, st: raw.copy(),
         )
         df = metrics.fetch_valuation_history("600519")
         assert pd.isna(df.iloc[0]["pe_ttm"])

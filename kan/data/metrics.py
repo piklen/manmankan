@@ -2,10 +2,10 @@
 
 架构分层 (地基-1 起 · 类比 fetcher.py 之于 K 线):
 - `kan.data.protocols.MetricsSource`         · Protocol (截面 adapter 契约)
-- `kan.data.tushare.TushareMetricsSource`    · 内置截面源 (daily_basic)
+- `kan.data.metrics.TushareMetricsSource`    · 内置截面源 (daily_basic)
 - `kan.data.source_chain.MetricsSourceChain` · 责任链 (priority sort + race + 熔断)
 - `kan.data._builtin_sources`                · 内置源工厂 + 用户注册表 (internal)
-- `kan.data.metrics` (本文件)                · cache + chain 编排 + 公开 API (fetch_metrics)
+- `kan.data.metrics` (本文件)                · adapter + cache + chain 编排 + 公开 API
 
 与 K 线 fetcher 的本质区别 (截面 vs 时序 · 代价不对称):
 - K 线: 逐只拉历史 · cache key = symbol · 判鲜 = 最后一行 date ≥ latest_trade_date
@@ -60,6 +60,12 @@ _METRICS_TTL = 6 * 3600
 
 历史交易日截面固定 · 永鲜 · 不受此 TTL 约束 (见 _metrics_cache_fresh)。
 """
+
+_TUSHARE_METRICS_FIELDS = (
+    "ts_code,trade_date,close,turnover_rate,volume_ratio,"
+    "pe_ttm,pb,ps_ttm,dv_ttm,total_mv,circ_mv"
+)
+_TUSHARE_HISTORY_FIELDS = "trade_date,pe_ttm,pb,ps_ttm,dv_ttm"
 
 
 # ── 归一化 ───────────────────────────────────────────────────────────
@@ -165,6 +171,84 @@ def _filter_symbols(df: pd.DataFrame, symbols: list[str] | None) -> pd.DataFrame
     return df[df["symbol"].isin(wanted)].reset_index(drop=True)
 
 
+def _to_tushare_metrics_df(data: dict | None) -> pd.DataFrame | None:
+    """TuShare daily_basic data block -> raw metrics DataFrame with `symbol`."""
+    import pandas as pd
+
+    from kan.data.tushare import _strip_ts_suffix
+
+    if not data:
+        return None
+    fields = data.get("fields") or []
+    items = data.get("items") or []
+    if not items:
+        return None
+    df = pd.DataFrame(items, columns=fields)
+    if "ts_code" not in df.columns:
+        return None
+    df["symbol"] = df["ts_code"].map(_strip_ts_suffix)
+    return df.drop(columns=["ts_code"])
+
+
+def _fetch_tushare_metrics(
+    trade_date: str, symbols: list[str] | None = None,
+) -> pd.DataFrame | None:
+    """TuShare daily_basic 单日截面 adapter · 独立熔断 key `tushare_metrics`."""
+    del symbols  # daily_basic 截面一次拉全市场，过滤交给编排层。
+
+    from kan.data.tushare import _post_tushare_api, _resolve_config
+    from kan.infra import circuit_breaker
+
+    token, endpoint = _resolve_config()
+    if not token:
+        return None
+    cb = circuit_breaker.get_breaker()
+    if cb.is_down("tushare_metrics"):
+        return None
+    try:
+        data, _err = _post_tushare_api(
+            endpoint=endpoint,
+            token=token,
+            api_name="daily_basic",
+            params={"trade_date": trade_date},
+            fields=_TUSHARE_METRICS_FIELDS,
+        )
+        if data is None:
+            cb.record("tushare_metrics", ok=False)
+            return None
+        df = _to_tushare_metrics_df(data)
+        if df is None or df.empty:
+            cb.record("tushare_metrics", ok=False)
+            return None
+        cb.record("tushare_metrics", ok=True)
+        return df
+    except Exception as e:
+        debug_log(__name__, "fetch tushare metrics 失败", e)
+        cb.record("tushare_metrics", ok=False)
+        return None
+
+
+class TushareMetricsSource:
+    """TuShare Pro 截面指标源 · priority=10 · 配 token 时顶档优先 · daily_basic."""
+
+    name = "tushare_metrics"
+    priority = 10
+
+    def is_available(self) -> bool:
+        from kan.data.tushare import _resolve_config
+        from kan.infra import circuit_breaker
+
+        token, _ = _resolve_config()
+        if not token:
+            return False
+        return not circuit_breaker.get_breaker().is_down(self.name)
+
+    def fetch(
+        self, trade_date: str, symbols: list[str] | None = None,
+    ) -> pd.DataFrame | None:
+        return _fetch_tushare_metrics(trade_date, symbols)
+
+
 # ── 公开 API ─────────────────────────────────────────────────────────
 
 def fetch_metrics(
@@ -244,6 +328,50 @@ def _normalize_history(df: pd.DataFrame) -> pd.DataFrame:
     return df.dropna(subset=["trade_date"]).reset_index(drop=True)
 
 
+def _fetch_tushare_metrics_history(
+    symbol: str,
+    start_date: str,
+) -> pd.DataFrame | None:
+    """TuShare daily_basic 单股估值时序 adapter · 复用 `tushare_metrics` 熔断 key."""
+    import pandas as pd
+
+    from kan.data.tushare import _normalize_symbol_to_ts, _post_tushare_api, _resolve_config
+    from kan.infra import circuit_breaker
+
+    token, endpoint = _resolve_config()
+    if not token:
+        return None
+    cb = circuit_breaker.get_breaker()
+    if cb.is_down("tushare_metrics"):
+        return None
+    try:
+        ts_code = _normalize_symbol_to_ts(symbol)
+    except ValueError:
+        return None
+    try:
+        data, _err = _post_tushare_api(
+            endpoint=endpoint,
+            token=token,
+            api_name="daily_basic",
+            params={"ts_code": ts_code, "start_date": start_date},
+            fields=_TUSHARE_HISTORY_FIELDS,
+        )
+        if data is None:
+            cb.record("tushare_metrics", ok=False)
+            return None
+        fields = data.get("fields") or []
+        items = data.get("items") or []
+        if not items:
+            cb.record("tushare_metrics", ok=False)
+            return None
+        cb.record("tushare_metrics", ok=True)
+        return pd.DataFrame(items, columns=fields)
+    except Exception as e:
+        debug_log(__name__, "fetch tushare metrics history 失败", e)
+        cb.record("tushare_metrics", ok=False)
+        return None
+
+
 def fetch_valuation_history(
     symbol: str,
     lookback_days: int = _DEFAULT_LOOKBACK_DAYS,
@@ -262,8 +390,6 @@ def fetch_valuation_history(
     from datetime import timedelta
 
     from kan.core.trading_calendar import latest_trade_date
-    from kan.data.tushare import _fetch_tushare_metrics_history
-
     if not _SYMBOL_PATTERN.match(symbol):
         return _empty_history_df()
     ensure_dirs()

@@ -20,7 +20,7 @@ Future (v0.0.6.5+ candidates):
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Literal
+from typing import ClassVar, Literal, Self
 
 ALLOWED_OPS = ("lt", "lte", "gt", "gte", "eq", "ne")
 ALLOWED_PERIODS = (3, 5, 7, 10, 15, 30, 60, 90, 120, 180)
@@ -29,50 +29,6 @@ RESONANCE_LEVELS = ("low", "high")
 
 class FilterParseError(ValueError):
     """DSL parse error · raised when user input violates grammar."""
-
-
-@dataclass(frozen=True)
-class PosFilter:
-    """位置百分位 filter · 例 PERIOD=180 OP=lt VALUE=5.0 = 180 日位置 < 5%."""
-
-    period: int
-    op: str
-    value: float
-
-    @classmethod
-    def parse(cls, raw: str) -> PosFilter:
-        """Parse 'PERIOD:OP:VAL' string · 例 '180:lt:5'."""
-        parts = raw.split(":")
-        if len(parts) != 3:
-            raise FilterParseError(
-                f"--pos 格式错误 '{raw}' · 需要 PERIOD:OP:VAL 例 180:lt:5"
-            )
-        try:
-            period = int(parts[0])
-        except ValueError as e:
-            raise FilterParseError(
-                f"--pos 周期非整数 '{parts[0]}' · 例: --pos 180:lt:5"
-            ) from e
-        if period not in ALLOWED_PERIODS:
-            raise FilterParseError(
-                f"--pos 周期 {period} 不支持 · 仅 {list(ALLOWED_PERIODS)} · 例: --pos 180:lt:5"
-            )
-        op = parts[1].lower()
-        if op not in ALLOWED_OPS:
-            raise FilterParseError(
-                f"--pos 运算符 '{op}' 不支持 · 仅 {list(ALLOWED_OPS)} · 例: --pos 180:lt:5"
-            )
-        try:
-            value = float(parts[2])
-        except ValueError as e:
-            raise FilterParseError(
-                f"--pos 数值非数字 '{parts[2]}' · 例: --pos 180:lt:5"
-            ) from e
-        if not 0 <= value <= 100:
-            raise FilterParseError(
-                f"--pos 数值 {value} 越界 · 需 [0, 100] · 例: --pos 180:lt:5"
-            )
-        return cls(period=period, op=op, value=value)
 
 
 @dataclass(frozen=True)
@@ -114,8 +70,6 @@ class ResonanceFilter:
         return cls(level=level, op=op, value=value)  # type: ignore[arg-type]
 
 
-# ─── 整合-1 新增 filter (OP:VAL · 裸值/净额阈值 · 复用 apply_op) ───
-
 def _parse_op_val(raw: str, *, flag: str, example: str) -> tuple[str, float]:
     """Parse 'OP:VAL' string (整合-1 · pe/roe/moneyflow 共用)· 例 'lt:20'.
 
@@ -142,207 +96,215 @@ def _parse_op_val(raw: str, *, flag: str, example: str) -> tuple[str, float]:
 
 
 @dataclass(frozen=True)
-class PeFilter:
+class ScalarFilter:
+    """通用 `OP:VAL` 裸值 filter.
+
+    子类只声明 `flag` / `example` / docstring。这样新增同构 filter 时不再复制
+    parse 逻辑，filter 语义仍由 registry + matcher 决定。
+    """
+
+    flag: ClassVar[str]
+    example: ClassVar[str]
+    op: str
+    value: float
+
+    @classmethod
+    def parse(cls, raw: str) -> Self:
+        op, value = _parse_op_val(raw, flag=cls.flag, example=cls.example)
+        return cls(op=op, value=value)
+
+
+@dataclass(frozen=True)
+class PeriodScalarFilter:
+    """通用 `PERIOD:OP:VAL` filter.
+
+    用于位置、涨幅、均线乖离率这类带周期参数的裸值筛选。`value_range`
+    只在确有硬边界的 filter 上启用，例如位置百分位 [0, 100]。
+    """
+
+    flag: ClassVar[str]
+    example: ClassVar[str]
+    allowed_periods: ClassVar[tuple[int, ...]]
+    value_range: ClassVar[tuple[float, float] | None] = None
+    period: int
+    op: str
+    value: float
+
+    @classmethod
+    def parse(cls, raw: str) -> Self:
+        parts = raw.split(":")
+        if len(parts) != 3:
+            raise FilterParseError(
+                f"{cls.flag} 格式错误 '{raw}' · 需要 PERIOD:OP:VAL 例 {cls.example}"
+            )
+        try:
+            period = int(parts[0])
+        except ValueError as e:
+            raise FilterParseError(
+                f"{cls.flag} 周期非整数 '{parts[0]}' · 例: {cls.flag} {cls.example}"
+            ) from e
+        if period not in cls.allowed_periods:
+            raise FilterParseError(
+                f"{cls.flag} 周期 {period} 不支持 · 仅 {list(cls.allowed_periods)} · "
+                f"例: {cls.flag} {cls.example}"
+            )
+        op = parts[1].lower()
+        if op not in ALLOWED_OPS:
+            raise FilterParseError(
+                f"{cls.flag} 运算符 '{op}' 不支持 · 仅 {list(ALLOWED_OPS)} · "
+                f"例: {cls.flag} {cls.example}"
+            )
+        try:
+            value = float(parts[2])
+        except ValueError as e:
+            raise FilterParseError(
+                f"{cls.flag} 数值非数字 '{parts[2]}' · 例: {cls.flag} {cls.example}"
+            ) from e
+        if cls.value_range is not None:
+            low, high = cls.value_range
+            if not low <= value <= high:
+                raise FilterParseError(
+                    f"{cls.flag} 数值 {value} 越界 · 需 [{low:g}, {high:g}] · "
+                    f"例: {cls.flag} {cls.example}"
+                )
+        return cls(period=period, op=op, value=value)
+
+
+class PosFilter(PeriodScalarFilter):
+    """位置百分位 filter · 例 PERIOD=180 OP=lt VALUE=5.0 = 180 日位置 < 5%."""
+
+    flag = "--pos"
+    example = "180:lt:5"
+    allowed_periods = ALLOWED_PERIODS
+    value_range = (0.0, 100.0)
+
+
+class PeFilter(ScalarFilter):
     """市盈率 filter · 例 OP=lt VALUE=20 = PE TTM < 20 (裸值筛 · 整合-1).
 
-    裸 PE 阈值由用户显式指定 · 不做行业分位 (拍板:分位主观性强 · 后续优化)·
-    读 valuation.pe_ttm (None → 不命中)。
+    裸 PE 阈值由用户显式指定 · 不做行业分位。读 valuation.pe_ttm (None → 不命中)。
     """
 
-    op: str
-    value: float
-
-    @classmethod
-    def parse(cls, raw: str) -> PeFilter:
-        op, value = _parse_op_val(raw, flag="--pe", example="lt:20")
-        return cls(op=op, value=value)
+    flag = "--pe"
+    example = "lt:20"
 
 
-@dataclass(frozen=True)
-class RoeFilter:
-    """净资产收益率 filter · 例 OP=gte VALUE=15 = ROE ≥ 15% (裸值筛 · 整合-1).
+class RoeFilter(ScalarFilter):
+    """净资产收益率 filter · 例 OP=gte VALUE=15 = ROE ≥ 15% (裸值筛 · 整合-1)."""
 
-    读 fundamentals.roe (None → 不命中)· ROE 单向正向因子 · 裸值可筛可回显。
-    """
-
-    op: str
-    value: float
-
-    @classmethod
-    def parse(cls, raw: str) -> RoeFilter:
-        op, value = _parse_op_val(raw, flag="--roe", example="gte:15")
-        return cls(op=op, value=value)
+    flag = "--roe"
+    example = "gte:15"
 
 
-@dataclass(frozen=True)
-class MoneyflowFilter:
+class MoneyflowFilter(ScalarFilter):
     """主力净额 filter · 例 OP=gt VALUE=0 = 主力净流入 (整合-1).
 
     读 moneyflow.net_amount (东财口径 · 单位万元 · None → 不命中)· 客观资金事实。
     """
 
-    op: str
-    value: float
-
-    @classmethod
-    def parse(cls, raw: str) -> MoneyflowFilter:
-        op, value = _parse_op_val(raw, flag="--moneyflow", example="gt:0")
-        return cls(op=op, value=value)
+    flag = "--moneyflow"
+    example = "gt:0"
 
 
 # ─── 整合-2 新增 filter (技术/情绪/筹码 · OP:VAL 裸值阈值 · 全截面) ───
 # 合规:全部用户主导阈值 (同 --pe) · 只筛裸值 · 不内置金叉/超买等信号 preset。
 
-@dataclass(frozen=True)
-class RsiFilter:
+class RsiFilter(ScalarFilter):
     """RSI (6 日) filter · 例 OP=lt VALUE=30 = RSI < 30 (裸值筛 · 整合-2).
 
     读 technical.rsi_6 (前复权 · None → 不命中)· 用户主导阈值 · 不输出"超买/超卖"判断。
     """
 
-    op: str
-    value: float
-
-    @classmethod
-    def parse(cls, raw: str) -> RsiFilter:
-        op, value = _parse_op_val(raw, flag="--rsi", example="lt:30")
-        return cls(op=op, value=value)
+    flag = "--rsi"
+    example = "lt:30"
 
 
-@dataclass(frozen=True)
-class MacdDifFilter:
+class MacdDifFilter(ScalarFilter):
     """MACD DIF 快线 filter · 例 OP=gt VALUE=0 = DIF > 0 (裸值筛 · 整合-2).
 
     读 technical.macd_dif (前复权 · None → 不命中)· 不做金叉/死叉 (跨日 + 信号订阅红线)。
     """
 
-    op: str
-    value: float
-
-    @classmethod
-    def parse(cls, raw: str) -> MacdDifFilter:
-        op, value = _parse_op_val(raw, flag="--macd-dif", example="gt:0")
-        return cls(op=op, value=value)
+    flag = "--macd-dif"
+    example = "gt:0"
 
 
-@dataclass(frozen=True)
-class MacdFilter:
+class MacdFilter(ScalarFilter):
     """MACD 柱 filter · 例 OP=gt VALUE=0 = 柱 > 0 (当前 DIF 在 DEA 上方 · 整合-2).
 
     读 technical.macd (= (DIF-DEA)×2 · None → 不命中)· 柱正负 = 当日多空状态 ·
     非"金叉"(金叉是状态切换瞬间 · 需跨日对比 · 截面单日算不出)。
     """
 
-    op: str
-    value: float
-
-    @classmethod
-    def parse(cls, raw: str) -> MacdFilter:
-        op, value = _parse_op_val(raw, flag="--macd", example="gt:0")
-        return cls(op=op, value=value)
+    flag = "--macd"
+    example = "gt:0"
 
 
-@dataclass(frozen=True)
-class KdjJFilter:
+class KdjJFilter(ScalarFilter):
     """KDJ J 值 filter · 例 OP=lt VALUE=20 = J < 20 (裸值筛 · 整合-2).
 
     读 technical.kdj_j (前复权 · None → 不命中)· 用户主导阈值 · 不输出超买超卖判断。
     """
 
-    op: str
-    value: float
-
-    @classmethod
-    def parse(cls, raw: str) -> KdjJFilter:
-        op, value = _parse_op_val(raw, flag="--kdj-j", example="lt:20")
-        return cls(op=op, value=value)
+    flag = "--kdj-j"
+    example = "lt:20"
 
 
-@dataclass(frozen=True)
-class StreakFilter:
+class StreakFilter(ScalarFilter):
     """连板天数 filter · 例 OP=gte VALUE=3 = 连板 ≥ 3 (裸值筛 · 整合-2).
 
     读 sentiment.limit_times (None → 不命中 · 即该股当日未涨跌停)· 客观事实 ·
     不输出"妖股/强势"判断词。
     """
 
-    op: str
-    value: float
-
-    @classmethod
-    def parse(cls, raw: str) -> StreakFilter:
-        op, value = _parse_op_val(raw, flag="--streak", example="gte:3")
-        return cls(op=op, value=value)
+    flag = "--streak"
+    example = "gte:3"
 
 
-@dataclass(frozen=True)
-class WinnerFilter:
+class WinnerFilter(ScalarFilter):
     """获利盘 filter · 例 OP=gte VALUE=50 = 获利盘 ≥ 50% (裸值筛 · 整合-2).
 
     读 chip.winner_rate (% · None → 不命中)· 客观计算值 · 不输出判断词。
     """
 
-    op: str
-    value: float
-
-    @classmethod
-    def parse(cls, raw: str) -> WinnerFilter:
-        op, value = _parse_op_val(raw, flag="--winner", example="gte:50")
-        return cls(op=op, value=value)
+    flag = "--winner"
+    example = "gte:50"
 
 
 # ─── 整合-3 新增 filter (股东·持股结构 · OP:VAL 裸值阈值 · 逐股 · --all 不支持) ───
 # 合规:用户主导阈值 · 只筛已披露客观事实衍生 · 不输出主力建仓/洗盘/控盘等判断词。
 
-@dataclass(frozen=True)
-class HoldersFilter:
+class HoldersFilter(ScalarFilter):
     """股东户数环比 filter · 例 OP=lt VALUE=0 = 户数环比减少 (裸值筛 · 整合-3).
 
     读 shareholder.holder_chg_pct (% · None → 不命中)· 相邻两次披露环比 · 季度级 ·
     负=户数减少 · 客观事实衍生 · 不输出"主力建仓/控盘"判断词。
     """
 
-    op: str
-    value: float
-
-    @classmethod
-    def parse(cls, raw: str) -> HoldersFilter:
-        op, value = _parse_op_val(raw, flag="--holders", example="lt:0")
-        return cls(op=op, value=value)
+    flag = "--holders"
+    example = "lt:0"
 
 
-@dataclass(frozen=True)
-class Top10Filter:
+class Top10Filter(ScalarFilter):
     """前十大流通集中度 filter · 例 OP=gte VALUE=50 = 集中度 ≥ 50% (裸值筛 · 整合-3).
 
     读 shareholder.top10_float_ratio (% · None → 不命中)· 前十大流通股东持股合计占
     流通比 · 季度级 · 客观披露事实 · 不输出"高度控盘"判断词。
     """
 
-    op: str
-    value: float
-
-    @classmethod
-    def parse(cls, raw: str) -> Top10Filter:
-        op, value = _parse_op_val(raw, flag="--top10", example="gte:50")
-        return cls(op=op, value=value)
+    flag = "--top10"
+    example = "gte:50"
 
 
-@dataclass(frozen=True)
-class NorthFilter:
+class NorthFilter(ScalarFilter):
     """北向持股 filter · 例 OP=gte VALUE=3 = 北向 ≥ 3% (裸值筛 · 整合-3).
 
     读 shareholder.north_hold_ratio (% · None → 不命中 / 未进前十)· "香港中央结算"
     季度名义持有人占流通比代理 (hk_hold 日频 2024-08 断供 · 降级)· 客观披露事实。
     """
 
-    op: str
-    value: float
-
-    @classmethod
-    def parse(cls, raw: str) -> NorthFilter:
-        op, value = _parse_op_val(raw, flag="--north", example="gte:3")
-        return cls(op=op, value=value)
+    flag = "--north"
+    example = "gte:3"
 
 
 # ─── 趋势/动量扩展 filter (客观裸值 · 截面 ma_bias/atr_pct 全市场 + K 线衍生 gain/up_days) ───
@@ -352,124 +314,50 @@ ALLOWED_MA = (5, 10, 20, 60)
 """--ma-bias 支持的均线周期 (对应 stk_factor_pro 已拉 ma_5/10/20/60)。"""
 
 
-@dataclass(frozen=True)
-class MaBiasFilter:
+class MaBiasFilter(PeriodScalarFilter):
     """均线乖离率 filter · 例 PERIOD=20 OP=gt VALUE=0 = 收盘距 20 日线 > 0% (站上).
 
     乖离率 = (close − ma_N) / ma_N × 100 · 读 technical.ma_bias(period) (纯算 · 现成均线)·
     PERIOD ∈ {5,10,20,60} · 客观 BIAS · 不判「多头排列/趋势」· 全市场 --all 支持。
     """
 
-    period: int
-    op: str
-    value: float
-
-    @classmethod
-    def parse(cls, raw: str) -> MaBiasFilter:
-        parts = raw.split(":")
-        if len(parts) != 3:
-            raise FilterParseError(
-                f"--ma-bias 格式错误 '{raw}' · 需要 PERIOD:OP:VAL 例 20:gt:0"
-            )
-        try:
-            period = int(parts[0])
-        except ValueError as e:
-            raise FilterParseError(
-                f"--ma-bias 周期非整数 '{parts[0]}' · 例: --ma-bias 20:gt:0"
-            ) from e
-        if period not in ALLOWED_MA:
-            raise FilterParseError(
-                f"--ma-bias 周期 {period} 不支持 · 仅 {list(ALLOWED_MA)} · 例: --ma-bias 20:gt:0"
-            )
-        op = parts[1].lower()
-        if op not in ALLOWED_OPS:
-            raise FilterParseError(
-                f"--ma-bias 运算符 '{op}' 不支持 · 仅 {list(ALLOWED_OPS)} · 例: --ma-bias 20:gt:0"
-            )
-        try:
-            value = float(parts[2])
-        except ValueError as e:
-            raise FilterParseError(
-                f"--ma-bias 数值非数字 '{parts[2]}' · 例: --ma-bias 20:gt:0"
-            ) from e
-        return cls(period=period, op=op, value=value)
+    flag = "--ma-bias"
+    example = "20:gt:0"
+    allowed_periods = ALLOWED_MA
 
 
-@dataclass(frozen=True)
-class GainFilter:
+class GainFilter(PeriodScalarFilter):
     """近 N 日涨幅 filter · 例 PERIOD=30 OP=gt VALUE=20 = 近 30 日涨幅 > 20%.
 
     读 StockScanResult.periods[N].gain_pct (K 线衍生 · 需 K 线池 · --all 不支持)·
     客观涨幅 · 双关动量/涨速 (工具不判机会还是末端)· PERIOD ∈ ALLOWED_PERIODS (注意无 20)。
     """
 
-    period: int
-    op: str
-    value: float
-
-    @classmethod
-    def parse(cls, raw: str) -> GainFilter:
-        parts = raw.split(":")
-        if len(parts) != 3:
-            raise FilterParseError(
-                f"--gain 格式错误 '{raw}' · 需要 PERIOD:OP:VAL 例 30:gt:20"
-            )
-        try:
-            period = int(parts[0])
-        except ValueError as e:
-            raise FilterParseError(
-                f"--gain 周期非整数 '{parts[0]}' · 例: --gain 30:gt:20"
-            ) from e
-        if period not in ALLOWED_PERIODS:
-            raise FilterParseError(
-                f"--gain 周期 {period} 不支持 · 仅 {list(ALLOWED_PERIODS)} · 例: --gain 30:gt:20"
-            )
-        op = parts[1].lower()
-        if op not in ALLOWED_OPS:
-            raise FilterParseError(
-                f"--gain 运算符 '{op}' 不支持 · 仅 {list(ALLOWED_OPS)} · 例: --gain 30:gt:20"
-            )
-        try:
-            value = float(parts[2])
-        except ValueError as e:
-            raise FilterParseError(
-                f"--gain 数值非数字 '{parts[2]}' · 例: --gain 30:gt:20"
-            ) from e
-        return cls(period=period, op=op, value=value)
+    flag = "--gain"
+    example = "30:gt:20"
+    allowed_periods = ALLOWED_PERIODS
 
 
-@dataclass(frozen=True)
-class AtrPctFilter:
+class AtrPctFilter(ScalarFilter):
     """ATR 波动率百分比 filter · 例 OP=lt VALUE=5 = ATR/close < 5% (波动率裸值 · 风险数据).
 
     读 technical.atr_pct() = atr / close × 100 (固定周期 · stk_factor_pro 截面)·
     全市场 --all 支持 · 客观波动率 · 不判「高波动危险/低波动安全」。
     """
 
-    op: str
-    value: float
-
-    @classmethod
-    def parse(cls, raw: str) -> AtrPctFilter:
-        op, value = _parse_op_val(raw, flag="--atr-pct", example="lt:5")
-        return cls(op=op, value=value)
+    flag = "--atr-pct"
+    example = "lt:5"
 
 
-@dataclass(frozen=True)
-class UpDaysFilter:
+class UpDaysFilter(ScalarFilter):
     """连阳天数 filter · 例 OP=gte VALUE=3 = 连续 ≥ 3 根阳线 (涨速/加速裸值).
 
     读 StockScanResult.up_days (candle 口径 close>open · K 线衍生 · --all 走预计算快照)·
     客观连阳计数 · 不判「强势/妖股」· 区别于 --streak (连板天数 · 涨跌停口径)。
     """
 
-    op: str
-    value: float
-
-    @classmethod
-    def parse(cls, raw: str) -> UpDaysFilter:
-        op, value = _parse_op_val(raw, flag="--up-days", example="gte:3")
-        return cls(op=op, value=value)
+    flag = "--up-days"
+    example = "gte:3"
 
 
 @dataclass(frozen=True)
@@ -664,10 +552,12 @@ __all__ = [
     "MoneyflowFilter",
     "NorthFilter",
     "PeFilter",
+    "PeriodScalarFilter",
     "PosFilter",
     "ResonanceFilter",
     "RoeFilter",
     "RsiFilter",
+    "ScalarFilter",
     "StreakFilter",
     "Top10Filter",
     "UpDaysFilter",
