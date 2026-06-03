@@ -1,9 +1,9 @@
-"""kan find · 用户主导的选股 DSL (v0.0.6.4 MVP · 地基-2 加 AI 消费 JSON)
+"""kan find · 用户主导的条件筛选 DSL。
 
 按用户输入条件 · 在自选/行业/题材/热榜池里筛符合的股票。
 "工具仅返回数据 · 不替你判断"
 
-地基-2 (AI 消费入口):
+AI JSON 层 (AI 消费入口):
 - `--format json`:命中股票带全维度 metadata (triggered_filters + context + valuation)
 - `--format md`:markdown 表格
 - 无 filter + `--format json|md`:整池全维度 (= AI 取数环节 · 不带 filter = 数据 provider)
@@ -846,7 +846,7 @@ def find(
         ),
     ] = [],  # noqa: B006 · typer multi-option 需要 list 默认值
 ) -> None:
-    """按你的规则筛股 · 不替你定规则 (v0.0.6.4 MVP · 地基-2 加 JSON)
+    """按你的规则筛股 · 不替你定规则。
 
     示例:
       kan find --pos 180:lt:5                          # 180 日位置 < 5%
@@ -887,7 +887,7 @@ def find(
         --top10 OP:VAL         前十大流通集中度% · 例 gte:50 · 逐股 · --all 不支持
         --north OP:VAL         北向持股% · 例 gte:3 (香港中央结算季度代理) · 逐股 · --all 不支持
 
-    输出 (地基-2):
+    输出 (AI JSON 层):
       --format terminal  默认 · Rich 表格 (需至少一个 filter)
       --format json      AI 友好 · 命中带 metadata · 无 filter = 整池取数
       --compact          json 低字段量输出 · 适合脚本/外部模型首轮筛选
@@ -997,7 +997,7 @@ def find(
         raise typer.Exit(2) from e
 
     # 无 filter:terminal 默认报错引导 (人类 UX 不变 · 测试守护);
-    # json/md 放开 = AI 取数环节 (整池全维度 · PRD §5 "不带 filter = 数据 provider")。
+    # json/md 放开 = AI 取数环节 (整池全维度 · 不带 filter = 数据 provider)。
     if conditions.is_empty() and not is_export and not all_stocks:
         _exit_find_error(
             fmt,
@@ -1046,7 +1046,7 @@ def find(
             exit_code=1,
         )
 
-    # 2.5 全市场截面取数 (--all) · 不走 K 线管线 (截面专用路径 · PRD §3.2) · 早返回不读自选
+    # 2.5 全市场截面取数 (--all) · 不走 K 线管线 · 早返回不读自选
     if all_stocks:
         _run_all_stocks_path(
             source_mode=source_mode,

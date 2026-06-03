@@ -1,8 +1,8 @@
-"""题材扫描渲染层 helper · 三层信息架构(spec §10)。
+"""题材扫描渲染层 helper · 三层信息架构。
 
 层 1:题材指数本身位置(1 行 metadata · 由 cli_scan_cmds 的 board_index_result 复用渲染)
 层 2:成分股 N 行表(共用 scan 现有 render_scan_table)
-层 3:散户警示 4 行强 disclaimer(spec §12.1 LOCKED)
+层 3:散户警示 4 行强 disclaimer
 """
 from __future__ import annotations
 
@@ -18,7 +18,7 @@ THEME_TREND_DISCLAIMER = "连涨 ≠ 还会涨 · 连跌 ≠ 还会跌 · 题材
 
 
 def render_theme_disclaimer() -> None:
-    """4 行强 disclaimer(AGENTS.md §6 · spec §12.1 LOCKED · 不省一行)。
+    """4 行强 disclaimer(AGENTS.md §6 · 不省一行)。
 
     题材线 disclaimer 比 --industry 多一档:加 "题材跟风风险高于行业"。
     """

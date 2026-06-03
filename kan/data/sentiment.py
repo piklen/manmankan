@@ -1,4 +1,4 @@
-"""情绪面 (涨跌停/连板) 截面拉取编排 · cache + 公开 API (整合-2)。
+"""情绪面 (涨跌停/连板) 截面拉取编排 · cache + 公开 API (技术/情绪/筹码维度)。
 
 仿 moneyflow.py 的截面缓存机制 · 单源直调 _fetch_tushare_sentiment (limit_list_d 仅
 tushare 一源)。

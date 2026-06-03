@@ -1,13 +1,13 @@
-"""估值分位 + 行业中位对照 (地基-3 · 输出层合规呈现)。
+"""估值分位 + 行业中位对照 (全市场截面层 · 输出层合规呈现)。
 
 把原始估值比率 (pe_ttm / pb · 数据层 · 易误读裸值) 转成位置型表达:
 - 历史分位:当前 PE/PB 在自身近 N 年序列的百分位 (temporal · 同价格位置%)
 - 行业内分位:当前 PE/PB 在申万一级同行的百分位 (cross-sectional · 50=中位)
 - 行业中位:申万一级同行 PE/PB 中位 (aggregate 参照值)
 
-合规 (compliance · PRD §6 · 维护者反复明示"估值用分位非裸值"):
-- 对外只出分位 + 行业中位对照 · **绝不出个股估值裸值** · 绝不出判断词
-- 估值位置 = 价格位置的同构延伸 (PRD §1.1)
+合规:估值位置上下文用分位和行业参照表达。
+- 对外只出分位 + 行业中位对照 · 不重复承载个股估值裸值 · 不出判断词
+- 估值位置 = 价格位置的同构延伸
 
 纯函数 (compute_*) 与编排 (build_valuation_context) 分离 · 前者离线可测 ·
 后者负责拉 history / 行业映射 / 截面 (无 token → None 优雅降级)。
@@ -128,7 +128,7 @@ def build_valuation_context(symbol: str) -> ValuationContext | None:
     from kan.data.industry_map import fetch_sw_l1_map
     from kan.data.metrics import _DEFAULT_LOOKBACK_DAYS, fetch_metrics, fetch_valuation_history
 
-    cross = fetch_metrics()  # 全市场截面 (地基-2 已缓存 · 复用)
+    cross = fetch_metrics()  # 全市场截面 (AI JSON 层 已缓存 · 复用)
     if cross is None or cross.empty:
         return None  # 无 token / 无截面 → 估值对照不可算
 
@@ -173,7 +173,7 @@ def compute_cross_section_contexts(
     序列一次 (替代逐股重过滤 cross 的 O(N²) · 全市场 ~5500 只必需) · 复用 pct_rank /
     _median 原语 + _MIN_INDUSTRY 守门保证算法与单股版一致。
 
-    历史分位不算 (全市场逐股历史 HTTP 太贵 · PRD §3.2 代价不对称) · *_pct_rank 恒 None。
+    历史分位不算 (全市场逐股历史 HTTP 代价过高) · *_pct_rank 恒 None。
 
     Args:
         cross_section_df: 全市场截面 (fetch_metrics 出口 · 含 symbol / pe_ttm / pb)

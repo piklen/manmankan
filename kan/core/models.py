@@ -65,11 +65,9 @@ class StockScanResult(BaseModel):
 class ValuationMetrics(BaseModel):
     """单只股票截面市场指标 · daily_basic 衍生 · 原始指标值。
 
-    合规 (compliance §6/§7 · 整合-1 拍板更新):字段用原始指标名 · 不含评分 / 评级 /
-    判断词。估值裸值 (pe_ttm / pb / ps_ttm / dv_ttm) 自整合-1 起**可对外输出** ——
-    filter 阈值由用户显式指定 (--pe 是用户主导的数据筛选 · 非工具荐股) · 行业分位
-    主观性强 (回看窗口 / 行业划分皆为选择) · 裸值反而客观。输出过滤见 export
-    (_valuation_public_dict 不再删裸值 · 推翻"估值不给裸值"旧设计 · 见 compliance §7)。
+    合规 (compliance §6/§7):字段用原始指标名 · 不含评分 / 评级 / 判断词。
+    估值裸值 (pe_ttm / pb / ps_ttm / dv_ttm) 可对外输出:filter 阈值由用户显式
+    指定 (--pe 是用户主导的数据筛选 · 非工具荐股)。
     """
 
     trade_date: date
@@ -86,10 +84,10 @@ class ValuationMetrics(BaseModel):
 
 
 class ValuationContext(BaseModel):
-    """估值位置对照 · 输出层合规呈现 (地基-3)。
+    """估值位置对照 · 输出层合规呈现 (全市场截面层)。
 
-    把个股估值比率 (pe_ttm / pb · 易误读裸值) 转成位置型表达 · 对外只出分位 + 行业
-    中位对照 · **绝不含个股估值裸值** (compliance · PRD §6 · 估值位置 = 价格位置同构延伸):
+    把个股估值比率 (pe_ttm / pb) 转成位置型表达 · 只承载分位 + 行业
+    中位对照,不重复承载个股估值裸值:
     - *_pct_rank:     历史分位 (当前值在自身近 N 年序列的百分位 · temporal)
     - *_industry_pct: 行业内分位 (当前值在申万一级同行的百分位 · cross-sectional · 50=中位)
     - *_industry_median: 申万一级同行中位 (aggregate 参照值 · 非个股裸值)
@@ -109,11 +107,11 @@ class ValuationContext(BaseModel):
 
 
 class FundamentalMetrics(BaseModel):
-    """单只股票财务质量·成长指标 · fina_indicator 衍生 · 最新一期报告原始值 (整合-1)。
+    """单只股票财务质量·成长指标 · fina_indicator 衍生 · 最新一期报告原始值 (估值/质量/资金维度)。
 
     合规 (compliance §6/§7):原始指标名 · 不含评分 / 判断词。ROE / 增速是单向正向
     因子 (越高越好 · 无"贵/便宜"双向误导) · 裸值可对外 (用户主导 --roe filter)。
-    逐股 fina_indicator 拉取 (全市场代价高 · 只在小池按需 · PRD §3.2)。
+    逐股 fina_indicator 拉取 (全市场代价高 · 只在小池按需)。
     """
 
     end_date: date | None = None        # 报告期 (季度末日期)
@@ -124,7 +122,7 @@ class FundamentalMetrics(BaseModel):
 
 
 class MoneyflowMetrics(BaseModel):
-    """单只股票主力资金截面指标 · moneyflow_dc 衍生 · 原始净额 (整合-1)。
+    """单只股票主力资金截面指标 · moneyflow_dc 衍生 · 原始净额 (估值/质量/资金维度)。
 
     合规 (compliance §2):主力净额是客观资金事实 (同 OHLCV 安全区) · 裸值可出。
     截面 (trade_date) 维度 · 数据从 20230911 起 (早期 None · 优雅降级)。
@@ -138,14 +136,14 @@ class MoneyflowMetrics(BaseModel):
 
 
 class TechnicalMetrics(BaseModel):
-    """单只股票技术面因子 · stk_factor_pro 衍生 · 前复权 (_qfq) 原始指标值 (整合-2)。
+    """单只股票技术面因子 · stk_factor_pro 衍生 · 前复权 (_qfq) 原始指标值 (技术/情绪/筹码维度)。
 
     合规 (compliance §3/§7):原始指标名 (macd/kdj/rsi/ma/boll) · 不含"超买/超卖/
     金叉/死叉"等信号判断词 · 只出裸值让用户自判。filter 阈值用户显式指定
     (--rsi lt:30 同 --pe 逻辑 · 非工具信号订阅)。截面 (trade_date) 维度。
 
     复权:技术分析标准用前复权 (_qfq) · 对外字段去 _qfq 后缀中性命名。金叉/死叉
-    不做 (需跨日对比 · 截面单日算不出 + 踩信号订阅红线 · 见 PRD 整合-2)。
+    不做 (需跨日对比 · 截面单日算不出 + 踩信号订阅红线 · 见 PRD 技术/情绪/筹码维度)。
     """
 
     trade_date: date | None = None     # 因子交易日
@@ -188,7 +186,7 @@ class TechnicalMetrics(BaseModel):
 
 
 class SentimentMetrics(BaseModel):
-    """单只股票情绪面 · limit_list_d 衍生 · 涨跌停/连板原始事实 (整合-2)。
+    """单只股票情绪面 · limit_list_d 衍生 · 涨跌停/连板原始事实 (技术/情绪/筹码维度)。
 
     合规 (compliance §2/§3):连板天数 / 炸板次数是客观市场事实 · 不输出"妖股/
     强势"判断词 · 只出裸值。filter 用户显式指定 (--streak gte:3 = 连板 ≥ 3)。
@@ -207,7 +205,7 @@ class SentimentMetrics(BaseModel):
 
 
 class ChipMetrics(BaseModel):
-    """单只股票筹码分布 · cyq_perf 衍生 · 获利盘/成本分布原始值 (整合-2)。
+    """单只股票筹码分布 · cyq_perf 衍生 · 获利盘/成本分布原始值 (技术/情绪/筹码维度)。
 
     合规 (compliance §2/§7):获利盘比例 / 成本分位是客观计算值 · 不输出判断词 ·
     只出裸值。filter 用户显式指定 (--winner gte:50 = 获利盘 ≥ 50%)。
@@ -224,9 +222,9 @@ class ChipMetrics(BaseModel):
 
 
 class ShareholderMetrics(BaseModel):
-    """单只股票股东·持股结构 · stk_holdernumber + top10_floatholders 衍生 · 季度披露 (整合-3)。
+    """单只股票股东·持股结构 · stk_holdernumber + top10_floatholders 衍生 · 季度披露 (股东持股维度)。
 
-    合规 (compliance §7 整合-3 守则):户数环比 / 前十大流通集中度 / 北向名义持有人占比
+    合规 (compliance §7 股东持股维度 守则):户数环比 / 前十大流通集中度 / 北向名义持有人占比
     均为已披露客观事实的算术衍生 · 裸值可出 · 不输出"主力建仓 / 洗盘 / 控盘 / 高度控盘"
     等判断词 (§3 信号化黑名单延伸)。filter 用户显式指定 (--holders / --top10 / --north)。
 
@@ -249,19 +247,20 @@ class EnrichedResult(StockScanResult):
 
     继承 StockScanResult:保留位置 / 共振 / ST / 涨跌停字段 · 访问扁平
     (r.symbol / r.valuation.pe_ttm) · JSON 序列化时 scan 字段与子对象平铺 ·
-    供 AI 消费友好 (地基-2 kan find --format json)。
+    供 AI 消费友好 (AI JSON 层 kan find --format json)。
 
-    整合-1 挂 valuation / fundamentals / moneyflow · sentiment 后续阶段补 ·
-    字段膨胀风险靠"按需挂载 (None 默认) + 输出层只序列化已 enrich 维度"控制。
+    挂载 valuation / fundamentals / moneyflow / technical / sentiment / chip /
+    shareholder。字段膨胀风险靠"按需挂载 (None 默认) + 输出层只序列化已 enrich
+    维度"控制。
     """
 
     valuation: ValuationMetrics | None = None
-    fundamentals: FundamentalMetrics | None = None  # fina_indicator (ROE / 增速 · 整合-1)
-    moneyflow: MoneyflowMetrics | None = None        # moneyflow_dc (主力资金 · 整合-1)
-    technical: TechnicalMetrics | None = None        # stk_factor_pro (MACD/KDJ/RSI · 整合-2)
-    sentiment: SentimentMetrics | None = None        # limit_list_d (连板 / 炸板 · 整合-2)
-    chip: ChipMetrics | None = None                  # cyq_perf (获利盘 · 整合-2)
-    shareholder: ShareholderMetrics | None = None    # 股东户数/十大流通/北向 (逐股 · 整合-3)
+    fundamentals: FundamentalMetrics | None = None  # fina_indicator (ROE / 增速 · 估值/质量/资金维度)
+    moneyflow: MoneyflowMetrics | None = None        # moneyflow_dc (主力资金 · 估值/质量/资金维度)
+    technical: TechnicalMetrics | None = None        # stk_factor_pro (MACD/KDJ/RSI · 技术/情绪/筹码维度)
+    sentiment: SentimentMetrics | None = None        # limit_list_d (连板 / 炸板 · 技术/情绪/筹码维度)
+    chip: ChipMetrics | None = None                  # cyq_perf (获利盘 · 技术/情绪/筹码维度)
+    shareholder: ShareholderMetrics | None = None    # 股东户数/十大流通/北向 (逐股 · 股东持股维度)
 
     @classmethod
     def from_scan(

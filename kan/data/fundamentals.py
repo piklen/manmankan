@@ -1,8 +1,8 @@
-"""逐股财务指标 (ROE / 增速) 拉取编排 · 逐股缓存 + 公开 API (整合-1)。
+"""逐股财务指标 (ROE / 增速) 拉取编排 · 逐股缓存 + 公开 API (估值/质量/资金维度)。
 
 仿 metrics.fetch_valuation_history 的逐股缓存 (每股一 parquet · 存全报告期) +
-industry_map 单源降级。fina_indicator 按 ts_code 逐股 (全市场逐股代价高 ·
-PRD §3.2) · 只在 K 线池 / 小池按需拉 (find --roe · 全市场 --all 不支持)。
+industry_map 单源降级。fina_indicator 按 ts_code 逐股 (全市场逐股代价高) ·
+只在 K 线池 / 小池按需拉 (find --roe · 全市场 --all 不支持)。
 
 每股缓存全历史报告期 · 读时取最新一期 (max end_date)。TTL 90d (季报季度更新)。
 原始指标值 (compliance §6/§7 · 命名中性)。
@@ -141,7 +141,7 @@ def _latest_row(df: pd.DataFrame) -> pd.Series | None:
 def fetch_fundamentals(
     symbols: list[str], force: bool = False,
 ) -> dict[str, pd.Series]:
-    """逐股拉财务指标 · 返回 {symbol: 最新一期 Series} (整合-1 · ROE/增速)。
+    """逐股拉财务指标 · 返回 {symbol: 最新一期 Series} (估值/质量/资金维度 · ROE/增速)。
 
     逐股 HTTP (全市场代价高 · 只在小池 / K 线池按需调) · 每股 90d parquet 缓存。
     无 token / 失败 → 该股不入 dict (caller .get(symbol) → None · 优雅降级)。

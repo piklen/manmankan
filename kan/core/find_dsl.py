@@ -1,8 +1,8 @@
-"""DSL parser for `kan find` · v0.0.6.4 MVP
+"""DSL parser for `kan find`.
 
 按用户输入条件 · 解析成结构化 Filter 对象。
 
-支持 filter (MVP v0.0.6.4):
+支持 filter:
 - --pos PERIOD:OP:VAL    位置百分位 (例 180:lt:5 = 180 日位置 < 5%)
 - --resonance LEVEL:OP:VAL  共振信号 (例 low:gte:3 = 低点共振 ≥ 3 周期)
 - --exclude-st           排 ST/*ST
@@ -71,7 +71,7 @@ class ResonanceFilter:
 
 
 def _parse_op_val(raw: str, *, flag: str, example: str) -> tuple[str, float]:
-    """Parse 'OP:VAL' string (整合-1 · pe/roe/moneyflow 共用)· 例 'lt:20'.
+    """Parse 'OP:VAL' string (估值/质量/资金维度 · pe/roe/moneyflow 共用)· 例 'lt:20'.
 
     不卡数值范围 (PE 可负 / ROE 可负 / 资金净额量级跨度大 · 硬卡范围误伤合理输入)·
     仅校验 op 合法 + 数值有限 (排 NaN / inf)。
@@ -180,7 +180,7 @@ class PosFilter(PeriodScalarFilter):
 
 
 class PeFilter(ScalarFilter):
-    """市盈率 filter · 例 OP=lt VALUE=20 = PE TTM < 20 (裸值筛 · 整合-1).
+    """市盈率 filter · 例 OP=lt VALUE=20 = PE TTM < 20 (裸值筛 · 估值/质量/资金维度).
 
     裸 PE 阈值由用户显式指定 · 不做行业分位。读 valuation.pe_ttm (None → 不命中)。
     """
@@ -190,14 +190,14 @@ class PeFilter(ScalarFilter):
 
 
 class RoeFilter(ScalarFilter):
-    """净资产收益率 filter · 例 OP=gte VALUE=15 = ROE ≥ 15% (裸值筛 · 整合-1)."""
+    """净资产收益率 filter · 例 OP=gte VALUE=15 = ROE ≥ 15% (裸值筛 · 估值/质量/资金维度)."""
 
     flag = "--roe"
     example = "gte:15"
 
 
 class MoneyflowFilter(ScalarFilter):
-    """主力净额 filter · 例 OP=gt VALUE=0 = 主力净流入 (整合-1).
+    """主力净额 filter · 例 OP=gt VALUE=0 = 主力净流入 (估值/质量/资金维度).
 
     读 moneyflow.net_amount (东财口径 · 单位万元 · None → 不命中)· 客观资金事实。
     """
@@ -206,11 +206,11 @@ class MoneyflowFilter(ScalarFilter):
     example = "gt:0"
 
 
-# ─── 整合-2 新增 filter (技术/情绪/筹码 · OP:VAL 裸值阈值 · 全截面) ───
+# ─── 技术/情绪/筹码维度 新增 filter (技术/情绪/筹码 · OP:VAL 裸值阈值 · 全截面) ───
 # 合规:全部用户主导阈值 (同 --pe) · 只筛裸值 · 不内置金叉/超买等信号 preset。
 
 class RsiFilter(ScalarFilter):
-    """RSI (6 日) filter · 例 OP=lt VALUE=30 = RSI < 30 (裸值筛 · 整合-2).
+    """RSI (6 日) filter · 例 OP=lt VALUE=30 = RSI < 30 (裸值筛 · 技术/情绪/筹码维度).
 
     读 technical.rsi_6 (前复权 · None → 不命中)· 用户主导阈值 · 不输出"超买/超卖"判断。
     """
@@ -220,7 +220,7 @@ class RsiFilter(ScalarFilter):
 
 
 class MacdDifFilter(ScalarFilter):
-    """MACD DIF 快线 filter · 例 OP=gt VALUE=0 = DIF > 0 (裸值筛 · 整合-2).
+    """MACD DIF 快线 filter · 例 OP=gt VALUE=0 = DIF > 0 (裸值筛 · 技术/情绪/筹码维度).
 
     读 technical.macd_dif (前复权 · None → 不命中)· 不做金叉/死叉 (跨日 + 信号订阅红线)。
     """
@@ -230,7 +230,7 @@ class MacdDifFilter(ScalarFilter):
 
 
 class MacdFilter(ScalarFilter):
-    """MACD 柱 filter · 例 OP=gt VALUE=0 = 柱 > 0 (当前 DIF 在 DEA 上方 · 整合-2).
+    """MACD 柱 filter · 例 OP=gt VALUE=0 = 柱 > 0 (当前 DIF 在 DEA 上方 · 技术/情绪/筹码维度).
 
     读 technical.macd (= (DIF-DEA)×2 · None → 不命中)· 柱正负 = 当日多空状态 ·
     非"金叉"(金叉是状态切换瞬间 · 需跨日对比 · 截面单日算不出)。
@@ -241,7 +241,7 @@ class MacdFilter(ScalarFilter):
 
 
 class KdjJFilter(ScalarFilter):
-    """KDJ J 值 filter · 例 OP=lt VALUE=20 = J < 20 (裸值筛 · 整合-2).
+    """KDJ J 值 filter · 例 OP=lt VALUE=20 = J < 20 (裸值筛 · 技术/情绪/筹码维度).
 
     读 technical.kdj_j (前复权 · None → 不命中)· 用户主导阈值 · 不输出超买超卖判断。
     """
@@ -251,7 +251,7 @@ class KdjJFilter(ScalarFilter):
 
 
 class StreakFilter(ScalarFilter):
-    """连板天数 filter · 例 OP=gte VALUE=3 = 连板 ≥ 3 (裸值筛 · 整合-2).
+    """连板天数 filter · 例 OP=gte VALUE=3 = 连板 ≥ 3 (裸值筛 · 技术/情绪/筹码维度).
 
     读 sentiment.limit_times (None → 不命中 · 即该股当日未涨跌停)· 客观事实 ·
     不输出"妖股/强势"判断词。
@@ -262,7 +262,7 @@ class StreakFilter(ScalarFilter):
 
 
 class WinnerFilter(ScalarFilter):
-    """获利盘 filter · 例 OP=gte VALUE=50 = 获利盘 ≥ 50% (裸值筛 · 整合-2).
+    """获利盘 filter · 例 OP=gte VALUE=50 = 获利盘 ≥ 50% (裸值筛 · 技术/情绪/筹码维度).
 
     读 chip.winner_rate (% · None → 不命中)· 客观计算值 · 不输出判断词。
     """
@@ -271,11 +271,11 @@ class WinnerFilter(ScalarFilter):
     example = "gte:50"
 
 
-# ─── 整合-3 新增 filter (股东·持股结构 · OP:VAL 裸值阈值 · 逐股 · --all 不支持) ───
+# ─── 股东持股维度 新增 filter (股东·持股结构 · OP:VAL 裸值阈值 · 逐股 · --all 不支持) ───
 # 合规:用户主导阈值 · 只筛已披露客观事实衍生 · 不输出主力建仓/洗盘/控盘等判断词。
 
 class HoldersFilter(ScalarFilter):
-    """股东户数环比 filter · 例 OP=lt VALUE=0 = 户数环比减少 (裸值筛 · 整合-3).
+    """股东户数环比 filter · 例 OP=lt VALUE=0 = 户数环比减少 (裸值筛 · 股东持股维度).
 
     读 shareholder.holder_chg_pct (% · None → 不命中)· 相邻两次披露环比 · 季度级 ·
     负=户数减少 · 客观事实衍生 · 不输出"主力建仓/控盘"判断词。
@@ -286,7 +286,7 @@ class HoldersFilter(ScalarFilter):
 
 
 class Top10Filter(ScalarFilter):
-    """前十大流通集中度 filter · 例 OP=gte VALUE=50 = 集中度 ≥ 50% (裸值筛 · 整合-3).
+    """前十大流通集中度 filter · 例 OP=gte VALUE=50 = 集中度 ≥ 50% (裸值筛 · 股东持股维度).
 
     读 shareholder.top10_float_ratio (% · None → 不命中)· 前十大流通股东持股合计占
     流通比 · 季度级 · 客观披露事实 · 不输出"高度控盘"判断词。
@@ -297,7 +297,7 @@ class Top10Filter(ScalarFilter):
 
 
 class NorthFilter(ScalarFilter):
-    """北向持股 filter · 例 OP=gte VALUE=3 = 北向 ≥ 3% (裸值筛 · 整合-3).
+    """北向持股 filter · 例 OP=gte VALUE=3 = 北向 ≥ 3% (裸值筛 · 股东持股维度).
 
     读 shareholder.north_hold_ratio (% · None → 不命中 / 未进前十)· "香港中央结算"
     季度名义持有人占流通比代理 (hk_hold 日频 2024-08 断供 · 降级)· 客观披露事实。
@@ -365,11 +365,11 @@ class ConditionSet:
     """DSL 解析后的完整 filter 集合 · 多 filter 间 AND 语义.
 
     K 线类 (位置/共振):pos_filters / resonance_filters · 走 scan 衍生字段。
-    截面类 (估值/资金 · 整合-1):pe_filters / moneyflow_filters · 走 enrich 子对象。
-    财务类 (整合-1):roe_filters · 走 fundamentals (逐股 · 全市场 --all 不支持)。
-    技术/情绪/筹码类 (整合-2 · 全截面):rsi/macd_dif/macd/kdj_j/streak/winner ·
+    截面类 (估值/资金 · 估值/质量/资金维度):pe_filters / moneyflow_filters · 走 enrich 子对象。
+    财务类 (估值/质量/资金维度):roe_filters · 走 fundamentals (逐股 · 全市场 --all 不支持)。
+    技术/情绪/筹码类 (技术/情绪/筹码维度 · 全截面):rsi/macd_dif/macd/kdj_j/streak/winner ·
       走 enrich 子对象 (technical/sentiment/chip) · K 线池 + --all 两路都支持。
-    股东类 (整合-3):holders/top10/north · 走 shareholder (逐股 · --all 不支持 · 同 roe)。
+    股东类 (股东持股维度):holders/top10/north · 走 shareholder (逐股 · --all 不支持 · 同 roe)。
     exclude_st:quiet filter (不记 triggered · 直接 drop)。
     """
 
@@ -502,11 +502,11 @@ class ConditionSet:
         )
 
     def needs_sentiment(self) -> bool:
-        """是否需挂 sentiment (--streak · 截面稀疏 · 整合-2)。"""
+        """是否需挂 sentiment (--streak · 截面稀疏 · 技术/情绪/筹码维度)。"""
         return bool(self.streak_filters)
 
     def needs_chip(self) -> bool:
-        """是否需挂 chip (--winner · 截面 · 整合-2)。"""
+        """是否需挂 chip (--winner · 截面 · 技术/情绪/筹码维度)。"""
         return bool(self.winner_filters)
 
     def needs_shareholder(self) -> bool:

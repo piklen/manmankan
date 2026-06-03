@@ -1,8 +1,8 @@
-"""全市场股票列表 (地基-3 · AllStocksSet 截面池原料)。
+"""全市场股票列表 (全市场截面层 · AllStocksSet 截面池原料)。
 
 tushare stock_basic 一次拉全市场上市股 → [(symbol, name)] · 24h JSON cache。
 保留主板 / 创业板 / 科创板 / 含 ST · **排北交所** · 含 ST 是有意:排不排交给
-用户 `--exclude-st` 决定 (PRD §9)。
+用户 `--exclude-st` 决定。
 
 排北交所用 `market == "北交所"` 过滤 (不用代码段正则):北交所现主力 920xxx 段 ·
 tushare 旧式 83/43/87/82 代码推断会漏 (代码段会变 · market 字段稳)。

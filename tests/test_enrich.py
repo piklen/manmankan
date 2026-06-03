@@ -159,6 +159,22 @@ class TestEnrichFundamentalsMoneyflow:
         assert out[0].moneyflow.net_amount == 5000.0
         assert out[0].moneyflow.source == "tushare_moneyflow"
 
+    def test_need_technical_preserves_atr_for_atr_pct(self, monkeypatch):
+        monkeypatch.setattr("kan.data.metrics.fetch_metrics", lambda **_kw: self._VAL_DF)
+        tech_df = pd.DataFrame([{
+            "symbol": "600519",
+            "trade_date": datetime.date(2026, 5, 29),
+            "close": 100.0,
+            "atr": 3.0,
+            "_source": "tushare_factor",
+        }])
+        monkeypatch.setattr("kan.data.technical.fetch_technical", lambda **k: tech_df)
+
+        out = enrich.enrich_results([_scan()], trade_date="20260529", need_technical=True)
+
+        assert out[0].technical.atr == 3.0
+        assert out[0].technical.atr_pct() == 3.0
+
 
 class TestEnrichScanRows:
     def test_attaches_pe_moneyflow_5d_and_corporate_action(self, monkeypatch):

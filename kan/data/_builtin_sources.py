@@ -74,7 +74,7 @@ def clear_user_kline_sources() -> None:
 
 
 # ══════════════════════════════════════════════════════════════════
-# 截面指标领域注册表 (地基-1) · 同形 K 线三件套 · default_metrics_chain 取此列表
+# 截面指标领域注册表 (截面指标层) · 同形 K 线三件套 · default_metrics_chain 取此列表
 # ══════════════════════════════════════════════════════════════════
 
 _user_metrics_sources: list[MetricsSource] = []
@@ -84,7 +84,7 @@ _user_metrics_sources: list[MetricsSource] = []
 def builtin_metrics_sources() -> list[MetricsSource]:
     """内置截面指标源 + 用户注册源 · 给 default_metrics_chain 构造用。
 
-    地基-1 只含 TushareMetricsSource (daily_basic · priority 10) ·
+    截面指标层 只含 TushareMetricsSource (daily_basic · priority 10) ·
     PublicMetricsSource 降级源 (akshare / 东财公开接口) 留后续阶段。
     """
     from kan.data.metrics import TushareMetricsSource
@@ -103,7 +103,7 @@ def register_metrics_source(source: MetricsSource) -> None:
                 建议 priority ∈ [50, 89] 避开内置 (10-49) / 兜底 (90-99)。
                 name 建议加 prefix (例 user_wind_metrics) 避免与内置撞名 (熔断器 key 共享)。
 
-    internal: 地基-1 暂不 export 到 kan.api (AI 入口契约 = 地基-2) · 测试 / 内部用。
+    internal: 截面指标层 暂不 export 到 kan.api (AI 入口契约 = AI JSON 层) · 测试 / 内部用。
     """
     from kan.data.source_chain import reset_default_metrics_chain
 

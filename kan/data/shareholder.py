@@ -1,18 +1,18 @@
-"""股东·持股结构 (户数环比 / 十大流通集中度 / 北向中央结算代理) 逐股拉取编排 (整合-3)。
+"""股东·持股结构 (户数环比 / 十大流通集中度 / 北向中央结算代理) 逐股拉取编排 (股东持股维度)。
 
 仿 fundamentals.py 的逐股缓存 (每股一 parquet · 存衍生单行 · TTL 90d) · 单源直调两个
-tushare adapter (stk_holdernumber + top10_floatholders) 合成衍生指标 · 与整合-2 的截面
+tushare adapter (stk_holdernumber + top10_floatholders) 合成衍生指标 · 与技术/情绪/筹码维度 的截面
 缓存 (chip/technical 按 trade_date 一次拉全市场) 本质不同。
 
 逐股 (ts_code) 维度:stk_holdernumber 不定期季度披露 · top10_floatholders 必须 ts_code
-(无截面全市场拉法 · 同 fundamentals · 全市场 --all 不支持 · PRD §3.2)。三维均季度级 ·
+(无截面全市场拉法 · 同 fundamentals · 全市场 --all 不支持)。三维均季度级 ·
 None = 该期无披露 / 未进前十 (非故障 · 仿 sentiment None 语义)。
 
 北向:hk_hold 日频明细 2024-08 断供 (tushare 实测核实) → 用 top10_floatholders 里"香港
 中央结算有限公司"季度名义持有人占流通比作代理 (复用 top10 一次拉取 · 零额外数据源) ·
 未进前十大流通 → north_hold_ratio None。
 
-衍生计算 (compliance §7 整合-3 守则):户数环比 / 前十大集中度 / 北向占比均为已披露客观
+衍生计算 (compliance §7 股东持股维度 守则):户数环比 / 前十大集中度 / 北向占比均为已披露客观
 事实的算术衍生 · 裸值可出 · 不输出"主力建仓 / 洗盘 / 控盘 / 高度控盘"等判断词。
 """
 from __future__ import annotations
@@ -296,7 +296,7 @@ def _fetch_one(symbol: str, force: bool = False) -> pd.Series | None:
 def fetch_shareholder(
     symbols: list[str], force: bool = False,
 ) -> dict[str, pd.Series]:
-    """逐股拉股东·持股结构 · 返回 {symbol: 衍生单行 Series} (整合-3)。
+    """逐股拉股东·持股结构 · 返回 {symbol: 衍生单行 Series} (股东持股维度)。
 
     逐股 HTTP (全市场代价高 · 只在小池 / K 线池按需调 · find --holders/--top10/--north ·
     全市场 --all 不支持) · 每股 90d parquet 缓存。无 token / 失败 / 无披露 → 该股不入

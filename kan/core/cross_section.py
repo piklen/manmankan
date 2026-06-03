@@ -1,10 +1,10 @@
-"""全市场截面取数编排 (地基-3 · kan find --all 截面专用路径)。
+"""全市场截面取数编排 (全市场截面层 · kan find --all 截面专用路径)。
 
 与 K 线管线 (pipeline.run_data_pipeline + scan_batch) 正交:K 线管线逐股
 auto-fetch 历史 K 线 (全市场 ~5500 只 = 灾难) · 本模块主路径走截面 (按 trade_date
 一次拉全市场 daily_basic) · 只算"市场客观事实 + 行业内分位 + 行业中位"。
 需要位置/共振/涨幅/连阳时,通过 `need_kline=True` 额外挂载每日批量 K 线快照,
-仍避免逐股拉 K。历史估值分位暂不做 (逐股 HTTP 太贵 · PRD §3.2 截面 vs K 线代价不对称)。
+仍避免逐股拉 K。历史估值分位暂不做 (逐股 HTTP 代价过高)。
 
 数据流 (全部复用现成):
   stock_set.pairs()                    → [(code, name)] 骨架 (name 来源)
@@ -13,7 +13,7 @@ auto-fetch 历史 K 线 (全市场 ~5500 只 = 灾难) · 本模块主路径走�
   valuation_context.compute_cross_section_contexts() → 批量行业内分位 + 中位 (O(N))
   enrich._row_to_valuation()           → 单行截面 → ValuationMetrics (NaN→None 一处逻辑)
 
-合规 (compliance §6/§7 · PRD §6):本层 valuation 仍承载原始指标 (同 enrich) ·
+合规 (compliance §6/§7):本层 valuation 仍承载原始指标 (同 enrich) ·
 估值裸值是否对外由输出层 (export._valuation_public_dict) 决定 · 数据层不过滤。
 """
 from __future__ import annotations
@@ -43,7 +43,7 @@ if TYPE_CHECKING:
 class CrossSectionRow:
     """单只股票的截面取数结果 · code/name + 客观事实 valuation + 估值对照 context。
 
-    整合-1 加 moneyflow (主力资金截面)· 整合-2 加 technical/sentiment/chip (技术/情绪/
+    估值/质量/资金维度 加 moneyflow (主力资金截面)· 技术/情绪/筹码维度 加 technical/sentiment/chip (技术/情绪/
     筹码截面 · 支持 --all --rsi/--macd-dif/--macd/--kdj-j/--streak/--winner filter)。
     """
 
@@ -51,10 +51,10 @@ class CrossSectionRow:
     name: str
     valuation: ValuationMetrics | None
     valuation_context: ValuationContext | None
-    moneyflow: MoneyflowMetrics | None = None    # 整合-1 · 主力资金截面 (None=无数据/早期)
-    technical: TechnicalMetrics | None = None    # 整合-2 · 技术面截面 (None=无数据)
-    sentiment: SentimentMetrics | None = None    # 整合-2 · 情绪截面 (None=当日未涨跌停)
-    chip: ChipMetrics | None = None              # 整合-2 · 筹码截面 (None=无数据)
+    moneyflow: MoneyflowMetrics | None = None    # 估值/质量/资金维度 · 主力资金截面 (None=无数据/早期)
+    technical: TechnicalMetrics | None = None    # 技术/情绪/筹码维度 · 技术面截面 (None=无数据)
+    sentiment: SentimentMetrics | None = None    # 技术/情绪/筹码维度 · 情绪截面 (None=当日未涨跌停)
+    chip: ChipMetrics | None = None              # 技术/情绪/筹码维度 · 筹码截面 (None=无数据)
     scan: StockScanResult | None = None          # --all K 线裸值快照 (pos/gain/up_days)
 
 

@@ -193,7 +193,7 @@ class ThemeSet:
 
         themed = boards.search_theme(self.theme)
         constituents = boards.get_theme_constituents(themed)
-        # K 线失败降级为空 df · 不影响成分股扫描 (spec §11)
+        # K 线失败降级为空 df · 不影响成分股扫描
         try:
             index_kline = boards.fetch_theme_kline(themed)
         except ThemeDataUnavailableError as e:
@@ -293,7 +293,7 @@ class AllStocksSet:
     """A 股全市场集合 · tushare stock_basic 全部上市股 (排北交所 · 含 ST)。
 
     kan find --all 的截面池 · 走截面专用路径 (core.cross_section.run_cross_section) ·
-    不走 K 线管线 (全市场逐股 auto-fetch K 线 = 灾难 · PRD §3.2)。lazy:.pairs() 才
+    不走 K 线管线 (全市场逐股 auto-fetch K 线代价过高)。lazy:.pairs() 才
     拉 universe。meta() → None (同 WatchlistSet · highlight/index_kline 对全市场无意义)。
     """
 

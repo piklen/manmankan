@@ -227,7 +227,7 @@ def reset_default_chain() -> None:
 
 
 # ══════════════════════════════════════════════════════════════════
-# 截面指标领域 MetricsSourceChain (地基-1) · 同形 KlineSourceChain · 复用 _run_chain
+# 截面指标领域 MetricsSourceChain (截面指标层) · 同形 KlineSourceChain · 复用 _run_chain
 # ══════════════════════════════════════════════════════════════════
 
 
@@ -279,7 +279,7 @@ _default_metrics_chain: MetricsSourceChain | None = None
 def default_metrics_chain() -> MetricsSourceChain:
     """内置截面指标源链 · TushareMetricsSource (priority 10) + 用户注册源。
 
-    地基-1 只有 tushare 一个源 (PublicMetricsSource 降级源留 §5 后续) ·
+    截面指标层 只有 tushare 一个源 (PublicMetricsSource 降级源留 §5 后续) ·
     lazy singleton · register_metrics_source 后 reset 失效重建。
     """
     global _default_metrics_chain

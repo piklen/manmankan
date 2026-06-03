@@ -1,6 +1,6 @@
 """截面市场指标拉取编排 · cache + chain (责任链) + 公开 API。
 
-架构分层 (地基-1 起 · 类比 fetcher.py 之于 K 线):
+架构分层 (类比 fetcher.py 之于 K 线):
 - `kan.data.protocols.MetricsSource`         · Protocol (截面 adapter 契约)
 - `kan.data.metrics.TushareMetricsSource`    · 内置截面源 (daily_basic)
 - `kan.data.source_chain.MetricsSourceChain` · 责任链 (priority sort + race + 熔断)
@@ -11,8 +11,8 @@
 - K 线: 逐只拉历史 · cache key = symbol · 判鲜 = 最后一行 date ≥ latest_trade_date
 - 截面: 按 trade_date 一次拉全市场 · cache key = trade_date · 判鲜 = 历史日永鲜 / 最新日 TTL
 
-合规 (compliance §6/§7 · PRD §6):本层只承载原始指标值 (pe_ttm / pb / dv_ttm ...) ·
-分位 / 行业中位对照在输出层 (地基-2/3 有全市场池后) 呈现 · 数据层不算不输出。
+合规 (compliance §6/§7):本层只承载原始指标值 (pe_ttm / pb / dv_ttm ...) ·
+分位 / 行业中位对照在输出层呈现 · 数据层不算不输出。
 """
 from __future__ import annotations
 
@@ -273,7 +273,7 @@ def fetch_metrics(
 
     内置 priority (chain 内自动排序 · 见 protocols.py priority 约定):
     - 10  TushareMetricsSource · 配 token 时顶档 · daily_basic
-    (地基-1 仅此一源 · PublicMetricsSource 降级源留后续阶段)
+    (截面指标层 仅此一源 · PublicMetricsSource 降级源留后续阶段)
     """
     td = _validate_trade_date(trade_date or _latest_trade_date_str())
     ensure_dirs()
@@ -295,7 +295,7 @@ def fetch_metrics(
     return _filter_symbols(df, symbols)
 
 
-# ── 估值历史时序 (地基-3) · 历史分位原料 (单股多日 · 与截面正交) ──────────
+# ── 估值历史时序 (全市场截面层) · 历史分位原料 (单股多日 · 与截面正交) ──────────
 
 _HISTORY_COLUMNS = ["trade_date", "pe_ttm", "pb", "ps_ttm", "dv_ttm"]
 _HISTORY_TTL = 20 * 3600
@@ -377,7 +377,7 @@ def fetch_valuation_history(
     lookback_days: int = _DEFAULT_LOOKBACK_DAYS,
     force: bool = False,
 ) -> pd.DataFrame:
-    """单股估值时序 (pe_ttm/pb/ps_ttm/dv_ttm) · 估值历史分位原料 (地基-3)。
+    """单股估值时序 (pe_ttm/pb/ps_ttm/dv_ttm) · 估值历史分位原料 (全市场截面层)。
 
     走 tushare daily_basic (ts_code + start_date · 单股多日) · 单股 parquet 缓存。
     无 token / 失败 / 非法 symbol → 空 DataFrame (不抛 · 分位维度缺失即降级)。
