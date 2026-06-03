@@ -10,7 +10,32 @@ from __future__ import annotations
 from datetime import date, datetime
 from unittest.mock import patch
 
-from kan.cli.helpers import format_date_compact, format_fetched_at_compact
+from kan.cli.helpers import (
+    _load_names_with_optional_spinner,
+    format_date_compact,
+    format_fetched_at_compact,
+)
+
+
+class _DummyStatus:
+    def __enter__(self):
+        return self
+
+    def __exit__(self, exc_type, exc, tb) -> bool:
+        return False
+
+
+class _DummyConsole:
+    def __init__(self) -> None:
+        self.status_messages: list[str] = []
+        self.printed: list[str] = []
+
+    def status(self, message: str, *, spinner: str):
+        self.status_messages.append(message)
+        return _DummyStatus()
+
+    def print(self, message: str) -> None:
+        self.printed.append(message)
 
 
 class TestFormatDateCompact:
@@ -111,6 +136,17 @@ class TestFormatFetchedAtCompact:
         with patch("kan.cli.helpers._today", return_value=date(2026, 5, 14)):
             result = format_fetched_at_compact("2026-05-13 21:59")
         assert result == "05-13 21:59"
+
+
+def test_stock_names_first_run_progress_message(monkeypatch) -> None:
+    monkeypatch.setattr("kan.storage.paths.is_stock_names_cache_fresh", lambda: False)
+    monkeypatch.setattr("kan.storage.watchlist.preload_stock_names", lambda: {"600519": "贵州茅台"})
+
+    console = _DummyConsole()
+    names = _load_names_with_optional_spinner(console)
+
+    assert names == {"600519": "贵州茅台"}
+    assert any("首次运行 · 下载 A 股代码表 · 仅此一次" in m for m in console.status_messages)
 
 
 # TestNoLegacyTextInWarnings 已删除 (v0.0.4.8 改造)

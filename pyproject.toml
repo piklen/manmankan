@@ -16,7 +16,6 @@ classifiers = [
     "Development Status :: 3 - Alpha",
     "Environment :: Console",
     "Intended Audience :: End Users/Desktop",
-    "License :: Other/Proprietary License",
     "Operating System :: OS Independent",
     "Programming Language :: Python :: 3",
     "Programming Language :: Python :: 3.11",
@@ -27,14 +26,14 @@ classifiers = [
 ]
 
 dependencies = [
-    "akshare>=1.14,<2",
-    "pandas>=2.0,<4",  # 允许 pandas 3.x/4.x 前夜版本面 · CI 覆盖读写 parquet 主路径
+    "akshare==1.18.60",  # 数据源 SDK 精确 pin · 降低上游投毒 / API 漂移面
+    "pandas>=2.0,<3",  # 避免提前吃 pandas 3.x 行为变更
     "pydantic>=2.0,<3",
     "rich>=13.0,<16",
     "typer>=0.12,<0.26",
     "pyarrow>=15.0,<25",  # pandas 读写 parquet 的运行时依赖
-    "baostock>=0.9.1,<1",
-    "numpy>=1.26,<3",  # 间接 → 直接依赖 · 控制版本面 · 防 macOS Gatekeeper .so 签名问题
+    "baostock==0.9.1",  # 数据源 SDK 精确 pin · 与 adata 同级别收敛
+    "numpy>=1.26,<2.5",  # 间接 → 直接依赖 · 控制版本面 · 防 macOS Gatekeeper .so 签名问题
     "adata==2.9.5",  # v0.0.5.0 题材位置扫描 · 同花顺 catalog/成分股 + 东财 K 线/反查 · pin 防上游投毒
 ]
 
@@ -49,6 +48,7 @@ kan = "kan.cli:cli_main"
 
 [dependency-groups]
 dev = [
+    "mypy>=1.10,<2",
     "pytest>=8.0",
     "pytest-cov>=5.0",
     "ruff>=0.4",
@@ -71,6 +71,15 @@ ignore = [
 # test 函数名含 env var 名 (e.g., _KAN_COMPLETE / _TYPER_COMPLETE_ARGS) 是有意大写
 # 保留 env var 字面量在函数名里 · 比改成 lowercase 更可读
 "tests/test_atexit_completion_isolation.py" = ["N802"]
+
+[tool.mypy]
+python_version = "3.11"
+files = ["kan/core"]
+ignore_missing_imports = true
+check_untyped_defs = true
+warn_unused_ignores = true
+warn_redundant_casts = true
+show_error_codes = true
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

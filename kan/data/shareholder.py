@@ -51,6 +51,8 @@ _NORTH_NOMINEE = "香港中央结算"
 _SH_TTL = 90 * 24 * 3600
 """季度披露 · 90d 长缓存 (逐股 HTTP 贵 · 同 fundamentals · 季报季度更新)。"""
 _SH_SOURCE = "tushare_shareholder"
+_HOLDERNUM_FIELDS = "ann_date,end_date,holder_num"
+_TOP10FLOAT_FIELDS = "end_date,holder_name,hold_ratio"
 
 
 def _cache_path(symbol: str) -> Path:
@@ -86,6 +88,86 @@ def _load_cache(path: Path) -> pd.DataFrame | None:
         return pd.read_parquet(path)
     except Exception as e:
         debug_log(__name__, f"_load_cache({path.name})", e)
+        return None
+
+
+def _fetch_tushare_holdernumber(symbol: str) -> pd.DataFrame | None:
+    """TuShare stk_holdernumber 单股股东户数 adapter · 独立熔断 key `tushare_holdernum`."""
+    from kan.data.tushare import _normalize_symbol_to_ts, _post_tushare_api, _resolve_config
+    from kan.infra import circuit_breaker
+
+    token, endpoint = _resolve_config()
+    if not token:
+        return None
+    cb = circuit_breaker.get_breaker()
+    if cb.is_down("tushare_holdernum"):
+        return None
+    try:
+        ts_code = _normalize_symbol_to_ts(symbol)
+    except ValueError:
+        return None
+    try:
+        data, _err = _post_tushare_api(
+            endpoint=endpoint,
+            token=token,
+            api_name="stk_holdernumber",
+            params={"ts_code": ts_code},
+            fields=_HOLDERNUM_FIELDS,
+        )
+        if data is None:
+            cb.record("tushare_holdernum", ok=False)
+            return None
+        fields = data.get("fields") or []
+        items = data.get("items") or []
+        if not items:
+            cb.record("tushare_holdernum", ok=False)
+            return None
+        cb.record("tushare_holdernum", ok=True)
+        import pandas as pd
+        return pd.DataFrame(items, columns=fields)
+    except Exception as e:
+        debug_log(__name__, "fetch tushare holdernumber 失败", e)
+        cb.record("tushare_holdernum", ok=False)
+        return None
+
+
+def _fetch_tushare_top10float(symbol: str) -> pd.DataFrame | None:
+    """TuShare top10_floatholders 单股十大流通股东 adapter · 独立熔断 key."""
+    from kan.data.tushare import _normalize_symbol_to_ts, _post_tushare_api, _resolve_config
+    from kan.infra import circuit_breaker
+
+    token, endpoint = _resolve_config()
+    if not token:
+        return None
+    cb = circuit_breaker.get_breaker()
+    if cb.is_down("tushare_top10float"):
+        return None
+    try:
+        ts_code = _normalize_symbol_to_ts(symbol)
+    except ValueError:
+        return None
+    try:
+        data, _err = _post_tushare_api(
+            endpoint=endpoint,
+            token=token,
+            api_name="top10_floatholders",
+            params={"ts_code": ts_code},
+            fields=_TOP10FLOAT_FIELDS,
+        )
+        if data is None:
+            cb.record("tushare_top10float", ok=False)
+            return None
+        fields = data.get("fields") or []
+        items = data.get("items") or []
+        if not items:
+            cb.record("tushare_top10float", ok=False)
+            return None
+        cb.record("tushare_top10float", ok=True)
+        import pandas as pd
+        return pd.DataFrame(items, columns=fields)
+    except Exception as e:
+        debug_log(__name__, "fetch tushare top10float 失败", e)
+        cb.record("tushare_top10float", ok=False)
         return None
 
 
@@ -172,11 +254,6 @@ def _fetch_one(symbol: str, force: bool = False) -> pd.Series | None:
     同 fundamentals 失败不落盘 · caller .get(symbol) → None)。
     """
     import pandas as pd
-
-    from kan.data.tushare import (
-        _fetch_tushare_holdernumber,
-        _fetch_tushare_top10float,
-    )
 
     if not _SYMBOL_PATTERN.match(symbol):
         return None

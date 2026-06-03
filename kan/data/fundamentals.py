@@ -27,6 +27,9 @@ _SYMBOL_PATTERN = re.compile(r"^\d{6}$")
 _FUNDAMENTALS_TTL = 90 * 24 * 3600
 """季报季度更新 · 90d 长缓存 (逐股 HTTP 贵 · 长缓存复用)。"""
 
+_TUSHARE_FUNDAMENTALS_FIELDS = "end_date,roe,netprofit_yoy,or_yoy"
+"""fina_indicator 拉取字段 · 净资产收益率 ROE + 净利同比 + 营收同比增速 (%)."""
+
 
 def _cache_path(symbol: str) -> Path:
     if not _SYMBOL_PATTERN.match(symbol):
@@ -62,10 +65,48 @@ def _load_cache(path: Path) -> pd.DataFrame | None:
         return None
 
 
+def _fetch_tushare_fundamentals(symbol: str) -> pd.DataFrame | None:
+    """TuShare fina_indicator 单股财务指标 adapter · 独立熔断 key `tushare_fina`."""
+    from kan.data.tushare import _normalize_symbol_to_ts, _post_tushare_api, _resolve_config
+    from kan.infra import circuit_breaker
+
+    token, endpoint = _resolve_config()
+    if not token:
+        return None
+    cb = circuit_breaker.get_breaker()
+    if cb.is_down("tushare_fina"):
+        return None
+    try:
+        ts_code = _normalize_symbol_to_ts(symbol)
+    except ValueError:
+        return None
+    try:
+        data, _err = _post_tushare_api(
+            endpoint=endpoint,
+            token=token,
+            api_name="fina_indicator",
+            params={"ts_code": ts_code},
+            fields=_TUSHARE_FUNDAMENTALS_FIELDS,
+        )
+        if data is None:
+            cb.record("tushare_fina", ok=False)
+            return None
+        fields = data.get("fields") or []
+        items = data.get("items") or []
+        if not items:
+            cb.record("tushare_fina", ok=False)
+            return None
+        cb.record("tushare_fina", ok=True)
+        import pandas as pd
+        return pd.DataFrame(items, columns=fields)
+    except Exception as e:
+        debug_log(__name__, "fetch tushare fundamentals 失败", e)
+        cb.record("tushare_fina", ok=False)
+        return None
+
+
 def _fetch_one(symbol: str, force: bool = False) -> pd.DataFrame:
     """单股财务时序 (全报告期) · 逐股 parquet 缓存 · 无 token/失败 → 空 df。"""
-    from kan.data.tushare import _fetch_tushare_fundamentals
-
     if not _SYMBOL_PATTERN.match(symbol):
         return _empty_df()
     ensure_dirs()

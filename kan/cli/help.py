@@ -14,9 +14,9 @@ def help_cmd() -> None:
     from rich.console import Console
 
     from kan import __version__
-    from kan.core.find_registry import format_find_field_presets, format_find_filter_flags
+    from kan.core.find_registry import format_find_field_presets, format_find_filter_groups
 
-    find_filter_flags = format_find_filter_flags()
+    find_filter_groups = format_find_filter_groups()
     find_field_presets = format_find_field_presets()
 
     # 速记表顶部加版本号 · issue 复现成本下降
@@ -37,15 +37,16 @@ def help_cmd() -> None:
   kan clear                   清空自选列表
 
 [bold cyan]位置扫描[/bold cyan]
+  新手从 kan scan 和 kan find 开始
   kan scan                  全景扫描 10 周期（低点模式）
   kan scan --high           全景扫描 10 周期（高点模式）
   kan scan -S               仅显示有共振信号的股票（--signal）
   kan scan --diff           显示与上次扫描的变化
 
 [bold cyan]低点/高点筛选[/bold cyan]
-  kan low 60                谁在 60 日低点？
+  kan low 60                谁在 60 日低点？（find --pos 快捷入口）
   kan low 30 60 120         多周期一次看
-  kan high 30               谁在 30 日高点？
+  kan high 30               谁在 30 日高点？（find --pos 快捷入口）
 
 [bold cyan]单只详情 / 多股对比 / 历史回溯[/bold cyan]
   kan info 600519                    单只股票全周期位置 + 涨跌 + 共振
@@ -83,7 +84,9 @@ def help_cmd() -> None:
   kan find --industry 半导体 --format json --fields @core,@valuation
 
   [dim]PERIOD: 3/5/7/10/15/30/60/90/120/180 · OP: lt/lte/gt/gte/eq/ne · LEVEL: low/high[/dim]
-  [dim]可用 filter: {find_filter_flags}[/dim]
+  [dim]单维度 filter 只反映该维度 · 命中不等于整体位置低/高 · 多维度请叠加 filter 或用 kan info 看全周期[/dim]
+  [dim]可用 filter 分组:
+  {find_filter_groups}[/dim]
   [dim]可用 fields preset: {find_field_presets}[/dim]
   [dim]不告诉你买什么 · 帮你找到符合条件的(候选 ≠ 买入信号)[/dim]
 

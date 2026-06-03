@@ -42,11 +42,15 @@ jobs:
       - name: Lockfile is current
         run: uv lock --check
       - name: Install dependencies
-        run: uv sync --locked --all-groups --all-extras
+        run: uv sync --frozen --all-groups --all-extras
+      - name: Dependency upper-bound review
+        run: uv run python scripts/check-dependency-bounds.py
       - name: Privacy / public archive scan
         run: bash scripts/check-privacy-leaks.sh
       - name: Lint source and tests
         run: uv run ruff check kan/ tests/
+      - name: Type check core
+        run: uv run mypy
       - name: Tracked package sanity
         run: |
           python - <<'PY'
@@ -109,7 +113,7 @@ jobs:
           python-version: ${{ matrix.python-version }}
           enable-cache: true
       - name: Install dependencies
-        run: uv sync --locked --all-groups --all-extras
+        run: uv sync --frozen --all-groups --all-extras
       - name: Run tests
         run: uv run pytest -q -m "not tty and not network"
 
@@ -178,7 +182,7 @@ jobs:
           enable-cache: true
       - name: Install dependencies + manmankan as tool
         run: |
-          uv sync --locked --all-groups --all-extras
+          uv sync --frozen --all-groups --all-extras
           uv tool install --reinstall .
       # v0.0.4.x catch-up fix: BSD script (macOS) vs util-linux script (Linux) 参数语法不兼容
       # Linux util-linux: script -q -c "<cmd>" <file>

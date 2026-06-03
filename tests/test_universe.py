@@ -26,7 +26,7 @@ class TestFetchAllStocks:
 
     def test_no_token_empty(self, temp_env, monkeypatch):
         monkeypatch.setattr(
-            "kan.data.tushare._fetch_tushare_stock_basic_all", lambda: None,
+            "kan.data.universe._fetch_tushare_stock_basic_all", lambda: None,
         )
         assert universe.fetch_all_stocks() == []
 
@@ -40,7 +40,7 @@ class TestFetchAllStocks:
             {"symbol": "830799", "name": "旧北交所", "market": "北交所"},
         ])
         monkeypatch.setattr(
-            "kan.data.tushare._fetch_tushare_stock_basic_all", lambda: df.copy(),
+            "kan.data.universe._fetch_tushare_stock_basic_all", lambda: df.copy(),
         )
         codes = [c for c, _ in universe.fetch_all_stocks()]
         assert "600519" in codes
@@ -56,7 +56,7 @@ class TestFetchAllStocks:
             {"symbol": "000111", "name": "*ST 测试", "market": "主板"},
         ])
         monkeypatch.setattr(
-            "kan.data.tushare._fetch_tushare_stock_basic_all", lambda: df.copy(),
+            "kan.data.universe._fetch_tushare_stock_basic_all", lambda: df.copy(),
         )
         codes = [c for c, _ in universe.fetch_all_stocks()]
         assert "000111" in codes, "ST 应保留 (用户自己 --exclude-st 决定)"
@@ -64,7 +64,7 @@ class TestFetchAllStocks:
     def test_builds_and_caches(self, temp_env, monkeypatch):
         df = self._df([{"symbol": "600519", "name": "贵州茅台", "market": "主板"}])
         monkeypatch.setattr(
-            "kan.data.tushare._fetch_tushare_stock_basic_all", lambda: df.copy(),
+            "kan.data.universe._fetch_tushare_stock_basic_all", lambda: df.copy(),
         )
         pairs = universe.fetch_all_stocks()
         assert pairs == [("600519", "贵州茅台")]
@@ -77,7 +77,7 @@ class TestFetchAllStocks:
         def _f():
             calls["n"] += 1
             return df.copy()
-        monkeypatch.setattr("kan.data.tushare._fetch_tushare_stock_basic_all", _f)
+        monkeypatch.setattr("kan.data.universe._fetch_tushare_stock_basic_all", _f)
         universe.fetch_all_stocks()
         universe.fetch_all_stocks()
         assert calls["n"] == 1, "cache 命中不应重复 fetch"
@@ -87,7 +87,7 @@ class TestFetchAllStocks:
         cache.write_text("{ not valid json", encoding="utf-8")
         df = self._df([{"symbol": "600519", "name": "贵州茅台", "market": "主板"}])
         monkeypatch.setattr(
-            "kan.data.tushare._fetch_tushare_stock_basic_all", lambda: df.copy(),
+            "kan.data.universe._fetch_tushare_stock_basic_all", lambda: df.copy(),
         )
         assert universe.fetch_all_stocks() == [("600519", "贵州茅台")]
 
@@ -97,7 +97,7 @@ class TestFetchAllStocks:
         old = time.time() - 100000  # 过期 (> TTL)
         os.utime(cache, (old, old))
         monkeypatch.setattr(
-            "kan.data.tushare._fetch_tushare_stock_basic_all", lambda: None,
+            "kan.data.universe._fetch_tushare_stock_basic_all", lambda: None,
         )
         # 拉取失败 → 退化陈旧 cache (而非空)
         assert universe.fetch_all_stocks() == [("600519", "贵州茅台")]

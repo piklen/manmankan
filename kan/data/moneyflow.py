@@ -41,6 +41,7 @@ _TRADE_DATE_PATTERN = re.compile(r"^\d{8}$")
 _MONEYFLOW_TTL = 6 * 3600
 """最新交易日截面 mtime TTL (同 metrics) · 历史交易日截面固定 · 永鲜。"""
 _MONEYFLOW_SOURCE = "tushare_moneyflow"
+_TUSHARE_MONEYFLOW_FIELDS = "ts_code,trade_date,net_amount,buy_elg_amount,buy_lg_amount"
 
 
 # ── 归一化 ───────────────────────────────────────────────────────────
@@ -124,6 +125,59 @@ def _filter_symbols(df: pd.DataFrame, symbols: list[str] | None) -> pd.DataFrame
     return df[df["symbol"].isin(wanted)].reset_index(drop=True)
 
 
+def _to_tushare_moneyflow_df(data: dict | None) -> pd.DataFrame | None:
+    """TuShare moneyflow_dc data block -> raw DataFrame with `symbol`."""
+    import pandas as pd
+
+    from kan.data.tushare import _strip_ts_suffix
+
+    if not data:
+        return None
+    fields = data.get("fields") or []
+    items = data.get("items") or []
+    if not items:
+        return None
+    df = pd.DataFrame(items, columns=fields)
+    if "ts_code" not in df.columns:
+        return None
+    df["symbol"] = df["ts_code"].map(_strip_ts_suffix)
+    return df.drop(columns=["ts_code"])
+
+
+def _fetch_tushare_moneyflow(trade_date: str) -> pd.DataFrame | None:
+    """TuShare moneyflow_dc 单日截面 adapter · 独立熔断 key `tushare_moneyflow`."""
+    from kan.data.tushare import _post_tushare_api, _resolve_config
+    from kan.infra import circuit_breaker
+
+    token, endpoint = _resolve_config()
+    if not token:
+        return None
+    cb = circuit_breaker.get_breaker()
+    if cb.is_down("tushare_moneyflow"):
+        return None
+    try:
+        data, _err = _post_tushare_api(
+            endpoint=endpoint,
+            token=token,
+            api_name="moneyflow_dc",
+            params={"trade_date": trade_date},
+            fields=_TUSHARE_MONEYFLOW_FIELDS,
+        )
+        if data is None:
+            cb.record("tushare_moneyflow", ok=False)
+            return None
+        df = _to_tushare_moneyflow_df(data)
+        if df is None or df.empty:
+            cb.record("tushare_moneyflow", ok=False)
+            return None
+        cb.record("tushare_moneyflow", ok=True)
+        return df
+    except Exception as e:
+        debug_log(__name__, "fetch tushare moneyflow 失败", e)
+        cb.record("tushare_moneyflow", ok=False)
+        return None
+
+
 # ── 公开 API ─────────────────────────────────────────────────────────
 
 def fetch_moneyflow(
@@ -145,8 +199,6 @@ def fetch_moneyflow(
         DataFrame · 标准列 MONEYFLOW_COLUMNS。无 token / 失败 / 早期无数据
         (< 20230911) → 空 DataFrame (列齐 · 0 行 · 不抛 · 调用方按行数判断)。
     """
-    from kan.data.tushare import _fetch_tushare_moneyflow
-
     td = _validate_trade_date(trade_date or _latest_trade_date_str())
     ensure_dirs()
     cache = _cache_path(td)

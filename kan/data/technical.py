@@ -56,6 +56,34 @@ _TRADE_DATE_PATTERN = re.compile(r"^\d{8}$")
 _TECHNICAL_TTL = 6 * 3600
 """最新交易日截面 mtime TTL (同 moneyflow) · 历史交易日截面固定 · 永鲜。"""
 _TECHNICAL_SOURCE = "tushare_factor"
+_TUSHARE_TECHNICAL_FIELDS = (
+    "ts_code,trade_date,close_qfq,atr_qfq,"
+    "macd_dif_qfq,macd_dea_qfq,macd_qfq,"
+    "kdj_k_qfq,kdj_d_qfq,kdj_qfq,"
+    "rsi_qfq_6,rsi_qfq_12,rsi_qfq_24,"
+    "ma_qfq_5,ma_qfq_10,ma_qfq_20,ma_qfq_60,"
+    "boll_upper_qfq,boll_mid_qfq,boll_lower_qfq"
+)
+_TUSHARE_TECHNICAL_RENAME = {
+    "close_qfq": "close",
+    "atr_qfq": "atr",
+    "macd_dif_qfq": "macd_dif",
+    "macd_dea_qfq": "macd_dea",
+    "macd_qfq": "macd",
+    "kdj_k_qfq": "kdj_k",
+    "kdj_d_qfq": "kdj_d",
+    "kdj_qfq": "kdj_j",
+    "rsi_qfq_6": "rsi_6",
+    "rsi_qfq_12": "rsi_12",
+    "rsi_qfq_24": "rsi_24",
+    "ma_qfq_5": "ma_5",
+    "ma_qfq_10": "ma_10",
+    "ma_qfq_20": "ma_20",
+    "ma_qfq_60": "ma_60",
+    "boll_upper_qfq": "boll_upper",
+    "boll_mid_qfq": "boll_mid",
+    "boll_lower_qfq": "boll_lower",
+}
 
 
 # ── 归一化 ───────────────────────────────────────────────────────────
@@ -139,6 +167,60 @@ def _filter_symbols(df: pd.DataFrame, symbols: list[str] | None) -> pd.DataFrame
     return df[df["symbol"].isin(wanted)].reset_index(drop=True)
 
 
+def _to_tushare_technical_df(data: dict | None) -> pd.DataFrame | None:
+    """TuShare stk_factor_pro data block -> raw technical DataFrame with `symbol`."""
+    import pandas as pd
+
+    from kan.data.tushare import _strip_ts_suffix
+
+    if not data:
+        return None
+    fields = data.get("fields") or []
+    items = data.get("items") or []
+    if not items:
+        return None
+    df = pd.DataFrame(items, columns=fields)
+    if "ts_code" not in df.columns:
+        return None
+    df["symbol"] = df["ts_code"].map(_strip_ts_suffix)
+    df = df.drop(columns=["ts_code"])
+    return df.rename(columns=_TUSHARE_TECHNICAL_RENAME)
+
+
+def _fetch_tushare_technical(trade_date: str) -> pd.DataFrame | None:
+    """TuShare stk_factor_pro 单日截面 adapter · 独立熔断 key `tushare_factor`."""
+    from kan.data.tushare import _post_tushare_api, _resolve_config
+    from kan.infra import circuit_breaker
+
+    token, endpoint = _resolve_config()
+    if not token:
+        return None
+    cb = circuit_breaker.get_breaker()
+    if cb.is_down("tushare_factor"):
+        return None
+    try:
+        data, _err = _post_tushare_api(
+            endpoint=endpoint,
+            token=token,
+            api_name="stk_factor_pro",
+            params={"trade_date": trade_date},
+            fields=_TUSHARE_TECHNICAL_FIELDS,
+        )
+        if data is None:
+            cb.record("tushare_factor", ok=False)
+            return None
+        df = _to_tushare_technical_df(data)
+        if df is None or df.empty:
+            cb.record("tushare_factor", ok=False)
+            return None
+        cb.record("tushare_factor", ok=True)
+        return df
+    except Exception as e:
+        debug_log(__name__, "fetch tushare technical 失败", e)
+        cb.record("tushare_factor", ok=False)
+        return None
+
+
 # ── 公开 API ─────────────────────────────────────────────────────────
 
 def fetch_technical(
@@ -160,8 +242,6 @@ def fetch_technical(
         DataFrame · 标准列 TECHNICAL_COLUMNS。无 token / 失败 → 空 DataFrame
         (列齐 · 0 行 · 不抛 · 调用方按行数判断)。
     """
-    from kan.data.tushare import _fetch_tushare_technical
-
     td = _validate_trade_date(trade_date or _latest_trade_date_str())
     ensure_dirs()
     cache = _cache_path(td)

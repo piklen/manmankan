@@ -51,6 +51,14 @@ class FindFilterSpec:
     missing_semantics: str
 
 
+@dataclass(frozen=True)
+class FindFilterHelpGroup:
+    key: str
+    title: str
+    filters: tuple[str, ...]
+    note: str = ""
+
+
 FILTER_SPECS = {
     "pos": FindFilterSpec(
         "pos", "--pos", None, True,
@@ -154,6 +162,40 @@ FILTER_DIMENSIONS_BY_FLAG = {
     spec.flag: spec.dimension for spec in FILTER_SPECS.values() if spec.dimension is not None
 }
 
+FIND_FILTER_HELP_GROUPS = (
+    FindFilterHelpGroup(
+        "core",
+        "核心层 · 位置 / 共振 / ST",
+        ("pos", "resonance", "exclude_st"),
+        "新手先从 `--pos` / `--resonance` 开始；低点/高点快捷入口可用 `kan low` / `kan high`。",
+    ),
+    FindFilterHelpGroup(
+        "valuation_quality_money",
+        "估值 / 质量 / 资金",
+        ("pe", "roe", "moneyflow"),
+        "`--roe` 为逐股报告期数据，`--all` 不支持。",
+    ),
+    FindFilterHelpGroup(
+        "technical_momentum",
+        "技术 / 趋势动量",
+        ("rsi", "macd_dif", "macd", "kdj_j", "ma_bias", "gain", "atr_pct", "up_days"),
+        "进阶 · 需理解指标口径；这里输出裸值事实，不做超买/趋势判断。",
+    ),
+    FindFilterHelpGroup(
+        "sentiment_chip_shareholder",
+        "情绪 / 筹码 / 股东",
+        ("streak", "winner", "holders", "top10", "north"),
+        "进阶 · 股东类为季度披露代理，`--all` 不支持；需理解缺数据与未披露语义。",
+    ),
+)
+
+
+def condition_attr_for_filter(filter_type: str) -> str:
+    """Return `ConditionSet` attribute for a registered filter type."""
+    if filter_type == "exclude_st":
+        return "exclude_st"
+    return f"{filter_type}_filters"
+
 
 @dataclass(frozen=True)
 class FindFilterDocsRow:
@@ -221,6 +263,17 @@ _MISSING_SEMANTICS_LABELS = {
 def format_find_filter_flags() -> str:
     """Return registry filter flags for short help text."""
     return " / ".join(spec.flag for spec in FILTER_SPECS.values())
+
+
+def format_find_filter_groups() -> str:
+    """Return grouped registry filters for root help short text."""
+    lines: list[str] = []
+    for group in FIND_FILTER_HELP_GROUPS:
+        flags = " / ".join(FILTER_SPECS[name].flag for name in group.filters)
+        lines.append(f"{group.title}: {flags}")
+        if group.note:
+            lines.append(f"  {group.note}")
+    return "\n".join(lines)
 
 
 def format_find_field_presets() -> str:
@@ -462,7 +515,9 @@ __all__ = [
     "FILTER_SPECS",
     "FIND_FIELD_PRESETS",
     "FIND_FIELD_SPECS",
+    "FIND_FILTER_HELP_GROUPS",
     "TRIGGER_FLAG",
+    "condition_attr_for_filter",
     "dimensions_from_fields",
     "dimensions_from_filters",
     "fields_need_kline",
@@ -470,6 +525,7 @@ __all__ = [
     "find_filter_docs_rows",
     "format_find_field_presets",
     "format_find_filter_flags",
+    "format_find_filter_groups",
     "parse_find_fields",
     "render_find_filter_docs_table",
 ]

@@ -214,7 +214,7 @@ def _load_names_with_optional_spinner(console) -> dict[str, str]:
 
     t_start = time.monotonic()
     with console.status(
-        "[yellow]⏳ 正在加载 A 股代码表 (首次约 5-15s · 后续 7 天内秒级)...[/yellow]",
+        "[yellow]⏳ 首次运行 · 下载 A 股代码表 · 仅此一次 (约 5-15s)...[/yellow]",
         spinner="dots",
     ):
         from kan.storage.watchlist import preload_stock_names

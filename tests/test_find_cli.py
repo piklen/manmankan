@@ -145,10 +145,34 @@ class TestFindCli:
         assert "--compact" in plain
         assert "--no-compact-context" in plain
         assert "--fields" in plain
+        assert "单维度 filter 只反映该维度" in plain
+        assert "命中不等于整体位置低/高" in plain
         for spec in FILTER_SPECS.values():
             assert spec.flag in plain
         assert "@core" in plain
         assert "@valuation" in plain
+
+    def test_find_help_survives_narrow_and_wide_terminals(self):
+        for columns in ("60", "200"):
+            env = {
+                **os.environ,
+                "KAN_NO_BOOT_BANNER": "1",
+                "NO_COLOR": "1",
+                "COLUMNS": columns,
+            }
+            result = subprocess.run(
+                ["uv", "run", "kan", "find", "--help"],
+                cwd=REPO_ROOT,
+                env=env,
+                capture_output=True,
+                text=True,
+                timeout=60,
+            )
+            assert result.returncode == 0
+            plain = _strip_ansi(result.stdout + result.stderr)
+            assert "核心层" in plain
+            assert "--holders" in plain
+            assert "--all 不支持" in plain
 
     def test_no_compact_context_requires_compact(self, tmp_path):
         ec, out, _err = _run_isolated(
@@ -175,6 +199,21 @@ class TestFindCli:
             assert ec == 2, f"{bad_res} should exit 2"
             assert "例:" in out, f"{bad_res} missing 例: hint"
             assert "low:gte:3" in out, f"{bad_res} missing --resonance sample low:gte:3"
+
+    def test_find_user_facing_errors_include_copyable_example(self):
+        cases = [
+            ["find", "--pos", "180:lt:5", "--compact"],
+            ["find", "--pos", "180:lt:5", "--fields", "code"],
+            ["find", "--pos", "180:lt:5", "--limit", "0"],
+            ["find", "--pos", "180:lt:5", "--industry", "X", "--theme", "Y"],
+            ["find", "--pos", "180:lt:5", "--only-watchlist"],
+            ["find", "--all", "--pe", "lt:20"],
+            ["find", "--all", "--roe", "gte:15", "--format", "json"],
+        ]
+        for args in cases:
+            ec, out = _run(args)
+            assert ec in (1, 2), f"{args} should fail as user-facing error"
+            assert "例:" in out, f"{args} missing copyable example"
 
     @pytest.mark.skipif(
         not os.environ.get("KAN_RUN_FIND_DATA_TEST"),

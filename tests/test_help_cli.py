@@ -11,6 +11,7 @@ import sys
 from unittest.mock import patch
 
 import pytest
+from click.utils import strip_ansi
 from typer.testing import CliRunner
 
 from kan.cli import app
@@ -98,6 +99,12 @@ def test_root_help_lists_find_registry_flags_and_presets() -> None:
         assert spec.flag in output
     for preset in FIND_FIELD_PRESETS:
         assert preset in output
+    assert "单维度 filter 只反映该维度" in output
+    assert "命中不等于整体位置低/高" in output
+    assert "核心层 · 位置 / 共振 / ST" in output
+    assert "估值 / 质量 / 资金" in output
+    assert "进阶 · 需理解指标口径" in output
+    assert "新手从 kan scan 和 kan find 开始" in output
 
 
 def test_subcommand_help_unaffected() -> None:
@@ -108,6 +115,14 @@ def test_subcommand_help_unaffected() -> None:
     # typer 默认 help 标志：Usage: 行 + Options 段
     assert "Usage:" in result.stdout
     assert "Options" in result.stdout
+
+
+def test_low_high_help_points_to_find_pos_shortcut() -> None:
+    runner = CliRunner()
+    for command in ("low", "high"):
+        result = runner.invoke(app, [command, "--help"])
+        assert result.exit_code == 0
+        assert "find --pos" in strip_ansi(result.stdout)
 
 
 # --- _maybe_print_boot_banner 测试 (v0.0.4.4 加 · 补 CR finding)

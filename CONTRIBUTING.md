@@ -120,7 +120,7 @@ git config core.hooksPath .githooks
 
 - **公开词**（通用 AI 工具署名）内联在脚本里，CI 也会拦；
 - **维护者自定的私密词 / 内部代号**放在 `.ai/private/privacy-deny.txt`（**gitignored，不进仓库**），脚本运行时动态读取，命中只回显「文件:行号」、不回显词本身。
-- 该文件缺失时（CI runner / 新 clone）自动降级为只扫公开词——属正常，无需补建。
+- 该文件缺失时（CI runner / 新 clone）自动降级为只扫公开词——属正常，无需补建。CI 判定的是公开层；本地 pre-commit / commit-msg 判定的是公开层 + 私密层，二者不同是有意设计。私密层误报时应先修本地词表口径，不应跳过 hook。
 
 维护者维护自己的私密词清单时，编辑本地 `.ai/private/privacy-deny.txt` 即可（一行一项，`re:` 前缀表示正则）。
 
