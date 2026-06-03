@@ -34,7 +34,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:
-      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6 (pinned 2026-05-27)
+      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10  # v6 (pinned 2026-05-27)
       - uses: astral-sh/setup-uv@08807647e7069bb48b6ef5acd8ec9567f424441b  # pinned 2026-05-27
         with:
           python-version: '3.12'
@@ -90,7 +90,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
-      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6 (pinned 2026-05-27)
+      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10  # v6 (pinned 2026-05-27)
       - name: Privacy / public archive scan
         run: bash scripts/check-privacy-leaks.sh
 
@@ -103,7 +103,7 @@ jobs:
         os: [ubuntu-latest, macos-latest]
         python-version: ['3.11', '3.12']
     steps:
-      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6 (pinned 2026-05-27)
+      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10  # v6 (pinned 2026-05-27)
       - uses: astral-sh/setup-uv@08807647e7069bb48b6ef5acd8ec9567f424441b  # pinned 2026-05-27
         with:
           python-version: ${{ matrix.python-version }}
@@ -121,7 +121,7 @@ jobs:
       matrix:
         python-version: ['3.11', '3.12']
     steps:
-      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6 (pinned 2026-05-27)
+      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10  # v6 (pinned 2026-05-27)
       - uses: astral-sh/setup-uv@08807647e7069bb48b6ef5acd8ec9567f424441b  # pinned 2026-05-27
         with:
           python-version: ${{ matrix.python-version }}
@@ -171,7 +171,7 @@ jobs:
         os: [ubuntu-latest, macos-latest]
         python-version: ['3.11', '3.12']
     steps:
-      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6 (pinned 2026-05-27)
+      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10  # v6 (pinned 2026-05-27)
       - uses: astral-sh/setup-uv@08807647e7069bb48b6ef5acd8ec9567f424441b  # pinned 2026-05-27
         with:
           python-version: ${{ matrix.python-version }}
