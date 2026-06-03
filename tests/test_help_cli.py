@@ -11,6 +11,7 @@ import sys
 from unittest.mock import patch
 
 import pytest
+from click.utils import strip_ansi
 from typer.testing import CliRunner
 
 from kan.cli import app
@@ -121,7 +122,7 @@ def test_low_high_help_points_to_find_pos_shortcut() -> None:
     for command in ("low", "high"):
         result = runner.invoke(app, [command, "--help"])
         assert result.exit_code == 0
-        assert "find --pos" in result.stdout
+        assert "find --pos" in strip_ansi(result.stdout)
 
 
 # --- _maybe_print_boot_banner 测试 (v0.0.4.4 加 · 补 CR finding)
