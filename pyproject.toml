@@ -1,7 +1,7 @@
 [project]
 name = "manmankan"
 version = "0.0.6.9"
-description = "A 股本地数据筛选器 · 告诉你坐标，不替你决策 · 人和 AI 共用的 CLI/JSON 数据层"
+description = "A股行情翻译官 · 先看清再决定 · 散户看得清，AI 调得动"
 requires-python = ">=3.11"
 license = { file = "LICENSE" }
 authors = [
@@ -12,10 +12,12 @@ keywords = [
     "stock", "a-share", "cli", "json", "ai-workflow", "data-analysis",
     "position", "scanner", "akshare", "tushare", "中国股市",
     "watchlist", "stock-screener", "terminal", "baostock", "A股", "自选股",
+    "ai-data-layer", "data-middleware", "agent-native", "mcp",
 ]
 classifiers = [
     "Development Status :: 3 - Alpha",
     "Environment :: Console",
+    "Intended Audience :: Developers",
     "Intended Audience :: End Users/Desktop",
     "Operating System :: OS Independent",
     "Programming Language :: Python :: 3",

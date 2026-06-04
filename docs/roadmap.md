@@ -24,6 +24,8 @@
 
 - **AI JSON 契约稳定化**:保持 `scan` / `info` / `find` / `history` 等 JSON 顶层 disclaimer、错误 envelope、字段向后兼容,让外部 AI 能低 context 成本消费结构化数据。
 - **数据组合边界**:继续增强 CLI / JSON 数据过滤能力,但不内置财报解读、分红日历或策略 preset;需要完整基本面研究时,用 `kan find --format json` 与外部公告 / 财报 / 分红数据源组合。
+- **MCP Server**:在 CLI 基础上提供 MCP 协议接口(stdio + Streamable HTTP 双 transport),让支持 MCP 的 AI Agent 工具通过标准协议消费数据。设计原则:一个 MCP tool 对应一个复合查询,而非一个 API endpoint 映射一个 tool——减少 Agent 的多次往返。
+- **Skills.md 持续同步**:命令变更时同步更新 `skills/manmankan-skill.md`,确保 AI Agent 读到的是当前版本的能力清单。
 
 ---
 
@@ -31,6 +33,8 @@
 
 - H5 可视化页面(位置热力图 + 趋势曲线)。
 - 行业热力图(板块维度位置聚合)。
+- **Source 接口抽象**:提取数据源适配层(Source / DataProvider 接口),为多市场支持打架构基础。
+- **多市场扩展**:在 Source 接口稳定后,实现首个非 A 股市场 Source(目标:美股,通过 yfinance 等免费数据源)。"当前专注 A 股,架构为多市场设计。"
 
 ---
 
