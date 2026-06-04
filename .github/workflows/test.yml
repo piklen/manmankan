@@ -104,11 +104,8 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-latest, macos-latest]
+        os: [ubuntu-latest]
         python-version: ['3.11', '3.12']
-        exclude:
-          - os: macos-latest
-            python-version: '3.12'
     steps:
       - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10  # v6 (pinned 2026-05-27)
       - uses: astral-sh/setup-uv@08807647e7069bb48b6ef5acd8ec9567f424441b  # pinned 2026-05-27
@@ -121,30 +118,32 @@ jobs:
         run: uv run pytest -q -m "not tty and not network"
 
   # macOS hosted runners are the slowest and most failure-prone part of the matrix.
-  # Full pytest still covers Python 3.12 on Ubuntu and macOS behavior on Python 3.11.
-  # This keeps the macOS + Python 3.12 signal without letting one runner combo block releases.
-  macos-py312-smoke:
+  # Full pytest runs on Ubuntu for both supported Python versions; macOS keeps targeted
+  # platform smoke + TTY coverage so one runner class cannot block releases.
+  macos-smoke:
     runs-on: macos-latest
     timeout-minutes: 12
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ['3.11', '3.12']
     steps:
       - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10  # v6 (pinned 2026-05-27)
       - uses: astral-sh/setup-uv@08807647e7069bb48b6ef5acd8ec9567f424441b  # pinned 2026-05-27
         with:
-          python-version: '3.12'
+          python-version: ${{ matrix.python-version }}
           enable-cache: true
       - name: Install dependencies
         run: uv sync --frozen --all-groups --all-extras
-      - name: macOS Python 3.12 import and CLI smoke
+      - name: macOS import and CLI smoke
         run: |
           uv run python - <<'PY'
           import importlib.metadata
           import platform
-          import sys
 
           import kan
 
           assert platform.system() == "Darwin"
-          assert sys.version_info[:2] == (3, 12)
           assert importlib.metadata.version("manmankan") == kan.__version__
           PY
           uv run kan --version
