@@ -195,17 +195,18 @@ def run_upgrade(
         return "failed", f"{install.name} upgrade 异常: {type(e).__name__}"
 
     if result.returncode == 0:
-        # 背景: 升级文件下载成功 ≠ 装得起来 · 跑 import smoke 验证。
-        # 只导入当前真实公开 API/模块,避免旧模块路径让成功升级被误判失败。
+        # 背景: 升级文件下载成功 ≠ 装得起来 · 跑 public-surface smoke 验证。
+        # 只验证 runtime version、package metadata 和公开 API，避免内部模块路径漂移
+        # 让成功升级被误判失败。
         try:
             with console.status("[cyan]验证安装...[/cyan]", spinner="dots"):
                 smoke = subprocess.run(
                     [sys.executable, "-c",
                      (
+                         "import importlib.metadata; "
                          "import kan; "
                          "from kan.api import WatchlistSet, fetch, from_flags, scan; "
-                         "from kan.core import scanner; "
-                         "from kan.storage import watchlist; "
+                         "assert importlib.metadata.version('manmankan') == kan.__version__; "
                          "assert kan.__version__; "
                          + (
                              f"assert kan.__version__ == {target_version!r}; "

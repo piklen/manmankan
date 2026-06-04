@@ -63,7 +63,7 @@ def help_cmd() -> None:
   [dim]以上参数可任意组合：kan trend --down 5 --latest 7 --candle --industry 半导体[/dim]
   [dim]N 范围：2-30[/dim]
 
-[bold cyan]条件选股 DSL[/bold cyan]
+[bold cyan]条件筛选[/bold cyan]
   kan find --pos 180:lt:5                      位置 filter · 180 日位置 < 5%
   kan find --resonance low:gte:3               共振 filter · 低点共振 ≥ 3 周期
   kan find --pos 60:lt:10 --resonance low:gte:2  多条件 AND
@@ -84,7 +84,7 @@ def help_cmd() -> None:
   {find_filter_groups}[/dim]
   [dim]可用 fields preset:
   {find_field_presets}[/dim]
-  [dim]不告诉你买什么 · 帮你找到符合条件的(候选 ≠ 买入信号)[/dim]
+  [dim]告诉你坐标，不替你决策 · 命中条件 ≠ 买入信号[/dim]
 
 [bold cyan]行业 / 热榜 / 题材扫描[/bold cyan]
   kan scan --industry 半导体      扫指定行业全成分股（自选股 ⭐ 高亮）

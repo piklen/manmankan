@@ -11,9 +11,18 @@
 [![PyPI version](https://img.shields.io/pypi/v/manmankan.svg)](https://pypi.org/project/manmankan/)
 [![PyPI downloads](https://img.shields.io/pypi/dm/manmankan.svg)](https://pypi.org/project/manmankan/)
 [![Tests](https://github.com/piklen/manmankan/actions/workflows/test.yml/badge.svg)](https://github.com/piklen/manmankan/actions/workflows/test.yml)
-[![Status: Alpha](https://img.shields.io/badge/status-alpha-orange.svg)](https://github.com/piklen/manmankan/releases)
+[![Local-first](https://img.shields.io/badge/local--first-no_telemetry-green.svg)](docs/compliance.md)
+[![CLI + JSON](https://img.shields.io/badge/output-CLI_%2B_JSON-blue.svg)](docs/find.md)
 
-慢慢看是一个纯命令行工具。它不试图判断一只股票值不值得买，而是回答更底层的问题：这批候选现在处在什么位置、哪些数据可用、哪些规则命中、哪些缺口需要继续研究。
+慢慢看是一个纯命令行工具。它把一批 A 股候选整理成“坐标清单”：多周期位置、共振、估值/资金/技术字段、命中规则和缺数据状态。人可以在终端里快速扫一眼，AI 可以直接消费低噪声 JSON 继续做解释、排序、研究清单或交叉验证。
+
+```bash
+uv tool install manmankan
+kan scan --codes 600519,000858
+kan find --codes 600519,000858 --format json --compact
+```
+
+如果你也想先把候选池数据说清楚，再交给人或 AI 慢慢研究，可以 star 关注后续版本。
 
 <details>
 <summary><b>English summary</b></summary>
