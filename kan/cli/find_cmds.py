@@ -16,52 +16,36 @@ AI JSON 层 (AI 消费入口):
 """
 from __future__ import annotations
 
-from math import ceil
 from typing import TYPE_CHECKING, Annotated
 
 import typer
 
 from kan.app import app
 from kan.cli.helpers import (
-    _load_watchlist_pairs,
+    _parse_codes,
     _print_err,
     _with_heavy_imports_spinner,
 )
-from kan.cli.helpers import (
-    _parse_codes as _shared_parse_codes,
-)
-from kan.cli.helpers import (
-    _resolve_code_pairs as _shared_resolve_code_pairs,
-)
 from kan.core.find_registry import (
-    DIMENSIONS_UNSUPPORTED_IN_ALL,
-    FILTER_SPECS,
-    condition_attr_for_filter,
     dimensions_from_fields,
-    fields_need_kline,
-    fields_need_valuation_context,
     format_find_field_presets,
     parse_find_fields,
 )
 from kan.data.hot import HotList
+from kan.service.find_service import (
+    FindCodePoolResult,
+    FindCrossSectionRequest,
+    FindKlineRequest,
+    FindKlineResult,
+    FindOutputProfile,
+    FindServiceError,
+    run_find_cross_section,
+    run_find_kline,
+)
 from kan.storage import export
 
 if TYPE_CHECKING:
     from kan.core.find_dsl import ConditionSet
-    from kan.core.models import EnrichedResult
-
-
-def _parse_codes(raw: str) -> tuple[list[str], list[str]]:
-    """兼容旧测试 import path · 实现移到 cli.helpers 供 scan/find 共用。"""
-    return _shared_parse_codes(raw)
-
-
-def _resolve_code_pairs(raw: str) -> list[tuple[str, str]]:
-    """兼容旧测试 import path · 实现移到 cli.helpers 供 scan/find 共用。"""
-    return _shared_resolve_code_pairs(
-        raw,
-        command="kan find",
-    )
 
 
 def _resolve_code_pairs_or_exit_json(
@@ -103,63 +87,6 @@ def _resolve_code_pairs_or_exit_json(
     return [(code, names.get(code, code)) for code in codes]
 
 
-def _find_pools(
-    industry: str | None,
-    hot: HotList | None,
-    theme: str | None,
-    group: str | None,
-    code_pairs: list[tuple[str, str]] | None = None,
-) -> list[str]:
-    """构造 rule.pools 机器标识 (JSON 输出 · 例 ["industry:半导体"] / ["watchlist"])。"""
-    if code_pairs is not None:
-        return [f"codes:{len(code_pairs)}"]
-    if industry is not None:
-        return [f"industry:{industry}"]
-    if hot is not None:
-        return [f"hot:{getattr(hot, 'value', hot)}"]
-    if theme is not None:
-        return [f"theme:{theme}"]
-    return [f"watchlist:{group}"] if group else ["watchlist"]
-
-
-def _find_filters(conditions: ConditionSet) -> list[dict]:
-    """构造 rule.filters (JSON 输出 · 复刻用户输入的 DSL · 利于 AI 审计)。"""
-    out: list[dict] = []
-    for filter_type, spec in FILTER_SPECS.items():
-        attr = condition_attr_for_filter(filter_type)
-        if filter_type == "exclude_st":
-            if getattr(conditions, attr):
-                out.append({"name": spec.flag})
-            continue
-        for f in getattr(conditions, attr):
-            if hasattr(f, "level"):
-                param = f"{f.level}:{f.op}:{f.value:g}"
-            elif hasattr(f, "period"):
-                param = f"{f.period}:{f.op}:{f.value:g}"
-            else:
-                param = f"{f.op}:{f.value:g}"
-            out.append({"name": spec.flag, "param": param})
-    return out
-
-
-def _kline_snapshot_periods(conditions: ConditionSet) -> list[int] | None:
-    """`--all` K 线快照只取 filter 需要的周期,避免轻量条件拉 181 天。"""
-    if not conditions.has_kline_filters():
-        return None
-
-    from kan.core.scanner import PERIODS
-
-    periods: set[int] = set()
-    periods.update(f.period for f in conditions.pos_filters)
-    periods.update(f.period for f in conditions.gain_filters)
-    if conditions.resonance_filters:
-        periods.update(PERIODS)
-    if conditions.up_days_filters:
-        max_days = max(1, max(ceil(f.value) for f in conditions.up_days_filters))
-        periods.add(min(max_days, max(PERIODS)))
-    return sorted(periods or PERIODS)
-
-
 def _exit_find_error(
     fmt: export.OutputFormat,
     *,
@@ -184,187 +111,31 @@ def _exit_find_error(
     raise typer.Exit(exit_code)
 
 
-def _get_watchlist_pairs_or_exit_json(
-    group: str | None,
-    fmt: export.OutputFormat,
-) -> list[tuple[str, str]]:
-    """Load default watchlist while preserving JSON envelope in find export mode."""
-    from kan.storage.watchlist import GroupNotFoundError, load_watchlist
-
-    try:
-        pairs = [(s.symbol, s.name) for s in load_watchlist(group).stocks]
-    except GroupNotFoundError as e:
-        _exit_find_error(
-            fmt,
-            code="group_not_found",
-            message=str(e),
-            hint="例: kan group list；或去掉 --group 使用 default 组",
-            exit_code=2,
-        )
-    if not pairs:
-        label = "自选" if not group else f"「{group}」组"
-        suffix = "" if not group else f" --group {group}"
-        _exit_find_error(
-            fmt,
-            code="empty_watchlist",
-            message=f"{label}列表为空",
-            hint=f"例: kan add 600519 000858{suffix}；或用 --codes 指定外部代码池",
-            exit_code=1,
-        )
-    return pairs
+def _exit_find_service_error(fmt: export.OutputFormat, error: FindServiceError) -> None:
+    _exit_find_error(
+        fmt,
+        code=error.code,
+        message=error.message,
+        hint=error.hint,
+        exit_code=error.exit_code,
+    )
 
 
-def _any_metric(results: list[EnrichedResult], attr: str, fields: tuple[str, ...]) -> bool:
-    """任一股票有目标子对象字段值即视为该维度可用。"""
-    for r in results:
-        obj = getattr(r, attr, None)
-        if obj is None:
-            continue
-        if any(getattr(obj, field, None) is not None for field in fields):
-            return True
-    return False
-
-
-def _any_technical_for_filters(
-    results: list[EnrichedResult],
-    conditions: ConditionSet,
-) -> bool:
-    """按请求的技术 filter 判断 technical 数据是否真的可用。"""
-    for r in results:
-        t = getattr(r, "technical", None)
-        if t is None:
-            continue
-        if conditions.rsi_filters and getattr(t, "rsi_6", None) is not None:
-            return True
-        if conditions.macd_dif_filters and getattr(t, "macd_dif", None) is not None:
-            return True
-        if conditions.macd_filters and getattr(t, "macd", None) is not None:
-            return True
-        if conditions.kdj_j_filters and getattr(t, "kdj_j", None) is not None:
-            return True
-        if conditions.atr_pct_filters and t.atr_pct() is not None:
-            return True
-        if any(t.ma_bias(f.period) is not None for f in conditions.ma_bias_filters):
-            return True
-    return False
-
-
-def _find_data_gap(
-    conditions: ConditionSet,
-    results: list[EnrichedResult],
-) -> tuple[str, str, str] | None:
-    """识别“上游数据不可用”而不是让 filter 静默变成 0 命中。"""
-    if not results:
-        return None
-    token_hint = "例: kan config set tushare-token <你的_token>；或去掉对应 filter"
-    if conditions.pe_filters and not _any_metric(results, "valuation", ("pe_ttm",)):
-        return ("data_unavailable", "当前候选池缺少估值数据，无法执行 --pe filter", token_hint)
-    if conditions.moneyflow_filters and not _any_metric(results, "moneyflow", ("net_amount",)):
-        return ("data_unavailable", "当前候选池缺少资金流数据，无法执行 --moneyflow filter", token_hint)
-    if conditions.roe_filters and not _any_metric(results, "fundamentals", ("roe",)):
-        return ("data_unavailable", "当前候选池缺少财务数据，无法执行 --roe filter", token_hint)
-    if conditions.needs_technical() and not _any_technical_for_filters(results, conditions):
-        return ("data_unavailable", "当前候选池缺少技术指标数据，无法执行技术 filter", token_hint)
-    if conditions.winner_filters and not _any_metric(results, "chip", ("winner_rate",)):
-        return ("data_unavailable", "当前候选池缺少筹码数据，无法执行 --winner filter", token_hint)
-    if conditions.needs_shareholder() and not _any_metric(
-        results,
-        "shareholder",
-        ("holder_chg_pct", "top10_float_ratio", "north_hold_ratio"),
-    ):
-        return ("data_unavailable", "当前候选池缺少股东持股结构数据，无法执行股东 filter", token_hint)
-    return None
-
-
-def _condition_dimensions(conditions: ConditionSet) -> set[str]:
-    dims: set[str] = set()
-    if conditions.pe_filters:
-        dims.add("valuation")
-    if conditions.needs_fundamentals():
-        dims.add("fundamentals")
-    if conditions.needs_moneyflow():
-        dims.add("moneyflow")
-    if conditions.needs_technical():
-        dims.add("technical")
-    if conditions.needs_sentiment():
-        dims.add("sentiment")
-    if conditions.needs_chip():
-        dims.add("chip")
-    if conditions.needs_shareholder():
-        dims.add("shareholder")
-    return dims
-
-
-def _availability_dimensions(
-    conditions: ConditionSet,
-    *,
-    is_export: bool,
-    field_dimensions: set[str] | None = None,
-    fields_mode: bool = False,
-) -> set[str]:
-    """本次 find 实际尝试取数的维度,用于 data_availability 统计。"""
-    dims = _condition_dimensions(conditions)
-    dims.update(field_dimensions or set())
-    if fields_mode:
-        return dims
-    if is_export:
-        dims.add("valuation")
-    if conditions.needs_moneyflow() or (is_export and conditions.is_empty()):
-        dims.add("moneyflow")
-    if conditions.needs_technical() or (is_export and conditions.is_empty()):
-        dims.add("technical")
-    if conditions.needs_sentiment() or (is_export and conditions.is_empty()):
-        dims.add("sentiment")
-    if conditions.needs_chip() or (is_export and conditions.is_empty()):
-        dims.add("chip")
-    if conditions.needs_shareholder():
-        dims.add("shareholder")
-    return dims
-
-
-def _compact_dimensions(conditions: ConditionSet, *, is_export: bool) -> set[str]:
-    """compact 结果里应该内联摘要的维度。"""
-    if is_export and conditions.is_empty():
-        return {"valuation", "moneyflow", "technical", "sentiment", "chip"}
-    return _condition_dimensions(conditions)
-
-
-def _cross_section_dimensions(
-    conditions: ConditionSet,
+def _find_output_profile(
     *,
     fmt: export.OutputFormat,
     compact: bool,
+    compact_context: bool,
+    field_paths: tuple[str, ...],
     field_dimensions: set[str],
-    fields_mode: bool,
-) -> set[str]:
-    """`--all` 本次实际需要的截面维度,反向驱动取数和 data_availability。"""
-    dims = {"valuation"}  # 基础价格、data_cutoff、PE filter 都来自 daily_basic 截面。
-    dims.update(_condition_dimensions(conditions))
-    if fields_mode:
-        dims.update(field_dimensions)
-        return dims
-    if fmt is export.OutputFormat.md:
-        dims.add("moneyflow")  # markdown 表格固定展示主力净额列。
-        return dims
-    if compact:
-        dims.update(_compact_dimensions(conditions, is_export=True))
-        return dims
-    dims.update({"moneyflow", "technical", "sentiment", "chip"})
-    return dims
-
-
-def _cross_section_needs_valuation_context(
-    fmt: export.OutputFormat,
-    *,
-    compact: bool,
-    fields: tuple[str, ...],
-) -> bool:
-    """行业内分位/中位只在输出形态真的需要时计算。"""
-    if fmt is export.OutputFormat.md:
-        return True
-    if fields:
-        return fields_need_valuation_context(fields)
-    return fmt is export.OutputFormat.json and not compact
+) -> FindOutputProfile:
+    return FindOutputProfile(
+        mode=fmt.value,
+        compact=compact,
+        compact_context=compact_context,
+        field_paths=field_paths,
+        field_dimensions=frozenset(field_dimensions),
+    )
 
 
 def _render_terminal(
@@ -447,117 +218,45 @@ def _run_all_stocks_path(
     is_export: bool,
     limit: int | None,
 ) -> None:
-    """Run `kan find --all` cross-section path."""
-    from datetime import datetime
-
-    if source_mode:
-        _exit_find_error(
-            fmt,
-            code="invalid_all_pool",
-            message="--all 与 --industry / --hot / --theme / --codes 互斥",
-            hint="例: kan find --all --pe lt:20 --format json",
-            exit_code=2,
-        )
-    if conditions.needs_fundamentals():
-        _exit_find_error(
-            fmt,
-            code="unsupported_all_filter",
-            message="--all 全市场截面不支持 --roe (fina_indicator 逐股，全市场约 5500 只代价高)",
-            hint="例: kan find --industry 半导体 --roe gte:15 --format json",
-            exit_code=2,
-        )
-    if conditions.needs_shareholder():
-        _exit_find_error(
-            fmt,
-            code="unsupported_all_filter",
-            message="--all 全市场截面不支持 --holders/--top10/--north (股东数据逐股，全市场约 5500 只代价高)",
-            hint="例: kan find --industry 半导体 --top10 gte:50 --format json",
-            exit_code=2,
-        )
-    unsupported_fields = field_dimensions & DIMENSIONS_UNSUPPORTED_IN_ALL
-    if unsupported_fields:
-        _exit_find_error(
-            fmt,
-            code="invalid_fields",
-            message=(
-                "--all 全市场截面不支持这些 --fields 维度: "
-                + ", ".join(sorted(unsupported_fields))
-            ),
-            hint=(
-                "去掉逐股维度字段，或缩小候选池后再查。"
-                "例: kan find --industry 半导体 --format json --fields @shareholder"
-            ),
-            exit_code=2,
-        )
-    if not is_export:
-        _exit_find_error(
-            fmt,
-            code="invalid_all_format",
-            message="--all 截面取数请配 --format json 或 --format md (全市场约 5500 只，terminal 表格不适合)",
-            hint="例: kan find --all --pe lt:20 --format json",
-            exit_code=2,
-        )
-
-    from kan.core.cross_section import run_cross_section
-    from kan.core.find_filter import apply_cross_section_conditions
-    from kan.core.stock_set import AllStocksSet
-
-    included_dimensions = _cross_section_dimensions(
-        conditions,
+    """CLI adapter for `kan find --all` cross-section service."""
+    output = _find_output_profile(
         fmt=fmt,
         compact=compact,
+        compact_context=compact_context,
+        field_paths=field_paths,
         field_dimensions=field_dimensions,
-        fields_mode=bool(field_paths),
     )
-    cs = run_cross_section(
-        AllStocksSet(),
-        need_kline=(
-            conditions.has_kline_filters()
-            or (compact and compact_context)
-            or fields_need_kline(field_paths)
-        ),
-        kline_periods=_kline_snapshot_periods(conditions),
-        included_dimensions=included_dimensions,
-        need_valuation_context=_cross_section_needs_valuation_context(
-            fmt,
-            compact=compact,
-            fields=field_paths,
-        ),
-    )
-    if not cs.rows:
-        _exit_find_error(
-            fmt,
-            code="data_unavailable",
-            message="全市场截面无数据",
-            hint=(
-                "估值/量价/资金/行业分位依赖 tushare；"
-                "例: kan config set tushare-token <你的_token>"
-            ),
-        )
-    cs_matched = apply_cross_section_conditions(cs.rows, conditions)
-    cs_limited = cs_matched if limit is None else cs_matched[:limit]
-    query_time = datetime.now().astimezone().isoformat(timespec="seconds")
+    try:
+        result = run_find_cross_section(FindCrossSectionRequest(
+            conditions=conditions,
+            output=output,
+            source_mode=source_mode,
+            limit=limit,
+        ))
+    except FindServiceError as e:
+        _exit_find_service_error(fmt, e)
+
     if fmt is export.OutputFormat.json:
         typer.echo(export.to_json(export.cross_section_payload(
-            cs_limited,
-            query_time=query_time,
-            pool_size=cs.pool_size,
-            matched_total=len(cs_matched),
-            data_cutoff=cs.data_cutoff,
-            stale=cs.stale,
-            filters=_find_filters(conditions),
+            result.limited,
+            query_time=result.query_time,
+            pool_size=result.ctx.pool_size,
+            matched_total=len(result.matched),
+            data_cutoff=result.ctx.data_cutoff,
+            stale=result.ctx.stale,
+            filters=result.filters,
             compact=compact,
-            availability_rows=cs.rows,
-            included_dimensions=included_dimensions,
-            compact_dimensions=_compact_dimensions(conditions, is_export=is_export),
+            availability_rows=result.ctx.rows,
+            included_dimensions=result.included_dimensions,
+            compact_dimensions=result.compact_dimensions,
             fields=field_paths,
             compact_context=compact_context,
         )))
     else:
         typer.echo(export.cross_section_markdown(
-            [r for r, _ in cs_limited],
+            [r for r, _ in result.limited],
             title="慢慢看 · kan find · A股全市场截面",
-            pool_size=cs.pool_size,
+            pool_size=result.ctx.pool_size,
         ))
 
 
@@ -581,47 +280,36 @@ def _run_kline_path(
     console,
     find_disclaimer: str,
 ) -> None:
-    """Run non-`--all` K-line pool path."""
-    from datetime import datetime
-
-    from kan.core.enrich import enrich_results
-    from kan.core.find_filter import apply_conditions
-    from kan.core.pipeline import run_data_pipeline
-    from kan.core.scanner import scan_batch
-    from kan.core.stock_set import from_flags
-
-    watchlist_pairs = (
-        [] if code_pairs is not None else (
-            _load_watchlist_pairs(group)
-            if source_mode else _get_watchlist_pairs_or_exit_json(group, fmt)
-        )
+    """CLI adapter for the non-`--all` K-line find service."""
+    output = _find_output_profile(
+        fmt=fmt,
+        compact=compact,
+        compact_context=compact_context,
+        field_paths=field_paths,
+        field_dimensions=field_dimensions,
     )
-
-    if code_pairs is not None:
-        from kan.core.stock_set import CodeListSet
-
-        stock_set = CodeListSet(code_pairs)
-    else:
-        stock_set = from_flags(
+    try:
+        result = run_find_kline(FindKlineRequest(
+            conditions=conditions,
+            output=output,
+            code_pairs=code_pairs,
             industry=industry,
             hot=hot,
             theme=theme,
-            watchlist_pairs=watchlist_pairs,
             only_watchlist=only_watchlist,
-            watchlist_group=group,
-        )
+            group=group,
+            limit=limit,
+        ))
+    except FindServiceError as e:
+        _exit_find_service_error(fmt, e)
 
-    if code_pairs is not None and is_export and conditions.is_empty():
-        from datetime import datetime
-
-        pools = _find_pools(industry, hot, theme, group, code_pairs)
-        query_time = datetime.now().astimezone().isoformat(timespec="seconds")
+    if isinstance(result, FindCodePoolResult):
         if fmt is export.OutputFormat.json:
             try:
                 payload = export.code_pool_payload(
-                    code_pairs,
-                    query_time=query_time,
-                    pools=pools,
+                    result.code_pairs,
+                    query_time=result.query_time,
+                    pools=result.pools,
                     fields=field_paths,
                 )
             except ValueError as e:
@@ -638,112 +326,46 @@ def _run_kline_path(
             typer.echo(export.to_json(payload))
         else:
             typer.echo(export.code_pool_markdown(
-                code_pairs,
-                title=f"慢慢看 · kan find · {stock_set.name}",
+                result.code_pairs,
+                title=f"慢慢看 · kan find · {result.stock_set.name}",
             ))
         return
 
-    ctx = run_data_pipeline(
-        stock_set,
-        compute=scan_batch,
-        mode="low",
-        show_progress=not is_export,
-    )
-    if not ctx.targets and only_watchlist:
-        _exit_find_error(
-            fmt,
-            code="empty_intersection",
-            message="自选股与当前候选池没有交集",
-            hint="例: 去掉 --only-watchlist，或先运行 kan add 600519 把目标股票加进自选",
-        )
-    if not ctx.results and not is_export:
-        _exit_find_error(
-            fmt,
-            code="data_unavailable",
-            message="无缓存数据 · 请先拉取数据",
-            hint="例: kan fetch；或 kan scan 自动拉取自选股 K 线",
-            exit_code=1,
-        )
-
-    effective_limit = limit if limit is not None else 50
-    need_enrich = (
-        (is_export and not field_paths)
-        or conditions.has_cross_section_filters()
-        or conditions.needs_fundamentals()
-        or conditions.needs_shareholder()
-        or bool(field_dimensions)
-    )
-    if need_enrich:
-        pool_results = enrich_results(
-            ctx.results,
-            need_fundamentals=conditions.needs_fundamentals()
-            or ("fundamentals" in field_dimensions),
-            need_moneyflow=conditions.needs_moneyflow()
-            or (is_export and conditions.is_empty() and not field_paths)
-            or ("moneyflow" in field_dimensions),
-            need_technical=conditions.needs_technical()
-            or (is_export and conditions.is_empty() and not field_paths)
-            or ("technical" in field_dimensions),
-            need_sentiment=conditions.needs_sentiment()
-            or (is_export and conditions.is_empty() and not field_paths)
-            or ("sentiment" in field_dimensions),
-            need_chip=conditions.needs_chip()
-            or (is_export and conditions.is_empty() and not field_paths)
-            or ("chip" in field_dimensions),
-            need_shareholder=conditions.needs_shareholder()
-            or ("shareholder" in field_dimensions),
-        )
-    else:
-        pool_results = ctx.results
-    gap = _find_data_gap(conditions, pool_results)
-    if gap is not None:
-        code, message, hint = gap
-        _exit_find_error(fmt, code=code, message=message, hint=hint)
-    matches = apply_conditions(pool_results, conditions)
-    matches_limited = matches[:effective_limit]
+    assert isinstance(result, FindKlineResult)
 
     if is_export:
-        entries = [(m, m.result) for m in matches_limited]
-        pools = _find_pools(industry, hot, theme, group, code_pairs)
-        filters = _find_filters(conditions)
-        query_time = datetime.now().astimezone().isoformat(timespec="seconds")
         if fmt is export.OutputFormat.json:
             typer.echo(export.to_json(export.find_payload(
-                entries,
-                query_time=query_time,
-                pools=pools,
-                filters=filters,
-                pool_size=len(ctx.results),
-                matched_total=len(matches),
-                freshness=ctx.freshness,
+                result.entries,
+                query_time=result.query_time,
+                pools=result.pools,
+                filters=result.filters,
+                pool_size=len(result.ctx.results),
+                matched_total=len(result.matches),
+                freshness=result.ctx.freshness,
                 compact=compact,
-                availability_results=pool_results,
-                included_dimensions=_availability_dimensions(
-                    conditions,
-                    is_export=is_export,
-                    field_dimensions=field_dimensions,
-                    fields_mode=bool(field_paths),
-                ),
-                compact_dimensions=_compact_dimensions(conditions, is_export=is_export),
+                availability_results=result.pool_results,
+                included_dimensions=result.included_dimensions,
+                compact_dimensions=result.compact_dimensions,
                 fields=field_paths,
                 compact_context=compact_context,
             )))
         else:
             typer.echo(export.find_markdown(
-                entries,
-                title=f"慢慢看 · kan find · {stock_set.name}",
-                pool_size=len(ctx.results),
-                matched_total=len(matches),
+                result.entries,
+                title=f"慢慢看 · kan find · {result.stock_set.name}",
+                pool_size=len(result.ctx.results),
+                matched_total=len(result.matches),
             ))
         return
 
     _render_terminal(
         console=console,
-        stock_set=stock_set,
-        ctx=ctx,
-        matches=matches,
-        matches_limited=matches_limited,
-        effective_limit=effective_limit,
+        stock_set=result.stock_set,
+        ctx=result.ctx,
+        matches=result.matches,
+        matches_limited=result.matches_limited,
+        effective_limit=result.effective_limit,
         find_disclaimer=find_disclaimer,
     )
 

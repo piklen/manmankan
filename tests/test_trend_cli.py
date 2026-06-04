@@ -95,13 +95,12 @@ def _fake_trend_batch(*_args, **_kwargs) -> list[TrendResult]:
 @pytest.fixture
 def runner(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> CliRunner:
     """隔离 watchlist + cache_age + fetcher · 让 trend 走 mock 数据。"""
-    # cli.py 拆分后 trend 命令在 kan.cli.trend_cmds · from-import 把 helper 引用 bound
-    # 到 cli_trend_cmds 的 namespace · monkeypatch 必须改这里才能拦截
+    # _get_watchlist_pairs 仍是 CLI 装配依赖；_auto_fetch_stale 已归到 shared helper。
     monkeypatch.setattr(
         "kan.cli.trend_cmds._get_watchlist_pairs",
         lambda group=None: [("600519", "测试跌5"), ("000001", "测试涨3"), ("002001", "测试平")],
     )
-    monkeypatch.setattr("kan.cli.trend_cmds._auto_fetch_stale", lambda _pairs: None)
+    monkeypatch.setattr("kan.cli.helpers._auto_fetch_stale", lambda _pairs: None)
     monkeypatch.setattr("kan.core.scanner.trend_batch", _fake_trend_batch)
     monkeypatch.setattr("kan.data.fetcher.cache_age", lambda _sym: "2026-05-08 12:00")
     monkeypatch.setattr("kan.core.scanner.get_limit_threshold", lambda *a, **k: 10.0)

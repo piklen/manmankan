@@ -11,7 +11,6 @@ import typer
 
 from kan.app import app
 from kan.cli.helpers import (
-    _auto_fetch_stale,  # noqa: F401 · 保留兼容测试 monkeypatch · 实际调用由 pipeline.run_data_pipeline 内部完成
     _get_watchlist_pairs,
     _load_watchlist_pairs,
     _print_err,
@@ -72,7 +71,6 @@ def scan(
             compute_diff,
             load_snapshot,
             save_snapshot,
-            scan_batch,
         )
         from kan.render import terminal
         from kan.render.base import DISCLAIMER, responsive_periods
@@ -112,9 +110,10 @@ def scan(
         _print_err("❌ --diff 仅支持自选股扫描 · 自定义代码池不写入扫描快照")
         raise typer.Exit(2)
     # OOP 路径:CLI 构造 StockSet 再喂 pipeline · meta/highlight/filter 全部由 Set 承担
-    from kan.core.models import BoardMeta, HotMeta, ThemeMeta
-    from kan.core.pipeline import run_data_pipeline
+    from kan.core.models import HotMeta, ThemeMeta
+    from kan.core.pipeline import StockSetResolveError, raise_stock_set_resolve_exit
     from kan.core.stock_set import CodeListSet, from_flags
+    from kan.service.scan_service import ScanRequest, run_scan
     mode = "high" if high else "low"
     stock_set = (
         CodeListSet(code_pairs)
@@ -126,13 +125,18 @@ def scan(
             watchlist_group=group,
         )
     )
-    ctx = run_data_pipeline(
-        stock_set,
-        compute=scan_batch,
-        mode=mode,
-        show_progress=fmt is export.OutputFormat.terminal,
-    )
-    board_meta = ctx.meta
+    try:
+        service_result = run_scan(ScanRequest(
+            stock_set=stock_set,
+            mode=mode,
+            signal_only=signal,
+            exclude_st=exclude_st,
+            show_progress=fmt is export.OutputFormat.terminal,
+        ))
+    except StockSetResolveError as e:
+        raise_stock_set_resolve_exit(e)
+    ctx = service_result.ctx
+    board_meta = service_result.meta
     data_cutoff = ctx.freshness.data_cutoff
     fetched_at = ctx.freshness.fetched_at
     is_stale = ctx.freshness.is_stale  # JSON/MD payload + --diff 分支仍引用
@@ -141,40 +145,20 @@ def scan(
     is_code_mode = code_pairs is not None
     prev_snapshot = load_snapshot() if (diff and board_meta is None and not is_code_mode) else None
 
-    board_index_result = None
-    if isinstance(board_meta, BoardMeta):
-        from kan.core.scanner import scan_stock
-        board_index_result = scan_stock(
-            board_meta.index_kline, board_meta.board.code, board_meta.board.name,
-        )
-    elif isinstance(board_meta, ThemeMeta) and not board_meta.index_kline.empty:
-        from kan.core.scanner import scan_stock
-        board_index_result = scan_stock(
-            board_meta.index_kline, board_meta.theme.code, board_meta.theme.name,
-        )
+    board_index_result = service_result.board_index_result
 
     if not ctx.results:
         _print_err("无缓存数据 · 请先 `kan fetch` 拉取数据")
         raise typer.Exit(1)
 
-    from kan.core.enrich import enrich_scan_rows
+    all_results = service_result.all_results
+    results = service_result.results
 
-    all_results = enrich_scan_rows(ctx.results, data_cutoff=data_cutoff)
-
-    results = all_results
-    if exclude_st:
-        results = [r for r in results if not r.is_st]
-
-    if signal:
-        if mode == "high":
-            results = [r for r in results if r.high_resonance > 0]
-        else:
-            results = [r for r in results if r.low_resonance > 0]
-        if not results and fmt is export.OutputFormat.terminal:
-            console.print("没有股票触及极值区 · 无共振信号")
-            if board_meta is None and not is_code_mode:
-                save_snapshot(all_results)
-            return
+    if signal and not results and fmt is export.OutputFormat.terminal:
+        console.print("没有股票触及极值区 · 无共振信号")
+        if board_meta is None and not is_code_mode:
+            save_snapshot(all_results)
+        return
 
     title = terminal.scan_title(ctx, high_mode=high, signal_only=signal)
 

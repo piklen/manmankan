@@ -48,14 +48,14 @@ def industry_runner(monkeypatch):
     monkeypatch.setattr(
         "kan.cli.scan_cmds._get_watchlist_pairs", lambda group=None: [("600519", "贵州茅台")]
     )
-    monkeypatch.setattr("kan.cli.scan_cmds._auto_fetch_stale", lambda _p: None)
+    monkeypatch.setattr("kan.cli.helpers._auto_fetch_stale", lambda _p: None)
     monkeypatch.setattr(
         "kan.cli.scan_cmds._load_watchlist_pairs", lambda group=None: [("600519", "贵州茅台")]
     )
     monkeypatch.setattr(
         "kan.cli.trend_cmds._get_watchlist_pairs", lambda group=None: [("600519", "贵州茅台")]
     )
-    monkeypatch.setattr("kan.cli.trend_cmds._auto_fetch_stale", lambda _p: None)
+    monkeypatch.setattr("kan.cli.helpers._auto_fetch_stale", lambda _p: None)
     monkeypatch.setattr(
         "kan.cli.trend_cmds._load_watchlist_pairs", lambda group=None: [("600519", "贵州茅台")]
     )

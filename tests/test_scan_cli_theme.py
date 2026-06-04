@@ -101,7 +101,7 @@ def _stub_fetch_kline(monkeypatch):
             for code, name in targets
         ]
     monkeypatch.setattr("kan.core.scanner.scan_batch", fake_scan_batch)
-    monkeypatch.setattr("kan.cli.scan_cmds._auto_fetch_stale", lambda targets: None)
+    monkeypatch.setattr("kan.cli.helpers._auto_fetch_stale", lambda targets: None)
 
 
 def test_scan_theme_runs(monkeypatch, _isolate_all):

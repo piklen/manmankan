@@ -87,6 +87,27 @@ def test_resolve_stock_set_or_exit_no_meta_returns_none():
     assert meta is None
 
 
+def test_resolve_stock_set_source_error_is_domain_error_without_printing(monkeypatch):
+    """纯 resolve 不打印、不 Typer exit；CLI adapter 在边界负责展示。"""
+    err_calls: list[str] = []
+    monkeypatch.setattr(
+        "kan.core.pipeline._print_err",
+        lambda msg: err_calls.append(msg),
+    )
+    stock_set = _FakeStockSet(
+        pairs_error=ThemeNotFoundError("我的题材"),
+        theme="我的题材",
+    )
+
+    with pytest.raises(pipeline.StockSetResolveError) as exc_info:
+        pipeline.resolve_stock_set(stock_set)
+
+    assert err_calls == []
+    assert exc_info.value.code == "theme_not_found"
+    assert exc_info.value.exit_code == 2
+    assert "我的题材" in exc_info.value.message
+
+
 @pytest.mark.parametrize(("exc_cls", "expected_code", "msg_part"), [
     (BoardNotFoundError, 1, "未找到行业"),
     (BoardDataUnavailableError, 1, "行业数据源"),
@@ -545,6 +566,36 @@ def test_run_data_pipeline_source_error_exits_before_compute(monkeypatch):
         pipeline.run_data_pipeline(stock_set, compute=_compute)
     assert exc_info.value.exit_code == 1
     assert compute_calls == []  # compute 不该被调
+
+
+def test_run_data_pipeline_can_raise_domain_error_before_compute(monkeypatch):
+    """service/web 路径可选择 domain error，不被 Typer 绑死。"""
+    def fail_print(_msg: str) -> None:
+        raise AssertionError("should not print")
+
+    monkeypatch.setattr(
+        "kan.core.pipeline._print_err",
+        fail_print,
+    )
+    stock_set = _FakeStockSet(
+        pairs_error=BoardNotFoundError("ghost industry"),
+        industry="ghost industry",
+    )
+    compute_calls = []
+
+    def _compute(t, **kw):
+        compute_calls.append(t)
+        return []
+
+    with pytest.raises(pipeline.StockSetResolveError) as exc_info:
+        pipeline.run_data_pipeline(
+            stock_set,
+            compute=_compute,
+            exit_on_resolve_error=False,
+        )
+    assert exc_info.value.code == "board_not_found"
+    assert exc_info.value.exit_code == 1
+    assert compute_calls == []
 
 
 def test_run_data_pipeline_empty_results_yields_stale_freshness(monkeypatch):
