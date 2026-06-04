@@ -1,6 +1,6 @@
 [project]
 name = "manmankan"
-version = "0.0.6.8"
+version = "0.0.6.9"
 description = "A 股本地数据筛选器 · 告诉你坐标，不替你决策 · 人和 AI 共用的 CLI/JSON 数据层"
 requires-python = ">=3.11"
 license = { file = "LICENSE" }
