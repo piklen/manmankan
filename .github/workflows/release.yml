@@ -82,7 +82,7 @@ jobs:
         run: |
           uv run ruff check kan/ tests/
           uv run mypy
-          uv run pytest -q -m "not tty and not network"
+          uv run pytest -vv -m "not tty and not network" --durations=25 --durations-min=1.0
       - name: Build
         run: uv build --clear
       - name: Verify dist artifacts
@@ -169,17 +169,33 @@ jobs:
         with:
           python-version: ${{ matrix.python }}
       - uses: astral-sh/setup-uv@08807647e7069bb48b6ef5acd8ec9567f424441b  # pinned 2026-05-27
+        with:
+          enable-cache: false
       - name: Install manmankan from PyPI (${{ matrix.manager }})
         run: |
           # ref_name 去掉前导 v 后得到包版本
           VERSION="${GITHUB_REF_NAME#v}"
+          retry_install() {
+            local attempt
+            for attempt in 1 2 3 4 5 6; do
+              if "$@"; then
+                return 0
+              fi
+              if [ "$attempt" = 6 ]; then
+                return 1
+              fi
+              echo "PyPI install not ready yet (attempt ${attempt}/6); retrying..."
+              sleep 30
+            done
+          }
           case "${{ matrix.manager }}" in
             uv)
-              uv tool install "manmankan==${VERSION}" --reinstall
+              retry_install uv tool install "manmankan==${VERSION}" --reinstall
               ;;
             pip)
               python -m venv /tmp/smoke-venv
-              /tmp/smoke-venv/bin/pip install "manmankan==${VERSION}"
+              /tmp/smoke-venv/bin/python -m pip install --upgrade pip
+              retry_install /tmp/smoke-venv/bin/python -m pip install --no-cache-dir "manmankan==${VERSION}"
               echo "/tmp/smoke-venv/bin" >> "$GITHUB_PATH"
               ;;
           esac
