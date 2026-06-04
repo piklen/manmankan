@@ -27,13 +27,19 @@ DIMENSION_DATA_FIELDS = {
         "turnover_rate", "volume_ratio", "total_mv", "circ_mv",
     ),
     "fundamentals": ("roe", "netprofit_yoy", "or_yoy"),
-    "moneyflow": ("net_amount", "buy_elg_amount", "buy_lg_amount"),
+    "moneyflow": (
+        "net_amount", "buy_elg_amount", "buy_lg_amount", "buy_md_amount",
+        "buy_sm_amount", "inflow_days", "outflow_days", "net_amount_5d",
+    ),
     "technical": (
         "close", "macd_dif", "macd_dea", "macd", "kdj_k", "kdj_d", "kdj_j",
         "rsi_6", "rsi_12", "rsi_24", "ma_5", "ma_10", "ma_20", "ma_60",
         "atr", "boll_upper", "boll_mid", "boll_lower",
     ),
-    "sentiment": ("limit_times", "open_times", "limit", "up_stat"),
+    "sentiment": (
+        "limit_times", "open_times", "first_time", "last_time", "fd_amount",
+        "limit", "up_stat",
+    ),
     "chip": ("winner_rate", "cost_5pct", "cost_50pct", "cost_95pct", "weight_avg"),
     "shareholder": ("holder_chg_pct", "top10_float_ratio", "north_hold_ratio"),
 }
@@ -112,7 +118,17 @@ FILTER_SPECS = {
     ),
     "moneyflow": FindFilterSpec(
         "moneyflow", "--moneyflow", "moneyflow", True,
-        "tushare_moneyflow_dc", "daily",
+        "tushare_moneyflow", "daily",
+        "metric_null_or_data_unavailable",
+    ),
+    "moneyflow_daily": FindFilterSpec(
+        "moneyflow_daily", "--moneyflow-daily", "moneyflow", True,
+        "tushare_moneyflow", "daily",
+        "metric_null_or_data_unavailable",
+    ),
+    "moneyflow_days": FindFilterSpec(
+        "moneyflow_days", "--moneyflow-days", "moneyflow", True,
+        "tushare_moneyflow", "daily",
         "metric_null_or_data_unavailable",
     ),
     "rsi": FindFilterSpec(
@@ -136,9 +152,9 @@ FILTER_SPECS = {
         "metric_null_or_data_unavailable",
     ),
     "ma_bias": FindFilterSpec(
-        "ma_bias", "--ma-bias", "technical", True,
-        "tushare_stk_factor_pro", "daily",
-        "metric_null_or_data_unavailable",
+        "ma_bias", "--ma-bias", None, True,
+        "local_kline_or_kline_snapshot", "daily",
+        "insufficient_window_or_missing_snapshot",
     ),
     "atr_pct": FindFilterSpec(
         "atr_pct", "--atr-pct", "technical", True,
@@ -192,8 +208,11 @@ FIND_FILTER_HELP_GROUPS = (
     FindFilterHelpGroup(
         "valuation_quality_money",
         "估值 / 质量 / 资金",
-        ("pe", "pb", "turnover", "market_cap", "volume_ratio", "roe", "moneyflow"),
-        "`--market-cap` 单位亿元;`--roe` 为逐股报告期数据，`--all` 不支持。",
+        (
+            "pe", "pb", "turnover", "market_cap", "volume_ratio", "roe",
+            "moneyflow", "moneyflow_daily", "moneyflow_days",
+        ),
+        "`--market-cap` 单位亿元;`--roe` 为逐股报告期数据，`--all` 不支持；资金流单位万元。",
     ),
     FindFilterHelpGroup(
         "technical_momentum",
@@ -231,7 +250,7 @@ _SOURCE_LABELS = {
     "local_kline_or_kline_snapshot": "小池走本地日 K 缓存;`--all` 走全市场 K 线快照",
     "tushare_daily_basic": "TuShare `daily_basic` 衍生截面指标",
     "tushare_fina_indicator": "TuShare `fina_indicator` 最新报告期",
-    "tushare_moneyflow_dc": "TuShare `moneyflow_dc` 衍生主力净额",
+    "tushare_moneyflow": "TuShare `moneyflow` 衍生资金流向",
     "tushare_stk_factor_pro": "TuShare `stk_factor_pro` 衍生技术指标",
     "tushare_limit_list_d": "TuShare `limit_list_d` 涨跌停事件表",
     "tushare_cyq_perf": "TuShare `cyq_perf` 筹码分布",
@@ -245,7 +264,7 @@ _TOKEN_LABELS = {
     "local_kline_or_kline_snapshot": "小池否;`--all` 是",
     "tushare_daily_basic": "是",
     "tushare_fina_indicator": "是",
-    "tushare_moneyflow_dc": "是",
+    "tushare_moneyflow": "是",
     "tushare_stk_factor_pro": "是",
     "tushare_limit_list_d": "是",
     "tushare_cyq_perf": "是",
@@ -366,13 +385,20 @@ _VALUATION_CONTEXT_FIELDS = (
     "pe_industry_pct", "pb_industry_pct", "pe_industry_median", "pb_industry_median",
 )
 _FUNDAMENTALS_FIELDS = ("end_date", "roe", "netprofit_yoy", "or_yoy", "source")
-_MONEYFLOW_FIELDS = ("trade_date", "net_amount", "buy_elg_amount", "buy_lg_amount", "source")
+_MONEYFLOW_FIELDS = (
+    "trade_date", "net_amount", "buy_elg_amount", "buy_lg_amount",
+    "buy_md_amount", "buy_sm_amount", "inflow_days", "outflow_days",
+    "net_amount_5d", "source",
+)
 _TECHNICAL_FIELDS = (
     "trade_date", "close", "macd_dif", "macd_dea", "macd", "kdj_k", "kdj_d",
     "kdj_j", "rsi_6", "rsi_12", "rsi_24", "ma_5", "ma_10", "ma_20", "ma_60",
     "atr", "atr_pct", "ma_bias", "boll_upper", "boll_mid", "boll_lower", "source",
 )
-_SENTIMENT_FIELDS = ("trade_date", "limit_times", "open_times", "limit", "up_stat", "source")
+_SENTIMENT_FIELDS = (
+    "trade_date", "limit_times", "open_times", "first_time", "last_time",
+    "fd_amount", "limit", "up_stat", "source",
+)
 _CHIP_FIELDS = (
     "trade_date", "winner_rate", "cost_5pct", "cost_50pct", "cost_95pct",
     "weight_avg", "source",
@@ -440,7 +466,8 @@ FIND_FIELD_PRESETS = {
     ),
     "@moneyflow": (
         "moneyflow.trade_date", "moneyflow.net_amount", "moneyflow.buy_elg_amount",
-        "moneyflow.buy_lg_amount", "moneyflow.source",
+        "moneyflow.buy_lg_amount", "moneyflow.buy_md_amount", "moneyflow.buy_sm_amount",
+        "moneyflow.inflow_days", "moneyflow.net_amount_5d", "moneyflow.source",
     ),
     "@technical": (
         "technical.trade_date", "technical.rsi_6", "technical.macd_dif",
@@ -450,6 +477,7 @@ FIND_FIELD_PRESETS = {
     ),
     "@sentiment": (
         "sentiment.trade_date", "sentiment.limit_times", "sentiment.open_times",
+        "sentiment.first_time", "sentiment.last_time", "sentiment.fd_amount",
         "sentiment.limit", "sentiment.up_stat", "sentiment.source",
     ),
     "@chip": (

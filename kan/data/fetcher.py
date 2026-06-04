@@ -43,6 +43,7 @@ KLINE_COLUMNS = KLINE_REQUIRED + KLINE_OPTIONAL
 
 # 6 位纯数字股票代码 · 防止 path traversal
 _SYMBOL_PATTERN = re.compile(r"^\d{6}$")
+DEFAULT_KLINE_DAYS = 360
 
 
 def _normalize_kline(
@@ -139,6 +140,19 @@ def _read_cutoff_from_parquet(path: Path) -> date | None:
         return None
 
 
+def _cache_has_min_rows(path: Path, min_rows: int | None) -> bool:
+    """Return whether the cache has enough K-line rows for an N-day calculation."""
+    if min_rows is None or min_rows <= 0:
+        return True
+    try:
+        import pandas as pd
+
+        return len(pd.read_parquet(path, columns=["date"])) >= min_rows
+    except Exception as e:
+        debug_log(__name__, f"_cache_has_min_rows({path.name}, {min_rows})", e)
+        return False
+
+
 def _load_with_migration(path: Path) -> pd.DataFrame:
     """读 parquet · 旧 schema 缺 `_source` 列自动加 'unknown' · atomic write back.
 
@@ -190,7 +204,7 @@ def _is_legacy_tushare_raw_cache(path: Path) -> bool:
         return False
 
 
-def _is_cache_fresh(path: Path) -> bool:
+def _is_cache_fresh(path: Path, *, min_rows: int | None = None) -> bool:
     """缓存是否已包含"应有最近交易日"数据。
 
     当前判据：K 线最后一行 date ≥ latest_trade_date()。
@@ -204,6 +218,13 @@ def _is_cache_fresh(path: Path) -> bool:
             __name__,
             f"_is_cache_fresh({path.name})",
             "legacy tushare daily cache → stale",
+        )
+        return False
+    if not _cache_has_min_rows(path, min_rows):
+        debug_log(
+            __name__,
+            f"_is_cache_fresh({path.name})",
+            f"cache rows < required {min_rows} → stale",
         )
         return False
     last_date = _read_cutoff_from_parquet(path)
@@ -259,7 +280,11 @@ def _ensure_no_proxy() -> None:
 
 # ── 公开 API ─────────────────────────────────────────────────────────
 
-def fetch_kline(symbol: str, days: int = 180, force: bool = False) -> pd.DataFrame:
+def fetch_kline(
+    symbol: str,
+    days: int = DEFAULT_KLINE_DAYS,
+    force: bool = False,
+) -> pd.DataFrame:
     """拉取单只股票前复权日 K 线 · 走 default KlineSourceChain (按 priority sort + race)。
 
     返回 DataFrame · 标准列：date, open, high, low, close, volume, amount, _source
@@ -278,7 +303,7 @@ def fetch_kline(symbol: str, days: int = 180, force: bool = False) -> pd.DataFra
     _ensure_data_dir()
     cache = _cache_path(symbol)
 
-    if not force and _is_cache_fresh(cache):
+    if not force and _is_cache_fresh(cache, min_rows=days):
         return _load_with_migration(cache)
 
     _ensure_no_proxy()
@@ -326,7 +351,7 @@ def resolve_max_workers() -> int:
 
 def fetch_batch(
     symbols: list[str],
-    days: int = 180,
+    days: int = DEFAULT_KLINE_DAYS,
     force: bool = False,
     max_workers: int | None = None,
     on_progress: Callable | None = None,
@@ -382,8 +407,8 @@ def fetch_batch(
     return results, errors
 
 
-def is_fresh(symbol: str) -> bool:
-    return _is_cache_fresh(_cache_path(symbol))
+def is_fresh(symbol: str, *, min_rows: int | None = None) -> bool:
+    return _is_cache_fresh(_cache_path(symbol), min_rows=min_rows)
 
 
 def has_cache(symbol: str) -> bool:

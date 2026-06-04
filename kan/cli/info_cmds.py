@@ -200,6 +200,20 @@ def info(
     result = scan_stock(df, symbol, name)
     trend_result = calc_trend(df, symbol, name)
     volume_state = calc_volume_state(df)
+    moneyflow = None
+    sentiment = None
+    valuation = None
+    try:
+        from kan.core.enrich import enrich_results
+
+        enriched = enrich_results([result], need_moneyflow=True, need_sentiment=True)[0]
+        moneyflow = enriched.moneyflow
+        sentiment = enriched.sentiment
+        valuation = enriched.valuation
+    except Exception as e:
+        from kan.infra.log import debug_log
+
+        debug_log(__name__, f"info enrich failed · {symbol}", e)
     name_short = name.replace(" ", "")
 
     # 背景: 数据截止 / 拉取时间分离展示
@@ -217,18 +231,18 @@ def info(
         if fmt is export.OutputFormat.json:
             # AI JSON 层:enrich 截面市场指标 · 全市场截面层:估值位置对照 (历史分位+行业中位)
             # 无 token → 均 None · 优雅降级 (info 仍出位置/涨跌/量能)
-            from kan.core.enrich import enrich_results
             from kan.core.valuation_context import build_valuation_context
-            valuation = enrich_results([result])[0].valuation
             valuation_context = build_valuation_context(symbol)
             typer.echo(export.to_json(export.info_payload(
                 result, trend_result, volume=volume_state, data_cutoff=cutoff,
                 fetched_at=fetched_at or None, stale=is_stale,
                 valuation=valuation, valuation_context=valuation_context,
+                moneyflow=moneyflow, sentiment=sentiment,
             )))
         else:
             typer.echo(export.info_markdown(
                 result, trend_result, volume=volume_state, title=title,
+                moneyflow=moneyflow, sentiment=sentiment,
             ))
         return
 
@@ -261,6 +275,39 @@ def info(
         console.print(
             f"  成交量 · 今日是近 {volume_state.window} 日均量的 "
             f"{volume_state.ratio} 倍 · {volume_state.label}"
+        )
+    if moneyflow is not None and (
+        moneyflow.net_amount is not None
+        or moneyflow.buy_elg_amount is not None
+        or moneyflow.buy_lg_amount is not None
+        or moneyflow.net_amount_5d is not None
+    ):
+        def _fmt(value: float | None, digits: int = 0) -> str:
+            return "-" if value is None else f"{value:.{digits}f}"
+
+        console.print(
+            "  资金流 · "
+            f"今日主力 {_fmt(moneyflow.net_amount)} 万元 · "
+            f"超大单 {_fmt(moneyflow.buy_elg_amount)} 万元 · "
+            f"大单 {_fmt(moneyflow.buy_lg_amount)} 万元 · "
+            f"连续净流入 {moneyflow.inflow_days if moneyflow.inflow_days is not None else '-'} 天 · "
+            f"5日合计 {_fmt(moneyflow.net_amount_5d)} 万元"
+        )
+    if sentiment is not None and (
+        sentiment.first_time is not None
+        or sentiment.last_time is not None
+        or sentiment.open_times is not None
+        or sentiment.fd_amount is not None
+    ):
+        def _fmt_detail(value: float | None, digits: int = 0) -> str:
+            return "-" if value is None else f"{value:.{digits}f}"
+
+        console.print(
+            "  涨跌停详情 · "
+            f"首次封板 {sentiment.first_time or '-'} · "
+            f"最后封板 {sentiment.last_time or '-'} · "
+            f"开板次数 {_fmt_detail(sentiment.open_times)} · "
+            f"封单金额 {_fmt_detail(sentiment.fd_amount)}"
         )
 
     # kan info 加 stale/intraday 警告 · 与 scan/trend 一致

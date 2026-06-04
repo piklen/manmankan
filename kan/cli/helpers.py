@@ -259,7 +259,11 @@ def _get_watchlist_pairs(group: str | None = None) -> list[tuple[str, str]]:
     return pairs
 
 
-def _auto_fetch_stale(pairs: list[tuple[str, str]]) -> None:
+def _auto_fetch_stale(
+    pairs: list[tuple[str, str]],
+    *,
+    days: int | None = None,
+) -> None:
     """自动拉取缺失或过期（非今天）的自选股数据。
 
     并发自适应 (历史背景): resolve_max_workers() · cpu_count*2 cap 12.
@@ -306,7 +310,8 @@ def _auto_fetch_stale(pairs: list[tuple[str, str]]) -> None:
         stale: list[tuple[str, str]] = []
         update_every = max(1, n_total // 20)
         for i, (sym, name) in enumerate(pairs):
-            if not is_fresh(sym):
+            fresh = is_fresh(sym) if days is None else is_fresh(sym, min_rows=days)
+            if not fresh:
                 stale.append((sym, name))
             if (i + 1) % update_every == 0 or i + 1 == n_total:
                 status.update(
@@ -372,8 +377,10 @@ def _auto_fetch_stale(pairs: list[tuple[str, str]]) -> None:
 
         try:
             # 背景: max_workers 不再硬编码 · 由 fetch_batch 内部 resolve_max_workers() 启发式
+            fetch_kwargs = {"days": days} if days is not None else {}
             results, errors = fetch_batch(
                 [s for s, _ in stale],
+                **fetch_kwargs,
                 force=True,
                 on_progress=_on_done,
             )

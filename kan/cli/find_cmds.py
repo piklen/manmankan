@@ -249,6 +249,7 @@ def _run_all_stocks_path(
             data_cutoff=result.ctx.data_cutoff,
             stale=result.ctx.stale,
             filters=result.filters,
+            match_mode="any" if conditions.match_any else "all",
             compact=compact,
             availability_rows=result.ctx.rows,
             included_dimensions=result.included_dimensions,
@@ -351,6 +352,7 @@ def _run_kline_path(
                 pool_size=len(result.ctx.results),
                 matched_total=len(result.matches),
                 freshness=result.ctx.freshness,
+                match_mode="any" if conditions.match_any else "all",
                 compact=compact,
                 availability_results=result.pool_results,
                 included_dimensions=result.included_dimensions,
@@ -398,6 +400,10 @@ def find(
         bool,
         typer.Option("--exclude-st", help="排除 ST/*ST 股票"),
     ] = False,
+    match_any: Annotated[
+        bool,
+        typer.Option("--any", help="任一 filter 命中即返回；默认所有 filter 都需命中"),
+    ] = False,
     pe: Annotated[
         list[str],
         typer.Option(
@@ -444,7 +450,21 @@ def find(
         list[str],
         typer.Option(
             "--moneyflow",
-            help="主力资金 filter OP:VAL 例 gt:0 (主力净流入 · 单位万元) · 可多次",
+            help="主力资金 filter OP:VAL 例 gt:0 (近 5 日合计优先 · 单位万元) · 可多次",
+        ),
+    ] = [],  # noqa: B006 · typer multi-option 需要 list 默认值
+    moneyflow_daily: Annotated[
+        list[str],
+        typer.Option(
+            "--moneyflow-daily",
+            help="单日主力净额 filter OP:VAL 例 gt:0 (单位万元) · 可多次",
+        ),
+    ] = [],  # noqa: B006 · typer multi-option 需要 list 默认值
+    moneyflow_days: Annotated[
+        list[str],
+        typer.Option(
+            "--moneyflow-days",
+            help="连续主力净流入天数 filter OP:VAL 例 gte:3 · 可多次",
         ),
     ] = [],  # noqa: B006 · typer multi-option 需要 list 默认值
     rsi: Annotated[
@@ -581,7 +601,8 @@ def find(
             "--sort",
             help=(
                 "排序 FIELD:asc|desc · FIELD 取 "
-                "pe/pb/turnover/market-cap/volume-ratio/moneyflow · 例 moneyflow:desc"
+                "pe/pb/turnover/market-cap/volume-ratio/moneyflow/moneyflow-daily/moneyflow-days · "
+                "例 moneyflow:desc"
             ),
         ),
     ] = None,
@@ -634,10 +655,11 @@ def find(
       kan find --pos 180:lt:5                          # 180 日位置 < 5%
       kan find --resonance low:gte:3                   # 低点共振 ≥ 3 周期
       kan find --pos 60:lt:10 --resonance low:gte:2    # 多条件 AND
+      kan find --any --pos 20:lt:10 --moneyflow-daily gt:10000  # 任一 filter 命中
       kan find --industry 半导体 --pos 180:lt:10       # 半导体里 180 日位置 < 10%
       kan find --exclude-st --pos 180:lt:5             # 排 ST + 位置 filter
       kan find --industry 半导体 --format json         # 整池全维度 JSON(AI 取数)
-      kan find --industry 半导体 --pe lt:30 --moneyflow gt:0  # 估值+资金组合
+      kan find --industry 半导体 --pe lt:30 --moneyflow-daily gt:0  # 估值+资金组合
       kan find --all --pe lt:20 --format json          # 全市场 PE<20 截面筛
       kan find --all --pe lt:20 --format json --compact --no-compact-context
       kan find --all --pe lt:20 --format json --fields @core,@valuation
@@ -648,8 +670,9 @@ def find(
 
     Filter:
       单维度 filter 只反映该维度 · 命中不等于整体位置低/高 · 多维度请叠加 filter 或用 kan info 看全周期
+      默认所有 filter 都需命中；加 --any 时任一 filter 命中即返回，triggered_filters 记录实际命中项
       核心层:
-        --pos PERIOD:OP:VAL    PERIOD 取 3/5/7/10/15/30/60/90/120/180 · OP 取 lt/lte/gt/gte/eq/ne
+        --pos PERIOD:OP:VAL    PERIOD 取 2-360 任意整数 · OP 取 lt/lte/gt/gte/eq/ne
         --resonance LEVEL:OP:VAL   LEVEL 取 low/high · OP 同上 · VAL 取 [0, 10]
         --exclude-st           排 ST (quiet · 不记 triggered)
       估值 / 质量 / 资金:
@@ -659,10 +682,12 @@ def find(
         --market-cap OP:VAL    总市值(亿元)裸值筛 · 例 gt:100
         --volume-ratio OP:VAL  量比裸值筛 · 例 gt:1.5
         --roe OP:VAL           ROE % 裸值筛 · 例 gte:15 · 逐股 · --all 不支持
-        --moneyflow OP:VAL     主力净额(万元) · 例 gt:0 净流入
+        --moneyflow OP:VAL     主力净额(万元) · 近 5 日合计优先,缺失回落单日 · 例 gt:0
+        --moneyflow-daily OP:VAL  单日主力净额(万元) · 例 gt:0
+        --moneyflow-days OP:VAL   连续主力净流入天数 · 例 gte:3
       技术 / 趋势动量（进阶 · 需理解口径）:
         --rsi/--macd-dif/--macd/--kdj-j OP:VAL  技术裸值筛 · 前复权 · 例 --rsi lt:30
-        --ma-bias PERIOD:OP:VAL  乖离率 · PERIOD 取 5/10/20/60 · 例 20:gt:0
+        --ma-bias PERIOD:OP:VAL  乖离率 · PERIOD 取 2-360 任意整数 · 例 20:gt:0
         --gain PERIOD:OP:VAL   近 N 日涨幅% · 例 30:gt:20 · K 线池/--all 预计算快照
         --atr-pct OP:VAL       ATR 波动率% · 例 lt:5 (atr/close · 裸值)
         --up-days OP:VAL       连阳天数 · 例 gte:3 · K 线池/--all 预计算快照
@@ -767,6 +792,8 @@ def find(
             volume_ratio=volume_ratio,
             roe=roe,
             moneyflow=moneyflow,
+            moneyflow_daily=moneyflow_daily,
+            moneyflow_days=moneyflow_days,
             rsi=rsi,
             macd_dif=macd_dif,
             macd=macd,
@@ -781,6 +808,7 @@ def find(
             top10=top10,
             north=north,
             exclude_st=exclude_st,
+            match_any=match_any,
         )
     except FilterParseError as e:
         _exit_find_error(

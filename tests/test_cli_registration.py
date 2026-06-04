@@ -27,10 +27,12 @@ REPO_ROOT = Path(__file__).resolve().parents[1]
 # - cli_scan_cmds (6):      fetch / scan / low / high / info / compare
 # - cli_trend_cmds (1):     trend
 # - cli_meta_cmds (3):      update / uninstall / completion
+# - cli_ai_cmds (2):        examples / index
 # - cli_move_export_cmds (2): move / export   (历史背景多分组管理)
 # - cli_find_cmds (1):      find             (历史背景选股 DSL)
 # - cli_history_cmds (1):   history          (位置历史回溯)
-# 注:`kan group`/`kan config`/`kan theme` 是 sub-Typer (app.add_typer) · 不进 registered_commands · 不需 canary。
+# 注:`kan group`/`kan config`/`kan theme`/`kan fields`/`kan mcp` 是 sub-Typer
+# (app.add_typer) · 不进 registered_commands · 不需 canary。
 _EXPECTED_COMMANDS = {
     "help",
     "add",
@@ -49,6 +51,8 @@ _EXPECTED_COMMANDS = {
     "update",
     "uninstall",
     "completion",
+    "examples",
+    "index",
     "move",
     "export",
     "find",
@@ -101,3 +105,4 @@ def test_console_script_uses_thin_entrypoint() -> None:
     """console script should keep import-time failure guard outside kan.cli."""
     pyproject = tomllib.loads((REPO_ROOT / "pyproject.toml").read_text())
     assert pyproject["project"]["scripts"]["kan"] == "kan._entry:main"
+    assert pyproject["project"]["scripts"]["kan-mcp"] == "kan.mcp.server:main"

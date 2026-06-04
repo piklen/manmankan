@@ -63,9 +63,9 @@ class TestFindCli:
         assert "格式错误" in out or "周期非整数" in out
 
     def test_bad_pos_period_exits_two(self):
-        ec, out = _run(["find", "--pos", "200:lt:5"])
+        ec, out = _run(["find", "--pos", "361:lt:5"])
         assert ec == 2
-        assert "周期 200 不支持" in out
+        assert "周期 361 不支持" in out
 
     def test_bad_pos_value_exits_two(self):
         ec, out = _run(["find", "--pos", "180:lt:150"])
@@ -281,7 +281,7 @@ class TestFindCli:
         Rich console 可能 soft-wrap "例: --pos 180:lt:5" 跨行,因此分开断言
         "例:" 和 "180:lt:5" 都在 stderr 出现就够了。
         """
-        for bad_pos in ["foo:bar:baz", "200:lt:5", "180:wtf:5", "180:lt:abc", "180:lt:150"]:
+        for bad_pos in ["foo:bar:baz", "361:lt:5", "180:wtf:5", "180:lt:abc", "180:lt:150"]:
             ec, out = _run(["find", "--pos", bad_pos])
             assert ec == 2, f"{bad_pos} should exit 2"
             assert "例:" in out, f"{bad_pos} missing 例: hint"

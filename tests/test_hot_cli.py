@@ -49,7 +49,7 @@ def hot_runner(monkeypatch):
     monkeypatch.setattr(
         "kan.cli.extreme_cmds._get_watchlist_pairs", lambda group=None: [("600519", "贵州茅台")]
     )
-    monkeypatch.setattr("kan.cli.extreme_cmds._auto_fetch_stale", lambda _p: None)
+    monkeypatch.setattr("kan.cli.extreme_cmds._auto_fetch_stale", lambda _p, **_kw: None)
     monkeypatch.setattr(
         "kan.cli.extreme_cmds._load_watchlist_pairs", lambda group=None: [("600519", "贵州茅台")]
     )

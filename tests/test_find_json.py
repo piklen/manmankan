@@ -701,6 +701,20 @@ class TestCrossSectionPayload:
         assert tf["filter"] == "--pe"
         assert tf["value"] == 20.04
 
+    def test_find_payload_rule_match_mode(self):
+        p = export.find_payload(
+            [_entry(triggered=())],
+            query_time="t",
+            pools=["watchlist"],
+            filters=[{"name": "--pos", "param": "20:lt:10"}],
+            pool_size=1,
+            matched_total=1,
+            freshness=_freshness(),
+            match_mode="any",
+        )
+
+        assert p["rule"]["match"] == "any"
+
     def test_ctx_none_safe(self):
         p = export.cross_section_payload(
             self._entries(self._row(with_ctx=False)), query_time="t",

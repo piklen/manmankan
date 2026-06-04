@@ -19,6 +19,8 @@ def help_cmd() -> None:
 
 [bold cyan]自选股管理[/bold cyan]
   kan add 600519 000858       添加自选股（代码）
+  cat codes.txt | kan add -   从 stdin 批量添加代码
+  kan add 600519 --fetch      添加后立即拉取 K 线缓存
   kan add 茅台                添加自选股（名称搜索）
   kan add --industry 半导体   按行业批量添加成分股（二次确认）
   kan add --theme AI          按题材批量添加成分股（二次确认）
@@ -28,6 +30,7 @@ def help_cmd() -> None:
   kan list                    查看自选列表
   kan list --industry 半导体  只列某行业的自选
   kan list --theme AI         只列某题材的自选
+  kan group                   管理自选股分组
   kan import stocks.csv       CSV 批量导入
   kan clear                   清空自选列表
 
@@ -67,6 +70,7 @@ def help_cmd() -> None:
   kan find --pos 180:lt:5                      位置 filter · 180 日位置 < 5%
   kan find --resonance low:gte:3               共振 filter · 低点共振 ≥ 3 周期
   kan find --pos 60:lt:10 --resonance low:gte:2  多条件 AND
+  kan find --any --pos 20:lt:10 --moneyflow-daily gt:10000  多条件任一命中
   kan find --exclude-st --pos 180:lt:5         排 ST · 位置 filter
   kan find --industry 半导体 --pos 180:lt:10   行业池里筛 180 日位置 < 10%
   kan find --codes 600519,000858 --gain 30:gt:10  任意代码池里筛近 30 日涨幅
@@ -78,8 +82,8 @@ def help_cmd() -> None:
   kan find --all --pe lt:20 --format json --compact --no-compact-context  省略 K 线上下文
   kan find --industry 半导体 --format json --fields @core,@valuation
 
-  [dim]PERIOD: 3/5/7/10/15/30/60/90/120/180 · OP: lt/lte/gt/gte/eq/ne · LEVEL: low/high[/dim]
-  [dim]单维度 filter 只反映该维度 · 命中不等于整体位置低/高 · 多维度请叠加 filter 或用 kan info 看全周期[/dim]
+  [dim]PERIOD: 2-360 任意整数 · OP: lt/lte/gt/gte/eq/ne · LEVEL: low/high[/dim]
+  [dim]单维度 filter 只反映该维度 · 默认 AND；--any 为任一 filter 命中 · 命中不等于整体位置低/高[/dim]
   [dim]可用 filter 分组:
   {find_filter_groups}[/dim]
   [dim]可用 fields preset:
@@ -114,6 +118,7 @@ def help_cmd() -> None:
 [bold cyan]数据管理[/bold cyan]
   kan fetch                 拉取数据（通常不需要，scan 自动更新）
   kan fetch --force         强制刷新
+  kan fetch --verbose       逐只输出拉取状态
   kan fetch --industry X    预拉某行业全部成分股
   kan fetch --hot rank      预拉东财人气榜股票
   kan fetch --theme AI      预拉某题材全部成分股
@@ -133,6 +138,12 @@ def help_cmd() -> None:
 [bold cyan]shell 命令补全[/bold cyan] (mac/linux/windows)
   kan completion install    安装补全脚本（自动检测 shell · 之后 kan s<Tab>=kan scan）
   kan completion install zsh  显式指定 shell（zsh/bash/fish/powershell）
+
+[bold cyan]AI / MCP[/bold cyan]
+  kan examples              查看 3-5 个端到端工作流
+  kan fields list           查看 find JSON 字段白名单
+  kan mcp install           注册 manmankan MCP 到本机常见客户端
+  kan mcp serve             启动 stdio MCP server
 
 [dim]涨跌停自动标记 · ST 默认显示，kan scan --exclude-st 可排除[/dim]
 [dim]任何命令加 --help / -h 看详细说明[/dim]

@@ -1,17 +1,17 @@
 """主力资金截面拉取编排 · cache + 公开 API (估值/质量/资金维度)。
 
 仿 metrics.py 的截面缓存机制 (cache key = trade_date · parquet · 历史日永鲜 /
-最新日 TTL) · 但单源直调 _fetch_tushare_moneyflow (不走责任链:moneyflow_dc 仅
+最新日 TTL) · 但单源直调 _fetch_tushare_moneyflow (不走责任链:moneyflow 仅
 tushare 一源 · 同 industry_map "单源暂不抽 chain" 约定 · 避免过度抽象)。
 
-数据从 20230911 起 (早期交易日无数据 → 空 df 降级)。主力净额是客观资金事实
+moneyflow 数据从 2010 起。主力净额是客观资金事实
 (compliance §2 安全区 · 同 OHLCV · 裸值可出)。
 """
 from __future__ import annotations
 
 import re
 import time
-from datetime import datetime
+from datetime import date, datetime
 from pathlib import Path
 from typing import TYPE_CHECKING
 
@@ -27,13 +27,21 @@ if TYPE_CHECKING:
 MONEYFLOW_REQUIRED = ["symbol"]
 MONEYFLOW_OPTIONAL = [
     "trade_date",
-    "net_amount",        # 主力净额 (东财口径 · 单位万元)
+    "net_amount",        # 主力净额 (单位万元)
     "buy_elg_amount",    # 超大单净额
     "buy_lg_amount",     # 大单净额
+    "buy_md_amount",     # 中单净额
+    "buy_sm_amount",     # 小单净额
+    "inflow_days",       # 截至 trade_date 连续主力净流入天数
+    "outflow_days",      # 截至 trade_date 连续主力净流出天数
+    "net_amount_5d",     # 近 5 个交易日主力净额合计
     "_source",
 ]
 MONEYFLOW_COLUMNS = MONEYFLOW_REQUIRED + MONEYFLOW_OPTIONAL
-_MONEYFLOW_NUMERIC = ["net_amount", "buy_elg_amount", "buy_lg_amount"]
+_MONEYFLOW_NUMERIC = [
+    "net_amount", "buy_elg_amount", "buy_lg_amount", "buy_md_amount", "buy_sm_amount",
+    "inflow_days", "outflow_days", "net_amount_5d",
+]
 
 _SYMBOL_PATTERN = re.compile(r"^\d{6}$")
 _TRADE_DATE_PATTERN = re.compile(r"^\d{8}$")
@@ -41,7 +49,15 @@ _TRADE_DATE_PATTERN = re.compile(r"^\d{8}$")
 _MONEYFLOW_TTL = 6 * 3600
 """最新交易日截面 mtime TTL (同 metrics) · 历史交易日截面固定 · 永鲜。"""
 _MONEYFLOW_SOURCE = "tushare_moneyflow"
-_TUSHARE_MONEYFLOW_FIELDS = "ts_code,trade_date,net_amount,buy_elg_amount,buy_lg_amount"
+_TUSHARE_MONEYFLOW_FIELDS = (
+    "ts_code,trade_date,"
+    "buy_elg_amount,sell_elg_amount,"
+    "buy_lg_amount,sell_lg_amount,"
+    "buy_md_amount,sell_md_amount,"
+    "buy_sm_amount,sell_sm_amount,"
+    "net_mf_amount"
+)
+_MONEYFLOW_STREAK_LOOKBACK = 20
 
 
 # ── 归一化 ───────────────────────────────────────────────────────────
@@ -113,6 +129,37 @@ def _load_cache(path: Path) -> pd.DataFrame | None:
         return None
 
 
+def _cache_compatible(df: pd.DataFrame) -> bool:
+    """Current-cache schema guard · old moneyflow_dc caches must not shadow TuShare moneyflow."""
+    if df.empty:
+        return True
+    if not set(MONEYFLOW_COLUMNS).issubset(df.columns):
+        return False
+    if "_source" not in df.columns:
+        return False
+    sources = {str(x) for x in df["_source"].dropna().unique()}
+    return not sources or sources == {_MONEYFLOW_SOURCE}
+
+
+def _load_latest_available_moneyflow(before_td: str) -> pd.DataFrame | None:
+    """latest 截面拉空时 · 降级到 DATA_DIR 里早于 before_td 的最近资金流截面缓存。"""
+    best_date: str | None = None
+    best_path: Path | None = None
+    for path in DATA_DIR.glob("moneyflow_*.parquet"):
+        m = re.match(r"^moneyflow_(\d{8})\.parquet$", path.name)
+        if not m:
+            continue
+        d = m.group(1)
+        if d < before_td and (best_date is None or d > best_date):
+            best_date, best_path = d, path
+    if best_path is None:
+        return None
+    df = _load_cache(best_path)
+    if df is None or df.empty:
+        return None
+    return _normalize_moneyflow(df)
+
+
 def _empty_df() -> pd.DataFrame:
     import pandas as pd
     return pd.DataFrame(columns=MONEYFLOW_COLUMNS)
@@ -126,7 +173,7 @@ def _filter_symbols(df: pd.DataFrame, symbols: list[str] | None) -> pd.DataFrame
 
 
 def _to_tushare_moneyflow_df(data: dict | None) -> pd.DataFrame | None:
-    """TuShare moneyflow_dc data block -> raw DataFrame with `symbol`."""
+    """TuShare moneyflow data block -> raw DataFrame with `symbol` and normalized net columns."""
     import pandas as pd
 
     from kan.data.tushare import _strip_ts_suffix
@@ -141,11 +188,20 @@ def _to_tushare_moneyflow_df(data: dict | None) -> pd.DataFrame | None:
     if "ts_code" not in df.columns:
         return None
     df["symbol"] = df["ts_code"].map(_strip_ts_suffix)
+    if "net_mf_amount" in df.columns and "net_amount" not in df.columns:
+        df["net_amount"] = df["net_mf_amount"]
+    for prefix in ("elg", "lg", "md", "sm"):
+        buy_col = f"buy_{prefix}_amount"
+        sell_col = f"sell_{prefix}_amount"
+        if buy_col in df.columns and sell_col in df.columns:
+            buy = pd.to_numeric(df[buy_col], errors="coerce")
+            sell = pd.to_numeric(df[sell_col], errors="coerce")
+            df[buy_col] = buy - sell
     return df.drop(columns=["ts_code"])
 
 
 def _fetch_tushare_moneyflow(trade_date: str) -> pd.DataFrame | None:
-    """TuShare moneyflow_dc 单日截面 adapter · 独立熔断 key `tushare_moneyflow`."""
+    """TuShare moneyflow 单日截面 adapter · 独立熔断 key `tushare_moneyflow`."""
     from kan.data.tushare import _post_tushare_api, _resolve_config
     from kan.infra import circuit_breaker
 
@@ -159,7 +215,7 @@ def _fetch_tushare_moneyflow(trade_date: str) -> pd.DataFrame | None:
         data, _err = _post_tushare_api(
             endpoint=endpoint,
             token=token,
-            api_name="moneyflow_dc",
+            api_name="moneyflow",
             params={"trade_date": trade_date},
             fields=_TUSHARE_MONEYFLOW_FIELDS,
         )
@@ -168,7 +224,7 @@ def _fetch_tushare_moneyflow(trade_date: str) -> pd.DataFrame | None:
             return None
         df = _to_tushare_moneyflow_df(data)
         if df is None or df.empty:
-            cb.record("tushare_moneyflow", ok=False)
+            # API 成功响应但 items 空 = 当日数据未出 / 瞬时空 · 不熔断健康源。
             return None
         cb.record("tushare_moneyflow", ok=True)
         return df
@@ -176,6 +232,128 @@ def _fetch_tushare_moneyflow(trade_date: str) -> pd.DataFrame | None:
         debug_log(__name__, "fetch tushare moneyflow 失败", e)
         cb.record("tushare_moneyflow", ok=False)
         return None
+
+
+def _load_or_fetch_moneyflow_frame(
+    trade_date: str,
+    *,
+    force: bool = False,
+) -> pd.DataFrame:
+    """Load one exact trade_date frame from cache/API without historical fallback or rolling stats."""
+    ensure_dirs()
+    cache = _cache_path(trade_date)
+    if not force and _cache_fresh(cache, trade_date):
+        cached = _load_cache(cache)
+        if cached is not None and _cache_compatible(cached):
+            return _normalize_moneyflow(cached)
+
+    raw = _fetch_tushare_moneyflow(trade_date)
+    if raw is None or raw.empty:
+        return _empty_df()
+    df = _normalize_moneyflow(raw)
+    atomic_write_parquet(df, cache)
+    return df
+
+
+def _max_trade_date(df: pd.DataFrame, fallback_td: str) -> date:
+    import pandas as pd
+
+    vals = [d for d in df.get("trade_date", []) if d is not None and not pd.isna(d)]
+    if vals:
+        return max(vals)
+    return datetime.strptime(fallback_td, "%Y%m%d").date()
+
+
+def _recent_trade_dates(end_date: date, count: int) -> list[date]:
+    """取 <= end_date 的最近 count 个交易日 · calendar 不可用时退化 weekday。"""
+    from datetime import timedelta
+
+    try:
+        from kan.core.trading_calendar import get_trade_dates
+
+        dates = sorted(d for d in get_trade_dates() if d <= end_date)
+    except Exception:
+        dates = []
+    if len(dates) >= count:
+        return dates[-count:]
+
+    out: list[date] = []
+    cursor = end_date
+    while len(out) < count:
+        if cursor.weekday() < 5:
+            out.append(cursor)
+        cursor -= timedelta(days=1)
+    return sorted(out)
+
+
+def _attach_recent_flow_stats(
+    df: pd.DataFrame,
+    *,
+    end_date: date,
+    fetch_missing_history: bool,
+) -> pd.DataFrame:
+    """Attach net_amount_5d / inflow_days / outflow_days to the returned cross-section."""
+    import pandas as pd
+
+    if df.empty:
+        return df
+    symbols = set(df["symbol"].astype(str))
+    frames: list[pd.DataFrame] = []
+    for d in _recent_trade_dates(end_date, _MONEYFLOW_STREAK_LOOKBACK):
+        if d == end_date:
+            frame = df
+        elif fetch_missing_history:
+            frame = _load_or_fetch_moneyflow_frame(d.strftime("%Y%m%d"))
+        else:
+            cached = _load_cache(_cache_path(d.strftime("%Y%m%d")))
+            frame = cached if cached is not None else _empty_df()
+        if frame.empty:
+            continue
+        frame = frame[frame["symbol"].isin(symbols)]
+        if not frame.empty:
+            frames.append(frame[["symbol", "trade_date", "net_amount"]].copy())
+    if not frames:
+        return df
+
+    hist = pd.concat(frames, ignore_index=True)
+    hist = hist.dropna(subset=["trade_date"])
+    hist["net_amount"], _bad = to_numeric_checked(hist["net_amount"])
+    hist = hist.dropna(subset=["net_amount"])
+    if hist.empty:
+        return df
+
+    stats: dict[str, dict[str, float | int]] = {}
+    for symbol, group in hist.sort_values("trade_date").groupby("symbol", sort=False):
+        nets = [float(x) for x in group["net_amount"].tolist()]
+        dates = list(group["trade_date"])
+        if not nets:
+            continue
+        last5 = [net for d, net in zip(dates, nets, strict=False) if d <= end_date][-5:]
+        inflow = 0
+        outflow = 0
+        direction = 0
+        for net in reversed(nets):
+            if net == 0:
+                break
+            sign = 1 if net > 0 else -1
+            if direction == 0:
+                direction = sign
+            if sign != direction:
+                break
+            if sign > 0:
+                inflow += 1
+            else:
+                outflow += 1
+        stats[str(symbol)] = {
+            "net_amount_5d": round(sum(last5), 2) if last5 else 0.0,
+            "inflow_days": inflow,
+            "outflow_days": outflow,
+        }
+
+    out = df.copy()
+    for col in ("net_amount_5d", "inflow_days", "outflow_days"):
+        out[col] = out["symbol"].map(lambda s, c=col: stats.get(str(s), {}).get(c))
+    return out
 
 
 # ── 公开 API ─────────────────────────────────────────────────────────
@@ -201,17 +379,18 @@ def fetch_moneyflow(
     """
     td = _validate_trade_date(trade_date or _latest_trade_date_str())
     ensure_dirs()
-    cache = _cache_path(td)
-    if not force and _cache_fresh(cache, td):
-        cached = _load_cache(cache)
-        if cached is not None:
-            return _filter_symbols(cached, symbols)
-
-    raw = _fetch_tushare_moneyflow(td)
-    if raw is None or raw.empty:
-        return _empty_df()
-    df = _normalize_moneyflow(raw)
-    atomic_write_parquet(df, cache)
+    df = _load_or_fetch_moneyflow_frame(td, force=force)
+    if df.empty:
+        fallback = _load_latest_available_moneyflow(before_td=td)
+        if fallback is None:
+            return _empty_df()
+        df = fallback
+    end_date = _max_trade_date(df, td)
+    df = _attach_recent_flow_stats(
+        df,
+        end_date=end_date,
+        fetch_missing_history=symbols is not None,
+    )
     return _filter_symbols(df, symbols)
 
 

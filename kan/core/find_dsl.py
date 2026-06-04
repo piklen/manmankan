@@ -23,7 +23,9 @@ from dataclasses import dataclass
 from typing import ClassVar, Literal, Self
 
 ALLOWED_OPS = ("lt", "lte", "gt", "gte", "eq", "ne")
-ALLOWED_PERIODS = (3, 5, 7, 10, 15, 30, 60, 90, 120, 180)
+MIN_PERIOD = 2
+MAX_PERIOD = 360
+ALLOWED_PERIODS = tuple(range(MIN_PERIOD, MAX_PERIOD + 1))
 RESONANCE_LEVELS = ("low", "high")
 
 
@@ -143,9 +145,13 @@ class PeriodScalarFilter:
             raise FilterParseError(
                 f"{cls.flag} 周期非整数 '{parts[0]}' · 例: {cls.flag} {cls.example}"
             ) from e
-        if period not in cls.allowed_periods:
+        min_period = min(cls.allowed_periods)
+        max_period = max(cls.allowed_periods)
+        if not min_period <= period <= max_period:
+            closest = min_period if period < min_period else max_period
             raise FilterParseError(
-                f"{cls.flag} 周期 {period} 不支持 · 仅 {list(cls.allowed_periods)} · "
+                f"{cls.flag} 周期 {period} 不支持 · 范围 {min_period}-{max_period} · "
+                f"最接近的是 {closest} · "
                 f"例: {cls.flag} {cls.example}"
             )
         op = parts[1].lower()
@@ -197,13 +203,27 @@ class RoeFilter(ScalarFilter):
 
 
 class MoneyflowFilter(ScalarFilter):
-    """主力净额 filter · 例 OP=gt VALUE=0 = 主力净流入 (估值/质量/资金维度).
+    """主力资金 filter · 例 OP=gt VALUE=0 = 近 5 日合计优先、缺失回落单日净额.
 
-    读 moneyflow.net_amount (东财口径 · 单位万元 · None → 不命中)· 客观资金事实。
+    读 moneyflow.net_amount_5d 优先,缺失时读 moneyflow.net_amount (单位万元 · None → 不命中)。
     """
 
     flag = "--moneyflow"
     example = "gt:0"
+
+
+class MoneyflowDailyFilter(ScalarFilter):
+    """单日主力净额 filter · 例 OP=gt VALUE=0 = 当日主力净额 > 0 (单位万元)."""
+
+    flag = "--moneyflow-daily"
+    example = "gt:0"
+
+
+class MoneyflowDaysFilter(ScalarFilter):
+    """连续主力净流入天数 filter · 例 OP=gte VALUE=3 = 连续净流入 ≥ 3 天."""
+
+    flag = "--moneyflow-days"
+    example = "gte:3"
 
 
 class PbFilter(ScalarFilter):
@@ -352,15 +372,15 @@ class NorthFilter(ScalarFilter):
 # ─── 趋势/动量扩展 filter (客观裸值 · 截面 ma_bias/atr_pct 全市场 + K 线衍生 gain/up_days) ───
 # 合规:乖离率/波动率/涨幅/连阳全部客观裸值 · 阈值用户主导 · 不判「多头排列/强势/加速末端」。
 
-ALLOWED_MA = (5, 10, 20, 60)
-"""--ma-bias 支持的均线周期 (对应 stk_factor_pro 已拉 ma_5/10/20/60)。"""
+ALLOWED_MA = ALLOWED_PERIODS
+"""--ma-bias 支持 2-360 任意整数周期,由本地 K 线计算。"""
 
 
 class MaBiasFilter(PeriodScalarFilter):
     """均线乖离率 filter · 例 PERIOD=20 OP=gt VALUE=0 = 收盘距 20 日线 > 0% (站上).
 
-    乖离率 = (close − ma_N) / ma_N × 100 · 读 technical.ma_bias(period) (纯算 · 现成均线)·
-    PERIOD ∈ {5,10,20,60} · 客观 BIAS · 不判「多头排列/趋势」· 全市场 --all 支持。
+    乖离率 = (close − ma_N) / ma_N × 100 · 读本地 K 线/全市场 K 线快照纯算 ·
+    PERIOD 支持 2-360 · 客观 BIAS · 不判「多头排列/趋势」。
     """
 
     flag = "--ma-bias"
@@ -372,7 +392,7 @@ class GainFilter(PeriodScalarFilter):
     """近 N 日涨幅 filter · 例 PERIOD=30 OP=gt VALUE=20 = 近 30 日涨幅 > 20%.
 
     读 StockScanResult.periods[N].gain_pct (K 线衍生 · 需 K 线池 · --all 不支持)·
-    客观涨幅 · 双关动量/涨速 (工具不判机会还是末端)· PERIOD ∈ ALLOWED_PERIODS (注意无 20)。
+    客观涨幅 · 双关动量/涨速 (工具不判机会还是末端)· PERIOD 支持 2-360。
     """
 
     flag = "--gain"
@@ -424,6 +444,8 @@ class ConditionSet:
     volume_ratio_filters: tuple[VolumeRatioFilter, ...] = ()
     roe_filters: tuple[RoeFilter, ...] = ()
     moneyflow_filters: tuple[MoneyflowFilter, ...] = ()
+    moneyflow_daily_filters: tuple[MoneyflowDailyFilter, ...] = ()
+    moneyflow_days_filters: tuple[MoneyflowDaysFilter, ...] = ()
     rsi_filters: tuple[RsiFilter, ...] = ()
     macd_dif_filters: tuple[MacdDifFilter, ...] = ()
     macd_filters: tuple[MacdFilter, ...] = ()
@@ -438,6 +460,7 @@ class ConditionSet:
     atr_pct_filters: tuple[AtrPctFilter, ...] = ()
     up_days_filters: tuple[UpDaysFilter, ...] = ()
     exclude_st: bool = False
+    match_any: bool = False
 
     @classmethod
     def from_flags(
@@ -452,6 +475,8 @@ class ConditionSet:
         volume_ratio: list[str] | None = None,
         roe: list[str] | None = None,
         moneyflow: list[str] | None = None,
+        moneyflow_daily: list[str] | None = None,
+        moneyflow_days: list[str] | None = None,
         rsi: list[str] | None = None,
         macd_dif: list[str] | None = None,
         macd: list[str] | None = None,
@@ -466,6 +491,7 @@ class ConditionSet:
         atr_pct: list[str] | None = None,
         up_days: list[str] | None = None,
         exclude_st: bool = False,
+        match_any: bool = False,
     ) -> ConditionSet:
         """Build ConditionSet from CLI flag strings (raw user input)."""
         return cls(
@@ -482,6 +508,12 @@ class ConditionSet:
             ),
             roe_filters=tuple(RoeFilter.parse(r) for r in (roe or [])),
             moneyflow_filters=tuple(MoneyflowFilter.parse(m) for m in (moneyflow or [])),
+            moneyflow_daily_filters=tuple(
+                MoneyflowDailyFilter.parse(m) for m in (moneyflow_daily or [])
+            ),
+            moneyflow_days_filters=tuple(
+                MoneyflowDaysFilter.parse(m) for m in (moneyflow_days or [])
+            ),
             rsi_filters=tuple(RsiFilter.parse(x) for x in (rsi or [])),
             macd_dif_filters=tuple(MacdDifFilter.parse(x) for x in (macd_dif or [])),
             macd_filters=tuple(MacdFilter.parse(x) for x in (macd or [])),
@@ -496,6 +528,7 @@ class ConditionSet:
             atr_pct_filters=tuple(AtrPctFilter.parse(x) for x in (atr_pct or [])),
             up_days_filters=tuple(UpDaysFilter.parse(x) for x in (up_days or [])),
             exclude_st=exclude_st,
+            match_any=match_any,
         )
 
     def is_empty(self) -> bool:
@@ -509,6 +542,8 @@ class ConditionSet:
             or self.volume_ratio_filters
             or self.roe_filters
             or self.moneyflow_filters
+            or self.moneyflow_daily_filters
+            or self.moneyflow_days_filters
             or self.rsi_filters
             or self.macd_dif_filters
             or self.macd_filters
@@ -530,6 +565,7 @@ class ConditionSet:
         return bool(
             self.pos_filters
             or self.resonance_filters
+            or self.ma_bias_filters
             or self.gain_filters
             or self.up_days_filters
         )
@@ -543,6 +579,8 @@ class ConditionSet:
             or self.market_cap_filters
             or self.volume_ratio_filters
             or self.moneyflow_filters
+            or self.moneyflow_daily_filters
+            or self.moneyflow_days_filters
             or self.needs_technical()
             or self.needs_sentiment()
             or self.needs_chip()
@@ -553,17 +591,20 @@ class ConditionSet:
         return bool(self.roe_filters)
 
     def needs_moneyflow(self) -> bool:
-        """是否需挂 moneyflow (--moneyflow · 截面)。"""
-        return bool(self.moneyflow_filters)
+        """是否需挂 moneyflow (--moneyflow/--moneyflow-daily/--moneyflow-days · 截面)。"""
+        return bool(
+            self.moneyflow_filters
+            or self.moneyflow_daily_filters
+            or self.moneyflow_days_filters
+        )
 
     def needs_technical(self) -> bool:
-        """是否需挂 technical (--rsi/--macd-dif/--macd/--kdj-j/--ma-bias/--atr-pct · 截面)。"""
+        """是否需挂 technical (--rsi/--macd-dif/--macd/--kdj-j/--atr-pct · 截面)。"""
         return bool(
             self.rsi_filters
             or self.macd_dif_filters
             or self.macd_filters
             or self.kdj_j_filters
-            or self.ma_bias_filters
             or self.atr_pct_filters
         )
 
@@ -605,6 +646,8 @@ __all__ = [
     "ALLOWED_MA",
     "ALLOWED_OPS",
     "ALLOWED_PERIODS",
+    "MAX_PERIOD",
+    "MIN_PERIOD",
     "RESONANCE_LEVELS",
     "AtrPctFilter",
     "ConditionSet",
@@ -615,6 +658,8 @@ __all__ = [
     "MaBiasFilter",
     "MacdDifFilter",
     "MacdFilter",
+    "MoneyflowDailyFilter",
+    "MoneyflowDaysFilter",
     "MoneyflowFilter",
     "NorthFilter",
     "PeFilter",

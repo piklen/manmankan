@@ -118,6 +118,8 @@ SORT_FIELD_GETTERS = {
     "market_cap": lambda o: _nested(o, "valuation", "total_mv"),
     "volume_ratio": lambda o: _nested(o, "valuation", "volume_ratio"),
     "moneyflow": lambda o: _nested(o, "moneyflow", "net_amount"),
+    "moneyflow_daily": lambda o: _nested(o, "moneyflow", "net_amount"),
+    "moneyflow_days": lambda o: _nested(o, "moneyflow", "inflow_days"),
 }
 """--sort 支持字段 · key=用户输入名 · value=从 match.result / 截面 row 取裸值。"""
 
@@ -223,12 +225,36 @@ def kline_snapshot_periods(conditions: ConditionSet) -> list[int] | None:
     periods: set[int] = set()
     periods.update(f.period for f in conditions.pos_filters)
     periods.update(f.period for f in conditions.gain_filters)
+    periods.update(f.period for f in conditions.ma_bias_filters)
     if conditions.resonance_filters:
         periods.update(PERIODS)
     if conditions.up_days_filters:
         max_days = max(1, max(ceil(f.value) for f in conditions.up_days_filters))
         periods.add(min(max_days, max(PERIODS)))
     return sorted(periods or PERIODS)
+
+
+def kline_scan_periods(conditions: ConditionSet) -> list[int] | None:
+    """Periods to compute for non-`--all` K-line scans.
+
+    Keep the fixed scan display periods for terminal tables/sorting, then add any
+    user-requested 2-360 filter period so filters never silently miss data.
+    """
+    if not conditions.has_kline_filters():
+        return None
+    from kan.core.scanner import PERIODS
+
+    periods: set[int] = set(PERIODS)
+    periods.update(f.period for f in conditions.pos_filters)
+    periods.update(f.period for f in conditions.gain_filters)
+    periods.update(f.period for f in conditions.ma_bias_filters)
+    return sorted(periods)
+
+
+def kline_ma_bias_periods(conditions: ConditionSet) -> list[int] | None:
+    """MA BIAS periods requested by filters, or None when not needed."""
+    periods = sorted({f.period for f in conditions.ma_bias_filters})
+    return periods or None
 
 
 def availability_dimensions(
@@ -403,11 +429,18 @@ def run_find_kline(
             query_time=_query_time(),
         )
 
+    scan_periods = kline_scan_periods(request.conditions)
+    ma_bias_periods = kline_ma_bias_periods(request.conditions)
+    fetch_days = max(scan_periods) if scan_periods else None
+
     try:
         ctx = run_data_pipeline(
             stock_set,
             compute=scan_batch,
             mode="low",
+            periods=scan_periods,
+            ma_bias_periods=ma_bias_periods,
+            fetch_days=fetch_days,
             show_progress=not output.is_export,
             exit_on_resolve_error=False,
         )
@@ -551,7 +584,19 @@ def _any_technical_for_filters(
             return True
         if conditions.atr_pct_filters and t.atr_pct() is not None:
             return True
-        if any(t.ma_bias(f.period) is not None for f in conditions.ma_bias_filters):
+    return False
+
+
+def _any_ma_bias_for_filters(
+    results: list[Any],
+    conditions: ConditionSet,
+) -> bool:
+    """Check whether requested K-line ma_bias values are available."""
+    for r in results:
+        values = getattr(r, "ma_biases", None)
+        if not isinstance(values, dict):
+            continue
+        if any(values.get(f.period) is not None for f in conditions.ma_bias_filters):
             return True
     return False
 
@@ -566,12 +611,20 @@ def _find_data_gap(
     token_hint = "例: kan config set tushare-token <你的_token>；或去掉对应 filter"
     if conditions.pe_filters and not _any_metric(results, "valuation", ("pe_ttm",)):
         return ("data_unavailable", "当前候选池缺少估值数据，无法执行 --pe filter", token_hint)
-    if conditions.moneyflow_filters and not _any_metric(results, "moneyflow", ("net_amount",)):
+    if conditions.moneyflow_filters and not _any_metric(
+        results, "moneyflow", ("net_amount", "net_amount_5d")
+    ):
         return ("data_unavailable", "当前候选池缺少资金流数据，无法执行 --moneyflow filter", token_hint)
+    if conditions.moneyflow_daily_filters and not _any_metric(results, "moneyflow", ("net_amount",)):
+        return ("data_unavailable", "当前候选池缺少单日资金流数据，无法执行 --moneyflow-daily filter", token_hint)
+    if conditions.moneyflow_days_filters and not _any_metric(results, "moneyflow", ("inflow_days",)):
+        return ("data_unavailable", "当前候选池缺少连续资金流数据，无法执行 --moneyflow-days filter", token_hint)
     if conditions.roe_filters and not _any_metric(results, "fundamentals", ("roe",)):
         return ("data_unavailable", "当前候选池缺少财务数据，无法执行 --roe filter", token_hint)
     if conditions.needs_technical() and not _any_technical_for_filters(results, conditions):
         return ("data_unavailable", "当前候选池缺少技术指标数据，无法执行技术 filter", token_hint)
+    if conditions.ma_bias_filters and not _any_ma_bias_for_filters(results, conditions):
+        return ("data_unavailable", "当前候选池缺少 K 线乖离率数据，无法执行 --ma-bias filter", token_hint)
     if conditions.winner_filters and not _any_metric(results, "chip", ("winner_rate",)):
         return ("data_unavailable", "当前候选池缺少筹码数据，无法执行 --winner filter", token_hint)
     if conditions.needs_shareholder() and not _any_metric(

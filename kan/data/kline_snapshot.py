@@ -16,6 +16,7 @@ from __future__ import annotations
 import re
 import time
 from datetime import date, datetime, timedelta
+from hashlib import sha1
 from pathlib import Path
 from typing import TYPE_CHECKING
 
@@ -66,8 +67,10 @@ def _daily_cache_path(trade_date: str) -> Path:
     return DATA_DIR / f"daily_bars_{_validate_trade_date(trade_date)}.parquet"
 
 
-def _snapshot_cache_path(trade_date: str, max_period: int) -> Path:
-    return DATA_DIR / f"kline_snapshot_{_validate_trade_date(trade_date)}_{max_period}.parquet"
+def _snapshot_cache_path(trade_date: str, periods: list[int]) -> Path:
+    raw = "-".join(map(str, sorted(set(periods))))
+    key = raw if len(raw) <= 80 else sha1(raw.encode("ascii")).hexdigest()[:16]
+    return DATA_DIR / f"kline_snapshot_{_validate_trade_date(trade_date)}_{key}.parquet"
 
 
 def _load_cache(path: Path) -> pd.DataFrame | None:
@@ -163,6 +166,7 @@ def _snapshot_columns(periods: list[int]) -> list[str]:
         cols += [
             f"pos_{p}",
             f"gain_{p}",
+            f"ma_bias_{p}",
             f"low_{p}",
             f"high_{p}",
             f"insufficient_{p}",
@@ -192,7 +196,13 @@ def _build_snapshot(
         if group.empty:
             continue
         try:
-            result = scan_stock(group, str(symbol), str(symbol), periods=periods)
+            result = scan_stock(
+                group,
+                str(symbol),
+                str(symbol),
+                periods=periods,
+                ma_bias_periods=periods,
+            )
         except Exception as e:
             debug_log(__name__, f"kline snapshot scan failed · symbol={symbol}", e)
             continue
@@ -207,6 +217,7 @@ def _build_snapshot(
         for pr in result.periods:
             row[f"pos_{pr.period}"] = None if pr.insufficient else pr.position_pct
             row[f"gain_{pr.period}"] = pr.gain_pct
+            row[f"ma_bias_{pr.period}"] = result.ma_biases.get(pr.period)
             row[f"low_{pr.period}"] = None if pr.insufficient else pr.n_low
             row[f"high_{pr.period}"] = None if pr.insufficient else pr.n_high
             row[f"insufficient_{pr.period}"] = pr.insufficient
@@ -231,7 +242,7 @@ def fetch_kline_snapshot(
     td = _validate_trade_date(trade_date or _latest_trade_date_str())
     end = _date_from_trade_date(td)
     ensure_dirs()
-    cache = _snapshot_cache_path(td, max_period)
+    cache = _snapshot_cache_path(td, periods)
     if not force and _cache_fresh(cache, td, _SNAPSHOT_TTL):
         cached = _load_cache(cache)
         if cached is not None:

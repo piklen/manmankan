@@ -104,6 +104,7 @@ def test_is_fresh_today_cache(temp_data_dir, force_eastmoney_path, fake_akshare_
     with patch("akshare.stock_zh_a_hist", return_value=fake_akshare_df):
         fetcher.fetch_kline("600519", force=True)
     assert fetcher.is_fresh("600519")
+    assert not fetcher.is_fresh("600519", min_rows=360)
 
 
 def test_is_fresh_yesterday_cache(temp_data_dir):

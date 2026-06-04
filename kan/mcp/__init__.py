@@ -1,0 +1,2 @@
+"""manmankan MCP integration."""
+

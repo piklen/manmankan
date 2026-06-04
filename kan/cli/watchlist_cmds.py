@@ -37,7 +37,46 @@ def _looks_like_a_share_code(code: str) -> bool:
     return code.startswith(_A_SHARE_CODE_PREFIXES)
 
 
-def _add_by_industry(industry: str, yes: bool, group: str | None = None) -> None:
+def _expand_stdin_symbols(symbols: list[str] | None) -> list[str] | None:
+    """Expand '-' in add arguments from stdin (comma/whitespace separated)."""
+    if not symbols or "-" not in symbols:
+        return symbols
+    import sys
+
+    expanded: list[str] = []
+    for sym in symbols:
+        if sym == "-":
+            text = sys.stdin.read()
+            expanded.extend(part for part in _re.split(r"[\s,]+", text.strip()) if part)
+        else:
+            expanded.append(sym)
+    return expanded
+
+
+def _fetch_added(symbols: list[str]) -> None:
+    """Fetch K-line cache for newly added symbols when user opts in."""
+    if not symbols:
+        return
+    from kan.data.fetcher import DEFAULT_KLINE_DAYS, fetch_batch
+
+    results, errors = fetch_batch(symbols, days=DEFAULT_KLINE_DAYS)
+    ok = sum(1 for df in results.values() if df is not None)
+    fail = len(errors)
+    if fail:
+        typer.echo(f"  ⚠️  --fetch 完成: 成功 {ok} · 失败 {fail}", err=True)
+        for sym, err in list(errors.items())[:5]:
+            typer.echo(f"    {sym}: {err}", err=True)
+        return
+    typer.echo(f"  ✅ --fetch 已拉取 {ok} 只")
+
+
+def _add_by_industry(
+    industry: str,
+    yes: bool,
+    group: str | None = None,
+    dry_run: bool = False,
+    fetch: bool = False,
+) -> None:
     """按申万行业批量添加成分股进指定组 (group=None 走 default) · 二次确认 + 影响摘要。"""
     from kan.data import boards
     from kan.storage.watchlist import (
@@ -75,11 +114,15 @@ def _add_by_industry(industry: str, yes: bool, group: str | None = None) -> None
         return
 
     summary = (
-        f"⚠️ 将加 {len(cons)} 只{board.name}股进{target_label}\n"
+        f"⚠️ 将添加 {len(new)} 只{board.name}股进{target_label}\n"
         f"   其中 {already} 只已在{target_label} · 实际新增 {len(new)} 只\n"
         f"   {state_label} {old_total} → {old_total + len(new)} 只\n"
         f"   kan scan 耗时会明显变长"
     )
+    if dry_run:
+        typer.echo(summary)
+        typer.echo("dry-run: 未写入自选股")
+        return
     if not confirm_destructive(summary, yes=yes):
         typer.echo("已取消")
         return
@@ -91,9 +134,17 @@ def _add_by_industry(industry: str, yes: bool, group: str | None = None) -> None
         f"✅ 已加 {len(new)} 只{board.name}股 · "
         f"{state_label} {old_total} → {len(wl.stocks)} 只"
     )
+    if fetch:
+        _fetch_added([code for code, _name in new])
 
 
-def _add_by_theme(theme_query: str, yes: bool, group: str | None = None) -> None:
+def _add_by_theme(
+    theme_query: str,
+    yes: bool,
+    group: str | None = None,
+    dry_run: bool = False,
+    fetch: bool = False,
+) -> None:
     """按题材批量添加成分股进指定组 (group=None 走 default) · 二次确认 + 影响摘要。"""
     from kan.data import boards
     from kan.storage.watchlist import (
@@ -132,12 +183,16 @@ def _add_by_theme(theme_query: str, yes: bool, group: str | None = None) -> None
 
     from kan.render.theme import THEME_CLASSIFICATION, THEME_RISK
     summary = (
-        f"⚠️ 将加 {len(cons)} 只{themed.name}股进{target_label}\n"
+        f"⚠️ 将添加 {len(new)} 只{themed.name}股进{target_label}\n"
         f"   其中 {already} 只已在{target_label} · 实际新增 {len(new)} 只\n"
         f"   {state_label} {old_total} → {old_total + len(new)} 只\n"
         f"   ⚠️ {THEME_CLASSIFICATION}\n"
         f"   ⚠️ {THEME_RISK}"
     )
+    if dry_run:
+        typer.echo(summary)
+        typer.echo("dry-run: 未写入自选股")
+        return
     if not confirm_destructive(summary, yes=yes):
         typer.echo("已取消")
         return
@@ -149,6 +204,8 @@ def _add_by_theme(theme_query: str, yes: bool, group: str | None = None) -> None
         f"✅ 已加 {len(new)} 只{themed.name}股 · "
         f"{state_label} {old_total} → {len(wl.stocks)} 只"
     )
+    if fetch:
+        _fetch_added([code for code, _name in new])
 
 
 @app.command()
@@ -173,8 +230,17 @@ def add(
         bool,
         typer.Option("--yes", help="跳过二次确认 · 慎用"),
     ] = False,
+    dry_run: Annotated[
+        bool,
+        typer.Option("--dry-run", help="预览批量添加结果，不写入自选股"),
+    ] = False,
+    fetch: Annotated[
+        bool,
+        typer.Option("--fetch", help="添加成功后立即拉取新增股票 K 线缓存"),
+    ] = False,
 ) -> None:
     """添加自选股（支持代码或名称搜索 · --industry / --theme 批量加 · --group 加到指定组）"""
+    symbols = _expand_stdin_symbols(symbols)
     if industry is not None and theme is not None:
         _print_err("不能同时指定 --industry 和 --theme · 二选一")
         raise typer.Exit(2)
@@ -182,11 +248,14 @@ def add(
         _print_err("不能同时指定股票代码和 --industry / --theme · 二选一")
         raise typer.Exit(2)
     if industry is not None:
-        _add_by_industry(industry, yes, group=group)
+        _add_by_industry(industry, yes, group=group, dry_run=dry_run, fetch=fetch)
         return
     if theme is not None:
-        _add_by_theme(theme, yes, group=group)
+        _add_by_theme(theme, yes, group=group, dry_run=dry_run, fetch=fetch)
         return
+    if dry_run:
+        _print_err("❌ --dry-run 仅支持 --industry / --theme 批量添加")
+        raise typer.Exit(2)
 
     import time
 
@@ -230,6 +299,7 @@ def add(
         _print_err(f"❌ {e}")
         raise typer.Exit(2) from None
     changed = False
+    added_codes: list[str] = []
     success, skip, fail = 0, 0, 0
     unresolved_names = 0
     failures: list[str] = []  # 失败累积到末尾打印 · 防止打断 spinner / 进度反馈
@@ -281,6 +351,7 @@ def add(
                         fail += 1
                         continue
                 add_stock(wl, cleaned, name)
+                added_codes.append(cleaned)
                 changed = True
                 if not use_batch_spinner:
                     typer.echo(f"  ✅ 已添加 {name.replace(' ', '')} ({cleaned}){success_suffix}")
@@ -299,6 +370,7 @@ def add(
                         skip += 1
                     else:
                         add_stock(wl, code, _name)
+                        added_codes.append(code)
                         changed = True
                         if not use_batch_spinner:
                             typer.echo(f"  ✅ 已添加 {_name.replace(' ', '')} ({code}){success_suffix}")
@@ -351,6 +423,8 @@ def add(
             parts.append(f"失败 {fail}")
         time_part = f" · 用时 {add_elapsed:.1f}s" if add_elapsed >= 0.5 else ""
         typer.echo(f"  添加完成 · {' · '.join(parts)}{time_part}")
+        if fetch and added_codes:
+            _fetch_added(added_codes)
         # F7: batch 模式下 fail > 0 也要 exit 1 · 旧版只在单只模式 exit 1
         if fail:
             raise typer.Exit(1)
@@ -361,6 +435,8 @@ def add(
         for f in failures:
             typer.echo(f"  ❌ {f}", err=True)
         raise typer.Exit(1)
+    elif fetch and added_codes:
+        _fetch_added(added_codes)
 
 
 def _remove_by_industry(industry: str, yes: bool, group: str | None = None) -> None:
