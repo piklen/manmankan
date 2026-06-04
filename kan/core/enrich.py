@@ -112,6 +112,15 @@ def _row_to_moneyflow(row: pd.Series, fallback_date: date) -> MoneyflowMetrics:
         net_amount=_opt_float(row.get("net_amount")),
         buy_elg_amount=_opt_float(row.get("buy_elg_amount")),
         buy_lg_amount=_opt_float(row.get("buy_lg_amount")),
+        buy_md_amount=_opt_float(row.get("buy_md_amount")),
+        buy_sm_amount=_opt_float(row.get("buy_sm_amount")),
+        inflow_days=(
+            int(v) if (v := _opt_float(row.get("inflow_days"))) is not None else None
+        ),
+        outflow_days=(
+            int(v) if (v := _opt_float(row.get("outflow_days"))) is not None else None
+        ),
+        net_amount_5d=_opt_float(row.get("net_amount_5d")),
         source=row.get("_source") if isinstance(row.get("_source"), str) else None,
     )
 
@@ -162,6 +171,9 @@ def _row_to_sentiment(row: pd.Series, fallback_date: date) -> SentimentMetrics:
         trade_date=td,
         limit_times=_opt_float(row.get("limit_times")),
         open_times=_opt_float(row.get("open_times")),
+        first_time=row.get("first_time") if isinstance(row.get("first_time"), str) else None,
+        last_time=row.get("last_time") if isinstance(row.get("last_time"), str) else None,
+        fd_amount=_opt_float(row.get("fd_amount")),
         limit=row.get("limit") if isinstance(row.get("limit"), str) else None,
         up_stat=row.get("up_stat") if isinstance(row.get("up_stat"), str) else None,
         source=row.get("_source") if isinstance(row.get("_source"), str) else None,

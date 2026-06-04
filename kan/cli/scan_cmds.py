@@ -16,9 +16,30 @@ from kan.cli.helpers import (
     _print_err,
     _resolve_code_pairs,
     _with_heavy_imports_spinner,
+    format_date_compact,
 )
 from kan.data.hot import HotList
 from kan.storage import export
+
+
+def _render_cutoff_summary(results: list, console) -> None:
+    """Render per-cutoff stock counts for terminal scan output."""
+    from collections import Counter
+
+    from kan.data.fetcher import data_cutoff_date
+
+    counts = Counter(
+        d
+        for r in results
+        if (d := data_cutoff_date(getattr(r, "symbol", ""))) is not None
+    )
+    if not counts:
+        return
+    parts = [
+        f"{count}只 {format_date_compact(day)}"
+        for day, count in sorted(counts.items(), reverse=True)
+    ]
+    console.print(f"\n  [dim]数据截止: {' / '.join(parts)}[/dim]")
 
 
 @app.command()
@@ -204,6 +225,7 @@ def scan(
         )
 
     render_freshness_warning(freshness, console)
+    _render_cutoff_summary(all_results, console)
 
     # 增量对比 · 仅自选模式 (board_meta is None) · industry/hot 模式不做 diff/snapshot
     if board_meta is None and not is_code_mode and diff and prev_snapshot:

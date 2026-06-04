@@ -34,6 +34,8 @@ from kan.core.find_dsl import (
     MacdDifFilter,
     MacdFilter,
     MarketCapFilter,
+    MoneyflowDailyFilter,
+    MoneyflowDaysFilter,
     MoneyflowFilter,
     NorthFilter,
     PbFilter,
@@ -228,14 +230,49 @@ def _match_roe(
 def _match_moneyflow(
     filter: MoneyflowFilter, moneyflow: MoneyflowMetrics | None
 ) -> TriggeredFilter | None:
-    """Match 主力净额 filter against moneyflow · net_amount 缺失 → 不命中 (估值/质量/资金维度)。"""
+    """Match 主力资金 filter · 5 日合计优先,缺失回落单日净额。"""
+    if moneyflow is None:
+        return None
+    actual = moneyflow.net_amount_5d
+    if actual is None:
+        actual = moneyflow.net_amount
+    if actual is None:
+        return None
+    if apply_op(filter.op, actual, filter.value):
+        return TriggeredFilter(
+            filter_type="moneyflow",
+            param=f"{filter.op}:{filter.value:g}",
+            value=actual,
+        )
+    return None
+
+
+def _match_moneyflow_daily(
+    filter: MoneyflowDailyFilter, moneyflow: MoneyflowMetrics | None
+) -> TriggeredFilter | None:
+    """Match 单日主力净额 filter · net_amount 缺失 → 不命中。"""
     if moneyflow is None or moneyflow.net_amount is None:
         return None
     if apply_op(filter.op, moneyflow.net_amount, filter.value):
         return TriggeredFilter(
-            filter_type="moneyflow",
+            filter_type="moneyflow_daily",
             param=f"{filter.op}:{filter.value:g}",
             value=moneyflow.net_amount,
+        )
+    return None
+
+
+def _match_moneyflow_days(
+    filter: MoneyflowDaysFilter, moneyflow: MoneyflowMetrics | None
+) -> TriggeredFilter | None:
+    """Match 连续主力净流入天数 filter · inflow_days 缺失 → 不命中。"""
+    if moneyflow is None or moneyflow.inflow_days is None:
+        return None
+    if apply_op(filter.op, float(moneyflow.inflow_days), filter.value):
+        return TriggeredFilter(
+            filter_type="moneyflow_days",
+            param=f"{filter.op}:{filter.value:g}",
+            value=float(moneyflow.inflow_days),
         )
     return None
 
@@ -338,12 +375,10 @@ def _match_winner(
 # ─── 趋势/动量扩展匹配器 (ma_bias/atr_pct 吃 technical · gain/up_days 吃 result) ───
 
 def _match_ma_bias(
-    filter: MaBiasFilter, technical: TechnicalMetrics | None
+    filter: MaBiasFilter, result: StockScanResult
 ) -> TriggeredFilter | None:
-    """Match 乖离率 filter against technical · ma_bias(period) 缺失 → 不命中。"""
-    if technical is None:
-        return None
-    bias = technical.ma_bias(filter.period)
+    """Match 乖离率 filter against K 线衍生 ma_biases · 缺失 → 不命中。"""
+    bias = result.ma_biases.get(filter.period)
     if bias is None:
         return None
     if apply_op(filter.op, bias, filter.value):
@@ -465,11 +500,23 @@ FIND_MATCH_SEGMENTS: tuple[MatchSegmentSpec, ...] = (
     ),
     MatchSegmentSpec("roe", "roe_filters", "fundamentals", _match_roe, supports_cross_section=False),
     MatchSegmentSpec("moneyflow", "moneyflow_filters", "moneyflow", _match_moneyflow),
+    MatchSegmentSpec(
+        "moneyflow_daily",
+        "moneyflow_daily_filters",
+        "moneyflow",
+        _match_moneyflow_daily,
+    ),
+    MatchSegmentSpec(
+        "moneyflow_days",
+        "moneyflow_days_filters",
+        "moneyflow",
+        _match_moneyflow_days,
+    ),
     MatchSegmentSpec("rsi", "rsi_filters", "technical", _match_rsi),
     MatchSegmentSpec("macd_dif", "macd_dif_filters", "technical", _match_macd_dif),
     MatchSegmentSpec("macd", "macd_filters", "technical", _match_macd),
     MatchSegmentSpec("kdj_j", "kdj_j_filters", "technical", _match_kdj_j),
-    MatchSegmentSpec("ma_bias", "ma_bias_filters", "technical", _match_ma_bias),
+    MatchSegmentSpec("ma_bias", "ma_bias_filters", "result", _match_ma_bias),
     MatchSegmentSpec("atr_pct", "atr_pct_filters", "technical", _match_atr_pct),
     MatchSegmentSpec("streak", "streak_filters", "sentiment", _match_streak),
     MatchSegmentSpec("winner", "winner_filters", "chip", _match_winner),
@@ -528,11 +575,27 @@ def _match_all(
     return out
 
 
+def _match_any(
+    filters: tuple,
+    target: object,
+    matcher: Callable[..., TriggeredFilter | None],
+) -> list[TriggeredFilter]:
+    """一组同类 filter 任一匹配 target 即记录；缺数据视为该组无命中。"""
+    if not filters or target is None:
+        return []
+    out: list[TriggeredFilter] = []
+    for f in filters:
+        t = matcher(f, target)
+        if t is not None:
+            out.append(t)
+    return out
+
+
 def apply_conditions(
     results: list[EnrichedResult] | list[StockScanResult],
     conditions: ConditionSet,
 ) -> list[FindMatch]:
-    """Apply ConditionSet to (enriched) scan results · AND across all filters.
+    """Apply ConditionSet to (enriched) scan results · AND by default, optional OR.
 
     For each stock (AND · 任一组不全命中即淘汰):
     1. ST drop (early reject if exclude_st and is_st)
@@ -558,18 +621,26 @@ def apply_conditions(
             continue
 
         triggered: list[TriggeredFilter] = []
-        all_match = True
-        for segment in FIND_MATCH_SEGMENTS:
-            filters = getattr(conditions, segment.condition_attr)
-            target = _result_target(r, segment.target_attr)
-            matcher = segment.matcher
-            seg = _match_all(filters, target, matcher)
-            if seg is None:
-                all_match = False
-                break
-            triggered.extend(seg)
-        if not all_match:
-            continue
+        if conditions.match_any:
+            for segment in FIND_MATCH_SEGMENTS:
+                filters = getattr(conditions, segment.condition_attr)
+                target = _result_target(r, segment.target_attr)
+                triggered.extend(_match_any(filters, target, segment.matcher))
+            if not triggered:
+                continue
+        else:
+            all_match = True
+            for segment in FIND_MATCH_SEGMENTS:
+                filters = getattr(conditions, segment.condition_attr)
+                target = _result_target(r, segment.target_attr)
+                matcher = segment.matcher
+                seg = _match_all(filters, target, matcher)
+                if seg is None:
+                    all_match = False
+                    break
+                triggered.extend(seg)
+            if not all_match:
+                continue
 
         matches.append(FindMatch(result=r, triggered=tuple(triggered)))
 
@@ -591,7 +662,8 @@ def apply_cross_section_conditions(
 
     `run_cross_section(..., need_kline=True)` 可挂载 row.scan,于是位置/共振/
     涨幅/连阳也能像 K 线池一样复用 _match_*。fundamentals / shareholder 仍是
-    逐股维度,由 CLI 在 --all 下拦截。AND 语义 · 无 filter → 全量返回 (取数语义)。
+    逐股维度,由 CLI 在 --all 下拦截。默认 AND;`--any` 为任一 filter 命中 ·
+    无 filter → 全量返回 (取数语义)。
 
     Returns:
         list[(CrossSectionRow, triggered)] · 按命中 filter 数倒序 · 然后 code 升序。
@@ -604,20 +676,30 @@ def apply_cross_section_conditions(
         if conditions.exclude_st and ("ST" in row.name or "*ST" in row.name):
             continue
         triggered: list[TriggeredFilter] = []
-        all_match = True
-        for segment in FIND_MATCH_SEGMENTS:
-            if not segment.supports_cross_section:
-                continue
-            filters = getattr(conditions, segment.condition_attr)
-            target = _cross_section_target(row, segment.target_attr)
-            matcher = segment.matcher
-            seg = _match_all(filters, target, matcher)
-            if seg is None:
-                all_match = False
-                break
-            triggered.extend(seg)
-        if all_match:
-            out.append((row, tuple(triggered)))
+        if conditions.match_any:
+            for segment in FIND_MATCH_SEGMENTS:
+                if not segment.supports_cross_section:
+                    continue
+                filters = getattr(conditions, segment.condition_attr)
+                target = _cross_section_target(row, segment.target_attr)
+                triggered.extend(_match_any(filters, target, segment.matcher))
+            if triggered:
+                out.append((row, tuple(triggered)))
+        else:
+            all_match = True
+            for segment in FIND_MATCH_SEGMENTS:
+                if not segment.supports_cross_section:
+                    continue
+                filters = getattr(conditions, segment.condition_attr)
+                target = _cross_section_target(row, segment.target_attr)
+                matcher = segment.matcher
+                seg = _match_all(filters, target, matcher)
+                if seg is None:
+                    all_match = False
+                    break
+                triggered.extend(seg)
+            if all_match:
+                out.append((row, tuple(triggered)))
 
     out.sort(key=lambda x: (-len(x[1]), x[0].code))
     return out

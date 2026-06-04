@@ -284,6 +284,7 @@ def run_data_pipeline(
     compute: Callable,
     show_progress: bool = True,
     exit_on_resolve_error: bool = True,
+    fetch_days: int | None = None,
     **compute_kwargs: Any,
 ) -> DataCtx:
     """resolve → auto_fetch → compute → freshness 的统一编排 (StockSet 单签名)。
@@ -318,10 +319,16 @@ def run_data_pipeline(
             raise
         raise_stock_set_resolve_exit(e)
     if show_progress:
-        _auto_fetch_stale(targets)
+        if fetch_days is None:
+            _auto_fetch_stale(targets)
+        else:
+            _auto_fetch_stale(targets, days=fetch_days)
     else:
         with contextlib.redirect_stderr(io.StringIO()):
-            _auto_fetch_stale(targets)
+            if fetch_days is None:
+                _auto_fetch_stale(targets)
+            else:
+                _auto_fetch_stale(targets, days=fetch_days)
     results = compute(targets, **compute_kwargs)
     freshness = freshness_of(r.symbol for r in results)
     return DataCtx(

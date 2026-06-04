@@ -84,6 +84,14 @@ kan find --industry 半导体 --format json \
 
 未知字段或未知 preset 会返回 `invalid_fields`。`--fields` 请求某个维度时,该维度会计入 `data_availability`;未请求的维度仍是 `not_requested`。在 `--all` 下,`--fields` 也会反向驱动截面取数,未请求的 moneyflow / technical / sentiment / chip 不会主动拉取。
 
+### match mode
+
+多个 filter 默认是 AND 语义,即所有条件都需命中。显式加 `--any` 时改为任一 filter 命中即返回,`triggered_filters` 仍只记录实际命中的条件:
+
+```bash
+kan find --any --pos 20:lt:10 --moneyflow-daily gt:10000 --format json
+```
+
 ### data_availability
 
 `data_availability` 统计的是候选池维度可用性,用于区分“数据缺失”和“事实为 0”:
@@ -121,12 +129,14 @@ kan find --industry 半导体 --format json \
 | `--market-cap` | TuShare `daily_basic` 衍生截面指标 | 是 | 是 | 日频 | 指标为空为缺数据;整池缺失时返回 `data_unavailable` |
 | `--volume-ratio` | TuShare `daily_basic` 衍生截面指标 | 是 | 是 | 日频 | 指标为空为缺数据;整池缺失时返回 `data_unavailable` |
 | `--roe` | TuShare `fina_indicator` 最新报告期 | 是 | 否 | 季度/报告期 | 指标为空为缺数据;整池缺失时返回 `data_unavailable` |
-| `--moneyflow` | TuShare `moneyflow_dc` 衍生主力净额 | 是 | 是 | 日频 | 指标为空为缺数据;整池缺失时返回 `data_unavailable` |
+| `--moneyflow` | TuShare `moneyflow` 衍生资金流向 | 是 | 是 | 日频 | 指标为空为缺数据;整池缺失时返回 `data_unavailable` |
+| `--moneyflow-daily` | TuShare `moneyflow` 衍生资金流向 | 是 | 是 | 日频 | 指标为空为缺数据;整池缺失时返回 `data_unavailable` |
+| `--moneyflow-days` | TuShare `moneyflow` 衍生资金流向 | 是 | 是 | 日频 | 指标为空为缺数据;整池缺失时返回 `data_unavailable` |
 | `--rsi` | TuShare `stk_factor_pro` 衍生技术指标 | 是 | 是 | 日频 | 指标为空为缺数据;整池缺失时返回 `data_unavailable` |
 | `--macd-dif` | TuShare `stk_factor_pro` 衍生技术指标 | 是 | 是 | 日频 | 指标为空为缺数据;整池缺失时返回 `data_unavailable` |
 | `--macd` | TuShare `stk_factor_pro` 衍生技术指标 | 是 | 是 | 日频 | 指标为空为缺数据;整池缺失时返回 `data_unavailable` |
 | `--kdj-j` | TuShare `stk_factor_pro` 衍生技术指标 | 是 | 是 | 日频 | 指标为空为缺数据;整池缺失时返回 `data_unavailable` |
-| `--ma-bias` | TuShare `stk_factor_pro` 衍生技术指标 | 是 | 是 | 日频 | 指标为空为缺数据;整池缺失时返回 `data_unavailable` |
+| `--ma-bias` | 小池走本地日 K 缓存;`--all` 走全市场 K 线快照 | 小池否;`--all` 是 | 是 | 日频 | 周期不足为不命中;全市场快照不可用时返回 `data_unavailable` |
 | `--atr-pct` | TuShare `stk_factor_pro` 衍生技术指标 | 是 | 是 | 日频 | 指标为空为缺数据;整池缺失时返回 `data_unavailable` |
 | `--streak` | TuShare `limit_list_d` 涨跌停事件表 | 是 | 是 | 日频 | 稀疏事件;未出现在事件表通常表示当日未涨跌停 |
 | `--winner` | TuShare `cyq_perf` 筹码分布 | 是 | 是 | 日频 | 指标为空为缺数据;整池缺失时返回 `data_unavailable` |

@@ -149,6 +149,29 @@ def test_add_many_codes_without_names_cache_uses_fast_path(temp_kan_dir, monkeyp
     assert [s.name for s in wl.stocks] == ["600519", "000858", "300750"]
 
 
+def test_add_from_stdin(cli_runner):
+    """`kan add -` 从 stdin 读逗号/空白分隔代码。"""
+    result = cli_runner.invoke(app, ["add", "-"], input="600519,000001\n")
+
+    assert result.exit_code == 0
+    codes = [s.symbol for s in watchlist.load_watchlist().stocks]
+    assert codes == ["600519", "000001"]
+
+
+def test_add_fetches_new_codes_when_requested(cli_runner, monkeypatch):
+    """`kan add --fetch` 仅对新增代码触发拉取。"""
+    fetched: list[list[str]] = []
+    monkeypatch.setattr(
+        "kan.cli.watchlist_cmds._fetch_added",
+        lambda codes: fetched.append(list(codes)),
+    )
+
+    result = cli_runner.invoke(app, ["add", "600519", "000001", "--fetch"])
+
+    assert result.exit_code == 0
+    assert fetched == [["600519", "000001"]]
+
+
 # ════════════════════════════════════════════════════════════════
 # remove 命令 (cli_watchlist_cmds.py:186-215)
 # ════════════════════════════════════════════════════════════════
@@ -261,7 +284,7 @@ def test_add_industry_requires_confirm(cli_runner, fake_board):
     """add --industry 默认弹二次确认 · 输 n 自选股不变。"""
     result = cli_runner.invoke(app, ["add", "--industry=食品饮料"], input="n\n")
     assert result.exit_code == 0
-    assert "将加 3 只食品饮料股" in result.output
+    assert "将添加 3 只食品饮料股" in result.output
     assert "继续?" in result.output
     assert "已取消" in result.output
     assert len(watchlist.load_watchlist().stocks) == 0

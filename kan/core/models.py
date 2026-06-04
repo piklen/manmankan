@@ -4,7 +4,7 @@ from dataclasses import dataclass, field
 from datetime import date
 from typing import TYPE_CHECKING
 
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 if TYPE_CHECKING:
     import pandas as pd
@@ -59,6 +59,7 @@ class StockScanResult(BaseModel):
     pe_ttm: float | None = None       # PE TTM (scan 行内联裸值 · 无数据为 None)
     moneyflow_5d_net_amount: float | None = None  # 近 5 个交易日主力净额合计 (万元)
     moneyflow_5d_end_date: date | None = None
+    ma_biases: dict[int, float] = Field(default_factory=dict)  # K 线衍生 BIAS · key=周期
     corporate_action: CorporateActionMarker | None = None
 
 
@@ -122,16 +123,21 @@ class FundamentalMetrics(BaseModel):
 
 
 class MoneyflowMetrics(BaseModel):
-    """单只股票主力资金截面指标 · moneyflow_dc 衍生 · 原始净额 (估值/质量/资金维度)。
+    """单只股票主力资金截面指标 · TuShare moneyflow 衍生 · 原始净额 (估值/质量/资金维度)。
 
     合规 (compliance §2):主力净额是客观资金事实 (同 OHLCV 安全区) · 裸值可出。
     截面 (trade_date) 维度 · 数据从 20230911 起 (早期 None · 优雅降级)。
     """
 
     trade_date: date | None = None       # 资金流向交易日
-    net_amount: float | None = None      # 主力净额 (东财口径 · 单位万元)
+    net_amount: float | None = None      # 主力净额 (万元)
     buy_elg_amount: float | None = None  # 超大单净额 (万元)
     buy_lg_amount: float | None = None   # 大单净额 (万元)
+    buy_md_amount: float | None = None   # 中单净额 (万元)
+    buy_sm_amount: float | None = None   # 小单净额 (万元)
+    inflow_days: int | None = None       # 截至 trade_date 连续主力净流入天数
+    outflow_days: int | None = None      # 截至 trade_date 连续主力净流出天数
+    net_amount_5d: float | None = None   # 近 5 个交易日主力净额合计 (万元)
     source: str | None = None            # 数据源标注 (例 tushare_moneyflow)
 
 
@@ -199,6 +205,9 @@ class SentimentMetrics(BaseModel):
     trade_date: date | None = None    # 事件交易日
     limit_times: float | None = None  # 连板天数 (连续涨/跌停板数)
     open_times: float | None = None   # 炸板/开板次数 (盘中打开板的次数)
+    first_time: str | None = None      # 首次封板时间 (HHMMSS 或源格式)
+    last_time: str | None = None       # 最后封板时间 (HHMMSS 或源格式)
+    fd_amount: float | None = None     # 封单金额 (源单位 · TuShare 原始值)
     limit: str | None = None          # 涨跌停类型 (U 涨停 / D 跌停 / Z 炸板)
     up_stat: str | None = None        # 涨停统计 (例 "3/3" = 几天几板)
     source: str | None = None         # 数据源标注 (例 tushare_limit)

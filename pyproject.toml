@@ -48,6 +48,7 @@ Changelog = "https://github.com/piklen/manmankan/blob/main/CHANGELOG.md"
 
 [project.scripts]
 kan = "kan._entry:main"
+kan-mcp = "kan.mcp.server:main"
 
 [dependency-groups]
 dev = [

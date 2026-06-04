@@ -105,12 +105,16 @@ def _snapshot_row_to_scan(row, name: str, periods: list[int]) -> StockScanResult
         return None
     trade_date = pd.Timestamp(trade_date).date()
     period_results: list[PeriodResult] = []
+    ma_biases: dict[int, float] = {}
     for p in periods:
         insufficient = bool(row.get(f"insufficient_{p}", True))
         pos = row.get(f"pos_{p}")
         low = row.get(f"low_{p}")
         high = row.get(f"high_{p}")
         gain = row.get(f"gain_{p}")
+        ma_bias = row.get(f"ma_bias_{p}")
+        if ma_bias is not None and not pd.isna(ma_bias):
+            ma_biases[p] = float(ma_bias)
         if insufficient or pos is None or pd.isna(pos):
             period_results.append(PeriodResult(
                 period=p,
@@ -142,6 +146,7 @@ def _snapshot_row_to_scan(row, name: str, periods: list[int]) -> StockScanResult
         high_resonance=int(row.get("high_resonance", 0) or 0),
         is_st=("ST" in name or "*ST" in name),
         up_days=int(row.get("up_days", 0) or 0),
+        ma_biases=ma_biases,
     )
 
 

@@ -11,7 +11,7 @@ from kan.core.find_filter import (
     TriggeredFilter,
     apply_conditions,
 )
-from kan.core.models import PeriodResult, StockScanResult
+from kan.core.models import MoneyflowMetrics, PeriodResult, StockScanResult
 
 PERIODS = [3, 5, 7, 10, 15, 30, 60, 90, 120, 180]
 
@@ -127,6 +127,15 @@ class TestApplyConditions:
         # pos matches but resonance fails · AND fails
         assert apply_conditions([r], cs) == []
 
+    def test_any_semantics_one_match_keeps_result(self):
+        r = _mk_result(positions={180: 30.0}, low_resonance=4)
+        cs = ConditionSet.from_flags(
+            pos=["180:lt:5"], resonance=["low:gte:3"], match_any=True
+        )
+        matches = apply_conditions([r], cs)
+        assert len(matches) == 1
+        assert [t.filter_type for t in matches[0].triggered] == ["resonance"]
+
     def test_exclude_st_drops_st(self):
         r1 = _mk_result(symbol="600519", is_st=False)
         r2 = _mk_result(symbol="600000", name="*ST 浦发", is_st=True)
@@ -180,6 +189,43 @@ class TestApplyConditions:
         m = FindMatch(result=r, triggered=())
         with pytest.raises(FrozenInstanceError):
             m.triggered = (TriggeredFilter(filter_type="pos", param="x", value=1.0),)
+
+
+class TestMoneyflowMatchers:
+    """资金流 ScalarFilter matcher 单测."""
+
+    def test_moneyflow_uses_5d_sum_when_available(self):
+        from kan.core.find_dsl import MoneyflowFilter
+        from kan.core.find_filter import _match_moneyflow
+
+        mf = MoneyflowMetrics(net_amount=100.0, net_amount_5d=900.0)
+        hit = _match_moneyflow(MoneyflowFilter(op="gt", value=500.0), mf)
+        assert hit is not None
+        assert hit.value == 900.0
+
+    def test_moneyflow_daily_uses_today_net_amount(self):
+        from kan.core.find_dsl import MoneyflowDailyFilter
+        from kan.core.find_filter import _match_moneyflow_daily
+
+        mf = MoneyflowMetrics(net_amount=120.0, net_amount_5d=-300.0)
+        assert _match_moneyflow_daily(MoneyflowDailyFilter(op="gt", value=0.0), mf) is not None
+        assert _match_moneyflow_daily(MoneyflowDailyFilter(op="lt", value=0.0), mf) is None
+
+    def test_moneyflow_days_uses_inflow_days(self):
+        from kan.core.find_dsl import MoneyflowDaysFilter
+        from kan.core.find_filter import _match_moneyflow_days
+
+        mf = MoneyflowMetrics(net_amount=10.0, inflow_days=4)
+        hit = _match_moneyflow_days(MoneyflowDaysFilter(op="gte", value=3.0), mf)
+        assert hit is not None
+        assert hit.value == 4.0
+
+    def test_moneyflow_missing_does_not_match(self):
+        from kan.core.find_dsl import MoneyflowDailyFilter, MoneyflowDaysFilter
+        from kan.core.find_filter import _match_moneyflow_daily, _match_moneyflow_days
+
+        assert _match_moneyflow_daily(MoneyflowDailyFilter(op="gt", value=0.0), None) is None
+        assert _match_moneyflow_days(MoneyflowDaysFilter(op="gt", value=0.0), None) is None
 
 
 class TestValuationScalarMatchers:

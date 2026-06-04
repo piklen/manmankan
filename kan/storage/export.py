@@ -334,6 +334,8 @@ def info_payload(
     stale: bool,
     valuation: ValuationMetrics | None = None,
     valuation_context: ValuationContext | None = None,
+    moneyflow: MoneyflowMetrics | None = None,
+    sentiment: SentimentMetrics | None = None,
 ) -> dict:
     """kan info --format json 的结构化 payload。
 
@@ -362,6 +364,8 @@ def info_payload(
         "valuation_context": (
             valuation_context.model_dump() if valuation_context else None
         ),
+        "moneyflow": _moneyflow_public_dict(moneyflow),
+        "sentiment": _sentiment_public_dict(sentiment),
     }
 
 
@@ -371,6 +375,8 @@ def info_markdown(
     *,
     volume: VolumeState | None,
     title: str,
+    moneyflow: MoneyflowMetrics | None = None,
+    sentiment: SentimentMetrics | None = None,
 ) -> str:
     """kan info --format md · 标题 + 全周期位置表 + 成交量状态。"""
     tags = []
@@ -404,6 +410,33 @@ def info_markdown(
         sections.append(
             f"成交量 · 今日是近 {volume.window} 日均量的 "
             f"{volume.ratio} 倍 · {volume.label}"
+        )
+    if moneyflow is not None and (
+        moneyflow.net_amount is not None
+        or moneyflow.buy_elg_amount is not None
+        or moneyflow.buy_lg_amount is not None
+        or moneyflow.net_amount_5d is not None
+    ):
+        sections.append(
+            "资金流 · "
+            f"今日主力 {_scan_num(moneyflow.net_amount)} 万元 · "
+            f"超大单 {_scan_num(moneyflow.buy_elg_amount)} 万元 · "
+            f"大单 {_scan_num(moneyflow.buy_lg_amount)} 万元 · "
+            f"连续净流入 {moneyflow.inflow_days if moneyflow.inflow_days is not None else '-'} 天 · "
+            f"5日合计 {_scan_num(moneyflow.net_amount_5d)} 万元"
+        )
+    if sentiment is not None and (
+        sentiment.first_time is not None
+        or sentiment.last_time is not None
+        or sentiment.open_times is not None
+        or sentiment.fd_amount is not None
+    ):
+        sections.append(
+            "涨跌停详情 · "
+            f"首次封板 {sentiment.first_time or '-'} · "
+            f"最后封板 {sentiment.last_time or '-'} · "
+            f"开板次数 {_scan_num(sentiment.open_times, digits=0)} · "
+            f"封单金额 {_scan_num(sentiment.fd_amount)}"
         )
     sections.append(_disclaimer_quote())
     return "\n\n".join(sections)
@@ -636,6 +669,11 @@ def _moneyflow_public_dict(m: MoneyflowMetrics | None) -> dict | None:
         "net_amount": m.net_amount,
         "buy_elg_amount": m.buy_elg_amount,
         "buy_lg_amount": m.buy_lg_amount,
+        "buy_md_amount": m.buy_md_amount,
+        "buy_sm_amount": m.buy_sm_amount,
+        "inflow_days": m.inflow_days,
+        "outflow_days": m.outflow_days,
+        "net_amount_5d": m.net_amount_5d,
         "source": m.source,
     }
 
@@ -691,6 +729,9 @@ def _sentiment_public_dict(s: SentimentMetrics | None) -> dict | None:
         "trade_date": s.trade_date.isoformat() if s.trade_date else None,
         "limit_times": s.limit_times,
         "open_times": s.open_times,
+        "first_time": s.first_time,
+        "last_time": s.last_time,
+        "fd_amount": s.fd_amount,
         "limit": s.limit,
         "up_stat": s.up_stat,
         "source": s.source,
@@ -838,7 +879,10 @@ def _compact_dimension_summary(dim: str, obj: object | None) -> dict | None:
     if dim == "moneyflow":
         return _pick_non_null(
             _moneyflow_public_dict(obj),  # type: ignore[arg-type]
-            ("trade_date", "net_amount", "source"),
+            (
+                "trade_date", "net_amount", "net_amount_5d", "buy_elg_amount",
+                "buy_lg_amount", "inflow_days", "source",
+            ),
         )
     if dim == "technical":
         return _pick_non_null(
@@ -848,7 +892,10 @@ def _compact_dimension_summary(dim: str, obj: object | None) -> dict | None:
     if dim == "sentiment":
         return _pick_non_null(
             _sentiment_public_dict(obj),  # type: ignore[arg-type]
-            ("trade_date", "limit_times", "open_times", "limit", "source"),
+            (
+                "trade_date", "limit_times", "open_times", "first_time",
+                "last_time", "fd_amount", "limit", "source",
+            ),
         )
     if dim == "chip":
         return _pick_non_null(
@@ -1008,6 +1055,7 @@ def find_payload(
     compact_dimensions: set[str] | None = None,
     fields: tuple[str, ...] = (),
     compact_context: bool = True,
+    match_mode: str = "all",
 ) -> dict:
     """kan find --format json 的结构化 payload (AI JSON 层 · AI 消费入口)。
 
@@ -1043,7 +1091,7 @@ def find_payload(
         "command": "find",
         "result_schema": "fields" if fields else ("compact" if compact else "full"),
         "query_time": query_time,
-        "rule": {"pools": pools, "filters": filters},
+        "rule": {"pools": pools, "filters": filters, "match": match_mode},
         "results": [
             _select_find_fields(_find_result_field_source(m, er), fields)
             if fields
@@ -1308,6 +1356,7 @@ def cross_section_payload(
     compact_dimensions: set[str] | None = None,
     fields: tuple[str, ...] = (),
     compact_context: bool = True,
+    match_mode: str = "all",
 ) -> dict:
     """kan find --all --format json 截面取数/筛选 payload (全市场截面层 + 估值/质量/资金维度 截面 filter)。
 
@@ -1347,7 +1396,7 @@ def cross_section_payload(
         "mode": "cross_section",
         "result_schema": "fields" if fields else ("compact" if compact else "full"),
         "query_time": query_time,
-        "rule": {"pools": ["all"], "filters": filters or []},
+        "rule": {"pools": ["all"], "filters": filters or [], "match": match_mode},
         "results": [
             _select_find_fields(_cross_section_result_field_source(r, t), fields)
             if fields

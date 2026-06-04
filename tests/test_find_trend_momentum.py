@@ -1,9 +1,9 @@
 """Tests for 趋势/动量扩展 filter · ma-bias / gain / atr-pct / up-days。
 
 合规:全部客观裸值 filter · 阈值用户主导 · 不判断方向。覆盖:
-- parse(含值域边界:--gain 拒 20 / --ma-bias 拒非 5/10/20/60)
+- parse(周期 2-360 任意整数)
 - TechnicalMetrics.ma_bias()/atr_pct() 纯算 + 缺失降级
-- matcher 命中/不命中/None 降级(ma_bias/atr_pct 吃 technical · gain/up_days 吃 result)
+- matcher 命中/不命中/None 降级(ma_bias/gain/up_days 吃 result · atr_pct 吃 technical)
 - ConditionSet 路由归属(K 线衍生 vs 截面)
 - scanner.scan_stock 衍生(gain_pct / up_days)
 - cross_section(--all)路径 ma_bias/atr_pct 支持
@@ -41,6 +41,7 @@ def _mk_result(
     gains: dict[int, float] | None = None,
     up_days: int = 0,
     technical: TechnicalMetrics | None = None,
+    ma_biases: dict[int, float] | None = None,
     symbol: str = "600519",
     name: str = "贵州茅台",
 ):
@@ -67,6 +68,7 @@ def _mk_result(
         low_resonance=0,
         high_resonance=0,
         up_days=up_days,
+        ma_biases=ma_biases or {},
     )
     if technical is not None:
         return EnrichedResult.from_scan(scan, technical=technical)
@@ -102,10 +104,8 @@ class TestMaBiasFilterParse:
     def test_all_ma_periods(self, period):
         assert MaBiasFilter.parse(f"{period}:gt:0").period == period
 
-    def test_reject_non_ma_period(self):
-        # 7 在 ALLOWED_PERIODS 但不在 ALLOWED_MA(只有 5/10/20/60 有均线)
-        with pytest.raises(FilterParseError, match="周期 7 不支持"):
-            MaBiasFilter.parse("7:gt:0")
+    def test_accept_any_period_in_range(self):
+        assert MaBiasFilter.parse("7:gt:0").period == 7
 
     def test_negative_value_ok(self):
         # 乖离率可负(收盘在均线下方)· 不卡范围
@@ -126,10 +126,8 @@ class TestGainFilterParse:
         assert f.period == 30
         assert f.value == 20.0
 
-    def test_reject_period_20(self):
-        # 20 不在 ALLOWED_PERIODS(易踩坑:月窗口需用 15/30)
-        with pytest.raises(FilterParseError, match="周期 20 不支持"):
-            GainFilter.parse("20:gt:30")
+    def test_accept_period_20(self):
+        assert GainFilter.parse("20:gt:30").period == 20
 
     def test_large_gain_ok(self):
         # 涨幅可 >100% · 不卡范围
@@ -185,11 +183,11 @@ class TestConditionSetRouting:
         assert ConditionSet.from_flags(gain=["30:gt:20"]).has_kline_filters() is True
         assert ConditionSet.from_flags(up_days=["gte:3"]).has_kline_filters() is True
 
-    def test_ma_bias_atr_are_technical_not_kline(self):
+    def test_ma_bias_is_kline_atr_is_technical(self):
         cs = ConditionSet.from_flags(ma_bias=["20:gt:0"])
-        assert cs.needs_technical() is True
-        assert cs.has_cross_section_filters() is True
-        assert cs.has_kline_filters() is False
+        assert cs.needs_technical() is False
+        assert cs.has_cross_section_filters() is False
+        assert cs.has_kline_filters() is True
         assert ConditionSet.from_flags(atr_pct=["lt:5"]).needs_technical() is True
 
     def test_empty(self):
@@ -228,24 +226,23 @@ class TestGainUpDaysMatch:
         assert apply_conditions([r], ConditionSet.from_flags(up_days=["gte:3"])) == []
 
 
-# ─────────── matcher: ma_bias / atr_pct(技术 · 吃 technical）───────────
+# ─────────── matcher: ma_bias(K 线) / atr_pct(技术) ───────────
 
 
 class TestMaBiasAtrMatch:
     def test_ma_bias_match(self):
-        r = _mk_result(technical=TechnicalMetrics(close=110.0, ma_20=100.0))
+        r = _mk_result(ma_biases={20: 10.0})
         m = apply_conditions([r], ConditionSet.from_flags(ma_bias=["20:gt:0"]))
         assert len(m) == 1
         assert m[0].triggered[0].filter_type == "ma_bias"
         assert m[0].triggered[0].value == 10.0
 
     def test_ma_bias_below_no_match(self):
-        r = _mk_result(technical=TechnicalMetrics(close=95.0, ma_20=100.0))
+        r = _mk_result(ma_biases={20: -5.0})
         assert apply_conditions([r], ConditionSet.from_flags(ma_bias=["20:gt:0"])) == []
 
-    def test_ma_bias_no_technical_no_match(self):
-        # StockScanResult 无 technical 属性 → getattr None → 不命中
-        r = _mk_result(technical=None)
+    def test_ma_bias_missing_no_match(self):
+        r = _mk_result(ma_biases={})
         assert apply_conditions([r], ConditionSet.from_flags(ma_bias=["20:gt:0"])) == []
 
     def test_atr_pct_match(self):
@@ -270,7 +267,13 @@ class TestCrossSectionTrend:
         )
 
     def test_ma_bias_cross_section(self):
-        row = self._row(TechnicalMetrics(close=110.0, ma_20=100.0))
+        row = CrossSectionRow(
+            code="600519",
+            name="贵州茅台",
+            valuation=None,
+            valuation_context=None,
+            scan=_mk_result(ma_biases={20: 10.0}),
+        )
         out = apply_cross_section_conditions(
             [row], ConditionSet.from_flags(ma_bias=["20:gt:0"])
         )

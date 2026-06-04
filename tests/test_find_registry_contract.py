@@ -19,6 +19,8 @@ _FILTER_EXAMPLES = {
     "volume_ratio": "gt:1.5",
     "roe": "gte:15",
     "moneyflow": "gt:0",
+    "moneyflow_daily": "gt:0",
+    "moneyflow_days": "gte:3",
     "rsi": "lt:30",
     "macd_dif": "gt:0",
     "macd": "gt:0",

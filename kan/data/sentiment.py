@@ -31,13 +31,16 @@ SENTIMENT_OPTIONAL = [
     "trade_date",
     "limit_times",   # 连板天数
     "open_times",    # 炸板/开板次数
+    "first_time",    # 首次封板时间
+    "last_time",     # 最后封板时间
+    "fd_amount",     # 封单金额
     "limit",         # 涨跌停类型 U/D/Z (str)
     "up_stat",       # 涨停统计 "3/3" (str)
     "_source",
 ]
 SENTIMENT_COLUMNS = SENTIMENT_REQUIRED + SENTIMENT_OPTIONAL
-_SENTIMENT_NUMERIC = ["limit_times", "open_times"]
-_SENTIMENT_STR = ["limit", "up_stat"]
+_SENTIMENT_NUMERIC = ["limit_times", "open_times", "fd_amount"]
+_SENTIMENT_STR = ["limit", "up_stat", "first_time", "last_time"]
 
 _SYMBOL_PATTERN = re.compile(r"^\d{6}$")
 _TRADE_DATE_PATTERN = re.compile(r"^\d{8}$")
@@ -45,7 +48,9 @@ _TRADE_DATE_PATTERN = re.compile(r"^\d{8}$")
 _SENTIMENT_TTL = 6 * 3600
 """最新交易日截面 mtime TTL (同 moneyflow) · 历史交易日截面固定 · 永鲜。"""
 _SENTIMENT_SOURCE = "tushare_limit"
-_TUSHARE_SENTIMENT_FIELDS = "ts_code,trade_date,limit_times,open_times,limit,up_stat"
+_TUSHARE_SENTIMENT_FIELDS = (
+    "ts_code,trade_date,limit_times,open_times,first_time,last_time,fd_amount,limit,up_stat"
+)
 
 
 # ── 归一化 ───────────────────────────────────────────────────────────
@@ -178,7 +183,7 @@ def _fetch_tushare_sentiment(trade_date: str) -> pd.DataFrame | None:
             return None
         df = _to_tushare_sentiment_df(data)
         if df is None or df.empty:
-            cb.record("tushare_limit", ok=False)
+            # 稀疏事件接口:空 items 可能只是当日尚无榜单/数据未出 · 不误熔断。
             return None
         cb.record("tushare_limit", ok=True)
         return df

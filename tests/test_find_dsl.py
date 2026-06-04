@@ -48,9 +48,16 @@ class TestPosFilter:
         with pytest.raises(FilterParseError, match="周期非整数"):
             PosFilter.parse("abc:lt:5")
 
-    def test_parse_period_not_allowed(self):
-        with pytest.raises(FilterParseError, match="周期 200 不支持"):
-            PosFilter.parse("200:lt:5")
+    def test_parse_any_period_in_range(self):
+        assert PosFilter.parse("200:lt:5").period == 200
+
+    def test_parse_period_below_range(self):
+        with pytest.raises(FilterParseError, match=r"周期 1 不支持.*最接近的是 2"):
+            PosFilter.parse("1:lt:5")
+
+    def test_parse_period_above_range(self):
+        with pytest.raises(FilterParseError, match=r"周期 361 不支持.*最接近的是 360"):
+            PosFilter.parse("361:lt:5")
 
     def test_parse_invalid_op(self):
         with pytest.raises(FilterParseError, match="运算符 'xx' 不支持"):

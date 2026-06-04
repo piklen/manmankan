@@ -11,6 +11,7 @@
 from kan._entry import _maybe_print_boot_banner
 from kan.app import app
 from kan.cli import (
+    ai_cmds,
     atexit,
     board_cmds,
     compare_cmds,

@@ -14,6 +14,8 @@ from kan.core.models import PeriodResult, StockScanResult, VolumeState
 from kan.storage.paths import SNAPSHOT_PATH
 
 PERIODS = [3, 5, 7, 10, 15, 30, 60, 90, 120, 180]
+MIN_PERIOD = 2
+MAX_PERIOD = 360
 
 # *ST 涨跌停新规：2026-07-06 起主板 *ST 从 5% 调整为 10%
 # 来源：沪深北交易所 2026-04 公告
@@ -57,6 +59,7 @@ def scan_stock(
     symbol: str,
     name: str,
     periods: list[int] | None = None,
+    ma_bias_periods: list[int] | None = None,
 ) -> StockScanResult:
     """对单只股票计算多周期位置 + 趋势。"""
     import pandas as pd  # 背景: lazy · 函数体内 import 用于 pd.Timestamp 类型转换
@@ -163,6 +166,13 @@ def scan_stock(
             return None
         return round(float(df["close"].tail(days).mean()), 2)
 
+    ma_biases: dict[int, float] = {}
+    for days in sorted(set(ma_bias_periods or [])):
+        ma = _ma(days)
+        if ma is None or ma == 0:
+            continue
+        ma_biases[days] = round((current_price - ma) / ma * 100, 2)
+
     recent_low_20 = None
     if len(df) >= 20:
         recent_low_20 = round(float(df["low"].tail(20).min()), 2)
@@ -182,6 +192,7 @@ def scan_stock(
         ma_10=_ma(10),
         ma_20=_ma(20),
         recent_low_20=recent_low_20,
+        ma_biases=ma_biases,
     )
 
 
@@ -230,6 +241,8 @@ def _period_pct_key(r: StockScanResult, sentinel: float) -> tuple[float, ...]:
 def scan_batch(
     watchlist: list[tuple[str, str]],
     mode: str = "low",
+    periods: list[int] | None = None,
+    ma_bias_periods: list[int] | None = None,
 ) -> list[StockScanResult]:
     """批量扫描自选股 · 共振优先 + PERIODS 字典序 tie-break。
 
@@ -247,7 +260,16 @@ def scan_batch(
         df = get_cached(symbol)
         if df is None:
             continue
-        result = scan_stock(df, symbol, name)
+        if periods is None and ma_bias_periods is None:
+            result = scan_stock(df, symbol, name)
+        else:
+            result = scan_stock(
+                df,
+                symbol,
+                name,
+                periods=periods,
+                ma_bias_periods=ma_bias_periods,
+            )
         results.append(result)
 
     if mode == "high":

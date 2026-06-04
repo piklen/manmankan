@@ -1,6 +1,7 @@
 """fetch · 拉取股票历史 K 线数据 (含 --industry / --hot / --theme 批量预拉)。"""
 from __future__ import annotations
 
+from time import perf_counter
 from typing import Annotated
 
 import typer
@@ -34,6 +35,10 @@ def fetch(
         str | None,
         typer.Option("--group", "-g", help="选自选股分组 (默认 default 组)"),
     ] = None,
+    verbose: Annotated[
+        bool,
+        typer.Option("--verbose", help="逐只输出拉取状态"),
+    ] = False,
 ) -> None:
     """拉取股票历史 K 线数据 (--group 切换分组)"""
     from rich.console import Console
@@ -86,11 +91,17 @@ def fetch(
             raise typer.Exit(1)
         symbols = [s.symbol for s in wl.stocks]
 
+    started = perf_counter()
     success = 0
+    fresh = 0
+    updated = 0
     failed = 0
+    errors: list[tuple[str, str]] = []
     for sym in symbols:
         if not force and is_fresh(sym):
-            typer.echo(f"  {sym} 已是最新（今日已拉取）")
+            if verbose:
+                typer.echo(f"  {sym} 已是最新（今日已拉取）")
+            fresh += 1
             success += 1
             continue
         try:
@@ -99,12 +110,29 @@ def fetch(
                 spinner="dots",
             ):
                 df = fetch_kline(sym, force=force)
-            typer.echo(f"  ✅ {sym} 拉取成功（{len(df)} 条 K 线）")
+            if verbose:
+                typer.echo(f"  ✅ {sym} 拉取成功（{len(df)} 条 K 线）")
+            updated += 1
             success += 1
         except Exception as e:
-            typer.echo(f"  ❌ {sym} 拉取失败：{_safe_error_msg(e)}", err=True)
+            msg = _safe_error_msg(e)
+            if verbose:
+                typer.echo(f"  ❌ {sym} 拉取失败：{msg}", err=True)
+            errors.append((sym, msg))
             failed += 1
 
+    elapsed = perf_counter() - started
     if failed:
-        typer.echo(f"拉取完成：✅ 成功 {success} · ❌ 失败 {failed}", err=True)
+        typer.echo(
+            f"❌ 拉取失败 {failed} 只 · 成功 {success} 只 · 耗时 {elapsed:.1f}s",
+            err=True,
+        )
+        if not verbose:
+            for sym, msg in errors[:3]:
+                typer.echo(f"  {sym}: {msg}", err=True)
         raise typer.Exit(1)
+    if updated == 0:
+        typer.echo(f"✅ 已最新 · {fresh} 只无需更新 · 耗时 {elapsed:.1f}s")
+    else:
+        suffix = f" · 已最新 {fresh} 只" if fresh else ""
+        typer.echo(f"🔄 更新 {updated} 只{suffix} · 耗时 {elapsed:.1f}s")

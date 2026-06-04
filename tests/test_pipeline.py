@@ -629,3 +629,28 @@ def test_run_data_pipeline_calls_auto_fetch_with_resolved_targets(monkeypatch):
         compute=lambda t, **kw: [_FakeResult(s) for s, _ in t],
     )
     assert fetched_targets == [resolved]
+
+
+def test_run_data_pipeline_passes_fetch_days_to_auto_fetch(monkeypatch):
+    """360 日 find/low/high 路径需要把最小缓存行数传给 auto-fetch。"""
+    targets = [("600519", "贵州茅台")]
+    fetched_calls = []
+    monkeypatch.setattr(
+        "kan.cli.helpers._auto_fetch_stale",
+        lambda pairs, **kwargs: fetched_calls.append((pairs, kwargs)),
+    )
+    _patch_calendar(monkeypatch, expected_date=date(2026, 5, 23))
+    _patch_fetcher(
+        monkeypatch,
+        cutoffs={"600519": date(2026, 5, 23)},
+        ages={"600519": "2026-05-23T16:00:00"},
+    )
+    stock_set = _FakeStockSet(pairs=targets)
+
+    pipeline.run_data_pipeline(
+        stock_set,
+        compute=lambda t, **kw: [_FakeResult("600519")],
+        fetch_days=360,
+    )
+
+    assert fetched_calls == [(targets, {"days": 360})]
