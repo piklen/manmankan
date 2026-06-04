@@ -226,30 +226,56 @@ def scan_runner(monkeypatch):
 
     from kan.core.models import PeriodResult, StockScanResult
 
-    fake_result = StockScanResult(
+    fake_period_3 = PeriodResult(
+        period=3, n_low=90.0, n_high=110.0, position_pct=50.0,
+        at_low=False, at_high=False,
+    )
+    fake_period_30 = PeriodResult(
+        period=30, n_low=90.0, n_high=110.0, position_pct=3.0,
+        at_low=True, at_high=False,
+    )
+    fake_scan_result = StockScanResult(
         symbol="600519",
         name="测试",
         current_price=100.0,
         scan_date=date(2026, 5, 14),
-        periods=[
-            PeriodResult(
-                period=3, n_low=90.0, n_high=110.0, position_pct=50.0,
-                at_low=False, at_high=False,
-            ),
-        ],
+        periods=[fake_period_3],
         low_resonance=0,
         high_resonance=0,
     )
+    fake_extreme_result = StockScanResult(
+        symbol="600519",
+        name="测试",
+        current_price=100.0,
+        scan_date=date(2026, 5, 14),
+        periods=[fake_period_30],
+        low_resonance=1,
+        high_resonance=0,
+    )
 
+    fake_pairs = [("600519", "测试")]
+    monkeypatch.setattr("kan.cli.scan_cmds._get_watchlist_pairs", lambda group=None: fake_pairs)
+    monkeypatch.setattr("kan.cli.extreme_cmds._get_watchlist_pairs", lambda group=None: fake_pairs)
+    monkeypatch.setattr("kan.cli.helpers._auto_fetch_stale", lambda _pairs: None)
+    monkeypatch.setattr("kan.cli.extreme_cmds._auto_fetch_stale", lambda _pairs: None)
     monkeypatch.setattr(
-        "kan.cli.scan_cmds._get_watchlist_pairs",
-        lambda group=None: [("600519", "测试")],
+        "kan.core.scanner.scan_batch", lambda _pairs, mode="low": [fake_scan_result]
     )
-    monkeypatch.setattr("kan.cli.scan_cmds._auto_fetch_stale", lambda _pairs: None)
     monkeypatch.setattr(
-        "kan.core.scanner.scan_batch", lambda _pairs, mode="low": [fake_result]
+        "kan.core.scanner.filter_extreme",
+        lambda _pairs, periods, mode="low": (
+            {p: [(fake_extreme_result, fake_period_30)] for p in periods}
+            if mode == "low" else {}
+        ),
     )
+    monkeypatch.setattr("kan.core.scanner.load_snapshot", lambda: None)
+    monkeypatch.setattr("kan.core.scanner.save_snapshot", lambda _results: None)
+    monkeypatch.setattr("kan.data.fetcher.data_cutoff_date", lambda _sym: date(2026, 5, 14))
     monkeypatch.setattr("kan.data.fetcher.cache_age", lambda _sym: "2026-05-14 12:00")
+    monkeypatch.setattr(
+        "kan.core.trading_calendar.latest_trade_date", lambda: date(2026, 5, 14)
+    )
+    monkeypatch.setattr("kan.core.trading_calendar.market_phase", lambda: "post")
     monkeypatch.setattr("kan.core.scanner.get_limit_threshold", lambda *a, **k: 10.0)
     return CliRunner()
 
