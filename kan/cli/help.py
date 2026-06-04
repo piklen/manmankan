@@ -12,7 +12,7 @@ def help_cmd() -> None:
 
     from kan.core.find_registry import format_find_field_presets, format_find_filter_groups
 
-    find_filter_groups = format_find_filter_groups()
+    find_filter_groups = "\n  ".join(format_find_filter_groups().splitlines())
     find_field_presets = format_find_field_presets()
 
     Console().print(f"""[bold]慢慢看 · 命令速记[/bold]
@@ -82,7 +82,8 @@ def help_cmd() -> None:
   [dim]单维度 filter 只反映该维度 · 命中不等于整体位置低/高 · 多维度请叠加 filter 或用 kan info 看全周期[/dim]
   [dim]可用 filter 分组:
   {find_filter_groups}[/dim]
-  [dim]可用 fields preset: {find_field_presets}[/dim]
+  [dim]可用 fields preset:
+  {find_field_presets}[/dim]
   [dim]不告诉你买什么 · 帮你找到符合条件的(候选 ≠ 买入信号)[/dim]
 
 [bold cyan]行业 / 热榜 / 题材扫描[/bold cyan]

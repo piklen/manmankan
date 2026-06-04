@@ -135,6 +135,16 @@ def test_empty_history_dir_errors(snap_dir, runner):
     assert "还没有任何扫描历史" in result.output
 
 
+def test_empty_history_dir_json_errors(snap_dir, runner):
+    result = runner.invoke(app, ["history", "600519", "--format", "json"])
+    assert result.exit_code == 1
+    payload = json.loads(result.output)
+    assert payload["ok"] is False
+    assert payload["command"] == "history"
+    assert payload["error"]["code"] == "history_unavailable"
+    assert "例:" in payload["error"]["hint"]
+
+
 def test_history_terminal_ok(snap_dir, runner):
     _write(snap_dir, "2026-05-23", [_entry()])
     result = runner.invoke(app, ["history", "600519"])
@@ -148,6 +158,15 @@ def test_symbol_not_in_snapshots_errors(snap_dir, runner):
     result = runner.invoke(app, ["history", "600519"])
     assert result.exit_code == 1
     assert "没有" in result.output
+
+
+def test_symbol_not_in_snapshots_json_errors(snap_dir, runner):
+    _write(snap_dir, "2026-05-23", [_entry(symbol="000858", name="五粮液")])
+    result = runner.invoke(app, ["history", "600519", "--format", "json"])
+    assert result.exit_code == 1
+    payload = json.loads(result.output)
+    assert payload["ok"] is False
+    assert payload["error"]["code"] == "history_not_found"
 
 
 def test_name_resolution_single(snap_dir, runner):
@@ -172,6 +191,18 @@ def test_invalid_period_errors(snap_dir, runner):
     result = runner.invoke(app, ["history", "600519", "--period", "13"])
     assert result.exit_code == 2
     assert "周期不支持" in result.output
+
+
+def test_invalid_period_json_errors(snap_dir, runner):
+    _write(snap_dir, "2026-05-23", [_entry()])
+    result = runner.invoke(
+        app,
+        ["history", "600519", "--period", "13", "--format", "json"],
+    )
+    assert result.exit_code == 2
+    payload = json.loads(result.output)
+    assert payload["ok"] is False
+    assert payload["error"]["code"] == "invalid_period"
 
 
 def test_missing_period_shows_dash(snap_dir, runner):

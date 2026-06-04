@@ -477,8 +477,11 @@ def parse_find_fields(raw_values: list[str] | None) -> tuple[str, ...]:
                 seen.add(field)
                 out.append(field)
     if unknown:
-        allowed = ", ".join([*sorted(FIND_FIELD_PRESETS), *sorted(FIND_FIELD_SPECS)])
-        raise ValueError(f"不支持的 --fields 字段: {', '.join(unknown)} · 可用字段: {allowed}")
+        presets = ", ".join(sorted(FIND_FIELD_PRESETS))
+        raise ValueError(
+            f"不支持的 --fields 字段: {', '.join(unknown)} · "
+            f"可用 preset: {presets} · 字段全集见 docs/find.md"
+        )
     if not out:
         raise ValueError("--fields 不能为空 · 例: --fields @core,context.positions")
     return tuple(out)

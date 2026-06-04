@@ -177,6 +177,17 @@ def test_help_ttfb_stays_fast(tmp_path: Path) -> None:
     assert result["ttfb_ms"] <= HELP_TTFB_SLO_MS, result
 
 
+def test_find_help_ttfb_stays_fast(tmp_path: Path) -> None:
+    result = _measure_best_of_three(
+        ["find", "--help"],
+        tmp_path / "find-help",
+        timeout_s=2.0,
+        stop_on_spinner=False,
+    )
+    assert result["ttfb_ms"] is not None, result
+    assert result["ttfb_ms"] <= HELP_TTFB_SLO_MS, result
+
+
 def test_add_code_fast_path_ttfb_stays_fast(tmp_path: Path) -> None:
     result = _measure_best_of_three(
         ["add", "600519"],

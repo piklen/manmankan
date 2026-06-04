@@ -8,40 +8,7 @@ increment `D` unless the maintainer explicitly approves a larger bump.
 
 ## [Unreleased]
 
-### Changed
-
-- `kan help` / README / site 去除用户面硬编码发布版本号;具体版本仅保留在包元数据、CHANGELOG、JSON schema 和 `kan update` 等版本功能中
-- 代码注释、测试说明和 CI 文案中的历史发布版本标记改为中性描述,降低公开仓库的版本噪音
-
-### Internal
-
-- 隐私扫描新增用户面硬编码版本号 gate,防止 README / site / `kan help` 再次出现当前具体版本号
-
 ## [0.0.6.8] - 2026-06-04
-
-### Added
-
-- **`kan find --format json --compact --no-compact-context`** · compact 可显式省略 `positions` / `low_resonance` / `high_resonance` / `gains` / `up_days`;`--all` 无 K 线 filter 时不再为 compact 输出主动取全市场 K 线快照
-- **`kan find --format json --fields @preset`** · 字段 preset 支持 `@core` / `@context` / `@valuation` / `@valuation_context` / `@moneyflow` / `@technical` / `@sentiment` / `@chip` / `@shareholder`,仅展开客观字段集合,不改变筛选规则或排序
-
-### Changed
-
-- `kan find --all --format json --compact|--fields` 现在按 filter、compact 摘要和字段白名单反向驱动截面维度取数;未请求的 moneyflow / technical / sentiment / chip 不再无条件拉取,`data_availability` 对应维度显示 `not_requested`
-- `kan find` JSON schema version 升至 `0.0.6.8`
-- 首次运行 `kan` 时后台静默初始化 A 股代码-名称表;首次 / 无 cache 的 `kan add <6位代码...>` 走数字代码快路径,不等待名称表下载完成
-
-### Fixed
-
-- `kan find --format json --codes ...` 的非法 / 空代码池错误现在返回 `ok:false` JSON envelope,不再退回纯文本错误,保持 AI / 脚本消费契约一致
-- 东方财富飙升榜在上游字段缺失时改走更稳的 fallback,避免 `kan scan --hot surge` 因单一接口漂移直接不可用
-
-### Internal
-
-- 增加 find registry → docs / CLI help / field schema 一致性测试,降低 filter 元数据、字段白名单、文档和 help 漂移风险
-- `typer` 依赖上界调整为 `<0.27`,并通过 lockfile / package smoke / TTY CI 验证
-- 收敛 v0.0.6.6 review gap:中性措辞、JSON 契约和 registry 文档继续由测试守护
-
-## [0.0.6.7] - 2026-06-02
 
 ### Added
 
@@ -55,16 +22,39 @@ increment `D` unless the maintainer explicitly approves a larger bump.
 - **`kan theme trend --min-streak / --sort`** · 题材连续涨跌榜开放 1 天阈值,新增按最新单日涨幅 / 题材资金排序
 - **`kan find --format json --compact` / `--fields`** · 低字段量 JSON 输出和字段白名单 · 保留代码/名称/价格、触发 filter、位置/共振和已请求维度摘要;full / compact / fields JSON 均新增 `data_availability` 顶层统计,区分缺数据、未请求和当前模式不支持
 - **find filter / field registry** · 集中登记 filter 数据源、频率、`--all` 支持度、缺数据语义和 `--fields` 白名单,避免 CLI / export / docs 的字段契约继续散落
+- **`kan find --format json --compact --no-compact-context`** · compact 可显式省略 `positions` / `low_resonance` / `high_resonance` / `gains` / `up_days`;`--all` 无 K 线 filter 时不再为 compact 输出主动取全市场 K 线快照
+- **`kan find --format json --fields @preset`** · 字段 preset 支持 `@core` / `@context` / `@valuation` / `@valuation_context` / `@moneyflow` / `@technical` / `@sentiment` / `@chip` / `@shareholder`,仅展开客观字段集合,不改变筛选规则或排序
+
+### Changed
+
+- `kan find --all --format json --compact|--fields` 现在按 filter、compact 摘要和字段白名单反向驱动截面维度取数;未请求的 moneyflow / technical / sentiment / chip 不再无条件拉取,`data_availability` 对应维度显示 `not_requested`
+- `kan find` JSON schema version 升至 `0.0.6.8`
+- 首次运行 `kan` 时后台静默初始化 A 股代码-名称表;首次 / 无 cache 的 `kan add <6位代码...>` 走数字代码快路径,不等待名称表下载完成
+- `kan help` / README / site 去除用户面硬编码发布版本号;具体版本仅保留在包元数据、CHANGELOG、JSON schema 和 `kan update` 等版本功能中
+- 代码注释、测试说明和 CI 文案中的历史发布版本标记改为中性描述,降低公开仓库的版本噪音
 
 ### Fixed
 
+- `kan find --format json --codes ...` 的非法 / 空代码池错误现在返回 `ok:false` JSON envelope,不再退回纯文本错误,保持 AI / 脚本消费契约一致
+- `kan find --codes ... --format json` 无 filter 时走轻量 code-pool JSON,不再为外部代码池隐式触发 K 线 / 交易日历网络链路
+- `kan history --format json` 的无历史、未命中和非法周期错误统一返回机器可读 JSON envelope
+- `kan update` 升级后 smoke test 改用真实公开 API / 模块,并在指定目标版本时校验 runtime version
+- K 线源同 priority race 改用 daemon worker,避免慢 loser 在已中标后继续拖住 CLI 进程退出
+- 扫描快照写入改走原子 JSON 写入并保持 `0600` 文件权限
+- debug 日志脱敏补齐 JSON token / Authorization / Bearer token 常见泄漏形态
+- 东方财富飙升榜在上游字段缺失时改走更稳的 fallback,避免 `kan scan --hot surge` 因单一接口漂移直接不可用
 - 北交所 2024 新启用 `920xxx` 代码段被误判为上证（`.SH`）· 修正 `ts_code` 交易所后缀映射为 `.BJ`（影响北交所个股的 tushare K 线 / 截面拉取）
 - `kan compare` 不再在超过 8 只时直接拒绝 · 终端自动按 8 只一页展示,JSON / Markdown 保留全量输出
 - TuShare K 线顶档源改用 `stk_factor_pro` 前复权 OHLC,并给 K 线缓存写入 `_adjust=qfq`;旧版 TuShare 未复权缓存会自动判 stale 重新拉取,避免除权除息日前后位置跳变
 
 ### Internal
 
+- 增加 find registry → docs / CLI help / field schema 一致性测试,降低 filter 元数据、字段白名单、文档和 help 漂移风险
+- `typer` 依赖上界调整为 `<0.27`,并通过 lockfile / package smoke / TTY CI 验证
+- 隐私扫描新增用户面硬编码版本号 gate,防止 README / site / `kan help` 再次出现当前具体版本号
+- release workflow 新增 tag / version / main ancestry gate,并在 PyPI 发布前跑 dist wheel clean-install smoke
 - 截面市场指标数据源接入（`MetricsSource` 责任链 + tushare `daily_basic`）· 估值 / 量价 / 市值维度原始指标 · 复用既有「适配器 + 责任链」架构 · 配 tushare token 可用 · 内部数据层骨架（暂无 CLI 变化）
+- 收敛 v0.0.6.6 review gap:中性措辞、JSON 契约和 registry 文档继续由测试守护
 
 ## [0.0.6.6] - 2026-05-30
 
@@ -236,8 +226,7 @@ increment `D` unless the maintainer explicitly approves a larger bump.
 - **合规与隐私** · 强制风险提示 + 关键词黑名单（无买卖建议 / 无目标价 / 无评级）· 数据全本地
 
 [Unreleased]: https://github.com/piklen/manmankan/compare/v0.0.6.8...HEAD
-[0.0.6.8]: https://github.com/piklen/manmankan/compare/v0.0.6.7...v0.0.6.8
-[0.0.6.7]: https://github.com/piklen/manmankan/compare/v0.0.6.6...v0.0.6.7
+[0.0.6.8]: https://github.com/piklen/manmankan/compare/v0.0.6.6...v0.0.6.8
 [0.0.6.6]: https://github.com/piklen/manmankan/compare/v0.0.6.5...v0.0.6.6
 [0.0.6.5]: https://github.com/piklen/manmankan/compare/v0.0.5.1...v0.0.6.5
 [0.0.5.1]: https://github.com/piklen/manmankan/compare/v0.0.5.0...v0.0.5.1

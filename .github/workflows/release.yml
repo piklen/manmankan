@@ -26,10 +26,51 @@ jobs:
       contents: read
     steps:
       - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10  # v6 (pinned 2026-05-27)
+        with:
+          fetch-depth: 0
       - uses: astral-sh/setup-uv@08807647e7069bb48b6ef5acd8ec9567f424441b  # pinned 2026-05-27
         with:
           python-version: '3.12'
           enable-cache: true
+      - name: Verify tag, version, and main tip
+        run: |
+          VERSION="${GITHUB_REF_NAME#v}"
+          if [ "${GITHUB_REF_NAME}" != "v${VERSION}" ]; then
+            echo "Release tags must be v<version>; got ${GITHUB_REF_NAME}" >&2
+            exit 1
+          fi
+          git fetch origin main:refs/remotes/origin/main --tags
+          if [ "$(git rev-parse HEAD)" != "$(git rev-parse origin/main)" ]; then
+            echo "Release tag must point at origin/main tip" >&2
+            echo "HEAD:        $(git rev-parse HEAD)" >&2
+            echo "origin/main: $(git rev-parse origin/main)" >&2
+            exit 1
+          fi
+          python - <<'PY'
+          import re
+          import sys
+          import tomllib
+          import os
+          from pathlib import Path
+
+          version = os.environ["GITHUB_REF_NAME"].removeprefix("v")
+          pyproject = tomllib.loads(Path("pyproject.toml").read_text())
+          init_text = Path("kan/__init__.py").read_text()
+          init_match = re.search(r'__version__\s*=\s*"([^"]+)"', init_text)
+          changelog = Path("CHANGELOG.md").read_text()
+          changelog_match = re.search(r"^## \[(\d+\.\d+\.\d+(?:\.\d+)?)\]", changelog, re.M)
+
+          actual = {
+              "tag": version,
+              "pyproject": pyproject["project"]["version"],
+              "__version__": init_match.group(1) if init_match else None,
+              "CHANGELOG top": changelog_match.group(1) if changelog_match else None,
+          }
+          mismatches = {k: v for k, v in actual.items() if v != version}
+          if mismatches:
+              print("Release version mismatch:", actual, file=sys.stderr)
+              sys.exit(1)
+          PY
       - name: Lockfile is current
         run: uv lock --check
       - name: Install dependencies
@@ -57,6 +98,41 @@ jobs:
               for p in dist:
                   print(f"  - {p.name}")
               sys.exit(1)
+          PY
+      - name: Pre-publish clean wheel smoke
+        run: |
+          VERSION="${GITHUB_REF_NAME#v}"
+          uv venv /tmp/manmankan-release-smoke --python 3.12
+          uv pip install --python /tmp/manmankan-release-smoke/bin/python dist/*.whl
+          SMOKE_CWD="$(mktemp -d)"
+          cd "$SMOKE_CWD"
+          HOME="$(mktemp -d)" XDG_DATA_HOME="$(mktemp -d)" /tmp/manmankan-release-smoke/bin/kan --version | grep "kan ${VERSION}"
+          HOME="$(mktemp -d)" XDG_DATA_HOME="$(mktemp -d)" /tmp/manmankan-release-smoke/bin/kan --help
+          HOME="$(mktemp -d)" XDG_DATA_HOME="$(mktemp -d)" /tmp/manmankan-release-smoke/bin/kan scan --help
+          HOME="$(mktemp -d)" XDG_DATA_HOME="$(mktemp -d)" /tmp/manmankan-release-smoke/bin/kan find --help
+          HOME="$(mktemp -d)" XDG_DATA_HOME="$(mktemp -d)" /tmp/manmankan-release-smoke/bin/kan board rank --help
+          HOME="$(mktemp -d)" XDG_DATA_HOME="$(mktemp -d)" /tmp/manmankan-release-smoke/bin/kan history --help
+          FIND_JSON="$(mktemp)"
+          FIND_ERR="$(mktemp)"
+          export FIND_JSON
+          HOME="$(mktemp -d)" XDG_DATA_HOME="$(mktemp -d)" NO_COLOR=1 /tmp/manmankan-release-smoke/bin/kan find --codes 600519,000858 --format json > "$FIND_JSON" 2> "$FIND_ERR"
+          test ! -s "$FIND_ERR"
+          /tmp/manmankan-release-smoke/bin/python - <<'PY'
+          import importlib.metadata
+          import json
+          import os
+          from pathlib import Path
+
+          version = os.environ["GITHUB_REF_NAME"].removeprefix("v")
+          import kan
+
+          assert importlib.metadata.version("manmankan") == version
+          assert kan.__version__ == version
+          assert Path(kan.__file__).resolve().is_relative_to(Path("/tmp/manmankan-release-smoke").resolve())
+          payload = json.loads(Path(os.environ["FIND_JSON"]).read_text())
+          assert payload["ok"] is True
+          assert payload["mode"] == "code_pool"
+          assert payload["stats"]["matched"] == 2
           PY
       - name: Compute install.sh / install.ps1 SHA256
         run: |

@@ -8,6 +8,7 @@ StockScanResult / PeriodResult,Pydantic)已存在,这里只做序列化与表格
 from __future__ import annotations
 
 import json
+from collections.abc import Sequence
 from enum import StrEnum
 from typing import TYPE_CHECKING
 
@@ -916,7 +917,7 @@ def _object_has_dimension_data(dim: str, obj: object | None) -> bool:
     return any(getattr(obj, field, None) is not None for field in DIMENSION_DATA_FIELDS[dim])
 
 
-def _infer_included_dimensions(items: list[object]) -> set[str]:
+def _infer_included_dimensions(items: Sequence[object]) -> set[str]:
     """Fallback for direct unit calls that do not pass included_dimensions."""
     dims: set[str] = set()
     for item in items:
@@ -927,7 +928,7 @@ def _infer_included_dimensions(items: list[object]) -> set[str]:
 
 
 def _data_availability(
-    items: list[object],
+    items: Sequence[object],
     *,
     included_dimensions: set[str] | None = None,
     unsupported_dimensions: set[str] | None = None,
@@ -1072,6 +1073,65 @@ def find_payload(
             "stale": freshness.is_stale,
         },
     }
+
+
+def code_pool_payload(
+    pairs: list[tuple[str, str]],
+    *,
+    query_time: str,
+    pools: list[str],
+    fields: tuple[str, ...] = (),
+) -> dict:
+    """`kan find --codes ... --format json` without filters.
+
+    Explicit code pools should be able to act as a cheap metadata provider.
+    Pulling K-line data just to echo the user-supplied pool makes first-run JSON
+    automation depend on slow external sources.
+    """
+    from kan.render.base import FIND_DISCLAIMER_TEXT
+
+    allowed = {"code", "name"}
+    selected = tuple(fields or ("code", "name"))
+    unsupported = [f for f in selected if f not in allowed]
+    if unsupported:
+        raise ValueError(
+            "外部代码池无 filter 取数只支持 code/name 字段；"
+            f"不支持: {', '.join(unsupported)}"
+        )
+
+    def _row(code: str, name: str) -> dict:
+        source = {"code": code, "name": name.replace(" ", "")}
+        return {k: source[k] for k in selected}
+
+    return {
+        "ok": True,
+        "schema_version": FIND_SCHEMA_VERSION,
+        "command": "find",
+        "mode": "code_pool",
+        "result_schema": "fields" if fields else "code_pool",
+        "query_time": query_time,
+        "rule": {"pools": pools, "filters": []},
+        "results": [_row(code, name) for code, name in pairs],
+        "disclaimer": FIND_DISCLAIMER_TEXT,
+        "data_availability": {
+            dim: {"requested": False, "available": False, "coverage": 0.0}
+            for dim in DATA_DIMENSIONS
+        },
+        "stats": {
+            "pool_size": len(pairs),
+            "matched": len(pairs),
+            "shown": len(pairs),
+            "data_cutoff": None,
+            "stale": False,
+        },
+    }
+
+
+def code_pool_markdown(pairs: list[tuple[str, str]], *, title: str) -> str:
+    """Markdown for an explicit code pool without filters."""
+    rows = [[name.replace(" ", ""), code] for code, name in pairs]
+    table = md_table(["股票", "代码"], rows) if rows else "无代码"
+    return f"# {title}\n\n{table}\n\n{_find_disclaimer_quote()}"
 
 
 def find_markdown(
@@ -1238,6 +1298,7 @@ def cross_section_payload(
     *,
     query_time: str,
     pool_size: int,
+    matched_total: int | None = None,
     data_cutoff: date | None,
     stale: bool,
     filters: list[dict] | None = None,
@@ -1309,6 +1370,7 @@ def cross_section_payload(
         ),
         "stats": {
             "pool_size": pool_size,
+            "matched": len(entries) if matched_total is None else matched_total,
             "shown": len(entries),
             "data_cutoff": data_cutoff.isoformat() if data_cutoff else None,
             "stale": stale,

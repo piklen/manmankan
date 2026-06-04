@@ -50,7 +50,10 @@ def _filter_extreme_cmd(
         _load_watchlist_pairs(group) if source_mode else _get_watchlist_pairs(group)
     )
     if only_watchlist and not source_mode:
-        _print_err("❌ --only-watchlist 需配合 --industry / --hot / --theme 使用")
+        _print_err(
+            "❌ --only-watchlist 需配合 --industry / --hot / --theme 使用\n"
+            "   例: kan low 30 --industry 半导体 --only-watchlist"
+        )
         raise typer.Exit(1)
     # OOP 路径:from_flags → resolve_stock_set_or_exit · 取代 resolve_targets_or_exit
     from kan.core.models import BoardMeta, HotMeta, ThemeMeta

@@ -11,6 +11,10 @@
 """
 from __future__ import annotations
 
+import subprocess
+import sys
+import time
+
 import pandas as pd
 import pytest
 
@@ -177,6 +181,45 @@ def test_race_both_succeed_one_wins(sample_df):
     assert result is not None
     _, name = result
     assert name in {"a", "b"}
+
+
+def test_race_slow_loser_does_not_hold_process_open():
+    """慢 loser 不应在 race 已中标后拖住 CLI 进程退出。"""
+    code = r"""
+import time
+import pandas as pd
+from kan.data.source_chain import KlineSourceChain
+
+class Slow:
+    name = "slow"
+    priority = 30
+    def is_available(self):
+        return True
+    def fetch(self, symbol, start):
+        time.sleep(5)
+        return None
+
+class Fast:
+    name = "fast"
+    priority = 30
+    def is_available(self):
+        return True
+    def fetch(self, symbol, start):
+        return pd.DataFrame({"date": ["2026-05-08"], "close": [1.0]})
+
+result = KlineSourceChain([Slow(), Fast()]).fetch("600519", "20260101")
+assert result is not None
+assert result[1] == "fast"
+"""
+    started = time.monotonic()
+    subprocess.run(
+        [sys.executable, "-c", code],
+        check=True,
+        capture_output=True,
+        text=True,
+        timeout=2.0,
+    )
+    assert time.monotonic() - started < 2.0
 
 
 def test_race_both_fail_falls_back(sample_df):

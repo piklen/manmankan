@@ -1,7 +1,7 @@
 # 慢慢看 · manmankan
 
 > A 股自选股 CLI · **不告诉你买什么 · 只帮你找到符合条件的**
-> 多周期位置百分位 · 共振信号 · 用户主导的条件筛选 · 100% 本地。
+> 多周期位置百分位 · 共振信号 · 用户主导的条件筛选 · 本地存储。
 > Alpha 活跃发版中 · Parity 7.0.0 授权：个人自用免费，商用 / 对外运营 / 衍生软件受 copyleft 贡献义务约束。
 
 [![License: Parity 7.0.0](https://img.shields.io/badge/License-Parity_7.0.0-orange.svg)](https://paritylicense.com/versions/7.0.0.html)
@@ -18,11 +18,11 @@
 
 **manmankan** (慢慢看) is a pure command-line tool for China A-share investors who track their own watchlists. It shows where each stock currently sits within its 3 / 5 / 7 / 10 / 15 / 30 / 60 / 90 / 120 / 180-day price range — a "position percentile" — and flags stocks that touch lows (or highs) across multiple timeframes as resonance signals (`×N`).
 
-It deliberately stops there: **no buy/sell advice, no ratings, no price targets, no "AI stock picking."** Just objective price-position data, fully local — no login, no account, no telemetry. Data is delayed end-of-day K-line from the AKShare ecosystem (baostock primary). `pip install manmankan` · Python 3.11+ · [Parity Public License 7.0.0](LICENSE) · A-share only (no HK / US / futures).
+It deliberately stops there: **no buy/sell advice, no ratings, no price targets, no "AI stock picking."** Just objective price-position data, fully local — no login, no account, no telemetry. Data is delayed end-of-day K-line from the AKShare ecosystem (baostock primary). `uv tool install manmankan` · Python 3.11+ · [Parity Public License 7.0.0](LICENSE) · A-share only (no HK / US / futures).
 </details>
 
 > **Alpha 活跃发版中** · API 在 1.0 前可能调整 · `uv tool install manmankan` 即装即用
-> **100% 本地** · 不登录 · 不上传自选 · 不推送 · 不遥测 · 数据存 `~/.local/share/kan/`(XDG 规范)
+> **本地存储** · 不登录 · 不上传自选 · 不推送 · 不遥测 · 数据存 `~/.local/share/kan/`(XDG 规范)
 > **延时数据** · 盘后批量拉取前复权日 K 线 · 不适合分钟级短线
 > **许可** · 个人散户日常自用完全免费;商业使用见 [许可证](#许可证)
 
@@ -76,17 +76,18 @@ kan --version
 **Mac / Linux** — 打开「终端」(Terminal),粘贴回车:
 
 ```bash
-curl -LsSf https://raw.githubusercontent.com/piklen/manmankan/main/scripts/install.sh | bash
+curl -LsSf https://astral.sh/uv/install.sh | sh
+uv tool install manmankan
 ```
 
 **Windows** — 打开 PowerShell,粘贴回车:
 
 ```powershell
-powershell -c "irm https://raw.githubusercontent.com/piklen/manmankan/main/scripts/install.ps1 | iex"
+powershell -ExecutionPolicy ByPass -c "irm https://astral.sh/uv/install.ps1 | iex"
+uv tool install manmankan
 ```
 
-> 脚本会自动装 uv + manmankan 并验证。看到 ✅ 即成功;装好后打开**新**终端窗口(PATH 才生效)。
-> 安全敏感用户可先下载脚本审阅再跑(`curl -L ... > install.sh`),每版 release notes 公布 SHA256。
+> 第一步只安装 uv;第二步从 PyPI 安装 manmankan。装好后如当前窗口找不到 `kan`,打开**新**终端窗口(PATH 才生效)。
 
 </details>
 
@@ -115,7 +116,7 @@ git clone https://github.com/piklen/manmankan.git && cd manmankan && uv sync && 
 
 ```bash
 uv tool install manmankan           # 一行装好
-kan add 600519 茅台 601318          # 代码 / 名称混搭
+kan add 600519 601318 000858        # 纯代码批量加入
 kan scan                            # 一屏看完位置 + 共振信号
 kan find --pos 180:lt:5 --limit 5   # 按你的规则筛:180 日位置 < 5%
 kan find --codes 600519,000858 --gain 30:gt:10  # 任意代码池里筛
@@ -123,7 +124,7 @@ kan find --codes 600519,000858 --gain 30:gt:10  # 任意代码池里筛
 
 第一次跑会有两次「看起来卡住」的时刻,**都是正常的**:
 
-- **首次运行 `kan`**:后台静默初始化 A 股代码-名称表;批量 `kan add <6位代码...>` 不等待下载,通常秒级响应。
+- **首次运行 `kan`**:后台静默初始化 A 股代码-名称表;批量 `kan add <6位代码...>` 不等待下载,通常秒级响应。若本地名称表还没命中,会先按代码保存;需要按中文名搜索时可用 `kan add 茅台`。
 - **首次 `kan scan`**:多源并发拉取自选股 K 线(30 只约 1–2 分钟,180 天日 K)· 之后只补增量。
 
 进度条都是真实的——失败会跳过单只继续跑,Ctrl-C 可中断,已拉数据自动保存、下次续传。装坏了跑 `uv tool install manmankan --reinstall`,详见 [§故障排查](#故障排查-faq)。
@@ -168,7 +169,8 @@ kan find --codes 600519,000858 --gain 30:gt:10  # 任意代码池里筛
 **自选股 / 分组**
 
 ```bash
-kan add 600519 茅台 601318     # 代码 / 名称混搭 · 批量
+kan add 600519 601318 000858   # 纯代码批量加入 · 首次也快
+kan add 茅台                   # 名称搜索(需要本地名称表)
 kan remove 茅台 五粮液         # 移除 · 批量
 kan list                       # 查看自选(--all 看所有组)
 kan import stocks.csv          # CSV 批量导入(上限 10 MB)
@@ -227,6 +229,7 @@ kan find --pos 180:lt:5 --limit 20            # 输出条数上限(默认 50)
 ```
 
 > 语法:`--pos PERIOD:OP:VAL`(PERIOD ∈ 3/5/7/10/15/30/60/90/120/180,OP ∈ lt/lte/gt/gte/eq/ne)· `--resonance low|high:OP:VAL` · `--exclude-st`。`kan find` 是**用户主导的条件筛选器**:规则由你显式指定,**无内置筛选策略 preset、无评分、无评级、无推荐**,只返回符合你规则的股票。JSON schema、数据来源和缺数据语义见 [`docs/find.md`](docs/find.md);合规细则见 [`docs/compliance.md` §7](docs/compliance.md)。
+> `kan find --all` 以及估值 / 质量 / 资金 / 技术 / 筹码 / 股东类 filter 依赖 TuShare Pro token 或对应上游数据;未配置 token 时,自选 / 行业 / 题材 / 外部代码池的位置、共振、涨幅等 K 线类筛选仍可用。
 
 **行业 / 热榜 / 题材**
 
@@ -303,7 +306,7 @@ for period, stocks in hits.items():
 
 **跨板块涨跌停**:`kan scan` / `kan trend --latest` 自动标记,按板块差异化——主板 ±10% / 创业板 · 科创板 ±20% / 北交所 ±30% / ST · *ST ±5%(2026-07-06 起 ±10%,来自交易所公告,代码内置自动切换)。
 
-**隐私**:完全本地运行,**不上传任何用户数据**。不登录、不注册、不上传自选、不向第三方推送查询行为、不做遥测。装过早期版本(`~/.kan/`)首次启动会自动迁移到 XDG 路径。详见 [`SECURITY.md`](SECURITY.md)。
+**隐私**:完全本地运行,**不上传自选股、不做遥测**。CLI 会按命令访问公开行情数据源;`kan update` / atexit 更新检查会访问 PyPI(可设 `KAN_NO_UPDATE_CHECK=1` 关闭);配置 TuShare token 后,token 只发往你配置的 TuShare API 端点。装过早期版本(`~/.kan/`)首次启动会自动迁移到 XDG 路径。详见 [`SECURITY.md`](SECURITY.md)。
 
 ---
 

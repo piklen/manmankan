@@ -26,9 +26,10 @@ source 责任 (Adapter pattern · 防腐层):
 """
 from __future__ import annotations
 
+import queue
+import threading
+import time
 from collections.abc import Callable
-from concurrent.futures import ThreadPoolExecutor, as_completed
-from concurrent.futures import TimeoutError as FuturesTimeout
 from typing import TYPE_CHECKING, Any, TypeVar
 
 from kan.infra.log import debug_log
@@ -126,33 +127,43 @@ def _race(
 ) -> tuple[T, str] | None:
     """同 priority 多源并发 race · 第一个非 None 中标 · 慢源后台自生自灭。
 
-    不用 `with ThreadPoolExecutor`: __exit__ 的 shutdown(wait=True) 会阻塞
-    等所有线程 · 某源 hang 时整个调用挂死。改 shutdown(wait=False, cancel_futures=True) ·
-    拿到结果即返回 · 慢/hang 的线程后台自生自灭 · 不阻塞调用方。
-    (沿用 早期 _fetch_via_akshare 教训)
+    不用 ThreadPoolExecutor: executor worker 是非 daemon 线程,即使 wait=False,
+    Python 进程退出时仍会等慢源结束。这里显式使用 daemon thread,保证
+    已降级/已中标后的 CLI 进程不会被不可取消 SDK 调用拖住。
     """
-    executor = ThreadPoolExecutor(max_workers=len(sources))
-    try:
-        future_to_source = {
-            executor.submit(invoke, src): src
-            for src in sources
-        }
+    results: queue.Queue[tuple[Any, T | None, Exception | None]] = queue.Queue()
+
+    def _worker(src: Any) -> None:
         try:
-            for future in as_completed(future_to_source, timeout=timeout):
-                src = future_to_source[future]
-                try:
-                    result = future.result()
-                except Exception as e:
-                    debug_log(__name__, f"race fetch {src.name}", e)
-                    continue
-                if result is not None:
-                    return result, src.name
-        except FuturesTimeout:
-            # 所有同 priority 源都没及时返回 · 降级下一 priority
-            pass
-        return None
-    finally:
-        executor.shutdown(wait=False, cancel_futures=True)
+            results.put((src, invoke(src), None))
+        except Exception as e:
+            results.put((src, None, e))
+
+    for src in sources:
+        threading.Thread(
+            target=_worker,
+            args=(src,),
+            name=f"kan-source-race-{getattr(src, 'name', 'unknown')}",
+            daemon=True,
+        ).start()
+
+    deadline = time.monotonic() + timeout
+    remaining = len(sources)
+    while remaining > 0:
+        wait = deadline - time.monotonic()
+        if wait <= 0:
+            return None
+        try:
+            src, result, err = results.get(timeout=wait)
+        except queue.Empty:
+            return None
+        remaining -= 1
+        if err is not None:
+            debug_log(__name__, f"race fetch {src.name}", err)
+            continue
+        if result is not None:
+            return result, src.name
+    return None
 
 
 class KlineSourceChain:

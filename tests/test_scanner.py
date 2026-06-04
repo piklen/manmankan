@@ -1,6 +1,7 @@
 """scanner 核心算法测试 · 构造已知 DataFrame 验证位置百分比"""
 
 import json
+import os
 from datetime import date, timedelta
 
 import pandas as pd
@@ -161,6 +162,14 @@ class TestSaveSnapshot:
         last = (temp_snapshot_dir / "last_scan.json").read_text()
         daily = (temp_snapshot_dir / "snapshots" / f"{date.today().isoformat()}.json").read_text()
         assert last == daily
+
+    @pytest.mark.skipif(os.name == "nt", reason="POSIX file mode only")
+    def test_snapshot_files_are_private(self, temp_snapshot_dir):
+        save_snapshot([_make_scan_result()])
+        daily = temp_snapshot_dir / "snapshots" / f"{date.today().isoformat()}.json"
+        for path in (temp_snapshot_dir / "last_scan.json", daily):
+            assert path.exists()
+            assert path.stat().st_mode & 0o777 == 0o600
 
     def test_cleanup_old_snapshots(self, temp_snapshot_dir):
         snapshots_dir = temp_snapshot_dir / "snapshots"

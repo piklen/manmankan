@@ -44,7 +44,7 @@ Issues = "https://github.com/piklen/manmankan/issues"
 Changelog = "https://github.com/piklen/manmankan/blob/main/CHANGELOG.md"
 
 [project.scripts]
-kan = "kan.cli:cli_main"
+kan = "kan._entry:main"
 
 [dependency-groups]
 dev = [
@@ -74,7 +74,7 @@ ignore = [
 
 [tool.mypy]
 python_version = "3.11"
-files = ["kan/core"]
+files = ["kan/core", "kan/storage/export.py", "kan/data/updater.py", "kan/data/source_chain.py"]
 ignore_missing_imports = true
 check_untyped_defs = true
 warn_unused_ignores = true

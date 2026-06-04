@@ -15,6 +15,8 @@ helpers:
 """
 from __future__ import annotations
 
+import contextlib
+import io
 from collections.abc import Callable
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any
@@ -221,6 +223,7 @@ def run_data_pipeline(
     stock_set: StockSet,
     *,
     compute: Callable,
+    show_progress: bool = True,
     **compute_kwargs: Any,
 ) -> DataCtx:
     """resolve → auto_fetch → compute → freshness 的统一编排 (StockSet 单签名)。
@@ -249,7 +252,11 @@ def run_data_pipeline(
     from kan.cli.helpers import _auto_fetch_stale
 
     targets, meta = resolve_stock_set_or_exit(stock_set)
-    _auto_fetch_stale(targets)
+    if show_progress:
+        _auto_fetch_stale(targets)
+    else:
+        with contextlib.redirect_stderr(io.StringIO()):
+            _auto_fetch_stale(targets)
     results = compute(targets, **compute_kwargs)
     freshness = freshness_of(r.symbol for r in results)
     return DataCtx(

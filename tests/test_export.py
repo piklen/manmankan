@@ -7,6 +7,7 @@ from types import SimpleNamespace
 from kan.core.models import PeriodResult, StockScanResult, VolumeState
 from kan.storage.export import (
     OutputFormat,
+    code_pool_payload,
     compare_markdown,
     compare_payload,
     error_payload,
@@ -379,6 +380,23 @@ def test_error_payload_find_machine_readable():
     assert payload["error"]["code"] == "data_unavailable"
     assert payload["error"]["hint"] == "配置 tushare token"
     assert "候选" in payload["disclaimer"]
+
+
+def test_code_pool_payload_is_lightweight_find_schema():
+    payload = code_pool_payload(
+        [("600519", "贵州茅台"), ("000858", "000858")],
+        query_time="2026-06-04T12:00:00+08:00",
+        pools=["codes:2"],
+    )
+    assert payload["ok"] is True
+    assert payload["command"] == "find"
+    assert payload["mode"] == "code_pool"
+    assert payload["results"] == [
+        {"code": "600519", "name": "贵州茅台"},
+        {"code": "000858", "name": "000858"},
+    ]
+    assert payload["stats"]["matched"] == 2
+    assert payload["stats"]["data_cutoff"] is None
 
 
 def test_compare_markdown_transposed():

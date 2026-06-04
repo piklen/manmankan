@@ -236,6 +236,16 @@ class TestDetectInstallMethod:
         result = updater.detect_install_method()
         assert "uv tool" in result.name
 
+    def test_package_spec_can_pin_target_version(self, monkeypatch):
+        monkeypatch.setattr(
+            "sys.executable",
+            "/Users/x/.local/share/uv/tools/manmankan/bin/python",
+        )
+        result = updater.detect_install_method("manmankan==0.0.6.8")
+        assert result.upgrade_cmd == [
+            "uv", "tool", "install", "--reinstall", "manmankan==0.0.6.8",
+        ]
+
 
 # --- run_upgrade ---
 
@@ -260,6 +270,28 @@ class TestRunUpgrade:
             status, msg = updater.run_upgrade()
         assert status == "success"
         assert msg == "uv tool"
+
+    def test_target_version_pins_install_and_smoke(self, monkeypatch):
+        monkeypatch.setattr(
+            "sys.executable",
+            "/Users/x/.local/share/uv/tools/manmankan/bin/python",
+        )
+        calls = []
+
+        def fake_run(cmd, **kwargs):
+            calls.append(cmd)
+            return self._make_completed(0)
+
+        with patch("kan.data.updater.subprocess.run", side_effect=fake_run):
+            status, msg = updater.run_upgrade(target_version="0.0.6.8")
+
+        assert status == "success"
+        assert msg == "uv tool"
+        assert calls[0] == [
+            "uv", "tool", "install", "--reinstall", "manmankan==0.0.6.8",
+        ]
+        assert "from kan.api import WatchlistSet, fetch, from_flags, scan" in calls[1][2]
+        assert "assert kan.__version__ == '0.0.6.8'" in calls[1][2]
 
     def test_failed_nonzero_returncode(self, monkeypatch):
         monkeypatch.setattr(
