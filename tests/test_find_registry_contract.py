@@ -2,10 +2,10 @@ from __future__ import annotations
 
 from dataclasses import fields
 
-from kan.cli.find_cmds import _find_filters
 from kan.core.find_dsl import ConditionSet
 from kan.core.find_filter import FIND_MATCH_SEGMENTS
 from kan.core.find_registry import FILTER_SPECS, condition_attr_for_filter
+from kan.service.find_service import find_filters
 
 _FILTER_EXAMPLES = {
     "pos": "180:lt:5",
@@ -51,11 +51,11 @@ def test_find_filters_output_is_registry_driven() -> None:
     kwargs["exclude_st"] = True
     conditions = ConditionSet.from_flags(**kwargs)
 
-    rendered = _find_filters(conditions)
+    rendered = find_filters(conditions)
     rendered_by_flag = {row["name"]: row for row in rendered}
 
     for filter_type, spec in FILTER_SPECS.items():
         row = rendered_by_flag.get(spec.flag)
-        assert row is not None, f"{spec.flag} missing from _find_filters output"
+        assert row is not None, f"{spec.flag} missing from find_filters output"
         if filter_type != "exclude_st":
             assert row["param"] == _FILTER_EXAMPLES[filter_type]

@@ -9,7 +9,6 @@ import typer
 
 from kan.app import app
 from kan.cli.helpers import (
-    _auto_fetch_stale,  # noqa: F401 · 保留兼容测试 monkeypatch · 实际调用由 pipeline.run_data_pipeline 内部完成
     _get_watchlist_pairs,
     _load_watchlist_pairs,
     _print_err,

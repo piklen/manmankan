@@ -94,7 +94,7 @@ class TestFindCli:
         assert "PERIOD:OP:VAL" in out or "kan find" in out
 
     def test_parse_codes_normalizes_and_dedupes(self):
-        from kan.cli.find_cmds import _parse_codes
+        from kan.cli.helpers import _parse_codes
 
         codes, invalid = _parse_codes("sh600519, 000858\n600519 300750.SZ")
         assert codes == ["600519", "000858", "300750"]
@@ -121,21 +121,24 @@ class TestFindCli:
         assert pairs == [("600519", "贵州茅台"), ("000858", "000858")]
 
     def test_resolve_codes_reads_stdin_and_fills_names(self, monkeypatch):
-        from kan.cli.find_cmds import _resolve_code_pairs
+        from kan.cli.helpers import _resolve_code_pairs
 
         monkeypatch.setattr(sys, "stdin", io.StringIO("600519\n000858"))
         monkeypatch.setattr(
             "kan.storage.watchlist.preload_stock_names",
             lambda: {"600519": "贵州茅台"},
         )
-        assert _resolve_code_pairs("-") == [("600519", "贵州茅台"), ("000858", "000858")]
+        assert _resolve_code_pairs("-", command="kan find") == [
+            ("600519", "贵州茅台"),
+            ("000858", "000858"),
+        ]
 
     def test_kline_snapshot_periods_only_uses_needed_windows(self):
-        from kan.cli.find_cmds import _kline_snapshot_periods
         from kan.core.find_dsl import ConditionSet
+        from kan.service.find_service import kline_snapshot_periods
 
-        assert _kline_snapshot_periods(ConditionSet.from_flags(up_days=["gte:3"])) == [3]
-        assert _kline_snapshot_periods(ConditionSet.from_flags(pos=["30:lt:20"])) == [30]
+        assert kline_snapshot_periods(ConditionSet.from_flags(up_days=["gte:3"])) == [3]
+        assert kline_snapshot_periods(ConditionSet.from_flags(pos=["30:lt:20"])) == [30]
 
     def test_codes_invalid_exits_two(self):
         ec, out = _run(["find", "--codes", "600519,bad", "--pos", "180:lt:5"])

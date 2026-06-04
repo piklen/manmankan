@@ -4,9 +4,10 @@
 已移除 · CLI 全部走 StockSet 单一路径。
 
 helpers:
-  - resolve_stock_set_or_exit:触发 StockSet.pairs() / .meta() · 把 5 类 source
-    错误统一收成 typer.Exit (BoardNotFound / BoardDataUnavailable /
-    HotListUnavailable / ThemeNotFound / ThemeDataUnavailable)。
+  - resolve_stock_set:触发 StockSet.pairs() / .meta() · 把 5 类 source
+    错误统一收成 StockSetResolveError。
+  - resolve_stock_set_or_exit:CLI 兼容 adapter · 把 StockSetResolveError 转为
+    typer.Exit。
   - Freshness + freshness_of:跨 symbols 聚合 max data_cutoff 与 max cache_age,
     一并推导 is_stale / phase。
   - render_freshness_warning:在终端打 stale / 盘中 互斥警告。
@@ -19,11 +20,8 @@ import contextlib
 import io
 from collections.abc import Callable
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, NoReturn
 
-import typer
-
-from kan.cli.helpers import _print_err
 from kan.data.boards import (
     BoardDataUnavailableError,
     BoardNotFoundError,
@@ -44,18 +42,55 @@ if TYPE_CHECKING:
 # ── 目标源错误统一处理 (StockSet 路径) ─────────────────────────────────
 
 
-def resolve_stock_set_or_exit(
+class StockSetResolveError(Exception):
+    """Domain-level stock-set resolution error.
+
+    CLI adapters may render `message` and exit with `exit_code`; service/web
+    callers can catch this exception without importing Typer.
+    """
+
+    def __init__(
+        self,
+        *,
+        code: str,
+        message: str,
+        exit_code: int,
+        cause: Exception | None = None,
+    ) -> None:
+        super().__init__(message)
+        self.code = code
+        self.message = message
+        self.exit_code = exit_code
+        self.__cause__ = cause
+
+
+def _print_err(message: str) -> None:
+    """CLI error printer adapter, kept patchable for existing tests."""
+    from kan.cli.helpers import _print_err as print_err
+
+    print_err(message)
+
+
+def raise_stock_set_resolve_exit(error: StockSetResolveError) -> NoReturn:
+    """Render a StockSetResolveError through the CLI error channel and exit."""
+    import typer
+
+    _print_err(error.message)
+    raise typer.Exit(error.exit_code)
+
+
+def resolve_stock_set(
     stock_set: StockSet,
 ) -> tuple[list[tuple[str, str]], BoardMeta | HotMeta | ThemeMeta | None]:
-    """触发 stock_set.pairs() + .meta() · 把上游异常转 typer.Exit。
+    """触发 stock_set.pairs() + .meta() · 把上游异常转 StockSetResolveError。
 
-    错误退出码:
+    错误 exit_code:
       - BoardNotFound / BoardDataUnavailable / HotListUnavailable
-        / ThemeDataUnavailable → Exit(1)
-      - ThemeNotFound → Exit(2) (typo 视为用户输入错)
+        / ThemeDataUnavailable → 1
+      - ThemeNotFound → 2 (typo 视为用户输入错)
 
-    错误文案带场景提示 + 后续动作引导。命令侧调本 helper 后从 ~12 行 try/except
-    塌为 1 行 `targets, meta = resolve_stock_set_or_exit(stock_set)`。
+    错误文案带场景提示 + 后续动作引导，但本函数不打印、不退出；CLI 边界调用
+    resolve_stock_set_or_exit / raise_stock_set_resolve_exit 负责展示。
 
     industry / theme 名从 stock_set 属性 (IndustrySet.industry / ThemeSet.theme)
     抽取 · 用于错误文案中引用用户原始输入。HotRankSet / WatchlistSet 无此属性 ·
@@ -68,34 +103,58 @@ def resolve_stock_set_or_exit(
         meta = stock_set.meta()
         return targets, meta
     except BoardNotFoundError:
-        _print_err(
-            f"❌ 未找到行业「{industry_name}」· 可试更短关键词(如「半导体」「白酒」)"
-        )
-        raise typer.Exit(1) from None
+        raise StockSetResolveError(
+            code="board_not_found",
+            message=f"❌ 未找到行业「{industry_name}」· 可试更短关键词(如「半导体」「白酒」)",
+            exit_code=1,
+        ) from None
     except BoardDataUnavailableError as e:
         debug_log(__name__, "industry data fetch failed", e)
-        _print_err("❌ 行业数据源暂时不可用,稍后再试")
-        raise typer.Exit(1) from None
+        raise StockSetResolveError(
+            code="board_data_unavailable",
+            message="❌ 行业数据源暂时不可用,稍后再试",
+            exit_code=1,
+            cause=e,
+        ) from e
     except HotListUnavailableError as e:
         debug_log(__name__, "hot list fetch failed", e.__cause__ or e)
-        _print_err(
-            f"❌ 东财热榜源暂时不可用 · 可能东财接口波动 / 限流 ({e})\n"
-            "   替代:`kan scan --industry <行业名>` 或 `kan scan --theme=<题材>`\n"
-            "   详情设 KAN_DEBUG=1 跑同命令看底层错误"
-        )
-        raise typer.Exit(1) from None
+        raise StockSetResolveError(
+            code="hot_list_unavailable",
+            message=(
+                f"❌ 东财热榜源暂时不可用 · 可能东财接口波动 / 限流 ({e})\n"
+                "   替代:`kan scan --industry <行业名>` 或 `kan scan --theme=<题材>`\n"
+                "   详情设 KAN_DEBUG=1 跑同命令看底层错误"
+            ),
+            exit_code=1,
+            cause=e,
+        ) from e
     except ThemeNotFoundError:
-        _print_err(
-            f"❌ 未找到题材「{theme_name}」· 试更短关键词(如「AI」「华为」) · "
-            "或跑 kan theme search 看候选"
-        )
-        raise typer.Exit(2) from None
+        raise StockSetResolveError(
+            code="theme_not_found",
+            message=(
+                f"❌ 未找到题材「{theme_name}」· 试更短关键词(如「AI」「华为」) · "
+                "或跑 kan theme search 看候选"
+            ),
+            exit_code=2,
+        ) from None
     except ThemeDataUnavailableError as e:
         debug_log(__name__, "theme data fetch failed", e.__cause__ or e)
-        _print_err(
-            "❌ 题材数据源暂时不可用 · 稍后再试 · 行业扫描可用(--industry)"
-        )
-        raise typer.Exit(1) from None
+        raise StockSetResolveError(
+            code="theme_data_unavailable",
+            message="❌ 题材数据源暂时不可用 · 稍后再试 · 行业扫描可用(--industry)",
+            exit_code=1,
+            cause=e,
+        ) from e
+
+
+def resolve_stock_set_or_exit(
+    stock_set: StockSet,
+) -> tuple[list[tuple[str, str]], BoardMeta | HotMeta | ThemeMeta | None]:
+    """CLI adapter for resolve_stock_set, preserving existing Typer exits."""
+    try:
+        return resolve_stock_set(stock_set)
+    except StockSetResolveError as e:
+        raise_stock_set_resolve_exit(e)
 
 
 # ── 数据新鲜度聚合 ───────────────────────────────────────────────────
@@ -224,6 +283,7 @@ def run_data_pipeline(
     *,
     compute: Callable,
     show_progress: bool = True,
+    exit_on_resolve_error: bool = True,
     **compute_kwargs: Any,
 ) -> DataCtx:
     """resolve → auto_fetch → compute → freshness 的统一编排 (StockSet 单签名)。
@@ -233,8 +293,8 @@ def run_data_pipeline(
     构造 StockSet (`from_flags(...)`) · 再传本函数。
 
     收口顺序:
-      1. resolve_stock_set_or_exit:触发 stock_set.pairs() + .meta() · 把 5 类
-         source 错误统一成 typer.Exit
+      1. resolve_stock_set:触发 stock_set.pairs() + .meta() · 把 5 类 source 错误
+         统一成 StockSetResolveError；默认保持 CLI 旧行为转 typer.Exit
       2. _auto_fetch_stale:对落后 / 缺失的 symbols 静默补缺 (网络相关 / 不阻塞)
       3. compute(targets, **compute_kwargs):各命令注入自己的批处理函数
          (scan_batch / trend_batch · 都接 `(targets, **kwargs)` · 要求 result 元素
@@ -251,7 +311,12 @@ def run_data_pipeline(
     """
     from kan.cli.helpers import _auto_fetch_stale
 
-    targets, meta = resolve_stock_set_or_exit(stock_set)
+    try:
+        targets, meta = resolve_stock_set(stock_set)
+    except StockSetResolveError as e:
+        if not exit_on_resolve_error:
+            raise
+        raise_stock_set_resolve_exit(e)
     if show_progress:
         _auto_fetch_stale(targets)
     else:

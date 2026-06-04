@@ -16,9 +16,8 @@
 - 返回 raw result · CLI 层负责渲染 · 用户调用时自由处理 (写脚本 / cron / 出 markdown)
 - kwargs 透传 underlying · 不引入新参数概念
 
-CLI 层 (kan/cli/*_cmds.py) 暂未迁移到这一层 (仍走 resolve_scan_targets +
-run_data_pipeline 编排)。OOP 层是给 "Python API 脚本化使用 + 渐进迁移 CLI"
-打地基。
+CLI 层正在渐进下沉到 service 层；本 OOP 层继续作为 Python API 脚本化使用
+的薄 facade。
 """
 from __future__ import annotations
 

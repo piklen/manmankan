@@ -52,7 +52,7 @@ def _stub(monkeypatch):
     )
     # trend_batch 让它返回空 · 简化
     monkeypatch.setattr("kan.core.scanner.trend_batch", lambda targets, candle=False: [])
-    monkeypatch.setattr("kan.cli.trend_cmds._auto_fetch_stale", lambda targets: None)
+    monkeypatch.setattr("kan.cli.helpers._auto_fetch_stale", lambda targets: None)
 
 
 def test_trend_theme_runs(monkeypatch, _isolate_all):
