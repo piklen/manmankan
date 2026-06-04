@@ -94,7 +94,10 @@ def trend(
         _load_watchlist_pairs(group) if source_mode else _get_watchlist_pairs(group)
     )
     if only_watchlist and not source_mode:
-        _print_err("❌ --only-watchlist 需配合 --industry / --hot / --theme 使用")
+        _print_err(
+            "❌ --only-watchlist 需配合 --industry / --hot / --theme 使用\n"
+            "   例: kan trend --industry 半导体 --only-watchlist"
+        )
         raise typer.Exit(1)
     # fail-fast:参数校验前置 · 不让 invalid args 触发网络 fetch
     if down is not None and up is not None:

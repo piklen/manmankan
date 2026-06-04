@@ -439,7 +439,7 @@ class TestFindRegistry:
             parse_find_fields(["code,valuation.nope"])
         except ValueError as e:
             assert "valuation.nope" in str(e)
-            assert "valuation.pe_ttm" in str(e)
+            assert "字段全集见 docs/find.md" in str(e)
         else:
             raise AssertionError("unknown field should raise")
 
@@ -633,13 +633,21 @@ class TestCrossSectionPayload:
         assert p["mode"] == "cross_section"
         assert p["rule"]["pools"] == ["all"]
         assert p["stats"] == {
-            "pool_size": 5500, "shown": 1,
+            "pool_size": 5500, "matched": 1, "shown": 1,
             "data_cutoff": "2026-05-29", "stale": False,
         }
         r0 = p["results"][0]
         assert r0["code"] == "600519"
         assert r0["valuation_context"]["pe_industry_pct"] == 62.0
         assert r0["valuation_context"]["pe_industry_median"] == 28.5
+
+    def test_matched_total_can_exceed_shown(self):
+        p = export.cross_section_payload(
+            self._entries(self._row()), query_time="t",
+            pool_size=5500, matched_total=42, data_cutoff=None, stale=False,
+        )
+        assert p["stats"]["matched"] == 42
+        assert p["stats"]["shown"] == 1
 
     def test_disclaimer_present(self):
         p = export.cross_section_payload(

@@ -148,6 +148,29 @@ class TestRedact:
         assert "token=<redacted>" in msg
         assert "secret123" not in msg
 
+    def test_redact_token_in_json_body(self, monkeypatch, caplog):
+        """JSON body/header token variants must not leak in debug output."""
+        monkeypatch.setenv("KAN_DEBUG", "1")
+        with caplog.at_level(logging.DEBUG, logger="test.module"):
+            debug_log(
+                "test.module",
+                "post api",
+                ValueError('body={"token":"SECRET_TK_123456","Authorization":"Bearer abc.def"}'),
+            )
+        msg = caplog.records[0].getMessage()
+        assert '"token":"<redacted>"' in msg
+        assert '"Authorization":"<redacted>"' in msg
+        assert "SECRET_TK_123456" not in msg
+        assert "abc.def" not in msg
+
+    def test_redact_bearer_token(self, monkeypatch, caplog):
+        monkeypatch.setenv("KAN_DEBUG", "1")
+        with caplog.at_level(logging.DEBUG, logger="test.module"):
+            debug_log("test.module", "auth", ValueError("Authorization: Bearer abc.def-ghi"))
+        msg = caplog.records[0].getMessage()
+        assert "Bearer <redacted>" in msg
+        assert "abc.def-ghi" not in msg
+
     def test_redact_windows_path(self, monkeypatch, caplog):
         r"""Windows path C:\Users\realname → C:\Users\<user>"""
         monkeypatch.setenv("KAN_DEBUG", "1")

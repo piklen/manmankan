@@ -94,10 +94,16 @@ def scan(
         )
     )
     if only_watchlist and not source_mode:
-        _print_err("❌ --only-watchlist 需配合 --industry / --hot / --theme 使用")
+        _print_err(
+            "❌ --only-watchlist 需配合 --industry / --hot / --theme 使用\n"
+            "   例: kan scan --industry 半导体 --only-watchlist"
+        )
         raise typer.Exit(1)
     if code_pairs is not None and only_watchlist:
-        _print_err("❌ --codes 与 --only-watchlist 不能同时使用")
+        _print_err(
+            "❌ --codes 与 --only-watchlist 不能同时使用\n"
+            "   例: kan scan --codes 600519,000858"
+        )
         raise typer.Exit(2)
     if code_pairs is not None and group is not None:
         _print_err("❌ --codes 已显式指定代码池 · 不再叠加 --group")
@@ -120,7 +126,12 @@ def scan(
             watchlist_group=group,
         )
     )
-    ctx = run_data_pipeline(stock_set, compute=scan_batch, mode=mode)
+    ctx = run_data_pipeline(
+        stock_set,
+        compute=scan_batch,
+        mode=mode,
+        show_progress=fmt is export.OutputFormat.terminal,
+    )
     board_meta = ctx.meta
     data_cutoff = ctx.freshness.data_cutoff
     fetched_at = ctx.freshness.fetched_at

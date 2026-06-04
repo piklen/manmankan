@@ -304,7 +304,7 @@ _SNAPSHOT_KEEP_DAYS = 240
 
 def save_snapshot(results: list[StockScanResult]) -> None:
     """保存本次 scan 结果快照（last_scan.json + 按日归档）。"""
-    from kan.storage.paths import SNAPSHOTS_DIR, ensure_dirs
+    from kan.storage.paths import SNAPSHOTS_DIR, atomic_write_json, ensure_dirs
     ensure_dirs()
     data = []
     for r in results:
@@ -316,14 +316,10 @@ def save_snapshot(results: list[StockScanResult]) -> None:
                 for p in r.periods if not p.insufficient
             },
         })
-    payload = json.dumps(data, ensure_ascii=False)
-
-    with open(SNAPSHOT_PATH, "w", encoding="utf-8") as f:
-        f.write(payload)
+    atomic_write_json(SNAPSHOT_PATH, data, ensure_ascii=False)
 
     daily = SNAPSHOTS_DIR / f"{date.today().isoformat()}.json"
-    with open(daily, "w", encoding="utf-8") as f:
-        f.write(payload)
+    atomic_write_json(daily, data, ensure_ascii=False)
 
     cutoff = date.today() - __import__("datetime").timedelta(days=_SNAPSHOT_KEEP_DAYS)
     for old in SNAPSHOTS_DIR.glob("*.json"):

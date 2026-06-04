@@ -1,7 +1,9 @@
 # manmankan 一键安装脚本 · Windows PowerShell
 #
-# 调用方式（用户复制粘贴一行 · PowerShell 里跑）：
-#   powershell -c "irm https://raw.githubusercontent.com/piklen/manmankan/main/scripts/install.ps1 | iex"
+# 推荐安装：
+#   uv tool install manmankan
+#
+# 想使用脚本时,请先下载并审阅 release tag 对应版本。
 #
 # 设计原则：命令行新手可读 · 全程中文 · idempotent · 失败给 fallback · 不留半成品
 #
@@ -24,7 +26,7 @@ function Step ([string]$title) { Say ""; Write-Host "━━━ $title ━━━"
 # ── Banner ───────────────────────────────────────────────────────
 Say ""
 Say "🐙 慢慢看 (manmankan) 一键安装脚本"
-Say "   A 股自选股位置感工具 · 100% 本地 · 完全免费开源"
+Say "   A 股自选股位置工具 · 本地存储 · 个人自用免费 · source-available"
 Say ""
 Say "📋 即将做这 4 件事："
 Say "   1. 检查你的系统 (Windows + PowerShell 版本)"
@@ -180,13 +182,13 @@ if ($needsReshell) {
 
 Say "📖 下一步 · 复制粘贴这两行试试:"
 Say ""
-Say "   kan add 600519 茅台 601318     # 加你的自选股"
+Say "   kan add 600519 601318 000858   # 加你的自选股"
 Say "   kan scan                        # 看一屏位置 + 共振"
 Say ""
 Say "📚 看完整命令:  kan --help"
 Say "📖 README:    https://github.com/piklen/manmankan"
 Say "❓ 装坏了:    https://github.com/piklen/manmankan/issues"
 Say ""
-Hint "🔒 manmankan 100% 本地运行 · 没账号 · 没推送 · 没广告"
+Hint "🔒 manmankan 本地存储自选 · 没账号 · 没推送 · 没广告"
 Hint "   你的自选股存 `$env:LOCALAPPDATA\kan\ · 完全是你的"
 Say ""

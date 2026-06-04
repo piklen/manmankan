@@ -17,7 +17,7 @@
 
   <!-- Primary SEO -->
   <title>慢慢看 · manmankan · A 股自选股 CLI · 不告诉你买什么 · 帮你找到符合条件的</title>
-  <meta name="description" content="慢慢看 (manmankan) 是纯命令行 A 股自选股工具 · 不告诉你买什么 · 帮你找到符合条件的 · 多周期位置百分位 + 共振信号 + 用户主导的选股 DSL · 100% 本地运行 · 不登录 · 不上传 · 不广告 · Parity Public License 7.0.0 source-available · 支持 mac/Linux/Windows。" />
+  <meta name="description" content="慢慢看 (manmankan) 是纯命令行 A 股自选股工具 · 不告诉你买什么 · 帮你找到符合条件的 · 多周期位置百分位 + 共振信号 + 用户主导的选股 DSL · 本地存储 · 不登录 · 不上传自选 · 不遥测 · Parity Public License 7.0.0 source-available · 支持 mac/Linux/Windows。" />
   <meta name="keywords" content="慢慢看,manmankan,A股,自选股,选股,选股 DSL,位置百分位,共振信号,命令行工具,CLI,股票工具,source-available,Parity License,本地运行,Python,散户,长线投资,K线,板块,题材扫描,东方财富热榜" />
   <meta name="author" content="piklen" />
   <meta name="robots" content="index,follow,max-image-preview:large" />
@@ -50,7 +50,7 @@
   <!-- Twitter / X Card -->
   <meta name="twitter:card" content="summary_large_image" />
   <meta name="twitter:title" content="慢慢看 · manmankan" />
-  <meta name="twitter:description" content="A 股自选股 CLI · 不告诉你买什么 · 帮你找到符合条件的 · 100% 本地 · Parity 7.0.0" />
+  <meta name="twitter:description" content="A 股自选股 CLI · 不告诉你买什么 · 帮你找到符合条件的 · 本地存储 · 不上传自选 · Parity 7.0.0" />
   <meta name="twitter:image" content="https://piklen.github.io/manmankan/og.svg" />
 
   <!-- JSON-LD · Schema.org SoftwareApplication (Google rich result) -->
@@ -60,7 +60,7 @@
     "@type": "SoftwareApplication",
     "name": "manmankan",
     "alternateName": "慢慢看",
-    "description": "A 股自选股 CLI · 不告诉你买什么 · 帮你找到符合条件的 · 多周期位置百分位 + 共振信号 + 用户主导的选股 DSL · 100% 本地",
+    "description": "A 股自选股 CLI · 不告诉你买什么 · 帮你找到符合条件的 · 多周期位置百分位 + 共振信号 + 用户主导的选股 DSL · 本地存储",
     "applicationCategory": "FinanceApplication",
     "applicationSubCategory": "InvestmentTool",
     "operatingSystem": "macOS, Linux, Windows",
@@ -370,7 +370,7 @@
     <div class="max-w-5xl mx-auto px-6 pt-20 pb-20 sm:pt-32 sm:pb-28 text-center">
       <div class="inline-flex items-center gap-2 px-3 py-1.5 mb-8 text-xs rounded-full" style="background: var(--bg-card); border: 1px solid var(--border); color: var(--text-soft);">
         <span class="w-1.5 h-1.5 rounded-full" style="background: var(--accent);"></span>
-        <span>Alpha · Parity 7.0.0 · 100% 本地</span>
+        <span>Alpha · Parity 7.0.0 · 本地存储</span>
       </div>
 
       <h1 class="text-5xl sm:text-7xl lg:text-8xl font-extrabold tracking-tight mb-7 leading-[1.05]">
@@ -389,10 +389,10 @@
 
       <!-- Click-to-copy install command -->
       <div class="max-w-md mx-auto mb-8">
-        <button type="button" class="copy-card" data-copy="pip install manmankan" onclick="copyCmd(this)">
+        <button type="button" class="copy-card" data-copy="uv tool install manmankan" onclick="copyCmd(this)">
           <span class="copy-hint">点击复制 ↗</span>
           <span style="color: var(--accent);" class="font-bold">$</span>
-          <span style="color: var(--text);" class="flex-1 text-sm sm:text-base font-medium" data-copy-label>pip install manmankan</span>
+          <span style="color: var(--text);" class="flex-1 text-sm sm:text-base font-medium" data-copy-label>uv tool install manmankan</span>
           <span class="feedback text-sm">✓ 已复制</span>
         </button>
       </div>
@@ -498,11 +498,11 @@
         </div>
         <h3 class="text-lg font-bold mb-4">数据 · 隐私</h3>
         <ul class="text-sm space-y-2.5 leading-relaxed" style="color: var(--text-soft);">
-          <li>· 100% 本地 · 不要登录 · 不上传自选</li>
+          <li>· 本地存储 · 不上传自选 · 不遥测</li>
           <li>· 0 telemetry · 0 广告 · 0 推送</li>
           <li>· 数据存 <code class="ci text-xs">~/.local/share/kan/</code></li>
-          <li>· baostock 主源 + adata / 东财兜底</li>
-          <li>· 可选接 TuShare Pro 提速</li>
+          <li>· 公开行情 API + PyPI 更新检查</li>
+          <li>· 可选接 TuShare Pro token</li>
           <li>· <code class="ci text-xs">kan uninstall</code> 一键彻底清</li>
         </ul>
       </div>
@@ -518,28 +518,28 @@
       <p style="color: var(--text-soft);">Python 3.11+ · 任意命令点击即复制 · 装机平均 1-2 分钟</p>
     </div>
 
-    <!-- 推荐 · 一键脚本 -->
+    <!-- 推荐 · uv 安装 -->
     <div class="grid md:grid-cols-2 gap-4 max-w-4xl mx-auto mb-6">
-      <button type="button" class="copy-card flex-col items-stretch !p-0 overflow-hidden" data-copy="curl -LsSf https://raw.githubusercontent.com/piklen/manmankan/main/scripts/install.sh | bash" onclick="copyCmd(this)" style="cursor: pointer;">
+      <button type="button" class="copy-card flex-col items-stretch !p-0 overflow-hidden" data-copy="curl -LsSf https://astral.sh/uv/install.sh | sh && uv tool install manmankan" onclick="copyCmd(this)" style="cursor: pointer;">
         <span class="copy-hint">点击复制 ↗</span>
         <div class="px-4 py-2.5 text-xs font-mono flex items-center gap-2 border-b" style="background: var(--bg-soft); border-color: var(--border); color: var(--text-muted);">
           <span style="color: #ef4444;">●</span><span style="color: #fbbf24;">●</span><span style="color: #34d399;">●</span>
           <span class="ml-2">🍎 mac / Linux · Terminal</span>
         </div>
         <div class="px-5 py-4 text-xs sm:text-sm font-mono break-all leading-relaxed" style="color: var(--text);">
-          <span style="color: var(--accent);">$</span> <span data-copy-label>curl -LsSf https://raw.githubusercontent.com/piklen/manmankan/main/scripts/install.sh | bash</span>
+          <span style="color: var(--accent);">$</span> <span data-copy-label>curl -LsSf https://astral.sh/uv/install.sh | sh && uv tool install manmankan</span>
         </div>
         <span class="feedback" style="bottom: 16px; right: 22px; top: auto;">✓ 已复制</span>
       </button>
 
-      <button type="button" class="copy-card flex-col items-stretch !p-0 overflow-hidden" data-copy='powershell -c "irm https://raw.githubusercontent.com/piklen/manmankan/main/scripts/install.ps1 | iex"' onclick="copyCmd(this)" style="cursor: pointer;">
+      <button type="button" class="copy-card flex-col items-stretch !p-0 overflow-hidden" data-copy='powershell -ExecutionPolicy ByPass -c "irm https://astral.sh/uv/install.ps1 | iex"; uv tool install manmankan' onclick="copyCmd(this)" style="cursor: pointer;">
         <span class="copy-hint">点击复制 ↗</span>
         <div class="px-4 py-2.5 text-xs font-mono flex items-center gap-2 border-b" style="background: var(--bg-soft); border-color: var(--border); color: var(--text-muted);">
           <span style="color: #ef4444;">●</span><span style="color: #fbbf24;">●</span><span style="color: #34d399;">●</span>
           <span class="ml-2">🪟 Windows · PowerShell</span>
         </div>
         <div class="px-5 py-4 text-xs sm:text-sm font-mono break-all leading-relaxed" style="color: var(--text);">
-          <span style="color: var(--accent);">&gt;</span> <span data-copy-label>powershell -c "irm https://raw.githubusercontent.com/piklen/manmankan/main/scripts/install.ps1 | iex"</span>
+          <span style="color: var(--accent);">&gt;</span> <span data-copy-label>powershell -ExecutionPolicy ByPass -c "irm https://astral.sh/uv/install.ps1 | iex"; uv tool install manmankan</span>
         </div>
         <span class="feedback" style="bottom: 16px; right: 22px; top: auto;">✓ 已复制</span>
       </button>
@@ -559,20 +559,18 @@
           <span class="text-sm" data-copy-label>pipx install manmankan</span>
           <span class="feedback text-xs">✓</span>
         </button>
-        <button type="button" class="copy-card !py-3" data-copy="pip install manmankan" onclick="copyCmd(this)">
+        <button type="button" class="copy-card !py-3" data-copy="python -m pip install manmankan" onclick="copyCmd(this)">
           <span style="color: var(--accent);" class="font-bold">$</span>
-          <span class="text-sm" data-copy-label>pip install manmankan</span>
+          <span class="text-sm" data-copy-label>python -m pip install manmankan</span>
           <span class="feedback text-xs">✓</span>
         </button>
       </div>
     </div>
 
     <div class="max-w-4xl mx-auto mt-7 p-4 rounded-lg text-sm leading-relaxed" style="background: var(--warn-soft); border: 1px solid var(--warn); color: var(--text-soft);">
-      🔒 <b style="color: var(--text);">不放心一键脚本？</b>
-      永远不要盲跑 <code class="ci">curl ... | bash</code>。
-      脚本是开源的 ·
-      <a href="https://github.com/piklen/manmankan/blob/main/scripts/install.sh" style="color: var(--accent);" class="font-medium hover:underline">先看源码再装</a>
-      · 校验 SHA256（每版 release notes 公布）。
+      🔒 <b style="color: var(--text);">安装边界</b>
+      推荐用 <code class="ci">uv tool install</code> 从 PyPI 装到隔离环境。
+      <code class="ci">python -m pip install</code> 只建议在你自己创建的虚拟环境里使用。
     </div>
   </section>
 
@@ -592,7 +590,7 @@
         <span class="w-3 h-3 rounded-full" style="background: #34d399; opacity: 0.7;"></span>
         <span class="ml-3 text-xs font-mono" style="color: #71717a;">~ — 第一次上手</span>
       </div>
-<pre><span style="color: #34d399;">$</span> kan add 600519 茅台 601318          <span style="color: #71717a;"># 加 3 只 · 代码/名称混搭</span>
+<pre><span style="color: #34d399;">$</span> kan add 600519 601318 000858        <span style="color: #71717a;"># 加 3 只 · 纯代码批量</span>
 <span style="color: #34d399;">$</span> kan scan                            <span style="color: #71717a;"># 一屏看完位置 + 共振</span>
 <span style="color: #34d399;">$</span> kan info 600519                     <span style="color: #71717a;"># 单股详情</span>
 <span style="color: #34d399;">$</span> kan compare 茅台 五粮液             <span style="color: #71717a;"># 多股对比</span>
@@ -633,12 +631,12 @@
           <svg class="chevron" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="color: var(--text-muted);"><polyline points="6 9 12 15 18 9"/></svg>
         </summary>
         <p class="mt-4 leading-relaxed" style="color: var(--text-soft);">
-          <b style="color: var(--text);">不会</b>。慢慢看是纯命令行工具，完全本地运行。
+          <b style="color: var(--text);">不会</b>。慢慢看是纯命令行工具，自选股和缓存都在本机。
           没有账号 · 没有登录 · 没有 telemetry · 没有推送 · 没有广告。
           自选股数据存在你机器的 <code class="ci">~/.local/share/kan/</code>（XDG 规范）。
           <br /><br />
-          唯一的「网络请求」是去 baostock / adata / 东方财富 公开 API 拉日 K 线数据，
-          这些请求只发送股票代码（公开信息），不带任何身份标识。
+          网络边界是公开行情 API、PyPI 更新检查，以及你主动配置 TuShare Pro 时的 TuShare API。
+          行情请求通常只发送股票代码;TuShare token 只发往你配置的 TuShare 端点。可用 <code class="ci">KAN_NO_UPDATE_CHECK=1</code> 关闭更新检查。
           源码 <a href="https://github.com/piklen/manmankan" style="color: var(--accent);" class="hover:underline">source-available</a> · 可审。
         </p>
       </details>
@@ -686,7 +684,7 @@
           Just objective price-position data, fully local — no login, no account, no telemetry. Data is delayed end-of-day K-line from the AKShare ecosystem (baostock primary).
         </p>
         <p class="font-mono text-sm">
-          <span style="color: var(--accent);">$</span> pip install manmankan
+          <span style="color: var(--accent);">$</span> uv tool install manmankan
         </p>
         <p class="text-sm">
           Python 3.11+ · Parity Public License 7.0.0 (non-commercial · copyleft) · A-share only (no HK / US / futures) ·

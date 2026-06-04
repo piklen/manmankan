@@ -1,36 +1,11 @@
-"""kan CLI entry point · 极薄入口 (只装 cli_main 函数 + boot banner)。
+"""kan CLI runtime entry point.
 
-子命令装饰器触发 / app 单例 / 子模块 import 全由 kan/cli/__init__.py 接管。
-本文件只负责:
-  1. boot banner (启动 spinner · module top-level 执行)
-  2. cli_main: argv 预处理 + atexit register + app() 调用 + ImportError 兜底
+console-script import-time guard lives in kan/_entry.py. This module keeps the
+runtime wiring importable for tests and for Typer command registration.
 """
-import os as _os
 import sys as _sys
 
-_BOOT_BANNER_COMMANDS = {
-    "add", "scan", "fetch", "low", "high", "info", "trend", "find", "theme", "board",
-}
-
-
-def _maybe_print_boot_banner() -> None:
-    if _os.environ.get("KAN_NO_BOOT_BANNER") == "1":
-        return
-    if not _sys.stderr.isatty():
-        return
-    if len(_sys.argv) < 2:
-        return
-    if _sys.argv[1] not in _BOOT_BANNER_COMMANDS:
-        return
-    if "--help" in _sys.argv[2:] or "-h" in _sys.argv[2:]:
-        return
-    _sys.stderr.write("⏳ 启动中...\r")
-    _sys.stderr.flush()
-
-
-_maybe_print_boot_banner()
-
-from kan.app import app  # noqa: E402
+from kan.app import app
 
 
 def cli_main() -> None:

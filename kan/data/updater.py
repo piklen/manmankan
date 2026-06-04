@@ -127,7 +127,7 @@ def check_for_updates(force: bool = False) -> UpdateInfo:
     )
 
 
-def detect_install_method() -> DetectedInstall:
+def detect_install_method(package_spec: str = "manmankan") -> DetectedInstall:
     """检测当前 kan 怎么装的 · 返回 (name, upgrade_argv)。
 
     通过 sys.executable 路径模式判断:
@@ -139,24 +139,28 @@ def detect_install_method() -> DetectedInstall:
     # 背景: 全部命令改用 force-reinstall 模式 · 避免 partial state 升级
     # 老 .so cache 不重链导致 macOS Gatekeeper 拒载等安装后导入失败场景
     if "uv/tools" in exe and "manmankan" in exe:
-        return DetectedInstall("uv tool", ["uv", "tool", "install", "--reinstall", "manmankan"])
+        return DetectedInstall("uv tool", ["uv", "tool", "install", "--reinstall", package_spec])
     if "pipx/venvs/manmankan" in exe:
-        return DetectedInstall("pipx", ["pipx", "install", "--force", "manmankan"])
+        return DetectedInstall("pipx", ["pipx", "install", "--force", package_spec])
     if "site-packages" in exe or ".venv" in exe:
         return DetectedInstall(
             "pip / venv",
-            [exe, "-m", "pip", "install", "--force-reinstall", "manmankan"],
+            [exe, "-m", "pip", "install", "--force-reinstall", package_spec],
         )
     return DetectedInstall(
         "uv tool (推测)",
-        ["uv", "tool", "install", "--reinstall", "manmankan"],
+        ["uv", "tool", "install", "--reinstall", package_spec],
     )
 
 
 UpgradeStatus = Literal["success", "failed"]
 
 
-def run_upgrade(console: Console | None = None) -> tuple[UpgradeStatus, str]:
+def run_upgrade(
+    console: Console | None = None,
+    *,
+    target_version: str | None = None,
+) -> tuple[UpgradeStatus, str]:
     """运行升级命令 · 返回 (status, 描述消息)。
 
     所有异常吞掉 · 不让 caller (atexit hook / kan update 命令) 受影响。
@@ -166,7 +170,8 @@ def run_upgrade(console: Console | None = None) -> tuple[UpgradeStatus, str]:
                  caller 传入自己的 console 保持输出风格一致 · None 则建 stderr console
                  (注：rich.Console.status 在 is_terminal=False 时不干扰 stdout pipe)
     """
-    install = detect_install_method()
+    package_spec = f"manmankan=={target_version}" if target_version else "manmankan"
+    install = detect_install_method(package_spec)
     if console is None:
         console = Console(stderr=True)
 
@@ -190,13 +195,26 @@ def run_upgrade(console: Console | None = None) -> tuple[UpgradeStatus, str]:
         return "failed", f"{install.name} upgrade 异常: {type(e).__name__}"
 
     if result.returncode == 0:
-        # 背景: 升级文件下载成功 ≠ 装得起来 · 跑 import smoke 验证
-        # 防依赖 partial state / 老 .so cache 不重链导致的安装后导入失败
+        # 背景: 升级文件下载成功 ≠ 装得起来 · 跑 import smoke 验证。
+        # 只导入当前真实公开 API/模块,避免旧模块路径让成功升级被误判失败。
         try:
             with console.status("[cyan]验证安装...[/cyan]", spinner="dots"):
                 smoke = subprocess.run(
                     [sys.executable, "-c",
-                     "import kan; from kan import scanner, fetcher, watchlist"],
+                     (
+                         "import kan; "
+                         "from kan.api import WatchlistSet, fetch, from_flags, scan; "
+                         "from kan.core import scanner; "
+                         "from kan.storage import watchlist; "
+                         "assert kan.__version__; "
+                         + (
+                             f"assert kan.__version__ == {target_version!r}; "
+                             if target_version else ""
+                         )
+                         + (
+                         "assert WatchlistSet().name; "
+                         "assert callable(scan) and callable(fetch) and callable(from_flags)"
+                     ))],
                     capture_output=True, text=True, timeout=10,
                 )
         except (subprocess.TimeoutExpired, FileNotFoundError):

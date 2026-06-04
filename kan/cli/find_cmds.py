@@ -23,7 +23,6 @@ import typer
 
 from kan.app import app
 from kan.cli.helpers import (
-    _get_watchlist_pairs,
     _load_watchlist_pairs,
     _print_err,
     _with_heavy_imports_spinner,
@@ -95,11 +94,11 @@ def _resolve_code_pairs_or_exit_json(
             exit_code=2,
         )
     try:
-        from kan.storage.watchlist import preload_stock_names
+        from kan.storage.watchlist import load_stock_names_cache
 
-        names = preload_stock_names()
+        names = load_stock_names_cache(allow_stale=True) or {}
     except Exception as e:
-        debug_log(__name__, "preload stock names for find --codes", e)
+        debug_log(__name__, "load cached stock names for find --codes", e)
         names = {}
     return [(code, names.get(code, code)) for code in codes]
 
@@ -183,6 +182,36 @@ def _exit_find_error(
             text += f"\n   {hint}"
         _print_err(text)
     raise typer.Exit(exit_code)
+
+
+def _get_watchlist_pairs_or_exit_json(
+    group: str | None,
+    fmt: export.OutputFormat,
+) -> list[tuple[str, str]]:
+    """Load default watchlist while preserving JSON envelope in find export mode."""
+    from kan.storage.watchlist import GroupNotFoundError, load_watchlist
+
+    try:
+        pairs = [(s.symbol, s.name) for s in load_watchlist(group).stocks]
+    except GroupNotFoundError as e:
+        _exit_find_error(
+            fmt,
+            code="group_not_found",
+            message=str(e),
+            hint="例: kan group list；或去掉 --group 使用 default 组",
+            exit_code=2,
+        )
+    if not pairs:
+        label = "自选" if not group else f"「{group}」组"
+        suffix = "" if not group else f" --group {group}"
+        _exit_find_error(
+            fmt,
+            code="empty_watchlist",
+            message=f"{label}列表为空",
+            hint=f"例: kan add 600519 000858{suffix}；或用 --codes 指定外部代码池",
+            exit_code=1,
+        )
+    return pairs
 
 
 def _any_metric(results: list[EnrichedResult], attr: str, fields: tuple[str, ...]) -> bool:
@@ -513,6 +542,7 @@ def _run_all_stocks_path(
             cs_limited,
             query_time=query_time,
             pool_size=cs.pool_size,
+            matched_total=len(cs_matched),
             data_cutoff=cs.data_cutoff,
             stale=cs.stale,
             filters=_find_filters(conditions),
@@ -562,7 +592,8 @@ def _run_kline_path(
 
     watchlist_pairs = (
         [] if code_pairs is not None else (
-            _load_watchlist_pairs(group) if source_mode else _get_watchlist_pairs(group)
+            _load_watchlist_pairs(group)
+            if source_mode else _get_watchlist_pairs_or_exit_json(group, fmt)
         )
     )
 
@@ -580,7 +611,44 @@ def _run_kline_path(
             watchlist_group=group,
         )
 
-    ctx = run_data_pipeline(stock_set, compute=scan_batch, mode="low")
+    if code_pairs is not None and is_export and conditions.is_empty():
+        from datetime import datetime
+
+        pools = _find_pools(industry, hot, theme, group, code_pairs)
+        query_time = datetime.now().astimezone().isoformat(timespec="seconds")
+        if fmt is export.OutputFormat.json:
+            try:
+                payload = export.code_pool_payload(
+                    code_pairs,
+                    query_time=query_time,
+                    pools=pools,
+                    fields=field_paths,
+                )
+            except ValueError as e:
+                _exit_find_error(
+                    fmt,
+                    code="invalid_fields",
+                    message=str(e),
+                    hint=(
+                        "例: kan find --codes 600519,000858 "
+                        "--format json --fields code,name"
+                    ),
+                    exit_code=2,
+                )
+            typer.echo(export.to_json(payload))
+        else:
+            typer.echo(export.code_pool_markdown(
+                code_pairs,
+                title=f"慢慢看 · kan find · {stock_set.name}",
+            ))
+        return
+
+    ctx = run_data_pipeline(
+        stock_set,
+        compute=scan_batch,
+        mode="low",
+        show_progress=not is_export,
+    )
     if not ctx.targets and only_watchlist:
         _exit_find_error(
             fmt,
@@ -1032,8 +1100,13 @@ def find(
             exclude_st=exclude_st,
         )
     except FilterParseError as e:
-        _print_err(f"❌ {e}")
-        raise typer.Exit(2) from e
+        _exit_find_error(
+            fmt,
+            code="invalid_filter",
+            message=str(e),
+            hint="例: kan find --pos 180:lt:5 或 kan find --resonance low:gte:3",
+            exit_code=2,
+        )
 
     # 无 filter:terminal 默认报错引导 (人类 UX 不变 · 测试守护);
     # json/md 放开 = AI 取数环节 (整池全维度 · 不带 filter = 数据 provider)。
@@ -1041,10 +1114,10 @@ def find(
         _exit_find_error(
             fmt,
             code="missing_filter",
-            message="至少需要一个 filter (--pos / --resonance / --exclude-st)",
+            message="terminal 模式至少需要一个 filter",
             hint=(
-                "例: kan find --pos 180:lt:5；"
-                "取数模式例: kan find --industry 半导体 --format json"
+                "例: kan find --pos 180:lt:5；kan find --pe lt:20；"
+                "取数模式例: kan find --codes 600519,000858 --format json"
             ),
             exit_code=1,
         )

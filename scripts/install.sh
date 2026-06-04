@@ -1,11 +1,11 @@
 #!/usr/bin/env bash
 # manmankan 一键安装脚本 · mac / Linux
 #
-# 调用方式（用户复制粘贴一行）：
-#   curl -LsSf https://raw.githubusercontent.com/piklen/manmankan/main/scripts/install.sh | bash
+# 推荐安装：
+#   uv tool install manmankan
 #
-# 想自己看完再装：
-#   curl -L https://raw.githubusercontent.com/piklen/manmankan/main/scripts/install.sh > /tmp/install.sh
+# 想使用脚本时,请先下载并审阅 release tag 对应版本：
+#   curl -L https://raw.githubusercontent.com/piklen/manmankan/<tag>/scripts/install.sh > /tmp/install.sh
 #   less /tmp/install.sh
 #   bash /tmp/install.sh
 #
@@ -32,7 +32,7 @@ step() { say ""; say "${BLUE}━━━ $1 ━━━${NC}"; }
 # ── Banner ───────────────────────────────────────────────────────
 say ""
 say "🐙 慢慢看 (manmankan) 一键安装脚本"
-say "   A 股自选股位置感工具 · 100% 本地 · 完全免费开源"
+say "   A 股自选股位置工具 · 本地存储 · 个人自用免费 · source-available"
 say ""
 say "📋 即将做这 4 件事："
 say "   1. 检查你的系统 (mac / Linux)"
@@ -174,13 +174,13 @@ fi
 
 say "📖 下一步 · 复制粘贴这两行试试:"
 say ""
-say "   kan add 600519 茅台 601318     ${DIM}# 加你的自选股${NC}"
+say "   kan add 600519 601318 000858   ${DIM}# 加你的自选股${NC}"
 say "   kan scan                        ${DIM}# 看一屏位置 + 共振${NC}"
 say ""
 say "📚 看完整命令:  kan --help"
 say "📖 README:    https://github.com/piklen/manmankan"
 say "❓ 装坏了:    https://github.com/piklen/manmankan/issues"
 say ""
-hint "🔒 manmankan 100% 本地运行 · 没账号 · 没推送 · 没广告"
+hint "🔒 manmankan 本地存储自选 · 没账号 · 没推送 · 没广告"
 hint "   你的自选股存 ~/.local/share/kan/ · 完全是你的"
 say ""

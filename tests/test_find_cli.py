@@ -54,7 +54,7 @@ class TestFindCli:
     def test_empty_filter_exits_one(self):
         ec, out = _run(["find"])
         assert ec == 1
-        assert "至少需要一个 filter" in out
+        assert "terminal 模式至少需要一个 filter" in out
         assert "kan find --pos 180:lt:5" in out
 
     def test_bad_pos_format_exits_two(self):
@@ -100,6 +100,26 @@ class TestFindCli:
         assert codes == ["600519", "000858", "300750"]
         assert invalid == []
 
+    def test_find_codes_json_uses_cached_names_only(self, monkeypatch):
+        from kan.cli.find_cmds import _resolve_code_pairs_or_exit_json
+        from kan.storage import export, watchlist
+
+        def fail_preload():
+            raise AssertionError("find --codes must not preload stock names")
+
+        monkeypatch.setattr(watchlist, "preload_stock_names", fail_preload)
+        monkeypatch.setattr(
+            watchlist,
+            "load_stock_names_cache",
+            lambda *, allow_stale=False: {"600519": "贵州茅台"} if allow_stale else None,
+        )
+
+        pairs = _resolve_code_pairs_or_exit_json(
+            "600519,000858", export.OutputFormat.json,
+        )
+
+        assert pairs == [("600519", "贵州茅台"), ("000858", "000858")]
+
     def test_resolve_codes_reads_stdin_and_fills_names(self, monkeypatch):
         from kan.cli.find_cmds import _resolve_code_pairs
 
@@ -135,6 +155,26 @@ class TestFindCli:
         assert "例:" in payload["error"]["hint"]
         assert payload["schema_version"]
         assert payload["disclaimer"]
+
+    def test_invalid_filter_json_returns_error_envelope(self):
+        ec, out = _run([
+            "find", "--codes", "600519", "--pos", "bad:format", "--format", "json",
+        ])
+        assert ec == 2
+        payload = json.loads(out)
+        assert payload["ok"] is False
+        assert payload["command"] == "find"
+        assert payload["error"]["code"] == "invalid_filter"
+        assert "例:" in payload["error"]["hint"]
+
+    def test_invalid_resonance_json_returns_error_envelope(self):
+        ec, out = _run([
+            "find", "--codes", "600519", "--resonance", "mid:gte:3", "--format", "json",
+        ])
+        assert ec == 2
+        payload = json.loads(out)
+        assert payload["ok"] is False
+        assert payload["error"]["code"] == "invalid_filter"
 
     def test_codes_empty_json_returns_error_envelope(self):
         ec, out = _run([
@@ -322,7 +362,7 @@ class TestFindJsonOutput:
         """无 filter + terminal(默认)→ exit 1 "至少需要一个 filter" · 人类 UX 不变。"""
         ec, out = _run(["find"])
         assert ec == 1
-        assert "至少需要一个 filter" in out
+        assert "terminal 模式至少需要一个 filter" in out
 
     def test_no_filter_json_bypasses_filter_guard(self, tmp_path):
         """无 filter + --format json = 取数模式 · 越过 filter 守卫。
@@ -331,9 +371,39 @@ class TestFindJsonOutput:
         关键:不再是 "至少需要一个 filter" 错误 → 证明 export 模式放开了空 filter。
         """
         _ec, out, err = _run_isolated(["find", "--format", "json"], tmp_path)
-        combined = out + err
-        assert "至少需要一个 filter" not in combined  # filter 守卫已对 export 放开
-        assert "自选列表为空" in combined  # 落到 watchlist 守卫 (空池无数可取)
+        payload = json.loads(out)
+        assert payload["ok"] is False
+        assert payload["error"]["code"] == "empty_watchlist"
+        assert "terminal 模式至少需要一个 filter" not in (out + err)
+
+    def test_codes_no_filter_json_returns_code_pool_without_kline_fetch(self, tmp_path):
+        """显式代码池无 filter 是轻量取数,不应触发 K 线/交易日历网络链路。"""
+        ec, out, err = _run_isolated(
+            ["find", "--codes", "600519,000858", "--format", "json"], tmp_path,
+        )
+        assert ec == 0
+        assert err == ""
+        payload = json.loads(out)
+        assert payload["ok"] is True
+        assert payload["mode"] == "code_pool"
+        assert payload["rule"]["pools"] == ["codes:2"]
+        assert payload["stats"]["matched"] == 2
+        assert [r["code"] for r in payload["results"]] == ["600519", "000858"]
+        assert all(r["name"] for r in payload["results"])
+
+    def test_codes_no_filter_json_rejects_unavailable_fields(self, tmp_path):
+        ec, out, _err = _run_isolated(
+            [
+                "find", "--codes", "600519,000858", "--format", "json",
+                "--fields", "code,price",
+            ],
+            tmp_path,
+        )
+        assert ec == 2
+        payload = json.loads(out)
+        assert payload["ok"] is False
+        assert payload["error"]["code"] == "invalid_fields"
+        assert "code/name" in payload["error"]["message"]
 
     @pytest.mark.skipif(
         not os.environ.get("KAN_RUN_FIND_DATA_TEST"),
@@ -417,6 +487,7 @@ class TestFindAllCrossSection:
         assert payload["ok"] is False
         assert payload["error"]["code"] == "invalid_fields"
         assert "valuation.nope" in payload["error"]["message"]
+        assert "字段全集见 docs/find.md" in payload["error"]["message"]
 
     def test_all_fields_reject_unsupported_dimension_before_fetch(self, tmp_path):
         ec, out, _err = _run_isolated(

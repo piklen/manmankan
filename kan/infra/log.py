@@ -53,6 +53,10 @@ _REDACT_PATTERNS = [
     (re.compile(r"(/(?:Users|home))/[^/\s]+"), r"\1/<user>"),
     # token=xxx 或 ?key=xxx in URL → <redacted>
     (re.compile(r"([?&](?:token|key|api_key|secret|auth)=)[^&\s]+"), r"\1<redacted>"),
+    # JSON/header variants: {"token":"xxx"} / {"Authorization":"Bearer xxx"}
+    (re.compile(r'("(?:token|api_key|secret|auth)"\s*:\s*")[^"]+(")', re.I), r"\1<redacted>\2"),
+    (re.compile(r'("(?:authorization)"\s*:\s*")[^"]+(")', re.I), r"\1<redacted>\2"),
+    (re.compile(r"\bBearer\s+[A-Za-z0-9._\-]+", re.I), "Bearer <redacted>"),
     # Windows path C:\Users\xiao → C:\Users\<user>
     (re.compile(r"([A-Z]:\\Users\\)[^\\\s]+"), r"\1<user>"),
     # 背景: body 文本里的裸 token 兜底

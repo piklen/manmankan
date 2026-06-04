@@ -1,0 +1,32 @@
+name: Network Smoke
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: '30 23 * * *'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: network-smoke-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  KAN_NO_COMPLETION_AUTOINSTALL: "1"
+  KAN_NO_UPDATE_CHECK: "1"
+
+jobs:
+  network-smoke:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10  # v6 (pinned 2026-05-27)
+      - uses: astral-sh/setup-uv@08807647e7069bb48b6ef5acd8ec9567f424441b  # pinned 2026-05-27
+        with:
+          python-version: '3.12'
+          enable-cache: true
+      - name: Install dependencies
+        run: uv sync --frozen --all-groups --all-extras
+      - name: Run network-marked smoke tests
+        run: uv run pytest -q -m network tests/network

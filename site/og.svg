@@ -42,12 +42,12 @@
     <text x="80" y="290" font-size="86" font-weight="800" fill="#e4e4e7" letter-spacing="-2">告诉你它<tspan fill="url(#brand)">站在哪</tspan></text>
     <text x="80" y="380" font-size="58" font-weight="600" fill="#71717a" letter-spacing="-1">不告诉你买什么</text>
 
-    <text x="80" y="465" font-size="24" fill="#a1a1aa">A 股自选股「位置感」CLI · 100% 本地 · source-available</text>
+    <text x="80" y="465" font-size="24" fill="#a1a1aa">A 股自选股「位置感」CLI · 本地存储 · source-available</text>
 
     <!-- bottom row -->
     <g transform="translate(80, 540)">
       <rect x="0" y="-30" width="380" height="48" rx="8" fill="#18181b" stroke="#27272a" stroke-width="1"/>
-      <text x="20" y="0" font-family="ui-monospace, SFMono-Regular, Menlo, monospace" font-size="20" fill="#e4e4e7"><tspan fill="#34d399">$</tspan> pip install manmankan</text>
+      <text x="20" y="0" font-family="ui-monospace, SFMono-Regular, Menlo, monospace" font-size="20" fill="#e4e4e7"><tspan fill="#34d399">$</tspan> uv tool install manmankan</text>
     </g>
 
     <text x="1120" y="570" font-size="18" fill="#52525b" text-anchor="end">piklen.github.io/manmankan</text>

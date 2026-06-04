@@ -95,3 +95,9 @@ def test_release_version_matches_package_metadata_and_changelog_top_entry() -> N
     assert match is not None, "CHANGELOG.md must start with a versioned release section"
 
     assert __version__ == pyproject["project"]["version"] == match.group("version")
+
+
+def test_console_script_uses_thin_entrypoint() -> None:
+    """console script should keep import-time failure guard outside kan.cli."""
+    pyproject = tomllib.loads((REPO_ROOT / "pyproject.toml").read_text())
+    assert pyproject["project"]["scripts"]["kan"] == "kan._entry:main"

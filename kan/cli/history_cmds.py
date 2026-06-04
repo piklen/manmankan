@@ -15,7 +15,34 @@ from kan.cli.helpers import _print_err
 from kan.storage import export
 
 
-def _resolve_in_snapshots(raw: str, universe: dict[str, str]) -> tuple[str, str]:
+def _exit_history_error(
+    fmt: export.OutputFormat,
+    *,
+    code: str,
+    message: str,
+    hint: str | None = None,
+    exit_code: int = 1,
+) -> None:
+    if fmt is export.OutputFormat.json:
+        typer.echo(export.to_json(export.error_payload(
+            "history",
+            code=code,
+            message=message,
+            hint=hint,
+        )))
+    else:
+        text = f"❌ {message}"
+        if hint:
+            text += f"\n   {hint}"
+        _print_err(text)
+    raise typer.Exit(exit_code)
+
+
+def _resolve_in_snapshots(
+    raw: str,
+    universe: dict[str, str],
+    fmt: export.OutputFormat,
+) -> tuple[str, str]:
     """把用户输入(代码 / 名称)解析成 (symbol, name) · 解析域 = 有历史的股票。
 
     6 位代码 → 直接查;非 6 位 → 在快照名称里模糊搜。0 / 多匹配抛 typer.Exit + 引导。
@@ -25,28 +52,49 @@ def _resolve_in_snapshots(raw: str, universe: dict[str, str]) -> tuple[str, str]
     if re.match(r"^\d{6}$", cleaned):
         if cleaned in universe:
             return cleaned, universe[cleaned]
-        _print_err(
-            f"没有「{raw}」的历史 · `kan history` 只能看曾在自选、且跑过 `kan scan` 的股票"
+        _exit_history_error(
+            fmt,
+            code="history_not_found",
+            message=(
+                f"没有「{raw}」的历史 · kan history 只能看曾在自选、"
+                "且跑过 kan scan 的股票"
+            ),
+            hint="例: kan scan；然后 kan history 600519",
+            exit_code=1,
         )
-        raise typer.Exit(1)
     if not cleaned:
-        _print_err("空字符串不是有效股票名 / 代码 · 例: kan history 600519 或 kan history 茅台")
-        raise typer.Exit(2)
+        _exit_history_error(
+            fmt,
+            code="invalid_symbol",
+            message="空字符串不是有效股票名 / 代码",
+            hint="例: kan history 600519 或 kan history 茅台",
+            exit_code=2,
+        )
     q = cleaned.replace(" ", "")
     matches = [(s, n) for s, n in universe.items() if q in n.replace(" ", "")]
     if len(matches) == 1:
         return matches[0]
     if len(matches) == 0:
-        _print_err(
-            f"快照历史里没有匹配「{raw}」的股票 · `kan history` 只覆盖曾在自选、"
-            "且跑过 `kan scan` 的股票 · 试 6 位代码"
+        _exit_history_error(
+            fmt,
+            code="history_not_found",
+            message=(
+                f"快照历史里没有匹配「{raw}」的股票 · kan history 只覆盖曾在自选、"
+                "且跑过 kan scan 的股票"
+            ),
+            hint="例: 试 6 位代码,或先运行 kan scan 积累快照",
+            exit_code=1,
         )
-        raise typer.Exit(1)
     preview = "; ".join(f"{s} {n.replace(' ', '')}" for s, n in matches[:8])
     if len(matches) > 8:
         preview += f"; …等 {len(matches)} 只"
-    _print_err(f"「{raw}」匹配到 {len(matches)} 只 · 候选: {preview} · 请用代码精确指定")
-    raise typer.Exit(1)
+    _exit_history_error(
+        fmt,
+        code="ambiguous_symbol",
+        message=f"「{raw}」匹配到 {len(matches)} 只",
+        hint=f"候选: {preview} · 请用代码精确指定",
+        exit_code=1,
+    )
 
 
 @app.command()
@@ -65,21 +113,34 @@ def history(
     from kan.core.scanner import PERIODS, load_symbol_history, snapshot_symbol_names
 
     if period not in PERIODS:
-        _print_err(
-            f"❌ 周期不支持：{period} · 可选 {'/'.join(map(str, PERIODS))}"
+        _exit_history_error(
+            fmt,
+            code="invalid_period",
+            message=f"周期不支持: {period}",
+            hint=f"可选 {'/'.join(map(str, PERIODS))}",
+            exit_code=2,
         )
-        raise typer.Exit(2)
 
     universe = snapshot_symbol_names()
     if not universe:
-        _print_err("还没有任何扫描历史 · 先跑 `kan scan` 积累每日快照,之后才能回溯位置")
-        raise typer.Exit(1)
+        _exit_history_error(
+            fmt,
+            code="history_unavailable",
+            message="还没有任何扫描历史",
+            hint="例: 先运行 kan scan 积累每日快照,之后再运行 kan history 600519",
+            exit_code=1,
+        )
 
-    sym, name = _resolve_in_snapshots(symbol, universe)
+    sym, name = _resolve_in_snapshots(symbol, universe, fmt)
     entries = load_symbol_history(sym)
     if not entries:  # 理论上不会(sym 来自 universe)· 防快照在两次读之间被改
-        _print_err(f"没有「{name} {sym}」的历史快照")
-        raise typer.Exit(1)
+        _exit_history_error(
+            fmt,
+            code="history_not_found",
+            message=f"没有「{name} {sym}」的历史快照",
+            hint="例: 先运行 kan scan 积累每日快照",
+            exit_code=1,
+        )
 
     if fmt is export.OutputFormat.json:
         typer.echo(export.to_json(export.history_payload(sym, name, entries, period=period)))
