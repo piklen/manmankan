@@ -157,6 +157,34 @@ def _load_metrics_cache(path: Path) -> pd.DataFrame | None:
         return None
 
 
+def _load_latest_available_metrics(before_td: str) -> pd.DataFrame | None:
+    """latest 截面拉空时 · 降级到 DATA_DIR 里早于 before_td 的最近历史截面缓存。
+
+    根因:tushare daily_basic 偶发瞬时返回空 items(当日数据未出 / 服务端抽风)·
+    若直接返回空则 PE/PB 全列 `-`(feedback 头号痛点)。估值裸值(pe_ttm/pb/mv)
+    日间近乎不变 · 用最近交易日截面远胜全 None。
+
+    返回 df 的 trade_date 列保留历史日 · _row_to_valuation 据此标注真实数据日期
+    (展示层 / JSON 可见 "数据日 06-03")· 不冒充 before_td · 数据保真不破坏。
+    metrics_hist_<symbol>.parquet 不匹配 8 位日期正则 · 天然跳过(只取截面快照)。
+    """
+    best_date: str | None = None
+    best_path: Path | None = None
+    for path in DATA_DIR.glob("metrics_*.parquet"):
+        m = re.match(r"^metrics_(\d{8})\.parquet$", path.name)
+        if not m:
+            continue
+        d = m.group(1)
+        if d < before_td and (best_date is None or d > best_date):
+            best_date, best_path = d, path
+    if best_path is None:
+        return None
+    df = _load_metrics_cache(best_path)
+    if df is None or df.empty:
+        return None
+    return df
+
+
 def _empty_metrics_df() -> pd.DataFrame:
     """空截面 DataFrame (列齐 · 0 行) · 无 token / 全源失败时返回 · 不抛。"""
     import pandas as pd
@@ -218,7 +246,9 @@ def _fetch_tushare_metrics(
             return None
         df = _to_tushare_metrics_df(data)
         if df is None or df.empty:
-            cb.record("tushare_metrics", ok=False)
+            # API 成功响应但 items 空(daily_basic 当日数据未出 / tushare 瞬时抽风)·
+            # 这是"无数据"而非"源故障"· 不记失败 · 否则健康源会被误熔断污染后续请求 ·
+            # 上层 fetch_metrics 会降级到最近历史截面(见 _load_latest_available_metrics)。
             return None
         cb.record("tushare_metrics", ok=True)
         return df
@@ -286,7 +316,12 @@ def fetch_metrics(
 
     result = default_metrics_chain().fetch(td)
     if result is None:
-        # 无 token / 全源失败 · 返回空 schema DataFrame (不抛 · 截面"无数据非异常")
+        # latest 截面拉空(无 token / 全源失败 / tushare daily_basic 瞬时抽风)→
+        # 先降级到最近历史截面 · 估值日间近乎不变 · 历史截面胜过全 None(PE 列不再全 `-`)。
+        fallback = _load_latest_available_metrics(before_td=td)
+        if fallback is not None:
+            return _filter_symbols(fallback, symbols)
+        # 无历史截面可用(首次使用且恰逢抽风)→ 空 schema(不抛 · 截面"无数据非异常")
         return _empty_metrics_df()
     raw, source = result
 
