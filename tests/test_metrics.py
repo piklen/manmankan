@@ -157,3 +157,64 @@ class TestFetchMetrics:
         monkeypatch.setattr(metrics, "default_metrics_chain", lambda: _Chain())
         df = metrics.fetch_metrics("20260529", symbols=["600519", "300750"])
         assert set(df["symbol"]) == {"600519", "300750"}
+
+    def test_load_latest_available_metrics_picks_most_recent(self, temp_env):
+        """降级 helper:选早于目标日且最近的截面缓存(不选晚于目标日的)。"""
+        from kan.storage.paths import atomic_write_parquet
+        for d, pe in [("20260601", 20.0), ("20260603", 21.0), ("20260605", 99.0)]:
+            norm = metrics._normalize_metrics(
+                pd.DataFrame({"symbol": ["600519"], "pe_ttm": [pe], "trade_date": [d]}),
+                source="t",
+            )
+            atomic_write_parquet(norm, temp_env / f"metrics_{d}.parquet")
+        out = metrics._load_latest_available_metrics(before_td="20260604")
+        assert out is not None
+        assert out.iloc[0]["pe_ttm"] == 21.0  # 选 06-03(早于且最近)· 不选晚于的 06-05
+
+    def test_load_latest_available_metrics_none_when_empty(self, temp_env):
+        """无历史截面缓存 → None(caller 再返回空 df · 不编造数据)。"""
+        assert metrics._load_latest_available_metrics(before_td="20260604") is None
+
+    def test_fetch_metrics_falls_back_to_history(self, temp_env, monkeypatch):
+        """chain 拉空(tushare 瞬时抽风)→ 降级到历史截面 · PE 不再全 None · 标真实数据日。"""
+        from kan.storage.paths import atomic_write_parquet
+        hist = metrics._normalize_metrics(
+            pd.DataFrame(
+                {"symbol": ["600519"], "pe_ttm": [20.0], "trade_date": ["20260601"]}
+            ),
+            source="tushare_metrics",
+        )
+        atomic_write_parquet(hist, temp_env / "metrics_20260601.parquet")
+
+        class _NoneChain:
+            def fetch(self, trade_date, symbols=None):
+                return None
+        monkeypatch.setattr(metrics, "default_metrics_chain", lambda: _NoneChain())
+        df = metrics.fetch_metrics("20260604")
+        assert len(df) == 1
+        assert df.iloc[0]["pe_ttm"] == 20.0
+        assert df.iloc[0]["trade_date"] == datetime.date(2026, 6, 1)  # 标历史日 · 数据保真
+
+    def test_empty_items_does_not_trip_breaker(self, temp_env, monkeypatch):
+        """daily_basic 成功响应但 items 空(瞬时抽风)→ 不记熔断失败 · 健康源不被污染。"""
+        from kan.infra import circuit_breaker
+        monkeypatch.setattr(
+            "kan.data.tushare._resolve_config",
+            lambda: ("tok", "https://api.tushare.pro"),
+        )
+        monkeypatch.setattr(
+            "kan.data.tushare._post_tushare_api",
+            lambda **kw: ({"fields": ["ts_code", "pe_ttm"], "items": []}, None),
+        )
+        rec: list = []
+
+        class _CB:
+            def is_down(self, k):
+                return False
+
+            def record(self, k, ok):
+                rec.append((k, ok))
+        monkeypatch.setattr(circuit_breaker, "get_breaker", lambda: _CB())
+        out = metrics._fetch_tushare_metrics("20260604")
+        assert out is None
+        assert ("tushare_metrics", False) not in rec  # 空 items 不触发熔断

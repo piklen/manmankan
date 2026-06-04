@@ -217,6 +217,8 @@ def _run_all_stocks_path(
     compact_context: bool,
     is_export: bool,
     limit: int | None,
+    offset: int,
+    sort: tuple[str, str] | None,
 ) -> None:
     """CLI adapter for `kan find --all` cross-section service."""
     output = _find_output_profile(
@@ -232,6 +234,8 @@ def _run_all_stocks_path(
             output=output,
             source_mode=source_mode,
             limit=limit,
+            offset=offset,
+            sort=sort,
         ))
     except FindServiceError as e:
         _exit_find_service_error(fmt, e)
@@ -277,6 +281,8 @@ def _run_kline_path(
     compact_context: bool,
     is_export: bool,
     limit: int | None,
+    offset: int,
+    sort: tuple[str, str] | None,
     console,
     find_disclaimer: str,
 ) -> None:
@@ -299,6 +305,8 @@ def _run_kline_path(
             only_watchlist=only_watchlist,
             group=group,
             limit=limit,
+            offset=offset,
+            sort=sort,
         ))
     except FindServiceError as e:
         _exit_find_service_error(fmt, e)
@@ -395,6 +403,34 @@ def find(
         typer.Option(
             "--pe",
             help="估值 filter OP:VAL 例 lt:20 (PE TTM < 20 · 裸值筛) · 可多次",
+        ),
+    ] = [],  # noqa: B006 · typer multi-option 需要 list 默认值
+    pb: Annotated[
+        list[str],
+        typer.Option(
+            "--pb",
+            help="估值 filter OP:VAL 例 lt:3 (PB < 3 · 裸值筛) · 可多次",
+        ),
+    ] = [],  # noqa: B006 · typer multi-option 需要 list 默认值
+    turnover: Annotated[
+        list[str],
+        typer.Option(
+            "--turnover",
+            help="换手率 filter OP:VAL 例 gt:5 (换手 > 5% · 裸值筛) · 可多次",
+        ),
+    ] = [],  # noqa: B006 · typer multi-option 需要 list 默认值
+    market_cap: Annotated[
+        list[str],
+        typer.Option(
+            "--market-cap",
+            help="总市值 filter OP:VAL 例 gt:100 (总市值 > 100 亿 · 单位亿元) · 可多次",
+        ),
+    ] = [],  # noqa: B006 · typer multi-option 需要 list 默认值
+    volume_ratio: Annotated[
+        list[str],
+        typer.Option(
+            "--volume-ratio",
+            help="量比 filter OP:VAL 例 gt:1.5 (量比 > 1.5 · 裸值筛) · 可多次",
         ),
     ] = [],  # noqa: B006 · typer multi-option 需要 list 默认值
     roe: Annotated[
@@ -532,6 +568,23 @@ def find(
             help="输出条数上限 (默认 K 线模式 50 · --all 截面模式全量)",
         ),
     ] = None,
+    offset: Annotated[
+        int,
+        typer.Option(
+            "--offset",
+            help="跳过前 N 条 (配合 --limit 分页 · 默认 0)",
+        ),
+    ] = 0,
+    sort: Annotated[
+        str | None,
+        typer.Option(
+            "--sort",
+            help=(
+                "排序 FIELD:asc|desc · FIELD 取 "
+                "pe/pb/turnover/market-cap/volume-ratio/moneyflow · 例 moneyflow:desc"
+            ),
+        ),
+    ] = None,
     all_stocks: Annotated[
         bool,
         typer.Option(
@@ -601,6 +654,10 @@ def find(
         --exclude-st           排 ST (quiet · 不记 triggered)
       估值 / 质量 / 资金:
         --pe OP:VAL            PE TTM 裸值筛 · 例 lt:20
+        --pb OP:VAL            PB 裸值筛 · 例 lt:3
+        --turnover OP:VAL      换手率% 裸值筛 · 例 gt:5
+        --market-cap OP:VAL    总市值(亿元)裸值筛 · 例 gt:100
+        --volume-ratio OP:VAL  量比裸值筛 · 例 gt:1.5
         --roe OP:VAL           ROE % 裸值筛 · 例 gte:15 · 逐股 · --all 不支持
         --moneyflow OP:VAL     主力净额(万元) · 例 gt:0 净流入
       技术 / 趋势动量（进阶 · 需理解口径）:
@@ -704,6 +761,10 @@ def find(
             pos=pos,
             resonance=resonance,
             pe=pe,
+            pb=pb,
+            turnover=turnover,
+            market_cap=market_cap,
+            volume_ratio=volume_ratio,
             roe=roe,
             moneyflow=moneyflow,
             rsi=rsi,
@@ -729,6 +790,31 @@ def find(
             hint="例: kan find --pos 180:lt:5 或 kan find --resonance low:gte:3",
             exit_code=2,
         )
+
+    # 解析 --sort FIELD:asc|desc → (field, direction) · 校验字段与方向
+    sort_spec: tuple[str, str] | None = None
+    if sort is not None:
+        from kan.service.find_service import SORT_FIELD_GETTERS
+        raw_parts = sort.split(":")
+        field = raw_parts[0].strip().replace("-", "_")  # market-cap → market_cap
+        direction = raw_parts[1].strip().lower() if len(raw_parts) > 1 else "desc"
+        if field not in SORT_FIELD_GETTERS:
+            _exit_find_error(
+                fmt,
+                code="invalid_sort",
+                message=f"--sort 字段 '{raw_parts[0]}' 不支持",
+                hint=f"可选: {', '.join(SORT_FIELD_GETTERS)} · 例: --sort moneyflow:desc",
+                exit_code=2,
+            )
+        if direction not in ("asc", "desc"):
+            _exit_find_error(
+                fmt,
+                code="invalid_sort",
+                message=f"--sort 方向 '{direction}' 不支持",
+                hint="只支持 asc|desc · 例: --sort pe:asc",
+                exit_code=2,
+            )
+        sort_spec = (field, direction)
 
     # 无 filter:terminal 默认报错引导 (人类 UX 不变 · 测试守护);
     # json/md 放开 = AI 取数环节 (整池全维度 · 不带 filter = 数据 provider)。
@@ -792,6 +878,8 @@ def find(
             compact_context=compact_context,
             is_export=is_export,
             limit=limit,
+            offset=offset,
+            sort=sort_spec,
         )
         return
 
@@ -811,6 +899,8 @@ def find(
         compact_context=compact_context,
         is_export=is_export,
         limit=limit,
+        offset=offset,
+        sort=sort_spec,
         console=console,
         find_disclaimer=find_disclaimer,
     )

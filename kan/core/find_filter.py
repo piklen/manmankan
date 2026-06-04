@@ -33,8 +33,10 @@ from kan.core.find_dsl import (
     MaBiasFilter,
     MacdDifFilter,
     MacdFilter,
+    MarketCapFilter,
     MoneyflowFilter,
     NorthFilter,
+    PbFilter,
     PeFilter,
     PosFilter,
     ResonanceFilter,
@@ -42,7 +44,9 @@ from kan.core.find_dsl import (
     RsiFilter,
     StreakFilter,
     Top10Filter,
+    TurnoverFilter,
     UpDaysFilter,
+    VolumeRatioFilter,
     WinnerFilter,
     apply_op,
 )
@@ -138,6 +142,70 @@ def _match_pe(
             filter_type="pe",
             param=f"{filter.op}:{filter.value:g}",
             value=valuation.pe_ttm,
+        )
+    return None
+
+
+def _match_pb(
+    filter: PbFilter, valuation: ValuationMetrics | None
+) -> TriggeredFilter | None:
+    """Match PB filter against valuation · pb 缺失 → 不命中 (估值/质量/资金维度)。"""
+    if valuation is None or valuation.pb is None:
+        return None
+    if apply_op(filter.op, valuation.pb, filter.value):
+        return TriggeredFilter(
+            filter_type="pb",
+            param=f"{filter.op}:{filter.value:g}",
+            value=valuation.pb,
+        )
+    return None
+
+
+def _match_turnover(
+    filter: TurnoverFilter, valuation: ValuationMetrics | None
+) -> TriggeredFilter | None:
+    """Match 换手率 filter · turnover_rate(%)缺失 → 不命中 (估值/质量/资金维度)。"""
+    if valuation is None or valuation.turnover_rate is None:
+        return None
+    if apply_op(filter.op, valuation.turnover_rate, filter.value):
+        return TriggeredFilter(
+            filter_type="turnover",
+            param=f"{filter.op}:{filter.value:g}",
+            value=valuation.turnover_rate,
+        )
+    return None
+
+
+def _match_market_cap(
+    filter: MarketCapFilter, valuation: ValuationMetrics | None
+) -> TriggeredFilter | None:
+    """Match 总市值 filter · total_mv(万元)÷1e4 换算亿元后比较。
+
+    用户输入单位亿元(--market-cap gt:100 = 总市值 > 100 亿)· total_mv 缺失 → 不命中。
+    """
+    if valuation is None or valuation.total_mv is None:
+        return None
+    cap_yi = valuation.total_mv / 1e4  # 万元 → 亿元
+    if apply_op(filter.op, cap_yi, filter.value):
+        return TriggeredFilter(
+            filter_type="market_cap",
+            param=f"{filter.op}:{filter.value:g}",
+            value=cap_yi,
+        )
+    return None
+
+
+def _match_volume_ratio(
+    filter: VolumeRatioFilter, valuation: ValuationMetrics | None
+) -> TriggeredFilter | None:
+    """Match 量比 filter · volume_ratio 缺失 → 不命中 (估值/质量/资金维度)。"""
+    if valuation is None or valuation.volume_ratio is None:
+        return None
+    if apply_op(filter.op, valuation.volume_ratio, filter.value):
+        return TriggeredFilter(
+            filter_type="volume_ratio",
+            param=f"{filter.op}:{filter.value:g}",
+            value=valuation.volume_ratio,
         )
     return None
 
@@ -389,6 +457,12 @@ FIND_MATCH_SEGMENTS: tuple[MatchSegmentSpec, ...] = (
     MatchSegmentSpec("gain", "gain_filters", "result", _match_gain),
     MatchSegmentSpec("up_days", "up_days_filters", "result", _match_up_days),
     MatchSegmentSpec("pe", "pe_filters", "valuation", _match_pe),
+    MatchSegmentSpec("pb", "pb_filters", "valuation", _match_pb),
+    MatchSegmentSpec("turnover", "turnover_filters", "valuation", _match_turnover),
+    MatchSegmentSpec("market_cap", "market_cap_filters", "valuation", _match_market_cap),
+    MatchSegmentSpec(
+        "volume_ratio", "volume_ratio_filters", "valuation", _match_volume_ratio
+    ),
     MatchSegmentSpec("roe", "roe_filters", "fundamentals", _match_roe, supports_cross_section=False),
     MatchSegmentSpec("moneyflow", "moneyflow_filters", "moneyflow", _match_moneyflow),
     MatchSegmentSpec("rsi", "rsi_filters", "technical", _match_rsi),
