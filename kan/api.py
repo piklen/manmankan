@@ -84,7 +84,7 @@
   (集合 ∩ 自选)、rank_map (热榜名次)、index_kline (板块指数 K 线) 等。
 - 数据源限流时各 Set 内部已做 5 分钟熔断 · 不会反复打挂上游。
 
-数据源扩展 (v0.0.6 起)
+数据源扩展 (历史背景)
 ─────────────────────
 
 manmankan 内置 K 线 5 源 (tushare/baostock/eastmoney/sina/tencent · 按稳定性排优先级)
@@ -168,7 +168,7 @@ from kan.core.verbs import (
     trend,
 )
 
-# v0.0.6 · 数据源扩展 API (KlineSource + ThemeConstituentSource Protocol + register/inspect)
+# 背景 · 数据源扩展 API (KlineSource + ThemeConstituentSource Protocol + register/inspect)
 from kan.data._builtin_sources import (
     clear_user_kline_sources,
     register_kline_source,
@@ -188,13 +188,13 @@ __all__ = [
     # StockSet
     "HotRankSet",
     "IndustrySet",
-    # v0.0.6: 数据源扩展 Protocol (用户写自定义源时用作 typing 提示)
+    # 背景: 数据源扩展 Protocol (用户写自定义源时用作 typing 提示)
     "KlineSource",
     "StockSet",
     "ThemeConstituentSource",
     "ThemeSet",
     "WatchlistSet",
-    # v0.0.6: chain inspect
+    # 背景: chain inspect
     "clear_user_kline_sources",
     "clear_user_theme_constituent_sources",
     # verbs
@@ -203,7 +203,7 @@ __all__ = [
     "high",
     "kline_chain",
     "low",
-    # v0.0.6: register 自定义数据源
+    # 背景: register 自定义数据源
     "register_kline_source",
     "register_theme_constituent_source",
     "scan",

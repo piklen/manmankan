@@ -23,15 +23,15 @@ DEFAULT_CONFIG: dict[str, Any] = {
     "last_check_date": None,      # ISO date "YYYY-MM-DD" · daily cache 命中
     "latest_seen_version": None,  # 上次发现的最新版本号字符串
     "last_hint_date": None,       # 选 False 后 hint 限流 (每周一次)
-    "tushare_token": None,        # v0.0.5: TuShare Pro API token (None=未配置 → 跳过 TS 分支)
-    "tushare_endpoint": None,     # v0.0.5: TuShare Pro 端点 (None=用 https://api.tushare.pro 默认)
+    "tushare_token": None,        # 背景: TuShare Pro API token (None=未配置 → 跳过 TS 分支)
+    "tushare_endpoint": None,     # 背景: TuShare Pro 端点 (None=用 https://api.tushare.pro 默认)
 }
 
 
 def _atomic_write_json(path: Path, data: Any) -> None:
     """先写 .tmp 再 os.replace · 防半截写入。
 
-    v0.0.4.4: 父目录 mode=0o700 + 写完 chmod 0o600 · 保护用户配置。
+    背景: 父目录 mode=0o700 + 写完 chmod 0o600 · 保护用户配置。
     """
     path.parent.mkdir(mode=0o700, parents=True, exist_ok=True)
     tmp_path = path.with_suffix(path.suffix + ".tmp")

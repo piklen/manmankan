@@ -1,4 +1,4 @@
-"""破坏性操作二次确认 helper · v0.0.5.0 引入 · 给 add/remove/clear --theme(或 --industry) 用。
+"""破坏性操作二次确认 helper · 背景 · 给 add/remove/clear --theme(或 --industry) 用。
 
 设计:
 - show_summary_and_confirm(action, targets, current_size, skip=False)

@@ -49,7 +49,7 @@ def fetch(
         if symbols:
             typer.echo("--industry / --hot / --theme 与股票代码不能同时使用", err=True)
             raise typer.Exit(2)
-        # v0.0.5.3 OOP 路径:from_flags → resolve_stock_set_or_exit
+        # OOP 路径:from_flags → resolve_stock_set_or_exit
         from kan.core.pipeline import resolve_stock_set_or_exit
         from kan.core.stock_set import from_flags
         wl_pairs = []

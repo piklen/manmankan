@@ -397,7 +397,7 @@ def _fetch_tushare_daily_bars(trade_date: str) -> pd.DataFrame | None:
 
 
 # ══════════════════════════════════════════════════════════════════
-# KlineSource Protocol 适配 (v0.0.6) · 顶档付费源 · is_available 含 token 检查
+# KlineSource Protocol 适配 (历史背景) · 顶档付费源 · is_available 含 token 检查
 # ══════════════════════════════════════════════════════════════════
 
 

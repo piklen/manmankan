@@ -1,4 +1,4 @@
-"""题材榜数据编排层 · v0.0.5.7 引入 · `kan theme trend` 后端。
+"""题材榜数据编排层 · 背景 · `kan theme trend` 后端。
 
 把"所有题材指数"当一组 first-class 标的批量拉 K 线 + 算 streak。
 跟 watchlist trend 在算法上 100% 复用 `calc_trend` · 数据源换成题材 K 线。
@@ -58,7 +58,7 @@ class LeaderboardDiagnosis:
       tushare_endpoint:   实际用的端点(env > config > DEFAULT)· 仅 attempted 时填
       tushare_token_masked: ***xxxx 形式 · 永不存原 token
       tushare_error_code: TuShare server 业务码 (40101/40203/40004) 或客户端码 (-1/-2/-3)·
-                          None=没失败 / 没拿到 error · v0.0.6.5 加 · 用于精准建议
+                          None=没失败 / 没拿到 error · 背景 · 用于精准建议
       tushare_error_msg:  TuShare server 原文 msg (已 redact 防 token 泄漏)·
                           直接给用户看是安全的 · 比我们脑补文案更权威
       em_attempted:       走 EM 路径 → True (token 未配 或 TuShare 失败 fallback)
@@ -107,7 +107,7 @@ def load_theme_leaderboard(
 
     数据源选择(运行时):
     - TuShare token 配置 + ths_daily batch 通 → 走 TuShare 路径(快 · 稳定 · source='tushare')
-    - 否则 → 走 adata EM 路径(原 v0.0.5.7 并行实现 · source='em')
+    - 否则 → 走 adata EM 路径(原 历史背景并行实现 · source='em')
 
     Args:
         candle: True=阳线阴线口径 / False=收盘价口径 · 透传 calc_trend。

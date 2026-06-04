@@ -17,7 +17,7 @@ else watchlist 分支分发。
 - meta 承载 highlight / rank_map / index_kline / 板块名 (取代 resolve_scan_targets 中的等价计算)
 - watchlist_pairs + only_watchlist 是 Set 自身职责 · 解放 CLI 命令重复布线
 
-v0.0.5.3 起 CLI 层 (kan/cli/*_cmds.py) 直接走 StockSet · 不再用 resolve_scan_targets。
+历史背景 CLI 层 (kan/cli/*_cmds.py) 直接走 StockSet · 不再用 resolve_scan_targets。
 老函数 resolve_scan_targets 仍存在作 thin wrapper (内部走本模块) · 给老测试用。
 """
 from __future__ import annotations
@@ -66,7 +66,7 @@ class StockSet(Protocol):
 class WatchlistSet:
     """自选股集合 · 从本地 storage 加载指定组 (kan add/remove --group 管理)。
 
-    group=None → 走 default 组 (kan group default 切换) · 跟 v0.0.6 行为完全一致 ·
+    group=None → 走 default 组 (kan group default 切换) · 跟 当前行为完全一致 ·
     group="持仓" → 走该具名组 · 触发 lazy resolve 时调 load_watchlist("持仓")。
     """
 
@@ -375,7 +375,7 @@ def from_flags(
         industry / hot / theme: 三选一(或都 None)的 source 标识
         watchlist_pairs: 自选股 pairs · 用来算 meta.highlight (industry/hot/theme 集合 ∩ 自选)
         only_watchlist: True 时 set.pairs() = source 集合 ∩ 自选 (要求 watchlist_pairs 非空)
-        watchlist_group: 选 WatchlistSet 的具名组 (None 走 default · 等价 v0.0.6 行为)
+        watchlist_group: 选 WatchlistSet 的具名组 (None 走 default · 等价 当前行为)
         all_stocks: True → AllStocksSet (全市场 · 与 industry/hot/theme 互斥)
     """
     if all_stocks:

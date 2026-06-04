@@ -1,4 +1,4 @@
-"""CLI integration tests for `kan find` (v0.0.6.4).
+"""CLI integration tests for `kan find` (历史背景).
 
 Uses subprocess (not typer.CliRunner) to avoid sys.argv shenanigans with
 the root @app.callback() that checks `len(sys.argv) == 1`.

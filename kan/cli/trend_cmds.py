@@ -60,7 +60,7 @@ def trend(
 ) -> None:
     """连续涨跌看板 (--group 切换分组)"""
     # 处理 trend <ticker> 误用 · 散户最直觉的"看茅台趋势 kan trend 600519"会进 extra_args
-    # 引导到 `kan info <ticker>` · 接口升级到收 ticker 是 v0.0.6 计划
+    # 引导到 `kan info <ticker>` · 接口升级到收 ticker 是 历史背景计划
     if extra_args:
         first = extra_args[0]
         # 判断:6 位数字 → 像股票代码 · isalpha 含非 ASCII(中文) / ASCII(英文)→ 像股票名
@@ -105,7 +105,7 @@ def trend(
             _print_err(f"❌ {name} 的值必须在 2-30 之间（当前：{val}）")
             raise typer.Exit(1)
 
-    # v0.0.5.3 OOP 路径
+    # OOP 路径
     from kan.core.models import ThemeMeta
     from kan.core.pipeline import run_data_pipeline
     from kan.core.stock_set import from_flags

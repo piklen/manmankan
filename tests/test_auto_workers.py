@@ -1,4 +1,4 @@
-"""v0.0.4.7(用户反馈触发):resolve_max_workers 启发式测试.
+"""历史背景(用户反馈触发):resolve_max_workers 启发式测试.
 
 改动: max_workers 硬编码 5 → min(cpu_count*2, 12) 启发式.
 - akshare 是 I/O bound 不是 CPU bound · cpu_count*2 比 cpu-1 更合理
@@ -58,13 +58,13 @@ class TestKanWorkersEnvVar:
             assert resolve_max_workers() == 3
 
     def test_env_var_zero_falls_back(self, monkeypatch):
-        """0 不在 1-20 范围 · 回退默认 (v0.0.4.7 上限 50→20)."""
+        """0 不在 1-20 范围 · 回退默认 (历史背景上限 50→20)."""
         monkeypatch.setenv("KAN_WORKERS", "0")
         with patch("os.cpu_count", return_value=8):
             assert resolve_max_workers() == 12  # 8*2 cap 12
 
     def test_env_var_over_20_falls_back(self, monkeypatch):
-        """v0.0.4.7 安全收紧:上限 50→20 · 防 KAN_WORKERS=50 反射 DoS akshare."""
+        """历史背景安全收紧:上限 50→20 · 防 KAN_WORKERS=50 反射 DoS akshare."""
         monkeypatch.setenv("KAN_WORKERS", "21")
         with patch("os.cpu_count", return_value=8):
             assert resolve_max_workers() == 12
@@ -82,9 +82,9 @@ class TestKanWorkersEnvVar:
 
 
 class TestD1RuntimeBehavior:
-    """v0.0.4.7:_auto_fetch_stale 运行时行为真测.
+    """背景:_auto_fetch_stale 运行时行为真测.
 
-    v0.0.4.8 改造:从旧"grep 源码作弊"测试改为 CliRunner runtime 真测.
+    背景:从旧"grep 源码作弊"测试改为 CliRunner runtime 真测.
     新设计: mock rich.Console / rich.Progress · capture 所有调用 · verify runtime 用户面输出.
     """
 
@@ -152,11 +152,11 @@ class TestD1RuntimeBehavior:
             "all_text": "\n".join(prints + status_updates + progress_descs),
         }
 
-    def test_no_v045_migration_text_in_runtime_output(self):
-        """v0.0.4.5 一次性迁移文案不应出现在 _auto_fetch_stale 的任何 user-facing 输出中."""
+    def test_no_legacy_migration_text_in_runtime_output(self):
+        """旧一次性迁移文案不应出现在 _auto_fetch_stale 的任何 user-facing 输出中."""
         pairs = [(f"60000{i:04d}", f"股{i}") for i in range(35)]
         result = self._run_auto_fetch_stale(pairs)
-        assert "v0.0.4.5 起首次刷新会全量补数据" not in result["all_text"], (
+        assert "首次刷新会全量补数据" not in result["all_text"], (
             f"旧迁移文案不应出现在用户面输出 · 实际全部输出: {result['all_text'][:500]}"
         )
 
@@ -183,6 +183,4 @@ class TestD1RuntimeBehavior:
         assert "并发 8" in all_prints, (
             f"应显示动态 '并发 8' · 实际 console prints: {result['console_prints']}"
         )
-        assert "并发 5" not in all_prints, (
-            "不应硬编码 '并发 5' (v0.0.4.7 改造点)"
-        )
+        assert "并发 5" not in all_prints, "不应硬编码 '并发 5'"

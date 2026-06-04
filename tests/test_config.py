@@ -123,7 +123,7 @@ def test_save_unicode_chinese_content(temp_config_path):
 
 
 class TestTushareFields:
-    """v0.0.5 新增 tushare_token / tushare_endpoint 字段"""
+    """历史背景 tushare_token / tushare_endpoint 字段"""
 
     def test_default_tushare_fields_are_none(self, temp_config_path):
         """新装用户读到 None，不打开 tushare 分支"""

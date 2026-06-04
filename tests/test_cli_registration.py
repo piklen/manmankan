@@ -1,4 +1,4 @@
-"""CLI 命令注册 canary · v0.0.3 cli.py 拆分后的保险丝。
+"""CLI 命令注册 canary · cli.py 拆分后的保险丝。
 
 拆分后命令实现散落在 4 个 cli_*_cmds.py 子模块 · 依赖 kan/cli.py 末尾的
 显式 import 触发 @app.command() 装饰器执行。任何子模块漏 import 都会让
@@ -27,8 +27,8 @@ REPO_ROOT = Path(__file__).resolve().parents[1]
 # - cli_scan_cmds (6):      fetch / scan / low / high / info / compare
 # - cli_trend_cmds (1):     trend
 # - cli_meta_cmds (3):      update / uninstall / completion
-# - cli_move_export_cmds (2): move / export   (v0.0.6.1 多分组管理)
-# - cli_find_cmds (1):      find             (v0.0.6.4 选股 DSL)
+# - cli_move_export_cmds (2): move / export   (历史背景多分组管理)
+# - cli_find_cmds (1):      find             (历史背景选股 DSL)
 # - cli_history_cmds (1):   history          (位置历史回溯)
 # 注:`kan group`/`kan config`/`kan theme` 是 sub-Typer (app.add_typer) · 不进 registered_commands · 不需 canary。
 _EXPECTED_COMMANDS = {

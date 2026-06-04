@@ -1,4 +1,4 @@
-"""watchlist 多分组测试 · v0.0.6.1 引入。
+"""watchlist 多分组测试 · 历史背景。
 
 覆盖:
 - v1 → v2 schema 自动迁移幂等

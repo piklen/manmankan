@@ -1,4 +1,4 @@
-"""kan.data.theme_leaderboard 单元测试 · v0.0.5.7。
+"""kan.data.theme_leaderboard 单元测试 · 历史背景。
 
 覆盖:
 - _resolve_parallel:env / 默认 / clamp
@@ -28,7 +28,7 @@ def _mock_adata(monkeypatch):
 
 @pytest.fixture(autouse=True)
 def _isolate_boards_and_disable_tushare(monkeypatch, tmp_path):
-    """v0.0.6.5 加: 防 leaderboard test 命中真实用户 cache。
+    """背景: 防 leaderboard test 命中真实用户 cache。
 
     之前 test 假设 TuShare token 没配 · 走 EM 路径 · monkeypatch fetch_theme_kline 起效。
     但用户配 tushare token + 跑过一次后 · ~/.local/share/kan/boards/ 留 cache · 下次

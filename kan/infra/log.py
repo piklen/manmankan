@@ -1,7 +1,7 @@
 """统一 debug logging · 通过 KAN_DEBUG env var 控制可见.
 
 合并实施:
-- v0.0.4.8: fetcher.py 4 处 hot-path broad except 加 debug log
+- 背景: fetcher.py 4 处 hot-path broad except 加 debug log
 - 统一 debug 通道 helper
 
 设计:
@@ -45,7 +45,7 @@ def _ensure_kan_handler() -> None:
     _HANDLER_INSTALLED = True
 
 
-# v0.0.4.8 finalize: path/token redact 防 issue 截图 leak
+# 背景: path/token redact 防 issue 截图 leak
 # 用户开 KAN_DEBUG=1 后截图发 issue 会暴露 username / 本地路径 / API token
 # 这里 best-effort 替换常见 PII pattern · 不保证 100% 覆盖 · 仍提醒 docstring
 _REDACT_PATTERNS = [
@@ -55,7 +55,7 @@ _REDACT_PATTERNS = [
     (re.compile(r"([?&](?:token|key|api_key|secret|auth)=)[^&\s]+"), r"\1<redacted>"),
     # Windows path C:\Users\xiao → C:\Users\<user>
     (re.compile(r"([A-Z]:\\Users\\)[^\\\s]+"), r"\1<user>"),
-    # v0.0.5.0: body 文本里的裸 token 兜底
+    # 背景: body 文本里的裸 token 兜底
     # 防 TuShare 服务端返回 msg 含 "token xxxxx invalid" 直接进日志
     (re.compile(r"\btoken[\s=:]+[A-Za-z0-9_\-]{8,}", re.I), "token <redacted>"),
 ]
@@ -66,7 +66,7 @@ def redact_text(text: str) -> str:
 
     用例:
     - debug_log 内部 sanitize 异常文本(原有用法)
-    - tushare server msg 透传给用户前 sanitize (v0.0.6.5 后 · _post_tushare_api)
+    - tushare server msg 透传给用户前 sanitize (背景 · _post_tushare_api)
     - 任何要打印给用户的含 PII 文本
 
     覆盖: home dir / URL token 参数 / Windows path / body 文本里裸 token
@@ -96,7 +96,7 @@ def debug_log(module: str, op: str, err: BaseException) -> None:
     用户开 KAN_DEBUG=1 后 stderr 显示:
         DEBUG:kan.data.fetcher:fetch eastmoney: ConnectionError: HTTPSConnectionPool ...
 
-    v0.0.4.8 finalize · str(err) 经 redact_text 处理:
+    背景 · str(err) 经 redact_text 处理:
         - /Users/<真名> → /Users/<user>
         - token=xxx → token=<redacted>
     截图发 issue 时 best-effort 防 PII leak · 但**不保证 100% 覆盖** (e.g. IP / 内部 hostname 未 redact)

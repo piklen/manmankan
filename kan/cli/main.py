@@ -40,7 +40,7 @@ def cli_main() -> None:
     防止其 stderr 输出跟 add 命令的 Live Display spinner 共享 stderr 时
     buffer 竞争（用户可能看不到 spinner 动画的 corner case）。
 
-    v0.0.4.4: 顶层 try/except (ImportError, ModuleNotFoundError) 兜底 ·
+    背景: 顶层 try/except (ImportError, ModuleNotFoundError) 兜底 ·
     防安装不完整时抛 60+ 行 traceback · 给用户清晰 reinstall 引导。
     """
     import atexit
@@ -73,7 +73,7 @@ def cli_main() -> None:
                 _sys.exit(1)
             raise
     except (ImportError, ModuleNotFoundError) as e:
-        # v0.0.4.4: 装机不完整时给清晰行动建议 · 不抛 traceback
+        # 背景: 装机不完整时给清晰行动建议 · 不抛 traceback
         # 用 stdlib stderr write · 不依赖 rich (rich 可能正是 ImportError 来源)
         _sys.stderr.write(
             f"\n❌ kan 安装文件不完整 ({type(e).__name__}: {str(e)[:120]})\n"

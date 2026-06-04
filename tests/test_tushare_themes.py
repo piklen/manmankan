@@ -1,4 +1,4 @@
-"""kan.data.tushare_themes 单元测试 · v0.0.5.7。
+"""kan.data.tushare_themes 单元测试 · 历史背景。
 
 覆盖:
 - tushare_token_configured · token / endpoint 解析
@@ -72,7 +72,7 @@ def test_catalog_returns_none_when_no_token(monkeypatch):
 
 
 def test_catalog_returns_error_when_api_fails(monkeypatch):
-    """v0.0.6.5 后: API 失败返 (None, TushareApiError) · server msg 透传。"""
+    """背景: API 失败返 (None, TushareApiError) · server msg 透传。"""
     from kan.data import tushare_themes
     from kan.data.tushare import TushareApiError
 
@@ -207,7 +207,7 @@ def test_klines_partial_day_failure_tolerated(monkeypatch):
 
 
 def test_klines_all_days_fail_transmits_first_error(monkeypatch):
-    """v0.0.6.5: 全 N 天 ths_daily 失败 → (None, first_error) · 透传给上层 diagnosis。"""
+    """背景: 全 N 天 ths_daily 失败 → (None, first_error) · 透传给上层 diagnosis。"""
     from datetime import date
 
     from kan.data import tushare_themes

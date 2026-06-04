@@ -110,7 +110,7 @@ def scan_table(
 
     title 由 ctx.meta(BoardMeta/HotMeta/ThemeMeta/None)+ ctx.freshness 决定 ·
     自选模式带 cutoff/fetched_at 后缀 · 行业/热榜/题材模式标题完全替换不带后缀
-    (与 v0.0.5.0 原状一致 · 不改)。
+    (与 原状一致 · 不改)。
 
     Args:
         ctx: 数据流水线产出快照 · 提供 meta + freshness。
@@ -544,7 +544,7 @@ def trend_table(
     return table
 
 
-# ── 题材榜 leaderboard(`kan theme trend`)· v0.0.5.7 ───────────────────
+# ── 题材榜 leaderboard(`kan theme trend`)· 历史背景───────────────────
 
 
 def theme_leaderboard_title(

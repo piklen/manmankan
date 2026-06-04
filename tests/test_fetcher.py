@@ -1,6 +1,6 @@
-"""fetcher 测试 · 缓存逻辑 + AKShare mock + 多源 fallback (v0.0.6 chain 架构)。
+"""fetcher 测试 · 缓存逻辑 + AKShare mock + 多源 fallback (chain 架构)。
 
-v0.0.6 起 fallback 走 KlineSourceChain · `_fetch_<source>` SOT 在各 source module:
+历史背景 fallback 走 KlineSourceChain · `_fetch_<source>` SOT 在各 source module:
 - `_fetch_tushare`  在 `kan.data.tushare`
 - `_fetch_<其余 4>` 在 `kan.data.sources`
 
@@ -29,7 +29,7 @@ def temp_data_dir(tmp_path, monkeypatch):
 def force_eastmoney_path(monkeypatch):
     """绕过 tushare / baostock / 新浪 · 让 chain 落到东财 (priority 30 race · sina None 后只剩 eastmoney)。
 
-    v0.0.6 chain 架构 monkeypatch 路径:
+    chain 架构 monkeypatch 路径:
     - `_fetch_tushare` SOT 在 `kan.data.tushare` (TushareKlineSource.fetch 调它)
     - `_fetch_baostock/_sina/_tencent` SOT 在 `kan.data.sources` (对应 class 调它)
 
@@ -90,7 +90,7 @@ def test_is_fresh_no_cache(temp_data_dir):
 
 
 def test_is_fresh_today_cache(temp_data_dir, force_eastmoney_path, fake_akshare_df, monkeypatch):
-    """v0.0.4.5: is_fresh 改为对比 K 线 date ≥ latest_trade_date()。
+    """背景: is_fresh 改为对比 K 线 date ≥ latest_trade_date()。
 
     fake_akshare_df 最后一行 = 2026-04-30 · mock latest_trade_date 同日返回，
     避免触发 akshare 网络请求 + 让测试与系统时间解耦。
@@ -274,7 +274,7 @@ class TestNormalizeKline:
         assert len(df) == 1  # 垃圾 close 行被 dropna 丢掉
 
     def test_unparseable_warning_includes_symbol_when_provided(self, caplog):
-        """v0.0.5.5 起 warning 末尾带 `[symbol]` · 调试时定位脏数据源头(批量 fetch 时一连串
+        """历史背景 warning 末尾带 `[symbol]` · 调试时定位脏数据源头(批量 fetch 时一连串
         warning 没标 symbol → 用户实测无法判断是哪只股票的脏数据)。
         """
         raw = pd.DataFrame({
@@ -361,7 +361,7 @@ def test_fetch_baostock_returns_none_on_error(temp_data_dir):
 def test_circuit_skips_breaker_down_source(temp_data_dir, raw_kline_df, isolated_breaker, monkeypatch):
     """breaker 标记 baostock down → chain 跳过 BaostockKlineSource → 走 akshare race 档.
 
-    v0.0.6: BaostockKlineSource.is_available() 看熔断器 · down 时返 False · chain skip。
+    背景: BaostockKlineSource.is_available() 看熔断器 · down 时返 False · chain skip。
     """
     monkeypatch.setattr(tushare, "_fetch_tushare", lambda *a, **kw: None)
     isolated_breaker.record("baostock", ok=False)
@@ -414,7 +414,7 @@ def raw_kline_df():
 def test_fetch_kline_stamps_source(temp_data_dir, raw_kline_df, source, mock_target, monkeypatch):
     """各源 fallback 标记正确 source · 其它源全 mock None 让目标源生效.
 
-    v0.0.6 chain monkeypatch 路径:
+    chain monkeypatch 路径:
     - `_fetch_tushare` 在 `kan.data.tushare` namespace
     - `_fetch_baostock / _sina / _eastmoney / _tencent` 在 `kan.data.sources` namespace
 
@@ -535,7 +535,7 @@ def test_read_cutoff_unaffected_by_migration(temp_data_dir):
 
 
 class TestTushareProDispatch:
-    """v0.0.5: 配 token 时 tushare 顶替 baostock 作主路径；未配 token 行为不变"""
+    """背景: 配 token 时 tushare 顶替 baostock 作主路径；未配 token 行为不变"""
 
     @pytest.fixture
     def isolated_env(self, tmp_path, monkeypatch):
@@ -553,8 +553,8 @@ class TestTushareProDispatch:
     def test_no_token_path_unchanged(self, isolated_env, monkeypatch, fake_akshare_df):
         """未配 token → TushareKlineSource.is_available()=False → chain 跳过 · 走 akshare 档.
 
-        v0.0.6: 未配 token 时 chain 直接 skip TushareKlineSource (不调 fetch) ·
-        与 v0.0.5.x 不同 (旧版本 fetch 内部检查 token · 调用一次返 None)。
+        背景: 未配 token 时 chain 直接 skip TushareKlineSource (不调 fetch) ·
+        与 历史背景不同 (旧版本 fetch 内部检查 token · 调用一次返 None)。
         新行为更高效 · 不浪费一次 fetch 调用。
         """
         # 把 _fetch_tushare 设 spy 没必要 (chain 不会调它 · is_available 已 False)
@@ -568,7 +568,7 @@ class TestTushareProDispatch:
         monkeypatch.setattr(sources, "_fetch_sina", lambda *a, **kw: None)
         with patch("akshare.stock_zh_a_hist", return_value=fake_akshare_df):
             df = fetcher.fetch_kline("600519", force=True)
-        # v0.0.6: 未配 token 时 chain skip TushareKlineSource · _fetch_tushare 不被调
+        # 背景: 未配 token 时 chain skip TushareKlineSource · _fetch_tushare 不被调
         assert not called["tushare"]
         assert not df.empty
 

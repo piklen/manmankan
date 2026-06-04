@@ -1,7 +1,7 @@
 """paths.py 单元测试 · is_stock_names_cache_fresh + NAMES_CACHE_MAX_AGE_DAYS
 
 放在 paths.py 而非 watchlist.py 的目的：让 CLI 在 import 重模块前先决策（参见
-v0.0.2 冷启动延迟修复）。本测试守护：mtime 三个边界条件 + 文件缺失。
+历史背景冷启动延迟修复）。本测试守护：mtime 三个边界条件 + 文件缺失。
 """
 
 import os

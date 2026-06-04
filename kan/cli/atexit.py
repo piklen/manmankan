@@ -6,7 +6,7 @@
   3. 失败不重试（避免每次启动都 retry 失败的网络 / shell 检测）
   4. shell completion 调用静默（typer 注入的脚本设置 _KAN_COMPLETE 时调
      kan 子进程拿候选项 · 任何 stdout 写入会被 zsh `eval $(...)` 抓走当
-     _arguments spec 解析 · v0.0.4.5 报 `comparguments:327: invalid argument`）
+     _arguments spec 解析 · 曾报 `comparguments:327: invalid argument`）
 """
 import contextlib
 import os
@@ -129,7 +129,7 @@ def _check_updates_atexit() -> None:
     所有异常都吞掉 · atexit hook 不能让主命令 exit code 改变。
     """
     # shell completion 子调用必须完全静默 · 防 typer.prompt 污染 zsh eval 抓取流
-    # (v0.0.4.5 报 `_arguments:comparguments:327: invalid argument`)
+    # (曾报 `_arguments:comparguments:327: invalid argument`)
     if _is_shell_completion_run():
         return
 

@@ -80,7 +80,7 @@ def test_api_all_lists_match_actual_exports():
         "from_flags",
         # verbs
         "fetch", "high", "low", "scan", "trend",
-        # v0.0.6: 数据源扩展 API
+        # 背景: 数据源扩展 API
         "KlineSource", "ThemeConstituentSource",
         "register_kline_source", "register_theme_constituent_source",
         "clear_user_kline_sources", "clear_user_theme_constituent_sources",
@@ -89,7 +89,7 @@ def test_api_all_lists_match_actual_exports():
     assert declared == expected, f"kan.api.__all__ 与预期 surface 不符: 多={declared-expected} · 少={expected-declared}"
 
 
-# ── v0.0.6 数据源扩展 API surface ──────────────────────────────────────
+# ── 早期数据源扩展 API surface ──────────────────────────────────────
 
 
 def test_api_exports_kline_source_protocol():

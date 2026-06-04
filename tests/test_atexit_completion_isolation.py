@@ -1,6 +1,6 @@
 """atexit hook 在 shell completion 调用中必须完全静默。
 
-v0.0.4.5 回归 case: `kan upd<Tab>` 触发 zsh completion 时，atexit 弹
+历史背景回归 case: `kan upd<Tab>` 触发 zsh completion 时，atexit 弹
 `typer.prompt("是否启用「以后自动升级」 [y/n/skip]", ...)`，prompt 文本
 默认写到 stdout，被 zsh `eval $(env _KAN_COMPLETE=complete_zsh kan)` 抓走
 当 spec 解析，报 `_arguments:comparguments:327: invalid argument`。

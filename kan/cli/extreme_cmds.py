@@ -52,7 +52,7 @@ def _filter_extreme_cmd(
     if only_watchlist and not source_mode:
         _print_err("❌ --only-watchlist 需配合 --industry / --hot / --theme 使用")
         raise typer.Exit(1)
-    # v0.0.5.3 OOP 路径:from_flags → resolve_stock_set_or_exit · 取代 resolve_targets_or_exit
+    # OOP 路径:from_flags → resolve_stock_set_or_exit · 取代 resolve_targets_or_exit
     from kan.core.models import BoardMeta, HotMeta, ThemeMeta
     from kan.core.pipeline import resolve_stock_set_or_exit
     from kan.core.stock_set import from_flags
@@ -68,7 +68,7 @@ def _filter_extreme_cmd(
     rank_map = board_meta.rank_map if is_hot else {}
     _auto_fetch_stale(targets)
 
-    # 板块 / 题材指数 reference · 跟 scan --industry / --theme 视觉对齐(v0.0.5.5 backlog)
+    # 板块 / 题材指数 reference · 跟 scan --industry / --theme 视觉对齐(backlog)
     board_index_result = None
     if isinstance(board_meta, BoardMeta):
         board_index_result = scan_stock(

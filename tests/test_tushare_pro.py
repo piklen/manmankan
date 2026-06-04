@@ -154,7 +154,7 @@ class TestPostTushareApi:
         assert err is None
 
     def test_nonzero_code_returns_error_with_msg(self, monkeypatch):
-        """v0.0.6.5 后: 业务码非 0 返 (None, TushareApiError) · server msg 透传给上层。"""
+        """背景: 业务码非 0 返 (None, TushareApiError) · server msg 透传给上层。"""
         class _FakeSession:
             def post(self, url, json, timeout):
                 mock = MagicMock()
@@ -200,7 +200,7 @@ class TestPostTushareApi:
         assert "ConnectionError" in err.msg
 
     def test_token_redacted_in_server_msg(self, monkeypatch):
-        """v0.0.6.5: server msg 若含 token-like 字符串 · err.msg 必经 redact_text 清洗。"""
+        """背景: server msg 若含 token-like 字符串 · err.msg 必经 redact_text 清洗。"""
         class _FakeSession:
             def post(self, url, json, timeout):
                 mock = MagicMock()

@@ -29,7 +29,7 @@ def _info_industry(industry: str, fmt: export.OutputFormat) -> None:
         from kan.render.base import DISCLAIMER
 
     console = Console()
-    # v0.0.5.4 OOP 路径
+    # OOP 路径
     _targets, meta = resolve_stock_set_or_exit(from_flags(industry=industry))
 
     assert meta is not None
@@ -75,7 +75,7 @@ def _info_theme(theme_query: str, fmt: export.OutputFormat) -> None:
         from kan.render.theme import render_theme_disclaimer
 
     console = Console()
-    # v0.0.5.4 OOP 路径
+    # OOP 路径
     _targets, meta = resolve_stock_set_or_exit(from_flags(theme=theme_query))
 
     assert meta is not None
@@ -202,7 +202,7 @@ def info(
     volume_state = calc_volume_state(df)
     name_short = name.replace(" ", "")
 
-    # v0.0.4.5: 数据截止 / 拉取时间分离展示
+    # 背景: 数据截止 / 拉取时间分离展示
     cutoff = data_cutoff_date(symbol)
     fetched_at = cache_age(symbol) or ""
     title = f"慢慢看 · {name_short} {symbol}"
@@ -242,8 +242,8 @@ def info(
         tag += " [bold green]跌停[/bold green]"
 
     console.print(f"\n[bold]{title}[/bold]{tag}")
-    # v0.0.4.4: 累计涨跌加 ▲/▼ 符号 + 红涨绿跌颜色 · 与 trend 命令详情列对齐
-    # 修复 v0.0.4.3 用户报告："跌1天 · 累计 0.85%" 让人困惑（正数+负方向语义冲突）
+    # 背景: 累计涨跌加 ▲/▼ 符号 + 红涨绿跌颜色 · 与 trend 命令详情列对齐
+    # 修复 早期用户报告："跌1天 · 累计 0.85%" 让人困惑（正数+负方向语义冲突）
     if trend_result.streak > 0:
         cum_str = f"[red]▲{abs(trend_result.streak_pct):.2f}%[/red]"
     elif trend_result.streak < 0:

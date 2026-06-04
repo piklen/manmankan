@@ -1,6 +1,6 @@
 """akshare 双源并发 fallback + no_proxy 代理隔离测试
 
-v0.0.5.0 起 `_fetch_*` 搬到 kan.data.sources · monkeypatch 走 sources namespace
+历史背景 `_fetch_*` 搬到 kan.data.sources · monkeypatch 走 sources namespace
 (`_fetch_via_akshare` 通过 module globals 查名字 · patch source location 才生效)。
 """
 

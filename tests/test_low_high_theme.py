@@ -62,7 +62,7 @@ def test_low_theme_runs(monkeypatch, _isolate_all):
     assert result.exit_code == 0, result.output
     # 输出含题材成分股 location label
     assert "AI应用" in result.output
-    # v0.0.6+: 空 hits 时仍显示 🎯 题材指数 reference 行(v0.0.5.5 backlog)
+    # 背景: 空 hits 时仍显示 🎯 题材指数 reference 行(backlog)
     assert "🎯" in result.output
     assert "题材指数" in result.output
 

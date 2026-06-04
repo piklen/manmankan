@@ -215,7 +215,7 @@ class TestMaxTrendDates:
 
 # ════════════════════════════════════════════════════════════════
 # stale/intraday warning runtime 真测 (scan 命令)
-# (v0.0.4.8: 补 scan 完整覆盖 · 跟 trend runtime test 对称)
+# (背景: 补 scan 完整覆盖 · 跟 trend runtime test 对称)
 # ════════════════════════════════════════════════════════════════
 @pytest.fixture
 def scan_runner(monkeypatch):
@@ -294,12 +294,12 @@ def test_scan_intraday_warning_compliant_phrasing(scan_runner, monkeypatch):
     result = scan_runner.invoke(app, ["scan"])
     assert result.exit_code == 0
     output = result.output
-    # v0.0.4.8: 纯状态描述 · 移除预测性 "可能回落/可能回升/都是正常波动"
+    # 背景: 纯状态描述 · 移除预测性 "可能回落/可能回升/都是正常波动"
     assert "涨跌停标签反映当前时刻" in output, f"scan intraday 新文案应出现 · output: {output[-500:]}"
     assert "建议盘后 15:30" in output
     assert "下一秒打开" not in output, "scan 不应残留预测性词 (AGENTS.md §6)"
-    assert "都是正常波动" not in output, "v0.0.4.8: 应删除"
-    assert "可能回落" not in output, "v0.0.4.8: 应删除"
+    assert "都是正常波动" not in output, "应删除预测性词"
+    assert "可能回落" not in output, "应删除预测性词"
 
 
 def test_scan_warnings_mutex_stale_wins(scan_runner, monkeypatch):
@@ -327,7 +327,7 @@ def test_scan_warnings_mutex_stale_wins(scan_runner, monkeypatch):
 
 
 # ════════════════════════════════════════════════════════════════
-# v0.0.4.8: scan/low/high/info 命令组 CliRunner 覆盖增量
+# 背景: scan/low/high/info 命令组 CliRunner 覆盖增量
 # 复用 scan_runner fixture · mock 全部 dependencies
 # ════════════════════════════════════════════════════════════════
 def test_scan_command_basic_runs(scan_runner):

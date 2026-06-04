@@ -199,7 +199,7 @@ class TestCheckForUpdates:
 
 
 class TestDetectInstallMethod:
-    # v0.0.4.4: 升级命令全改为 force-reinstall 模式
+    # 背景: 升级命令全改为 force-reinstall 模式
     # 防 partial state 升级 (老 .so cache 不重链触发 macOS Gatekeeper 拒载)
 
     def test_uv_tool(self, monkeypatch):
@@ -314,11 +314,11 @@ class TestRunUpgrade:
         assert status == "failed"
 
 
-# --- spinner UX (v0.0.5.1) ---
+# --- spinner UX (历史背景) ---
 
 
 class TestRunUpgradeSpinner:
-    """v0.0.5.1: run_upgrade 用 rich.Console.status 显示进度 spinner
+    """背景: run_upgrade 用 rich.Console.status 显示进度 spinner
 
     根因守护:capture_output=True 吞掉 uv/pipx 原生输出 · 用户感知"卡死"
     修复后:主升级阶段 + smoke 阶段各一段 spinner · 非 TTY 自动退化静默

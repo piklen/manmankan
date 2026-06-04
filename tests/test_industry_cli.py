@@ -134,7 +134,7 @@ def test_low_industry_runs(industry_runner, monkeypatch):
     result = industry_runner.invoke(app, ["low", "30", "--industry=食品饮料"])
     assert result.exit_code == 0
     assert "Traceback" not in result.output
-    # v0.0.6+: 空 hits 时仍显示 🏛️ 板块指数 reference 行(v0.0.5.5 backlog)
+    # 背景: 空 hits 时仍显示 🏛️ 板块指数 reference 行(backlog)
     assert "🏛️" in result.output
     assert "板块指数" in result.output
 

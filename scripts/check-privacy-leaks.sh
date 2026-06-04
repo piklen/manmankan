@@ -317,6 +317,38 @@ if [ -n "$VERSION_LEAKS" ]; then
   exit 1
 fi
 
+USER_VERSION_PATTERN='v?0\.0\.[0-9]+(\.[0-9]+)?|softwareVersion|当前 v'
+USER_VERSION_SURFACES=(
+  "README.md"
+  "docs/README.md"
+  "docs/cli-errors.md"
+  "docs/compliance.md"
+  "docs/roadmap.md"
+  "site/index.html"
+  "kan/cli/help.py"
+)
+USER_VERSION_LEAKS=""
+for f in "${USER_VERSION_SURFACES[@]}"; do
+  [ -f "$f" ] || continue
+  hits=$(grep -nEH "$USER_VERSION_PATTERN" "$f" 2>/dev/null || true)
+  if [ -n "$hits" ]; then
+    USER_VERSION_LEAKS="${USER_VERSION_LEAKS}${hits}"$'\n'
+  fi
+done
+
+if [ -n "$USER_VERSION_LEAKS" ]; then
+  echo "❌ 用户面出现硬编码发布版本号:"
+  echo "$USER_VERSION_LEAKS" | sed '/^$/d; s/^/   /'
+  echo ""
+  echo "   允许位置: pyproject.toml · kan/__init__.py · CHANGELOG.md · docs/reviews/ · docs/find.md schema 示例 · kan update 输出"
+  echo "   用户面 README / site / kan help 应使用中性表达,不要写当前具体版本号。"
+  echo ""
+  echo "═══════════════════════════════════════════════════════════"
+  echo "❌ 用户面版本号泄漏 · 修复后再 commit / push"
+  echo "═══════════════════════════════════════════════════════════"
+  exit 1
+fi
+
 echo "✅ 版本号一致"
 echo ""
 echo "✅ 自检全绿"

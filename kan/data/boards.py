@@ -214,7 +214,7 @@ def fetch_industry_kline(board: Board, force: bool = False) -> pd.DataFrame:
     return df
 
 # ══════════════════════════════════════════════════════════════════
-# 题材(theme)数据子系统 · v0.0.5.0 引入
+# 题材(theme)数据子系统 · 历史背景
 # ══════════════════════════════════════════════════════════════════
 
 _THEME_CATALOG_TTL = 24 * 3600
@@ -316,7 +316,7 @@ def search_theme(query: str) -> Theme:
 
 
 def get_theme_constituents(theme, force: bool = False) -> list[tuple[str, str]]:
-    """题材成分股 (代码, 名称) 列表 · v0.0.6 走 ThemeConstituentSourceChain。
+    """题材成分股 (代码, 名称) 列表 · 走 ThemeConstituentSourceChain。
 
     chain 内置 2 源 (THS priority=10 → EM priority=20 with em_push2_concept 5min 熔断):
     - ThsConstituentSource · adata.stock.info.concept_constituent_ths · 主源
