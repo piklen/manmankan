@@ -8,6 +8,10 @@ increment `D` unless the maintainer explicitly approves a larger bump.
 
 ## [Unreleased]
 
+### Fixed
+
+- PyPI package summary 更新为「告诉你坐标,不替你决策」定位,避免公开包列表页继续沿用旧版用户面文案。
+
 ## [0.0.6.8] - 2026-06-04
 
 ### Added

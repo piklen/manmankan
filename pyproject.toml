@@ -1,7 +1,7 @@
 [project]
 name = "manmankan"
 version = "0.0.6.8"
-description = "A 股自选股 CLI · 不告诉你买什么 · 帮你找到符合条件的 · 多周期位置 + 共振 + 选股 DSL"
+description = "A 股本地数据筛选器 · 告诉你坐标，不替你决策 · 人和 AI 共用的 CLI/JSON 数据层"
 requires-python = ">=3.11"
 license = { file = "LICENSE" }
 authors = [
