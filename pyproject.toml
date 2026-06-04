@@ -9,7 +9,8 @@ authors = [
 ]
 readme = "README.md"
 keywords = [
-    "stock", "a-share", "cli", "position", "scanner", "akshare", "中国股市",
+    "stock", "a-share", "cli", "json", "ai-workflow", "data-analysis",
+    "position", "scanner", "akshare", "tushare", "中国股市",
     "watchlist", "stock-screener", "terminal", "baostock", "A股", "自选股",
 ]
 classifiers = [
@@ -38,7 +39,7 @@ dependencies = [
 ]
 
 [project.urls]
-Homepage = "https://github.com/piklen/manmankan"
+Homepage = "https://piklen.github.io/manmankan/"
 Repository = "https://github.com/piklen/manmankan"
 Issues = "https://github.com/piklen/manmankan/issues"
 Changelog = "https://github.com/piklen/manmankan/blob/main/CHANGELOG.md"

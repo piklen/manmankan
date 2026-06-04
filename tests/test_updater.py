@@ -291,7 +291,10 @@ class TestRunUpgrade:
             "uv", "tool", "install", "--reinstall", "manmankan==0.0.6.8",
         ]
         assert "from kan.api import WatchlistSet, fetch, from_flags, scan" in calls[1][2]
+        assert "importlib.metadata.version('manmankan') == kan.__version__" in calls[1][2]
         assert "assert kan.__version__ == '0.0.6.8'" in calls[1][2]
+        assert "from kan import scanner" not in calls[1][2]
+        assert "from kan.core import scanner" not in calls[1][2]
 
     def test_failed_nonzero_returncode(self, monkeypatch):
         monkeypatch.setattr(

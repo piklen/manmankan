@@ -8,8 +8,14 @@ increment `D` unless the maintainer explicitly approves a larger bump.
 
 ## [Unreleased]
 
+### Changed
+
+- README 首屏强化为 GitHub 仓库首页入口:突出本地 A 股数据筛选器、CLI/JSON、AI 可读数据层和不替用户决策的边界。
+- PyPI / package metadata keywords 与 homepage 补充 AI workflow、JSON 和项目站点入口。
+
 ### Fixed
 
+- 自升级安装后 smoke 改为验证 runtime version、package metadata 和公开 `kan.api`,不再导入历史内部模块路径导致成功安装被误判失败。
 - PyPI package summary 更新为「告诉你坐标,不替你决策」定位,避免公开包列表页继续沿用旧版用户面文案。
 
 ## [0.0.6.8] - 2026-06-04
