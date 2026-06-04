@@ -8,6 +8,8 @@ increment `D` unless the maintainer explicitly approves a larger bump.
 
 ## [Unreleased]
 
+## [0.0.6.9] - 2026-06-04
+
 ### Changed
 
 - README 首屏强化为 GitHub 仓库首页入口:突出本地 A 股数据筛选器、CLI/JSON、AI 可读数据层和不替用户决策的边界。
@@ -240,7 +242,8 @@ increment `D` unless the maintainer explicitly approves a larger bump.
 - **Shell 补全** · zsh / bash / fish / powershell
 - **合规与隐私** · 强制风险提示 + 关键词黑名单（无买卖建议 / 无目标价 / 无评级）· 数据全本地
 
-[Unreleased]: https://github.com/piklen/manmankan/compare/v0.0.6.8...HEAD
+[Unreleased]: https://github.com/piklen/manmankan/compare/v0.0.6.9...HEAD
+[0.0.6.9]: https://github.com/piklen/manmankan/compare/v0.0.6.8...v0.0.6.9
 [0.0.6.8]: https://github.com/piklen/manmankan/compare/v0.0.6.6...v0.0.6.8
 [0.0.6.6]: https://github.com/piklen/manmankan/compare/v0.0.6.5...v0.0.6.6
 [0.0.6.5]: https://github.com/piklen/manmankan/compare/v0.0.5.1...v0.0.6.5
