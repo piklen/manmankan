@@ -8,6 +8,15 @@ increment `D` unless the maintainer explicitly approves a larger bump.
 
 ## [Unreleased]
 
+### Changed
+
+- `kan help` / README / site 去除用户面硬编码发布版本号;具体版本仅保留在包元数据、CHANGELOG、JSON schema 和 `kan update` 等版本功能中
+- 代码注释、测试说明和 CI 文案中的历史发布版本标记改为中性描述,降低公开仓库的版本噪音
+
+### Internal
+
+- 隐私扫描新增用户面硬编码版本号 gate,防止 README / site / `kan help` 再次出现当前具体版本号
+
 ## [0.0.6.8] - 2026-06-04
 
 ### Added

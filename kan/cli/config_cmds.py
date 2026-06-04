@@ -1,4 +1,4 @@
-"""`kan config` 子命令组 · 用户配置增删查 · v0.0.5 引入。
+"""`kan config` 子命令组 · 用户配置增删查 · 历史背景。
 
 支持字段（封闭集合）：
 - tushare-token     (TuShare Pro API token)
@@ -178,7 +178,7 @@ def unset_cmd(
 ) -> None:
     """清除一项配置（回 null = 用默认值）。
 
-    不传 KEY 时不报错 · 改为列当前已配字段 + 用法引导(v0.0.6.5 加 ·
+    不传 KEY 时不报错 · 改为列当前已配字段 + 用法引导(背景 ·
     替代 typer 默认 'Missing argument' 黑屏 · 维护者实测痛点)。
     """
     cfg = config.load()

@@ -1,6 +1,6 @@
-"""数据时效性判定回归测试 (v0.0.4.5)
+"""数据时效性判定回归测试 (历史背景)
 
-修复 bug：v0.0.4.4 及之前的 _is_cache_fresh 用 mtime 判"今日"，
+修复 bug：早期实现的 _is_cache_fresh 用 mtime 判"今日"，
 凌晨 02:55 拉昨日数据后 mtime 日期 = 今天，scan 整天显示昨日涨停名单。
 
 新判据基于 K 线 date 列 + 交易日历的 latest_trade_date()：
@@ -77,7 +77,7 @@ def test_stale_data_with_today_mtime_must_be_rejected(
 ):
     """凌晨 02:55 拉到昨日数据：mtime=今天 但 K 线最后一行=昨天 → 必须判 stale。
 
-    这是 v0.0.4.4 数据时效性 bug 的 smoking gun · 旧逻辑被 mtime 假象骗，
+    这是 早期数据时效性 bug 的 smoking gun · 旧逻辑被 mtime 假象骗，
     新逻辑必须基于 K 线真实 date 判定。
     """
     parquet_with_date(

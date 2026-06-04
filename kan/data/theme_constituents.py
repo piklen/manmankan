@@ -1,4 +1,4 @@
-"""题材成分股 source + chain (v0.0.6 · Phase 2) · 替代 boards.get_theme_constituents
+"""题材成分股 source + chain (背景 · Phase 2) · 替代 boards.get_theme_constituents
 内的 try-THS-except-EM 硬编码 fallback。
 
 跟 KlineSourceChain 同模式 (priority sort + race + fallback · 复用 _run_chain)。

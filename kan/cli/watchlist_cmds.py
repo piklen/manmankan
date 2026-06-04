@@ -2,7 +2,7 @@
 
 这一组命令的共同特征：操作 kan.storage.watchlist 模块的持久化状态 · 不涉及 K 线数据拉取。
 
-help 命令拆到 kan.cli.help（v0.0.5.0 起）· 减少本文件行数 ·
+help 命令拆到 kan.cli.help（历史背景）· 减少本文件行数 ·
 help 文案变更不再触发 watchlist 编辑冲突。
 """
 import re as _re
@@ -355,8 +355,8 @@ def add(
         if fail:
             raise typer.Exit(1)
     elif failures:
-        # v0.0.4.4: 单只模式下错误必须打 + exit 1
-        # 修复 v0.0.4.3 用户报告："kan add 999999" / "kan add 不存在的名字" / "kan add 科技"(多匹配)
+        # 背景: 单只模式下错误必须打 + exit 1
+        # 修复 早期用户报告："kan add 999999" / "kan add 不存在的名字" / "kan add 科技"(多匹配)
         # 三种错误输入全静默 + Exit 0 · 用户认为工具坏了
         for f in failures:
             typer.echo(f"  ❌ {f}", err=True)

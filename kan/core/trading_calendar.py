@@ -1,7 +1,7 @@
-"""A 股交易日历 + 市场相位判定 · 数据时效性的真相源 + 防御纵深 v0.0.4.7。
+"""A 股交易日历 + 市场相位判定 · 数据时效性的真相源 + 防御纵深 历史背景。
 
 为什么需要本模块:
-v0.0.4.4 前缓存新鲜度只看 mtime · 凌晨 02:55 拉了昨日数据后 mtime 日期 = 今天,
+早期实现缓存新鲜度只看 mtime · 凌晨 02:55 拉了昨日数据后 mtime 日期 = 今天,
 被误判为"今日数据齐了"整天不刷新, scan 结果停留在昨日(包括错误涨停标签)。
 本模块提供"应有最近交易日"作为缓存判定的真相基准(替代 mtime)。
 
@@ -12,7 +12,7 @@ v0.0.4.4 前缓存新鲜度只看 mtime · 凌晨 02:55 拉了昨日数据后 mt
 - 不引入 pytz / zoneinfo · 假设系统时区为本地(Asia/Shanghai 用户主体)
 - 跨时区用户可通过 TZ 环境变量影响 datetime.now() · 或设 KAN_DATA_AVAIL_OFFSET_MIN
 
-v0.0.4.7 防御纵深:
+历史背景防御纵深:
 - akshare 失败 / 返脏 / cache 损坏 → 不抛 RuntimeError · 退化 weekday 启发式 + stderr warning
 - 缓存内容三 invariant sanity check (count > 5000 · min year < 2010 · max date > today-30)
 - chmod 0o600 后真校验 · 失败 stderr warn (不再静默 suppress)
@@ -36,7 +36,7 @@ MARKET_CLOSE = time(15, 0)
 def _resolve_data_available_after() -> time:
     """计算 DATA_AVAILABLE_AFTER · 支持 env var KAN_DATA_AVAIL_OFFSET_MIN 覆盖.
 
-    v0.0.4.7: 跨时区 / WSL2 默认 UTC / Docker 容器用户能自救.
+    背景: 跨时区 / WSL2 默认 UTC / Docker 容器用户能自救.
 
     默认 15:30 北京时间 (= 15:00 收盘 + 30min 数据延迟 final).
     Override: KAN_DATA_AVAIL_OFFSET_MIN=N (整数 minutes) · 变为 15:00 + N min.
@@ -104,7 +104,7 @@ def _sanity_check_dates(dates: set[date], context: str = "") -> bool:
             file=sys.stderr,
         )
         return False
-    today = _today()  # v0.0.4.8: 用 kan.infra._time.today() 集中(单一来源)
+    today = _today()  # 背景: 用 kan.infra._time.today() 集中(单一来源)
     max_d = max(dates)
     if max_d < today - timedelta(days=SANITY_MAX_DAYS_OLD):
         print(
@@ -165,7 +165,7 @@ def _write_cache(dates: set[date]) -> None:
                 file=sys.stderr,
             )
     except OSError as e:
-        # v0.0.4.7: 不暴露 errno 原文 · 仅给类型 · 防容器逃逸侦察辅助
+        # 背景: 不暴露 errno 原文 · 仅给类型 · 防容器逃逸侦察辅助
         print(
             f"[kan] ⚠️  chmod 失败 (errno {e.errno}) · trade_dates.json 权限可能开放",
             file=sys.stderr,

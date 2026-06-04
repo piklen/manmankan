@@ -51,7 +51,7 @@ def test_normalize_symbol_too_short():
 
 
 # ── resolve_symbol_or_name · 6 位代码 / 名称 / 多匹配 / 零匹配 / 空输入 ──────────
-# v0.0.5.5 引入 · info / compare 共用入口 · 让"用户给名称"在所有 verb 一致 work。
+# 背景 · info / compare 共用入口 · 让"用户给名称"在所有 verb 一致 work。
 
 
 def _stub_names(monkeypatch, mapping):
@@ -350,13 +350,13 @@ class TestStockGroups:
         assert s2.groups == s.groups
 
 
-# --- 冷启动延迟回归保护 (v0.0.2 引入 · akshare lazy import) ---
+# --- 冷启动延迟回归保护 (背景 · akshare lazy import) ---
 
 
 class TestColdStartInvariants:
     """守护 akshare 不在 kan.storage.watchlist 顶层被 import · 防冷启动 启动反馈回归。
 
-    v0.0.1 实测：watchlist.py 顶层 `import akshare as ak` 把 pandas/numpy/bs4/requests
+    早期实测：watchlist.py 顶层 `import akshare as ak` 把 pandas/numpy/bs4/requests
     整窝拖入启动路径，单 akshare 占 watchlist 加载成本 85%（热启动 229ms / 冷启动约 8s）。
     """
 
@@ -385,11 +385,11 @@ class TestColdStartInvariants:
         )
 
     def test_scanner_top_level_does_not_load_pandas(self):
-        """import kan.core.scanner 时 pandas/numpy 不应出现在 sys.modules（v0.0.4.4 加）。
+        """import kan.core.scanner 时 pandas/numpy 不应出现在 sys.modules（历史背景）。
 
         早期版本安装后导入失败的成因之一：scanner.py 顶层 `import pandas as pd`
         触发 numpy C-extension load · macOS Gatekeeper 拒载老 .so cache。
-        v0.0.4.4 改为 `if TYPE_CHECKING: import pandas` + 函数体 lazy。
+        已改为 `if TYPE_CHECKING: import pandas` + 函数体 lazy。
         """
         import subprocess
         import sys

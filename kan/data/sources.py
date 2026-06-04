@@ -4,17 +4,17 @@
 异常 broad catch + debug_log + 熔断器记账。归一化由 fetcher._normalize_kline
 统一做(出口) · 这一层只管 "网络 I/O + source-specific 列映射"。
 
-v0.0.5.0 起从 fetcher.py 抽出 · fetcher.py 保留 cache + 编排 + 公开 API ·
+从 fetcher.py 抽出 · fetcher.py 保留 cache + 编排 + 公开 API ·
 本模块只放数据源 fetcher · 解耦"网络访问"与"缓存编排"。
 
-v0.0.6 起加 `*KlineSource` class (实现 KlineSource Protocol) · 作为责任链 (KlineSourceChain)
+加入 `*KlineSource` class (实现 KlineSource Protocol) · 作为责任链 (KlineSourceChain)
 中的元数据携带 (name / priority / is_available)。class 是 thin Protocol 适配 ·
 内部仍调 module function `_fetch_<source>` (保持 SOT · 测试 monkeypatch 路径不破)。
 
 monkeypatch 路径:测试 patch 在本模块 namespace
 (例:`monkeypatch.setattr("kan.data.sources._fetch_sina", ...)`)· `_fetch_via_akshare`
 通过 module globals 查 `_fetch_sina` / `_fetch_eastmoney` · patch 生效。
-v0.0.6 KlineSource class 的 fetch() 也通过 module globals 调 `_fetch_*` · patch 同样生效。
+KlineSource class 的 fetch() 也通过 module globals 调 `_fetch_*` · patch 同样生效。
 """
 
 from __future__ import annotations
@@ -275,7 +275,7 @@ def _fetch_via_akshare(symbol: str, start: str) -> tuple[pd.DataFrame, str] | No
 
 
 # ══════════════════════════════════════════════════════════════════
-# KlineSource Protocol 适配 (v0.0.6) · 每个 class 是 thin wrapper
+# KlineSource Protocol 适配 (历史背景) · 每个 class 是 thin wrapper
 # 调对应 _fetch_<source> module function (SOT) · 元数据携带 name / priority
 # is_available · chain 内统一接管 fallback / race / 熔断 / debug_log
 # ══════════════════════════════════════════════════════════════════

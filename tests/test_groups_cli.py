@@ -1,5 +1,5 @@
 """kan group / kan move / kan export / watchlist 命令带 --group 的 CLI 集成测试 ·
-v0.0.6.1 引入。
+历史背景。
 
 测试策略:
 - temp_kan_dir 隔离 watchlist.json

@@ -7,7 +7,7 @@
 - --resonance LEVEL:OP:VAL  共振信号 (例 low:gte:3 = 低点共振 ≥ 3 周期)
 - --exclude-st           排 ST/*ST
 
-Future (v0.0.6.5+ candidates):
+Future (candidates):
 - --vol-ratio OP:VAL     量比 filter (需要 calc_volume_state)
 - --streak up|down:OP:VAL  连涨连跌 (需要 calc_trend)
 - --exclude-newshare DAYS  新股排除 (需要上市日期)

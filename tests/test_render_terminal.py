@@ -321,7 +321,7 @@ def test_extreme_table_no_reference_backward_compat():
 
 
 def test_scan_table_with_theme_meta_uses_kite_emoji():
-    """v0.0.6+: scan_table 题材路径首行从 🏛️ 改为 🎯 题材指数(跟 info --theme 对齐)。"""
+    """背景: scan_table 题材路径首行从 🏛️ 改为 🎯 题材指数(跟 info --theme 对齐)。"""
     board_idx = _stock(
         symbol="886108", name="AI应用",
         periods=[_period(30, pct=55)],

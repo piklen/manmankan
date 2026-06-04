@@ -105,7 +105,7 @@ def scan(
     if code_pairs is not None and diff:
         _print_err("❌ --diff 仅支持自选股扫描 · 自定义代码池不写入扫描快照")
         raise typer.Exit(2)
-    # v0.0.5.3 OOP 路径:CLI 构造 StockSet 再喂 pipeline · meta/highlight/filter 全部由 Set 承担
+    # OOP 路径:CLI 构造 StockSet 再喂 pipeline · meta/highlight/filter 全部由 Set 承担
     from kan.core.models import BoardMeta, HotMeta, ThemeMeta
     from kan.core.pipeline import run_data_pipeline
     from kan.core.stock_set import CodeListSet, from_flags

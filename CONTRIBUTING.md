@@ -11,7 +11,7 @@ git clone https://github.com/piklen/manmankan.git
 cd manmankan
 uv sync
 
-# v0.0.4.4: 激活 pre-commit hook (隐私词扫描 · 防 PII 泄漏)
+# 激活 pre-commit hook (隐私词扫描 · 防 PII 泄漏)
 git config core.hooksPath .githooks
 ```
 

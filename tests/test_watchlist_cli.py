@@ -1,4 +1,4 @@
-"""watchlist CLI 命令组 CliRunner 真测(v0.0.4.8:行覆盖率 13% → 60%+)
+"""watchlist CLI 命令组 CliRunner 真测(背景:行覆盖率 13% → 60%+)
 
 测试策略:
 - 用 temp_kan_dir fixture 隔离 watchlist.json
@@ -92,7 +92,7 @@ def test_add_command_by_name_single_match_succeeds(cli_runner):
 
 
 def test_add_command_multi_match_lists_candidates(cli_runner):
-    """LOCKED 真测 (v0.0.4.7): 多匹配应列出候选 · 不 dead-end.
+    """LOCKED 真测 (历史背景): 多匹配应列出候选 · 不 dead-end.
 
     `kan add 平安` 匹配 平安银行(000001) + 中国平安(601318) + 平安股份(002007).
     旧行为: "匹配到 N 只 · 请用更精确名称或代码" → dead-end.

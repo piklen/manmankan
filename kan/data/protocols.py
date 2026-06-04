@@ -1,4 +1,4 @@
-"""数据源 Protocol 定义 · v0.0.6 引入「适配器 + 责任链」架构。
+"""数据源 Protocol 定义 · 历史背景「适配器 + 责任链」架构。
 
 设计原则:
 - 每个领域独立 Protocol (KlineSource / 后续 ThemeKlineSource / HotListSource ...) ·
@@ -53,7 +53,7 @@ class KlineSource(Protocol):
     """
 
     priority: int
-    """优先级 · 数字小优先 · 同值多源并发 race (复刻 v0.0.5.0 sina+eastmoney race 语义)。
+    """优先级 · 数字小优先 · 同值多源并发 race (复刻早期 sina+eastmoney race 语义)。
 
     chain 按 priority sort · 不同 priority 严格 fallback 链 ·
     同 priority 时 ThreadPoolExecutor 并发 · 第一个非 None 中标。

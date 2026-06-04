@@ -1,4 +1,4 @@
-"""Tests for kan/core/find_filter.py · filter application (v0.0.6.4)."""
+"""Tests for kan/core/find_filter.py · filter application (历史背景)."""
 
 from dataclasses import FrozenInstanceError
 from datetime import date

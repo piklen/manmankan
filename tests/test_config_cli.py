@@ -1,9 +1,9 @@
-"""kan config CLI 文案防御测试 · v0.0.6.5 加。
+"""kan config CLI 文案防御测试 · 历史背景。
 
 只覆盖文案 / 引导 / mask 等 UX 关键不变量 · 业务逻辑测试见 test_config.py(storage 层)。
 
 防御场景:
-- `_print_endpoint` 默认状态必须给 set 引导 (v0.0.6.5 前漏掉 · 用户摸索 dash vs underscore 受苦)
+- `_print_endpoint` 默认状态必须给 set 引导 (早期实现漏掉 · 用户摸索 dash vs underscore 受苦)
 - `_print_token` 默认状态必须给 set 引导
 - mask_token 永不返回原 token
 """
@@ -53,7 +53,7 @@ def test_mask_token_never_returns_raw():
 
 
 def test_config_unset_no_arg_shows_set_keys(monkeypatch, capsys):
-    """v0.0.6.5: kan config unset 不传 KEY 不报错 · 列当前已配字段 + 引导。
+    """背景: kan config unset 不传 KEY 不报错 · 列当前已配字段 + 引导。
 
     回归防御: 防文案回退到 typer 默认 'Missing argument' 黑屏(维护者实测痛点)。
     """

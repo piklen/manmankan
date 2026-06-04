@@ -104,7 +104,7 @@ def test_hot_rank_set_lazy_load(monkeypatch):
 
     def fake_fetch(which):
         calls["n"] += 1
-        # v0.0.5.3: stub HotEntry 加 rank · meta() 算 rank_map 用
+        # 背景: stub HotEntry 加 rank · meta() 算 rank_map 用
         return [
             type("E", (), {"symbol": "300750", "name": "宁德时代", "rank": 1})(),
         ]
@@ -131,7 +131,7 @@ def test_theme_set_lazy_load(monkeypatch):
 
     def fake_search(query):
         calls["search"] += 1
-        # v0.0.5.3: 加 code 属性 · fetch_theme_kline 拼 cache path 用
+        # 背景: 加 code 属性 · fetch_theme_kline 拼 cache path 用
         return type("T", (), {"name": query, "code": "886108", "source": "ths"})()
 
     def fake_constituents(themed):
@@ -165,7 +165,7 @@ def test_industry_set_lazy_load(monkeypatch):
     import pandas as pd
 
     def fake_search(query):
-        # v0.0.5.3: 加 code + level + size · fetch_industry_kline 拼 cache path 用
+        # 背景: 加 code + level + size · fetch_industry_kline 拼 cache path 用
         return type("B", (), {"name": query, "code": "801080", "level": 2, "size": 5})()
 
     def fake_constituents(board):
@@ -219,7 +219,7 @@ def test_from_flags_mutual_exclusion(kwargs):
         from_flags(**kwargs)
 
 
-# ─────────────── meta() · v0.0.5.3 新加 ───────────────
+# ─────────────── meta() · 历史背景新加 ───────────────
 
 
 def test_watchlist_meta_is_none():

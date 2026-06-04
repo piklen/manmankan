@@ -1,4 +1,4 @@
-"""TuShare Pro 题材数据源 · v0.0.5.7 · 配 token 时优先于 adata EM 路径。
+"""TuShare Pro 题材数据源 · 背景 · 配 token 时优先于 adata EM 路径。
 
 为啥引入 TuShare 路径:
 - adata EM datacenter HTTP 服务端不稳定(2026-05-25 实测 RemoteDisconnected

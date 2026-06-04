@@ -21,7 +21,7 @@ from kan.infra.log import debug_log
 from kan.storage.paths import HOT_DIR, STOCK_NAMES_CACHE, atomic_write_json, ensure_dirs
 
 _CACHE_TTL = 3600  # 1h · 热榜实时榜 · 盘后工具 1h 内重复跑结果稳定 · 不反复打源
-_HOT_TIMEOUT_SECONDS = 15  # 单次拉取硬超时 · 防 v0.0.4.3 同型"沉默 5 分钟卡死"
+_HOT_TIMEOUT_SECONDS = 15  # 单次拉取硬超时 · 防 同类"沉默 5 分钟卡死"
 _EASTMONEY_TIMEOUT_SECONDS = 8
 _SURGE_RANK_URL = "https://emappdata.eastmoney.com/stockrank/getAllHisRcList"
 _EASTMONEY_HEADERS = {

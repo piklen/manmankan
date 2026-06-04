@@ -1,4 +1,4 @@
-"""数据源责任链编排器 · v0.0.6 引入 · 替代 fetcher.py 硬编码 if-chain。
+"""数据源责任链编排器 · 背景 · 替代 fetcher.py 硬编码 if-chain。
 
 核心算法 `_run_chain` 是通用的 (K 线 / 题材成分股 / 未来其他领域复用):
 1. 按 priority 排序 (caller 已 sort · 此处直接用)
@@ -129,7 +129,7 @@ def _race(
     不用 `with ThreadPoolExecutor`: __exit__ 的 shutdown(wait=True) 会阻塞
     等所有线程 · 某源 hang 时整个调用挂死。改 shutdown(wait=False, cancel_futures=True) ·
     拿到结果即返回 · 慢/hang 的线程后台自生自灭 · 不阻塞调用方。
-    (沿用 v0.0.5.0 _fetch_via_akshare 教训)
+    (沿用 早期 _fetch_via_akshare 教训)
     """
     executor = ThreadPoolExecutor(max_workers=len(sources))
     try:

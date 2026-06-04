@@ -1,6 +1,6 @@
-"""v0.0.4.7.1 hotfix: _auto_fetch_stale 3 阶段 spinner 真测.
+"""spinner hotfix: _auto_fetch_stale 3 阶段 spinner 真测.
 
-真用户反馈触发:用户升级 v0.0.4.7 后 `kan scan` "检查缓存..." spinner
+真用户反馈触发:用户升级 历史背景 `kan scan` "检查缓存..." spinner
 5-30s 沉默 · 真小白误判卡死。本次 hotfix 3 阶段 spinner (B+C 组合):
 
 - Stage 1: ⏳ 加载数据模块... (akshare/pandas import)

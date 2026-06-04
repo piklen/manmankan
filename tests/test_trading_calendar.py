@@ -205,7 +205,7 @@ class TestSanityCheck:
 
 # ─────────────── env var KAN_DATA_AVAIL_OFFSET_MIN override ───────────────
 class TestDataAvailableEnvVar:
-    """v0.0.4.7: 跨时区用户自救 · env var 偏移 DATA_AVAILABLE_AFTER."""
+    """背景: 跨时区用户自救 · env var 偏移 DATA_AVAILABLE_AFTER."""
 
     def test_default_is_15_30(self, monkeypatch):
         from datetime import time

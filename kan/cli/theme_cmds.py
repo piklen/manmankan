@@ -1,14 +1,14 @@
-"""`kan theme` 子命令组 · 题材发现 + 题材榜 · v0.0.5.0 引入 / v0.0.5.7 加 trend。
+"""`kan theme` 子命令组 · 题材发现 + 题材榜 · 历史背景 / 历史背景 trend。
 
 参考 `cli_config_cmds.py` 体例(typer.Typer + add_typer 注册风格)。
 
 子命令:
 - theme list [--all]    列题材清单(默认拼音前 30 · --all 全部 ~391 + 散户超载警告)
 - theme search 关键词    模糊搜题材
-- theme trend           题材连续涨跌榜 · v0.0.5.7 · K 线走 EM datacenter(不在反爬名单)·
+- theme trend           题材连续涨跌榜 · 背景 · K 线走 EM datacenter(不在反爬名单)·
                         并行拉 + 24h cache · streak 算法复用 calc_trend
 
-v0.0.5.7 修订:v0.0.5.0 注释 "adata 无批量接口 · 触发反爬" 仅适用于 push2 路径的成分股接口 ·
+背景:历史背景注释 "adata 无批量接口 · 触发反爬" 仅适用于 push2 路径的成分股接口 ·
 K 线接口 get_market_concept_east 走 datacenter HTTP · 不在反爬名单 · 并行 16 worker 安全。
 """
 from __future__ import annotations
@@ -42,8 +42,8 @@ class ThemeTrendSort(StrEnum):
 def _render_failure_diagnosis(diagnosis) -> list[str]:
     """把 LeaderboardDiagnosis 展开成多行用户可读的失败消息(每行一条)。
 
-    背景: v0.0.6.5 之前失败消息只有 "391 题材失败 · 可能是网络问题",
-    完全屏蔽多源 fallback 链路状态。v0.0.6.5 加 diagnosis 但建议靠脑补
+    背景: 早期实现失败消息只有 "391 题材失败 · 可能是网络问题",
+    完全屏蔽多源 fallback 链路状态。历史背景 diagnosis 但建议靠脑补
     ("ths_daily 需 2000+ 积分" 实测打脸 · 真实是频率限速)。
     本版本透传 TuShare server msg 当 ground truth · 我们不再猜。
     """

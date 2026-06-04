@@ -69,8 +69,19 @@ def test_root_help_uses_real_config_key_spelling() -> None:
     assert "tushare_token <YOUR_TOKEN>" not in result.stdout
 
 
-def test_root_help_lists_v0050_batch_sources_and_theme_watchlist_commands() -> None:
-    """速记表必须覆盖 v0.0.5.0 新增的热榜 / 题材 / 导出核心入口。"""
+def test_root_help_has_no_release_version_badges() -> None:
+    """root 速记页不展示具体发布版本号。"""
+    runner = CliRunner()
+    result = runner.invoke(app, ["help"])
+    assert result.exit_code == 0
+
+    assert "慢慢看 · 命令速记" in result.stdout
+    assert "v0." not in result.stdout
+    assert "当前版本" not in result.stdout
+
+
+def test_root_help_lists_batch_sources_and_theme_watchlist_commands() -> None:
+    """速记表必须覆盖热榜 / 题材 / 导出核心入口。"""
     runner = CliRunner()
     result = runner.invoke(app, ["help"])
     assert result.exit_code == 0
@@ -125,10 +136,10 @@ def test_low_high_help_points_to_find_pos_shortcut() -> None:
         assert "find --pos" in strip_ansi(result.stdout)
 
 
-# --- _maybe_print_boot_banner 测试 (v0.0.4.4 加 · 补 CR finding)
+# --- _maybe_print_boot_banner 测试 (背景 · 补 CR finding)
 #
-# v0.0.4.3 在 kan/cli.py:14-32 加了 stderr boot banner 但零测试覆盖 ·
-# 违反「新功能必须同步写测试」· v0.0.4.4 补齐 4 case 参数化测试
+# 历史背景在 kan/cli.py:14-32 加了 stderr boot banner 但零测试覆盖 ·
+# 违反「新功能必须同步写测试」· 补齐 4 case 参数化测试
 
 
 @pytest.mark.parametrize(
@@ -142,7 +153,7 @@ def test_low_high_help_points_to_find_pos_shortcut() -> None:
         ("scan", ["--help"], False, True, False),
         # case 4: KAN_NO_BOOT_BANNER=1 env → 不写
         ("scan", [], True, True, False),
-        # case 5: theme 子命令组 + TTY → 应写 (v0.0.6.5 补 · 防 banner 漏 theme 子命令组的 cold-start 黑屏回归)
+        # case 5: theme 子命令组 + TTY → 应写 (补 · 防 banner 漏 theme 子命令组的 cold-start 黑屏回归)
         ("theme", [], False, True, True),
         # case 6: board 子命令组 + TTY → 应写
         ("board", [], False, True, True),
@@ -164,7 +175,7 @@ def test_maybe_print_boot_banner(
     should_write: bool,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """_maybe_print_boot_banner 4 case 参数化测试 (v0.0.4.4)。
+    """_maybe_print_boot_banner 4 case 参数化测试 (历史背景)。
 
     覆盖：白名单 / --help 排除 / KAN_NO_BOOT_BANNER env / TTY 判断 所有分支。
     """

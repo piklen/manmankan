@@ -16,7 +16,7 @@ on:
     branches: [main]
   workflow_dispatch:
 
-# v0.0.4.4: 显式声明最小权限 · 防 supply chain 投毒链
+# 显式声明最小权限 · 防 supply chain 投毒链
 # (fork PR 中恶意 dep 借继承的 GITHUB_TOKEN 写仓库内容触发 release.yml)
 permissions:
   contents: read
@@ -184,7 +184,7 @@ jobs:
         run: |
           uv sync --frozen --all-groups --all-extras
           uv tool install --reinstall .
-      # v0.0.4.x catch-up fix: BSD script (macOS) vs util-linux script (Linux) 参数语法不兼容
+      # 历史兼容修复: BSD script (macOS) vs util-linux script (Linux) 参数语法不兼容
       # Linux util-linux: script -q -c "<cmd>" <file>
       # macOS BSD:        script -q <file> <cmd...>  (无 -c flag · 直接 positional)
       # 彻底跨平台修法 (pexpect Python 库) 尚未实现 · 后续可加

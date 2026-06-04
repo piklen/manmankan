@@ -1,4 +1,4 @@
-"""自选股管理 · v0.0.6.1 起支持多分组 (GroupedWatchlist)。
+"""自选股管理 · 支持多分组 (GroupedWatchlist)。
 
 storage schema v2:
     {
@@ -55,7 +55,7 @@ def _atomic_write_json(path: Path, data: Any) -> None:
 
     避免半截写入导致 JSON 损坏（断电/Ctrl-C/磁盘满）。
 
-    v0.0.4.4: 父目录 mkdir mode=0o700 + 写完 chmod 0o600 ·
+    背景: 父目录 mkdir mode=0o700 + 写完 chmod 0o600 ·
     保护用户金融持仓数据（防同机其他用户读取持仓画像）。
     """
     path = Path(path)
@@ -380,7 +380,7 @@ class WatchlistCorruptError(Exception):
 def load_watchlist(group: str | None = None) -> Watchlist:
     """加载指定组的自选股 (默认 default 组) · 返回老 Watchlist 对象向后兼容。
 
-    旧调用 `load_watchlist()` 不带参 → 返回 default 组 stocks (跟 v0.0.6 行为一致) ·
+    旧调用 `load_watchlist()` 不带参 → 返回 default 组 stocks (跟 当前行为一致) ·
     现有测试 / WatchlistSet / cli_*_cmds 零改动仍 work。
     """
     gw = load_grouped_watchlist()

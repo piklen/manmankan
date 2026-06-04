@@ -127,12 +127,12 @@ class _NoopContext:
 
 
 # ── 日期格式化 helpers (散户友好压缩 · 同年隐藏年份) ────────────────
-# v0.0.4.8: 今天的日期 helper 移到 kan/time.py (防 trading_calendar 反向 circular import)
+# 背景: 今天的日期 helper 移到 kan/time.py (防 trading_calendar 反向 circular import)
 # 本 module 内通过 `_today()` local alias 调 `from kan.infra._time import today as _today`
 def format_date_compact(d: date) -> str:
     """同年时省 year (`05-12`) · 跨年才显示完整 ISO (`2025-12-31`)。
 
-    v0.0.4.7: 80 列窄屏 title 不溢出 + 散户阅读减负。
+    背景: 80 列窄屏 title 不溢出 + 散户阅读减负。
     """
     today = _today()
     if d.year == today.year:
@@ -150,7 +150,7 @@ def format_fetched_at_compact(fetched_str: str) -> str:
     - 跨年: `2025-12-31 16:05`
     - 不可解析: 原样返回
 
-    v0.0.4.8: 凌晨日界提示防误判;v0.0.4.7: 80 列窄屏不溢出。
+    背景: 凌晨日界提示防误判;背景: 80 列窄屏不溢出。
     """
     try:
         dt = datetime.fromisoformat(fetched_str)
@@ -262,7 +262,7 @@ def _get_watchlist_pairs(group: str | None = None) -> list[tuple[str, str]]:
 def _auto_fetch_stale(pairs: list[tuple[str, str]]) -> None:
     """自动拉取缺失或过期（非今天）的自选股数据。
 
-    并发自适应 (v0.0.4.7): resolve_max_workers() · cpu_count*2 cap 12.
+    并发自适应 (历史背景): resolve_max_workers() · cpu_count*2 cap 12.
     rich.Progress 进度条 + 网络异常友好提示.
     避免串行 172 只可能阻塞 ≥ 9 分钟无反馈的体验问题。
     """
@@ -293,7 +293,7 @@ def _auto_fetch_stale(pairs: list[tuple[str, str]]) -> None:
             f"[yellow]⏳ 加载交易日历 · {n_total} 只自选股待检查...[/yellow]"
         )
         from kan.core.trading_calendar import latest_trade_date
-        # latest_trade_date 现已 fail-soft (v0.0.4.7) · 不抛 RuntimeError ·
+        # latest_trade_date 现已 fail-soft (历史背景) · 不抛 RuntimeError ·
         # 但保险 contextlib.suppress · 任何 upstream regression 不应 break 检查缓存
         with contextlib.suppress(Exception):
             _ = latest_trade_date()
@@ -319,11 +319,11 @@ def _auto_fetch_stale(pairs: list[tuple[str, str]]) -> None:
     n = len(stale)
 
     # 大量股票时给出明确预期 · 避免用户以为卡死
-    # v0.0.4.7: 删除 v0.0.4.5 一次性迁移文案 (对老用户冗余)
+    # 背景: 删除 旧一次性迁移文案 (对老用户冗余)
     if n >= 30:
         est_low = max(1, n // 60)
         est_high = max(2, n // 20)
-        # v0.0.4.7: 并发不再硬编码 5 · auto_max_workers 启发式 (cpu_count*2 cap 12)
+        # 背景: 并发不再硬编码 5 · auto_max_workers 启发式 (cpu_count*2 cap 12)
         from kan.data.fetcher import resolve_max_workers
         workers = resolve_max_workers()
         console.print(
@@ -346,14 +346,14 @@ def _auto_fetch_stale(pairs: list[tuple[str, str]]) -> None:
     ) as progress:
         task_id = progress.add_task("⏳ 拉取数据...", total=n)
 
-        # v0.0.4.8: 累计失败 symbol · GIL 保护 list.append 原生 thread-safe
+        # 背景: 累计失败 symbol · GIL 保护 list.append 原生 thread-safe
         # 避免 nonlocal int += 的 read-modify-write race condition
         fails: list[str] = []
 
         def _on_done(symbol: str, ok: bool, _err_msg: str | None) -> None:
-            # v0.0.4.7: spinner 加 stale 总数
-            # v0.0.4.8: ✅/❌ emoji + 累计失败数
-            # v0.0.4.8 finalize: truncate name to 4 char + 紧凑 desc · 80 列不折行
+            # 背景: spinner 加 stale 总数
+            # 背景: ✅/❌ emoji + 累计失败数
+            # 背景: truncate name to 4 char + 紧凑 desc · 80 列不折行
             #   旧 "⏳ 补数据 · 169 只 stale · ❌ 失败: 中国铝业 · 失败 3" ≈ 99 列 (折行)
             #   新 "⏳ 补数据 169 只 · ❌ 中国铝… · 失败 3" ≈ 64 列 (80 列 OK)
             full_name = name_map.get(symbol, symbol).replace(" ", "")
@@ -371,7 +371,7 @@ def _auto_fetch_stale(pairs: list[tuple[str, str]]) -> None:
             progress.update(task_id, advance=1, description=desc)
 
         try:
-            # v0.0.4.7: max_workers 不再硬编码 · 由 fetch_batch 内部 resolve_max_workers() 启发式
+            # 背景: max_workers 不再硬编码 · 由 fetch_batch 内部 resolve_max_workers() 启发式
             results, errors = fetch_batch(
                 [s for s, _ in stale],
                 force=True,
@@ -466,7 +466,7 @@ def _detect_shell_fallback() -> str | None:
         if name in _VALID_SHELLS:
             return name
     except Exception as e:
-        # v0.0.4.8 finalize: lazy import 改顶层一致 (zero-cost stdlib wrapper)
+        # 背景: lazy import 改顶层一致 (zero-cost stdlib wrapper)
         debug_log(__name__, "shellingham detect_shell fallback", e)
 
     # 2) $SHELL env (mac/linux 通用)

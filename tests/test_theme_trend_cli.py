@@ -1,4 +1,4 @@
-"""kan theme trend CLI 子命令测试 · v0.0.5.7。
+"""kan theme trend CLI 子命令测试 · 历史背景。
 
 模仿 test_theme_cli.py 风格 · mock adata + stub data layer。
 """
@@ -279,7 +279,7 @@ def test_trend_partial_errors_shown(monkeypatch):
 
 
 def test_trend_failure_diagnosis_with_tushare_self_hosted_proxy(monkeypatch):
-    """v0.0.6.5 加 · 6.6 更新: 自部署代理 + 没拿到具体 code → 推切官方端点。
+    """背景 · 6.6 更新: 自部署代理 + 没拿到具体 code → 推切官方端点。
 
     历史: 之前文案 '可能是网络问题' 屏蔽链路 · 现透传 server msg 给用户。
     """

@@ -1,4 +1,4 @@
-"""helpers 日期格式化 helper 测试(散户友好压缩 · v0.0.4.7).
+"""helpers 日期格式化 helper 测试(散户友好压缩 · 历史背景).
 
 覆盖:
 - format_date_compact: 同年省 year · 跨年完整 ISO
@@ -64,7 +64,7 @@ class TestFormatDateCompact:
 class TestFormatFetchedAtCompact:
     """当天只时间 · 同年 mm-dd HH:MM · 跨年完整."""
 
-    # v0.0.4.8: 由于 helpers 改用 _today()(kan/time.py · 单一来源)·
+    # 背景: 由于 helpers 改用 _today()(kan/time.py · 单一来源)·
     # patch path 从 "kan.cli.helpers.datetime" → "kan.cli.helpers._today" (更直接)
 
     def test_today_returns_time_only(self):
@@ -92,7 +92,7 @@ class TestFormatFetchedAtCompact:
         # empty 走 except (ValueError) · 返原样
         assert result == ""
 
-    # ── v0.0.4.8 凌晨日界提示 ────────────────────────────
+    # ── 历史背景凌晨日界提示 ────────────────────────────
     def test_today_pre_dawn_shows_jinchen(self):
         """当天 00:00-04:59 → '今晨' 前缀防深夜误判"""
         with patch("kan.cli.helpers._today", return_value=date(2026, 5, 14)):
@@ -149,7 +149,7 @@ def test_stock_names_first_run_progress_message(monkeypatch) -> None:
     assert any("首次运行 · 初始化 A 股代码表" in m for m in console.status_messages)
 
 
-# TestNoLegacyTextInWarnings 已删除 (v0.0.4.8 改造)
+# TestNoLegacyTextInWarnings 已删除 (历史背景)
 # 原 3 个 grep-source 作弊 test 已被替换为 CliRunner runtime 真测:
 # - test_trend_cli.py::test_trend_stale_warning_uses_new_phrasing
 # - test_trend_cli.py::test_trend_intraday_warning_compliant_phrasing

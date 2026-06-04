@@ -196,14 +196,14 @@ def test_trend_streak_option_removed(runner: CliRunner) -> None:
 
 # ════════════════════════════════════════════════════════════════
 # stale/intraday warning runtime 真测
-# (v0.0.4.8 改造自 test_cli_helpers_format.py TestNoLegacyTextInWarnings grep-source 作弊)
+# (改造自 test_cli_helpers_format.py TestNoLegacyTextInWarnings grep-source 作弊)
 # ════════════════════════════════════════════════════════════════
 def test_trend_stale_warning_uses_new_phrasing(
     runner: CliRunner, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     """stale 警告应含'当前缓存到 X 收盘' + '数据滞后 N 天' · 不再'应有最近交易日'.
 
-    v0.0.4.8: 旧 grep-source 作弊改 CliRunner 真测 ·
+    背景: 旧 grep-source 作弊改 CliRunner 真测 ·
     模拟 data_cutoff < expected_cutoff → is_stale=True 触发 stale 警告分支.
     """
     from datetime import date
@@ -233,7 +233,7 @@ def test_trend_intraday_warning_compliant_phrasing(
 ) -> None:
     """盘中警告应是状态描述 · 不含预测性'下一秒打开' AGENTS.md §6 红线词.
 
-    v0.0.4.8: 旧 grep-source 改 CliRunner 真测 ·
+    背景: 旧 grep-source 改 CliRunner 真测 ·
     模拟 fresh data + phase=INTRADAY → 触发 intraday 警告分支.
     """
     from datetime import date
@@ -253,15 +253,15 @@ def test_trend_intraday_warning_compliant_phrasing(
     result = runner.invoke(app, ["trend"])
     assert result.exit_code == 0
     output = result.output
-    # 新文案 v0.0.4.8 cross-validated: 纯状态描述 · 移除 "可能回落/可能回升/都是正常波动" 预测性词
+    # 纯状态描述 · 移除 "可能回落/可能回升/都是正常波动" 预测性词
     assert "涨跌停标签反映当前时刻" in output, (
-        f"v0.0.4.8 新文案 '涨跌停标签反映当前时刻' 应出现 · 实际 output: {output[-500:]}"
+        f"新文案 '涨跌停标签反映当前时刻' 应出现 · 实际 output: {output[-500:]}"
     )
     assert "建议盘后 15:30" in output, "新文案应含 '建议盘后 15:30'"
     # 红线: 旧预测性词不应残留 (AGENTS.md §6 不预测涨跌)
-    assert "下一秒打开" not in output, "预测性词 '下一秒打开' 应删除 (v0.0.4.7)"
-    assert "都是正常波动" not in output, "v0.0.4.8: '都是正常波动' 含预测语义 · 应删除"
-    assert "可能回落" not in output, "v0.0.4.8: '可能回落' 含方向词 · 应删除"
+    assert "下一秒打开" not in output, "预测性词 '下一秒打开' 应删除"
+    assert "都是正常波动" not in output, "'都是正常波动' 含预测语义 · 应删除"
+    assert "可能回落" not in output, "'可能回落' 含方向词 · 应删除"
 
 
 def test_trend_warnings_mutex_stale_wins(
@@ -269,7 +269,7 @@ def test_trend_warnings_mutex_stale_wins(
 ) -> None:
     """stale+intraday 同时为 True 时只显示 stale · intraday 不显示 (if/elif 互斥).
 
-    v0.0.4.8: 旧 grep-source 作弊改 CliRunner 真测 ·
+    背景: 旧 grep-source 作弊改 CliRunner 真测 ·
     场景: 用户跑 scan 时盘中数据 stale (数据中断 + 行情仍在跑) → stale 优先(用户最先动作就是 fetch).
     """
     from datetime import date

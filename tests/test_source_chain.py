@@ -1,4 +1,4 @@
-"""KlineSourceChain + _builtin_sources 注册表 单元测试 (v0.0.6)。
+"""KlineSourceChain + _builtin_sources 注册表 单元测试 (历史背景)。
 
 覆盖:
 - chain priority 排序 (构造时 sort · 同 priority 保持注册序)

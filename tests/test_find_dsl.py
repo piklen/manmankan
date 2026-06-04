@@ -1,4 +1,4 @@
-"""Tests for kan/core/find_dsl.py · DSL parser (v0.0.6.4)."""
+"""Tests for kan/core/find_dsl.py · DSL parser (历史背景)."""
 
 from dataclasses import FrozenInstanceError
 

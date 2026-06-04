@@ -1,6 +1,6 @@
 """K 线数据拉取编排 · cache + chain (责任链) + 公开 API。
 
-架构分层 (v0.0.6 起):
+架构分层 (历史背景):
 - `kan.data.protocols.KlineSource`     · Protocol (adapter 契约)
 - `kan.data.sources` / `kan.data.tushare` · 5 个内置 KlineSource 实现
 - `kan.data.source_chain.KlineSourceChain` · 责任链 (priority sort + race + 熔断)
@@ -11,8 +11,8 @@
 用户自定义源: `from kan.api import register_kline_source` · 详见 `kan.api` docstring。
 
 历史:
-- v0.0.5.0: sources.py 从 fetcher.py 抽出 · 单点 fetcher / 编排分离
-- v0.0.6:   chain 抽出 · 删 if-chain · 同 priority 多源并发 race 统一进 chain
+- 背景: sources.py 从 fetcher.py 抽出 · 单点 fetcher / 编排分离
+- 背景:   chain 抽出 · 删 if-chain · 同 priority 多源并发 race 统一进 chain
 """
 
 from __future__ import annotations
@@ -193,7 +193,7 @@ def _is_legacy_tushare_raw_cache(path: Path) -> bool:
 def _is_cache_fresh(path: Path) -> bool:
     """缓存是否已包含"应有最近交易日"数据。
 
-    v0.0.4.5 起判据：K 线最后一行 date ≥ latest_trade_date()。
+    当前判据：K 线最后一行 date ≥ latest_trade_date()。
     旧实现 mtime_date == today 已废 · 凌晨 02:55 拉到昨日数据后会被
     误判为"今日数据齐了"整天不刷新 · scan 显示昨日涨停名单。
     """
@@ -403,9 +403,9 @@ def get_cached(symbol: str) -> pd.DataFrame | None:
 
 
 def cache_age(symbol: str) -> str | None:
-    """缓存文件 mtime · 语义 = "上次拉取时间"（v0.0.4.5 起不再当作"数据日期"使用）。
+    """缓存文件 mtime · 语义 = "上次拉取时间"（现在不再当作"数据日期"使用）。
 
-    历史教训：v0.0.4.4 及之前把 mtime 当作"数据日期"显示在 scan 标题（"X 更新"），
+    历史教训：早期实现把 mtime 当作"数据日期"显示在 scan 标题（"X 更新"），
     凌晨 02:55 拉数据后 mtime 日期 = 今天，但 K 线最后一行还是昨日，
     用户看到"今天更新"以为是今日数据，实际还是昨日（涨停标签错位）。
     现在 scan 标题分离展示"数据截止 X 收盘 · Y 拉取"（见 data_cutoff_date）。

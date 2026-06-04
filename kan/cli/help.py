@@ -1,8 +1,5 @@
 """kan help 命令 · 命令速记 cheat-sheet 独立模块。
 
-v0.0.5.0 起从 cli_watchlist_cmds 抽出 · 减少 cli_watchlist god-file 行数 ·
-help 文案变更不再触发 cli_watchlist 编辑冲突。
-
 注册机制:被 kan.cli 顶层 import 触发 @app.command 装饰器执行。
 """
 from kan.app import app
@@ -13,14 +10,12 @@ def help_cmd() -> None:
     """查看命令帮助"""
     from rich.console import Console
 
-    from kan import __version__
     from kan.core.find_registry import format_find_field_presets, format_find_filter_groups
 
     find_filter_groups = format_find_filter_groups()
     find_field_presets = format_find_field_presets()
 
-    # 速记表顶部加版本号 · issue 复现成本下降
-    Console().print(f"""[bold]慢慢看 · v{__version__} · 命令速记[/bold]
+    Console().print(f"""[bold]慢慢看 · 命令速记[/bold]
 
 [bold cyan]自选股管理[/bold cyan]
   kan add 600519 000858       添加自选股（代码）
@@ -68,7 +63,7 @@ def help_cmd() -> None:
   [dim]以上参数可任意组合：kan trend --down 5 --latest 7 --candle --industry 半导体[/dim]
   [dim]N 范围：2-30[/dim]
 
-[bold cyan]条件选股 DSL[/bold cyan]  ⭐ v0.0.6.5+
+[bold cyan]条件选股 DSL[/bold cyan]
   kan find --pos 180:lt:5                      位置 filter · 180 日位置 < 5%
   kan find --resonance low:gte:3               共振 filter · 低点共振 ≥ 3 周期
   kan find --pos 60:lt:10 --resonance low:gte:2  多条件 AND
@@ -124,7 +119,7 @@ def help_cmd() -> None:
 
 [bold cyan]配置（tushare-pro 凭证）[/bold cyan]
   kan config get                              查看当前配置（全部）
-  kan config get tushare-token                查看单 key（v0.0.5.1+）
+  kan config get tushare-token                查看单 key
   kan config set tushare-token <YOUR_TOKEN>   设 tushare 凭证
   kan config set tushare-endpoint https://x   设 tushare API 端点
   kan config unset tushare-token              清凭证

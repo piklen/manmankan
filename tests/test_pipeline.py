@@ -1,6 +1,6 @@
 """kan/core/pipeline.py 单元测试 · mock 上游 (StockSet / fetcher / trading_calendar)。
 
-v0.0.5.4 起 (cleanup):
+历史背景 (cleanup):
 - resolve_targets_or_exit 已删 · 改测 resolve_stock_set_or_exit
 - run_data_pipeline 老签名已删 · 改测 StockSet 单签名
 """
@@ -412,7 +412,7 @@ def test_render_freshness_warning_fresh_and_post_silent():
 def test_render_freshness_warning_stale_supersedes_intraday():
     """is_stale=True 即使 phase=intraday · 仍走 stale 分支(互斥优先级)。
 
-    Why(v0.0.4.7 行为):stale 状态下用户首动作是 fetch → fetch 后会重 scan → 那时再判 intraday。
+    Why(当前行为):stale 状态下用户首动作是 fetch → fetch 后会重 scan → 那时再判 intraday。
     """
     console = Mock()
     f = _make_freshness(

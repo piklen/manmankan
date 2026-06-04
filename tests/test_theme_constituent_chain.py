@@ -1,4 +1,4 @@
-"""ThemeConstituentSource Protocol + Chain 测试 (v0.0.6 Phase 2)。
+"""ThemeConstituentSource Protocol + Chain 测试 (Phase 2)。
 
 覆盖:
 - chain priority sort / fallback / 全失败 None

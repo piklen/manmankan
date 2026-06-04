@@ -1,6 +1,6 @@
 """扫描目标解析 · 历史 API + meta 类型 re-export 入口 (deprecated layer)。
 
-v0.0.5.3 起本模块沉降为兼容层:
+历史背景本模块沉降为兼容层:
 - `BoardMeta / HotMeta / ThemeMeta` 三个 dataclass 已迁到 `kan.core.models`
   (跟 Board / Theme 同地存放)。本文件 re-export 保留旧 import path 不破坏老 caller。
 - `resolve_scan_targets()` 改为 thin wrapper · 内部走 `kan.core.stock_set.from_flags()` ·
@@ -34,7 +34,7 @@ def resolve_scan_targets(
     hot: HotList | None = None,
     theme: str | None = None,
 ) -> tuple[list[tuple[str, str]], BoardMeta | HotMeta | ThemeMeta | None]:
-    """[deprecated] 解析扫描目标 · v0.0.5.3 起改为 stock_set.from_flags 的 thin wrapper。
+    """[deprecated] 解析扫描目标 · 已改为 stock_set.from_flags 的 thin wrapper。
 
     行为契约不变 (现有测试覆盖):
     - industry / hot / theme 都为 None → (watchlist_pairs, None) · 不触发任何 IO
