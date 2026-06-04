@@ -56,6 +56,7 @@ increment `D` unless the maintainer explicitly approves a larger bump.
 - release workflow 新增 tag / version / main ancestry gate,并在 PyPI 发布前跑 dist wheel clean-install smoke
 - release workflow 绑定 `pypi` environment,配合仓库环境 reviewer 做发布前人工确认
 - GitHub Pages 站点移除浏览器 Tailwind CDN,改用本地静态 CSS,降低站点运行时供应链依赖
+- test workflow 将 macOS + Python 3.12 全量 pytest 替换为 targeted smoke,保留平台 / 解释器信号,避免 GitHub macOS runner 偶发卡住拖慢发版
 - 合规文档和路线图澄清 AI 边界:支持 AI 消费 JSON 数据做后续研究 / 筛选,但不输出 AI 选股建议、自动荐股或策略结论
 - 截面市场指标数据源接入（`MetricsSource` 责任链 + tushare `daily_basic`）· 估值 / 量价 / 市值维度原始指标 · 复用既有「适配器 + 责任链」架构 · 配 tushare token 可用 · 内部数据层骨架（暂无 CLI 变化）
 - 收敛 v0.0.6.6 review gap:中性措辞、JSON 契约和 registry 文档继续由测试守护
