@@ -1,10 +1,8 @@
 # 慢慢看 · manmankan
 
-> 告诉你坐标，不替你决策。
+> **先看清，再决定。A股行情翻译官。**
 >
-> 人和 AI 共用的 A 股本地数据筛选器：把自选、行业、题材、热榜、全市场和外部代码池整理成结构化、可审计、低上下文成本的数据。
->
-> 支持 AI 辅助筛选 / 研究输入；不输出买卖建议、评级、目标价或策略结论。
+> 散户看得清，AI 调得动。只给数据，不给答案。
 
 [![License: Parity 7.0.0](https://img.shields.io/badge/License-Parity_7.0.0-orange.svg)](https://paritylicense.com/versions/7.0.0.html)
 [![Python 3.11+](https://img.shields.io/badge/python-3.11+-blue.svg)](https://www.python.org/downloads/)
@@ -13,8 +11,9 @@
 [![Tests](https://github.com/piklen/manmankan/actions/workflows/test.yml/badge.svg)](https://github.com/piklen/manmankan/actions/workflows/test.yml)
 [![Local-first](https://img.shields.io/badge/local--first-no_telemetry-green.svg)](docs/compliance.md)
 [![CLI + JSON](https://img.shields.io/badge/output-CLI_%2B_JSON-blue.svg)](docs/find.md)
+[![Agent-Native](https://img.shields.io/badge/agent--native-Skills.md-purple.svg)](skills/manmankan-skill.md)
 
-慢慢看是一个纯命令行工具。它把一批 A 股候选整理成“坐标清单”：多周期位置、共振、估值/资金/技术字段、命中规则和缺数据状态。人可以在终端里快速扫一眼，AI 可以直接消费低噪声 JSON 继续做解释、排序、研究清单或交叉验证。
+慢慢看是一个纯命令行工具。它把一批 A 股候选整理成"坐标清单"：多周期位置、共振、估值/资金/技术字段、命中规则和缺数据状态。人可以在终端里快速扫一眼，AI 可以直接消费低噪声 JSON 继续做解释、排序、研究清单或交叉验证。
 
 ```bash
 uv tool install manmankan
@@ -27,9 +26,9 @@ kan find --codes 600519,000858 --format json --compact
 <details>
 <summary><b>English summary</b></summary>
 
-**manmankan** is a local A-share data screening layer for both humans and AI workflows. It turns watchlists, industries, themes, hot lists, full-market scans, or external code pools into auditable CLI/JSON outputs: price-range coordinates, resonance, filters, fields, and data availability.
+**manmankan** (*"take your time, see clearly"*) is an A-share data translation layer — it turns raw market data into structured, auditable CLI/JSON outputs for both retail investors and AI workflows. Watchlists, industries, themes, hot lists, full-market scans, or external code pools — one command, one clean output.
 
-It provides coordinates, not decisions: no buy/sell advice, no ratings, no price targets, and no strategy conclusions. Python 3.11+ · local storage · A-share only · [Parity Public License 7.0.0](LICENSE).
+Data, not decisions: no buy/sell advice, no ratings, no price targets. Python 3.11+ · local-first · A-share (architecture designed for multi-market extension) · [Parity Public License 7.0.0](LICENSE).
 </details>
 
 ## 为什么存在
@@ -42,7 +41,19 @@ It provides coordinates, not decisions: no buy/sell advice, no ratings, no price
 - **给 AI 用**：用低噪声 JSON 把候选、字段、命中条件、缺数据语义交给模型，方便继续做解释、排序、研究清单或交叉验证。
 - **给自动化用**：CLI 和 `kan.api` 都能接外部代码池，适合 cron、notebook、脚本和本地研究流水线。
 
-如果你要让 AI 参与候选筛选，慢慢看的角色是提供可审计输入：它负责把“坐标”和“条件命中”说清楚，不负责替你下结论。
+如果你要让 AI 参与候选筛选，慢慢看的角色是提供可审计输入：它负责把"坐标"和"条件命中"说清楚，不负责替你下结论。
+
+## 为 AI 设计
+
+慢慢看从第一天起就把 AI Agent 当作一等用户。与传统的"先做人类终端、再挂 JSON 输出"不同，manmankan 的每个命令都同时考虑人类可读和机器可消费两种输出形态。
+
+| 设计决策 | 说明 |
+|----------|------|
+| **JSON 是产品，不是后门** | `--format json` 输出包含 `schema_version`、`data_availability`、`disclaimer`、`error` 信封——AI 不需要猜测字段含义或处理裸异常 |
+| **低上下文成本** | `--compact` / `--fields @core` / `--no-compact-context` 让 AI 按需索取，不浪费 token |
+| **Skills.md 能力清单** | [`skills/manmankan-skill.md`](skills/manmankan-skill.md) 是给 AI Agent 的"说明书"——AI 读到它就知道 manmankan 能做什么、怎么调、错误怎么处理 |
+| **MCP Server**（路线图中） | 在 CLI 基础上额外提供 MCP 协议接口，让支持 MCP 的 AI Agent 工具直接通过标准协议消费数据 |
+| **退出码即 API** | 每个命令的退出码有明确语义（0=成功，非 0=具体错误类别），AI 不需要解析 stderr 来判断成败 |
 
 ## 快速开始
 
@@ -75,7 +86,7 @@ kan history 600519 --format json
 
 ## 数据契约
 
-慢慢看的核心输出不是“推荐”，而是可组合的数据事实。
+慢慢看的核心输出不是"推荐"，而是可组合的数据事实。
 
 主要能力：
 
@@ -118,6 +129,10 @@ git clone https://github.com/piklen/manmankan.git && cd manmankan && uv sync && 
 uv tool install manmankan --index-url https://pypi.org/simple/
 ```
 
+## 市场覆盖
+
+**当前专注 A 股。** 数据源适配层为多市场扩展设计——美股、港股、加密货币等市场可以作为独立 Source 接入，共享同一套 CLI 命令语义和 JSON schema。详见 [`docs/architecture.md`](docs/architecture.md)。
+
 ## 边界
 
 慢慢看不会做这些事：
@@ -125,9 +140,10 @@ uv tool install manmankan --index-url https://pypi.org/simple/
 - 不推荐具体股票。
 - 不预测涨跌。
 - 不给买卖建议、评级、目标价或仓位建议。
-- 不内置策略 preset、打分模型或“最佳标的”排序。
+- 不内置策略 preset、打分模型或"最佳标的"排序。
 - 不下单、不接券商账户、不读取持仓。
-- 不提供实时行情、分钟级行情、港股、美股、期货或完整财报数据库。
+- 不提供实时行情、分钟级行情、港股、美股、期货或完整财报数据库（多市场是远期路线图，当前仅 A 股）。
+- 不内置 AI / LLM / 托管服务——AI 由用户自己选择和运行。
 
 位置百分位的定义是：
 
@@ -154,9 +170,11 @@ uv tool install manmankan --index-url https://pypi.org/simple/
 | 文档 | 用途 |
 |---|---|
 | [`CHANGELOG.md`](CHANGELOG.md) | 版本变更记录 |
+| [`docs/architecture.md`](docs/architecture.md) | 架构愿景：三层定位、Source 模型、多市场路线、AI 消费设计 |
 | [`docs/find.md`](docs/find.md) | `kan find` JSON schema、字段、缺数据语义 |
 | [`docs/compliance.md`](docs/compliance.md) | 合规边界、公开输出语言规范 |
 | [`docs/roadmap.md`](docs/roadmap.md) | 路线图和明确不做的方向 |
+| [`skills/manmankan-skill.md`](skills/manmankan-skill.md) | AI Agent 能力清单（给 AI 读的说明书） |
 | [`kan/api.py`](kan/api.py) | Python API 公开 contract |
 | [`SECURITY.md`](SECURITY.md) | 安全与漏洞报告 |
 | [`CONTRIBUTING.md`](CONTRIBUTING.md) | 开发、测试、贡献规范 |
@@ -184,6 +202,6 @@ git config core.hooksPath .githooks
 
 [Parity Public License 7.0.0](LICENSE) · 附 [Attribution Rider](NOTICE) · © 2026 piklen
 
-个人、学术、评估、非营利用途免费；衍生作品须同 license 公开。商业使用、付费服务、SaaS 或嵌入商业产品须先获得作者书面授权。衍生作品须在 README 显著位置标注 “Based on manmankan (https://github.com/piklen/manmankan)”。
+个人、学术、评估、非营利用途免费；衍生作品须同 license 公开。商业使用、付费服务、SaaS 或嵌入商业产品须先获得作者书面授权。衍生作品须在 README 显著位置标注 "Based on manmankan (https://github.com/piklen/manmankan)"。
 
 Bug / 功能反馈走 [GitHub Issues](https://github.com/piklen/manmankan/issues) 或 [Discussions](https://github.com/piklen/manmankan/discussions)。
