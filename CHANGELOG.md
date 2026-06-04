@@ -31,6 +31,7 @@ increment `D` unless the maintainer explicitly approves a larger bump.
 - `kan find` JSON schema version 升至 `0.0.6.8`
 - 首次运行 `kan` 时后台静默初始化 A 股代码-名称表;首次 / 无 cache 的 `kan add <6位代码...>` 走数字代码快路径,不等待名称表下载完成
 - `kan help` / README / site 去除用户面硬编码发布版本号;具体版本仅保留在包元数据、CHANGELOG、JSON schema 和 `kan update` 等版本功能中
+- README / site 统一调整为「告诉你坐标,不替你决策」定位,强调人和 AI 共用的本地数据筛选器,并压缩 README 的命令手册式内容
 - 代码注释、测试说明和 CI 文案中的历史发布版本标记改为中性描述,降低公开仓库的版本噪音
 
 ### Fixed
@@ -55,6 +56,7 @@ increment `D` unless the maintainer explicitly approves a larger bump.
 - release workflow 新增 tag / version / main ancestry gate,并在 PyPI 发布前跑 dist wheel clean-install smoke
 - release workflow 绑定 `pypi` environment,配合仓库环境 reviewer 做发布前人工确认
 - GitHub Pages 站点移除浏览器 Tailwind CDN,改用本地静态 CSS,降低站点运行时供应链依赖
+- 合规文档和路线图澄清 AI 边界:支持 AI 消费 JSON 数据做后续研究 / 筛选,但不输出 AI 选股建议、自动荐股或策略结论
 - 截面市场指标数据源接入（`MetricsSource` 责任链 + tushare `daily_basic`）· 估值 / 量价 / 市值维度原始指标 · 复用既有「适配器 + 责任链」架构 · 配 tushare token 可用 · 内部数据层骨架（暂无 CLI 变化）
 - 收敛 v0.0.6.6 review gap:中性措辞、JSON 契约和 registry 文档继续由测试守护
 
@@ -82,7 +84,7 @@ increment `D` unless the maintainer explicitly approves a larger bump.
 
 ### Added
 
-- **`kan find`** · 用户主导的条件选股 DSL：`--pos PERIOD:OP:VAL`（位置百分位筛选）· `--resonance LEVEL:OP:VAL`（共振筛选）· `--exclude-st` · AND 语义 · 输出末尾强制 disclaimer
+- **`kan find`** · 用户主导的条件筛选 DSL：`--pos PERIOD:OP:VAL`（位置百分位筛选）· `--resonance LEVEL:OP:VAL`（共振筛选）· `--exclude-st` · AND 语义 · 输出末尾强制 disclaimer
 - **`kan group`** · 多分组管理（create / list / rename / delete / default / copy）· 现有命令新增 `--group` flag · 老用户零感知
 - **`kan move`** · 跨组移动单股 · **`kan export`** · CSV 导出
 - **数据源适配器 + 责任链架构** · 可注入自定义 `KlineSource` / `ThemeConstituentSource`（Wind / 通达信本地 .blk / 自建数据库）· chain 按 priority 排序 + 失败 fallback

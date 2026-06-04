@@ -16,9 +16,9 @@
   </script>
 
   <!-- Primary SEO -->
-  <title>慢慢看 · manmankan · A 股自选股 CLI · 不告诉你买什么 · 帮你找到符合条件的</title>
-  <meta name="description" content="慢慢看 (manmankan) 是纯命令行 A 股自选股工具 · 不告诉你买什么 · 帮你找到符合条件的 · 多周期位置百分位 + 共振信号 + 用户主导的选股 DSL · 本地存储 · 不登录 · 不上传自选 · 不遥测 · Parity Public License 7.0.0 source-available · 支持 mac/Linux/Windows。" />
-  <meta name="keywords" content="慢慢看,manmankan,A股,自选股,选股,选股 DSL,位置百分位,共振信号,命令行工具,CLI,股票工具,source-available,Parity License,本地运行,Python,散户,长线投资,K线,板块,题材扫描,东方财富热榜" />
+  <title>慢慢看 · manmankan · A 股本地数据筛选器 · 告诉你坐标，不替你决策</title>
+  <meta name="description" content="慢慢看 (manmankan) 是人和 AI 共用的 A 股本地数据筛选器 · 告诉你坐标，不替你决策 · 多周期位置百分位 + 共振 + 用户主导筛选 + JSON 输出 · 本地存储 · 不登录 · 不上传自选 · 不遥测 · Parity Public License 7.0.0 source-available · 支持 mac/Linux/Windows。" />
+  <meta name="keywords" content="慢慢看,manmankan,A股,自选股,股票筛选,筛选 DSL,位置百分位,共振信号,命令行工具,CLI,股票工具,AI workflow,source-available,Parity License,本地运行,Python,散户,长线投资,K线,板块,题材扫描,东方财富热榜" />
   <meta name="author" content="piklen" />
   <meta name="robots" content="index,follow,max-image-preview:large" />
   <meta name="googlebot" content="index,follow" />
@@ -37,20 +37,20 @@
   <!-- Open Graph (FB / WeChat / Telegram / Discord) -->
   <meta property="og:type" content="website" />
   <meta property="og:site_name" content="慢慢看 · manmankan" />
-  <meta property="og:title" content="慢慢看 · manmankan · A 股自选股 CLI · 不告诉你买什么" />
-  <meta property="og:description" content="不告诉你买什么 · 帮你找到符合条件的。多周期位置 + 共振 + 用户主导的选股 DSL。纯命令行 · 完全本地 · 0 telemetry · Parity Public License 7.0.0。" />
+  <meta property="og:title" content="慢慢看 · manmankan · 告诉你坐标，不替你决策" />
+  <meta property="og:description" content="人和 AI 共用的 A 股本地数据筛选器。多周期位置 + 共振 + 用户主导筛选 + JSON 输出。纯命令行 · 完全本地 · 0 telemetry · Parity Public License 7.0.0。" />
   <meta property="og:url" content="https://piklen.github.io/manmankan/" />
   <meta property="og:image" content="https://piklen.github.io/manmankan/og.svg" />
   <meta property="og:image:width" content="1200" />
   <meta property="og:image:height" content="630" />
-  <meta property="og:image:alt" content="慢慢看 · A 股自选股 CLI · 终端截图" />
+  <meta property="og:image:alt" content="慢慢看 · A 股本地数据筛选器 · 终端截图" />
   <meta property="og:locale" content="zh_CN" />
   <meta property="og:locale:alternate" content="en_US" />
 
   <!-- Twitter / X Card -->
   <meta name="twitter:card" content="summary_large_image" />
   <meta name="twitter:title" content="慢慢看 · manmankan" />
-  <meta name="twitter:description" content="A 股自选股 CLI · 不告诉你买什么 · 帮你找到符合条件的 · 本地存储 · 不上传自选 · Parity 7.0.0" />
+  <meta name="twitter:description" content="A 股本地数据筛选器 · 告诉你坐标，不替你决策 · 本地存储 · 不上传自选 · Parity 7.0.0" />
   <meta name="twitter:image" content="https://piklen.github.io/manmankan/og.svg" />
 
   <!-- JSON-LD · Schema.org SoftwareApplication (Google rich result) -->
@@ -60,7 +60,7 @@
     "@type": "SoftwareApplication",
     "name": "manmankan",
     "alternateName": "慢慢看",
-    "description": "A 股自选股 CLI · 不告诉你买什么 · 帮你找到符合条件的 · 多周期位置百分位 + 共振信号 + 用户主导的选股 DSL · 本地存储",
+    "description": "A 股本地数据筛选器 · 告诉你坐标，不替你决策 · 多周期位置百分位 + 共振信号 + 用户主导筛选 + JSON 输出 · 本地存储",
     "applicationCategory": "FinanceApplication",
     "applicationSubCategory": "InvestmentTool",
     "operatingSystem": "macOS, Linux, Windows",
@@ -371,17 +371,16 @@
       </div>
 
       <h1 class="text-5xl sm:text-7xl lg:text-8xl font-extrabold tracking-tight mb-7 leading-[1.05]">
-        不告诉你<span class="gradient-text">买什么</span>
+        告诉你<span class="gradient-text">坐标</span>
         <br />
-        <span style="color: var(--text-muted);" class="text-4xl sm:text-6xl lg:text-7xl font-bold">帮你找到符合条件的</span>
+        <span style="color: var(--text-muted);" class="text-4xl sm:text-6xl lg:text-7xl font-bold">不替你决策</span>
       </h1>
 
       <p class="text-lg sm:text-xl mb-12 leading-relaxed max-w-3xl mx-auto" style="color: var(--text-soft);">
-        <b style="color: var(--text);">慢慢看</b> 是一个纯命令行的 A 股自选股工具 ——
-        把 30 只自选股在 <b style="color: var(--text);">3 / 5 / 7 / 10 / 15 / 30 / 60 / 90 / 120 / 180 日</b> 窗口内的位置百分位
-        <b style="color: var(--text);">一屏显示</b>，
-        把同时触低 / 触高的多周期共振标成 <span class="resonance font-mono px-1.5">×N</span>，
-        <b style="color: var(--text);">全新 `kan find`</b> · 让你按自己的规则筛全市场,工具只给数据,决策仍由你做。
+        <b style="color: var(--text);">慢慢看</b> 是人和 AI 共用的 A 股本地数据筛选器 ——
+        把自选、行业、题材、热榜、全市场和外部代码池整理成
+        <b style="color: var(--text);">多周期位置</b>、<span class="resonance font-mono px-1.5">×N</span> 共振、用户主导筛选和低噪声 JSON。
+        工具只给可复核的数据坐标，后续判断由你负责。
       </p>
 
       <!-- Click-to-copy install command -->
@@ -470,7 +469,7 @@
           <li>· 单股详情 · 多股对比</li>
           <li>· 行业 / 题材 / 热榜 4 类对象切换</li>
           <li>· 涨跌停 / ST 标记 · 5 档量能识别</li>
-          <li>· JSON / Markdown 快照导出</li>
+          <li>· JSON / Markdown / compact 字段导出</li>
         </ul>
       </div>
 
@@ -482,7 +481,7 @@
         <ul class="text-sm space-y-2.5 leading-relaxed" style="color: var(--text-soft);">
           <li>· 不给买卖建议</li>
           <li>· 不给评级 / 目标价 / 预测涨跌</li>
-          <li>· 不做「AI 选股」</li>
+          <li>· 不替人或 AI 下结论</li>
           <li>· 不接 broker · 不下单</li>
           <li>· 不做 T+0 短线（数据延时）</li>
           <li>· 不做港股 / 美股 / 期货</li>
@@ -677,8 +676,8 @@
           It shows where each stock currently sits within its 3 / 5 / 7 / 10 / 15 / 30 / 60 / 90 / 120 / 180-day price range — a "position percentile" — and flags stocks that simultaneously touch lows (or highs) across multiple timeframes as resonance signals (<code class="ci">×N</code>).
         </p>
         <p>
-          It deliberately stops there: <b style="color: var(--text);">no buy/sell advice, no ratings, no price targets, no "AI stock picking."</b>
-          Just objective price-position data, fully local — no login, no account, no telemetry. Data is delayed end-of-day K-line from the AKShare ecosystem (baostock primary).
+          It stops at auditable data: <b style="color: var(--text);">no buy/sell advice, no ratings, no price targets, and no strategy conclusions.</b>
+          Local storage, CLI/JSON outputs, no login, no account, no telemetry. Data is delayed end-of-day K-line from the AKShare ecosystem (baostock primary).
         </p>
         <p class="font-mono text-sm">
           <span style="color: var(--accent);">$</span> uv tool install manmankan
@@ -701,7 +700,7 @@
             <span style="color: var(--accent);" class="font-mono">$</span>
             <span>慢慢看 · manmankan</span>
           </div>
-          <p class="text-xs leading-relaxed">A 股自选股 CLI · 不告诉你买什么 · 帮你找到符合条件的</p>
+          <p class="text-xs leading-relaxed">A 股本地数据筛选器 · 告诉你坐标，不替你决策</p>
         </div>
         <div>
           <div class="font-semibold mb-3" style="color: var(--text-soft);">项目</div>
