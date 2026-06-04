@@ -197,6 +197,23 @@ def test_stock_names_cache_used(temp_kan_dir):
         assert names["600519"] == "贵州茅台"
 
 
+def test_load_watchlist_resolves_code_placeholder_from_cache(temp_kan_dir):
+    """后台名称表建好后,占位 name==symbol 的自选应显示真实名称。"""
+    watchlist.STOCK_NAMES_CACHE.write_text(
+        json.dumps({"600519": "贵州茅台"}, ensure_ascii=False),
+        encoding="utf-8",
+    )
+    watchlist.save_watchlist(
+        watchlist.Watchlist(
+            stocks=[Stock(symbol="600519", name="600519", added_at=date(2026, 6, 4))]
+        )
+    )
+
+    wl = watchlist.load_watchlist()
+
+    assert wl.stocks[0].name == "贵州茅台"
+
+
 # --- 名称搜索 ---
 
 

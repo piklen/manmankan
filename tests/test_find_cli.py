@@ -35,6 +35,21 @@ def _run(args: list[str]) -> tuple[int, str]:
     return result.returncode, result.stdout + result.stderr
 
 
+def _run_with_input(args: list[str], input_text: str) -> tuple[int, str]:
+    """Run `kan find ARGS` with stdin · returns (exit_code, combined output)."""
+    env = {**os.environ, "KAN_NO_BOOT_BANNER": "1", "NO_COLOR": "1"}
+    result = subprocess.run(
+        ["uv", "run", "kan", *args],
+        cwd=REPO_ROOT,
+        env=env,
+        input=input_text,
+        capture_output=True,
+        text=True,
+        timeout=60,
+    )
+    return result.returncode, result.stdout + result.stderr
+
+
 class TestFindCli:
     def test_empty_filter_exits_one(self):
         ec, out = _run(["find"])
@@ -106,6 +121,40 @@ class TestFindCli:
         ec, out = _run(["find", "--codes", "600519,bad", "--pos", "180:lt:5"])
         assert ec == 2
         assert "--codes 含非法代码" in out
+
+    def test_codes_invalid_json_returns_error_envelope(self):
+        ec, out = _run([
+            "find", "--codes", "600519,bad", "--pos", "180:lt:5", "--format", "json",
+        ])
+        assert ec == 2
+        payload = json.loads(out)
+        assert payload["ok"] is False
+        assert payload["command"] == "find"
+        assert payload["error"]["code"] == "invalid_codes"
+        assert "--codes 含非法代码" in payload["error"]["message"]
+        assert "例:" in payload["error"]["hint"]
+        assert payload["schema_version"]
+        assert payload["disclaimer"]
+
+    def test_codes_empty_json_returns_error_envelope(self):
+        ec, out = _run([
+            "find", "--codes", ",,,", "--pos", "180:lt:5", "--format", "json",
+        ])
+        assert ec == 2
+        payload = json.loads(out)
+        assert payload["ok"] is False
+        assert payload["error"]["code"] == "empty_codes"
+        assert payload["error"]["hint"].startswith("例:")
+
+    def test_codes_stdin_invalid_json_returns_error_envelope(self):
+        ec, out = _run_with_input([
+            "find", "--codes", "-", "--pos", "180:lt:5", "--format", "json",
+        ], "not-a-code\n")
+        assert ec == 2
+        payload = json.loads(out)
+        assert payload["ok"] is False
+        assert payload["error"]["code"] == "invalid_codes"
+        assert "not-a-code" in payload["error"]["message"]
 
     def test_codes_mutex_with_industry_exits_two(self):
         ec, out = _run([

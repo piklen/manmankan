@@ -177,10 +177,20 @@ def test_help_ttfb_stays_fast(tmp_path: Path) -> None:
     assert result["ttfb_ms"] <= HELP_TTFB_SLO_MS, result
 
 
+def test_add_code_fast_path_ttfb_stays_fast(tmp_path: Path) -> None:
+    result = _measure_best_of_three(
+        ["add", "600519"],
+        tmp_path / "add-fast-path",
+        timeout_s=2.0,
+        stop_on_spinner=False,
+    )
+    assert result["ttfb_ms"] is not None, result
+    assert result["ttfb_ms"] <= SLO_MS, result
+
+
 @pytest.mark.parametrize(
     "args,needs_watchlist",
     [
-        (["add", "600519"], False),
         (["scan"], True),
         (["fetch", "600519", "--force"], False),
         (["low", "60"], True),

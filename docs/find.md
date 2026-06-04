@@ -165,3 +165,5 @@ kan find --industry 半导体 --format json \
 | `empty_intersection` | `--only-watchlist` 后候选池为空 |
 | `invalid_fields` | `--fields` 字段未知、为空、与 `--compact` 冲突,或当前模式不支持该维度 |
 | `invalid_compact_context` | `--no-compact-context` 未与 `--format json --compact` 一起使用 |
+| `invalid_codes` | `--codes` 或 `--codes -` 中包含非 6 位 A 股代码 |
+| `empty_codes` | `--codes` 解析后没有任何有效代码 |

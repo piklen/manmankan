@@ -197,7 +197,7 @@ def _network_error_msg(err: str) -> str:
 
 
 def _load_names_with_optional_spinner(console) -> dict[str, str]:
-    """加载 A 股代码表 · 缓存过期时 spinner 包住 watchlist 重 import + preload。
+    """加载 A 股代码表 · cache 不新鲜时 spinner 包住初始化/刷新过程。
 
     设计要点：fresh 检查走极轻的 kan.storage.paths（~370μs）· spinner 提前到 watchlist
     重模块（akshare lazy 后约 ~40ms 热启动 / ~1-2s 冷启动）import 之前显示，
@@ -214,7 +214,7 @@ def _load_names_with_optional_spinner(console) -> dict[str, str]:
 
     t_start = time.monotonic()
     with console.status(
-        "[yellow]⏳ 首次运行 · 下载 A 股代码表 · 仅此一次 (约 5-15s)...[/yellow]",
+        "[yellow]⏳ 首次运行 · 初始化 A 股代码表...[/yellow]",
         spinner="dots",
     ):
         from kan.storage.watchlist import preload_stock_names
