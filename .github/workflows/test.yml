@@ -104,7 +104,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-latest, macos-latest]
+        os: [ubuntu-latest]
         python-version: ['3.11', '3.12']
     steps:
       - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10  # v6 (pinned 2026-05-27)
@@ -116,6 +116,50 @@ jobs:
         run: uv sync --frozen --all-groups --all-extras
       - name: Run tests
         run: uv run pytest -q -m "not tty and not network"
+
+  # macOS hosted runners are the slowest and most failure-prone part of the matrix.
+  # Full pytest runs on Ubuntu for both supported Python versions; macOS keeps targeted
+  # platform smoke + TTY coverage so one runner class cannot block releases.
+  macos-smoke:
+    runs-on: macos-latest
+    timeout-minutes: 12
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ['3.11', '3.12']
+    steps:
+      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10  # v6 (pinned 2026-05-27)
+      - uses: astral-sh/setup-uv@08807647e7069bb48b6ef5acd8ec9567f424441b  # pinned 2026-05-27
+        with:
+          python-version: ${{ matrix.python-version }}
+          enable-cache: true
+      - name: Install dependencies
+        run: uv sync --frozen --all-groups --all-extras
+      - name: macOS import and CLI smoke
+        run: |
+          uv run python - <<'PY'
+          import importlib.metadata
+          import platform
+
+          import kan
+
+          assert platform.system() == "Darwin"
+          assert importlib.metadata.version("manmankan") == kan.__version__
+          PY
+          uv run kan --version
+          uv run kan --help
+          HOME="$(mktemp -d)" XDG_DATA_HOME="$(mktemp -d)" NO_COLOR=1 uv run kan find --codes 600519,000858 --format json > /tmp/kan-find-code-pool.json
+          python - <<'PY'
+          import json
+          from pathlib import Path
+
+          payload = json.loads(Path("/tmp/kan-find-code-pool.json").read_text())
+          assert payload["mode"] == "code_pool"
+          assert payload["ok"] is True
+          assert payload["stats"]["matched"] == 2
+          PY
+      - name: Targeted macOS contract tests
+        run: uv run pytest -q tests/test_help_cli.py tests/test_paths.py tests/test_find_json.py tests/test_api.py
 
   package-smoke:
     runs-on: ubuntu-latest
