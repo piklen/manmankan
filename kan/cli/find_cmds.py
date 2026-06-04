@@ -65,6 +65,45 @@ def _resolve_code_pairs(raw: str) -> list[tuple[str, str]]:
     )
 
 
+def _resolve_code_pairs_or_exit_json(
+    raw: str,
+    fmt: export.OutputFormat,
+) -> list[tuple[str, str]]:
+    """Resolve `kan find --codes`, preserving JSON error envelopes in json mode."""
+    import sys
+
+    from kan.infra.log import debug_log
+
+    text = sys.stdin.read() if raw == "-" else raw
+    codes, invalid = _parse_codes(text)
+    if invalid:
+        preview = ", ".join(invalid[:5])
+        suffix = "..." if len(invalid) > 5 else ""
+        _exit_find_error(
+            fmt,
+            code="invalid_codes",
+            message=f"--codes 含非法代码: {preview}{suffix} · 需 6 位 A 股代码",
+            hint="例: kan find --codes 600519,000858 --pos 180:lt:20",
+            exit_code=2,
+        )
+    if not codes:
+        _exit_find_error(
+            fmt,
+            code="empty_codes",
+            message="--codes 为空",
+            hint="例: kan find --codes 600519,000858 --pos 180:lt:20",
+            exit_code=2,
+        )
+    try:
+        from kan.storage.watchlist import preload_stock_names
+
+        names = preload_stock_names()
+    except Exception as e:
+        debug_log(__name__, "preload stock names for find --codes", e)
+        names = {}
+    return [(code, names.get(code, code)) for code in codes]
+
+
 def _find_pools(
     industry: str | None,
     hot: HotList | None,
@@ -1036,7 +1075,7 @@ def find(
             hint="例: kan find --codes 600519,000858 --gain 30:gt:10",
             exit_code=2,
         )
-    code_pairs = _resolve_code_pairs(codes) if codes is not None else None
+    code_pairs = _resolve_code_pairs_or_exit_json(codes, fmt) if codes is not None else None
     if only_watchlist and not source_mode:
         _exit_find_error(
             fmt,

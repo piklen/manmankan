@@ -8,7 +8,7 @@ increment `D` unless the maintainer explicitly approves a larger bump.
 
 ## [Unreleased]
 
-## [0.0.6.8] - 2026-06-02
+## [0.0.6.8] - 2026-06-04
 
 ### Added
 
@@ -19,10 +19,18 @@ increment `D` unless the maintainer explicitly approves a larger bump.
 
 - `kan find --all --format json --compact|--fields` 现在按 filter、compact 摘要和字段白名单反向驱动截面维度取数;未请求的 moneyflow / technical / sentiment / chip 不再无条件拉取,`data_availability` 对应维度显示 `not_requested`
 - `kan find` JSON schema version 升至 `0.0.6.8`
+- 首次运行 `kan` 时后台静默初始化 A 股代码-名称表;首次 / 无 cache 的 `kan add <6位代码...>` 走数字代码快路径,不等待名称表下载完成
+
+### Fixed
+
+- `kan find --format json --codes ...` 的非法 / 空代码池错误现在返回 `ok:false` JSON envelope,不再退回纯文本错误,保持 AI / 脚本消费契约一致
+- 东方财富飙升榜在上游字段缺失时改走更稳的 fallback,避免 `kan scan --hot surge` 因单一接口漂移直接不可用
 
 ### Internal
 
 - 增加 find registry → docs / CLI help / field schema 一致性测试,降低 filter 元数据、字段白名单、文档和 help 漂移风险
+- `typer` 依赖上界调整为 `<0.27`,并通过 lockfile / package smoke / TTY CI 验证
+- 收敛 v0.0.6.6 review gap:中性措辞、JSON 契约和 registry 文档继续由测试守护
 
 ## [0.0.6.7] - 2026-06-02
 

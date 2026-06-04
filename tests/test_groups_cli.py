@@ -44,6 +44,7 @@ def fake_names() -> dict[str, str]:
 
 @pytest.fixture
 def runner(temp_kan_dir, fake_names, monkeypatch: pytest.MonkeyPatch) -> CliRunner:
+    watchlist.STOCK_NAMES_CACHE.write_text(json.dumps(fake_names, ensure_ascii=False))
     monkeypatch.setattr(
         "kan.cli.watchlist_cmds._load_names_with_optional_spinner",
         lambda _console: fake_names,

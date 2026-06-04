@@ -146,7 +146,7 @@ def test_stock_names_first_run_progress_message(monkeypatch) -> None:
     names = _load_names_with_optional_spinner(console)
 
     assert names == {"600519": "贵州茅台"}
-    assert any("首次运行 · 下载 A 股代码表 · 仅此一次" in m for m in console.status_messages)
+    assert any("首次运行 · 初始化 A 股代码表" in m for m in console.status_messages)
 
 
 # TestNoLegacyTextInWarnings 已删除 (v0.0.4.8 改造)

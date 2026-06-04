@@ -18,6 +18,24 @@ from kan.cli.helpers import (
     confirm_destructive,
 )
 
+_A_SHARE_CODE_PREFIXES = (
+    "000", "001", "002", "003",
+    "300", "301", "302",
+    "600", "601", "603", "605",
+    "688", "689",
+)
+
+
+def _clean_code_token(raw: str) -> str | None:
+    """Return normalized 6-digit code for code-like input, else None."""
+    cleaned = _re.sub(r"^(sh|sz|SH|SZ)", "", raw.strip())
+    return cleaned if _re.match(r"^\d{6}$", cleaned) else None
+
+
+def _looks_like_a_share_code(code: str) -> bool:
+    """Cheap syntax gate for no-cache numeric add fast path."""
+    return code.startswith(_A_SHARE_CODE_PREFIXES)
+
 
 def _add_by_industry(industry: str, yes: bool, group: str | None = None) -> None:
     """按申万行业批量添加成分股进指定组 (group=None 走 default) · 二次确认 + 影响摘要。"""
@@ -188,16 +206,23 @@ def add(
     # tqdm/login banner 抑制已下沉到 watchlist.py 各 _fetch_* 函数内部 self-suppress
     _console = Console(stderr=True)
 
-    names = _load_names_with_optional_spinner(_console)
-
     # watchlist 已被 helper 加载到 sys.modules · 第二次 import 是 dict 查找
     from kan.storage.watchlist import (
         GroupNotFoundError,
         add_stock,
+        load_stock_names_cache,
         load_watchlist,
         save_watchlist,
         search_by_name,
     )
+
+    code_only_input = all(_clean_code_token(sym) is not None for sym in symbols)
+    if code_only_input:
+        # 只读本地 cache,不触发网络刷新。批量数字代码 add 的主诉是"快加入",
+        # 不该为了显示名称同步拉全市场代码表。
+        names = load_stock_names_cache(allow_stale=True) or {}
+    else:
+        names = _load_names_with_optional_spinner(_console)
 
     try:
         wl = load_watchlist(group)
@@ -206,6 +231,7 @@ def add(
         raise typer.Exit(2) from None
     changed = False
     success, skip, fail = 0, 0, 0
+    unresolved_names = 0
     failures: list[str] = []  # 失败累积到末尾打印 · 防止打断 spinner / 进度反馈
     skips: list[str] = []     # 跳过明细 · batch 模式末尾打印 · 修 F6 "跳过 N 不知所云"
 
@@ -243,13 +269,17 @@ def add(
                     continue
                 name = names.get(cleaned)
                 if not name:
-                    # 加下一步引导 · 不留 dead-end
-                    failures.append(
-                        f"未找到股票: {cleaned}（不在 A 股代码表中）· "
-                        f"试 `kan add 茅台` 用名称搜索"
-                    )
-                    fail += 1
-                    continue
+                    if code_only_input and _looks_like_a_share_code(cleaned):
+                        name = cleaned
+                        unresolved_names += 1
+                    else:
+                        # 加下一步引导 · 不留 dead-end
+                        failures.append(
+                            f"未找到股票: {cleaned}（不在 A 股代码表中）· "
+                            f"试 `kan add 茅台` 用名称搜索"
+                        )
+                        fail += 1
+                        continue
                 add_stock(wl, cleaned, name)
                 changed = True
                 if not use_batch_spinner:
@@ -308,6 +338,10 @@ def add(
         if failures:
             for f in failures:
                 typer.echo(f"  ❌ {f}", err=True)
+        if unresolved_names:
+            typer.echo(
+                f"  ⚠️  {unresolved_names} 只未命中本地名称表,已先按代码加入"
+            )
         parts = []
         if success:
             parts.append(f"成功 {success}")

@@ -9,6 +9,7 @@
 """
 from __future__ import annotations
 
+import json
 from datetime import date
 from pathlib import Path
 
@@ -54,6 +55,7 @@ def fake_names() -> dict[str, str]:
 @pytest.fixture
 def cli_runner(temp_kan_dir, fake_names, monkeypatch: pytest.MonkeyPatch) -> CliRunner:
     """watchlist CLI CliRunner · mock 全部 name lookup 走 fake_names."""
+    watchlist.STOCK_NAMES_CACHE.write_text(json.dumps(fake_names, ensure_ascii=False))
     monkeypatch.setattr(
         "kan.cli.watchlist_cmds._load_names_with_optional_spinner",
         lambda _console: fake_names,
@@ -121,6 +123,30 @@ def test_add_command_duplicate_is_skipped(cli_runner):
     result = cli_runner.invoke(app, ["add", "600519"])
     assert result.exit_code == 0
     assert "已在自选列表" in result.output
+
+
+def test_add_many_codes_without_names_cache_uses_fast_path(temp_kan_dir, monkeypatch):
+    """无名称 cache 时,批量数字代码 add 不应同步拉全市场名称表。"""
+    calls: list[bool] = []
+
+    def fail_loader(_console):
+        calls.append(True)
+        raise AssertionError("numeric code fast path should not preload stock names")
+
+    monkeypatch.setattr(
+        "kan.cli.watchlist_cmds._load_names_with_optional_spinner",
+        fail_loader,
+    )
+
+    result = CliRunner().invoke(app, ["add", "600519", "000858", "300750"])
+
+    assert result.exit_code == 0
+    assert "成功 3" in result.output
+    assert "未命中本地名称表" in result.output
+    assert not calls
+    wl = watchlist.load_watchlist()
+    assert [s.symbol for s in wl.stocks] == ["600519", "000858", "300750"]
+    assert [s.name for s in wl.stocks] == ["600519", "000858", "300750"]
 
 
 # ════════════════════════════════════════════════════════════════

@@ -174,19 +174,13 @@ def _normalize_symbol(raw: str) -> str:
 def _load_stock_names() -> dict[str, str]:
     """加载 A 股代码-名称映射，带本地缓存。
 
-    主用 baostock query_stock_basic (5s · ~3 倍快) ·
-    akshare stock_info_a_code_name (~16s) 作为 fallback。
+    主用 baostock query_stock_basic · akshare stock_info_a_code_name 作为 fallback。
+    `kan add` 数字代码快路径可只读本地 cache,避免交互命令同步等待上游源。
     """
     ensure_dirs()
-    if STOCK_NAMES_CACHE.exists():
-        mtime = datetime.fromtimestamp(STOCK_NAMES_CACHE.stat().st_mtime)
-        if (datetime.now() - mtime).days < NAMES_CACHE_MAX_AGE_DAYS:
-            try:
-                with open(STOCK_NAMES_CACHE, encoding="utf-8") as f:
-                    return json.load(f)
-            except json.JSONDecodeError:
-                # 缓存损坏 · 静默重新拉取（不致命，下面会兜底）
-                pass
+    cached = load_stock_names_cache(allow_stale=False)
+    if cached is not None:
+        return cached
 
     mapping = _fetch_names_baostock() or _fetch_names_akshare()
     if mapping is None:
@@ -195,6 +189,40 @@ def _load_stock_names() -> dict[str, str]:
         )
     _atomic_write_json(STOCK_NAMES_CACHE, mapping)
     return mapping
+
+
+def load_stock_names_cache(*, allow_stale: bool = False) -> dict[str, str] | None:
+    """只读本地股票名称 cache · 不触发网络刷新。"""
+    if not STOCK_NAMES_CACHE.exists():
+        return None
+    if not allow_stale:
+        mtime = datetime.fromtimestamp(STOCK_NAMES_CACHE.stat().st_mtime)
+        if (datetime.now() - mtime).days >= NAMES_CACHE_MAX_AGE_DAYS:
+            return None
+    try:
+        raw = json.loads(STOCK_NAMES_CACHE.read_text(encoding="utf-8"))
+    except json.JSONDecodeError:
+        return None
+    if not isinstance(raw, dict):
+        return None
+    names = {
+        str(code): str(name).strip()
+        for code, name in raw.items()
+        if re.fullmatch(r"\d{6}", str(code)) and str(name).strip()
+    }
+    return names or None
+
+
+def _apply_cached_names(stocks: list[Stock]) -> list[Stock]:
+    """用本地 cache 修正 `name == symbol` 的占位名 · 不触发网络。"""
+    names = load_stock_names_cache(allow_stale=True)
+    if not names:
+        return stocks
+    for stock in stocks:
+        name = names.get(stock.symbol)
+        if name and stock.name == stock.symbol:
+            stock.name = name
+    return stocks
 
 
 def _fetch_names_baostock() -> dict[str, str] | None:
@@ -395,7 +423,7 @@ def load_grouped_watchlist() -> GroupedWatchlist:
 
     # v1 → v2 在线迁移 · 检测条件: 顶层有 stocks 但没 groups
     if "stocks" in data and "groups" not in data:
-        stocks = [Stock(**s) for s in data.get("stocks", [])]
+        stocks = _apply_cached_names([Stock(**s) for s in data.get("stocks", [])])
         gw = GroupedWatchlist(
             groups={DEFAULT_GROUP_NAME: stocks},
             default=DEFAULT_GROUP_NAME,
@@ -408,7 +436,7 @@ def load_grouped_watchlist() -> GroupedWatchlist:
     groups: dict[str, list[Stock]] = {}
     for name, payload in raw_groups.items():
         stock_list = payload.get("stocks", []) if isinstance(payload, dict) else []
-        groups[name] = [Stock(**s) for s in stock_list]
+        groups[name] = _apply_cached_names([Stock(**s) for s in stock_list])
 
     default = data.get("default", DEFAULT_GROUP_NAME)
     # default 指向不存在组时降级 (理论不发生 · 防御性):
