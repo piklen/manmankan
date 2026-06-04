@@ -85,6 +85,26 @@ FILTER_SPECS = {
         "tushare_daily_basic", "daily",
         "metric_null_or_data_unavailable",
     ),
+    "pb": FindFilterSpec(
+        "pb", "--pb", "valuation", True,
+        "tushare_daily_basic", "daily",
+        "metric_null_or_data_unavailable",
+    ),
+    "turnover": FindFilterSpec(
+        "turnover", "--turnover", "valuation", True,
+        "tushare_daily_basic", "daily",
+        "metric_null_or_data_unavailable",
+    ),
+    "market_cap": FindFilterSpec(
+        "market_cap", "--market-cap", "valuation", True,
+        "tushare_daily_basic", "daily",
+        "metric_null_or_data_unavailable",
+    ),
+    "volume_ratio": FindFilterSpec(
+        "volume_ratio", "--volume-ratio", "valuation", True,
+        "tushare_daily_basic", "daily",
+        "metric_null_or_data_unavailable",
+    ),
     "roe": FindFilterSpec(
         "roe", "--roe", "fundamentals", False,
         "tushare_fina_indicator", "quarterly_report",
@@ -172,8 +192,8 @@ FIND_FILTER_HELP_GROUPS = (
     FindFilterHelpGroup(
         "valuation_quality_money",
         "估值 / 质量 / 资金",
-        ("pe", "roe", "moneyflow"),
-        "`--roe` 为逐股报告期数据，`--all` 不支持。",
+        ("pe", "pb", "turnover", "market_cap", "volume_ratio", "roe", "moneyflow"),
+        "`--market-cap` 单位亿元;`--roe` 为逐股报告期数据，`--all` 不支持。",
     ),
     FindFilterHelpGroup(
         "technical_momentum",

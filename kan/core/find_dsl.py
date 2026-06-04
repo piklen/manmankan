@@ -206,6 +206,48 @@ class MoneyflowFilter(ScalarFilter):
     example = "gt:0"
 
 
+class PbFilter(ScalarFilter):
+    """市净率 filter · 例 OP=lt VALUE=3 = PB < 3 (裸值筛 · 估值/质量/资金维度).
+
+    读 valuation.pb (None → 不命中)· 用户主导阈值 · 不做行业分位 / 高低估判断。
+    """
+
+    flag = "--pb"
+    example = "lt:3"
+
+
+class TurnoverFilter(ScalarFilter):
+    """换手率 filter · 例 OP=gt VALUE=5 = 换手 > 5% (裸值筛 · 估值/质量/资金维度).
+
+    读 valuation.turnover_rate (% · None → 不命中)· 客观成交活跃度 · 不输出"活跃/对倒"判断。
+    """
+
+    flag = "--turnover"
+    example = "gt:5"
+
+
+class MarketCapFilter(ScalarFilter):
+    """总市值 filter · 例 OP=gt VALUE=100 = 总市值 > 100 亿 (裸值筛 · 估值/质量/资金维度).
+
+    单位: 亿元 (matcher 内把 valuation.total_mv 万元 ÷ 1e4 换算)· None → 不命中 ·
+    客观规模事实 · 不输出"大/小盘股"标签判断。
+    """
+
+    flag = "--market-cap"
+    example = "gt:100"
+
+
+class VolumeRatioFilter(ScalarFilter):
+    """量比 filter · 例 OP=gt VALUE=1.5 = 量比 > 1.5 (裸值筛 · 估值/质量/资金维度).
+
+    读 valuation.volume_ratio (tushare 口径 ~今日量/5日均量倍数 · None → 不命中)·
+    客观放缩量 · 不输出"放量突破/缩量"等趋势判断。
+    """
+
+    flag = "--volume-ratio"
+    example = "gt:1.5"
+
+
 # ─── 技术/情绪/筹码维度 新增 filter (技术/情绪/筹码 · OP:VAL 裸值阈值 · 全截面) ───
 # 合规:全部用户主导阈值 (同 --pe) · 只筛裸值 · 不内置金叉/超买等信号 preset。
 
@@ -376,6 +418,10 @@ class ConditionSet:
     pos_filters: tuple[PosFilter, ...] = ()
     resonance_filters: tuple[ResonanceFilter, ...] = ()
     pe_filters: tuple[PeFilter, ...] = ()
+    pb_filters: tuple[PbFilter, ...] = ()
+    turnover_filters: tuple[TurnoverFilter, ...] = ()
+    market_cap_filters: tuple[MarketCapFilter, ...] = ()
+    volume_ratio_filters: tuple[VolumeRatioFilter, ...] = ()
     roe_filters: tuple[RoeFilter, ...] = ()
     moneyflow_filters: tuple[MoneyflowFilter, ...] = ()
     rsi_filters: tuple[RsiFilter, ...] = ()
@@ -400,6 +446,10 @@ class ConditionSet:
         pos: list[str] | None = None,
         resonance: list[str] | None = None,
         pe: list[str] | None = None,
+        pb: list[str] | None = None,
+        turnover: list[str] | None = None,
+        market_cap: list[str] | None = None,
+        volume_ratio: list[str] | None = None,
         roe: list[str] | None = None,
         moneyflow: list[str] | None = None,
         rsi: list[str] | None = None,
@@ -422,6 +472,14 @@ class ConditionSet:
             pos_filters=tuple(PosFilter.parse(p) for p in (pos or [])),
             resonance_filters=tuple(ResonanceFilter.parse(r) for r in (resonance or [])),
             pe_filters=tuple(PeFilter.parse(p) for p in (pe or [])),
+            pb_filters=tuple(PbFilter.parse(p) for p in (pb or [])),
+            turnover_filters=tuple(TurnoverFilter.parse(t) for t in (turnover or [])),
+            market_cap_filters=tuple(
+                MarketCapFilter.parse(m) for m in (market_cap or [])
+            ),
+            volume_ratio_filters=tuple(
+                VolumeRatioFilter.parse(v) for v in (volume_ratio or [])
+            ),
             roe_filters=tuple(RoeFilter.parse(r) for r in (roe or [])),
             moneyflow_filters=tuple(MoneyflowFilter.parse(m) for m in (moneyflow or [])),
             rsi_filters=tuple(RsiFilter.parse(x) for x in (rsi or [])),
@@ -445,6 +503,10 @@ class ConditionSet:
             self.pos_filters
             or self.resonance_filters
             or self.pe_filters
+            or self.pb_filters
+            or self.turnover_filters
+            or self.market_cap_filters
+            or self.volume_ratio_filters
             or self.roe_filters
             or self.moneyflow_filters
             or self.rsi_filters
@@ -476,6 +538,10 @@ class ConditionSet:
         """截面类 filter (估值/资金/技术/情绪/筹码) · K 线池 + --all 两路都支持。"""
         return bool(
             self.pe_filters
+            or self.pb_filters
+            or self.turnover_filters
+            or self.market_cap_filters
+            or self.volume_ratio_filters
             or self.moneyflow_filters
             or self.needs_technical()
             or self.needs_sentiment()

@@ -180,3 +180,40 @@ class TestApplyConditions:
         m = FindMatch(result=r, triggered=())
         with pytest.raises(FrozenInstanceError):
             m.triggered = (TriggeredFilter(filter_type="pos", param="x", value=1.0),)
+
+
+class TestValuationScalarMatchers:
+    """估值维度 ScalarFilter matcher 单测 (--pb/--turnover/--market-cap/--volume-ratio)。"""
+
+    @staticmethod
+    def _val(**kw):
+        from kan.core.models import ValuationMetrics
+        return ValuationMetrics(trade_date=date(2026, 6, 3), **kw)
+
+    def test_market_cap_converts_wan_to_yi(self):
+        # total_mv 万元 → 亿元换算:1_500_000 万 = 150 亿
+        from kan.core.find_dsl import MarketCapFilter
+        from kan.core.find_filter import _match_market_cap
+        v = self._val(total_mv=1_500_000.0)
+        hit = _match_market_cap(MarketCapFilter(op="gt", value=100.0), v)
+        assert hit is not None
+        assert hit.value == 150.0  # 输出亿元
+        assert _match_market_cap(MarketCapFilter(op="lt", value=100.0), v) is None
+
+    def test_pb_match_and_missing(self):
+        from kan.core.find_dsl import PbFilter
+        from kan.core.find_filter import _match_pb
+        v = self._val(pb=2.5)
+        assert _match_pb(PbFilter(op="lt", value=3.0), v) is not None
+        assert _match_pb(PbFilter(op="gt", value=3.0), v) is None
+        # 缺数据(pb None)→ 不命中 · 优雅降级
+        assert _match_pb(PbFilter(op="lt", value=3.0), self._val()) is None
+
+    def test_turnover_and_volume_ratio(self):
+        from kan.core.find_dsl import TurnoverFilter, VolumeRatioFilter
+        from kan.core.find_filter import _match_turnover, _match_volume_ratio
+        v = self._val(turnover_rate=6.0, volume_ratio=1.8)
+        assert _match_turnover(TurnoverFilter(op="gt", value=5.0), v) is not None
+        assert _match_volume_ratio(VolumeRatioFilter(op="gt", value=1.5), v) is not None
+        # None valuation → 不命中(集成路径传未 enrich 结果时安全降级)
+        assert _match_turnover(TurnoverFilter(op="gt", value=5.0), None) is None

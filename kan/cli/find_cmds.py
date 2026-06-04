@@ -397,6 +397,34 @@ def find(
             help="估值 filter OP:VAL 例 lt:20 (PE TTM < 20 · 裸值筛) · 可多次",
         ),
     ] = [],  # noqa: B006 · typer multi-option 需要 list 默认值
+    pb: Annotated[
+        list[str],
+        typer.Option(
+            "--pb",
+            help="估值 filter OP:VAL 例 lt:3 (PB < 3 · 裸值筛) · 可多次",
+        ),
+    ] = [],  # noqa: B006 · typer multi-option 需要 list 默认值
+    turnover: Annotated[
+        list[str],
+        typer.Option(
+            "--turnover",
+            help="换手率 filter OP:VAL 例 gt:5 (换手 > 5% · 裸值筛) · 可多次",
+        ),
+    ] = [],  # noqa: B006 · typer multi-option 需要 list 默认值
+    market_cap: Annotated[
+        list[str],
+        typer.Option(
+            "--market-cap",
+            help="总市值 filter OP:VAL 例 gt:100 (总市值 > 100 亿 · 单位亿元) · 可多次",
+        ),
+    ] = [],  # noqa: B006 · typer multi-option 需要 list 默认值
+    volume_ratio: Annotated[
+        list[str],
+        typer.Option(
+            "--volume-ratio",
+            help="量比 filter OP:VAL 例 gt:1.5 (量比 > 1.5 · 裸值筛) · 可多次",
+        ),
+    ] = [],  # noqa: B006 · typer multi-option 需要 list 默认值
     roe: Annotated[
         list[str],
         typer.Option(
@@ -601,6 +629,10 @@ def find(
         --exclude-st           排 ST (quiet · 不记 triggered)
       估值 / 质量 / 资金:
         --pe OP:VAL            PE TTM 裸值筛 · 例 lt:20
+        --pb OP:VAL            PB 裸值筛 · 例 lt:3
+        --turnover OP:VAL      换手率% 裸值筛 · 例 gt:5
+        --market-cap OP:VAL    总市值(亿元)裸值筛 · 例 gt:100
+        --volume-ratio OP:VAL  量比裸值筛 · 例 gt:1.5
         --roe OP:VAL           ROE % 裸值筛 · 例 gte:15 · 逐股 · --all 不支持
         --moneyflow OP:VAL     主力净额(万元) · 例 gt:0 净流入
       技术 / 趋势动量（进阶 · 需理解口径）:
@@ -704,6 +736,10 @@ def find(
             pos=pos,
             resonance=resonance,
             pe=pe,
+            pb=pb,
+            turnover=turnover,
+            market_cap=market_cap,
+            volume_ratio=volume_ratio,
             roe=roe,
             moneyflow=moneyflow,
             rsi=rsi,
