@@ -73,6 +73,8 @@ class FindKlineRequest:
     only_watchlist: bool = False
     group: str | None = None
     limit: int | None = None
+    offset: int = 0
+    sort: tuple[str, str] | None = None
 
 
 @dataclass(frozen=True)
@@ -102,12 +104,63 @@ class FindKlineResult:
         return [(m, m.result) for m in self.matches_limited]
 
 
+def _nested(obj: object, attr: str, sub: str) -> float | None:
+    """安全取 obj.<attr>.<sub> 数值(子对象/字段缺失 → None)· sort getter 共用。"""
+    holder = getattr(obj, attr, None)
+    val = getattr(holder, sub, None) if holder is not None else None
+    return val if isinstance(val, (int, float)) else None
+
+
+SORT_FIELD_GETTERS = {
+    "pe": lambda o: _nested(o, "valuation", "pe_ttm"),
+    "pb": lambda o: _nested(o, "valuation", "pb"),
+    "turnover": lambda o: _nested(o, "valuation", "turnover_rate"),
+    "market_cap": lambda o: _nested(o, "valuation", "total_mv"),
+    "volume_ratio": lambda o: _nested(o, "valuation", "volume_ratio"),
+    "moneyflow": lambda o: _nested(o, "moneyflow", "net_amount"),
+}
+"""--sort 支持字段 · key=用户输入名 · value=从 match.result / 截面 row 取裸值。"""
+
+
+def _sorted_offset_limit(
+    items: list,
+    key_obj: Any,
+    sort: tuple[str, str] | None,
+    offset: int,
+    limit: int | None,
+) -> list:
+    """按 sort 排序(None 值恒排末尾)后做 offset/limit 切片 · K 线池 + 截面两路径共用。
+
+    sort: (field, "asc"|"desc") · field 必在 SORT_FIELD_GETTERS(cmds 已校验)。
+    key_obj: item → 取字段的对象(K 线池=FindMatch.result · 截面=row tuple[0])。
+    """
+    out = items
+    if sort is not None:
+        field, direction = sort
+        getter = SORT_FIELD_GETTERS.get(field)
+        if getter is not None:
+            reverse = direction == "desc"
+
+            def _key(it: Any) -> tuple:
+                v = getter(key_obj(it))
+                if v is None:
+                    return (1, 0.0)  # None 恒排末尾(不论 asc/desc)
+                return (0, -v if reverse else v)
+
+            out = sorted(items, key=_key)
+    start = max(0, offset)
+    end = None if limit is None else start + limit
+    return out[start:end]
+
+
 @dataclass(frozen=True)
 class FindCrossSectionRequest:
     conditions: ConditionSet
     output: FindOutputProfile
     source_mode: bool = False
     limit: int | None = None
+    offset: int = 0
+    sort: tuple[str, str] | None = None
 
 
 @dataclass(frozen=True)
@@ -284,7 +337,9 @@ def run_find_cross_section(request: FindCrossSectionRequest) -> FindCrossSection
             ),
         )
     matched = apply_cross_section_conditions(cs.rows, conditions)
-    limited = matched if request.limit is None else matched[:request.limit]
+    limited = _sorted_offset_limit(
+        matched, lambda it: it[0], request.sort, request.offset, request.limit
+    )
     return FindCrossSectionResult(
         ctx=cs,
         matched=matched,
@@ -407,7 +462,9 @@ def run_find_kline(
         code, message, hint = gap
         raise FindServiceError(code=code, message=message, hint=hint)
     matches = apply_conditions(pool_results, request.conditions)
-    matches_limited = matches[:effective_limit]
+    matches_limited = _sorted_offset_limit(
+        matches, lambda m: m.result, request.sort, request.offset, effective_limit
+    )
     return FindKlineResult(
         stock_set=stock_set,
         ctx=ctx,

@@ -217,6 +217,8 @@ def _run_all_stocks_path(
     compact_context: bool,
     is_export: bool,
     limit: int | None,
+    offset: int,
+    sort: tuple[str, str] | None,
 ) -> None:
     """CLI adapter for `kan find --all` cross-section service."""
     output = _find_output_profile(
@@ -232,6 +234,8 @@ def _run_all_stocks_path(
             output=output,
             source_mode=source_mode,
             limit=limit,
+            offset=offset,
+            sort=sort,
         ))
     except FindServiceError as e:
         _exit_find_service_error(fmt, e)
@@ -277,6 +281,8 @@ def _run_kline_path(
     compact_context: bool,
     is_export: bool,
     limit: int | None,
+    offset: int,
+    sort: tuple[str, str] | None,
     console,
     find_disclaimer: str,
 ) -> None:
@@ -299,6 +305,8 @@ def _run_kline_path(
             only_watchlist=only_watchlist,
             group=group,
             limit=limit,
+            offset=offset,
+            sort=sort,
         ))
     except FindServiceError as e:
         _exit_find_service_error(fmt, e)
@@ -560,6 +568,23 @@ def find(
             help="输出条数上限 (默认 K 线模式 50 · --all 截面模式全量)",
         ),
     ] = None,
+    offset: Annotated[
+        int,
+        typer.Option(
+            "--offset",
+            help="跳过前 N 条 (配合 --limit 分页 · 默认 0)",
+        ),
+    ] = 0,
+    sort: Annotated[
+        str | None,
+        typer.Option(
+            "--sort",
+            help=(
+                "排序 FIELD:asc|desc · FIELD 取 "
+                "pe/pb/turnover/market-cap/volume-ratio/moneyflow · 例 moneyflow:desc"
+            ),
+        ),
+    ] = None,
     all_stocks: Annotated[
         bool,
         typer.Option(
@@ -766,6 +791,31 @@ def find(
             exit_code=2,
         )
 
+    # 解析 --sort FIELD:asc|desc → (field, direction) · 校验字段与方向
+    sort_spec: tuple[str, str] | None = None
+    if sort is not None:
+        from kan.service.find_service import SORT_FIELD_GETTERS
+        raw_parts = sort.split(":")
+        field = raw_parts[0].strip().replace("-", "_")  # market-cap → market_cap
+        direction = raw_parts[1].strip().lower() if len(raw_parts) > 1 else "desc"
+        if field not in SORT_FIELD_GETTERS:
+            _exit_find_error(
+                fmt,
+                code="invalid_sort",
+                message=f"--sort 字段 '{raw_parts[0]}' 不支持",
+                hint=f"可选: {', '.join(SORT_FIELD_GETTERS)} · 例: --sort moneyflow:desc",
+                exit_code=2,
+            )
+        if direction not in ("asc", "desc"):
+            _exit_find_error(
+                fmt,
+                code="invalid_sort",
+                message=f"--sort 方向 '{direction}' 不支持",
+                hint="只支持 asc|desc · 例: --sort pe:asc",
+                exit_code=2,
+            )
+        sort_spec = (field, direction)
+
     # 无 filter:terminal 默认报错引导 (人类 UX 不变 · 测试守护);
     # json/md 放开 = AI 取数环节 (整池全维度 · 不带 filter = 数据 provider)。
     if conditions.is_empty() and not is_export and not all_stocks:
@@ -828,6 +878,8 @@ def find(
             compact_context=compact_context,
             is_export=is_export,
             limit=limit,
+            offset=offset,
+            sort=sort_spec,
         )
         return
 
@@ -847,6 +899,8 @@ def find(
         compact_context=compact_context,
         is_export=is_export,
         limit=limit,
+        offset=offset,
+        sort=sort_spec,
         console=console,
         find_disclaimer=find_disclaimer,
     )

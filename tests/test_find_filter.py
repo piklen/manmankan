@@ -217,3 +217,35 @@ class TestValuationScalarMatchers:
         assert _match_volume_ratio(VolumeRatioFilter(op="gt", value=1.5), v) is not None
         # None valuation → 不命中(集成路径传未 enrich 结果时安全降级)
         assert _match_turnover(TurnoverFilter(op="gt", value=5.0), None) is None
+
+
+class TestSortOffsetLimit:
+    """find_service._sorted_offset_limit · 排序(None 末尾)+ offset/limit 分页。"""
+
+    @staticmethod
+    def _mk(pe):
+        from kan.core.models import ValuationMetrics
+        return type(
+            "M",
+            (),
+            {"valuation": ValuationMetrics(trade_date=date(2026, 6, 3), pe_ttm=pe)},
+        )()
+
+    def test_sort_desc_none_last(self):
+        from kan.service.find_service import _sorted_offset_limit
+        items = [self._mk(10), self._mk(30), self._mk(20), self._mk(None)]
+        out = _sorted_offset_limit(items, lambda x: x, ("pe", "desc"), 0, None)
+        assert [x.valuation.pe_ttm for x in out] == [30, 20, 10, None]
+
+    def test_offset_limit_pagination(self):
+        from kan.service.find_service import _sorted_offset_limit
+        items = [self._mk(10), self._mk(30), self._mk(20)]
+        # asc → [10,20,30] · offset 1 limit 1 → [20]
+        out = _sorted_offset_limit(items, lambda x: x, ("pe", "asc"), 1, 1)
+        assert [x.valuation.pe_ttm for x in out] == [20]
+
+    def test_no_sort_offset_only_keeps_order(self):
+        from kan.service.find_service import _sorted_offset_limit
+        items = [self._mk(10), self._mk(30), self._mk(20)]
+        out = _sorted_offset_limit(items, lambda x: x, None, 1, None)
+        assert [x.valuation.pe_ttm for x in out] == [30, 20]  # 不排序 · 仅跳过第 1 个
