@@ -45,7 +45,7 @@ def _board_reference_label(
     industry 模式 → 「🏛️ X 板块指数」 · theme 模式 → 「🎯 X 题材指数」
     单 SOT 化以前 scan_table 内硬编码 🏛️ 的写法,避免 scan 与 low/high 视觉漂移。
     """
-    from kan.core.scan_targets import ThemeMeta
+    from kan.core.models import ThemeMeta
 
     if isinstance(meta, ThemeMeta):
         return f"🎯 {name} 题材指数"
@@ -62,7 +62,7 @@ def scan_title(
     signal_only: bool = False,
 ) -> str:
     """构造 scan 命令标题 · 给 terminal table.title + md export 共用 · 单 SOT。"""
-    from kan.core.scan_targets import BoardMeta, HotMeta, ThemeMeta
+    from kan.core.models import BoardMeta, HotMeta, ThemeMeta
 
     meta = ctx.meta
     data_cutoff = ctx.freshness.data_cutoff
@@ -123,7 +123,7 @@ def scan_table(
             第一行 + section 分隔(与 results 区分)。caller 提前算好(scan_stock 是
             重导入 · render 层不应自己调度)。
     """
-    from kan.core.scan_targets import HotMeta
+    from kan.core.models import HotMeta
 
     meta = ctx.meta
     title = scan_title(ctx, high_mode=high_mode, signal_only=signal_only)
@@ -443,7 +443,7 @@ def trend_title(
     filter_label: str = "",
 ) -> str:
     """构造 trend 命令标题 · terminal + md export 共用。"""
-    from kan.core.scan_targets import BoardMeta, HotMeta, ThemeMeta
+    from kan.core.models import BoardMeta, HotMeta, ThemeMeta
 
     meta = ctx.meta
     data_cutoff = ctx.freshness.data_cutoff
@@ -490,7 +490,7 @@ def trend_table(
         candle: 阳线阴线口径 · 影响 mode_label。
         filter_label: " · 连跌≥3天" / " · 连涨≥5天" / "" · caller 构造好传入。
     """
-    from kan.core.scan_targets import HotMeta
+    from kan.core.models import HotMeta
 
     meta = ctx.meta
     title = trend_title(ctx, candle=candle, filter_label=filter_label)

@@ -395,20 +395,3 @@ def test_from_flags_with_watchlist_group(temp_kan_dir):
 # ───────────────────── 整体回归 ─────────────────────
 
 
-def test_old_v1_storage_users_unaffected(temp_kan_dir):
-    """老用户的 v1 watchlist.json 仍能 kan list / kan scan · 透明迁移。"""
-    v1 = {
-        "stocks": [
-            {"symbol": "600519", "name": "贵州茅台", "added_at": "2026-05-01"},
-        ]
-    }
-    watchlist.WATCHLIST_PATH.write_text(json.dumps(v1, ensure_ascii=False))
-
-    runner = CliRunner()
-    result = runner.invoke(app, ["list"])
-    assert result.exit_code == 0
-    assert "600519" in result.output
-
-    # 验证已透明升级到 v2
-    data = json.loads(watchlist.WATCHLIST_PATH.read_text())
-    assert data.get("version") == 2

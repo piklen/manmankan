@@ -23,10 +23,8 @@ def cli_main() -> None:
     try:
         from kan.cli.atexit import _auto_install_completion, _check_updates_atexit
         from kan.cli.helpers import _normalize_help_args, _normalize_streak_args
-        from kan.storage.paths import migrate_legacy
         from kan.storage.stock_names_refresh import maybe_start_stock_names_refresh
 
-        migrate_legacy()
         maybe_start_stock_names_refresh()
         _normalize_help_args()
         _normalize_streak_args()

@@ -16,9 +16,16 @@ from datetime import date
 import pandas as pd
 from rich.text import Text
 
-from kan.core.models import Board, PeriodResult, StockScanResult, Theme
+from kan.core.models import (
+    Board,
+    BoardMeta,
+    HotMeta,
+    PeriodResult,
+    StockScanResult,
+    Theme,
+    ThemeMeta,
+)
 from kan.core.pipeline import DataCtx, Freshness
-from kan.core.scan_targets import BoardMeta, HotMeta, ThemeMeta
 from kan.core.scanner import TrendResult
 from kan.render import terminal
 

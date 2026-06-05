@@ -55,7 +55,7 @@ FIND_SCHEMA_VERSION = "0.0.6.8"
 
 def _board_reference_kind(meta: BoardMeta | HotMeta | ThemeMeta | None) -> str:
     """meta 类型对应的 reference kind 标识 · md / json 共用。"""
-    from kan.core.scan_targets import ThemeMeta
+    from kan.core.models import ThemeMeta
 
     return "theme" if isinstance(meta, ThemeMeta) else "industry"
 
@@ -256,7 +256,7 @@ def _extreme_reference_row(
     period: int,
 ) -> list[str] | None:
     """构造单周期 md 表格的 reference 首行 · period 不在 board.periods 时返回 None。"""
-    from kan.core.scan_targets import ThemeMeta
+    from kan.core.models import ThemeMeta
 
     board_pr = next(
         (p for p in board_index_result.periods if p.period == period), None,

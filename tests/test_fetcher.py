@@ -63,11 +63,10 @@ def test_fetch_kline_normalizes_columns(temp_data_dir, force_eastmoney_path, fak
 
     assert set(df.columns) == {
         "date", "open", "high", "low", "close",
-        "volume", "amount", "_source", "_adjust",
+        "volume", "amount", "_source",
     }
     assert len(df) == 3
     assert (df["_source"] == "eastmoney").all()  # force_eastmoney_path fixture 走东财路径
-    assert (df["_adjust"] == "qfq").all()
 
 
 def test_fetch_kline_writes_cache(temp_data_dir, force_eastmoney_path, fake_akshare_df):
@@ -116,34 +115,6 @@ def test_is_fresh_yesterday_cache(temp_data_dir):
     assert not fetcher.is_fresh("600519")
 
 
-def test_is_fresh_legacy_tushare_raw_cache_is_stale(temp_data_dir):
-    """旧版 TuShare daily 缓存没有 _adjust=qfq 标记 · 即使日期新也要重拉。"""
-    cache = temp_data_dir / "600519.parquet"
-    pd.DataFrame({
-        "date": [datetime(2026, 5, 8).date()],
-        "open": [100.0], "high": [101.0], "low": [99.0], "close": [100.5],
-        "_source": ["tushare"],
-    }).to_parquet(cache, index=False)
-
-    assert not fetcher.is_fresh("600519")
-
-
-def test_is_fresh_tushare_qfq_cache_can_be_fresh(temp_data_dir, monkeypatch):
-    cache = temp_data_dir / "600519.parquet"
-    pd.DataFrame({
-        "date": [datetime(2026, 5, 8).date()],
-        "open": [100.0], "high": [101.0], "low": [99.0], "close": [100.5],
-        "_source": ["tushare"], "_adjust": ["qfq"],
-    }).to_parquet(cache, index=False)
-    monkeypatch.setattr(
-        trading_calendar, "latest_trade_date",
-        lambda *a, **kw: date(2026, 5, 8),
-    )
-    trading_calendar.clear_memo()
-
-    assert fetcher.is_fresh("600519")
-
-
 def test_get_cached_returns_none_when_missing(temp_data_dir):
     assert fetcher.get_cached("600519") is None
 
@@ -183,7 +154,7 @@ def test_fetch_batch_continues_on_error(temp_data_dir, force_eastmoney_path, fak
 
 
 def test_get_cached_fills_missing_optional_columns(temp_data_dir):
-    """旧 parquet 缺 volume/amount 仍补 NaN · 缺 _source 经 migration 补 unknown."""
+    """手工/自定义源 parquet 缺 volume/amount · get_cached 补 NaN 防下游 KeyError。"""
     cache = temp_data_dir / "600519.parquet"
     old_df = pd.DataFrame({
         "date": [datetime(2026, 5, 8).date()],
@@ -197,8 +168,6 @@ def test_get_cached_fills_missing_optional_columns(temp_data_dir):
     assert "amount" in df.columns
     assert pd.isna(df["volume"].iloc[0])
     assert pd.isna(df["amount"].iloc[0])
-    assert df["_source"].iloc[0] == "unknown"  # migration 行为
-    assert df["_adjust"].iloc[0] == "unknown"
 
 
 # --- _normalize_kline ---
@@ -215,7 +184,6 @@ class TestNormalizeKline:
         assert df["close"].dtype == "float64"
         assert df["date"].iloc[0].__class__.__name__ == "date"
         assert df["_source"].iloc[0] == "test"
-        assert df["_adjust"].iloc[0] == "unknown"
 
     def test_fills_missing_optional_columns(self):
         raw = pd.DataFrame({
@@ -225,7 +193,6 @@ class TestNormalizeKline:
         df = fetcher._normalize_kline(raw)
         assert "volume" in df.columns
         assert pd.isna(df["volume"].iloc[0])
-        assert df["_adjust"].iloc[0] == "unknown"
 
     def test_raises_on_missing_required_column(self):
         raw = pd.DataFrame({"date": ["2026-05-08"], "open": [100]})
@@ -389,7 +356,7 @@ def test_circuit_empty_result_not_recorded_down(isolated_breaker):
     assert not isolated_breaker.is_down("eastmoney")
 
 
-# ── source stamping + migration · _source column ───────────────────────
+# ── source stamping · _source column ───────────────────────────────────
 
 
 @pytest.fixture
@@ -435,88 +402,8 @@ def test_fetch_kline_stamps_source(temp_data_dir, raw_kline_df, source, mock_tar
     assert (df["_source"] == source).all()
 
 
-def test_load_with_migration_legacy_adds_unknown(temp_data_dir):
-    """旧 parquet 缺 _source 列 · _load_with_migration 自动补 unknown · 行数 zero-loss."""
-    cache = temp_data_dir / "600519.parquet"
-    old_df = pd.DataFrame({
-        "date": [datetime(2026, 5, 7).date(), datetime(2026, 5, 8).date()],
-        "open": [100.0, 101.0], "high": [101.0, 102.0],
-        "low": [99.0, 100.0], "close": [100.5, 101.5],
-        "volume": [10000, 11000], "amount": [1e6, 1.1e6],
-    })
-    old_df.to_parquet(cache, index=False)
-
-    df = fetcher._load_with_migration(cache)
-    assert "_source" in df.columns
-    assert "_adjust" in df.columns
-    assert (df["_source"] == "unknown").all()
-    assert (df["_adjust"] == "unknown").all()
-    assert len(df) == len(old_df)  # zero-loss
-
-
-def test_load_with_migration_writes_back_atomic(temp_data_dir, monkeypatch):
-    """migration 触发 atomic write back · 持久化 _source 列到磁盘."""
-    cache = temp_data_dir / "600519.parquet"
-    old_df = pd.DataFrame({
-        "date": [datetime(2026, 5, 8).date()],
-        "open": [100.0], "high": [101.0], "low": [99.0], "close": [100.5],
-    })
-    old_df.to_parquet(cache, index=False)
-
-    calls = []
-    original = paths.atomic_write_parquet
-
-    def spy(df, path):
-        calls.append(path)
-        return original(df, path)
-
-    monkeypatch.setattr("kan.storage.paths.atomic_write_parquet", spy)
-
-    fetcher._load_with_migration(cache)
-    assert len(calls) == 1
-    reloaded = pd.read_parquet(cache)
-    assert "_source" in reloaded.columns
-    assert "_adjust" in reloaded.columns
-
-
-def test_load_with_migration_idempotent(temp_data_dir, monkeypatch):
-    """已含 _source 列的 parquet 不重复 migrate · 不触发 atomic write back."""
-    cache = temp_data_dir / "600519.parquet"
-    df_with_source = pd.DataFrame({
-        "date": [datetime(2026, 5, 8).date()],
-        "open": [100.0], "high": [101.0], "low": [99.0], "close": [100.5],
-        "volume": [10000.0], "amount": [1e6],
-        "_source": ["baostock"], "_adjust": ["qfq"],
-    })
-    df_with_source.to_parquet(cache, index=False)
-
-    calls = []
-    monkeypatch.setattr(
-        "kan.storage.paths.atomic_write_parquet", lambda *a, **kw: calls.append(1)
-    )
-    df = fetcher._load_with_migration(cache)
-    assert len(calls) == 0
-    assert (df["_source"] == "baostock").all()
-
-
-def test_get_cached_triggers_migration(temp_data_dir):
-    """get_cached 路径走 migration helper · 旧 parquet 自动补 _source = unknown."""
-    cache = temp_data_dir / "600519.parquet"
-    old_df = pd.DataFrame({
-        "date": [datetime(2026, 5, 8).date()],
-        "open": [100.0], "high": [101.0], "low": [99.0], "close": [100.5],
-        "volume": [10000.0], "amount": [1e6],
-    })
-    old_df.to_parquet(cache, index=False)
-
-    df = fetcher.get_cached("600519")
-    assert df is not None
-    assert df["_source"].iloc[0] == "unknown"
-    assert df["_adjust"].iloc[0] == "unknown"
-
-
-def test_read_cutoff_unaffected_by_migration(temp_data_dir):
-    """_read_cutoff_from_parquet 只读 date 列 · 不触发 migration · 文件未改写."""
+def test_read_cutoff_only_reads_date_no_rewrite(temp_data_dir):
+    """_read_cutoff_from_parquet 只读 date 列 · 不改写文件(mtime 不变)。"""
     cache = temp_data_dir / "600519.parquet"
     old_df = pd.DataFrame({
         "date": [datetime(2026, 5, 7).date(), datetime(2026, 5, 8).date()],
@@ -531,8 +418,6 @@ def test_read_cutoff_unaffected_by_migration(temp_data_dir):
 
     assert last_date == datetime(2026, 5, 8).date()
     assert mtime_before == mtime_after
-    reloaded = pd.read_parquet(cache)
-    assert "_source" not in reloaded.columns
 
 
 class TestTushareProDispatch:
@@ -599,4 +484,3 @@ class TestTushareProDispatch:
         df = fetcher.fetch_kline("600519", force=True)
         assert not baostock_called["hit"]
         assert (df["_source"] == "tushare").all()
-        assert (df["_adjust"] == "qfq").all()

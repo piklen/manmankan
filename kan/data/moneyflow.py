@@ -129,18 +129,6 @@ def _load_cache(path: Path) -> pd.DataFrame | None:
         return None
 
 
-def _cache_compatible(df: pd.DataFrame) -> bool:
-    """Current-cache schema guard · old moneyflow_dc caches must not shadow TuShare moneyflow."""
-    if df.empty:
-        return True
-    if not set(MONEYFLOW_COLUMNS).issubset(df.columns):
-        return False
-    if "_source" not in df.columns:
-        return False
-    sources = {str(x) for x in df["_source"].dropna().unique()}
-    return not sources or sources == {_MONEYFLOW_SOURCE}
-
-
 def _load_latest_available_moneyflow(before_td: str) -> pd.DataFrame | None:
     """latest 截面拉空时 · 降级到 DATA_DIR 里早于 before_td 的最近资金流截面缓存。"""
     best_date: str | None = None
@@ -244,7 +232,7 @@ def _load_or_fetch_moneyflow_frame(
     cache = _cache_path(trade_date)
     if not force and _cache_fresh(cache, trade_date):
         cached = _load_cache(cache)
-        if cached is not None and _cache_compatible(cached):
+        if cached is not None:
             return _normalize_moneyflow(cached)
 
     raw = _fetch_tushare_moneyflow(trade_date)
