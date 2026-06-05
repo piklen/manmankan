@@ -35,14 +35,14 @@ def hot_runner(monkeypatch):
     monkeypatch.setattr(
         "kan.cli.scan_cmds._get_watchlist_pairs", lambda group=None: [("600519", "贵州茅台")]
     )
-    monkeypatch.setattr("kan.cli.helpers._auto_fetch_stale", lambda _p: None)
+    monkeypatch.setattr("kan.cli.helpers._auto_fetch_stale", lambda _p, **_kw: None)
     monkeypatch.setattr(
         "kan.cli.scan_cmds._load_watchlist_pairs", lambda group=None: [("600519", "贵州茅台")]
     )
     monkeypatch.setattr(
         "kan.cli.trend_cmds._get_watchlist_pairs", lambda group=None: [("600519", "贵州茅台")]
     )
-    monkeypatch.setattr("kan.cli.helpers._auto_fetch_stale", lambda _p: None)
+    monkeypatch.setattr("kan.cli.helpers._auto_fetch_stale", lambda _p, **_kw: None)
     monkeypatch.setattr(
         "kan.cli.trend_cmds._load_watchlist_pairs", lambda group=None: [("600519", "贵州茅台")]
     )
@@ -55,7 +55,7 @@ def hot_runner(monkeypatch):
     )
     monkeypatch.setattr(
         "kan.core.scanner.scan_batch",
-        lambda pairs, mode="low": [_fake_scan_result(s, n) for s, n in pairs],
+        lambda pairs, mode="low", periods=None: [_fake_scan_result(s, n) for s, n in pairs],
     )
     monkeypatch.setattr("kan.data.fetcher.cache_age", lambda _s: "2026-05-21 12:00")
     monkeypatch.setattr(

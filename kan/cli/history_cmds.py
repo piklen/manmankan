@@ -102,7 +102,7 @@ def history(
     symbol: Annotated[str, typer.Argument(help="股票代码或名称")],
     period: Annotated[
         int,
-        typer.Option("--period", "-p", help="回溯周期(默认 30 · 可选 3/5/7/10/15/30/60/90/120/180)"),
+        typer.Option("--period", "-p", help="回溯周期(2-360 · 默认 30 · 仅展示历史快照中已记录的周期)"),
     ] = 30,
     fmt: Annotated[
         export.OutputFormat,
@@ -110,14 +110,14 @@ def history(
     ] = export.OutputFormat.terminal,
 ) -> None:
     """看一只股票过去 N 天「位置百分位」的变化轨迹（纯离线 · 读每日扫描快照）"""
-    from kan.core.scanner import PERIODS, load_symbol_history, snapshot_symbol_names
+    from kan.core.scanner import MAX_PERIOD, MIN_PERIOD, load_symbol_history, snapshot_symbol_names
 
-    if period not in PERIODS:
+    if period < MIN_PERIOD or period > MAX_PERIOD:
         _exit_history_error(
             fmt,
             code="invalid_period",
             message=f"周期不支持: {period}",
-            hint=f"可选 {'/'.join(map(str, PERIODS))}",
+            hint=f"周期范围 {MIN_PERIOD}-{MAX_PERIOD} · 例: kan history 600519 --period 20",
             exit_code=2,
         )
 

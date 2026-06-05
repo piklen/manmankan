@@ -92,6 +92,17 @@ kan find --industry 半导体 --format json \
 kan find --any --pos 20:lt:10 --moneyflow-daily gt:10000 --format json
 ```
 
+### sort / pagination
+
+`kan find` 支持在筛选后排序和分页:
+
+```bash
+kan find --all --moneyflow-daily gt:0 --sort moneyflow:desc --limit 20 --offset 20 --format json
+kan find --industry 半导体 --pos 20:lt:30 --sort pos_20:asc --limit 30 --format json
+```
+
+`--sort` 只接受登记字段,方向为 `asc` / `desc`;未知字段在 JSON 模式返回 `invalid_sort` envelope。`--offset` 先跳过前 N 条,再按 `--limit` 截断;`stats.matched_total` 保留截断前命中数。
+
 ### data_availability
 
 `data_availability` 统计的是候选池维度可用性,用于区分“数据缺失”和“事实为 0”:
@@ -179,5 +190,6 @@ kan find --any --pos 20:lt:10 --moneyflow-daily gt:10000 --format json
 | `empty_intersection` | `--only-watchlist` 后候选池为空 |
 | `invalid_fields` | `--fields` 字段未知、为空、与 `--compact` 冲突,或当前模式不支持该维度 |
 | `invalid_compact_context` | `--no-compact-context` 未与 `--format json --compact` 一起使用 |
+| `invalid_sort` | `--sort` 字段或方向不在登记白名单内 |
 | `invalid_codes` | `--codes` 或 `--codes -` 中包含非 6 位 A 股代码 |
 | `empty_codes` | `--codes` 解析后没有任何有效代码 |

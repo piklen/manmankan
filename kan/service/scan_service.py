@@ -22,6 +22,7 @@ class ScanRequest:
 
     stock_set: StockSet
     mode: ScanMode = "low"
+    periods: list[int] | None = None
     signal_only: bool = False
     exclude_st: bool = False
     show_progress: bool = True
@@ -56,10 +57,12 @@ def run_scan(request: ScanRequest) -> ScanServiceResult:
         request.stock_set,
         compute=scan_batch,
         mode=request.mode,
+        periods=request.periods,
+        fetch_days=max(request.periods) if request.periods else None,
         show_progress=request.show_progress,
         exit_on_resolve_error=False,
     )
-    board_index_result = _scan_board_index(ctx.meta)
+    board_index_result = _scan_board_index(ctx.meta, periods=request.periods)
     all_results = enrich_scan_rows(ctx.results, data_cutoff=ctx.freshness.data_cutoff)
     results = _filter_scan_results(
         all_results,
@@ -93,12 +96,13 @@ def _filter_scan_results(
 
 def _scan_board_index(
     meta: BoardMeta | HotMeta | ThemeMeta | None,
+    periods: list[int] | None = None,
 ) -> StockScanResult | None:
     """Scan industry/theme index K-line when available for contextual rows."""
     from kan.core.scanner import scan_stock
 
     if isinstance(meta, BoardMeta):
-        return scan_stock(meta.index_kline, meta.board.code, meta.board.name)
+        return scan_stock(meta.index_kline, meta.board.code, meta.board.name, periods=periods)
     if isinstance(meta, ThemeMeta) and not meta.index_kline.empty:
-        return scan_stock(meta.index_kline, meta.theme.code, meta.theme.name)
+        return scan_stock(meta.index_kline, meta.theme.code, meta.theme.name, periods=periods)
     return None

@@ -37,7 +37,10 @@ def help_cmd() -> None:
 [bold cyan]位置扫描[/bold cyan]
   新手从 kan scan 和 kan find 开始
   kan scan                  全景扫描 10 周期（低点模式）
-  kan scan --high           全景扫描 10 周期（高点模式）
+  kan scan --wide           窄屏也展示全部周期
+  kan scan --compact        只展示短/中/长关键周期
+  kan scan --periods 5,20,60,180  自定义 2-360 周期集合
+  kan scan --high           全景扫描（高点模式）
   kan scan -S               仅显示有共振信号的股票（--signal）
   kan scan --diff           显示与上次扫描的变化
 

@@ -8,6 +8,12 @@ increment `D` unless the maintainer explicitly approves a larger bump.
 
 ## [Unreleased]
 
+### Added
+
+- `kan scan --periods` 支持显式选择 2-360 周期集合，`--compact` / `--wide` 支持终端窄屏与全周期展示手动切换。
+- `kan board rank --period`、`kan compare --periods`、`kan history --period` 的周期边界统一到 2-360；`compare` 会按用户指定周期实际计算。
+- `kan info <code>` 增加所属申万一级行业的位置均值与低到高排名对照；无行业映射或本地样本不足时自动降级不展示。
+
 ## [0.0.6.9] - 2026-06-04
 
 ### Changed

@@ -24,6 +24,7 @@ if TYPE_CHECKING:
 
     from kan.core.models import (
         BoardMeta,
+        BoardPositionContext,
         HotMeta,
         PeriodResult,
         StockScanResult,
@@ -369,6 +370,24 @@ def info_table(
                 format_pct(pr),
             )
 
+    return table
+
+
+def board_position_table(context: BoardPositionContext) -> Table:
+    """kan info 所属板块位置对照表 · 低到高排名是客观排序口径。"""
+    table = Table(show_lines=False, pad_edge=False, padding=(0, 1))
+    table.add_column("周期", justify="right", style="cyan")
+    table.add_column("本股位置", justify="right")
+    table.add_column("板块均值", justify="right")
+    table.add_column("低到高排名", justify="right")
+
+    for row in context.periods:
+        table.add_row(
+            f"{row.period}日",
+            f"{row.position_pct:.1f}%",
+            f"{row.board_avg_pct:.1f}%",
+            f"{row.rank_low_to_high}/{row.sample}",
+        )
     return table
 
 

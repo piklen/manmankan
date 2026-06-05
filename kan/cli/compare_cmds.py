@@ -20,7 +20,7 @@ def compare(
         str,
         typer.Option(
             "--periods", "-p",
-            help="周期(默认 5,30,180 短中长 · 逗号分隔多个:7,30,90)"
+            help="周期(2-360 · 默认 5,30,180 短中长 · 逗号分隔多个:7,20,90)"
         ),
     ] = "5,30,180",
     fmt: Annotated[
@@ -43,7 +43,7 @@ def compare(
 
     status_console = Console(stderr=True)
     with _with_heavy_imports_spinner(status_console, "⏳ 加载数据模块..."):
-        from kan.core.scanner import PERIODS, scan_stock
+        from kan.core.scanner import MAX_PERIOD, MIN_PERIOD, scan_stock
         from kan.data.fetcher import fetch_kline, get_cached, is_fresh
         from kan.render import terminal
         from kan.render.base import DISCLAIMER
@@ -56,12 +56,13 @@ def compare(
     except ValueError:
         _print_err(f"❌ --periods 格式错误：{periods!r} · 应为逗号分隔整数")
         raise typer.Exit(2) from None
-    invalid = [p for p in period_list if p not in PERIODS]
+    invalid = [p for p in period_list if p < MIN_PERIOD or p > MAX_PERIOD]
     if invalid or not period_list:
         _print_err(
-            f"❌ 周期不支持：{invalid or periods!r} · 可选 {'/'.join(map(str, PERIODS))}"
+            f"❌ 周期不支持：{invalid or periods!r} · 范围 {MIN_PERIOD}-{MAX_PERIOD}"
         )
         raise typer.Exit(2)
+    period_list = sorted(dict.fromkeys(period_list))
 
     results = []
     seen: set[str] = set()
@@ -88,7 +89,7 @@ def compare(
         if df is None:
             _print_err(f"❌ {sym} 无数据")
             raise typer.Exit(1)
-        results.append(scan_stock(df, sym, name))
+        results.append(scan_stock(df, sym, name, periods=period_list))
 
     if fmt is export.OutputFormat.json:
         typer.echo(export.to_json(export.compare_payload(results, periods=period_list)))

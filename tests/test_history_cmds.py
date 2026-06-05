@@ -188,7 +188,7 @@ def test_name_resolution_multi_errors(snap_dir, runner):
 
 def test_invalid_period_errors(snap_dir, runner):
     _write(snap_dir, "2026-05-23", [_entry()])
-    result = runner.invoke(app, ["history", "600519", "--period", "13"])
+    result = runner.invoke(app, ["history", "600519", "--period", "1"])
     assert result.exit_code == 2
     assert "周期不支持" in result.output
 
@@ -197,7 +197,7 @@ def test_invalid_period_json_errors(snap_dir, runner):
     _write(snap_dir, "2026-05-23", [_entry()])
     result = runner.invoke(
         app,
-        ["history", "600519", "--period", "13", "--format", "json"],
+        ["history", "600519", "--period", "361", "--format", "json"],
     )
     assert result.exit_code == 2
     payload = json.loads(result.output)
@@ -213,6 +213,17 @@ def test_missing_period_shows_dash(snap_dir, runner):
     result = runner.invoke(app, ["history", "600519", "--format", "md"])
     assert result.exit_code == 0
     assert "| - |" in result.output
+
+
+def test_arbitrary_valid_period_missing_snapshot_is_null(snap_dir, runner):
+    _write(snap_dir, "2026-05-23", [
+        _entry(periods={"30": {"pct": 4.0, "at_low": True, "at_high": False}}),
+    ])
+    result = runner.invoke(app, ["history", "600519", "--period", "13", "--format", "json"])
+    assert result.exit_code == 0
+    payload = json.loads(result.output)
+    assert payload["period"] == 13
+    assert payload["series"][0]["position_pct"] is None
 
 
 def test_format_json_structure(snap_dir, runner):

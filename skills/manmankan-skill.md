@@ -26,9 +26,11 @@
 | `kan scan` | 扫描当前自选股的多周期位置 | 每日起手第一步，了解持仓+自选的整体位置 |
 | `kan scan --group <组名>` | 扫描指定分组 | 分组巡检 |
 | `kan scan --codes <代码列表>` | 扫描外部代码 | 临时查看一批候选 |
+| `kan scan --periods 5,20,60,180 --wide` | 自定义 2-360 周期并全量展示 | 避免窄屏只看到部分周期 |
+| `kan scan --compact` | 终端只展示短/中/长关键周期 | 控制终端 token 和横向宽度 |
 | `kan scan --industry <行业>` | 扫描申万行业成分股 | 行业维度扫描 |
-| `kan info <代码>` | 单只股票全景：位置/估值/资金/技术 | 深度研判单只股票时用 |
-| `kan compare <代码1> <代码2> ...` | 多股横向对比 | 候选池缩窄时比较 |
+| `kan info <代码>` | 单只股票全景：位置/估值/资金/技术 + 所属行业位置对照 | 深度研判单只股票时用 |
+| `kan compare <代码1> <代码2> ... --periods 20,60` | 多股横向对比 | 候选池缩窄时比较 |
 
 ### 2. 条件筛选
 
@@ -37,16 +39,20 @@
 | `kan find` | 按条件筛选股票 | **AI 的核心消费入口**——把自然语言需求翻译为 find 参数 |
 | `--pos N:lt:M` | 位置筛选（N 日位置 < M%） | 如 `--pos 180:lt:10` = 180 日低位 |
 | `--resonance low:gte:N` | 共振筛选（至少 N 个周期同时低位） | 多周期共振比单周期更可靠 |
-| `--pe lt:V` / `--pe gt:V` | PE 估值筛选 | 注意：当前 PE 数据可能缺失（`data_availability.pe=false`） |
-| `--moneyflow gt:V` | 主力资金净流入筛选（万元） | 当前为 5 日主力合计 |
+| `--pe` / `--pb` / `--turnover` / `--market-cap` / `--volume-ratio` | 估值、换手、市值、量比筛选 | 来自截面指标；看 `data_availability` 区分缺数据 |
+| `--moneyflow` / `--moneyflow-daily` / `--moneyflow-days` | 主力资金净额、单日资金、连续净流入天数 | 单位万元；输出分类资金流裸值 |
 | `--exclude-st` | 排除 ST 股 | **每次全市场扫描都必须加** |
-| `--gain gt:V` | N 日涨幅筛选 | 避开短期涨幅过大的 |
+| `--gain N:OP:V` / `--ma-bias N:OP:V` | 2-360 周期涨幅和均线乖离率 | 周期直接写入 filter，如 `20:gt:5` |
+| `--sort FIELD:asc/desc` / `--offset N` / `--limit N` | 排序与分页 | 适合全市场或大行业池低上下文消费 |
 
 ### 3. 候选池管理
 
 | 命令 | 用途 | AI 使用建议 |
 |------|------|------------|
-| `kan add <代码> [--group <组名>]` | 加自选股 | 可指定分组 |
+| `kan add <代码...> [--group <组名>]` | 批量加自选股 | 可指定分组 |
+| `cat codes.txt \| kan add -` | 从 stdin 批量添加 | 外部候选池回填自选 |
+| `kan add --industry <行业> --dry-run` | 批量添加预览 | 先看数量和影响，不写入 |
+| `kan add <代码> --fetch` | 添加后立即拉 K 线 | 避免下次 scan 冷启动 |
 | `kan remove <代码>` | 删自选股 | |
 | `kan list [--group <组名>]` | 列出自选股 | |
 | `kan group create/list/rename/delete/default` | 分组管理 | 分组是组织自选股的首选方式 |
@@ -58,17 +64,19 @@
 
 | 命令 | 用途 | AI 使用建议 |
 |------|------|------------|
-| `kan history <代码> [--format json]` | 日 K 线历史 | 需要原数据时用 |
+| `kan history <代码> --period N [--format json]` | 位置历史回溯 | N 支持 2-360；只展示快照中已记录周期 |
 | `kan trend [--up/down N]` | 连续涨跌跟踪 | 发现异动 |
-| `kan board rank --kind industry --by moneyflow` | 板块资金排名 | 大盘温度判断 |
+| `kan board rank --kind industry --by moneyflow --format json` | 板块资金排名 | 板块级客观裸值聚合 |
+| `kan index [sh sz cyb hs300] --format json` | 常用指数日线位置参照 | 补大盘基准 |
 | `kan low N` / `kan high N` | N 日新低/新高 | 极端位置发现 |
 
 ### 5. 数据维护
 
 | 命令 | 用途 | AI 使用建议 |
 |------|------|------------|
-| `kan fetch [--all]` | 更新本地数据 | 每日首次使用前跑一次 |
-| `kan fetch --codes <列表>` | 更新指定股票 | 新加入自选股后 |
+| `kan fetch` | 更新当前自选数据 | 每日首次使用前跑一次；默认摘要输出 |
+| `kan fetch 600519 000858` | 更新指定股票 | 新加入自选股后 |
+| `kan fetch --verbose` | 逐只输出拉取状态 | 排障时使用 |
 
 ---
 
@@ -94,18 +102,18 @@
 {
   "ok": false,
   "error": {
-    "code": "UNSUPPORTED_PERIOD",
-    "message": "--pos 周期 20 不支持 · 仅 [3,5,7,10,15,30,60,90,120,180]",
-    "hint": "最接近的是 15 或 30"
+    "code": "invalid_fields",
+    "message": "--fields 包含未知字段",
+    "hint": "例: kan fields list --format json"
   }
 }
 ```
 
 ### AI 消费要点
 - **先检查 `ok` 字段**——`false` 时不要尝试解析 `results`
-- **`data_availability` 是诚实信号**——`"pe": false` 表示 PE 数据不可用，AI 不应基于 PE 做判断
+- **`data_availability` 是诚实信号**——维度未请求、不可用、缺失要分开处理
 - **`schema_version` 用于版本适配**——当前为 1
-- **紧凑模式**：加 `--compact` 减少输出的空格和缩进；加 `--no-compact-context` 移除上下文约定文本
+- **紧凑模式**：`kan find --compact` 降低 JSON 字段量；`kan scan --compact` 降低终端横向宽度
 - **字段白名单**：`--fields @core,@valuation,@moneyflow` 只返回指定字段组，节省 token
 
 ---
@@ -116,7 +124,7 @@
 
 ```bash
 # 1. 更新数据
-kan fetch --all
+kan fetch
 
 # 2. 全市场低位筛选（排除 ST）
 kan find --all --pos 180:lt:10 --exclude-st --format json --compact
@@ -167,11 +175,9 @@ kan scan --group <组名>
 
 | 限制 | 影响 | 绕过方式 |
 |------|------|----------|
-| PE 数据当前可能缺失 | `kan find --pe` 可能返回空 | 用 tushare MCP 的 `daily_basic` 补 |
-| 资金流仅为 5 日合计 | 无法判断"今日转向" | 用 tushare MCP 的 `moneyflow` 补单日 |
-| 筛选周期仅支持 10 个固定值 | `--pos 20` 会报错 | 选最接近的（15 或 30） |
-| JSON 部分命令输出不稳定 | board rank/industry scan 偶发空输出 | 降级到终端输出 + 正则解析 |
-| `kan find --all` 无分页 | 结果可能截断 | 加更严格的筛选条件缩小范围 |
+| 上游数据可能缺失或限流 | 相关维度返回 null / `data_unavailable` | 先看 `data_availability` 和 JSON error hint |
+| 部分逐股高成本维度不支持 `--all` | 如股东/ROE 类全市场模式不可用 | 改用行业/代码池小范围查询 |
+| 历史回溯依赖扫描快照 | 未记录过的周期显示 null / `-` | 先用 `kan scan --periods N` 积累后再查 |
 | MCP 仅提供本地 stdio | 远程 HTTP transport 尚未提供 | 先用 `kan mcp install --dry-run` 预览本机客户端注册 |
 | 无实时行情 | 所有数据为日线级别 | 盘中不依赖 manmankan 做实时决策 |
 
@@ -182,10 +188,12 @@ kan scan --group <组名>
 Agent 可以通过以下方式发现 manmankan 的能力：
 
 1. **本文件**（`skills/manmankan-skill.md`）——完整的能力清单
-2. **`kan --help`**——命令列表（无分组命令入口，需 `kan group --help`）
-3. **`kan mcp install --dry-run`**——预览可注册的本机 MCP 客户端和目标配置
-4. **`kan <command> --help`**——每个命令的详细参数
-5. **`docs/find.md`**——`kan find` 的完整 JSON schema 和字段定义
+2. **`kan --help` / `kan help`**——中文速记，含 group / JSON / fields / MCP 入口
+3. **`kan examples`**——端到端工作流示例
+4. **`kan fields list --format json`**——字段 preset 和白名单
+5. **`kan mcp install --dry-run`**——预览可注册的本机 MCP 客户端和目标配置
+6. **`kan <command> --help`**——每个命令的详细参数
+7. **`docs/find.md`**——`kan find` 的完整 JSON schema 和字段定义
 
 建议 AI 在首次使用 manmankan 时：
 1. 读本文件了解全局能力

@@ -107,6 +107,55 @@ def _resolve_scan_code_pairs(
     return [(code, names.get(code, code)) for code in codes]
 
 
+def _parse_scan_periods(raw: str | None, fmt: export.OutputFormat) -> list[int] | None:
+    """Parse `kan scan --periods` as a 2-360 integer list."""
+    if raw is None:
+        return None
+    from kan.core.scanner import MAX_PERIOD, MIN_PERIOD
+
+    parts = [p.strip() for p in raw.replace(",", " ").split() if p.strip()]
+    if not parts:
+        _exit_scan_error(
+            fmt,
+            code="invalid_periods",
+            message="--periods 为空",
+            hint="例: kan scan --periods 5,20,60,180",
+            exit_code=2,
+        )
+    periods: list[int] = []
+    invalid: list[str] = []
+    for part in parts:
+        try:
+            period = int(part)
+        except ValueError:
+            invalid.append(part)
+            continue
+        if period < MIN_PERIOD or period > MAX_PERIOD:
+            invalid.append(part)
+            continue
+        periods.append(period)
+    if invalid:
+        _exit_scan_error(
+            fmt,
+            code="invalid_periods",
+            message=f"--periods 含无效周期: {', '.join(invalid[:5])} · 范围 {MIN_PERIOD}-{MAX_PERIOD}",
+            hint="例: kan scan --periods 5,20,60,180",
+            exit_code=2,
+        )
+    return sorted(dict.fromkeys(periods))
+
+
+def _compact_display_periods(periods: list[int]) -> list[int]:
+    """Stable short/mid/long terminal subset for explicit compact scan output."""
+    preferred = [5, 20, 30, 60, 180, 360]
+    chosen = [p for p in preferred if p in periods]
+    if chosen:
+        return chosen
+    if len(periods) <= 3:
+        return periods
+    return sorted({periods[0], periods[len(periods) // 2], periods[-1]})
+
+
 @app.command()
 def scan(
     symbols: Annotated[
@@ -141,12 +190,24 @@ def scan(
         str | None,
         typer.Option("--group", "-g", help="选自选股分组 (默认 default 组 · 跑 kan group list 查看)"),
     ] = None,
+    periods: Annotated[
+        str | None,
+        typer.Option("--periods", help="计算/展示周期（2-360，逗号或空格分隔）· 例: 5,20,60,180"),
+    ] = None,
+    compact: Annotated[
+        bool,
+        typer.Option("--compact", help="终端只展示短/中/长关键周期；JSON/Markdown 不受影响"),
+    ] = False,
+    wide: Annotated[
+        bool,
+        typer.Option("--wide", help="终端展示全部计算周期，可能超过窄屏宽度；JSON/Markdown 不受影响"),
+    ] = False,
     fmt: Annotated[
         export.OutputFormat,
         typer.Option("--format", help="输出格式：terminal（默认）/ md / json"),
     ] = export.OutputFormat.terminal,
 ) -> None:
-    """扫描自选股多周期位置（10 周期全景模式 · --group 切换分组）"""
+    """扫描自选股多周期位置（全景模式 · --group 切换分组）"""
     from rich.console import Console
 
     status_console = Console(stderr=True)
@@ -162,6 +223,15 @@ def scan(
         from kan.render.base import DISCLAIMER, responsive_periods
 
     console = Console()
+    period_list = _parse_scan_periods(periods, fmt) or list(PERIODS)
+    if compact and wide:
+        _exit_scan_error(
+            fmt,
+            code="invalid_display_mode",
+            message="--compact 与 --wide 不能同时使用",
+            hint="例: kan scan --wide；或 kan scan --compact",
+            exit_code=2,
+        )
     positional_codes = " ".join(symbols or []) or None
     if codes is not None and positional_codes is not None:
         _exit_scan_error(
@@ -242,6 +312,7 @@ def scan(
         service_result = run_scan(ScanRequest(
             stock_set=stock_set,
             mode=mode,
+            periods=period_list,
             signal_only=signal,
             exclude_st=exclude_st,
             show_progress=fmt is export.OutputFormat.terminal,
@@ -290,15 +361,20 @@ def scan(
         return
     if fmt is export.OutputFormat.md:
         typer.echo(export.scan_markdown(
-            results, periods=list(PERIODS), mode=mode, title=title,
+            results, periods=period_list, mode=mode, title=title,
             show_context=True,
         ))
         if board_meta is None and not is_code_mode:
             save_snapshot(all_results)
         return
 
-    display_periods = responsive_periods(console.width - 56)
-    is_compact = len(display_periods) < len(PERIODS)
+    if wide or periods is not None:
+        display_periods = period_list
+    elif compact:
+        display_periods = _compact_display_periods(period_list)
+    else:
+        display_periods = responsive_periods(console.width - 56, period_list)
+    is_compact = len(display_periods) < len(period_list)
 
     is_hot = isinstance(board_meta, HotMeta)
     table = terminal.scan_table(
@@ -317,8 +393,8 @@ def scan(
         shown = "/".join(str(p) for p in display_periods)
         n = len(display_periods)
         console.print(
-            f"\n  [dim]窄屏模式 · 显示 {n}/10 周期"
-            f"（{shown}日）· 加宽终端可见全部[/dim]"
+            f"\n  [dim]周期显示: {n}/{len(period_list)}"
+            f"（{shown}日）· 加 --wide 可见全部 · --periods 可自定义[/dim]"
         )
 
     render_freshness_warning(freshness, console)

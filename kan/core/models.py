@@ -123,6 +123,27 @@ class ValuationContext(BaseModel):
     pb_industry_median: float | None = None  # 申万一级 PB 中位 (参照)
 
 
+class BoardPositionPeriod(BaseModel):
+    """个股在所属板块内的位置对照 · 只承载客观排序/均值。"""
+
+    period: int
+    position_pct: float
+    board_avg_pct: float
+    rank_low_to_high: int
+    sample: int
+
+
+class BoardPositionContext(BaseModel):
+    """kan info 板块位置对照 · 所属申万行业 + 本地缓存样本统计。"""
+
+    industry: str
+    board_code: str | None = None
+    board_level: int | None = None
+    constituent_count: int
+    cached_sample: int
+    periods: list[BoardPositionPeriod]
+
+
 class FundamentalMetrics(BaseModel):
     """单只股票财务质量·成长指标 · fina_indicator 衍生 · 最新一期报告原始值 (估值/质量/资金维度)。
 

@@ -28,6 +28,7 @@ if TYPE_CHECKING:
     from kan.core.find_filter import FindMatch, TriggeredFilter
     from kan.core.models import (
         BoardMeta,
+        BoardPositionContext,
         ChipMetrics,
         EnrichedResult,
         FundamentalMetrics,
@@ -336,6 +337,7 @@ def info_payload(
     valuation_context: ValuationContext | None = None,
     moneyflow: MoneyflowMetrics | None = None,
     sentiment: SentimentMetrics | None = None,
+    board_context: BoardPositionContext | None = None,
 ) -> dict:
     """kan info --format json 的结构化 payload。
 
@@ -366,7 +368,28 @@ def info_payload(
         ),
         "moneyflow": _moneyflow_public_dict(moneyflow),
         "sentiment": _sentiment_public_dict(sentiment),
+        "board_position_context": (
+            board_context.model_dump() if board_context else None
+        ),
     }
+
+
+def _board_position_context_markdown(context: BoardPositionContext) -> str:
+    headers = ["周期", "本股位置", "板块均值", "低到高排名"]
+    rows = [
+        [
+            f"{row.period}日",
+            f"{row.position_pct:.1f}%",
+            f"{row.board_avg_pct:.1f}%",
+            f"{row.rank_low_to_high}/{row.sample}",
+        ]
+        for row in context.periods
+    ]
+    heading = (
+        f"板块对比 · 申万一级 {context.industry} · "
+        f"本地样本 {context.cached_sample}/{context.constituent_count}"
+    )
+    return f"{heading}\n\n{md_table(headers, rows)}"
 
 
 def info_markdown(
@@ -377,6 +400,7 @@ def info_markdown(
     title: str,
     moneyflow: MoneyflowMetrics | None = None,
     sentiment: SentimentMetrics | None = None,
+    board_context: BoardPositionContext | None = None,
 ) -> str:
     """kan info --format md · 标题 + 全周期位置表 + 成交量状态。"""
     tags = []
@@ -406,6 +430,8 @@ def info_markdown(
         md_table(headers, rows),
         f"低点共振 ×{result.low_resonance} · 高点共振 ×{result.high_resonance}",
     ]
+    if board_context is not None:
+        sections.append(_board_position_context_markdown(board_context))
     if volume is not None:
         sections.append(
             f"成交量 · 今日是近 {volume.window} 日均量的 "

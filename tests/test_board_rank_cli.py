@@ -59,6 +59,26 @@ def test_board_rank_json(monkeypatch):
     assert "disclaimer" in payload
 
 
+def test_board_rank_accepts_360_period(monkeypatch):
+    captured = {}
+    rows = _stub_board_rows(monkeypatch)
+
+    def fake_loader(**kw):
+        captured.update(kw)
+        return rows, []
+
+    monkeypatch.setattr(
+        "kan.data.board_leaderboard.load_board_leaderboard",
+        fake_loader,
+    )
+    result = CliRunner().invoke(
+        app,
+        ["board", "rank", "--by", "pos", "--period", "360", "--format", "json"],
+    )
+    assert result.exit_code == 0, result.output
+    assert captured["period"] == 360
+
+
 def test_board_rank_json_empty_error_envelope(monkeypatch):
     monkeypatch.setattr(
         "kan.data.board_leaderboard.load_board_leaderboard",

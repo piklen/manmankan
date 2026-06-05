@@ -4,7 +4,13 @@ import json
 from datetime import date
 from types import SimpleNamespace
 
-from kan.core.models import PeriodResult, StockScanResult, VolumeState
+from kan.core.models import (
+    BoardPositionContext,
+    BoardPositionPeriod,
+    PeriodResult,
+    StockScanResult,
+    VolumeState,
+)
 from kan.storage.export import (
     OutputFormat,
     code_pool_payload,
@@ -165,6 +171,25 @@ def _fake_trend(**kw):
     defaults = {"streak": -2, "streak_pct": 1.5, "direction": "跌2天"}
     defaults.update(kw)
     return SimpleNamespace(**defaults)
+
+
+def _board_context():
+    return BoardPositionContext(
+        industry="食品饮料",
+        board_code="801016",
+        board_level=1,
+        constituent_count=3,
+        cached_sample=3,
+        periods=[
+            BoardPositionPeriod(
+                period=3,
+                position_pct=50.0,
+                board_avg_pct=40.0,
+                rank_low_to_high=2,
+                sample=3,
+            )
+        ],
+    )
 
 
 def test_extreme_payload_shape():
@@ -330,6 +355,16 @@ def test_info_payload_with_volume():
     assert payload["volume"]["label"] == "明显放大"
 
 
+def test_info_payload_with_board_context():
+    payload = info_payload(
+        _result(), _fake_trend(), volume=None, data_cutoff=date(2026, 5, 21),
+        fetched_at=None, stale=False, board_context=_board_context(),
+    )
+    ctx = payload["board_position_context"]
+    assert ctx["industry"] == "食品饮料"
+    assert ctx["periods"][0]["rank_low_to_high"] == 2
+
+
 def test_info_markdown_structure():
     md = info_markdown(_result(), _fake_trend(), volume=None, title="测试详情")
     assert md.startswith("# 测试详情")
@@ -345,6 +380,16 @@ def test_info_markdown_with_volume():
         title="t",
     )
     assert "成交量 · 今日是近 5 日均量的 2.3 倍 · 明显放大" in md
+
+
+def test_info_markdown_with_board_context():
+    md = info_markdown(
+        _result(), _fake_trend(), volume=None, title="t",
+        board_context=_board_context(),
+    )
+    assert "板块对比 · 申万一级 食品饮料 · 本地样本 3/3" in md
+    assert "| 周期 | 本股位置 | 板块均值 | 低到高排名 |" in md
+    assert "| 3日 | 50.0% | 40.0% | 2/3 |" in md
 
 
 def test_trend_payload_shape():

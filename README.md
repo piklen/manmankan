@@ -18,6 +18,7 @@
 ```bash
 uv tool install manmankan
 kan scan --codes 600519,000858
+kan scan --periods 5,20,60,180 --wide
 kan find --codes 600519,000858 --format json --compact
 ```
 
@@ -77,6 +78,8 @@ kan find --help
 ```bash
 kan scan                                      # 扫当前自选
 kan scan --codes 600519,000858               # 扫外部候选代码池
+kan scan --periods 5,20,60,180 --wide         # 自定义 2-360 周期并全量展示
+kan info 600519                               # 单股详情 + 所属行业位置均值/排名对照
 kan find --codes 600519,000858 --format json # 把候选池整理成 JSON
 kan find --all --pe lt:20 --format json --compact
 kan board rank --kind industry --by moneyflow --format json

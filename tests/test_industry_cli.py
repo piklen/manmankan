@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 from datetime import date
+from types import SimpleNamespace
 
 import pandas as pd
 import pytest
@@ -48,14 +49,14 @@ def industry_runner(monkeypatch):
     monkeypatch.setattr(
         "kan.cli.scan_cmds._get_watchlist_pairs", lambda group=None: [("600519", "贵州茅台")]
     )
-    monkeypatch.setattr("kan.cli.helpers._auto_fetch_stale", lambda _p: None)
+    monkeypatch.setattr("kan.cli.helpers._auto_fetch_stale", lambda _p, **_kw: None)
     monkeypatch.setattr(
         "kan.cli.scan_cmds._load_watchlist_pairs", lambda group=None: [("600519", "贵州茅台")]
     )
     monkeypatch.setattr(
         "kan.cli.trend_cmds._get_watchlist_pairs", lambda group=None: [("600519", "贵州茅台")]
     )
-    monkeypatch.setattr("kan.cli.helpers._auto_fetch_stale", lambda _p: None)
+    monkeypatch.setattr("kan.cli.helpers._auto_fetch_stale", lambda _p, **_kw: None)
     monkeypatch.setattr(
         "kan.cli.trend_cmds._load_watchlist_pairs", lambda group=None: [("600519", "贵州茅台")]
     )
@@ -68,7 +69,7 @@ def industry_runner(monkeypatch):
     )
     monkeypatch.setattr(
         "kan.core.scanner.scan_batch",
-        lambda pairs, mode="low": [_fake_scan_result(s, n) for s, n in pairs],
+        lambda pairs, mode="low", periods=None: [_fake_scan_result(s, n) for s, n in pairs],
     )
     monkeypatch.setattr(
         "kan.core.scanner.scan_stock",
@@ -186,6 +187,47 @@ def test_info_industry_conflicts_with_symbol(industry_runner):
         app, ["info", "600519", "--industry=食品饮料"]
     )
     assert result.exit_code != 0
+
+
+def test_info_stock_shows_board_position_context(industry_runner, monkeypatch):
+    from kan.app import app
+
+    monkeypatch.setattr(
+        boards,
+        "get_industry_constituents",
+        lambda b, force=False: [
+            ("600519", "贵州茅台"),
+            ("000998", "隆平高科"),
+            ("000568", "泸州老窖"),
+        ],
+    )
+    monkeypatch.setattr(
+        "kan.storage.watchlist.resolve_symbol_or_name",
+        lambda raw: ("600519", "贵州茅台"),
+    )
+    monkeypatch.setattr("kan.data.fetcher.is_fresh", lambda symbol: True)
+    monkeypatch.setattr("kan.data.fetcher.get_cached", lambda symbol: _fake_kline())
+    monkeypatch.setattr(
+        "kan.data.industry_map.fetch_sw_l1_map",
+        lambda: {"600519": "食品饮料"},
+    )
+    monkeypatch.setattr(
+        "kan.core.scanner.calc_trend",
+        lambda df, sym, name: SimpleNamespace(streak=0, streak_pct=0.0, direction="平"),
+    )
+    monkeypatch.setattr("kan.core.scanner.calc_volume_state", lambda df: None)
+    monkeypatch.setattr(
+        "kan.core.enrich.enrich_results",
+        lambda rows, **kwargs: [
+            SimpleNamespace(moneyflow=None, sentiment=None, valuation=None)
+        ],
+    )
+
+    result = industry_runner.invoke(app, ["info", "600519"])
+    assert result.exit_code == 0, result.output
+    assert "板块对比" in result.output
+    assert "本地样本 3/3" in result.output
+    assert "低到高排名" in result.output
 
 
 def test_list_industry_filters_watchlist(monkeypatch):

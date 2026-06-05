@@ -64,15 +64,17 @@ def test_run_scan_enriches_then_filters_signal_and_st(monkeypatch) -> None:
     ])
     calls: dict[str, Any] = {}
 
-    def fake_scan_batch(targets, *, mode):
+    def fake_scan_batch(targets, *, mode, periods=None):
         raise AssertionError("run_data_pipeline should receive, not call, this function")
 
     def fake_run_data_pipeline(
-        stock_set_arg, *, compute, mode, show_progress, exit_on_resolve_error,
+        stock_set_arg, *, compute, mode, periods, fetch_days, show_progress, exit_on_resolve_error,
     ):
         calls["stock_set"] = stock_set_arg
         calls["compute"] = compute
         calls["mode"] = mode
+        calls["periods"] = periods
+        calls["fetch_days"] = fetch_days
         calls["show_progress"] = show_progress
         calls["exit_on_resolve_error"] = exit_on_resolve_error
         return DataCtx(
@@ -94,6 +96,7 @@ def test_run_scan_enriches_then_filters_signal_and_st(monkeypatch) -> None:
     result = run_scan(ScanRequest(
         stock_set=stock_set,
         mode="low",
+        periods=[20, 60],
         signal_only=True,
         exclude_st=True,
         show_progress=False,
@@ -103,6 +106,8 @@ def test_run_scan_enriches_then_filters_signal_and_st(monkeypatch) -> None:
         "stock_set": stock_set,
         "compute": fake_scan_batch,
         "mode": "low",
+        "periods": [20, 60],
+        "fetch_days": 60,
         "show_progress": False,
         "exit_on_resolve_error": False,
         "data_cutoff": date(2026, 5, 21),
@@ -123,9 +128,10 @@ def test_run_scan_returns_board_index_result(monkeypatch) -> None:
     stock_set = CodeListSet([("600519", "Alpha")])
 
     def fake_run_data_pipeline(
-        stock_set_arg, *, compute, mode, show_progress, exit_on_resolve_error,
+        stock_set_arg, *, compute, mode, periods, fetch_days, show_progress, exit_on_resolve_error,
     ):
         assert exit_on_resolve_error is False
+        assert fetch_days == 20
         return DataCtx(
             targets=stock_set_arg.pairs(),
             meta=board_meta,
@@ -136,6 +142,7 @@ def test_run_scan_returns_board_index_result(monkeypatch) -> None:
 
     def fake_scan_stock(df, symbol, name, periods=None):
         assert df is board_meta.index_kline
+        assert periods == [20]
         return _scan_result(symbol, name)
 
     monkeypatch.setattr("kan.core.pipeline.run_data_pipeline", fake_run_data_pipeline)
@@ -145,7 +152,7 @@ def test_run_scan_returns_board_index_result(monkeypatch) -> None:
     )
     monkeypatch.setattr("kan.core.scanner.scan_stock", fake_scan_stock)
 
-    result = run_scan(ScanRequest(stock_set=stock_set))
+    result = run_scan(ScanRequest(stock_set=stock_set, periods=[20]))
 
     assert result.board_index_result is not None
     assert result.board_index_result.symbol == "801016"
