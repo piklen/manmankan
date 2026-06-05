@@ -466,6 +466,20 @@ def test_scan_format_json(scan_runner):
     assert data["results"][0]["symbol"] == "600519"
 
 
+def test_scan_json_invalid_codes_error_envelope(scan_runner):
+    import json as _json
+
+    from kan.app import app
+
+    result = scan_runner.invoke(app, ["scan", "--codes", "bad", "--format", "json"])
+    assert result.exit_code == 2
+    data = _json.loads(result.output)
+    assert data["ok"] is False
+    assert data["command"] == "scan"
+    assert data["error"]["code"] == "invalid_codes"
+    assert "例:" in data["error"]["hint"]
+
+
 def test_scan_format_md(scan_runner):
     """`kan scan --format md` · 输出 markdown 表格"""
     from kan.app import app
@@ -485,8 +499,8 @@ def test_scan_codes_filters_to_explicit_pool(scan_runner, monkeypatch):
 
     pairs = [("600519", "贵州茅台"), ("000858", "五粮液")]
     monkeypatch.setattr(
-        "kan.cli.scan_cmds._resolve_code_pairs",
-        lambda raw, command: pairs,
+        "kan.cli.scan_cmds._resolve_scan_code_pairs",
+        lambda raw, command, fmt: pairs,
     )
     monkeypatch.setattr(
         "kan.cli.scan_cmds._get_watchlist_pairs",
@@ -523,23 +537,26 @@ def test_scan_positional_codes_supported(scan_runner, monkeypatch):
 
     captured = {}
 
-    def fake_resolve(raw, command):
+    def fake_resolve(raw, command, fmt):
         captured["raw"] = raw
         captured["command"] = command
+        captured["fmt"] = fmt
         return [("600519", "贵州茅台")]
 
-    monkeypatch.setattr("kan.cli.scan_cmds._resolve_code_pairs", fake_resolve)
+    monkeypatch.setattr("kan.cli.scan_cmds._resolve_scan_code_pairs", fake_resolve)
     result = scan_runner.invoke(app, ["scan", "600519,000858", "--format", "json"])
     assert result.exit_code == 0, result.output
-    assert captured == {"raw": "600519,000858", "command": "kan scan"}
+    assert captured["raw"] == "600519,000858"
+    assert captured["command"] == "kan scan"
+    assert captured["fmt"].value == "json"
 
 
 def test_scan_codes_rejects_diff(scan_runner, monkeypatch):
     from kan.app import app
 
     monkeypatch.setattr(
-        "kan.cli.scan_cmds._resolve_code_pairs",
-        lambda raw, command: [("600519", "贵州茅台")],
+        "kan.cli.scan_cmds._resolve_scan_code_pairs",
+        lambda raw, command, fmt: [("600519", "贵州茅台")],
     )
     result = scan_runner.invoke(app, ["scan", "--codes", "600519", "--diff"])
     assert result.exit_code == 2

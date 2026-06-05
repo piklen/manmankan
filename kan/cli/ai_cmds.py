@@ -204,6 +204,31 @@ def _index_row_payload(scan, *, code: str, name: str, data_available: bool) -> d
     }
 
 
+def _exit_ai_error(
+    command: str,
+    fmt: export.OutputFormat,
+    *,
+    code: str,
+    message: str,
+    hint: str | None = None,
+    exit_code: int = 1,
+) -> None:
+    """AI-facing commands keep JSON error envelopes when JSON was requested."""
+    if fmt is export.OutputFormat.json:
+        typer.echo(export.to_json(export.error_payload(
+            command,
+            code=code,
+            message=message,
+            hint=hint,
+        )))
+    else:
+        text = f"❌ {message}"
+        if hint:
+            text += f"\n   {hint}"
+        _print_err(text)
+    raise typer.Exit(exit_code)
+
+
 @app.command()
 def index(
     codes: Annotated[
@@ -223,16 +248,28 @@ def index(
     from kan.render.base import DISCLAIMER
 
     if period < MIN_PERIOD or period > MAX_PERIOD:
-        _print_err(f"❌ 周期 {period} 无效（范围 {MIN_PERIOD}-{MAX_PERIOD}）")
-        raise typer.Exit(2)
+        _exit_ai_error(
+            "index",
+            fmt,
+            code="invalid_period",
+            message=f"周期 {period} 无效（范围 {MIN_PERIOD}-{MAX_PERIOD}）",
+            hint="例: kan index sh --period 60 --format json",
+            exit_code=2,
+        )
     raw_codes = codes or [spec.code for spec in DEFAULT_INDEXES]
     rows: list[dict[str, Any]] = []
     for raw in raw_codes:
         try:
             code = normalize_index_code(raw)
         except ValueError as e:
-            _print_err(f"❌ {e}")
-            raise typer.Exit(2) from None
+            _exit_ai_error(
+                "index",
+                fmt,
+                code="invalid_index",
+                message=str(e),
+                hint="支持: sh / sz / cyb / hs300 · 例: kan index sh --format json",
+                exit_code=2,
+            )
         name = index_name(code)
         df = fetch_index_daily(code, days=max(days, period + 40))
         if df is None or len(df) < period:

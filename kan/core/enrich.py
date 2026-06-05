@@ -360,6 +360,17 @@ def enrich_scan_rows(
 
         debug_log(__name__, "scan enrich metrics", e)
 
+    daily_mf_by_symbol: dict[str, MoneyflowMetrics] = {}
+    try:
+        from kan.data.moneyflow import fetch_moneyflow
+
+        mf_df = fetch_moneyflow(trade_date=trade_date, symbols=symbols)
+        daily_mf_by_symbol = _index_moneyflow(mf_df, end)
+    except Exception as e:
+        from kan.infra.log import debug_log
+
+        debug_log(__name__, "scan enrich daily moneyflow", e)
+
     mf_5d = _moneyflow_5d_by_symbol(symbols, end=end)
 
     out: list[StockScanResult] = []
@@ -373,11 +384,42 @@ def enrich_scan_rows(
 
             debug_log(__name__, f"scan enrich corporate action · {r.symbol}", e)
 
+        val = val_by_symbol.get(r.symbol)
+        daily_mf = daily_mf_by_symbol.get(r.symbol)
         mf = mf_5d.get(r.symbol)
         updates = {
-            "pe_ttm": (
-                val_by_symbol[r.symbol].pe_ttm
-                if r.symbol in val_by_symbol else None
+            "pe_ttm": val.pe_ttm if val is not None else None,
+            "pb": val.pb if val is not None else None,
+            "ps_ttm": val.ps_ttm if val is not None else None,
+            "dv_ttm": val.dv_ttm if val is not None else None,
+            "turnover_rate": val.turnover_rate if val is not None else None,
+            "volume_ratio": val.volume_ratio if val is not None else None,
+            "total_mv": val.total_mv if val is not None else None,
+            "circ_mv": val.circ_mv if val is not None else None,
+            "valuation_trade_date": val.trade_date if val is not None else None,
+            "moneyflow_net_amount": (
+                daily_mf.net_amount if daily_mf is not None else None
+            ),
+            "moneyflow_buy_elg_amount": (
+                daily_mf.buy_elg_amount if daily_mf is not None else None
+            ),
+            "moneyflow_buy_lg_amount": (
+                daily_mf.buy_lg_amount if daily_mf is not None else None
+            ),
+            "moneyflow_buy_md_amount": (
+                daily_mf.buy_md_amount if daily_mf is not None else None
+            ),
+            "moneyflow_buy_sm_amount": (
+                daily_mf.buy_sm_amount if daily_mf is not None else None
+            ),
+            "moneyflow_inflow_days": (
+                daily_mf.inflow_days if daily_mf is not None else None
+            ),
+            "moneyflow_outflow_days": (
+                daily_mf.outflow_days if daily_mf is not None else None
+            ),
+            "moneyflow_trade_date": (
+                daily_mf.trade_date if daily_mf is not None else None
             ),
             "moneyflow_5d_net_amount": mf[0] if mf is not None else None,
             "moneyflow_5d_end_date": mf[1] if mf is not None else None,

@@ -13,8 +13,8 @@ from kan.app import app
 from kan.cli.helpers import (
     _get_watchlist_pairs,
     _load_watchlist_pairs,
+    _parse_codes,
     _print_err,
-    _resolve_code_pairs,
     _with_heavy_imports_spinner,
     format_date_compact,
 )
@@ -40,6 +40,71 @@ def _render_cutoff_summary(results: list, console) -> None:
         for day, count in sorted(counts.items(), reverse=True)
     ]
     console.print(f"\n  [dim]数据截止: {' / '.join(parts)}[/dim]")
+
+
+def _exit_scan_error(
+    fmt: export.OutputFormat,
+    *,
+    code: str,
+    message: str,
+    hint: str | None = None,
+    exit_code: int = 1,
+) -> None:
+    """scan 错误出口 · json 模式保持机器可读 envelope。"""
+    if fmt is export.OutputFormat.json:
+        typer.echo(export.to_json(export.error_payload(
+            "scan",
+            code=code,
+            message=message,
+            hint=hint,
+        )))
+    else:
+        text = f"❌ {message}"
+        if hint:
+            text += f"\n   {hint}"
+        _print_err(text)
+    raise typer.Exit(exit_code)
+
+
+def _resolve_scan_code_pairs(
+    raw: str,
+    *,
+    command: str,
+    fmt: export.OutputFormat,
+) -> list[tuple[str, str]]:
+    """Resolve `kan scan --codes`, preserving JSON error envelopes in json mode."""
+    import sys
+
+    from kan.infra.log import debug_log
+
+    text = sys.stdin.read() if raw == "-" else raw
+    codes, invalid = _parse_codes(text)
+    if invalid:
+        preview = ", ".join(invalid[:5])
+        suffix = "..." if len(invalid) > 5 else ""
+        _exit_scan_error(
+            fmt,
+            code="invalid_codes",
+            message=f"--codes 含非法代码: {preview}{suffix} · 需 6 位 A 股代码",
+            hint=f"例: {command} --codes 600519,000858",
+            exit_code=2,
+        )
+    if not codes:
+        _exit_scan_error(
+            fmt,
+            code="empty_codes",
+            message="--codes 为空",
+            hint=f"例: {command} --codes 600519,000858",
+            exit_code=2,
+        )
+    try:
+        from kan.storage.watchlist import preload_stock_names
+
+        names = preload_stock_names()
+    except Exception as e:
+        debug_log(__name__, "preload stock names for scan --codes", e)
+        names = {}
+    return [(code, names.get(code, code)) for code in codes]
 
 
 @app.command()
@@ -99,13 +164,26 @@ def scan(
     console = Console()
     positional_codes = " ".join(symbols or []) or None
     if codes is not None and positional_codes is not None:
-        _print_err("❌ 位置参数代码 与 --codes 不能同时使用")
-        raise typer.Exit(2)
+        _exit_scan_error(
+            fmt,
+            code="mutually_exclusive_codes",
+            message="位置参数代码 与 --codes 不能同时使用",
+            hint="例: kan scan --codes 600519,000858",
+            exit_code=2,
+        )
     raw_codes = codes if codes is not None else positional_codes
-    code_pairs = _resolve_code_pairs(raw_codes, command="kan scan") if raw_codes else None
+    code_pairs = (
+        _resolve_scan_code_pairs(raw_codes, command="kan scan", fmt=fmt)
+        if raw_codes else None
+    )
     if sum(1 for x in (industry, hot, theme, code_pairs) if x is not None) > 1:
-        _print_err("❌ --industry / --hot / --theme / --codes 四者互斥 · 同时只能用一个")
-        raise typer.Exit(2)
+        _exit_scan_error(
+            fmt,
+            code="mutually_exclusive_pool",
+            message="--industry / --hot / --theme / --codes 四者互斥 · 同时只能用一个",
+            hint="例: kan scan --industry 半导体；或 kan scan --codes 600519,000858",
+            exit_code=2,
+        )
     source_mode = industry is not None or hot is not None or theme is not None or code_pairs is not None
     watchlist_pairs = (
         [] if code_pairs is not None else (
@@ -113,23 +191,37 @@ def scan(
         )
     )
     if only_watchlist and not source_mode:
-        _print_err(
-            "❌ --only-watchlist 需配合 --industry / --hot / --theme 使用\n"
-            "   例: kan scan --industry 半导体 --only-watchlist"
+        _exit_scan_error(
+            fmt,
+            code="invalid_only_watchlist",
+            message="--only-watchlist 需配合 --industry / --hot / --theme 使用",
+            hint="例: kan scan --industry 半导体 --only-watchlist",
+            exit_code=1,
         )
-        raise typer.Exit(1)
     if code_pairs is not None and only_watchlist:
-        _print_err(
-            "❌ --codes 与 --only-watchlist 不能同时使用\n"
-            "   例: kan scan --codes 600519,000858"
+        _exit_scan_error(
+            fmt,
+            code="invalid_codes_pool",
+            message="--codes 与 --only-watchlist 不能同时使用",
+            hint="例: kan scan --codes 600519,000858",
+            exit_code=2,
         )
-        raise typer.Exit(2)
     if code_pairs is not None and group is not None:
-        _print_err("❌ --codes 已显式指定代码池 · 不再叠加 --group")
-        raise typer.Exit(2)
+        _exit_scan_error(
+            fmt,
+            code="invalid_codes_pool",
+            message="--codes 已显式指定代码池，不再叠加 --group",
+            hint="例: kan scan --codes 600519,000858",
+            exit_code=2,
+        )
     if code_pairs is not None and diff:
-        _print_err("❌ --diff 仅支持自选股扫描 · 自定义代码池不写入扫描快照")
-        raise typer.Exit(2)
+        _exit_scan_error(
+            fmt,
+            code="invalid_diff_pool",
+            message="--diff 仅支持自选股扫描 · 自定义代码池不写入扫描快照",
+            hint="例: kan scan --diff；或 kan scan --codes 600519,000858",
+            exit_code=2,
+        )
     # OOP 路径:CLI 构造 StockSet 再喂 pipeline · meta/highlight/filter 全部由 Set 承担
     from kan.core.models import HotMeta, ThemeMeta
     from kan.core.pipeline import StockSetResolveError, raise_stock_set_resolve_exit
@@ -169,8 +261,13 @@ def scan(
     board_index_result = service_result.board_index_result
 
     if not ctx.results:
-        _print_err("无缓存数据 · 请先 `kan fetch` 拉取数据")
-        raise typer.Exit(1)
+        _exit_scan_error(
+            fmt,
+            code="data_unavailable",
+            message="无缓存数据",
+            hint="例: kan fetch",
+            exit_code=1,
+        )
 
     all_results = service_result.all_results
     results = service_result.results
