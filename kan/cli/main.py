@@ -11,7 +11,7 @@ from kan.app import app
 def cli_main() -> None:
     """CLI entry point · sys.argv 预处理后再交给 typer。
 
-    实现细节：_auto_install_completion 推迟到命令完成后（atexit）执行，
+    实现细节：环境设置提示推迟到命令完成后（atexit）执行，
     防止其 stderr 输出跟 add 命令的 Live Display spinner 共享 stderr 时
     buffer 竞争（用户可能看不到 spinner 动画的 corner case）。
 
@@ -30,8 +30,8 @@ def cli_main() -> None:
         maybe_start_stock_names_refresh()
         _normalize_help_args()
         _normalize_streak_args()
-        # 命令结束后才装补全 + 检查更新 · 不抢主流程 stderr
-        # atexit LIFO 执行 · 后注册先跑 · update 检查先于 completion install
+        # 命令结束后才提示环境设置 + 检查更新 · 不抢主流程 stderr
+        # atexit LIFO 执行 · 后注册先跑 · update 检查先于环境设置提示
         atexit.register(_auto_install_completion)
         atexit.register(_check_updates_atexit)
         try:

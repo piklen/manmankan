@@ -15,6 +15,7 @@ from kan.cli.helpers import (
     _print_err,
     _safe_error_msg,
 )
+from kan.cli.setup_helpers import install_shell_completion
 
 
 @app.command()
@@ -238,30 +239,130 @@ def completion_cmd(
         )
         raise typer.Exit(1)
 
-    try:
-        from typer.completion import install
-        installed_shell, path = install(shell=shell, prog_name="kan")
-    except Exception as e:
-        typer.echo(f"❌ 安装失败: {_safe_error_msg(e)}", err=True)
-        raise typer.Exit(1) from None
+    result = install_shell_completion(shell)
+    if result.status == "failed":
+        typer.echo(f"❌ 安装失败: {result.detail}", err=True)
+        raise typer.Exit(1)
 
     from rich.console import Console
     console = Console()
     console.print(
-        f"[green]✅ {installed_shell} 补全脚本已安装到[/green] [cyan]{path}[/cyan]"
+        f"[green]✅ {result.shell} 补全脚本已安装到[/green] [cyan]{result.target}[/cyan]"
     )
     console.print()
     console.print("[yellow]让补全生效（任选其一）：[/yellow]")
-    if installed_shell == "zsh":
+    if result.shell == "zsh":
         console.print("  1) 重启终端")
         console.print("  2) [cyan]source ~/.zshrc[/cyan]")
-    elif installed_shell == "bash":
+    elif result.shell == "bash":
         console.print("  1) 重启终端")
         console.print("  2) [cyan]source ~/.bashrc[/cyan]")
-    elif installed_shell == "fish":
+    elif result.shell == "fish":
         console.print("  1) 重启终端 (fish 自动加载 completions/)")
-    elif installed_shell in ("powershell", "pwsh"):
+    elif result.shell in ("powershell", "pwsh"):
         console.print("  1) 重启 PowerShell")
         console.print("  2) [cyan]. $PROFILE[/cyan]")
     console.print()
     console.print("[dim]之后试 [bold]kan s[/bold] + Tab 看效果[/dim]")
+
+
+@app.command()
+def setup(
+    yes: Annotated[bool, typer.Option("--yes", "-y", help="使用自动检测结果，跳过交互确认")] = False,
+    dry_run: Annotated[bool, typer.Option("--dry-run", help="只预览，不写 shell/MCP 配置")] = False,
+    mcp_clients: Annotated[
+        str | None,
+        typer.Option(
+            "--mcp-clients",
+            help="MCP 目标: auto / all / none / 逗号分隔 client 列表",
+        ),
+    ] = None,
+    no_completion: Annotated[bool, typer.Option("--no-completion", help="跳过 shell 补全")] = False,
+    no_mcp: Annotated[bool, typer.Option("--no-mcp", help="跳过 MCP 客户端注册")] = False,
+) -> None:
+    """交互式配置本机环境：shell 补全 + MCP 客户端。"""
+    from rich.console import Console
+    from rich.table import Table
+
+    from kan.cli.setup_helpers import (
+        mark_completion_setup,
+        mark_mcp_setup,
+        mcp_install_succeeded,
+        parse_mcp_client_selection,
+    )
+    from kan.mcp.install import SUPPORTED_CLIENTS, detect_clients, install_clients
+
+    console = Console()
+    detected_shell = _detect_shell_fallback()
+    detected_clients = detect_clients()
+
+    console.print("[bold]manmankan 本机环境设置[/bold]")
+    console.print(f"shell: [cyan]{detected_shell or '未检测到'}[/cyan]")
+    console.print(
+        "MCP clients: "
+        + ("[cyan]" + ", ".join(detected_clients) + "[/cyan]" if detected_clients else "[dim]未检测到[/dim]")
+    )
+
+    install_completion_step = False
+    if not no_completion and detected_shell is not None:
+        install_completion_step = yes or typer.confirm(
+            f"安装 {detected_shell} 命令补全?",
+            default=True,
+        )
+
+    selected_clients: list[str] = []
+    if not no_mcp:
+        default_selection = mcp_clients or ("auto" if detected_clients else "none")
+        if yes:
+            selection = default_selection
+        else:
+            selection = typer.prompt(
+                "MCP clients [auto/all/none/csv]",
+                default=default_selection,
+                show_default=True,
+            )
+        try:
+            selected_clients = parse_mcp_client_selection(selection, detected_clients)
+        except ValueError as e:
+            _print_err(f"❌ {e}")
+            raise typer.Exit(2) from None
+
+    if install_completion_step:
+        completion_result = install_shell_completion(detected_shell, dry_run=dry_run)
+        if completion_result.status == "failed":
+            _print_err(f"❌ completion 安装失败: {completion_result.detail}")
+        else:
+            console.print(
+                f"[green]✅ completion[/green] {completion_result.status}: "
+                f"[cyan]{completion_result.target}[/cyan]"
+            )
+            if not dry_run:
+                mark_completion_setup(True)
+    elif no_completion:
+        console.print("[dim]跳过 completion[/dim]")
+    else:
+        if not dry_run:
+            mark_completion_setup(False)
+        console.print("[dim]已跳过 completion，之后仍可跑 `kan completion install`[/dim]")
+
+    if selected_clients:
+        results = install_clients(selected_clients, dry_run=dry_run)
+        table = Table(title="MCP 注册结果")
+        table.add_column("client", style="cyan")
+        table.add_column("status")
+        table.add_column("target", overflow="fold")
+        table.add_column("detail", overflow="fold")
+        for result in results:
+            table.add_row(result.client, result.status, result.target, result.detail)
+        console.print(table)
+        if not dry_run and mcp_install_succeeded([r.status for r in results]):
+            mark_mcp_setup(True)
+    elif no_mcp:
+        console.print("[dim]跳过 MCP[/dim]")
+    else:
+        if not dry_run:
+            mark_mcp_setup(False)
+        console.print(
+            "[dim]未选择 MCP client，之后可跑 "
+            f"`kan mcp install --client <client>`；支持: {', '.join(SUPPORTED_CLIENTS)}[/dim]"
+        )

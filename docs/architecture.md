@@ -111,7 +111,7 @@ manmankan 的每个命令都同时考虑两种输出形态：
 ### 3.3 Agent 消费（MCP + Skills.md）
 
 - **Skills.md**：`skills/manmankan-skill.md` 是给 AI Agent 的能力清单——Agent 读到就知道所有命令、参数和典型用法
-- **MCP Server**（路线图 P1）：在 CLI 基础上提供 MCP 协议接口，让支持 MCP 的 AI Agent 工具直接通过标准协议消费数据
+- **MCP Server**：`kan mcp serve` 在 CLI 契约上提供 stdio MCP；`kan mcp install` 负责注册到常见用户级客户端配置
 - **退出码语义**：0=成功，非 0=具体错误类别，Agent 不需要解析 stderr
 
 ---

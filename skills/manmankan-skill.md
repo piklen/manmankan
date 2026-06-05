@@ -172,7 +172,7 @@ kan scan --group <组名>
 | 筛选周期仅支持 10 个固定值 | `--pos 20` 会报错 | 选最接近的（15 或 30） |
 | JSON 部分命令输出不稳定 | board rank/industry scan 偶发空输出 | 降级到终端输出 + 正则解析 |
 | `kan find --all` 无分页 | 结果可能截断 | 加更严格的筛选条件缩小范围 |
-| 无 MCP 协议（路线图 P1） | 需通过 bash 工具调用 CLI | 用 `bash: kan ... --format json` |
+| MCP 仅提供本地 stdio | 远程 HTTP transport 尚未提供 | 先用 `kan mcp install --dry-run` 预览本机客户端注册 |
 | 无实时行情 | 所有数据为日线级别 | 盘中不依赖 manmankan 做实时决策 |
 
 ---
@@ -183,8 +183,9 @@ Agent 可以通过以下方式发现 manmankan 的能力：
 
 1. **本文件**（`skills/manmankan-skill.md`）——完整的能力清单
 2. **`kan --help`**——命令列表（无分组命令入口，需 `kan group --help`）
-3. **`kan <command> --help`**——每个命令的详细参数
-4. **`docs/find.md`**——`kan find` 的完整 JSON schema 和字段定义
+3. **`kan mcp install --dry-run`**——预览可注册的本机 MCP 客户端和目标配置
+4. **`kan <command> --help`**——每个命令的详细参数
+5. **`docs/find.md`**——`kan find` 的完整 JSON schema 和字段定义
 
 建议 AI 在首次使用 manmankan 时：
 1. 读本文件了解全局能力

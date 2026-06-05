@@ -23,6 +23,9 @@ DEFAULT_CONFIG: dict[str, Any] = {
     "last_check_date": None,      # ISO date "YYYY-MM-DD" · daily cache 命中
     "latest_seen_version": None,  # 上次发现的最新版本号字符串
     "last_hint_date": None,       # 选 False 后 hint 限流 (每周一次)
+    "completion_setup": None,     # null=未询问 · True=已安装/确认 · False=不再提示
+    "mcp_setup": None,            # null=未询问 · True=已安装/确认 · False=不再提示
+    "env_setup_last_skip_date": None,  # ISO date · setup prompt skip 限流
     "tushare_token": None,        # 背景: TuShare Pro API token (None=未配置 → 跳过 TS 分支)
     "tushare_endpoint": None,     # 背景: TuShare Pro 端点 (None=用 https://api.tushare.pro 默认)
 }

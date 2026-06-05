@@ -136,6 +136,7 @@ def help_cmd() -> None:
   kan update -y             跳过确认 · 用于脚本 / CI
 
 [bold cyan]shell 命令补全[/bold cyan] (mac/linux/windows)
+  kan setup                 交互式配置补全 + MCP（检测环境后让你选择）
   kan completion install    安装补全脚本（自动检测 shell · 之后 kan s<Tab>=kan scan）
   kan completion install zsh  显式指定 shell（zsh/bash/fish/powershell）
 
