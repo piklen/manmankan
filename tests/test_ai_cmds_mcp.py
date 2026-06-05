@@ -50,6 +50,87 @@ def test_mcp_install_dry_run_codex_uses_user_config(tmp_path, monkeypatch) -> No
     assert not (tmp_path / ".codex" / "config.toml").exists()
 
 
+def test_mcp_install_dry_run_default_covers_supported_clients(tmp_path, monkeypatch) -> None:
+    monkeypatch.setenv("HOME", str(tmp_path))
+
+    result = CliRunner().invoke(app, ["mcp", "install", "--dry-run"])
+
+    assert result.exit_code == 0
+    for client in (
+        "codex",
+        "claude-code",
+        "cursor",
+        "windsurf",
+        "cline",
+        "gemini-cli",
+        "opencode",
+        "zed",
+        "openclaw",
+        "amazon-q",
+    ):
+        assert client in result.output
+    assert not (tmp_path / ".cursor" / "mcp.json").exists()
+
+
+def test_mcp_install_cursor_writes_mcp_servers(tmp_path, monkeypatch) -> None:
+    monkeypatch.setenv("HOME", str(tmp_path))
+
+    result = CliRunner().invoke(app, ["mcp", "install", "--client", "cursor"])
+
+    assert result.exit_code == 0
+    config = json.loads((tmp_path / ".cursor" / "mcp.json").read_text(encoding="utf-8"))
+    server = config["mcpServers"]["manmankan"]
+    assert server["env"]["KAN_NO_BOOT_BANNER"] == "1"
+    assert server["command"]
+
+
+def test_mcp_install_opencode_writes_local_mcp(tmp_path, monkeypatch) -> None:
+    monkeypatch.setenv("HOME", str(tmp_path))
+
+    result = CliRunner().invoke(app, ["mcp", "install", "--client", "opencode"])
+
+    assert result.exit_code == 0
+    config = json.loads(
+        (tmp_path / ".config" / "opencode" / "opencode.json").read_text(encoding="utf-8")
+    )
+    server = config["mcp"]["manmankan"]
+    assert server["type"] == "local"
+    assert server["command"]
+    assert server["environment"]["KAN_NO_BOOT_BANNER"] == "1"
+    assert server["enabled"] is True
+
+
+def test_mcp_install_openclaw_writes_nested_mcp_servers(tmp_path, monkeypatch) -> None:
+    monkeypatch.setenv("HOME", str(tmp_path))
+
+    result = CliRunner().invoke(app, ["mcp", "install", "--client", "openclaw"])
+
+    assert result.exit_code == 0
+    config = json.loads((tmp_path / ".openclaw" / "openclaw.json").read_text(encoding="utf-8"))
+    assert "manmankan" in config["mcp"]["servers"]
+
+
+def test_mcp_install_invalid_json_is_not_overwritten(tmp_path, monkeypatch) -> None:
+    monkeypatch.setenv("HOME", str(tmp_path))
+    path = tmp_path / ".cursor" / "mcp.json"
+    path.parent.mkdir(parents=True)
+    path.write_text("{invalid", encoding="utf-8")
+
+    result = CliRunner().invoke(app, ["mcp", "install", "--client", "cursor"])
+
+    assert result.exit_code == 0
+    assert "failed" in result.output
+    assert "invalid JSON" in result.output
+    assert path.read_text(encoding="utf-8") == "{invalid"
+
+
+def test_mcp_install_unknown_client_exits_2() -> None:
+    result = CliRunner().invoke(app, ["mcp", "install", "--client", "unknown-client"])
+
+    assert result.exit_code == 2
+    assert "unknown-client" in result.output
+
+
 def test_index_json_uses_tushare_index_daily_adapter(monkeypatch) -> None:
     from kan.data import index as index_data
 

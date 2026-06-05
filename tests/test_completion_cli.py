@@ -105,6 +105,11 @@ def test_install_without_shell_no_detection(runner: CliRunner, monkeypatch):
 def test_install_zsh_calls_typer(runner: CliRunner, tmp_path, monkeypatch):
     """install zsh 应调用 typer.completion.install 且传 shell=zsh。"""
     called: dict = {}
+    monkeypatch.setattr(
+        "kan.cli.setup_helpers.completion_flag_path",
+        lambda: tmp_path / ".completion_installed",
+    )
+    monkeypatch.setattr("kan.storage.config.CONFIG_PATH", tmp_path / "config.json")
 
     def fake_install(shell: str, prog_name: str):
         called["shell"] = shell
@@ -118,3 +123,30 @@ def test_install_zsh_calls_typer(runner: CliRunner, tmp_path, monkeypatch):
     assert called["shell"] == "zsh"
     assert called["prog_name"] == "kan"
     assert "已安装到" in result.output
+
+
+def test_setup_yes_dry_run_uses_detected_clients(runner: CliRunner, tmp_path, monkeypatch):
+    """setup --yes --dry-run 应走自动检测，但不写配置。"""
+    monkeypatch.setattr("kan.cli.meta_cmds._detect_shell_fallback", lambda: "zsh")
+    monkeypatch.setattr("kan.mcp.install.detect_clients", lambda: ["cursor"])
+
+    result = runner.invoke(app, ["setup", "--yes", "--dry-run"])
+
+    assert result.exit_code == 0
+    assert "manmankan 本机环境设置" in result.output
+    assert "cursor" in result.output
+    assert not (tmp_path / ".cursor" / "mcp.json").exists()
+
+
+def test_setup_rejects_unknown_mcp_client(runner: CliRunner, monkeypatch):
+    """setup 的 mcp client csv 校验应复用支持列表。"""
+    monkeypatch.setattr("kan.cli.meta_cmds._detect_shell_fallback", lambda: "zsh")
+    monkeypatch.setattr("kan.mcp.install.detect_clients", lambda: ["cursor"])
+
+    result = runner.invoke(
+        app,
+        ["setup", "--yes", "--dry-run", "--mcp-clients", "missing-client"],
+    )
+
+    assert result.exit_code == 2
+    assert "missing-client" in result.output

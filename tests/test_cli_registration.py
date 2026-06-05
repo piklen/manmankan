@@ -26,7 +26,7 @@ REPO_ROOT = Path(__file__).resolve().parents[1]
 # - cli_watchlist_cmds (6): help / add / remove / list / import / clear
 # - cli_scan_cmds (6):      fetch / scan / low / high / info / compare
 # - cli_trend_cmds (1):     trend
-# - cli_meta_cmds (3):      update / uninstall / completion
+# - cli_meta_cmds (4):      update / uninstall / completion / setup
 # - cli_ai_cmds (2):        examples / index
 # - cli_move_export_cmds (2): move / export   (历史背景多分组管理)
 # - cli_find_cmds (1):      find             (历史背景选股 DSL)
@@ -51,6 +51,7 @@ _EXPECTED_COMMANDS = {
     "update",
     "uninstall",
     "completion",
+    "setup",
     "examples",
     "index",
     "move",

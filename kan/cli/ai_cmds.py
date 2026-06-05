@@ -143,7 +143,11 @@ def mcp_install(
         list[str] | None,
         typer.Option(
             "--client",
-            help="只注册指定客户端：codex / claude-code / claude-desktop / cursor / vscode，可重复",
+            help=(
+                "只注册指定客户端，可重复；支持: codex / claude-code / claude-desktop / "
+                "cursor / vscode / windsurf / cline / gemini-cli / opencode / "
+                "zed / openclaw / amazon-q"
+            ),
         ),
     ] = None,
     dry_run: Annotated[bool, typer.Option("--dry-run", help="只预览，不写配置")] = False,
@@ -171,6 +175,10 @@ def mcp_install(
     console = Console()
     console.print(table)
     console.print("[dim]重启对应客户端后生效；若已安装对应 CLI，会优先用 user scope 注册。[/dim]")
+    if not dry_run and results and all(r.status != "failed" for r in results):
+        from kan.cli.setup_helpers import mark_mcp_setup
+
+        mark_mcp_setup(True)
 
 
 def _index_row_payload(scan, *, code: str, name: str, data_available: bool) -> dict[str, Any]:

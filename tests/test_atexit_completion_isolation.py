@@ -141,7 +141,7 @@ def test_check_updates_skipped_when_stdout_piped(
 def test_auto_install_completion_skipped_when_KAN_COMPLETE_set(
     monkeypatch, completion_streams
 ):
-    """completion 触发时不得调 typer.completion.install (会写 shell rc 文件)。"""
+    """completion 触发时不得弹环境设置 prompt / 写 shell rc 文件。"""
     monkeypatch.setenv("_KAN_COMPLETE", "complete_zsh")
     monkeypatch.setenv("_TYPER_COMPLETE_ARGS", "kan upd")
 
@@ -160,3 +160,73 @@ def test_auto_install_completion_skipped_when_KAN_COMPLETE_set(
     assert install_called["n"] == 0
     assert out.getvalue() == ""
     assert err.getvalue() == ""
+
+
+@pytest.fixture
+def interactive_streams(monkeypatch):
+    """模拟普通交互终端：stdout/stderr 都是 tty。"""
+    out = _FakeStream(is_tty=True)
+    err = _FakeStream(is_tty=True)
+    monkeypatch.setattr(sys, "stdout", out)
+    monkeypatch.setattr(sys, "stderr", err)
+    return out, err
+
+
+def test_environment_setup_skip_does_not_install(monkeypatch):
+    """用户选 skip 时不安装，只记录近期跳过。"""
+    monkeypatch.delenv("_KAN_COMPLETE", raising=False)
+    monkeypatch.delenv("_TYPER_COMPLETE_ARGS", raising=False)
+    monkeypatch.setattr("kan.cli.atexit._is_interactive_session", lambda: True)
+    monkeypatch.setattr("kan.cli.setup_helpers.setup_skip_recent", lambda: False)
+    monkeypatch.setattr("kan.cli.helpers._detect_shell_fallback", lambda: "zsh")
+    monkeypatch.setattr("kan.cli.setup_helpers.completion_done", lambda: False)
+    monkeypatch.setattr("kan.cli.setup_helpers.mcp_done", lambda: True)
+    monkeypatch.setattr("kan.mcp.install.detect_clients", lambda: [])
+    monkeypatch.setattr("typer.prompt", lambda *_args, **_kwargs: "skip")
+    skipped = {"n": 0}
+    monkeypatch.setattr("kan.cli.setup_helpers.mark_setup_skip", lambda: skipped.__setitem__("n", 1))
+    monkeypatch.setattr(
+        "kan.cli.setup_helpers.install_shell_completion",
+        lambda *_args, **_kwargs: pytest.fail("skip 不应安装 completion"),
+    )
+
+    from kan.cli.atexit import _auto_install_completion
+    _auto_install_completion()
+
+    assert skipped["n"] == 1
+
+
+def test_environment_setup_yes_installs_completion_and_mcp(monkeypatch):
+    """用户选 y 时安装检测到的 completion 和 MCP clients。"""
+    from kan.cli.setup_helpers import CompletionInstallResult
+    from kan.mcp.install import InstallResult
+
+    monkeypatch.delenv("_KAN_COMPLETE", raising=False)
+    monkeypatch.delenv("_TYPER_COMPLETE_ARGS", raising=False)
+    monkeypatch.setattr("kan.cli.atexit._is_interactive_session", lambda: True)
+    monkeypatch.setattr("kan.cli.setup_helpers.setup_skip_recent", lambda: False)
+    monkeypatch.setattr("kan.cli.helpers._detect_shell_fallback", lambda: "zsh")
+    monkeypatch.setattr("kan.cli.setup_helpers.completion_done", lambda: False)
+    monkeypatch.setattr("kan.cli.setup_helpers.mcp_done", lambda: False)
+    monkeypatch.setattr("kan.mcp.install.detect_clients", lambda: ["cursor"])
+    monkeypatch.setattr("typer.prompt", lambda *_args, **_kwargs: "y")
+
+    calls = {"completion": 0, "mcp": 0, "mark_mcp": 0}
+
+    def fake_completion(*_args, **_kwargs):
+        calls["completion"] += 1
+        return CompletionInstallResult("zsh", "/tmp/_kan", "updated", "ok")
+
+    def fake_mcp(clients):
+        calls["mcp"] += 1
+        assert clients == ["cursor"]
+        return [InstallResult("cursor", "/tmp/mcp.json", "updated", "mcpServers.manmankan")]
+
+    monkeypatch.setattr("kan.cli.setup_helpers.install_shell_completion", fake_completion)
+    monkeypatch.setattr("kan.mcp.install.install_clients", fake_mcp)
+    monkeypatch.setattr("kan.cli.setup_helpers.mark_mcp_setup", lambda _value: calls.__setitem__("mark_mcp", 1))
+
+    from kan.cli.atexit import _auto_install_completion
+    _auto_install_completion()
+
+    assert calls == {"completion": 1, "mcp": 1, "mark_mcp": 1}
