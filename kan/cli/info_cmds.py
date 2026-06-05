@@ -15,6 +15,94 @@ from kan.cli.helpers import (
 )
 from kan.storage import export
 
+_MIN_BOARD_CONTEXT_SAMPLE = 3
+
+
+def _build_board_position_context(result):
+    """所属申万行业内的位置均值/排名 · 仅用本地 K 线缓存,失败时静默降级。"""
+    try:
+        from kan.core.models import BoardPositionContext, BoardPositionPeriod
+        from kan.core.scanner import scan_stock
+        from kan.data import boards
+        from kan.data.fetcher import get_cached
+        from kan.data.industry_map import fetch_sw_l1_map
+        from kan.infra.log import debug_log
+
+        target_periods = [p.period for p in result.periods if not p.insufficient]
+        if not target_periods:
+            return None
+
+        industry = fetch_sw_l1_map().get(result.symbol)
+        if not industry:
+            return None
+
+        board = boards.search_industry(industry)
+        constituents = boards.get_industry_constituents(board)
+        positions: dict[int, list[float]] = {p: [] for p in target_periods}
+        seen_codes: set[str] = set()
+        cached_codes: set[str] = set()
+
+        for code, name in constituents:
+            if code == result.symbol:
+                peer = result
+            else:
+                df = get_cached(code)
+                if df is None or df.empty:
+                    continue
+                try:
+                    peer = scan_stock(df, code, name, periods=target_periods)
+                except Exception as e:
+                    debug_log(__name__, f"info board peer scan failed · {code}", e)
+                    continue
+            seen_codes.add(code)
+            has_position = False
+            for pr in peer.periods:
+                if pr.insufficient or pr.period not in positions:
+                    continue
+                positions[pr.period].append(float(pr.position_pct))
+                has_position = True
+            if has_position:
+                cached_codes.add(code)
+
+        if result.symbol not in seen_codes:
+            for pr in result.periods:
+                if pr.insufficient or pr.period not in positions:
+                    continue
+                positions[pr.period].append(float(pr.position_pct))
+                cached_codes.add(result.symbol)
+
+        periods = []
+        for pr in result.periods:
+            if pr.insufficient:
+                continue
+            vals = positions.get(pr.period, [])
+            if len(vals) < _MIN_BOARD_CONTEXT_SAMPLE:
+                continue
+            rank = 1 + sum(v < pr.position_pct for v in vals)
+            periods.append(BoardPositionPeriod(
+                period=pr.period,
+                position_pct=round(float(pr.position_pct), 1),
+                board_avg_pct=round(sum(vals) / len(vals), 1),
+                rank_low_to_high=rank,
+                sample=len(vals),
+            ))
+
+        if not periods:
+            return None
+        return BoardPositionContext(
+            industry=industry,
+            board_code=getattr(board, "code", None),
+            board_level=getattr(board, "level", None),
+            constituent_count=len(constituents),
+            cached_sample=len(cached_codes),
+            periods=periods,
+        )
+    except Exception as e:
+        from kan.infra.log import debug_log
+
+        debug_log(__name__, f"info board context failed · {result.symbol}", e)
+        return None
+
 
 def _info_industry(industry: str, fmt: export.OutputFormat) -> None:
     """kan info --industry · 簡版板块档案。"""
@@ -133,7 +221,7 @@ def info(
         typer.Option("--format", help="输出格式：terminal（默认）/ md / json"),
     ] = export.OutputFormat.terminal,
 ) -> None:
-    """单只股票详情（全周期位置 + 涨跌信息）。
+    """单只股票详情（全周期位置 + 所属行业位置对照 + 涨跌信息）。
 
     成交量 5 档对称 label(对比 5 日均量):
       明显放大 ≥2.0x · 温和放大 1.5-2.0x · 量能平稳 0.67-1.5x
@@ -224,6 +312,7 @@ def info(
         title += f" · 数据截止 {format_date_compact(cutoff)} 收盘"
     if fetched_at:
         title += f" · {format_fetched_at_compact(fetched_at)} 拉取"
+    board_context = _build_board_position_context(result)
 
     if fmt is not export.OutputFormat.terminal:
         from kan.core.trading_calendar import latest_trade_date
@@ -237,12 +326,12 @@ def info(
                 result, trend_result, volume=volume_state, data_cutoff=cutoff,
                 fetched_at=fetched_at or None, stale=is_stale,
                 valuation=valuation, valuation_context=valuation_context,
-                moneyflow=moneyflow, sentiment=sentiment,
+                moneyflow=moneyflow, sentiment=sentiment, board_context=board_context,
             )))
         else:
             typer.echo(export.info_markdown(
                 result, trend_result, volume=volume_state, title=title,
-                moneyflow=moneyflow, sentiment=sentiment,
+                moneyflow=moneyflow, sentiment=sentiment, board_context=board_context,
             ))
         return
 
@@ -270,6 +359,13 @@ def info(
     # 全周期位置表
     table = terminal.info_table(result, is_industry=False)
     console.print(table)
+    if board_context is not None:
+        console.print()
+        console.print(
+            f"  板块对比 · 申万一级 {board_context.industry} · "
+            f"本地样本 {board_context.cached_sample}/{board_context.constituent_count}"
+        )
+        console.print(terminal.board_position_table(board_context))
     console.print(f"\n  低点共振 ×{result.low_resonance} · 高点共振 ×{result.high_resonance}")
     if volume_state is not None:
         console.print(

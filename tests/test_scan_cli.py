@@ -256,10 +256,10 @@ def scan_runner(monkeypatch):
     fake_pairs = [("600519", "测试")]
     monkeypatch.setattr("kan.cli.scan_cmds._get_watchlist_pairs", lambda group=None: fake_pairs)
     monkeypatch.setattr("kan.cli.extreme_cmds._get_watchlist_pairs", lambda group=None: fake_pairs)
-    monkeypatch.setattr("kan.cli.helpers._auto_fetch_stale", lambda _pairs: None)
+    monkeypatch.setattr("kan.cli.helpers._auto_fetch_stale", lambda _pairs, **_kw: None)
     monkeypatch.setattr("kan.cli.extreme_cmds._auto_fetch_stale", lambda _pairs, **_kw: None)
     monkeypatch.setattr(
-        "kan.core.scanner.scan_batch", lambda _pairs, mode="low": [fake_scan_result]
+        "kan.core.scanner.scan_batch", lambda _pairs, mode="low", periods=None: [fake_scan_result]
     )
     monkeypatch.setattr(
         "kan.core.scanner.filter_extreme",
@@ -377,6 +377,54 @@ def test_scan_command_exclude_st(scan_runner):
     from kan.app import app
     result = scan_runner.invoke(app, ["scan", "--exclude-st"])
     assert result.exit_code == 0
+
+
+def test_scan_custom_periods_are_forwarded(scan_runner, monkeypatch):
+    """`kan scan --periods` 计算自定义 2-360 周期集合。"""
+    from datetime import date
+
+    from kan.app import app
+    from kan.core.models import PeriodResult, StockScanResult
+
+    captured = {}
+
+    def _fake_scan(input_pairs, mode="low", periods=None):
+        captured["periods"] = periods
+        return [
+            StockScanResult(
+                symbol="600519",
+                name="测试",
+                current_price=100.0,
+                scan_date=date(2026, 5, 14),
+                periods=[
+                    PeriodResult(
+                        period=20, n_low=90.0, n_high=110.0,
+                        position_pct=50.0, at_low=False, at_high=False,
+                    ),
+                    PeriodResult(
+                        period=60, n_low=80.0, n_high=120.0,
+                        position_pct=50.0, at_low=False, at_high=False,
+                    ),
+                ],
+                low_resonance=0,
+                high_resonance=0,
+            )
+        ]
+
+    monkeypatch.setattr("kan.core.scanner.scan_batch", _fake_scan)
+    result = scan_runner.invoke(app, ["scan", "--periods", "20,60", "--wide"])
+    assert result.exit_code == 0, result.output
+    assert captured["periods"] == [20, 60]
+    assert "20日" in result.output
+
+
+def test_scan_display_modes_are_mutex(scan_runner):
+    """`--compact` / `--wide` 互斥，避免输出语义冲突。"""
+    from kan.app import app
+
+    result = scan_runner.invoke(app, ["scan", "--compact", "--wide", "--format", "json"])
+    assert result.exit_code == 2
+    assert "invalid_display_mode" in result.output
 
 
 def test_scan_command_signal_only_with_no_signal(scan_runner):
@@ -509,7 +557,7 @@ def test_scan_codes_filters_to_explicit_pool(scan_runner, monkeypatch):
 
     captured = {}
 
-    def _fake_scan(input_pairs, mode="low"):
+    def _fake_scan(input_pairs, mode="low", periods=None):
         captured["pairs"] = input_pairs
         return [
             StockScanResult(
@@ -590,3 +638,57 @@ def test_compare_too_many_symbols(scan_runner):
     many = [f"600{i:03d}" for i in range(31)]
     result = scan_runner.invoke(app, ["compare", *many])
     assert result.exit_code == 2
+
+
+def test_compare_custom_periods_are_forwarded(monkeypatch):
+    """`kan compare --periods` 支持 2-360 任意周期并传给 scan_stock。"""
+    from datetime import date
+
+    import pandas as pd
+    from typer.testing import CliRunner
+
+    from kan.app import app
+    from kan.core.models import PeriodResult, StockScanResult
+
+    names = {
+        "600519": ("600519", "贵州茅台"),
+        "000858": ("000858", "五粮液"),
+    }
+    captured: list[list[int] | None] = []
+
+    monkeypatch.setattr("kan.storage.watchlist.resolve_symbol_or_name", lambda raw: names[raw])
+    monkeypatch.setattr("kan.data.fetcher.is_fresh", lambda symbol: True)
+    monkeypatch.setattr(
+        "kan.data.fetcher.get_cached",
+        lambda symbol: pd.DataFrame({"close": [100.0], "date": [date(2026, 5, 14)]}),
+    )
+
+    def fake_scan_stock(df, symbol, name, periods=None):
+        captured.append(periods)
+        return StockScanResult(
+            symbol=symbol,
+            name=name,
+            current_price=100.0,
+            scan_date=date(2026, 5, 14),
+            periods=[
+                PeriodResult(
+                    period=20,
+                    n_low=90.0,
+                    n_high=110.0,
+                    position_pct=50.0,
+                    at_low=False,
+                    at_high=False,
+                )
+            ],
+            low_resonance=0,
+            high_resonance=0,
+        )
+
+    monkeypatch.setattr("kan.core.scanner.scan_stock", fake_scan_stock)
+
+    result = CliRunner().invoke(
+        app,
+        ["compare", "600519", "000858", "--periods", "20", "--format", "json"],
+    )
+    assert result.exit_code == 0, result.output
+    assert captured == [[20], [20]]

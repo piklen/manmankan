@@ -83,7 +83,7 @@ def _stub_fetch_kline(monkeypatch):
     from datetime import date
 
     from kan.core.models import PeriodResult, StockScanResult
-    def fake_scan_batch(targets, mode):
+    def fake_scan_batch(targets, mode, periods=None):
         return [
             StockScanResult(
                 symbol=code,
@@ -101,7 +101,7 @@ def _stub_fetch_kline(monkeypatch):
             for code, name in targets
         ]
     monkeypatch.setattr("kan.core.scanner.scan_batch", fake_scan_batch)
-    monkeypatch.setattr("kan.cli.helpers._auto_fetch_stale", lambda targets: None)
+    monkeypatch.setattr("kan.cli.helpers._auto_fetch_stale", lambda targets, **_kw: None)
 
 
 def test_scan_theme_runs(monkeypatch, _isolate_all):

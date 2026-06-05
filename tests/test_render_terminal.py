@@ -385,6 +385,30 @@ def test_info_table_industry_uses_plain_dash_for_insufficient():
     assert not isinstance(pos_col._cells[0], Text)
 
 
+def test_board_position_table_shape():
+    """单股 info 板块对照 · 排名列标明低到高口径。"""
+    from kan.core.models import BoardPositionContext, BoardPositionPeriod
+
+    table = terminal.board_position_table(BoardPositionContext(
+        industry="食品饮料",
+        board_code="801016",
+        board_level=1,
+        constituent_count=3,
+        cached_sample=3,
+        periods=[
+            BoardPositionPeriod(
+                period=30,
+                position_pct=12.5,
+                board_avg_pct=45.0,
+                rank_low_to_high=1,
+                sample=3,
+            )
+        ],
+    ))
+    assert [c.header for c in table.columns] == ["周期", "本股位置", "板块均值", "低到高排名"]
+    assert table.columns[3]._cells[0] == "1/3"
+
+
 # ── compare_table ─────────────────────────────────────────────────────
 
 

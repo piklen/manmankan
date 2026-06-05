@@ -18,26 +18,41 @@ FIND_DISCLAIMER_TEXT = (
 )
 
 
-def responsive_periods(console_width: int) -> list[int]:
+def responsive_periods(console_width: int, periods: list[int] | None = None) -> list[int]:
     """根据终端宽度选择要展示的周期子集 · 始终保证共振列可见。
 
     短密长疏策略：短线波段需要 5+10 日的密集信号 · 长期靠共振数补。
     实测列宽：股票(~22) + 现价(11) + 共振(7) ≈ 40 固定开销 · 每周期列 ≈ 9
     """
-    from kan.core.scanner import PERIODS
+    if periods is None:
+        from kan.core.scanner import PERIODS
+
+        period_list = list(PERIODS)
+    else:
+        period_list = sorted(dict.fromkeys(periods))
+
+    def pick(preferred: list[int], *, fallback_count: int) -> list[int]:
+        chosen = [p for p in preferred if p in period_list]
+        if chosen:
+            return chosen
+        if len(period_list) <= fallback_count:
+            return period_list
+        if fallback_count <= 1:
+            return [period_list[-1]]
+        return sorted({period_list[0], period_list[len(period_list) // 2], period_list[-1]})
 
     if console_width >= 130:
-        return list(PERIODS)
+        return period_list
     elif console_width >= 100:
-        return [3, 5, 10, 30, 60, 180]
+        return pick([3, 5, 10, 30, 60, 180, 360], fallback_count=6)
     elif console_width >= 90:
-        return [5, 10, 30, 60, 180]
+        return pick([5, 10, 30, 60, 180, 360], fallback_count=5)
     elif console_width >= 80:
-        return [5, 10, 30, 180]
+        return pick([5, 10, 30, 180, 360], fallback_count=4)
     elif console_width >= 70:
-        return [5, 30, 180]
+        return pick([5, 30, 180, 360], fallback_count=3)
     else:
-        return [30, 180]
+        return pick([30, 180, 360], fallback_count=2)
 
 
 def max_trend_dates(console_width: int) -> int:

@@ -9,6 +9,7 @@ from rich.console import Console
 from rich.table import Table
 
 from kan.app import app
+from kan.core.scanner import MAX_PERIOD, MIN_PERIOD
 from kan.render.base import DISCLAIMER
 from kan.storage import export
 
@@ -101,7 +102,13 @@ def rank_cmd(
     ] = BoardMetric.moneyflow,
     period: Annotated[
         int,
-        typer.Option("--period", "-p", help="涨幅 / 位置周期(日)", min=3, max=180),
+        typer.Option(
+            "--period",
+            "-p",
+            help=f"涨幅 / 位置周期(日，{MIN_PERIOD}-{MAX_PERIOD})",
+            min=MIN_PERIOD,
+            max=MAX_PERIOD,
+        ),
     ] = 30,
     level: Annotated[
         int,
