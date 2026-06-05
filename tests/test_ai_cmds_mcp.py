@@ -86,6 +86,7 @@ def test_mcp_install_cursor_writes_mcp_servers(tmp_path, monkeypatch) -> None:
 
 def test_mcp_install_opencode_writes_local_mcp(tmp_path, monkeypatch) -> None:
     monkeypatch.setenv("HOME", str(tmp_path))
+    monkeypatch.delenv("XDG_CONFIG_HOME", raising=False)
 
     result = CliRunner().invoke(app, ["mcp", "install", "--client", "opencode"])
 

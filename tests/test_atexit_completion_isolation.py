@@ -176,6 +176,8 @@ def test_environment_setup_skip_does_not_install(monkeypatch):
     """用户选 skip 时不安装，只记录近期跳过。"""
     monkeypatch.delenv("_KAN_COMPLETE", raising=False)
     monkeypatch.delenv("_TYPER_COMPLETE_ARGS", raising=False)
+    monkeypatch.delenv("KAN_NO_ENV_SETUP_PROMPT", raising=False)
+    monkeypatch.delenv("KAN_NO_COMPLETION_AUTOINSTALL", raising=False)
     monkeypatch.setattr("kan.cli.atexit._is_interactive_session", lambda: True)
     monkeypatch.setattr("kan.cli.setup_helpers.setup_skip_recent", lambda: False)
     monkeypatch.setattr("kan.cli.helpers._detect_shell_fallback", lambda: "zsh")
@@ -203,6 +205,8 @@ def test_environment_setup_yes_installs_completion_and_mcp(monkeypatch):
 
     monkeypatch.delenv("_KAN_COMPLETE", raising=False)
     monkeypatch.delenv("_TYPER_COMPLETE_ARGS", raising=False)
+    monkeypatch.delenv("KAN_NO_ENV_SETUP_PROMPT", raising=False)
+    monkeypatch.delenv("KAN_NO_COMPLETION_AUTOINSTALL", raising=False)
     monkeypatch.setattr("kan.cli.atexit._is_interactive_session", lambda: True)
     monkeypatch.setattr("kan.cli.setup_helpers.setup_skip_recent", lambda: False)
     monkeypatch.setattr("kan.cli.helpers._detect_shell_fallback", lambda: "zsh")
