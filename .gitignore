@@ -59,3 +59,6 @@ CLAUDE.md
 
 # Local think/scratch dir — not tracked
 .think/
+
+#other
+.codegraph
