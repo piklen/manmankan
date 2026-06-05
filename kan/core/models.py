@@ -57,6 +57,22 @@ class StockScanResult(BaseModel):
     ma_20: float | None = None        # 20 日均线 (前复权价格口径)
     recent_low_20: float | None = None  # 近 20 日最低价 (客观价位 · 非信号)
     pe_ttm: float | None = None       # PE TTM (scan 行内联裸值 · 无数据为 None)
+    pb: float | None = None           # PB (daily_basic · scan JSON 行内联裸值)
+    ps_ttm: float | None = None       # PS TTM (daily_basic · scan JSON 行内联裸值)
+    dv_ttm: float | None = None       # 股息率 TTM (% · daily_basic)
+    turnover_rate: float | None = None  # 换手率 (% · daily_basic)
+    volume_ratio: float | None = None   # 量比 (daily_basic)
+    total_mv: float | None = None       # 总市值 (万元 · daily_basic)
+    circ_mv: float | None = None        # 流通市值 (万元 · daily_basic)
+    valuation_trade_date: date | None = None  # 估值截面交易日
+    moneyflow_net_amount: float | None = None  # 单日主力净额 (万元)
+    moneyflow_buy_elg_amount: float | None = None  # 单日超大单净额 (万元)
+    moneyflow_buy_lg_amount: float | None = None   # 单日大单净额 (万元)
+    moneyflow_buy_md_amount: float | None = None   # 单日中单净额 (万元)
+    moneyflow_buy_sm_amount: float | None = None   # 单日小单净额 (万元)
+    moneyflow_inflow_days: int | None = None       # 连续主力净流入天数
+    moneyflow_outflow_days: int | None = None      # 连续主力净流出天数
+    moneyflow_trade_date: date | None = None       # 资金流截面交易日
     moneyflow_5d_net_amount: float | None = None  # 近 5 个交易日主力净额合计 (万元)
     moneyflow_5d_end_date: date | None = None
     ma_biases: dict[int, float] = Field(default_factory=dict)  # K 线衍生 BIAS · key=周期

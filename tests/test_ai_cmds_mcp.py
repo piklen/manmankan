@@ -156,3 +156,13 @@ def test_index_json_uses_tushare_index_daily_adapter(monkeypatch) -> None:
     assert row["code"] == "000001.SH"
     assert row["data_available"] is True
     assert row["position_pct"] is not None
+
+
+def test_index_json_invalid_code_error_envelope() -> None:
+    result = CliRunner().invoke(app, ["index", "missing", "--format", "json"])
+    assert result.exit_code == 2
+    payload = json.loads(result.output)
+    assert payload["ok"] is False
+    assert payload["command"] == "index"
+    assert payload["error"]["code"] == "invalid_index"
+    assert "例:" in payload["error"]["hint"]

@@ -57,3 +57,17 @@ def test_board_rank_json(monkeypatch):
     assert payload["command"] == "board_rank"
     assert payload["results"][0]["moneyflow_net"] == 120000.0
     assert "disclaimer" in payload
+
+
+def test_board_rank_json_empty_error_envelope(monkeypatch):
+    monkeypatch.setattr(
+        "kan.data.board_leaderboard.load_board_leaderboard",
+        lambda **_kw: ([], []),
+    )
+    result = CliRunner().invoke(app, ["board", "rank", "--format", "json"])
+    assert result.exit_code == 1
+    payload = json.loads(result.output)
+    assert payload["ok"] is False
+    assert payload["command"] == "board_rank"
+    assert payload["error"]["code"] == "data_unavailable"
+    assert "例:" in payload["error"]["hint"]

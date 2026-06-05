@@ -91,6 +91,36 @@ def test_scan_payload_json_roundtrip():
     assert parsed["results"][0]["name"] == "贵州茅台"
 
 
+def test_scan_payload_includes_ai_daily_metrics():
+    payload = scan_payload(
+        [_result(
+            pe_ttm=20.04,
+            pb=6.19,
+            turnover_rate=0.61,
+            volume_ratio=1.42,
+            total_mv=1.65e8,
+            moneyflow_net_amount=5000.0,
+            moneyflow_buy_elg_amount=3000.0,
+            moneyflow_buy_lg_amount=2000.0,
+            moneyflow_inflow_days=3,
+        )],
+        mode="low",
+        data_cutoff=date(2026, 5, 21),
+        fetched_at=None,
+        stale=False,
+    )
+    row = payload["results"][0]
+    assert row["pe_ttm"] == 20.04
+    assert row["pb"] == 6.19
+    assert row["turnover_rate"] == 0.61
+    assert row["volume_ratio"] == 1.42
+    assert row["total_mv"] == 1.65e8
+    assert row["moneyflow_net_amount"] == 5000.0
+    assert row["moneyflow_buy_elg_amount"] == 3000.0
+    assert row["moneyflow_buy_lg_amount"] == 2000.0
+    assert row["moneyflow_inflow_days"] == 3
+
+
 def test_scan_markdown_has_header_and_table():
     md = scan_markdown([_result()], periods=[3, 5], mode="low", title="测试标题")
     assert md.startswith("# 测试标题")

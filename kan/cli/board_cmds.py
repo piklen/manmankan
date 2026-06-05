@@ -136,7 +136,15 @@ def rank_cmd(
         )
 
     if not rows:
-        _print_err("❌ 板块榜无数据 · 检查网络 / token / 上游数据源后重试")
+        if fmt is export.OutputFormat.json:
+            typer.echo(export.to_json(export.error_payload(
+                "board_rank",
+                code="data_unavailable",
+                message="板块榜无数据",
+                hint="检查网络 / token / 上游数据源后重试 · 例: kan board rank --kind industry --by moneyflow --format json",
+            )))
+        else:
+            _print_err("❌ 板块榜无数据 · 检查网络 / token / 上游数据源后重试")
         raise typer.Exit(1)
 
     kind_label = "申万行业" if kind is BoardKind.industry else "题材概念"

@@ -186,6 +186,13 @@ class TestEnrichScanRows:
                 "symbol": "600519",
                 "trade_date": datetime.date(2026, 5, 29),
                 "pe_ttm": 20.04,
+                "pb": 6.19,
+                "ps_ttm": 9.63,
+                "dv_ttm": 3.9,
+                "turnover_rate": 0.61,
+                "volume_ratio": 1.42,
+                "total_mv": 1.65e8,
+                "circ_mv": 1.64e8,
                 "_source": "tushare_metrics",
             }]),
         )
@@ -196,6 +203,12 @@ class TestEnrichScanRows:
                 "symbol": "600519",
                 "trade_date": datetime.date(2026, 5, int(trade_date[-2:])),
                 "net_amount": value,
+                "buy_elg_amount": value + 1,
+                "buy_lg_amount": value + 2,
+                "buy_md_amount": value + 3,
+                "buy_sm_amount": value + 4,
+                "inflow_days": 3,
+                "outflow_days": 0,
                 "_source": "tushare_moneyflow",
             }])
 
@@ -223,6 +236,20 @@ class TestEnrichScanRows:
         out = enrich.enrich_scan_rows([_scan()], data_cutoff=datetime.date(2026, 5, 29))
         row = out[0]
         assert row.pe_ttm == 20.04
+        assert row.pb == 6.19
+        assert row.turnover_rate == 0.61
+        assert row.volume_ratio == 1.42
+        assert row.total_mv == 1.65e8
+        assert row.circ_mv == 1.64e8
+        assert row.valuation_trade_date == datetime.date(2026, 5, 29)
+        assert row.moneyflow_net_amount == 290.0
+        assert row.moneyflow_buy_elg_amount == 291.0
+        assert row.moneyflow_buy_lg_amount == 292.0
+        assert row.moneyflow_buy_md_amount == 293.0
+        assert row.moneyflow_buy_sm_amount == 294.0
+        assert row.moneyflow_inflow_days == 3
+        assert row.moneyflow_outflow_days == 0
+        assert row.moneyflow_trade_date == datetime.date(2026, 5, 29)
         assert row.moneyflow_5d_net_amount == 1350.0
         assert row.moneyflow_5d_end_date == datetime.date(2026, 5, 29)
         assert row.corporate_action.ex_date == datetime.date(2026, 5, 29)
