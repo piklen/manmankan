@@ -13,7 +13,7 @@ import typer
 THEME_CLASSIFICATION = "题材分类各家口径不同(本工具用同花顺口径)"
 THEME_RISK = "题材跟风风险高于行业"
 THEME_VS_INDUSTRY = "题材是标签 · 一只股可能在多个题材中"
-# 历史背景`kan theme trend` 专属 · 连涨连跌榜诱导追高/抄底风险
+# `kan theme trend` 专属 · 连涨连跌榜诱导追高/抄底风险
 THEME_TREND_DISCLAIMER = "连涨 ≠ 还会涨 · 连跌 ≠ 还会跌 · 题材方向变化比个股快"
 
 

@@ -1,4 +1,4 @@
-"""`kan config` 子命令组 · 用户配置增删查 · 历史背景。
+"""`kan config` 子命令组 · 用户配置增删查。
 
 支持字段（封闭集合）：
 - tushare-token     (TuShare Pro API token)

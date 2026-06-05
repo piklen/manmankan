@@ -563,7 +563,7 @@ def trend_table(
     return table
 
 
-# ── 题材榜 leaderboard(`kan theme trend`)· 历史背景───────────────────
+# ── 题材榜 leaderboard(`kan theme trend`)───────────────────
 
 
 def theme_leaderboard_title(

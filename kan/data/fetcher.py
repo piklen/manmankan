@@ -1,6 +1,6 @@
 """K 线数据拉取编排 · cache + chain (责任链) + 公开 API。
 
-架构分层 (历史背景):
+架构分层:
 - `kan.data.protocols.KlineSource`     · Protocol (adapter 契约)
 - `kan.data.sources` / `kan.data.tushare` · 5 个内置 KlineSource 实现
 - `kan.data.source_chain.KlineSourceChain` · 责任链 (priority sort + race + 熔断)
@@ -9,10 +9,6 @@
 - `kan.api`                            · 用户 facing (register_kline_source / kline_chain)
 
 用户自定义源: `from kan.api import register_kline_source` · 详见 `kan.api` docstring。
-
-历史:
-- 背景: sources.py 从 fetcher.py 抽出 · 单点 fetcher / 编排分离
-- 背景:   chain 抽出 · 删 if-chain · 同 priority 多源并发 race 统一进 chain
 """
 
 from __future__ import annotations

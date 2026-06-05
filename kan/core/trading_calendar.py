@@ -1,4 +1,4 @@
-"""A 股交易日历 + 市场相位判定 · 数据时效性的真相源 + 防御纵深 历史背景。
+"""A 股交易日历 + 市场相位判定 · 数据时效性的真相源 + 防御纵深。
 
 为什么需要本模块:
 早期实现缓存新鲜度只看 mtime · 凌晨 02:55 拉了昨日数据后 mtime 日期 = 今天,
@@ -12,7 +12,7 @@
 - 不引入 pytz / zoneinfo · 假设系统时区为本地(Asia/Shanghai 用户主体)
 - 跨时区用户可通过 TZ 环境变量影响 datetime.now() · 或设 KAN_DATA_AVAIL_OFFSET_MIN
 
-历史背景防御纵深:
+防御纵深:
 - akshare 失败 / 返脏 / cache 损坏 → 不抛 RuntimeError · 退化 weekday 启发式 + stderr warning
 - 缓存内容三 invariant sanity check (count > 5000 · min year < 2010 · max date > today-30)
 - chmod 0o600 后真校验 · 失败 stderr warn (不再静默 suppress)

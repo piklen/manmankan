@@ -1,4 +1,4 @@
-"""数据源 Protocol 定义 · 历史背景「适配器 + 责任链」架构。
+"""数据源 Protocol 定义 ·「适配器 + 责任链」架构。
 
 设计原则:
 - 每个领域独立 Protocol (KlineSource / 后续 ThemeKlineSource / HotListSource ...) ·

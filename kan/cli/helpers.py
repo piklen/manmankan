@@ -266,7 +266,7 @@ def _auto_fetch_stale(
 ) -> None:
     """自动拉取缺失或过期（非今天）的自选股数据。
 
-    并发自适应 (历史背景): resolve_max_workers() · cpu_count*2 cap 12.
+    并发自适应: resolve_max_workers() · cpu_count*2 cap 12.
     rich.Progress 进度条 + 网络异常友好提示.
     避免串行 172 只可能阻塞 ≥ 9 分钟无反馈的体验问题。
     """
@@ -297,7 +297,7 @@ def _auto_fetch_stale(
             f"[yellow]⏳ 加载交易日历 · {n_total} 只自选股待检查...[/yellow]"
         )
         from kan.core.trading_calendar import latest_trade_date
-        # latest_trade_date 现已 fail-soft (历史背景) · 不抛 RuntimeError ·
+        # latest_trade_date 现已 fail-soft · 不抛 RuntimeError ·
         # 但保险 contextlib.suppress · 任何 upstream regression 不应 break 检查缓存
         with contextlib.suppress(Exception):
             _ = latest_trade_date()
@@ -324,11 +324,10 @@ def _auto_fetch_stale(
     n = len(stale)
 
     # 大量股票时给出明确预期 · 避免用户以为卡死
-    # 背景: 删除 旧一次性迁移文案 (对老用户冗余)
     if n >= 30:
         est_low = max(1, n // 60)
         est_high = max(2, n // 20)
-        # 背景: 并发不再硬编码 5 · auto_max_workers 启发式 (cpu_count*2 cap 12)
+        # 并发用 resolve_max_workers 启发式(cpu_count*2 · cap 12)
         from kan.data.fetcher import resolve_max_workers
         workers = resolve_max_workers()
         console.print(

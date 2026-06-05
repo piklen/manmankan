@@ -1,4 +1,4 @@
-"""`kan move` + `kan export` 顶级命令 · 多分组管理配套 · 历史背景。
+"""`kan move` + `kan export` 顶级命令 · 多分组管理配套。
 
 - `kan move <symbol> <src> <dst>`:跨组移动单股(支持代码或名称模糊搜)。
   - src/dst 必须存在(不自动建组 · 防 typo 灾难)
