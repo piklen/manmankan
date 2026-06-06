@@ -31,7 +31,7 @@ env:
 
 jobs:
   quality-gates:
-    runs-on: ubuntu-latest
+    runs-on: [self-hosted, manmankan-ci]
     timeout-minutes: 20
     steps:
       - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10  # v6 (pinned 2026-05-27)
@@ -91,7 +91,7 @@ jobs:
 
   # 保留独立 job 名，避免已有 branch protection 仍绑定旧检查名时被误断。
   privacy-scan:
-    runs-on: ubuntu-latest
+    runs-on: [self-hosted, manmankan-ci]
     timeout-minutes: 10
     steps:
       - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10  # v6 (pinned 2026-05-27)
@@ -99,12 +99,11 @@ jobs:
         run: bash scripts/check-privacy-leaks.sh
 
   test:
-    runs-on: ${{ matrix.os }}
+    runs-on: [self-hosted, manmankan-ci]
     timeout-minutes: 35
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-latest]
         python-version: ['3.11', '3.12']
     steps:
       - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10  # v6 (pinned 2026-05-27)
@@ -124,52 +123,8 @@ jobs:
           git fetch origin main --depth=1 || true
           uv run diff-cover coverage.xml --compare-branch=origin/main --fail-under=85
 
-  # macOS hosted runners are the slowest and most failure-prone part of the matrix.
-  # Full pytest runs on Ubuntu for both supported Python versions; macOS keeps targeted
-  # platform smoke + TTY coverage so one runner class cannot block releases.
-  macos-smoke:
-    runs-on: macos-latest
-    timeout-minutes: 12
-    strategy:
-      fail-fast: false
-      matrix:
-        python-version: ['3.11', '3.12']
-    steps:
-      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10  # v6 (pinned 2026-05-27)
-      - uses: astral-sh/setup-uv@08807647e7069bb48b6ef5acd8ec9567f424441b  # pinned 2026-05-27
-        with:
-          python-version: ${{ matrix.python-version }}
-          enable-cache: true
-      - name: Install dependencies
-        run: uv sync --frozen --all-groups --all-extras
-      - name: macOS import and CLI smoke
-        run: |
-          uv run python - <<'PY'
-          import importlib.metadata
-          import platform
-
-          import kan
-
-          assert platform.system() == "Darwin"
-          assert importlib.metadata.version("manmankan") == kan.__version__
-          PY
-          uv run kan --version
-          uv run kan --help
-          HOME="$(mktemp -d)" XDG_DATA_HOME="$(mktemp -d)" NO_COLOR=1 uv run kan find --codes 600519,000858 --format json > /tmp/kan-find-code-pool.json
-          python - <<'PY'
-          import json
-          from pathlib import Path
-
-          payload = json.loads(Path("/tmp/kan-find-code-pool.json").read_text())
-          assert payload["mode"] == "code_pool"
-          assert payload["ok"] is True
-          assert payload["stats"]["matched"] == 2
-          PY
-      - name: Targeted macOS contract tests
-        run: uv run pytest -q tests/test_help_cli.py tests/test_paths.py tests/test_find_json.py tests/test_api.py
-
   package-smoke:
-    runs-on: ubuntu-latest
+    runs-on: [self-hosted, manmankan-ci]
     timeout-minutes: 25
     strategy:
       fail-fast: false
@@ -226,15 +181,13 @@ jobs:
           assert callable(from_flags)
           PY
 
-  # CI -m "not tty" 会排除 TTY 真测 · 补一个 TTY job 覆盖
-  # spinner / Live Display first-frame SLO + 真 entry point 调用
+  # CI -m "not tty" 会排除 TTY 真测 · 在 VPS Linux runner 补真实终端覆盖。
   tty-test:
-    runs-on: ${{ matrix.os }}
+    runs-on: [self-hosted, manmankan-ci]
     timeout-minutes: 25
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-latest, macos-latest]
         python-version: ['3.11', '3.12']
     steps:
       - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10  # v6 (pinned 2026-05-27)
@@ -246,13 +199,5 @@ jobs:
         run: |
           uv sync --frozen --all-groups --all-extras
           uv tool install --reinstall .
-      # 历史兼容修复: BSD script (macOS) vs util-linux script (Linux) 参数语法不兼容
-      # Linux util-linux: script -q -c "<cmd>" <file>
-      # macOS BSD:        script -q <file> <cmd...>  (无 -c flag · 直接 positional)
-      # 彻底跨平台修法 (pexpect Python 库) 尚未实现 · 后续可加
       - name: TTY real terminal tests on Linux (util-linux script)
-        if: runner.os == 'Linux'
         run: script -q -c "uv run pytest -q -m tty tests/test_cli_silent_period.py" /dev/null
-      - name: TTY real terminal tests on macOS (BSD script)
-        if: runner.os == 'macOS'
-        run: script -q /dev/null uv run pytest -q -m tty tests/test_cli_silent_period.py
