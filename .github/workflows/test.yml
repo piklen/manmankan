@@ -39,6 +39,7 @@ jobs:
         with:
           python-version: '3.12'
           enable-cache: true
+          prune-cache: false
       - name: Lockfile is current
         run: uv lock --check
       - name: Install dependencies
@@ -113,6 +114,7 @@ jobs:
         with:
           python-version: ${{ matrix.python-version }}
           enable-cache: true
+          prune-cache: false
       - name: Install dependencies
         run: uv sync --frozen --all-groups --all-extras
       - name: Run tests
@@ -136,6 +138,7 @@ jobs:
         with:
           python-version: ${{ matrix.python-version }}
           enable-cache: true
+          prune-cache: false
       - name: Build package
         run: uv build --clear
       - name: Install wheel in clean environment
@@ -204,6 +207,7 @@ jobs:
         with:
           python-version: ${{ matrix.python-version }}
           enable-cache: true
+          prune-cache: false
       - name: Install dependencies + manmankan as tool
         run: |
           uv sync --frozen --all-groups --all-extras
