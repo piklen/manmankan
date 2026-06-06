@@ -2,13 +2,13 @@
 
 把 manmankan 的 OOP 框架收口成一个稳定 import 入口 · 用户脚本写:
 
-    from kan.api import WatchlistSet, ThemeSet, HotRankSet, IndustrySet
+    from kan.api import WatchlistSet, WatchlistHoldingsSet, ThemeSet, HotRankSet, IndustrySet
     from kan.api import scan, low, high, trend, fetch
 
 替代散布在多个内部模块的 import:
 
     # 不推荐(内部布局可能在小版本调整)
-    from kan.core.stock_set import WatchlistSet, ThemeSet, HotRankSet, IndustrySet
+    from kan.core.stock_set import WatchlistSet, WatchlistHoldingsSet, ThemeSet, HotRankSet, IndustrySet
     from kan.core.verbs import scan, low, high, trend, fetch
 
 设计原则:
@@ -18,6 +18,8 @@
 
 四类股票集合 (StockSet):
 - WatchlistSet:   自选股 (本地 `kan add` 管理的列表)
+- HoldingsSet:    真实持仓 (本地 `kan hold` 管理的列表)
+- WatchlistHoldingsSet: 默认池 (自选 ∪ 真实持仓)
 - HotRankSet:     东方财富热榜 (mode="rank" 人气榜 / "surge" 飙升榜)
 - ThemeSet:       题材股 (同花顺概念板块成分股 · 如 "新能源" / "AI")
 - IndustrySet:    行业股 (申万行业分类 · 如 "白酒" / "半导体")
@@ -151,10 +153,12 @@ from __future__ import annotations
 
 # Re-export · 集合抽象 + 4 实现 + factory
 from kan.core.stock_set import (
+    HoldingsSet,
     HotRankSet,
     IndustrySet,
     StockSet,
     ThemeSet,
+    WatchlistHoldingsSet,
     WatchlistSet,
     from_flags,
 )
@@ -186,6 +190,7 @@ from kan.data.theme_constituents import (
 
 __all__ = [
     # StockSet
+    "HoldingsSet",
     "HotRankSet",
     "IndustrySet",
     # 背景: 数据源扩展 Protocol (用户写自定义源时用作 typing 提示)
@@ -193,6 +198,7 @@ __all__ = [
     "StockSet",
     "ThemeConstituentSource",
     "ThemeSet",
+    "WatchlistHoldingsSet",
     "WatchlistSet",
     # 背景: chain inspect
     "clear_user_kline_sources",

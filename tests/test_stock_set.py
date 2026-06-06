@@ -12,10 +12,12 @@ import pytest
 
 from kan.core.stock_set import (
     AllStocksSet,
+    HoldingsSet,
     HotRankSet,
     IndustrySet,
     StockSet,
     ThemeSet,
+    WatchlistHoldingsSet,
     WatchlistSet,
     from_flags,
 )
@@ -27,6 +29,8 @@ from kan.core.stock_set import (
     "instance",
     [
         WatchlistSet(_pairs=[("600519", "贵州茅台")]),
+        HoldingsSet(_pairs=[("600519", "贵州茅台")]),
+        WatchlistHoldingsSet(_pairs=[("600519", "贵州茅台")]),
         HotRankSet(mode="rank", _pairs=[("000858", "五粮液")]),
         ThemeSet(theme="AI", _pairs=[("002230", "科大讯飞")]),
         IndustrySet(industry="白酒", _pairs=[("600519", "贵州茅台")]),
@@ -85,6 +89,48 @@ def test_watchlist_set_codes_strips_names():
 def test_watchlist_set_len():
     ws = WatchlistSet(_pairs=[("600519", "贵州茅台"), ("000858", "五粮液")])
     assert len(ws) == 2
+
+
+# ─────────────── HoldingsSet / WatchlistHoldingsSet ───────────────
+
+
+def test_holdings_set_lazy_load(monkeypatch):
+    """构造 HoldingsSet 不触发 positions 读取。"""
+    calls = {"n": 0}
+
+    def fake_load_positions():
+        calls["n"] += 1
+        fake_position = type("P", (), {"symbol": "600519", "name": "贵州茅台"})()
+        return type("Book", (), {"positions": [fake_position]})()
+
+    monkeypatch.setattr("kan.storage.positions.load_positions", fake_load_positions)
+    hs = HoldingsSet()
+    assert calls["n"] == 0
+    assert hs.pairs() == [("600519", "贵州茅台")]
+    assert hs.membership("600519") == (False, True)
+    assert calls["n"] == 1
+
+
+def test_watchlist_holdings_set_merges_and_marks_sources(monkeypatch):
+    """默认池为自选 ∪ 持仓；同代码保留自选名称并记录双来源。"""
+    fake_watch = type("S", (), {"symbol": "600519", "name": "贵州茅台"})()
+    fake_hold_same = type("P", (), {"symbol": "600519", "name": "茅台持仓名"})()
+    fake_hold_only = type("P", (), {"symbol": "000858", "name": "五粮液"})()
+
+    monkeypatch.setattr(
+        "kan.storage.watchlist.load_watchlist",
+        lambda group=None: type("WL", (), {"stocks": [fake_watch]})(),
+    )
+    monkeypatch.setattr(
+        "kan.storage.positions.load_positions",
+        lambda: type("Book", (), {"positions": [fake_hold_same, fake_hold_only]})(),
+    )
+
+    stock_set = WatchlistHoldingsSet()
+
+    assert stock_set.pairs() == [("600519", "贵州茅台"), ("000858", "五粮液")]
+    assert stock_set.membership("600519") == (True, True)
+    assert stock_set.membership("000858") == (False, True)
 
 
 # ─────────────── HotRankSet ───────────────
@@ -187,7 +233,7 @@ def test_industry_set_lazy_load(monkeypatch):
 
 def test_from_flags_default_returns_watchlist():
     s = from_flags()
-    assert isinstance(s, WatchlistSet)
+    assert isinstance(s, WatchlistHoldingsSet)
 
 
 def test_from_flags_industry():
@@ -345,10 +391,10 @@ def test_from_flags_passes_only_watchlist_to_hot():
 
 
 def test_from_flags_watchlist_default_ignores_extras():
-    """三源都 None → WatchlistSet · watchlist_pairs/only_watchlist 忽略 (无意义)。"""
+    """三源都 None → 默认自选 ∪ 持仓 · watchlist_pairs/only_watchlist 忽略。"""
     s = from_flags(watchlist_pairs=[("600519", "贵州茅台")], only_watchlist=True)
-    assert isinstance(s, WatchlistSet)
-    # WatchlistSet 不存这两参数 · 不报错即可
+    assert isinstance(s, WatchlistHoldingsSet)
+    # 默认池不存这两参数 · 不报错即可
 
 
 def test_from_flags_hot_accepts_str_or_enum():
@@ -407,11 +453,22 @@ def test_from_flags_all_stocks():
     assert isinstance(s, AllStocksSet)
 
 
+def test_from_flags_only_holdings():
+    s = from_flags(only_holdings=True)
+    assert isinstance(s, HoldingsSet)
+
+
 @pytest.mark.parametrize("kwargs", [
     {"all_stocks": True, "industry": "白酒"},
     {"all_stocks": True, "hot": "rank"},
     {"all_stocks": True, "theme": "AI"},
+    {"all_stocks": True, "only_holdings": True},
 ])
 def test_from_flags_all_stocks_mutual_exclusion(kwargs):
     with pytest.raises(ValueError, match="互斥"):
         from_flags(**kwargs)
+
+
+def test_from_flags_only_holdings_mutual_exclusion():
+    with pytest.raises(ValueError, match="互斥"):
+        from_flags(only_holdings=True, industry="白酒")

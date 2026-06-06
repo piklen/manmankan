@@ -158,3 +158,41 @@ def test_run_scan_returns_board_index_result(monkeypatch) -> None:
     assert result.board_index_result.symbol == "801016"
     assert result.board_index_result.name == "Food"
     assert result.meta is board_meta
+
+
+def test_run_scan_applies_watchlist_and_holding_markers(monkeypatch) -> None:
+    """service 层给 scan 结果打来源标记，render/json 都可复用。"""
+    raw_results = [
+        _scan_result("600519", "Alpha"),
+        _scan_result("000858", "Beta"),
+    ]
+
+    class MarkedSet(CodeListSet):
+        def membership(self, symbol: str) -> tuple[bool, bool]:
+            return symbol == "600519", symbol in {"600519", "000858"}
+
+    stock_set = MarkedSet([("600519", "Alpha"), ("000858", "Beta")])
+
+    def fake_run_data_pipeline(
+        stock_set_arg, *, compute, mode, periods, fetch_days, show_progress, exit_on_resolve_error,
+    ):
+        return DataCtx(
+            targets=stock_set_arg.pairs(),
+            meta=None,
+            results=raw_results,
+            freshness=_freshness(),
+            source_name=stock_set_arg.name,
+        )
+
+    monkeypatch.setattr("kan.core.pipeline.run_data_pipeline", fake_run_data_pipeline)
+    monkeypatch.setattr(
+        "kan.core.enrich.enrich_scan_rows",
+        lambda results, *, data_cutoff: list(results),
+    )
+
+    result = run_scan(ScanRequest(stock_set=stock_set, show_progress=False))
+
+    assert result.all_results[0].in_watchlist is True
+    assert result.all_results[0].in_holding is True
+    assert result.all_results[1].in_watchlist is False
+    assert result.all_results[1].in_holding is True
