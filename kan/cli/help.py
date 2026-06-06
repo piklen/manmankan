@@ -34,9 +34,20 @@ def help_cmd() -> None:
   kan import stocks.csv       CSV 批量导入
   kan clear                   清空自选列表
 
+[bold cyan]真实持仓[/bold cyan]
+  kan hold add 600519 --cost 1680 --shares 100  手动录入持仓事实
+  kan hold add 600519 --cost 1600 --shares 100 --add  追加录入并重算均价
+  kan hold reduce 600519 --shares 100           减少持股数
+  kan hold cash 73000                           更新现金
+  kan hold import positions.csv                 CSV 批量导入持仓
+  kan hold                                      持仓盈亏 + 仓位 + 位置总览
+  kan hold --format json --mask                 JSON 输出并脱敏金额
+  kan hold scan                                 只扫描真实持仓池
+
 [bold cyan]位置扫描[/bold cyan]
   新手从 kan scan 和 kan find 开始
-  kan scan                  全景扫描 10 周期（低点模式）
+  kan scan                  默认池全景扫描（自选 ∪ 持仓）
+  kan scan --only-holdings  只扫描真实持仓池
   kan scan --wide           窄屏也展示全部周期
   kan scan --compact        只展示短/中/长关键周期
   kan scan --periods 5,20,60,180  自定义 2-360 周期集合
@@ -76,6 +87,7 @@ def help_cmd() -> None:
   kan find --pos 60:lt:10 --resonance low:gte:2  多条件 AND
   kan find --any --pos 20:lt:10 --moneyflow-daily gt:10000  多条件任一命中
   kan find --exclude-st --pos 180:lt:5         排 ST · 位置 filter
+  kan find --only-holdings --format json       真实持仓池取数
   kan find --industry 半导体 --pos 180:lt:10   行业池里筛 180 日位置 < 10%
   kan find --codes 600519,000858 --gain 30:gt:10  任意代码池里筛近 30 日涨幅
   cat codes.txt | kan find --codes - --pos 60:lt:20  stdin 代码池
@@ -109,7 +121,7 @@ def help_cmd() -> None:
   kan board rank --kind theme --by pos -p 30      题材位置分位榜
 
   [dim]scan / low / high / trend / fetch 全部支持 --industry / --hot / --theme 自由切换[/dim]
-  [dim]find 支持 --industry / --hot / --theme / --all / --codes 候选池 · 池参数互斥[/dim]
+  [dim]find 支持 --industry / --hot / --theme / --all / --codes / --only-holdings 候选池 · 池参数互斥[/dim]
 
 [bold cyan]导出格式[/bold cyan]
   kan scan --format md      markdown 表格输出
@@ -117,7 +129,7 @@ def help_cmd() -> None:
   kan compare 600519 000858 --format md
   kan board rank --kind industry --by gain --format json
 
-  [dim]--format 适用 scan / low / high / info / trend / compare / history / find / board rank[/dim]
+  [dim]--format 适用 scan / low / high / info / trend / compare / history / find / hold / board rank[/dim]
 
 [bold cyan]数据管理[/bold cyan]
   kan fetch                 拉取数据（通常不需要，scan 自动更新）

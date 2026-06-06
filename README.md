@@ -20,6 +20,8 @@ uv tool install manmankan
 kan scan --codes 600519,000858
 kan scan --periods 5,20,60,180 --wide
 kan find --codes 600519,000858 --format json --compact
+kan hold add 600519 --cost 1680 --shares 100
+kan hold --format json --mask
 ```
 
 如果你也想先把候选池数据说清楚，再交给人或 AI 慢慢研究，可以 star 关注后续版本。
@@ -41,6 +43,7 @@ Data, not decisions: no buy/sell advice, no ratings, no price targets. Python 3.
 - **给人看**：在终端里快速看到候选池的多周期位置、共振、涨跌、行业 / 题材 / 热榜背景。
 - **给 AI 用**：用低噪声 JSON 把候选、字段、命中条件、缺数据语义交给模型，方便继续做解释、排序、研究清单或交叉验证。
 - **给自动化用**：CLI 和 `kan.api` 都能接外部代码池，适合 cron、notebook、脚本和本地研究流水线。
+- **给持仓看坐标**：用户手动录入成本、股数和现金后，`kan hold` 计算今日 / 累计盈亏、仓位和 30 / 60 / 180 日位置。
 
 如果你要让 AI 参与候选筛选，慢慢看的角色是提供可审计输入：它负责把"坐标"和"条件命中"说清楚，不负责替你下结论。
 
@@ -76,17 +79,20 @@ kan find --help
 常用入口：
 
 ```bash
-kan scan                                      # 扫当前自选
+kan scan                                      # 扫默认池（自选 ∪ 持仓）
 kan scan --codes 600519,000858               # 扫外部候选代码池
 kan scan --periods 5,20,60,180 --wide         # 自定义 2-360 周期并全量展示
 kan info 600519                               # 单股详情 + 所属行业位置均值/排名对照
 kan find --codes 600519,000858 --format json # 把候选池整理成 JSON
 kan find --all --pe lt:20 --format json --compact
+kan hold add 600519 --cost 1680 --shares 100 # 手动录入真实持仓事实
+kan hold                                      # 持仓盈亏 + 仓位 + 位置总览
+kan hold --format json --mask                 # AI/脚本消费；金额脱敏
 kan board rank --kind industry --by moneyflow --format json
 kan history 600519 --format json
 ```
 
-`kan scan` 面向终端阅读；`kan find --format json` 面向脚本和 AI 消费。
+`kan scan` 面向终端阅读；`kan find --format json` 和 `kan hold --format json` 面向脚本和 AI 消费。
 
 ## 数据契约
 
@@ -97,6 +103,7 @@ kan history 600519 --format json
 - 多周期位置百分位：3 / 5 / 7 / 10 / 15 / 30 / 60 / 90 / 120 / 180 日。
 - 共振：同一候选在多个周期同时接近低位或高位。
 - 候选池：自选、行业、题材、热榜、全市场、外部 `--codes` 或 stdin。
+- 真实持仓：用户 CLI 录入成本 / 股数 / 现金，本地计算市值、仓位、今日和累计盈亏。
 - 筛选条件：位置、共振、涨跌、连阳连阴、估值、质量、资金、技术指标、筹码、股东、除权除息事件等。
 - 输出形态：终端表格、Markdown、JSON、紧凑 JSON、字段白名单、Python API。
 
@@ -145,8 +152,8 @@ uv tool install manmankan --index-url https://pypi.org/simple/
 - 不预测涨跌。
 - 不给买卖建议、评级、目标价或仓位建议。
 - 不内置策略 preset、打分模型或"最佳标的"排序。
-- 不下单、不接券商账户、不读取持仓。
-- 不提供实时行情、分钟级行情、港股、美股、期货或完整财报数据库（多市场是远期路线图，当前仅 A 股）。
+- 不下单、不接券商账户、不自动读取外部持仓；真实持仓只来自用户在 CLI 录入的本地 XDG 数据。
+- 不提供实时行情推送、分钟级行情、港股、美股、期货或完整财报数据库（多市场是远期路线图，当前仅 A 股）。
 - 不内置 AI / LLM / 托管服务——AI 由用户自己选择和运行。
 
 位置百分位的定义是：
@@ -162,6 +169,8 @@ uv tool install manmankan --index-url https://pypi.org/simple/
 慢慢看本地运行：
 
 - 自选股、缓存、扫描快照存放在 `~/.local/share/kan/`，按 XDG 规范管理。
+- 真实持仓存放在 `~/.local/share/kan/positions.json`，父目录 `0700`，文件 `0600`。
+- 持仓输出可加 `--mask` 脱敏金额；本地数据仍可能被 Time Machine / iCloud 等系统备份工具复制。
 - 不需要登录，不上传自选股，不做遥测。
 - CLI 会访问公开行情数据源；更新检查会访问 PyPI，可用 `KAN_NO_UPDATE_CHECK=1` 关闭。
 - 配置 TuShare token 后，token 只发往你配置的 TuShare API 端点。
