@@ -30,6 +30,7 @@ if TYPE_CHECKING:
         ChipMetrics,
         MoneyflowMetrics,
         PeriodResult,
+        RelativeStrengthMetrics,
         SentimentMetrics,
         StockScanResult,
         TechnicalMetrics,
@@ -56,6 +57,7 @@ class CrossSectionRow:
     sentiment: SentimentMetrics | None = None    # 技术/情绪/筹码维度 · 情绪截面 (None=当日未涨跌停)
     chip: ChipMetrics | None = None              # 技术/情绪/筹码维度 · 筹码截面 (None=无数据)
     scan: StockScanResult | None = None          # --all K 线裸值快照 (pos/gain/up_days)
+    relative_strength: RelativeStrengthMetrics | None = None  # 相对强度 (个股 − 大盘/行业 涨幅差 · None=未挂)
 
 
 @dataclass(frozen=True)

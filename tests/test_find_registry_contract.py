@@ -12,6 +12,8 @@ _FILTER_EXAMPLES = {
     "resonance": "low:gte:3",
     "gain": "30:gt:20",
     "up_days": "gte:3",
+    "rs_index": "30:gt:0",
+    "rs_board": "30:gt:0",
     "pe": "lt:20",
     "pb": "lt:3",
     "turnover": "gt:5",

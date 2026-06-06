@@ -217,6 +217,51 @@ class TestTechnicalSentimentChipDict:
         assert export._chip_public_dict(None) is None
 
 
+class TestRelativeStrengthPublicDict:
+    """相对强度对外 dict · int 周期 key → str · None 降级 · 端到端进 find_payload。"""
+
+    @staticmethod
+    def _rs():
+        from kan.core.models import RelativeStrengthMetrics
+
+        return RelativeStrengthMetrics(
+            industry="食品饮料", index_code="000300.SH", index_name="沪深300",
+            stock_gain={30: -9.85}, index_gain={30: -9.0}, board_gain={30: -9.56},
+            rs_index={30: -0.85}, rs_board={30: -0.29}, source="tushare_index+sw",
+        )
+
+    def test_none(self):
+        assert export._relative_strength_public_dict(None) is None
+
+    def test_int_period_keys_to_str_and_values(self):
+        d = export._relative_strength_public_dict(self._rs())
+        assert d["industry"] == "食品饮料"
+        assert d["index_name"] == "沪深300"
+        # int 周期 key 转 str (JSON 对象 key 须字符串)
+        assert d["rs_board"] == {"30": -0.29}
+        assert d["rs_index"] == {"30": -0.85}
+        assert d["stock_gain"] == {"30": -9.85}
+        assert d["board_gain"] == {"30": -9.56}
+        assert d["source"] == "tushare_index+sw"
+
+    def test_find_payload_includes_relative_strength(self):
+        # 端到端回归:relative_strength 进 find_payload 输出 (防 _find_result_dict 漏挂)
+        t = TriggeredFilter(filter_type="rs_board", param="30:gt:0", value=-0.29)
+        scan = _scan("600519")
+        er = EnrichedResult.from_scan(scan, relative_strength=self._rs())
+        entries = [(FindMatch(result=scan, triggered=(t,)), er)]
+        p = export.find_payload(
+            entries, query_time="t", pools=["watchlist"], filters=[],
+            pool_size=1, matched_total=1, freshness=_freshness(),
+        )
+        rs = p["results"][0]["relative_strength"]
+        assert rs["industry"] == "食品饮料"
+        assert rs["rs_board"] == {"30": -0.29}
+        tf = p["results"][0]["triggered_filters"][0]
+        assert tf["filter"] == "--rs-board"
+        assert tf["value"] == -0.29
+
+
 class TestFindPayload:
     def test_schema_and_disclaimer(self):
         t = TriggeredFilter(filter_type="pos", param="180:lt:50", value=38.7)

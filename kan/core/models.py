@@ -288,6 +288,31 @@ class ShareholderMetrics(BaseModel):
     source: str | None = None               # 数据源标注 (例 tushare_shareholder)
 
 
+class RelativeStrengthMetrics(BaseModel):
+    """个股相对强度 · 个股区间涨幅 − 对照(大盘指数 / 所属申万一级行业)区间涨幅 · 客观差值(趋势/动量扩展)。
+
+    合规 (compliance §6/§7):相对强度是两段客观涨幅的算术差 (个股 gain − 对照 gain) ·
+    裸值可出 · **不输出「真龙头 / 独立行情 / 跟风 / 强势 / 领涨」等判断词** (§3 黑名单延伸 ·
+    个股跑赢板块极易被误读为"工具在荐龙头" · 工具只出差值数字 · 判断权在用户/消费方)。
+    filter 用户显式指定 (--rs-index 30:gt:0 = 近 30 日跑赢大盘基准;--rs-board 30:gt:0 =
+    近 30 日跑赢所属申万一级行业)。
+
+    rs_index / rs_board 按周期存差值 (百分点) · 周期不足 / 个股行业未知 / 对照指数缺 →
+    该周期不入 dict (matcher 不命中 · None 语义 · 不静默当 0)。stock_gain / index_gain /
+    board_gain 存原始对照涨幅供 audit + 输出透明 (用户可见 个股涨 X、对照涨 Y、差 Z)。
+    """
+
+    industry: str | None = None       # 个股所属申万一级行业名 (board 对照口径 · None=未知)
+    index_code: str | None = None     # 大盘对照指数 ts_code (例 000300.SH)
+    index_name: str | None = None     # 大盘对照指数名 (例 沪深300)
+    stock_gain: dict[int, float] = Field(default_factory=dict)  # {周期: 个股区间涨幅 %}
+    index_gain: dict[int, float] = Field(default_factory=dict)  # {周期: 大盘指数区间涨幅 %}
+    board_gain: dict[int, float] = Field(default_factory=dict)  # {周期: 所属行业指数区间涨幅 %}
+    rs_index: dict[int, float] = Field(default_factory=dict)    # {周期: 个股 − 大盘 差值 (百分点)}
+    rs_board: dict[int, float] = Field(default_factory=dict)    # {周期: 个股 − 行业 差值 (百分点)}
+    source: str | None = None         # 数据源标注 (例 tushare_index+sw)
+
+
 class EnrichedResult(StockScanResult):
     """StockScanResult + 按需挂载的多维指标 (lazy · 不强制全拉)。
 
@@ -307,6 +332,7 @@ class EnrichedResult(StockScanResult):
     sentiment: SentimentMetrics | None = None        # limit_list_d (连板 / 炸板 · 技术/情绪/筹码维度)
     chip: ChipMetrics | None = None                  # cyq_perf (获利盘 · 技术/情绪/筹码维度)
     shareholder: ShareholderMetrics | None = None    # 股东户数/十大流通/北向 (逐股 · 股东持股维度)
+    relative_strength: RelativeStrengthMetrics | None = None  # 相对强度 (个股 − 大盘/行业 区间涨幅差 · 趋势/动量扩展)
 
     @classmethod
     def from_scan(
@@ -319,6 +345,7 @@ class EnrichedResult(StockScanResult):
         sentiment: SentimentMetrics | None = None,
         chip: ChipMetrics | None = None,
         shareholder: ShareholderMetrics | None = None,
+        relative_strength: RelativeStrengthMetrics | None = None,
     ) -> EnrichedResult:
         """把 StockScanResult 提升为 EnrichedResult + 按需挂多维指标 (lazy 挂载入口)。
 
@@ -335,6 +362,7 @@ class EnrichedResult(StockScanResult):
             sentiment=sentiment,
             chip=chip,
             shareholder=shareholder,
+            relative_strength=relative_strength,
         )
 
 

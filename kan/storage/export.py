@@ -35,6 +35,7 @@ if TYPE_CHECKING:
         HotMeta,
         MoneyflowMetrics,
         PeriodResult,
+        RelativeStrengthMetrics,
         SentimentMetrics,
         ShareholderMetrics,
         StockScanResult,
@@ -809,6 +810,31 @@ def _find_disclaimer_quote() -> str:
     return "> " + FIND_DISCLAIMER_TEXT
 
 
+def _relative_strength_public_dict(rs: RelativeStrengthMetrics | None) -> dict | None:
+    """RelativeStrengthMetrics → 对外 JSON (个股 − 对照 区间涨幅差 · 客观裸值)。
+
+    合规 (compliance §6/§7):相对强度是两段客观涨幅的算术差 · 裸值可出 · 不输出
+    强弱/龙头判断词。周期 dict 的 int key 转 str (JSON 对象 key 须为字符串 · 同 context)。
+    """
+    if rs is None:
+        return None
+
+    def _by_period(d: dict[int, float]) -> dict[str, float]:
+        return {str(k): v for k, v in d.items()}
+
+    return {
+        "industry": rs.industry,
+        "index_code": rs.index_code,
+        "index_name": rs.index_name,
+        "stock_gain": _by_period(rs.stock_gain),
+        "index_gain": _by_period(rs.index_gain),
+        "board_gain": _by_period(rs.board_gain),
+        "rs_index": _by_period(rs.rs_index),
+        "rs_board": _by_period(rs.rs_board),
+        "source": rs.source,
+    }
+
+
 def _find_result_dict(match: FindMatch, enriched: EnrichedResult) -> dict:
     """单只命中 → JSON 对象 (find JSON schema · AI JSON 层扩 valuation + context)。"""
     er = enriched
@@ -844,6 +870,9 @@ def _find_result_dict(match: FindMatch, enriched: EnrichedResult) -> dict:
         "sentiment": _sentiment_public_dict(getattr(er, "sentiment", None)),
         "chip": _chip_public_dict(getattr(er, "chip", None)),
         "shareholder": _shareholder_public_dict(getattr(er, "shareholder", None)),
+        "relative_strength": _relative_strength_public_dict(
+            getattr(er, "relative_strength", None)
+        ),
     }
 
 
@@ -1356,6 +1385,7 @@ def _cross_section_result_dict(
         "technical": _technical_public_dict(row.technical),
         "sentiment": _sentiment_public_dict(row.sentiment),
         "chip": _chip_public_dict(row.chip),
+        "relative_strength": _relative_strength_public_dict(row.relative_strength),
         "triggered_filters": [
             {
                 "filter": TRIGGER_FLAG.get(t.filter_type, t.filter_type),

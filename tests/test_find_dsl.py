@@ -191,6 +191,63 @@ class TestConditionSet:
             cs.exclude_st = True  # frozen
 
 
+class TestRsFilters:
+    """相对强度 filter parse (PeriodScalarFilter · 差值无 value_range · 可正可负)。"""
+
+    def test_rs_index_parse_basic(self):
+        from kan.core.find_dsl import RsIndexFilter
+
+        f = RsIndexFilter.parse("30:gt:0")
+        assert f.period == 30
+        assert f.op == "gt"
+        assert f.value == 0.0
+
+    def test_rs_board_parse_negative_value(self):
+        from kan.core.find_dsl import RsBoardFilter
+
+        f = RsBoardFilter.parse("60:lt:-5")
+        assert f.period == 60
+        assert f.value == -5.0
+
+    def test_rs_no_value_range_accepts_negative_and_large(self):
+        # 差值无硬边界:负值(跑输)、超 100 值(暴力跑赢)都合法,区别于 --pos 的 [0,100]
+        from kan.core.find_dsl import RsIndexFilter
+
+        assert RsIndexFilter.parse("30:lt:-30").value == -30.0
+        assert RsIndexFilter.parse("30:gt:150").value == 150.0
+
+    def test_rs_period_range_2_360(self):
+        from kan.core.find_dsl import RsBoardFilter
+
+        assert RsBoardFilter.parse("2:gt:0").period == 2
+        assert RsBoardFilter.parse("360:gt:0").period == 360
+
+    def test_rs_period_below_range_rejected(self):
+        from kan.core.find_dsl import RsIndexFilter
+
+        with pytest.raises(FilterParseError, match=r"周期 1 不支持"):
+            RsIndexFilter.parse("1:gt:0")
+
+    def test_rs_bad_format_rejected(self):
+        from kan.core.find_dsl import RsBoardFilter
+
+        with pytest.raises(FilterParseError, match="格式错误"):
+            RsBoardFilter.parse("30:gt")
+
+    def test_conditionset_rs_wiring(self):
+        cs = ConditionSet.from_flags(
+            rs_index=["30:gt:0"], rs_board=["20:lt:-5", "60:gt:3"]
+        )
+        assert cs.needs_relative_strength()
+        assert len(cs.rs_index_filters) == 1
+        assert len(cs.rs_board_filters) == 2
+        assert cs.rs_index_periods() == {30}
+        assert cs.rs_board_periods() == {20, 60}
+        assert cs.relative_strength_periods() == {20, 30, 60}
+        assert cs.has_kline_filters()  # RS 个股侧吃 K 线 gain
+        assert not cs.is_empty()
+
+
 class TestApplyOp:
     @pytest.mark.parametrize(
         "op,lhs,rhs,expected",
