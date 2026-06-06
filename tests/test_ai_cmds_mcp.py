@@ -39,7 +39,32 @@ def test_mcp_serve_lists_tools() -> None:
     lines = [json.loads(line) for line in out.getvalue().splitlines()]
     assert lines[0]["result"]["serverInfo"]["name"] == "manmankan"
     tools = {t["name"] for t in lines[1]["result"]["tools"]}
-    assert {"kan_scan", "kan_find", "kan_info", "kan_index"} <= tools
+    assert {"kan_scan", "kan_find", "kan_info", "kan_index", "kan_hold"} <= tools
+
+
+def test_mcp_hold_builds_cli_args(monkeypatch) -> None:
+    from kan.mcp import server
+
+    captured = {}
+
+    def fake_run(args):
+        captured["args"] = args
+        return {"exit_code": 0, "stdout": "ok", "stderr": ""}
+
+    monkeypatch.setattr(server, "_run_kan", fake_run)
+
+    result = server._kan_hold({
+        "action": "add",
+        "code": "600519",
+        "cost": 1680,
+        "shares": 100,
+        "name": "贵州茅台",
+    })
+
+    assert result["exit_code"] == 0
+    assert captured["args"] == [
+        "hold", "add", "600519", "--cost", "1680", "--shares", "100", "--name", "贵州茅台",
+    ]
 
 
 def test_mcp_install_dry_run_codex_uses_user_config(tmp_path, monkeypatch) -> None:

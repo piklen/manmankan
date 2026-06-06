@@ -160,8 +160,9 @@ kan find --industry 半导体 --pos 20:lt:30 --sort pos_20:asc --limit 30 --form
 
 | 池 | 说明 |
 |---|---|
-| 默认 | 当前 default 自选组 |
+| 默认 | 当前 default 自选组 ∪ 真实持仓 |
 | `--group` | 指定自选分组 |
+| `--only-holdings` | 只查真实持仓 |
 | `--industry` | 申万行业成分股 |
 | `--theme` | 题材成分股;题材分类来自上游口径 |
 | `--hot rank\|surge` | 东方财富热榜 |

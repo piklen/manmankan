@@ -186,6 +186,10 @@ def scan(
         bool,
         typer.Option("--only-watchlist", help="仅显示自选 ∩ 行业/热榜/题材(需配合 --industry / --hot / --theme)"),
     ] = False,
+    only_holdings: Annotated[
+        bool,
+        typer.Option("--only-holdings", help="只扫描真实持仓池"),
+    ] = False,
     group: Annotated[
         str | None,
         typer.Option("--group", "-g", help="选自选股分组 (默认 default 组 · 跑 kan group list 查看)"),
@@ -255,8 +259,34 @@ def scan(
             exit_code=2,
         )
     source_mode = industry is not None or hot is not None or theme is not None or code_pairs is not None
+    if only_holdings and source_mode:
+        _exit_scan_error(
+            fmt,
+            code="invalid_holdings_pool",
+            message="--only-holdings 不能和 --industry / --hot / --theme / --codes 同时使用",
+            hint="例: kan scan --only-holdings",
+            exit_code=2,
+        )
+    if only_holdings and group is not None:
+        _exit_scan_error(
+            fmt,
+            code="invalid_holdings_pool",
+            message="--only-holdings 已指定真实持仓池，不再叠加 --group",
+            hint="例: kan scan --only-holdings",
+            exit_code=2,
+        )
+    if only_holdings and only_watchlist:
+        _exit_scan_error(
+            fmt,
+            code="invalid_holdings_pool",
+            message="--only-holdings 与 --only-watchlist 不能同时使用",
+            hint="例: kan scan --only-holdings",
+            exit_code=2,
+        )
     watchlist_pairs = (
-        [] if code_pairs is not None else (
+        [] if code_pairs is not None or only_holdings or (
+            not source_mode and group is None
+        ) else (
             _load_watchlist_pairs(group) if source_mode else _get_watchlist_pairs(group)
         )
     )
@@ -306,6 +336,7 @@ def scan(
             watchlist_pairs=watchlist_pairs,
             only_watchlist=only_watchlist,
             watchlist_group=group,
+            only_holdings=only_holdings,
         )
     )
     try:

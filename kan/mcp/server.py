@@ -77,6 +77,7 @@ def _kan_scan(payload: dict[str, Any]) -> dict[str, Any]:
     _bool_flag(args, "--high", payload.get("high"))
     _bool_flag(args, "--signal", payload.get("signal"))
     _bool_flag(args, "--exclude-st", payload.get("exclude_st"))
+    _bool_flag(args, "--only-holdings", payload.get("only_holdings"))
     return _run_kan(args)
 
 
@@ -120,6 +121,7 @@ def _kan_find(payload: dict[str, Any]) -> dict[str, Any]:
     _bool_flag(args, "--any", payload.get("any"))
     _bool_flag(args, "--compact", payload.get("compact"))
     _bool_flag(args, "--exclude-st", payload.get("exclude_st"))
+    _bool_flag(args, "--only-holdings", payload.get("only_holdings"))
     return _run_kan(args)
 
 
@@ -149,6 +151,43 @@ def _kan_index(payload: dict[str, Any]) -> dict[str, Any]:
     return _run_kan(args)
 
 
+def _kan_hold(payload: dict[str, Any]) -> dict[str, Any]:
+    action = str(payload.get("action") or "overview")
+    if action in ("overview", "list"):
+        args = ["hold", "--format", str(payload.get("format") or "json")]
+        _bool_flag(args, "--no-refresh", payload.get("no_refresh"))
+        _bool_flag(args, "--mask", payload.get("mask"))
+        return _run_kan(args)
+    if action == "add":
+        code = payload.get("code")
+        if not isinstance(code, str) or not code.strip():
+            raise ValueError("code is required for hold add")
+        args = ["hold", "add", code]
+        _optional_arg(args, "--cost", payload.get("cost"))
+        _optional_arg(args, "--shares", payload.get("shares"))
+        _optional_arg(args, "--name", payload.get("name"))
+        _bool_flag(args, "--add", payload.get("add"))
+        return _run_kan(args)
+    if action == "reduce":
+        code = payload.get("code")
+        if not isinstance(code, str) or not code.strip():
+            raise ValueError("code is required for hold reduce")
+        args = ["hold", "reduce", code]
+        _optional_arg(args, "--shares", payload.get("shares"))
+        return _run_kan(args)
+    if action == "remove":
+        code = payload.get("code")
+        if not isinstance(code, str) or not code.strip():
+            raise ValueError("code is required for hold remove")
+        return _run_kan(["hold", "remove", code])
+    if action == "cash":
+        amount = payload.get("amount")
+        if amount is None:
+            raise ValueError("amount is required for hold cash")
+        return _run_kan(["hold", "cash", str(amount)])
+    raise ValueError(f"unsupported hold action: {action}")
+
+
 TOOLS = {
     "kan_scan": ToolSpec(
         name="kan_scan",
@@ -164,6 +203,7 @@ TOOLS = {
                 "high": {"type": "boolean"},
                 "signal": {"type": "boolean"},
                 "exclude_st": {"type": "boolean"},
+                "only_holdings": {"type": "boolean"},
                 "format": {"type": "string", "enum": ["json", "md"]},
             },
         },
@@ -195,6 +235,7 @@ TOOLS = {
                 "compact": {"type": "boolean"},
                 "any": {"type": "boolean"},
                 "exclude_st": {"type": "boolean"},
+                "only_holdings": {"type": "boolean"},
                 "format": {"type": "string", "enum": ["json", "md"]},
             },
         },
@@ -212,6 +253,29 @@ TOOLS = {
             "required": ["code"],
         },
         handler=_kan_info,
+    ),
+    "kan_hold": ToolSpec(
+        name="kan_hold",
+        description="Record or query real holdings facts; outputs objective P/L and position context.",
+        input_schema={
+            "type": "object",
+            "properties": {
+                "action": {
+                    "type": "string",
+                    "enum": ["overview", "list", "add", "reduce", "remove", "cash"],
+                },
+                "code": {"type": "string"},
+                "cost": {"type": "number"},
+                "shares": {"type": "integer"},
+                "name": {"type": "string"},
+                "add": {"type": "boolean"},
+                "amount": {"type": "number"},
+                "no_refresh": {"type": "boolean"},
+                "mask": {"type": "boolean"},
+                "format": {"type": "string", "enum": ["json", "md"]},
+            },
+        },
+        handler=_kan_hold,
     ),
     "kan_examples": ToolSpec(
         name="kan_examples",

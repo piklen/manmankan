@@ -20,6 +20,7 @@ def _get_base_dir() -> Path:
 BASE_DIR = _get_base_dir()
 DATA_DIR = BASE_DIR / "data"
 WATCHLIST_PATH = BASE_DIR / "watchlist.json"
+POSITIONS_PATH = BASE_DIR / "positions.json"
 STOCK_NAMES_CACHE = BASE_DIR / "stock_names.json"
 SNAPSHOT_PATH = BASE_DIR / "last_scan.json"
 SNAPSHOTS_DIR = BASE_DIR / "snapshots"

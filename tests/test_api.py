@@ -1,17 +1,19 @@
 """kan.api 公开 surface sanity check。
 
-确保 kan.api 暴露的符号 (4 个 Set + 5 个 verb + StockSet Protocol + from_flags)
+确保 kan.api 暴露的符号 (Set + verb + StockSet Protocol + from_flags)
 都是 importable 且类型正确 · 防止内部重构悄悄破坏公开 contract。
 """
 from __future__ import annotations
 
 
 def test_api_exports_all_stock_sets():
-    """kan.api 暴露 4 个 StockSet 实现 + Protocol + factory。"""
+    """kan.api 暴露 StockSet 实现 + Protocol + factory。"""
     from kan import api
 
-    # 4 个具体实现
+    # 具体实现
     assert hasattr(api, "WatchlistSet")
+    assert hasattr(api, "HoldingsSet")
+    assert hasattr(api, "WatchlistHoldingsSet")
     assert hasattr(api, "HotRankSet")
     assert hasattr(api, "ThemeSet")
     assert hasattr(api, "IndustrySet")
@@ -43,10 +45,10 @@ def test_api_watchlist_set_instantiates():
 
 def test_api_from_flags_returns_protocol_instance():
     """from_flags 返回值满足 StockSet Protocol (鸭子类型)。"""
-    from kan.api import StockSet, WatchlistSet, from_flags
+    from kan.api import StockSet, WatchlistHoldingsSet, from_flags
 
-    s = from_flags()  # 默认 WatchlistSet
-    assert isinstance(s, WatchlistSet)
+    s = from_flags()  # 默认自选 ∪ 持仓
+    assert isinstance(s, WatchlistHoldingsSet)
     assert isinstance(s, StockSet), "from_flags 返回值必须满足 StockSet Protocol"
 
 
@@ -76,8 +78,8 @@ def test_api_all_lists_match_actual_exports():
     declared = set(api.__all__)
     expected = {
         # StockSet
-        "HotRankSet", "IndustrySet", "StockSet", "ThemeSet", "WatchlistSet",
-        "from_flags",
+        "HoldingsSet", "HotRankSet", "IndustrySet", "StockSet", "ThemeSet",
+        "WatchlistHoldingsSet", "WatchlistSet", "from_flags",
         # verbs
         "fetch", "high", "low", "scan", "trend",
         # 背景: 数据源扩展 API

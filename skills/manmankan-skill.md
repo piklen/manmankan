@@ -23,7 +23,8 @@
 
 | 命令 | 用途 | AI 使用建议 |
 |------|------|------------|
-| `kan scan` | 扫描当前自选股的多周期位置 | 每日起手第一步，了解持仓+自选的整体位置 |
+| `kan scan` | 扫描默认池（自选 ∪ 持仓）的多周期位置 | 每日起手第一步，了解持仓+自选的整体位置 |
+| `kan scan --only-holdings` | 只扫描真实持仓池 | 单独查看持仓位置 |
 | `kan scan --group <组名>` | 扫描指定分组 | 分组巡检 |
 | `kan scan --codes <代码列表>` | 扫描外部代码 | 临时查看一批候选 |
 | `kan scan --periods 5,20,60,180 --wide` | 自定义 2-360 周期并全量展示 | 避免窄屏只看到部分周期 |
@@ -70,7 +71,21 @@
 | `kan index [sh sz cyb hs300] --format json` | 常用指数日线位置参照 | 补大盘基准 |
 | `kan low N` / `kan high N` | N 日新低/新高 | 极端位置发现 |
 
-### 5. 数据维护
+### 5. 真实持仓
+
+| 命令 | 用途 | AI 使用建议 |
+|------|------|------------|
+| `kan hold add <代码> --cost C --shares N` | 录入持仓成本和股数 | 由用户或脚本提供结构化事实 |
+| `kan hold add <代码> --cost C --shares N --add` | 追加录入并重算均价 | 只做事实合并 |
+| `kan hold reduce <代码> --shares N` | 减少持股数 | 更新用户提供的事实账本 |
+| `kan hold cash <金额>` | 更新现金 | 计算账户总资产和仓位 |
+| `kan hold import <csv>` / `pbpaste \| kan hold import -` | 批量导入持仓 | AI 解析截图后可转成 CSV/stdin 调用 |
+| `kan hold --format json --mask` | 持仓总览 JSON 且金额脱敏 | 截图 / 演示 / 外部模型低泄漏输入 |
+| `kan hold scan` | 只扫描真实持仓池 | 与普通 scan 输出口径一致 |
+
+`kan hold` 只能输出客观坐标、盈亏事实、仓位和除权除息核对提醒；不得把持仓状态改写成交易动作或处置结论。
+
+### 6. 数据维护
 
 | 命令 | 用途 | AI 使用建议 |
 |------|------|------------|
@@ -146,14 +161,17 @@ kan board rank --kind industry --by moneyflow --format json
 kan find --industry <行业名> --pos 60:lt:20 --format json --compact
 ```
 
-### 工作流 3：持仓巡检
+### 工作流 3：真实持仓坐标
 
 ```bash
-# 1. 扫描全部持仓和关注
+# 1. 查看真实持仓盈亏、仓位和 30/60/180 日位置
+kan hold --format json --mask
+
+# 2. 扫描全部持仓和关注
 kan scan
 
-# 2. 检查是否有接近止损位的
-kan find --codes <持仓代码列表> --pos 30:lt:15 --format json
+# 3. 单独查看真实持仓池
+kan find --only-holdings --format json
 ```
 
 ### 工作流 4：自选股分组管理
@@ -179,7 +197,7 @@ kan scan --group <组名>
 | 部分逐股高成本维度不支持 `--all` | 如股东/ROE 类全市场模式不可用 | 改用行业/代码池小范围查询 |
 | 历史回溯依赖扫描快照 | 未记录过的周期显示 null / `-` | 先用 `kan scan --periods N` 积累后再查 |
 | MCP 仅提供本地 stdio | 远程 HTTP transport 尚未提供 | 先用 `kan mcp install --dry-run` 预览本机客户端注册 |
-| 无实时行情 | 所有数据为日线级别 | 盘中不依赖 manmankan 做实时决策 |
+| 持仓实时价只服务盈亏现价口径 | 位置 / 共振仍按日 K 计算 | 看 `price_mode` 和 `data_cutoff` |
 
 ---
 
@@ -202,4 +220,4 @@ Agent 可以通过以下方式发现 manmankan 的能力：
 
 ---
 
-*维护：manmankan 能力变更时同步更新本文件 · 最后更新：2026-06-04*
+*维护：manmankan 能力变更时同步更新本文件 · 最后更新：2026-06-06*
