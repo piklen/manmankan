@@ -195,6 +195,52 @@ class TestRelativeStrength:
         assert isinstance(out[0], EnrichedResult)
         assert out[0].relative_strength.rs_index[30] == 5.0
 
+    def test_attach_board_dimension(self, monkeypatch):
+        # board 分支:mock industry_gains + sw_l1_map → rs_board + industry
+        monkeypatch.setattr(
+            "kan.data.relative_strength.industry_gains",
+            lambda periods: {"食品饮料": {30: -9.56}},
+        )
+        monkeypatch.setattr(
+            "kan.data.industry_map.fetch_sw_l1_map",
+            lambda: {"600519": "食品饮料"},
+        )
+        out = enrich.attach_relative_strength(
+            [self._scan_gain("600519", {30: -9.85})],
+            index_periods=set(), board_periods={30}, index_code="000300.SH",
+        )
+        assert out[0].relative_strength.rs_board[30] == -0.29
+        assert out[0].relative_strength.industry == "食品饮料"
+
+    def test_attach_cross_section(self, monkeypatch):
+        # --all 截面版 attach · row.scan 有个股 gain → 挂 rs_index
+        from kan.core.cross_section import CrossSectionRow
+
+        monkeypatch.setattr(
+            "kan.data.relative_strength.index_gains",
+            lambda periods, index_code="000300.SH": ({30: 7.0}, "000300.SH", "沪深300"),
+        )
+        row = CrossSectionRow(
+            code="600519", name="贵州茅台", valuation=None, valuation_context=None,
+            scan=self._scan_gain("600519", {30: 12.0}),
+        )
+        out = enrich.attach_relative_strength_cross_section(
+            [row], index_periods={30}, board_periods=set(), index_code="000300.SH",
+        )
+        assert out[0].relative_strength.rs_index[30] == 5.0
+
+    def test_attach_cross_section_no_scan_skips(self):
+        # row.scan None(无 K 线快照)→ 不挂 relative_strength
+        from kan.core.cross_section import CrossSectionRow
+
+        row = CrossSectionRow(
+            code="X", name="无K线", valuation=None, valuation_context=None, scan=None,
+        )
+        out = enrich.attach_relative_strength_cross_section(
+            [row], index_periods={30}, board_periods=set(), index_code="000300.SH",
+        )
+        assert out[0].relative_strength is None
+
 
 class TestEnrichFundamentalsMoneyflow:
     """整合-1 · 按需挂 fundamentals (逐股) / moneyflow (截面)。"""
