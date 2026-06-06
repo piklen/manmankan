@@ -212,7 +212,7 @@ fi
 echo ""
 echo "🔍 版本号一致性检查 ..."
 
-PROJECT_VERSION=$(python - <<'PY'
+PROJECT_VERSION=$(python3 - <<'PY'
 import tomllib
 from pathlib import Path
 
@@ -221,7 +221,7 @@ print(data["project"]["version"])
 PY
 )
 
-RUNTIME_VERSION=$(python - <<'PY'
+RUNTIME_VERSION=$(python3 - <<'PY'
 from pathlib import Path
 
 for line in Path("kan/__init__.py").read_text().splitlines():
@@ -231,7 +231,7 @@ for line in Path("kan/__init__.py").read_text().splitlines():
 PY
 )
 
-CHANGELOG_VERSION=$(python - <<'PY'
+CHANGELOG_VERSION=$(python3 - <<'PY'
 import re
 from pathlib import Path
 
@@ -252,7 +252,7 @@ if [ "$PROJECT_VERSION" != "$RUNTIME_VERSION" ] || [ "$PROJECT_VERSION" != "$CHA
   exit 1
 fi
 
-CHANGELOG_LINK_ERRORS=$(python - <<'PY'
+CHANGELOG_LINK_ERRORS=$(python3 - <<'PY'
 import re
 from pathlib import Path
 
