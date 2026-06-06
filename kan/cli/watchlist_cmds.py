@@ -1,9 +1,7 @@
 """自选股管理命令：add / remove / list / import / clear。
 
-这一组命令的共同特征：操作 kan.storage.watchlist 模块的持久化状态 · 不涉及 K 线数据拉取。
-
-help 命令拆到 kan.cli.help（历史背景）· 减少本文件行数 ·
-help 文案变更不再触发 watchlist 编辑冲突。
+共同特征:操作 kan.storage.watchlist 的持久化状态 · 不涉及 K 线数据拉取。
+help 命令在独立的 kan.cli.help 模块(help 文案变更不触发本文件编辑冲突)。
 """
 import re as _re
 from typing import Annotated
@@ -321,7 +319,7 @@ def add(
     success_suffix = "" if not group else f" → 「{group}」"
     with spinner_ctx:
         for sym in symbols:
-            # F41: 空字符串 / 纯空白拒绝 · 不进入"匹配 5207 只"逻辑
+            # 空字符串 / 纯空白拒绝 · 不进入名称模糊匹配(否则空串会匹配全市场)
             if not sym or not sym.strip():
                 failures.append(
                     "空字符串不是有效股票名 / 代码 · 例: kan add 600519 茅台"
@@ -403,7 +401,7 @@ def add(
 
     # 末尾汇总：先打跳过 + 失败明细 · 再打统计
     if batch:
-        # F6: batch 模式下逐条说明 skip 原因 · 防 "跳过 N" 不知所云
+        # batch 模式逐条说明 skip 原因 · 防"跳过 N 只"用户不知所云
         if skips:
             for s in skips:
                 typer.echo(f"  ⚠️  {s}")
@@ -425,7 +423,7 @@ def add(
         typer.echo(f"  添加完成 · {' · '.join(parts)}{time_part}")
         if fetch and added_codes:
             _fetch_added(added_codes)
-        # F7: batch 模式下 fail > 0 也要 exit 1 · 旧版只在单只模式 exit 1
+        # batch 模式只要有失败就 exit 1 · 与单只模式行为一致 · 便于脚本判断
         if fail:
             raise typer.Exit(1)
     elif failures:
@@ -596,7 +594,7 @@ def remove(
     in_label = "自选" if not group else f"「{group}」组"
     fail_count = 0
     for sym in symbols:
-        # F41: 空字符串拒绝(对齐 add)
+        # 空字符串拒绝 · 与 add 一致
         if not sym or not sym.strip():
             typer.echo(
                 "  ❌ 空字符串不是有效股票名 / 代码 · 例: kan remove 600519",
@@ -645,7 +643,7 @@ def remove(
                 typer.echo("    请用代码精确移除", err=True)
                 fail_count += 1
 
-    # F7: 任一只失败 → exit 1 · 对齐 add 行为
+    # 任一只失败 → exit 1 · 与 add 一致
     if fail_count:
         raise typer.Exit(1)
 

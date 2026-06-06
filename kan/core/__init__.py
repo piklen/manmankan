@@ -4,7 +4,6 @@
 - verbs: trend / scan / low / high 统一入口 · 接受任何 StockSet
 - pipeline: 多周期 / 多源数据编排
 - scanner: 位置扫描 + 5 档量能识别
-- scan_targets: 自选 / 热榜 / 题材 / 行业 4 类目标解析
 - models: dataclass / pydantic 数据模型
 - calendar: 交易日历
 """

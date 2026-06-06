@@ -10,10 +10,8 @@ storage schema v2:
         }
     }
 
-老 v1 schema {"stocks": [...]} 加载时自动迁移为 v2 (包成 default 组「自选」) ·
-迁移即时写回磁盘 · 用户零感知。老 API load_watchlist() / _save_watchlist(wl) /
-add / remove / clear / list_all 行为不变 (默认走 default 组) · 新 group 参数
-让 CLI 直接操作指定组。
+单组操作 API (load_watchlist / save_watchlist / add / remove / clear / list_all)
+不带 group 参数时走 default 组;带 group 参数时直接操作指定组。
 """
 
 from __future__ import annotations
@@ -364,7 +362,7 @@ def add_stock(wl: Watchlist, symbol: str, name: str) -> bool:
 
 
 def save_watchlist(wl: Watchlist, group: str | None = None) -> None:
-    """Save watchlist to disk · group=None 走 default 组 (向后兼容)。"""
+    """把单组视图 wl 写回磁盘 · group=None 走 default 组。"""
     _save_watchlist(wl, group=group)
 
 
@@ -378,20 +376,20 @@ class WatchlistCorruptError(Exception):
 
 
 def load_watchlist(group: str | None = None) -> Watchlist:
-    """加载指定组的自选股 (默认 default 组) · 返回老 Watchlist 对象向后兼容。
+    """加载指定组为单组视图 Watchlist (默认 default 组)。
 
-    旧调用 `load_watchlist()` 不带参 → 返回 default 组 stocks (跟 当前行为一致) ·
-    现有测试 / WatchlistSet / cli_*_cmds 零改动仍 work。
+    Watchlist 是单组的轻量容器 · 适合批量「读一组 → 内存改 → 写回一组」;
+    需要操作多组时用 load_grouped_watchlist。
     """
     gw = load_grouped_watchlist()
     return Watchlist(stocks=list(gw.get_group(group)))
 
 
 def _save_watchlist(wl: Watchlist, group: str | None = None) -> None:
-    """保存 wl 到指定组 (默认 default 组) · 老调用 _save_watchlist(wl) 不变。
+    """把单组视图 wl 写回指定组 (默认 default 组)。
 
-    实现:加载 GroupedWatchlist · 替换目标组的 stocks · 写回。这保留 v2 schema
-    完整性 (不擦掉其他组)。
+    实现:加载完整 GroupedWatchlist · 替换目标组的 stocks · 整体写回
+    (保留其他组不被擦除)。
     """
     gw = load_grouped_watchlist()
     target = group or gw.default
@@ -404,11 +402,11 @@ def _save_watchlist(wl: Watchlist, group: str | None = None) -> None:
 
 
 def load_grouped_watchlist() -> GroupedWatchlist:
-    """加载完整多分组 storage · v1 schema 自动迁移到 v2 + 持久化。
+    """加载多分组自选股 storage。
 
-    迁移路径:
-      v1 {"stocks": [...]} → v2 {"version":2, "default":"自选", "groups":{"自选":{"stocks":[...]}}}
-    迁移即时写回磁盘 (一次性) · 之后所有读都直走 v2 fast path。
+    磁盘 schema:
+      {"version": 2, "default": "自选", "groups": {"自选": {"stocks": [...]}}}
+    文件不存在 → 返回空的 default 组;default 指向不存在的组时降级修正(防御性)。
     """
     if not WATCHLIST_PATH.exists():
         return GroupedWatchlist()
@@ -421,17 +419,6 @@ def load_grouped_watchlist() -> GroupedWatchlist:
             f"错误: {e.msg} (行 {e.lineno} 列 {e.colno})"
         ) from e
 
-    # v1 → v2 在线迁移 · 检测条件: 顶层有 stocks 但没 groups
-    if "stocks" in data and "groups" not in data:
-        stocks = _apply_cached_names([Stock(**s) for s in data.get("stocks", [])])
-        gw = GroupedWatchlist(
-            groups={DEFAULT_GROUP_NAME: stocks},
-            default=DEFAULT_GROUP_NAME,
-        )
-        _save_grouped_watchlist(gw)
-        return gw
-
-    # v2 fast path
     raw_groups = data.get("groups", {})
     groups: dict[str, list[Stock]] = {}
     for name, payload in raw_groups.items():
@@ -641,7 +628,7 @@ def remove(symbol: str, group: str | None = None) -> tuple[bool, str]:
 
 
 def list_all(group: str | None = None) -> list[Stock]:
-    """列指定组股票 (不传走 default 组) · 老调用 list_all() 不变。"""
+    """列指定组股票 (不传走 default 组)。"""
     return load_watchlist(group).stocks
 
 

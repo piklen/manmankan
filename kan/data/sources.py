@@ -275,7 +275,7 @@ def _fetch_via_akshare(symbol: str, start: str) -> tuple[pd.DataFrame, str] | No
 
 
 # ══════════════════════════════════════════════════════════════════
-# KlineSource Protocol 适配 (历史背景) · 每个 class 是 thin wrapper
+# KlineSource Protocol 适配 · 每个 class 是 thin wrapper
 # 调对应 _fetch_<source> module function (SOT) · 元数据携带 name / priority
 # is_available · chain 内统一接管 fallback / race / 熔断 / debug_log
 # ══════════════════════════════════════════════════════════════════

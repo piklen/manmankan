@@ -1,6 +1,6 @@
 """K 线数据拉取编排 · cache + chain (责任链) + 公开 API。
 
-架构分层 (历史背景):
+架构分层:
 - `kan.data.protocols.KlineSource`     · Protocol (adapter 契约)
 - `kan.data.sources` / `kan.data.tushare` · 5 个内置 KlineSource 实现
 - `kan.data.source_chain.KlineSourceChain` · 责任链 (priority sort + race + 熔断)
@@ -9,10 +9,6 @@
 - `kan.api`                            · 用户 facing (register_kline_source / kline_chain)
 
 用户自定义源: `from kan.api import register_kline_source` · 详见 `kan.api` docstring。
-
-历史:
-- 背景: sources.py 从 fetcher.py 抽出 · 单点 fetcher / 编排分离
-- 背景:   chain 抽出 · 删 if-chain · 同 priority 多源并发 race 统一进 chain
 """
 
 from __future__ import annotations
@@ -38,7 +34,7 @@ if TYPE_CHECKING:
 # 新增列只需追加到 KLINE_OPTIONAL · 下游按列名读取 · 不受影响。
 
 KLINE_REQUIRED = ["date", "open", "high", "low", "close"]
-KLINE_OPTIONAL = ["volume", "amount", "_source", "_adjust"]
+KLINE_OPTIONAL = ["volume", "amount", "_source"]
 KLINE_COLUMNS = KLINE_REQUIRED + KLINE_OPTIONAL
 
 # 6 位纯数字股票代码 · 防止 path traversal
@@ -63,12 +59,7 @@ def _normalize_kline(
 
     for col in KLINE_OPTIONAL:
         if col not in df.columns:
-            if col == "_source":
-                df[col] = source
-            elif col == "_adjust":
-                df[col] = _default_adjustment(source)
-            else:
-                df[col] = float("nan")
+            df[col] = source if col == "_source" else float("nan")
 
     df = df[KLINE_COLUMNS].copy()
     df["date"] = pd.to_datetime(df["date"], errors="coerce").dt.date
@@ -85,18 +76,10 @@ def _normalize_kline(
             "数据源 %s K线含无法解析的数值 · 已置 NaN: %s%s", source, detail, sym_tag
         )
     df["_source"] = source
-    df["_adjust"] = df["_adjust"].fillna(_default_adjustment(source)).astype(str)
 
     df = df.sort_values("date").reset_index(drop=True)
     df = df.dropna(subset=["date", "close"])
     return df
-
-
-def _default_adjustment(source: str) -> str:
-    """内置 K 线源的价格复权口径标记 · 用于缓存迁移与排查。"""
-    if source in {"tushare", "baostock", "eastmoney", "sina", "tencent"}:
-        return "qfq"
-    return "unknown"
 
 
 # ── 通用工具 ─────────────────────────────────────────────────────────
@@ -153,57 +136,6 @@ def _cache_has_min_rows(path: Path, min_rows: int | None) -> bool:
         return False
 
 
-def _load_with_migration(path: Path) -> pd.DataFrame:
-    """读 parquet · 旧 schema 缺 `_source` 列自动加 'unknown' · atomic write back.
-
-    集中 migration 入口 · fetch_kline cache 命中 + get_cached 两处调用 ·
-    防散布式 migration 漂移。`_read_cutoff_from_parquet` 不调 (只读 date 列 ·
-    与 _source 无关 · 也不触发 atomic write back 防止 mtime 漂移)。
-    """
-    import pandas as pd
-
-    from kan.storage.paths import atomic_write_parquet
-
-    df = pd.read_parquet(path)
-    changed = False
-    log_notes: list[str] = []
-    if "_source" not in df.columns:
-        df["_source"] = "unknown"
-        changed = True
-        log_notes.append("legacy → _source=unknown")
-    if "_adjust" not in df.columns:
-        sources = df["_source"].dropna() if "_source" in df.columns else []
-        source = str(sources.iloc[0]) if len(sources) else "unknown"
-        df["_adjust"] = _default_adjustment(source)
-        value = df["_adjust"].iloc[0] if not df.empty else "unknown"
-        changed = True
-        log_notes.append(f"legacy → _adjust={value}")
-    if changed:
-        atomic_write_parquet(df, path)
-        debug_log(__name__, f"_load_with_migration({path.name})", "; ".join(log_notes))
-    return df
-
-
-def _is_legacy_tushare_raw_cache(path: Path) -> bool:
-    """旧版 TuShare daily 未复权缓存识别 · 返回 True 时强制重新 fetch。"""
-    try:
-        import pandas as pd
-
-        try:
-            df = pd.read_parquet(path, columns=["_source", "_adjust"])
-        except Exception:
-            df = pd.read_parquet(path, columns=["_source"])
-            df["_adjust"] = "unknown"
-        if df.empty:
-            return False
-        source = df["_source"].astype(str).str.lower()
-        adjust = df["_adjust"].astype(str).str.lower()
-        return bool(((source == "tushare") & (adjust != "qfq")).any())
-    except Exception as e:
-        debug_log(__name__, f"_is_legacy_tushare_raw_cache({path.name})", e)
-        return False
-
-
 def _is_cache_fresh(path: Path, *, min_rows: int | None = None) -> bool:
     """缓存是否已包含"应有最近交易日"数据。
 
@@ -212,13 +144,6 @@ def _is_cache_fresh(path: Path, *, min_rows: int | None = None) -> bool:
     误判为"今日数据齐了"整天不刷新 · scan 显示昨日涨停名单。
     """
     if not path.exists():
-        return False
-    if _is_legacy_tushare_raw_cache(path):
-        debug_log(
-            __name__,
-            f"_is_cache_fresh({path.name})",
-            "legacy tushare daily cache → stale",
-        )
         return False
     if not _cache_has_min_rows(path, min_rows):
         debug_log(
@@ -304,7 +229,8 @@ def fetch_kline(
     cache = _cache_path(symbol)
 
     if not force and _is_cache_fresh(cache, min_rows=days):
-        return _load_with_migration(cache)
+        import pandas as pd
+        return pd.read_parquet(cache)
 
     _ensure_no_proxy()
     start = (datetime.now() - timedelta(days=int(days * 1.8))).strftime("%Y%m%d")
@@ -419,8 +345,10 @@ def get_cached(symbol: str) -> pd.DataFrame | None:
     cache = _cache_path(symbol)
     if not cache.exists():
         return None
-    df = _load_with_migration(cache)
-    # 兜底：手工写入的 parquet 可能缺 volume/amount (非 _source · migration 已处理)
+    import pandas as pd
+
+    df = pd.read_parquet(cache)
+    # 兜底:用户自定义源 / 手工写入的 parquet 可能缺 volume/amount · 补 NaN 防下游 KeyError
     for col in ["volume", "amount"]:
         if col not in df.columns:
             df[col] = float("nan")

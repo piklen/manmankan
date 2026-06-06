@@ -23,10 +23,8 @@ def cli_main() -> None:
     try:
         from kan.cli.atexit import _auto_install_completion, _check_updates_atexit
         from kan.cli.helpers import _normalize_help_args, _normalize_streak_args
-        from kan.storage.paths import migrate_legacy
         from kan.storage.stock_names_refresh import maybe_start_stock_names_refresh
 
-        migrate_legacy()
         maybe_start_stock_names_refresh()
         _normalize_help_args()
         _normalize_streak_args()
@@ -37,8 +35,8 @@ def cli_main() -> None:
         try:
             app()
         except Exception as e:
-            # 顶层 WatchlistCorruptError catch · 改架构后 load_watchlist 不再 sys.exit
-            # 避免 list / scan / fetch 等命令在损坏场景下抛 traceback
+            # 顶层兜底 WatchlistCorruptError · load_watchlist 用 raise 而非 sys.exit ·
+            # 由顶层统一转友好提示 · 避免 list / scan / fetch 在损坏场景抛 traceback
             from kan.storage.watchlist import WatchlistCorruptError
             if isinstance(e, WatchlistCorruptError):
                 _sys.stderr.write(

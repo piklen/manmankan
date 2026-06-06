@@ -367,12 +367,12 @@ class Theme(BaseModel):
     size: int | None = None  # 成分股数 · catalog 接口未必提供 · 可空
 
 
-# ───────────────────── 集合 meta (StockSet / scan_targets 共享) ─────────────────────
+# ───────────────────── 集合 meta (StockSet 子类的附加产物) ─────────────────────
 
 
 @dataclass
 class BoardMeta:
-    """IndustrySet / resolve_scan_targets industry 模式的附加产物。"""
+    """IndustrySet 的附加产物(板块指数 K + 成分股 + 自选高亮)。"""
 
     board: Board
     index_kline: pd.DataFrame          # 板块指数 K(已归一化)
@@ -382,7 +382,7 @@ class BoardMeta:
 
 @dataclass
 class HotMeta:
-    """HotRankSet / resolve_scan_targets hot 模式的附加产物。"""
+    """HotRankSet 的附加产物(热榜名次 map + 自选高亮)。"""
 
     list_name: str                # "东财人气榜" / "东财飙升榜"
     rank_map: dict[str, int]      # {代码: 热榜名次}
@@ -391,7 +391,7 @@ class HotMeta:
 
 @dataclass
 class ThemeMeta:
-    """ThemeSet / resolve_scan_targets theme 模式的附加产物 · 跟 BoardMeta 对称。"""
+    """ThemeSet 的附加产物(题材指数 K + 成分股 + 自选高亮)· 跟 BoardMeta 对称。"""
 
     theme: Theme
     index_kline: pd.DataFrame              # EM 题材指数 K(已 rename)· K 线失败时为空 DataFrame

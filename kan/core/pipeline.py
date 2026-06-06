@@ -1,12 +1,11 @@
 """CLI 数据命令的脊椎与共享 helper · scan/low/high/trend/fetch 共用。
 
-历史背景 (cleanup): 老 `resolve_targets_or_exit` + `run_data_pipeline` 双签名重载
-已移除 · CLI 全部走 StockSet 单一路径。
+CLI 全部走 StockSet 单一路径(resolve → auto_fetch → compute → freshness)。
 
 helpers:
   - resolve_stock_set:触发 StockSet.pairs() / .meta() · 把 5 类 source
     错误统一收成 StockSetResolveError。
-  - resolve_stock_set_or_exit:CLI 兼容 adapter · 把 StockSetResolveError 转为
+  - resolve_stock_set_or_exit:CLI adapter · 把 StockSetResolveError 转为
     typer.Exit。
   - Freshness + freshness_of:跨 symbols 聚合 max data_cutoff 与 max cache_age,
     一并推导 is_stale / phase。
@@ -190,7 +189,7 @@ def freshness_of(symbols: Iterable[str]) -> Freshness:
         if freshness.is_stale: ...
 
     空 symbols / 所有 symbols 都无 cutoff → data_cutoff = None · is_stale = True
-    (与 历史背景各命令的现状一致:无缓存视为 stale)。
+    (与各命令的现状一致:无缓存视为 stale)。
     """
     from kan.core.trading_calendar import latest_trade_date, market_phase
     from kan.data.fetcher import cache_age, data_cutoff_date
@@ -289,9 +288,8 @@ def run_data_pipeline(
 ) -> DataCtx:
     """resolve → auto_fetch → compute → freshness 的统一编排 (StockSet 单签名)。
 
-    历史背景 (cleanup) · 老签名 ``run_data_pipeline(industry, only_watchlist,
-    watchlist_pairs, *, hot=..., theme=..., compute=...)`` 已移除 · 调用方必须先
-    构造 StockSet (`from_flags(...)`) · 再传本函数。
+    调用方先构造 StockSet (`from_flags(...)`) 再传入;本函数只认 StockSet,
+    不做 industry/hot/theme 分发。
 
     收口顺序:
       1. resolve_stock_set:触发 stock_set.pairs() + .meta() · 把 5 类 source 错误

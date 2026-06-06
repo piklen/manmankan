@@ -53,6 +53,7 @@ def help_cmd() -> None:
   kan info 600519                    单只股票全周期位置 + 涨跌 + 共振
   kan compare 600519 000858          多股横向对比（2-30 只 · 终端自动分页）
   kan history 600519                 位置历史回溯（-p 切周期 · 纯离线读每日快照）
+  kan index                          常用大盘指数位置参照（上证/深成/创业板/沪深300）
 
 [bold cyan]连续涨跌[/bold cyan]
   kan trend                 连续涨跌看板（不筛选）

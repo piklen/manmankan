@@ -14,11 +14,10 @@ else watchlist 分支分发。
 设计选择:
 - Protocol-based · 任何带 name / codes() / pairs() / meta 的对象都可扮演 StockSet
 - lazy resolution · 调 .pairs() / .codes() / .meta 时才真正拉数据
-- meta 承载 highlight / rank_map / index_kline / 板块名 (取代 resolve_scan_targets 中的等价计算)
+- meta 承载 highlight / rank_map / index_kline / 板块名 (按 Set 类型而定)
 - watchlist_pairs + only_watchlist 是 Set 自身职责 · 解放 CLI 命令重复布线
 
-历史背景 CLI 层 (kan/cli/*_cmds.py) 直接走 StockSet · 不再用 resolve_scan_targets。
-老函数 resolve_scan_targets 仍存在作 thin wrapper (内部走本模块) · 给老测试用。
+CLI 层 (kan/cli/*_cmds.py) 通过 from_flags() 构造 StockSet · 不再 if/elif 分发。
 """
 from __future__ import annotations
 

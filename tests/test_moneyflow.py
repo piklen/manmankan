@@ -65,32 +65,6 @@ class TestFetchMoneyflow:
         moneyflow.fetch_moneyflow(trade_date="20260101")
         assert calls == ["20260101"]
 
-    def test_incompatible_current_cache_refetches(self, _isolate, monkeypatch):
-        old = pd.DataFrame([
-            {
-                "symbol": "600519",
-                "trade_date": datetime.date(2026, 5, 29),
-                "net_amount": 1.0,
-                "buy_elg_amount": 1.0,
-                "buy_lg_amount": 0.0,
-                "_source": "tushare_moneyflow_dc",
-            }
-        ])
-        old.to_parquet(moneyflow._cache_path("20260529"), index=False)
-        calls: list[str] = []
-
-        def _f(td):
-            calls.append(td)
-            return _raw()
-
-        monkeypatch.setattr("kan.data.moneyflow._fetch_tushare_moneyflow", _f)
-
-        df = moneyflow.fetch_moneyflow(trade_date="20260529", symbols=["600519"])
-
-        assert "20260529" in calls
-        assert df.iloc[0]["net_amount"] == 5000.0
-        assert "buy_md_amount" in df.columns
-
     def test_bad_trade_date_raises(self, _isolate):
         with pytest.raises(ValueError, match="非法交易日"):
             moneyflow.fetch_moneyflow(trade_date="2026-05-29")

@@ -105,7 +105,6 @@ def uninstall(
 
     数据清理范围（除非 --keep-data）:
       - ~/.local/share/kan/ (XDG 数据)
-      - ~/.kan/ (legacy 数据 · 如存在)
 
     软件包本身不会自动卸载（chicken-and-egg · kan 无法删自己运行的进程）。
     本命令会检测安装方式并打印对应卸载指令，请手动执行。
@@ -118,17 +117,15 @@ def uninstall(
     from kan.storage.paths import BASE_DIR
 
     console = Console()
-    legacy_dir = Path.home() / ".kan"
 
     # 1. 列出会删的路径 + 大小
     targets: list[tuple[str, Path, int]] = []
-    for label, path in (("XDG 数据", BASE_DIR), ("Legacy 数据", legacy_dir)):
-        if path.exists():
-            try:
-                size = sum(f.stat().st_size for f in path.rglob("*") if f.is_file())
-            except OSError:
-                size = 0
-            targets.append((label, path, size))
+    if BASE_DIR.exists():
+        try:
+            size = sum(f.stat().st_size for f in BASE_DIR.rglob("*") if f.is_file())
+        except OSError:
+            size = 0
+        targets.append(("kan 数据", BASE_DIR, size))
 
     # 2. 检测安装方式
     install = _detect_install_method()

@@ -23,23 +23,16 @@ def runner() -> CliRunner:
 
 @pytest.fixture
 def mock_kan_data(tmp_path, monkeypatch):
-    """创建临时 kan 数据 (XDG + legacy) · 返回 (xdg_dir, legacy_dir)"""
+    """创建临时 kan XDG 数据 · 返回 xdg_dir"""
     xdg = tmp_path / "kan"
     xdg.mkdir()
-    (xdg / "watchlist.json").write_text(json.dumps({"stocks": []}))
+    (xdg / "watchlist.json").write_text(json.dumps({"version": 2, "groups": {}}))
     data_dir = xdg / "data"
     data_dir.mkdir()
     (data_dir / "600519.parquet").write_text("dummy")
 
-    legacy = tmp_path / ".kan"
-    legacy.mkdir()
-    (legacy / "watchlist.json").write_text(json.dumps({"stocks": []}))
-
     monkeypatch.setattr("kan.storage.paths.BASE_DIR", xdg)
-    # uninstall 内部用 Path.home() / ".kan" · mock home 让 ~/.kan = legacy
-    monkeypatch.setattr("pathlib.Path.home", lambda: tmp_path)
-
-    return xdg, legacy
+    return xdg
 
 
 # --- _human_size helper ---
@@ -109,30 +102,24 @@ def test_detect_install_unknown_fallback():
 
 def test_uninstall_keep_data_does_not_delete(mock_kan_data, runner):
     """--keep-data 只显示包卸载命令 · 不删数据"""
-    xdg, legacy = mock_kan_data
+    xdg = mock_kan_data
     result = runner.invoke(app, ["uninstall", "--keep-data"])
     assert result.exit_code == 0
-    # 数据仍在
-    assert xdg.exists()
-    assert legacy.exists()
-    # 输出含包卸载提示
-    assert "uninstall manmankan" in result.stdout
+    assert xdg.exists()  # 数据仍在
+    assert "uninstall manmankan" in result.stdout  # 输出含包卸载提示
 
 
 def test_uninstall_yes_deletes_data(mock_kan_data, runner):
     """--yes 跳过确认 · 真删数据"""
-    xdg, legacy = mock_kan_data
+    xdg = mock_kan_data
     result = runner.invoke(app, ["uninstall", "--yes"])
     assert result.exit_code == 0
-    # 数据已删
-    assert not xdg.exists()
-    assert not legacy.exists()
+    assert not xdg.exists()  # 数据已删
 
 
 def test_uninstall_no_data_still_shows_pkg_cmd(tmp_path, monkeypatch, runner):
     """没数据时也输出包卸载提示 · 不报错"""
     monkeypatch.setattr("kan.storage.paths.BASE_DIR", tmp_path / "non-existent-kan")
-    monkeypatch.setattr("pathlib.Path.home", lambda: tmp_path)
 
     result = runner.invoke(app, ["uninstall", "--yes"])
     assert result.exit_code == 0

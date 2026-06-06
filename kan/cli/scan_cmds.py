@@ -1,7 +1,7 @@
 """scan · 自选股多周期位置扫描（10 周期全景 · --diff / --signal / --exclude-st）。
 
-本版后此文件只装 scan 命令本身;fetch / low / high / info / compare 各自拆到
-cli_fetch_cmds / cli_extreme_cmds / cli_info_cmds / cli_compare_cmds。
+本文件只装 scan 命令;fetch / low / high / info / compare 各自在
+fetch_cmds / extreme_cmds / info_cmds / compare_cmds。
 """
 from __future__ import annotations
 

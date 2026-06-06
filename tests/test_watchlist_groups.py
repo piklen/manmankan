@@ -39,30 +39,6 @@ def temp_kan_dir(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
 # ───────────────────── v1 → v2 迁移 ─────────────────────
 
 
-def test_v1_legacy_schema_auto_migrates(temp_kan_dir):
-    """旧 {stocks: [...]} 加载时自动包成 v2 + 写回。"""
-    v1 = {
-        "stocks": [
-            {"symbol": "600519", "name": "贵州茅台", "added_at": "2026-05-01"},
-            {"symbol": "000858", "name": "五粮液", "added_at": "2026-05-02"},
-        ]
-    }
-    watchlist.WATCHLIST_PATH.write_text(json.dumps(v1, ensure_ascii=False))
-
-    gw = watchlist.load_grouped_watchlist()
-    assert gw.default == "自选"
-    assert list(gw.groups) == ["自选"]
-    assert len(gw.groups["自选"]) == 2
-    assert {s.symbol for s in gw.groups["自选"]} == {"600519", "000858"}
-
-    # 已写回 v2 schema
-    data = json.loads(watchlist.WATCHLIST_PATH.read_text())
-    assert data["version"] == 2
-    assert data["default"] == "自选"
-    assert "groups" in data
-    assert "stocks" not in data
-
-
 def test_v2_schema_roundtrip(temp_kan_dir):
     """v2 schema 写回 + 读回保持完整。"""
     gw = watchlist.GroupedWatchlist(

@@ -107,7 +107,7 @@ def load_theme_leaderboard(
 
     数据源选择(运行时):
     - TuShare token 配置 + ths_daily batch 通 → 走 TuShare 路径(快 · 稳定 · source='tushare')
-    - 否则 → 走 adata EM 路径(原 历史背景并行实现 · source='em')
+    - 否则 → 走 adata EM 路径(EM 并行实现 · source='em')
 
     Args:
         candle: True=阳线阴线口径 / False=收盘价口径 · 透传 calc_trend。

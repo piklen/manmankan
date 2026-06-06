@@ -3,7 +3,6 @@ from pathlib import Path
 
 # 题材功能新增的主体代码文件 · 红线词审查 scope
 THEME_SOURCE_FILES = [
-    "kan/core/scan_targets.py",
     "kan/infra/confirm.py",
     "kan/cli/theme_cmds.py",
     "kan/render/theme.py",

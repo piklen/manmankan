@@ -214,7 +214,7 @@ def fetch_industry_kline(board: Board, force: bool = False) -> pd.DataFrame:
     return df
 
 # ══════════════════════════════════════════════════════════════════
-# 题材(theme)数据子系统 · 历史背景
+# 题材(theme)数据子系统
 # ══════════════════════════════════════════════════════════════════
 
 _THEME_CATALOG_TTL = 24 * 3600
@@ -322,8 +322,8 @@ def get_theme_constituents(theme, force: bool = False) -> list[tuple[str, str]]:
     - ThsConstituentSource · adata.stock.info.concept_constituent_ths · 主源
     - EmConstituentSource  · adata.stock.info.concept_constituent_east · fallback
 
-    JSON cache 24h · cache key 仍按 src_prefix (THS vs EM) 区分 ·
-    保持文件 layout 与旧版兼容 (用户磁盘上现有 cache 不需迁移)。
+    JSON cache 24h · cache key 按 src_prefix (THS vs EM) 区分 ·
+    避免两源成分股结果互相覆盖。
 
     用户可通过 kan.api.register_theme_constituent_source 加自定义源。
     """

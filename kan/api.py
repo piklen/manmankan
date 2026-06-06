@@ -84,7 +84,7 @@
   (集合 ∩ 自选)、rank_map (热榜名次)、index_kline (板块指数 K 线) 等。
 - 数据源限流时各 Set 内部已做 5 分钟熔断 · 不会反复打挂上游。
 
-数据源扩展 (历史背景)
+数据源扩展
 ─────────────────────
 
 manmankan 内置 K 线 5 源 (tushare/baostock/eastmoney/sina/tencent · 按稳定性排优先级)

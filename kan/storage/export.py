@@ -55,7 +55,7 @@ FIND_SCHEMA_VERSION = "0.0.6.8"
 
 def _board_reference_kind(meta: BoardMeta | HotMeta | ThemeMeta | None) -> str:
     """meta 类型对应的 reference kind 标识 · md / json 共用。"""
-    from kan.core.scan_targets import ThemeMeta
+    from kan.core.models import ThemeMeta
 
     return "theme" if isinstance(meta, ThemeMeta) else "industry"
 
@@ -256,7 +256,7 @@ def _extreme_reference_row(
     period: int,
 ) -> list[str] | None:
     """构造单周期 md 表格的 reference 首行 · period 不在 board.periods 时返回 None。"""
-    from kan.core.scan_targets import ThemeMeta
+    from kan.core.models import ThemeMeta
 
     board_pr = next(
         (p for p in board_index_result.periods if p.period == period), None,
@@ -291,7 +291,7 @@ def extreme_markdown(
     「板块整体当前位置」对照)。
 
     `periods`:caller 原始周期 list · 用于空 hits 仍画 reference 表(与终端
-    行为一致)。None 时退化到 results_by_period.keys() · 跟 历史背景一致。
+    行为一致)。None 时退化到 results_by_period.keys()。
     """
     label = "低点" if mode == "low" else "高点"
     parts = [f"# 慢慢看 · {label}筛选"]
@@ -511,7 +511,7 @@ def theme_leaderboard_payload(
     data_cutoff: date | None,
     fetched_at: str | None,
 ) -> dict:
-    """kan theme trend --format json · 题材榜结构化输出 · 历史背景。"""
+    """kan theme trend --format json · 题材榜结构化输出。"""
     return {
         "command": "theme_trend",
         "mode": "candle" if candle else "close",
@@ -535,7 +535,7 @@ def theme_leaderboard_payload(
 def theme_leaderboard_markdown(
     results: list[TrendResult], *, title: str, latest: int | None,
 ) -> str:
-    """kan theme trend --format md · 题材榜 · 排名列 + 可选近 N 天明细 · 历史背景。"""
+    """kan theme trend --format md · 题材榜 · 排名列 + 可选近 N 天明细。"""
     headers = ["排名", "题材", "现价", "连续", "累计"]
     show_moneyflow = any(getattr(r, "moneyflow_net", None) is not None for r in results)
     if show_moneyflow:
