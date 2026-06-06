@@ -30,6 +30,7 @@ venv/
 htmlcov/
 .coverage
 .coverage.*
+coverage.xml
 .tox/
 
 # IDE

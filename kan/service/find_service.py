@@ -18,6 +18,7 @@ from kan.core.find_registry import (
     fields_need_valuation_context,
 )
 from kan.core.pipeline import DataCtx, StockSetResolveError, run_data_pipeline
+from kan.data.relative_strength import DEFAULT_RS_INDEX
 
 if TYPE_CHECKING:
     from kan.core.cross_section import CrossSectionCtx, CrossSectionRow
@@ -76,6 +77,7 @@ class FindKlineRequest:
     limit: int | None = None
     offset: int = 0
     sort: tuple[str, str] | None = None
+    rs_index_code: str = DEFAULT_RS_INDEX
 
 
 @dataclass(frozen=True)
@@ -164,6 +166,7 @@ class FindCrossSectionRequest:
     limit: int | None = None
     offset: int = 0
     sort: tuple[str, str] | None = None
+    rs_index_code: str = DEFAULT_RS_INDEX
 
 
 @dataclass(frozen=True)
@@ -230,6 +233,7 @@ def kline_snapshot_periods(conditions: ConditionSet) -> list[int] | None:
     periods.update(f.period for f in conditions.pos_filters)
     periods.update(f.period for f in conditions.gain_filters)
     periods.update(f.period for f in conditions.ma_bias_filters)
+    periods.update(conditions.relative_strength_periods())
     if conditions.resonance_filters:
         periods.update(PERIODS)
     if conditions.up_days_filters:
@@ -252,6 +256,7 @@ def kline_scan_periods(conditions: ConditionSet) -> list[int] | None:
     periods.update(f.period for f in conditions.pos_filters)
     periods.update(f.period for f in conditions.gain_filters)
     periods.update(f.period for f in conditions.ma_bias_filters)
+    periods.update(conditions.relative_strength_periods())
     return sorted(periods)
 
 
@@ -366,7 +371,17 @@ def run_find_cross_section(request: FindCrossSectionRequest) -> FindCrossSection
                 "例: kan config set tushare-token <你的_token>"
             ),
         )
-    matched = apply_cross_section_conditions(cs.rows, conditions)
+    rows = cs.rows
+    if conditions.needs_relative_strength():
+        from kan.core.enrich import attach_relative_strength_cross_section
+
+        rows = attach_relative_strength_cross_section(
+            rows,
+            index_periods=conditions.rs_index_periods(),
+            board_periods=conditions.rs_board_periods(),
+            index_code=request.rs_index_code,
+        )
+    matched = apply_cross_section_conditions(rows, conditions)
     limited = _sorted_offset_limit(
         matched, lambda it: it[0], request.sort, request.offset, request.limit
     )
@@ -385,7 +400,7 @@ def run_find_kline(
     request: FindKlineRequest,
 ) -> FindKlineResult | FindCodePoolResult:
     """Run non-`--all` find use case."""
-    from kan.core.enrich import enrich_results
+    from kan.core.enrich import attach_relative_strength, enrich_results
     from kan.core.find_filter import apply_conditions
     from kan.core.scanner import scan_batch
     from kan.core.stock_set import CodeListSet, from_flags
@@ -511,6 +526,13 @@ def run_find_kline(
         )
     else:
         pool_results = ctx.results
+    if request.conditions.needs_relative_strength():
+        pool_results = attach_relative_strength(
+            pool_results,
+            index_periods=request.conditions.rs_index_periods(),
+            board_periods=request.conditions.rs_board_periods(),
+            index_code=request.rs_index_code,
+        )
     gap = _find_data_gap(request.conditions, pool_results)
     if gap is not None:
         code, message, hint = gap
@@ -623,6 +645,19 @@ def _any_ma_bias_for_filters(
     return False
 
 
+def _any_rs(results: list[Any], conditions: ConditionSet) -> bool:
+    """Any result has a non-empty relative_strength diff for requested rs filters."""
+    for r in results:
+        rs = getattr(r, "relative_strength", None)
+        if rs is None:
+            continue
+        if conditions.rs_index_filters and rs.rs_index:
+            return True
+        if conditions.rs_board_filters and rs.rs_board:
+            return True
+    return False
+
+
 def _find_data_gap(
     conditions: ConditionSet,
     results: list[Any],
@@ -649,6 +684,12 @@ def _find_data_gap(
         return ("data_unavailable", "当前候选池缺少 K 线乖离率数据，无法执行 --ma-bias filter", token_hint)
     if conditions.winner_filters and not _any_metric(results, "chip", ("winner_rate",)):
         return ("data_unavailable", "当前候选池缺少筹码数据，无法执行 --winner filter", token_hint)
+    if conditions.needs_relative_strength() and not _any_rs(results, conditions):
+        return (
+            "data_unavailable",
+            "当前候选池缺少相对强度对照数据(指数/行业区间涨幅),无法执行 --rs-index/--rs-board filter",
+            token_hint,
+        )
     if conditions.needs_shareholder() and not _any_metric(
         results,
         "shareholder",
@@ -674,6 +715,8 @@ def _condition_dimensions(conditions: ConditionSet) -> set[str]:
         dims.add("chip")
     if conditions.needs_shareholder():
         dims.add("shareholder")
+    if conditions.needs_relative_strength():
+        dims.add("relative_strength")
     return dims
 
 

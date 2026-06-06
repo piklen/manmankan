@@ -105,6 +105,143 @@ class TestEnrichResults:
         assert out[0].valuation.trade_date == datetime.date(2026, 6, 1)
 
 
+class TestRelativeStrength:
+    """attach_relative_strength · 个股 gain − 对照 gain = 差值 · 缺一侧不入 dict (不当 0)。"""
+
+    @staticmethod
+    def _scan_gain(symbol: str, gains: dict[int, float]) -> StockScanResult:
+        return StockScanResult(
+            symbol=symbol, name="测试", current_price=100.0,
+            scan_date=datetime.date(2026, 5, 29),
+            periods=[
+                PeriodResult(
+                    period=p, n_low=0.0, n_high=100.0, position_pct=50.0,
+                    at_low=False, at_high=False, gain_pct=g,
+                )
+                for p, g in gains.items()
+            ],
+            low_resonance=0, high_resonance=0,
+        )
+
+    def test_build_rs_metrics_diff(self):
+        # 个股 30 日涨 12% · 大盘涨 7% · 行业涨 9% → rs_index=5 · rs_board=3
+        rsm = enrich._build_rs_metrics(
+            self._scan_gain("600519", {30: 12.0}),
+            idx_gains={30: 7.0}, idx_code="000300.SH", idx_name="沪深300",
+            board_by_ind={"电子": {30: 9.0}}, sw_map={"600519": "电子"},
+            index_periods={30}, board_periods={30},
+        )
+        assert rsm.rs_index[30] == 5.0
+        assert rsm.rs_board[30] == 3.0
+        # 原始涨幅留存供输出透明
+        assert rsm.stock_gain[30] == 12.0
+        assert rsm.index_gain[30] == 7.0
+        assert rsm.board_gain[30] == 9.0
+        assert rsm.industry == "电子"
+        assert rsm.index_name == "沪深300"
+
+    def test_build_rs_metrics_benchmark_missing(self):
+        # 大盘对照缺该周期 → rs_index 该周期不入 dict · 个股 gain 仍记录
+        rsm = enrich._build_rs_metrics(
+            self._scan_gain("600519", {30: 12.0}),
+            idx_gains={}, idx_code="000300.SH", idx_name="沪深300",
+            board_by_ind={}, sw_map={},
+            index_periods={30}, board_periods=set(),
+        )
+        assert 30 not in rsm.rs_index
+        assert rsm.stock_gain[30] == 12.0
+
+    def test_build_rs_metrics_industry_unknown(self):
+        # 个股行业未知 (sw_map 无映射) → rs_board 空 (不当 0)
+        rsm = enrich._build_rs_metrics(
+            self._scan_gain("600519", {30: 12.0}),
+            idx_gains={}, idx_code=None, idx_name=None,
+            board_by_ind={"电子": {30: 9.0}}, sw_map={},
+            index_periods=set(), board_periods={30},
+        )
+        assert rsm.industry is None
+        assert rsm.rs_board == {}
+
+    def test_build_rs_metrics_stock_gain_insufficient(self):
+        # 个股该周期 insufficient → stock_gain 缺 → 差值算不出 · rs 不入
+        scan = StockScanResult(
+            symbol="600519", name="x", current_price=100.0,
+            scan_date=datetime.date(2026, 5, 29),
+            periods=[PeriodResult(
+                period=30, n_low=0.0, n_high=100.0, position_pct=0.0,
+                at_low=False, at_high=False, insufficient=True,
+            )],
+            low_resonance=0, high_resonance=0,
+        )
+        rsm = enrich._build_rs_metrics(
+            scan, idx_gains={30: 7.0}, idx_code="x", idx_name="x",
+            board_by_ind={}, sw_map={}, index_periods={30}, board_periods=set(),
+        )
+        assert 30 not in rsm.rs_index
+
+    def test_attach_promotes_scan_to_enriched(self, monkeypatch):
+        # 端到端:StockScanResult → EnrichedResult · 挂 relative_strength (mock 对照源不触网)
+        from kan.core.models import EnrichedResult
+
+        monkeypatch.setattr(
+            "kan.data.relative_strength.index_gains",
+            lambda periods, index_code="000300.SH": ({30: 7.0}, "000300.SH", "沪深300"),
+        )
+        out = enrich.attach_relative_strength(
+            [self._scan_gain("600519", {30: 12.0})],
+            index_periods={30}, board_periods=set(), index_code="000300.SH",
+        )
+        assert len(out) == 1
+        assert isinstance(out[0], EnrichedResult)
+        assert out[0].relative_strength.rs_index[30] == 5.0
+
+    def test_attach_board_dimension(self, monkeypatch):
+        # board 分支:mock industry_gains + sw_l1_map → rs_board + industry
+        monkeypatch.setattr(
+            "kan.data.relative_strength.industry_gains",
+            lambda periods: {"食品饮料": {30: -9.56}},
+        )
+        monkeypatch.setattr(
+            "kan.data.industry_map.fetch_sw_l1_map",
+            lambda: {"600519": "食品饮料"},
+        )
+        out = enrich.attach_relative_strength(
+            [self._scan_gain("600519", {30: -9.85})],
+            index_periods=set(), board_periods={30}, index_code="000300.SH",
+        )
+        assert out[0].relative_strength.rs_board[30] == -0.29
+        assert out[0].relative_strength.industry == "食品饮料"
+
+    def test_attach_cross_section(self, monkeypatch):
+        # --all 截面版 attach · row.scan 有个股 gain → 挂 rs_index
+        from kan.core.cross_section import CrossSectionRow
+
+        monkeypatch.setattr(
+            "kan.data.relative_strength.index_gains",
+            lambda periods, index_code="000300.SH": ({30: 7.0}, "000300.SH", "沪深300"),
+        )
+        row = CrossSectionRow(
+            code="600519", name="贵州茅台", valuation=None, valuation_context=None,
+            scan=self._scan_gain("600519", {30: 12.0}),
+        )
+        out = enrich.attach_relative_strength_cross_section(
+            [row], index_periods={30}, board_periods=set(), index_code="000300.SH",
+        )
+        assert out[0].relative_strength.rs_index[30] == 5.0
+
+    def test_attach_cross_section_no_scan_skips(self):
+        # row.scan None(无 K 线快照)→ 不挂 relative_strength
+        from kan.core.cross_section import CrossSectionRow
+
+        row = CrossSectionRow(
+            code="X", name="无K线", valuation=None, valuation_context=None, scan=None,
+        )
+        out = enrich.attach_relative_strength_cross_section(
+            [row], index_periods={30}, board_periods=set(), index_code="000300.SH",
+        )
+        assert out[0].relative_strength is None
+
+
 class TestEnrichFundamentalsMoneyflow:
     """整合-1 · 按需挂 fundamentals (逐股) / moneyflow (截面)。"""
 

@@ -43,7 +43,9 @@ from kan.core.find_dsl import (
     PosFilter,
     ResonanceFilter,
     RoeFilter,
+    RsBoardFilter,
     RsiFilter,
+    RsIndexFilter,
     StreakFilter,
     Top10Filter,
     TurnoverFilter,
@@ -61,6 +63,7 @@ if TYPE_CHECKING:
         EnrichedResult,
         FundamentalMetrics,
         MoneyflowMetrics,
+        RelativeStrengthMetrics,
         SentimentMetrics,
         ShareholderMetrics,
         StockScanResult,
@@ -439,6 +442,50 @@ def _match_up_days(
     return None
 
 
+# ─── 相对强度匹配器 (吃 relative_strength 子对象 · 个股 − 对照 差值缺 → 不命中 · 不当 0) ───
+
+def _match_rs_index(
+    filter: RsIndexFilter, relative_strength: RelativeStrengthMetrics | None
+) -> TriggeredFilter | None:
+    """Match 相对大盘强度 filter · rs_index[period] 缺 (周期不足/对照指数缺) → 不命中。
+
+    rs_index[N] = 个股 N 日涨幅 − 大盘指数 N 日涨幅 (百分点) · 客观差值 · 不判强弱。
+    """
+    if relative_strength is None:
+        return None
+    diff = relative_strength.rs_index.get(filter.period)
+    if diff is None:
+        return None
+    if apply_op(filter.op, diff, filter.value):
+        return TriggeredFilter(
+            filter_type="rs_index",
+            param=f"{filter.period}:{filter.op}:{filter.value:g}",
+            value=diff,
+        )
+    return None
+
+
+def _match_rs_board(
+    filter: RsBoardFilter, relative_strength: RelativeStrengthMetrics | None
+) -> TriggeredFilter | None:
+    """Match 相对所属申万一级行业强度 filter · rs_board[period] 缺 (周期不足/行业未知/对照缺) → 不命中。
+
+    rs_board[N] = 个股 N 日涨幅 − 所属申万一级行业指数 N 日涨幅 (百分点) · 客观差值 · 不判龙头/跟风。
+    """
+    if relative_strength is None:
+        return None
+    diff = relative_strength.rs_board.get(filter.period)
+    if diff is None:
+        return None
+    if apply_op(filter.op, diff, filter.value):
+        return TriggeredFilter(
+            filter_type="rs_board",
+            param=f"{filter.period}:{filter.op}:{filter.value:g}",
+            value=diff,
+        )
+    return None
+
+
 # ─── 股东持股维度 股东·持股结构匹配器 (吃 shareholder 子对象 · 缺失/未进前十 → None) ───
 
 def _match_holders(
@@ -491,6 +538,12 @@ FIND_MATCH_SEGMENTS: tuple[MatchSegmentSpec, ...] = (
     MatchSegmentSpec("resonance", "resonance_filters", "result", _match_resonance),
     MatchSegmentSpec("gain", "gain_filters", "result", _match_gain),
     MatchSegmentSpec("up_days", "up_days_filters", "result", _match_up_days),
+    MatchSegmentSpec(
+        "rs_index", "rs_index_filters", "relative_strength", _match_rs_index
+    ),
+    MatchSegmentSpec(
+        "rs_board", "rs_board_filters", "relative_strength", _match_rs_board
+    ),
     MatchSegmentSpec("pe", "pe_filters", "valuation", _match_pe),
     MatchSegmentSpec("pb", "pb_filters", "valuation", _match_pb),
     MatchSegmentSpec("turnover", "turnover_filters", "valuation", _match_turnover),

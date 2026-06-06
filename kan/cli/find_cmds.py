@@ -32,6 +32,7 @@ from kan.core.find_registry import (
     parse_find_fields,
 )
 from kan.data.hot import HotList
+from kan.data.relative_strength import DEFAULT_RS_INDEX
 from kan.service.find_service import (
     FindCodePoolResult,
     FindCrossSectionRequest,
@@ -219,6 +220,7 @@ def _run_all_stocks_path(
     limit: int | None,
     offset: int,
     sort: tuple[str, str] | None,
+    rs_index_code: str,
 ) -> None:
     """CLI adapter for `kan find --all` cross-section service."""
     output = _find_output_profile(
@@ -236,6 +238,7 @@ def _run_all_stocks_path(
             limit=limit,
             offset=offset,
             sort=sort,
+            rs_index_code=rs_index_code,
         ))
     except FindServiceError as e:
         _exit_find_service_error(fmt, e)
@@ -285,6 +288,7 @@ def _run_kline_path(
     limit: int | None,
     offset: int,
     sort: tuple[str, str] | None,
+    rs_index_code: str,
     console,
     find_disclaimer: str,
 ) -> None:
@@ -310,6 +314,7 @@ def _run_kline_path(
             limit=limit,
             offset=offset,
             sort=sort,
+            rs_index_code=rs_index_code,
         ))
     except FindServiceError as e:
         _exit_find_service_error(fmt, e)
@@ -539,6 +544,27 @@ def find(
             help="连阳天数 filter OP:VAL 例 gte:3 (连续阳线数 · K 线池) · 可多次",
         ),
     ] = [],  # noqa: B006 · typer multi-option 需要 list 默认值
+    rs_index: Annotated[
+        list[str],
+        typer.Option(
+            "--rs-index",
+            help="相对大盘 filter PERIOD:OP:VAL 例 30:gt:0 (个股 − 大盘指数 涨幅差% · 跑赢=正) · 可多次",
+        ),
+    ] = [],  # noqa: B006 · typer multi-option 需要 list 默认值
+    rs_board: Annotated[
+        list[str],
+        typer.Option(
+            "--rs-board",
+            help="相对行业 filter PERIOD:OP:VAL 例 30:gt:0 (个股 − 所属申万一级行业 涨幅差% · 跑赢=正) · 可多次",
+        ),
+    ] = [],  # noqa: B006 · typer multi-option 需要 list 默认值
+    rs_index_code: Annotated[
+        str,
+        typer.Option(
+            "--rs-index-code",
+            help="--rs-index 对照指数 (默认沪深300 · 支持别名 上证/深成/创业板/沪深300 或 ts_code)",
+        ),
+    ] = DEFAULT_RS_INDEX,
     holders: Annotated[
         list[str],
         typer.Option(
@@ -811,6 +837,8 @@ def find(
             gain=gain,
             atr_pct=atr_pct,
             up_days=up_days,
+            rs_index=rs_index,
+            rs_board=rs_board,
             holders=holders,
             top10=top10,
             north=north,
@@ -947,6 +975,7 @@ def find(
             limit=limit,
             offset=offset,
             sort=sort_spec,
+            rs_index_code=rs_index_code,
         )
         return
 
@@ -969,6 +998,7 @@ def find(
         limit=limit,
         offset=offset,
         sort=sort_spec,
+        rs_index_code=rs_index_code,
         console=console,
         find_disclaimer=find_disclaimer,
     )

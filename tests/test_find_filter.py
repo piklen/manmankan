@@ -265,6 +265,71 @@ class TestValuationScalarMatchers:
         assert _match_turnover(TurnoverFilter(op="gt", value=5.0), None) is None
 
 
+class TestRelativeStrengthMatchers:
+    """相对强度 matcher 单测 (--rs-index/--rs-board · 读 relative_strength 子对象 · 缺差值不命中)。"""
+
+    @staticmethod
+    def _rs(**kw):
+        from kan.core.models import RelativeStrengthMetrics
+
+        return RelativeStrengthMetrics(**kw)
+
+    def test_rs_index_match_and_direction(self):
+        from kan.core.find_dsl import RsIndexFilter
+        from kan.core.find_filter import _match_rs_index
+
+        rs = self._rs(rs_index={30: 5.3})  # 个股近 30 日跑赢大盘 5.3 个点
+        hit = _match_rs_index(RsIndexFilter(period=30, op="gt", value=0.0), rs)
+        assert hit is not None
+        assert hit.value == 5.3
+        assert hit.param == "30:gt:0"
+        # 反方向(找跑输的)不命中
+        assert _match_rs_index(RsIndexFilter(period=30, op="lt", value=0.0), rs) is None
+
+    def test_rs_index_negative_diff(self):
+        from kan.core.find_dsl import RsIndexFilter
+        from kan.core.find_filter import _match_rs_index
+
+        rs = self._rs(rs_index={20: -4.2})  # 跑输大盘 4.2 个点
+        hit = _match_rs_index(RsIndexFilter(period=20, op="lt", value=0.0), rs)
+        assert hit is not None
+        assert hit.value == -4.2
+
+    def test_rs_index_period_missing_does_not_match(self):
+        # 请求周期不在 dict (周期不足 / 对照缺) → 不命中 · 绝不当 0
+        from kan.core.find_dsl import RsIndexFilter
+        from kan.core.find_filter import _match_rs_index
+
+        rs = self._rs(rs_index={30: 5.0})
+        assert _match_rs_index(RsIndexFilter(period=60, op="gt", value=0.0), rs) is None
+
+    def test_rs_board_match(self):
+        from kan.core.find_dsl import RsBoardFilter
+        from kan.core.find_filter import _match_rs_board
+
+        rs = self._rs(rs_board={30: 2.1}, industry="电子")
+        hit = _match_rs_board(RsBoardFilter(period=30, op="gt", value=0.0), rs)
+        assert hit is not None
+        assert hit.value == 2.1
+        assert hit.param == "30:gt:0"
+
+    def test_rs_none_subobject_does_not_match(self):
+        # relative_strength 子对象 None (未 attach) → 不命中 · 安全降级
+        from kan.core.find_dsl import RsBoardFilter, RsIndexFilter
+        from kan.core.find_filter import _match_rs_board, _match_rs_index
+
+        assert _match_rs_index(RsIndexFilter(period=30, op="gt", value=0.0), None) is None
+        assert _match_rs_board(RsBoardFilter(period=30, op="gt", value=0.0), None) is None
+
+    def test_rs_index_and_board_independent(self):
+        # 只有 index 差值 · board 空 → board filter 不命中 (两维度独立 · 四象限基础)
+        from kan.core.find_dsl import RsBoardFilter
+        from kan.core.find_filter import _match_rs_board
+
+        rs = self._rs(rs_index={30: 5.0})
+        assert _match_rs_board(RsBoardFilter(period=30, op="gt", value=0.0), rs) is None
+
+
 class TestSortOffsetLimit:
     """find_service._sorted_offset_limit · 排序(None 末尾)+ offset/limit 分页。"""
 

@@ -74,6 +74,7 @@ kan find --all --pe lt:20 --format json --compact --no-compact-context
 | `@sentiment` | 连板/开板/涨跌停事件字段 |
 | `@chip` | 获利盘和成本分布字段 |
 | `@shareholder` | 股东户数、前十大流通集中度、北向持股字段;`--all` 不支持 |
+| `@relative_strength` | 个股与大盘/所属申万一级行业的区间涨幅差、原始涨幅、行业、对照指数字段 |
 
 示例:
 
@@ -134,6 +135,8 @@ kan find --industry 半导体 --pos 20:lt:30 --sort pos_20:asc --limit 30 --form
 | `--resonance` | 小池走本地日 K 缓存;`--all` 走全市场 K 线快照 | 小池否;`--all` 是 | 是 | 日频 | 由位置结果计算;周期不足不计入共振 |
 | `--gain` | 小池走本地日 K 缓存;`--all` 走全市场 K 线快照 | 小池否;`--all` 是 | 是 | 日频 | 周期不足或缺少前值为不命中 |
 | `--up-days` | 小池走本地日 K 缓存;`--all` 走全市场 K 线快照 | 小池否;`--all` 是 | 是 | 日频 | 非连续阳线可为 `0`,不是缺数据 |
+| `--rs-index` | 个股本地/快照 K 线 + 大盘指数 index_daily 对照 | 是 | 是 | 日频 | 个股或大盘指数周期不足 / 指数对照缺失为不命中 |
+| `--rs-board` | 个股本地/快照 K 线 + 申万一级行业指数对照 | 是 | 是 | 日频 | 个股或行业指数周期不足 / 个股行业未知为不命中 |
 | `--pe` | TuShare `daily_basic` 衍生截面指标 | 是 | 是 | 日频 | 指标为空为缺数据;整池缺失时返回 `data_unavailable` |
 | `--pb` | TuShare `daily_basic` 衍生截面指标 | 是 | 是 | 日频 | 指标为空为缺数据;整池缺失时返回 `data_unavailable` |
 | `--turnover` | TuShare `daily_basic` 衍生截面指标 | 是 | 是 | 日频 | 指标为空为缺数据;整池缺失时返回 `data_unavailable` |

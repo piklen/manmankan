@@ -113,3 +113,64 @@ def test_cross_section_rejects_roe_before_fetch(monkeypatch) -> None:
 
     assert exc_info.value.code == "unsupported_all_filter"
     assert exc_info.value.exit_code == 2
+
+
+def _enriched_with_rs(*, rs_index=None, rs_board=None):
+    import datetime
+
+    from kan.core.models import (
+        EnrichedResult,
+        RelativeStrengthMetrics,
+        StockScanResult,
+    )
+
+    scan = StockScanResult(
+        symbol="600519", name="贵州茅台", current_price=100.0,
+        scan_date=datetime.date(2026, 5, 29), periods=[],
+        low_resonance=0, high_resonance=0,
+    )
+    rsm = RelativeStrengthMetrics(rs_index=rs_index or {}, rs_board=rs_board or {})
+    return EnrichedResult.from_scan(scan, relative_strength=rsm)
+
+
+class TestRelativeStrengthService:
+    """RS 在 service 层的纯函数:维度登记 / 命中检测 / 缺数据判定。"""
+
+    def test_condition_dimensions_includes_rs(self):
+        from kan.service.find_service import _condition_dimensions
+
+        cs = ConditionSet.from_flags(rs_index=["30:gt:0"])
+        assert "relative_strength" in _condition_dimensions(cs)
+
+    def test_any_rs_true_when_board_diff(self):
+        from kan.service.find_service import _any_rs
+
+        cs = ConditionSet.from_flags(rs_board=["30:gt:0"])
+        assert _any_rs([_enriched_with_rs(rs_board={30: -0.29})], cs) is True
+
+    def test_any_rs_true_when_index_diff(self):
+        from kan.service.find_service import _any_rs
+
+        cs = ConditionSet.from_flags(rs_index=["30:gt:0"])
+        assert _any_rs([_enriched_with_rs(rs_index={30: 5.0})], cs) is True
+
+    def test_any_rs_false_when_empty(self):
+        from kan.service.find_service import _any_rs
+
+        cs = ConditionSet.from_flags(rs_board=["30:gt:0"])
+        assert _any_rs([_enriched_with_rs(rs_board={})], cs) is False
+
+    def test_find_data_gap_rs_unavailable(self):
+        from kan.service.find_service import _find_data_gap
+
+        cs = ConditionSet.from_flags(rs_board=["30:gt:0"])
+        gap = _find_data_gap(cs, [_enriched_with_rs(rs_board={})])
+        assert gap is not None
+        assert gap[0] == "data_unavailable"
+        assert "相对强度" in gap[1]
+
+    def test_find_data_gap_rs_ok_when_diff_present(self):
+        from kan.service.find_service import _find_data_gap
+
+        cs = ConditionSet.from_flags(rs_board=["30:gt:0"])
+        assert _find_data_gap(cs, [_enriched_with_rs(rs_board={30: -0.29})]) is None

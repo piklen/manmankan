@@ -16,6 +16,7 @@ DATA_DIMENSIONS = (
     "sentiment",
     "chip",
     "shareholder",
+    "relative_strength",
 )
 """Dimensions reported by find JSON data_availability."""
 
@@ -42,6 +43,7 @@ DIMENSION_DATA_FIELDS = {
     ),
     "chip": ("winner_rate", "cost_5pct", "cost_50pct", "cost_95pct", "weight_avg"),
     "shareholder": ("holder_chg_pct", "top10_float_ratio", "north_hold_ratio"),
+    "relative_strength": ("rs_index", "rs_board"),
 }
 """Fields that make a dimension count as available; date/source alone do not."""
 
@@ -85,6 +87,16 @@ FILTER_SPECS = {
         "up_days", "--up-days", None, True,
         "local_kline_or_kline_snapshot", "daily",
         "zero_is_valid_fact",
+    ),
+    "rs_index": FindFilterSpec(
+        "rs_index", "--rs-index", "relative_strength", True,
+        "local_kline_and_index", "daily",
+        "insufficient_window_or_benchmark_missing",
+    ),
+    "rs_board": FindFilterSpec(
+        "rs_board", "--rs-board", "relative_strength", True,
+        "local_kline_and_sw_board", "daily",
+        "insufficient_window_or_industry_unknown",
     ),
     "pe": FindFilterSpec(
         "pe", "--pe", "valuation", True,
@@ -217,8 +229,12 @@ FIND_FILTER_HELP_GROUPS = (
     FindFilterHelpGroup(
         "technical_momentum",
         "技术 / 趋势动量",
-        ("rsi", "macd_dif", "macd", "kdj_j", "ma_bias", "gain", "atr_pct", "up_days"),
-        "进阶 · 需理解指标口径；这里输出裸值事实，不做超买/趋势判断。",
+        (
+            "rsi", "macd_dif", "macd", "kdj_j", "ma_bias", "gain", "atr_pct",
+            "up_days", "rs_index", "rs_board",
+        ),
+        "进阶 · 需理解指标口径；这里输出裸值事实，不做超买/趋势判断。"
+        "相对强度 (--rs-index/--rs-board) 输出 个股 − 对照 区间涨幅差，不判强弱/龙头。",
     ),
     FindFilterHelpGroup(
         "sentiment_chip_shareholder",
@@ -258,6 +274,8 @@ _SOURCE_LABELS = {
         "TuShare `stk_holdernumber` + `top10_floatholders` 衍生"
     ),
     "candidate_pool_metadata": "股票名称 / 候选池元数据",
+    "local_kline_and_index": "个股本地/快照 K 线 + 大盘指数 index_daily 对照",
+    "local_kline_and_sw_board": "个股本地/快照 K 线 + 申万一级行业指数对照",
 }
 
 _TOKEN_LABELS = {
@@ -270,6 +288,8 @@ _TOKEN_LABELS = {
     "tushare_cyq_perf": "是",
     "tushare_stk_holdernumber_and_top10_floatholders": "是",
     "candidate_pool_metadata": "否",
+    "local_kline_and_index": "是",
+    "local_kline_and_sw_board": "是",
 }
 
 _FREQUENCY_LABELS = {
@@ -280,6 +300,12 @@ _FREQUENCY_LABELS = {
 }
 
 _MISSING_SEMANTICS_LABELS = {
+    "insufficient_window_or_benchmark_missing": (
+        "个股或大盘指数周期不足 / 指数对照缺失为不命中"
+    ),
+    "insufficient_window_or_industry_unknown": (
+        "个股或行业指数周期不足 / 个股行业未知为不命中"
+    ),
     "insufficient_window_or_missing_snapshot": (
         "周期不足为不命中;全市场快照不可用时返回 `data_unavailable`"
     ),
@@ -407,6 +433,11 @@ _SHAREHOLDER_FIELDS = (
     "holder_end_date", "holder_num", "holder_chg_pct", "top10_end_date",
     "top10_float_ratio", "north_hold_ratio", "source",
 )
+_RELATIVE_STRENGTH_FIELDS = (
+    "industry", "index_code", "index_name",
+    "stock_gain", "index_gain", "board_gain",
+    "rs_index", "rs_board", "source",
+)
 
 _BASE_FIELD_SPECS = [
     _field("code"),
@@ -443,6 +474,10 @@ FIND_FIELD_SPECS = {
         *(_field(f"sentiment.{name}", dimension="sentiment") for name in _SENTIMENT_FIELDS),
         *(_field(f"chip.{name}", dimension="chip") for name in _CHIP_FIELDS),
         *(_field(f"shareholder.{name}", dimension="shareholder") for name in _SHAREHOLDER_FIELDS),
+        *(
+            _field(f"relative_strength.{name}", dimension="relative_strength")
+            for name in _RELATIVE_STRENGTH_FIELDS
+        ),
     )
 }
 
@@ -488,6 +523,12 @@ FIND_FIELD_PRESETS = {
         "shareholder.holder_end_date", "shareholder.holder_chg_pct",
         "shareholder.top10_end_date", "shareholder.top10_float_ratio",
         "shareholder.north_hold_ratio", "shareholder.source",
+    ),
+    "@relative_strength": (
+        "relative_strength.industry", "relative_strength.index_name",
+        "relative_strength.stock_gain", "relative_strength.index_gain",
+        "relative_strength.board_gain", "relative_strength.rs_index",
+        "relative_strength.rs_board", "relative_strength.source",
     ),
 }
 

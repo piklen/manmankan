@@ -422,6 +422,35 @@ class UpDaysFilter(ScalarFilter):
     example = "gte:3"
 
 
+# ─── 相对强度 filter (个股 区间涨幅 − 对照 区间涨幅 · 客观差值 · 趋势/动量扩展) ───
+# 合规:相对强度 = 两段客观涨幅算术差 · 阈值用户主导 · 不判「真龙头/独立行情/跟风/强势」。
+
+class RsIndexFilter(PeriodScalarFilter):
+    """个股相对大盘强度 filter · 例 PERIOD=30 OP=gt VALUE=0 = 近 30 日 个股涨幅 − 大盘涨幅 > 0 (跑赢大盘).
+
+    读 relative_strength.rs_index[N] = 个股 N 日涨幅 − 大盘指数 N 日涨幅 (默认沪深300 ·
+    可 --rs-index-code 改对照指数)· 客观涨幅差 (百分点)· 工具不判「独立行情/跟风/龙头」·
+    PERIOD 支持 2-360 · 需 K 线池算个股 gain + 指数对照。差值可正可负 · 不设 value_range。
+    """
+
+    flag = "--rs-index"
+    example = "30:gt:0"
+    allowed_periods = ALLOWED_PERIODS
+
+
+class RsBoardFilter(PeriodScalarFilter):
+    """个股相对所属申万一级行业强度 filter · 例 PERIOD=30 OP=gt VALUE=0 = 近 30 日 个股涨幅 − 行业涨幅 > 0 (跑赢板块).
+
+    读 relative_strength.rs_board[N] = 个股 N 日涨幅 − 所属申万一级行业指数 N 日涨幅 ·
+    客观涨幅差 (百分点)· 工具不判「真龙头/跟风/领涨」· PERIOD 支持 2-360 ·
+    需 K 线池算个股 gain + 申万行业映射 + 行业指数对照。差值可正可负 · 不设 value_range。
+    """
+
+    flag = "--rs-board"
+    example = "30:gt:0"
+    allowed_periods = ALLOWED_PERIODS
+
+
 @dataclass(frozen=True)
 class ConditionSet:
     """DSL 解析后的完整 filter 集合 · 多 filter 间 AND 语义.
@@ -459,6 +488,8 @@ class ConditionSet:
     gain_filters: tuple[GainFilter, ...] = ()
     atr_pct_filters: tuple[AtrPctFilter, ...] = ()
     up_days_filters: tuple[UpDaysFilter, ...] = ()
+    rs_index_filters: tuple[RsIndexFilter, ...] = ()
+    rs_board_filters: tuple[RsBoardFilter, ...] = ()
     exclude_st: bool = False
     match_any: bool = False
 
@@ -490,6 +521,8 @@ class ConditionSet:
         gain: list[str] | None = None,
         atr_pct: list[str] | None = None,
         up_days: list[str] | None = None,
+        rs_index: list[str] | None = None,
+        rs_board: list[str] | None = None,
         exclude_st: bool = False,
         match_any: bool = False,
     ) -> ConditionSet:
@@ -527,6 +560,8 @@ class ConditionSet:
             gain_filters=tuple(GainFilter.parse(x) for x in (gain or [])),
             atr_pct_filters=tuple(AtrPctFilter.parse(x) for x in (atr_pct or [])),
             up_days_filters=tuple(UpDaysFilter.parse(x) for x in (up_days or [])),
+            rs_index_filters=tuple(RsIndexFilter.parse(x) for x in (rs_index or [])),
+            rs_board_filters=tuple(RsBoardFilter.parse(x) for x in (rs_board or [])),
             exclude_st=exclude_st,
             match_any=match_any,
         )
@@ -557,17 +592,25 @@ class ConditionSet:
             or self.gain_filters
             or self.atr_pct_filters
             or self.up_days_filters
+            or self.rs_index_filters
+            or self.rs_board_filters
             or self.exclude_st
         )
 
     def has_kline_filters(self) -> bool:
-        """K 线衍生 filter (位置/共振/涨幅/连阳) · --all 走预计算快照。"""
+        """K 线衍生 filter (位置/共振/涨幅/连阳/相对强度) · --all 走预计算快照。
+
+        相对强度 (rs_index/rs_board) 的个股侧也吃 K 线 gain · 计入 · 确保 --all 快照
+        与 scan periods 覆盖对应周期 (对照数据另由 attach_relative_strength 挂载)。
+        """
         return bool(
             self.pos_filters
             or self.resonance_filters
             or self.ma_bias_filters
             or self.gain_filters
             or self.up_days_filters
+            or self.rs_index_filters
+            or self.rs_board_filters
         )
 
     def has_cross_section_filters(self) -> bool:
@@ -624,6 +667,22 @@ class ConditionSet:
             or self.north_filters
         )
 
+    def needs_relative_strength(self) -> bool:
+        """是否需挂 relative_strength (--rs-index/--rs-board · 个股 K 线 + 指数/行业对照)。"""
+        return bool(self.rs_index_filters or self.rs_board_filters)
+
+    def rs_index_periods(self) -> set[int]:
+        """--rs-index 请求的周期集合 (大盘对照只算这些 period · 省对照取数)。"""
+        return {f.period for f in self.rs_index_filters}
+
+    def rs_board_periods(self) -> set[int]:
+        """--rs-board 请求的周期集合 (行业对照只算这些 period · 省对照取数)。"""
+        return {f.period for f in self.rs_board_filters}
+
+    def relative_strength_periods(self) -> set[int]:
+        """RS 需要的全部周期 (个股 gain 必须覆盖的并集 · 给 kline period 收集)。"""
+        return self.rs_index_periods() | self.rs_board_periods()
+
 
 _OP_FUNCS = {
     "lt": lambda a, b: a < b,
@@ -667,6 +726,8 @@ __all__ = [
     "PosFilter",
     "ResonanceFilter",
     "RoeFilter",
+    "RsBoardFilter",
+    "RsIndexFilter",
     "RsiFilter",
     "ScalarFilter",
     "StreakFilter",
