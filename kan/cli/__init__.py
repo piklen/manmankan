@@ -23,6 +23,7 @@ from kan.cli import (
     help,
     helpers,
     history_cmds,
+    hold_cmds,
     info_cmds,
     meta_cmds,
     move_export_cmds,
