@@ -254,8 +254,13 @@ def scan_runner(monkeypatch):
     )
 
     fake_pairs = [("600519", "测试")]
+    fake_stock = type("S", (), {"symbol": "600519", "name": "测试"})()
+    fake_watchlist = type("WL", (), {"stocks": [fake_stock]})()
+    fake_positions = type("Book", (), {"positions": []})()
     monkeypatch.setattr("kan.cli.scan_cmds._get_watchlist_pairs", lambda group=None: fake_pairs)
     monkeypatch.setattr("kan.cli.extreme_cmds._get_watchlist_pairs", lambda group=None: fake_pairs)
+    monkeypatch.setattr("kan.storage.watchlist.load_watchlist", lambda group=None: fake_watchlist)
+    monkeypatch.setattr("kan.storage.positions.load_positions", lambda: fake_positions)
     monkeypatch.setattr("kan.cli.helpers._auto_fetch_stale", lambda _pairs, **_kw: None)
     monkeypatch.setattr("kan.cli.extreme_cmds._auto_fetch_stale", lambda _pairs, **_kw: None)
     monkeypatch.setattr(
@@ -284,7 +289,7 @@ def test_scan_stale_warning_uses_new_phrasing(scan_runner, monkeypatch):
     """真测: scan 命令的 stale 警告应含'当前缓存到 X 收盘' + '数据滞后 N 天'."""
     from datetime import date
 
-    from kan.app import app
+    from kan.cli import app
 
     monkeypatch.setattr(
         "kan.data.fetcher.data_cutoff_date", lambda _sym: date(2026, 5, 1)
@@ -307,7 +312,7 @@ def test_scan_intraday_warning_compliant_phrasing(scan_runner, monkeypatch):
     """真测: scan 盘中警告应是状态描述 · 不含'下一秒打开' 红线词."""
     from datetime import date
 
-    from kan.app import app
+    from kan.cli import app
 
     monkeypatch.setattr(
         "kan.data.fetcher.data_cutoff_date", lambda _sym: date(2026, 5, 14)
@@ -363,6 +368,82 @@ def test_scan_command_basic_runs(scan_runner):
     assert result.exit_code == 0
     # 应含表格基本结构
     assert "测试" in result.output or "600519" in result.output
+
+
+def test_scan_default_uses_holdings_when_watchlist_empty(monkeypatch):
+    """默认 scan = 自选 ∪ 持仓；自选空但持仓非空时不能被旧 guard 拦截。"""
+    import json as _json
+    from datetime import date
+
+    from typer.testing import CliRunner
+
+    from kan.cli import app
+    from kan.core.models import PeriodResult, StockScanResult
+    from kan.core.pipeline import DataCtx, Freshness
+
+    fake_position = type("P", (), {"symbol": "600519", "name": "贵州茅台"})()
+    monkeypatch.setattr(
+        "kan.storage.watchlist.load_watchlist",
+        lambda group=None: type("WL", (), {"stocks": []})(),
+    )
+    monkeypatch.setattr(
+        "kan.storage.positions.load_positions",
+        lambda: type("Book", (), {"positions": [fake_position]})(),
+    )
+
+    scan_row = StockScanResult(
+        symbol="600519",
+        name="贵州茅台",
+        current_price=100.0,
+        scan_date=date(2026, 6, 6),
+        periods=[
+            PeriodResult(
+                period=30,
+                n_low=90.0,
+                n_high=110.0,
+                position_pct=50.0,
+                at_low=False,
+                at_high=False,
+            )
+        ],
+        low_resonance=0,
+        high_resonance=0,
+    )
+    freshness = Freshness(
+        data_cutoff=date(2026, 6, 6),
+        fetched_at="2026-06-06 15:30",
+        expected_cutoff=date(2026, 6, 6),
+        is_stale=False,
+        phase="post",
+    )
+    captured = {}
+
+    def fake_run_data_pipeline(
+        stock_set, *, compute, mode, periods, fetch_days, show_progress, exit_on_resolve_error,
+    ):
+        pairs = stock_set.pairs()
+        captured["pairs"] = pairs
+        return DataCtx(
+            targets=pairs,
+            meta=None,
+            results=[scan_row],
+            freshness=freshness,
+            source_name=stock_set.name,
+        )
+
+    monkeypatch.setattr("kan.core.pipeline.run_data_pipeline", fake_run_data_pipeline)
+    monkeypatch.setattr(
+        "kan.core.enrich.enrich_scan_rows",
+        lambda results, *, data_cutoff: list(results),
+    )
+
+    result = CliRunner().invoke(app, ["scan", "--format", "json", "--periods", "30"])
+
+    assert result.exit_code == 0, result.output
+    assert captured["pairs"] == [("600519", "贵州茅台")]
+    payload = _json.loads(result.output)
+    assert payload["results"][0]["in_holding"] is True
+    assert payload["results"][0]["in_watchlist"] is False
 
 
 def test_scan_command_high_mode(scan_runner):

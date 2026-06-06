@@ -17,6 +17,8 @@ FIND_DISCLAIMER_TEXT = (
     "不构成任何形式的推荐或建议 · 用户自行评估"
 )
 
+HOLD_DISCLAIMER_TEXT = "持仓的客观坐标 + 盈亏事实 · 不构成买卖建议"
+
 
 def responsive_periods(console_width: int, periods: list[int] | None = None) -> list[int]:
     """根据终端宽度选择要展示的周期子集 · 始终保证共振列可见。

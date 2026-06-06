@@ -13,6 +13,7 @@ increment `D` unless the maintainer explicitly approves a larger bump.
 - `kan scan --periods` 支持显式选择 2-360 周期集合，`--compact` / `--wide` 支持终端窄屏与全周期展示手动切换。
 - `kan board rank --period`、`kan compare --periods`、`kan history --period` 的周期边界统一到 2-360；`compare` 会按用户指定周期实际计算。
 - `kan info <code>` 增加所属申万一级行业的位置均值与低到高排名对照；无行业映射或本地样本不足时自动降级不展示。
+- `kan hold` 真实持仓账本：用户手动录入成本 / 股数 / 现金，本地计算今日盈亏、累计盈亏、仓位和 30/60/180 日位置；`scan` / `find` 默认池扩展为自选 ∪ 持仓，并支持 `--only-holdings`。
 - **`kan find --rs-index / --rs-board`** · 相对强度 filter · 个股区间涨幅 − 对照（大盘指数 / 所属申万一级行业）区间涨幅的客观差值 · `PERIOD:OP:VAL`（2-360 周期 · 差值可正可负）· K 线池与全市场 `--all` 两路支持 · `--rs-index-code` 可改大盘对照指数（默认沪深300 · `--rs-index` 依赖 tushare `index_daily`，需 2000 积分）· 对照缺失（周期不足 / 个股行业未知 / 指数无权限）按周期降级不命中、不当 0 · `--format json` 带 `@relative_strength` 字段（个股/对照原始涨幅 + 差值 + 行业 + 对照指数）与 triggered 审计 · 只输出客观差值裸值、不判强弱龙头 · disclaimer 强制
 
 ## [0.0.6.9] - 2026-06-04

@@ -276,6 +276,7 @@ def _run_kline_path(
     hot: HotList | None,
     theme: str | None,
     only_watchlist: bool,
+    only_holdings: bool,
     group: str | None,
     conditions: ConditionSet,
     field_dimensions: set[str],
@@ -308,6 +309,7 @@ def _run_kline_path(
             hot=hot,
             theme=theme,
             only_watchlist=only_watchlist,
+            only_holdings=only_holdings,
             group=group,
             limit=limit,
             offset=offset,
@@ -603,6 +605,10 @@ def find(
             help="池仅自选 ∩ industry/hot/theme · 需配合 pool flag",
         ),
     ] = False,
+    only_holdings: Annotated[
+        bool,
+        typer.Option("--only-holdings", help="池: 只查真实持仓"),
+    ] = False,
     group: Annotated[
         str | None,
         typer.Option("--group", "-g", help="自选股分组 (默认 default 组)"),
@@ -736,6 +742,7 @@ def find(
       --industry NAME / --hot rank|surge / --theme NAME (不指定默认自选)
       --codes LIST (逗号/空格/换行分隔 · `--codes -` 从 stdin 读)
       --only-watchlist (需配合 pool · 取交集)
+      --only-holdings 只查真实持仓
       --group GROUP (选自选股具名组)
     """
     from rich.console import Console
@@ -912,6 +919,38 @@ def find(
             hint="例: kan find --codes 600519,000858 --gain 30:gt:10",
             exit_code=2,
         )
+    if only_holdings and source_mode:
+        _exit_find_error(
+            fmt,
+            code="invalid_holdings_pool",
+            message="--only-holdings 不能和 --industry / --hot / --theme / --codes 同时使用",
+            hint="例: kan find --only-holdings --format json",
+            exit_code=2,
+        )
+    if only_holdings and group is not None:
+        _exit_find_error(
+            fmt,
+            code="invalid_holdings_pool",
+            message="--only-holdings 已指定真实持仓池，不再叠加 --group",
+            hint="例: kan find --only-holdings --format json",
+            exit_code=2,
+        )
+    if only_holdings and only_watchlist:
+        _exit_find_error(
+            fmt,
+            code="invalid_holdings_pool",
+            message="--only-holdings 与 --only-watchlist 不能同时使用",
+            hint="例: kan find --only-holdings --format json",
+            exit_code=2,
+        )
+    if only_holdings and all_stocks:
+        _exit_find_error(
+            fmt,
+            code="invalid_holdings_pool",
+            message="--only-holdings 与 --all 不能同时使用",
+            hint="例: kan find --only-holdings --format json",
+            exit_code=2,
+        )
     code_pairs = _resolve_code_pairs_or_exit_json(codes, fmt) if codes is not None else None
     if only_watchlist and not source_mode:
         _exit_find_error(
@@ -947,6 +986,7 @@ def find(
         hot=hot,
         theme=theme,
         only_watchlist=only_watchlist,
+        only_holdings=only_holdings,
         group=group,
         conditions=conditions,
         field_dimensions=field_dimensions,

@@ -31,7 +31,7 @@ REPO_ROOT = Path(__file__).resolve().parents[1]
 # - cli_move_export_cmds (2): move / export   (历史背景多分组管理)
 # - cli_find_cmds (1):      find             (历史背景选股 DSL)
 # - cli_history_cmds (1):   history          (位置历史回溯)
-# 注:`kan group`/`kan config`/`kan theme`/`kan fields`/`kan mcp` 是 sub-Typer
+# 注:`kan group`/`kan config`/`kan theme`/`kan fields`/`kan mcp`/`kan hold` 是 sub-Typer
 # (app.add_typer) · 不进 registered_commands · 不需 canary。
 _EXPECTED_COMMANDS = {
     "help",

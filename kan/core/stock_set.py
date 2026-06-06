@@ -4,8 +4,10 @@
 任何 StockSet 实例统一处理 · 而不是各命令 if industry / elif hot / elif theme /
 else watchlist 分支分发。
 
-四类基础实现:
+基础实现:
 - WatchlistSet:  自选股 (本地 storage · 无 meta)
+- HoldingsSet:   真实持仓 (本地 positions.json · 无 meta)
+- WatchlistHoldingsSet: 默认自选 ∪ 持仓
 - HotRankSet:    东方财富热榜 (人气榜 / 飙升榜 · meta = HotMeta)
 - ThemeSet:      题材股 (同花顺概念板块成分股 · meta = ThemeMeta)
 - IndustrySet:   行业股 (东财行业分类 · meta = BoardMeta)
@@ -95,6 +97,80 @@ class WatchlistSet:
     def meta(self) -> None:
         """自选股集合无 meta (highlight/index_kline/rank_map 仅对 industry/hot/theme 有意义)。"""
         return None
+
+    def __len__(self) -> int:
+        return len(self._resolve())
+
+
+@dataclass
+class HoldingsSet:
+    """真实持仓集合 · 从 positions.json 加载。"""
+
+    name: str = "真实持仓"
+    _pairs: list[tuple[str, str]] | None = None
+
+    def _resolve(self) -> list[tuple[str, str]]:
+        if self._pairs is None:
+            from kan.storage.positions import load_positions
+
+            book = load_positions()
+            self._pairs = [(p.symbol, p.name) for p in book.positions]
+        return self._pairs
+
+    def codes(self) -> list[str]:
+        return [c for c, _ in self._resolve()]
+
+    def pairs(self) -> list[tuple[str, str]]:
+        return list(self._resolve())
+
+    def meta(self) -> None:
+        return None
+
+    def membership(self, symbol: str) -> tuple[bool, bool]:
+        holding = {c for c, _ in self._resolve()}
+        return False, symbol in holding
+
+    def __len__(self) -> int:
+        return len(self._resolve())
+
+
+@dataclass
+class WatchlistHoldingsSet:
+    """默认池 · 自选 ∪ 真实持仓，保留成员来源用于渲染标记。"""
+
+    name: str = "自选股+真实持仓"
+    _pairs: list[tuple[str, str]] | None = None
+    _watchlist_codes: set[str] = field(default_factory=set, repr=False)
+    _holding_codes: set[str] = field(default_factory=set, repr=False)
+
+    def _resolve(self) -> list[tuple[str, str]]:
+        if self._pairs is None:
+            from kan.storage.positions import load_positions
+            from kan.storage.watchlist import load_watchlist
+
+            watchlist_pairs = [(s.symbol, s.name) for s in load_watchlist().stocks]
+            holding_pairs = [(p.symbol, p.name) for p in load_positions().positions]
+            self._watchlist_codes = {c for c, _ in watchlist_pairs}
+            self._holding_codes = {c for c, _ in holding_pairs}
+            merged: dict[str, str] = {}
+            for code, name in [*watchlist_pairs, *holding_pairs]:
+                if code not in merged:
+                    merged[code] = name
+            self._pairs = list(merged.items())
+        return self._pairs
+
+    def codes(self) -> list[str]:
+        return [c for c, _ in self._resolve()]
+
+    def pairs(self) -> list[tuple[str, str]]:
+        return list(self._resolve())
+
+    def meta(self) -> None:
+        return None
+
+    def membership(self, symbol: str) -> tuple[bool, bool]:
+        self._resolve()
+        return symbol in self._watchlist_codes, symbol in self._holding_codes
 
     def __len__(self) -> int:
         return len(self._resolve())
@@ -362,11 +438,14 @@ def from_flags(
     only_watchlist: bool = False,
     watchlist_group: str | None = None,
     all_stocks: bool = False,
+    only_holdings: bool = False,
 ) -> StockSet:
     """从 CLI flags 构造对应 StockSet (一类 factory)。
 
     - all_stocks=True → AllStocksSet (全市场截面池 · 与 industry/hot/theme 互斥)
-    - 三者全 None → WatchlistSet · 走 watchlist_group 指定组 (不指定走 default)
+    - only_holdings=True → HoldingsSet
+    - 三者全 None + 无 group → WatchlistHoldingsSet · 默认自选 ∪ 持仓
+    - 三者全 None + 有 group → WatchlistSet · 走 watchlist_group 指定组
     - 任一非 None → 对应 Set · 同时把 watchlist_pairs + only_watchlist 注入 (算 highlight + filter)
     - 任意两个或三个同时非 None → ValueError (互斥)
 
@@ -378,11 +457,17 @@ def from_flags(
         all_stocks: True → AllStocksSet (全市场 · 与 industry/hot/theme 互斥)
     """
     if all_stocks:
-        if any(x is not None for x in (industry, hot, theme)):
+        if only_holdings or any(x is not None for x in (industry, hot, theme)):
             raise ValueError(
-                "all_stocks 与 industry / hot / theme 互斥 · 同时只能指定一个池"
+                "all_stocks 与 industry / hot / theme / only_holdings 互斥 · 同时只能指定一个池"
             )
         return AllStocksSet()
+    if only_holdings:
+        if watchlist_group is not None or any(x is not None for x in (industry, hot, theme)):
+            raise ValueError(
+                "only_holdings 与 industry / hot / theme / group 互斥 · 同时只能指定一个池"
+            )
+        return HoldingsSet()
     given = sum(1 for x in (industry, hot, theme) if x is not None)
     if given > 1:
         raise ValueError(
@@ -407,16 +492,20 @@ def from_flags(
             watchlist_pairs=wl_pairs,
             only_watchlist=only_watchlist,
         )
+    if watchlist_group is None:
+        return WatchlistHoldingsSet()
     return WatchlistSet(group=watchlist_group)
 
 
 __all__ = [
     "AllStocksSet",
     "CodeListSet",
+    "HoldingsSet",
     "HotRankSet",
     "IndustrySet",
     "StockSet",
     "ThemeSet",
+    "WatchlistHoldingsSet",
     "WatchlistSet",
     "from_flags",
 ]

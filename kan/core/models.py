@@ -77,6 +77,8 @@ class StockScanResult(BaseModel):
     moneyflow_5d_end_date: date | None = None
     ma_biases: dict[int, float] = Field(default_factory=dict)  # K 线衍生 BIAS · key=周期
     corporate_action: CorporateActionMarker | None = None
+    in_watchlist: bool = False
+    in_holding: bool = False
 
 
 class ValuationMetrics(BaseModel):

@@ -72,6 +72,7 @@ class FindKlineRequest:
     hot: HotList | None = None
     theme: str | None = None
     only_watchlist: bool = False
+    only_holdings: bool = False
     group: str | None = None
     limit: int | None = None
     offset: int = 0
@@ -185,8 +186,11 @@ def find_pools(
     theme: str | None,
     group: str | None,
     code_pairs: list[tuple[str, str]] | None = None,
+    only_holdings: bool = False,
 ) -> list[str]:
     """Build machine-readable pool identifiers for find output."""
+    if only_holdings:
+        return ["holdings"]
     if code_pairs is not None:
         return [f"codes:{len(code_pairs)}"]
     if industry is not None:
@@ -195,7 +199,7 @@ def find_pools(
         return [f"hot:{getattr(hot, 'value', hot)}"]
     if theme is not None:
         return [f"theme:{theme}"]
-    return [f"watchlist:{group}"] if group else ["watchlist"]
+    return [f"watchlist:{group}"] if group else ["watchlist+holdings"]
 
 
 def find_filters(conditions: ConditionSet) -> list[dict]:
@@ -410,10 +414,10 @@ def run_find_kline(
     )
     watchlist_pairs = (
         []
-        if request.code_pairs is not None
+        if request.code_pairs is not None or request.only_holdings
         else _load_find_watchlist_pairs(
             request.group,
-            require_non_empty=not source_mode,
+            require_non_empty=not source_mode and request.group is not None,
         )
     )
 
@@ -428,6 +432,7 @@ def run_find_kline(
             watchlist_pairs=watchlist_pairs,
             only_watchlist=request.only_watchlist,
             watchlist_group=request.group,
+            only_holdings=request.only_holdings,
         )
 
     if request.code_pairs is not None and output.is_export and request.conditions.is_empty():
@@ -440,6 +445,7 @@ def run_find_kline(
                 request.theme,
                 request.group,
                 request.code_pairs,
+                request.only_holdings,
             ),
             query_time=_query_time(),
         )
@@ -466,6 +472,21 @@ def run_find_kline(
             code="empty_intersection",
             message="自选股与当前候选池没有交集",
             hint="例: 去掉 --only-watchlist，或先运行 kan add 600519 把目标股票加进自选",
+        )
+    if not ctx.targets and request.only_holdings:
+        raise FindServiceError(
+            code="empty_holdings",
+            message="真实持仓为空",
+            hint="例: kan hold add 600519 --cost 1680 --shares 100",
+        )
+    if not ctx.targets and not source_mode and request.group is None:
+        raise FindServiceError(
+            code="empty_watchlist",
+            message="自选股和真实持仓为空",
+            hint=(
+                "例: kan add 600519；或 kan hold add 600519 --cost 1680 --shares 100；"
+                "或 kan find --codes 600519 --format json"
+            ),
         )
     if not ctx.results and not output.is_export:
         raise FindServiceError(
@@ -533,6 +554,7 @@ def run_find_kline(
             request.theme,
             request.group,
             request.code_pairs,
+            request.only_holdings,
         ),
         filters=find_filters(request.conditions),
         query_time=_query_time(),

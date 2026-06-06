@@ -64,6 +64,7 @@ def run_scan(request: ScanRequest) -> ScanServiceResult:
     )
     board_index_result = _scan_board_index(ctx.meta, periods=request.periods)
     all_results = enrich_scan_rows(ctx.results, data_cutoff=ctx.freshness.data_cutoff)
+    _apply_membership_markers(all_results, request.stock_set)
     results = _filter_scan_results(
         all_results,
         mode=request.mode,
@@ -106,3 +107,13 @@ def _scan_board_index(
     if isinstance(meta, ThemeMeta) and not meta.index_kline.empty:
         return scan_stock(meta.index_kline, meta.theme.code, meta.theme.name, periods=periods)
     return None
+
+
+def _apply_membership_markers(results: list[StockScanResult], stock_set: StockSet) -> None:
+    membership = getattr(stock_set, "membership", None)
+    if not callable(membership):
+        return
+    for row in results:
+        in_watchlist, in_holding = membership(row.symbol)
+        row.in_watchlist = in_watchlist
+        row.in_holding = in_holding
