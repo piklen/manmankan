@@ -35,7 +35,7 @@ jobs:
     timeout-minutes: 20
     steps:
       - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10  # v6 (pinned 2026-05-27)
-      - uses: astral-sh/setup-uv@08807647e7069bb48b6ef5acd8ec9567f424441b  # pinned 2026-05-27
+      - uses: astral-sh/setup-uv@fac544c07dec837d0ccb6301d7b5580bf5edae39  # pinned 2026-05-27
         with:
           python-version: '3.12'
           enable-cache: true
@@ -110,7 +110,7 @@ jobs:
       - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10  # v6 (pinned 2026-05-27)
         with:
           fetch-depth: 0  # diff-cover 需要 base 分支历史做新代码覆盖率对比
-      - uses: astral-sh/setup-uv@08807647e7069bb48b6ef5acd8ec9567f424441b  # pinned 2026-05-27
+      - uses: astral-sh/setup-uv@fac544c07dec837d0ccb6301d7b5580bf5edae39  # pinned 2026-05-27
         with:
           python-version: ${{ matrix.python-version }}
           enable-cache: true
@@ -134,7 +134,7 @@ jobs:
         python-version: ['3.11', '3.12']
     steps:
       - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10  # v6 (pinned 2026-05-27)
-      - uses: astral-sh/setup-uv@08807647e7069bb48b6ef5acd8ec9567f424441b  # pinned 2026-05-27
+      - uses: astral-sh/setup-uv@fac544c07dec837d0ccb6301d7b5580bf5edae39  # pinned 2026-05-27
         with:
           python-version: ${{ matrix.python-version }}
           enable-cache: true
@@ -203,7 +203,7 @@ jobs:
         python-version: ['3.11', '3.12']
     steps:
       - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10  # v6 (pinned 2026-05-27)
-      - uses: astral-sh/setup-uv@08807647e7069bb48b6ef5acd8ec9567f424441b  # pinned 2026-05-27
+      - uses: astral-sh/setup-uv@fac544c07dec837d0ccb6301d7b5580bf5edae39  # pinned 2026-05-27
         with:
           python-version: ${{ matrix.python-version }}
           enable-cache: true
