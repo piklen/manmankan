@@ -100,3 +100,23 @@ def test_watchlist_storage_stays_split() -> None:
         if len(path.read_text(encoding="utf-8").splitlines()) > 500
     ]
     assert oversized == []
+
+
+def test_terminal_render_stays_split() -> None:
+    """terminal render 公共入口保持薄门面，各命令族表格构建分文件维护。"""
+    root = Path(__file__).resolve().parents[1]
+    facade = root / "kan" / "render" / "terminal.py"
+    tree = ast.parse(facade.read_text(encoding="utf-8"), filename=str(facade))
+    definitions = [
+        node.name
+        for node in tree.body
+        if isinstance(node, ast.FunctionDef | ast.ClassDef)
+    ]
+    assert definitions == []
+
+    oversized = [
+        f"{path.relative_to(root)}:{len(path.read_text(encoding='utf-8').splitlines())}"
+        for path in (root / "kan" / "render").glob("terminal_*.py")
+        if len(path.read_text(encoding="utf-8").splitlines()) > 500
+    ]
+    assert oversized == []
