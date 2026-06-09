@@ -40,3 +40,23 @@ def test_storage_export_stays_split() -> None:
         if len(path.read_text(encoding="utf-8").splitlines()) > 500
     ]
     assert oversized == []
+
+
+def test_find_cli_entrypoint_stays_thin() -> None:
+    """find CLI 入口只保留 Typer 参数声明，执行细节拆到同层 helper。"""
+    root = Path(__file__).resolve().parents[1]
+    entrypoint = root / "kan" / "cli" / "find_cmds.py"
+    tree = ast.parse(entrypoint.read_text(encoding="utf-8"), filename=str(entrypoint))
+    definitions = [
+        node.name
+        for node in tree.body
+        if isinstance(node, ast.FunctionDef | ast.ClassDef)
+    ]
+    assert definitions == ["find"]
+
+    oversized = [
+        f"{path.relative_to(root)}:{len(path.read_text(encoding='utf-8').splitlines())}"
+        for path in (root / "kan" / "cli").glob("find_*.py")
+        if len(path.read_text(encoding="utf-8").splitlines()) > 500
+    ]
+    assert oversized == []
