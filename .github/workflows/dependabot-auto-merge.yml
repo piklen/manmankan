@@ -1,0 +1,70 @@
+name: Dependabot Auto Merge
+
+on:
+  workflow_run:
+    workflows: ["Test"]
+    types: [completed]
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  merge:
+    runs-on: ubuntu-latest
+    if: >
+      github.event.workflow_run.event == 'pull_request' &&
+      github.event.workflow_run.conclusion == 'success'
+    steps:
+      - name: Merge safe Dependabot updates
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          HEAD_SHA: ${{ github.event.workflow_run.head_sha }}
+        run: |
+          set -euo pipefail
+
+          pr_json="$(
+            gh api "repos/${REPO}/commits/${HEAD_SHA}/pulls" \
+              -H "Accept: application/vnd.github+json" \
+              --jq 'map(select(.user.login == "dependabot[bot]" and .base.ref == "main" and .state == "open")) | .[0] // empty'
+          )"
+          if [ -z "${pr_json}" ]; then
+            echo "No open Dependabot PR found for ${HEAD_SHA}; skip."
+            exit 0
+          fi
+
+          number="$(jq -r '.number' <<<"${pr_json}")"
+          title="$(jq -r '.title' <<<"${pr_json}")"
+          body="$(jq -r '.body // ""' <<<"${pr_json}")"
+          labels="$(jq -r '[.labels[].name] | join(",")' <<<"${pr_json}")"
+
+          echo "PR #${number}: ${title}"
+          echo "labels=${labels}"
+
+          if ! gh pr checks "${number}" --repo "${REPO}" --watch=false --fail-fast; then
+            echo "PR checks are not all green; skip."
+            exit 0
+          fi
+
+          allow="false"
+          if grep -q "ci" <<<"${labels}" && grep -Eq "update-type: version-update:semver-(patch|minor)" <<<"${body}"; then
+            allow="true"
+          fi
+          if grep -q "python" <<<"${labels}" &&
+             grep -q "dependency-type: direct:development" <<<"${body}" &&
+             grep -Eq "update-type: version-update:semver-(patch|minor)" <<<"${body}"; then
+            allow="true"
+          fi
+          if grep -q "python" <<<"${labels}" &&
+             grep -q "dependency-type: direct:production" <<<"${body}" &&
+             grep -q "update-type: version-update:semver-patch" <<<"${body}"; then
+            allow="true"
+          fi
+
+          if [ "${allow}" != "true" ]; then
+            echo "Dependabot update is outside the auto-merge policy; skip."
+            exit 0
+          fi
+
+          gh pr merge "${number}" --repo "${REPO}" --squash --auto --delete-branch
