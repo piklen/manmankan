@@ -27,6 +27,7 @@ concurrency:
 env:
   KAN_NO_COMPLETION_AUTOINSTALL: "1"
   KAN_NO_UPDATE_CHECK: "1"
+  UV_LINK_MODE: "copy"
 
 jobs:
   quality-gates:
@@ -39,6 +40,7 @@ jobs:
           python-version: '3.12'
           enable-cache: true
           prune-cache: false
+          cache-local-path: ${{ runner.temp }}/uv-cache
       - name: Lockfile is current
         run: uv lock --check
       - name: Install dependencies
@@ -114,6 +116,7 @@ jobs:
           python-version: ${{ matrix.python-version }}
           enable-cache: true
           prune-cache: false
+          cache-local-path: ${{ runner.temp }}/uv-cache
       - name: Install dependencies
         run: uv sync --frozen --all-groups --all-extras
       - name: Run tests
@@ -121,7 +124,11 @@ jobs:
       - name: Patch coverage (new code >= 85%)
         if: matrix.python-version == '3.12'
         run: |
-          git fetch origin main --depth=1 || true
+          git fetch --no-tags --force origin +refs/heads/main:refs/remotes/origin/main
+          if [ "$(git rev-parse --is-shallow-repository)" = "true" ]; then
+            git fetch --no-tags --unshallow origin
+          fi
+          git merge-base origin/main HEAD >/dev/null
           uv run diff-cover coverage.xml --compare-branch=origin/main --fail-under=85
 
   package-smoke:
@@ -138,6 +145,7 @@ jobs:
           python-version: ${{ matrix.python-version }}
           enable-cache: true
           prune-cache: false
+          cache-local-path: ${{ runner.temp }}/uv-cache
       - name: Build package
         run: uv build --clear
       - name: Install wheel in clean environment
@@ -207,6 +215,7 @@ jobs:
           python-version: ${{ matrix.python-version }}
           enable-cache: true
           prune-cache: false
+          cache-local-path: ${{ runner.temp }}/uv-cache
       - name: Install dependencies + manmankan as tool
         run: |
           uv sync --frozen --all-groups --all-extras
