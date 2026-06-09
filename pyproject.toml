@@ -29,14 +29,14 @@ classifiers = [
 ]
 
 dependencies = [
-    "akshare==1.18.60",  # 数据源 SDK 精确 pin · 降低上游投毒 / API 漂移面
-    "pandas>=2.0,<3",  # 避免提前吃 pandas 3.x 行为变更
-    "pydantic>=2.0,<3",
+    "akshare==1.18.64",  # 数据源 SDK 精确 pin · 降低上游投毒 / API 漂移面
+    "pandas>=3.0.3,<4",  # 避免提前吃 pandas 3.x 行为变更
+    "pydantic>=2.13.4,<3",
     "rich>=13.0,<16",
-    "typer>=0.12,<0.26",  # 0.26.x 让 TTY help 首帧超出 100ms SLO，修复前先收紧
+    "typer>=0.26.7,<0.27",  # 0.26.x 让 TTY help 首帧超出 100ms SLO，修复前先收紧
     "pyarrow>=15.0,<25",  # pandas 读写 parquet 的运行时依赖
-    "baostock==0.9.1",  # 数据源 SDK 精确 pin · 与 adata 同级别收敛
-    "numpy>=1.26,<2.5",  # 间接 → 直接依赖 · 控制版本面 · 防 macOS Gatekeeper .so 签名问题
+    "baostock==0.9.2",  # 数据源 SDK 精确 pin · 与 adata 同级别收敛
+    "numpy>=2.4.6,<2.5",  # 间接 → 直接依赖 · 控制版本面 · 防 macOS Gatekeeper .so 签名问题
     "adata==2.9.5",  # 题材位置扫描 · 同花顺 catalog/成分股 + 东财 K 线/反查 · pin 防上游投毒
 ]
 
