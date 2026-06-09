@@ -185,6 +185,8 @@ def test_race_both_succeed_one_wins(sample_df):
 
 def test_race_slow_loser_does_not_hold_process_open():
     """慢 loser 不应在 race 已中标后拖住 CLI 进程退出。"""
+    slow_loser_sleep = 15.0
+    exit_timeout = 6.0
     code = r"""
 import time
 import pandas as pd
@@ -196,7 +198,7 @@ class Slow:
     def is_available(self):
         return True
     def fetch(self, symbol, start):
-        time.sleep(5)
+        time.sleep(SLOW_LOSER_SLEEP)
         return None
 
 class Fast:
@@ -210,16 +212,16 @@ class Fast:
 result = KlineSourceChain([Slow(), Fast()]).fetch("600519", "20260101")
 assert result is not None
 assert result[1] == "fast"
-"""
+""".replace("SLOW_LOSER_SLEEP", str(slow_loser_sleep))
     started = time.monotonic()
     subprocess.run(
         [sys.executable, "-c", code],
         check=True,
         capture_output=True,
         text=True,
-        timeout=2.0,
+        timeout=exit_timeout,
     )
-    assert time.monotonic() - started < 2.0
+    assert time.monotonic() - started < exit_timeout
 
 
 def test_race_both_fail_falls_back(sample_df):
