@@ -354,7 +354,7 @@ def test_add_to_specific_group(temp_kan_dir):
     # mock name lookup 避免触发网络
     from unittest.mock import patch
 
-    with patch("kan.storage.watchlist._lookup_name", return_value="贵州茅台"):
+    with patch("kan.storage.watchlist_items._lookup_name", return_value="贵州茅台"):
         ok, _msg = watchlist.add("600519", group="持仓")
     assert ok
 
@@ -413,7 +413,7 @@ def test_add_to_nonexistent_group_raises(temp_kan_dir):
     from unittest.mock import patch
 
     with (
-        patch("kan.storage.watchlist._lookup_name", return_value="贵州茅台"),
+        patch("kan.storage.watchlist_items._lookup_name", return_value="贵州茅台"),
         pytest.raises(watchlist.GroupNotFoundError, match="不存在"),
     ):
         watchlist.add("600519", group="ghost")
