@@ -1,11 +1,21 @@
 version: 2
 updates:
-  - package-ecosystem: "pip"
+  - package-ecosystem: "uv"
     directory: "/"
     schedule:
       interval: "weekly"
       day: "monday"
     open-pull-requests-limit: 5
+    groups:
+      python-dev-tools:
+        patterns:
+          - "diff-cover"
+          - "mypy"
+          - "pytest*"
+          - "ruff"
+      python-runtime:
+        patterns:
+          - "*"
     labels:
       - "dependencies"
       - "python"
@@ -19,6 +29,10 @@ updates:
       interval: "weekly"
       day: "monday"
     open-pull-requests-limit: 3
+    groups:
+      github-actions:
+        patterns:
+          - "*"
     labels:
       - "dependencies"
       - "ci"

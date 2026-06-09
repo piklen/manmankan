@@ -7,15 +7,22 @@ sys.argv 预处理把 root-level --help 替换为 help 子命令。
 
 from __future__ import annotations
 
+import re
 import sys
 from unittest.mock import patch
 
 import pytest
-from click.utils import strip_ansi
 from typer.testing import CliRunner
 
 from kan.cli import app
 from kan.cli.helpers import _normalize_help_args
+
+ANSI_PATTERN = re.compile(r"\x1b\[[0-9;]*m")
+
+
+def strip_ansi(text: str) -> str:
+    return ANSI_PATTERN.sub("", text)
+
 
 # --- _normalize_help_args 纯函数测试 ---
 
