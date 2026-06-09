@@ -12,6 +12,7 @@ import pytest
 
 from kan.core.stock_set import (
     AllStocksSet,
+    CodeListSet,
     HoldingsSet,
     HotRankSet,
     IndustrySet,
@@ -34,6 +35,8 @@ from kan.core.stock_set import (
         HotRankSet(mode="rank", _pairs=[("000858", "五粮液")]),
         ThemeSet(theme="AI", _pairs=[("002230", "科大讯飞")]),
         IndustrySet(industry="白酒", _pairs=[("600519", "贵州茅台")]),
+        AllStocksSet(_pairs=[("600519", "贵州茅台")]),
+        CodeListSet(pairs_input=[("000001", "平安银行")]),
     ],
 )
 def test_satisfies_stock_set_protocol(instance):
@@ -44,6 +47,26 @@ def test_satisfies_stock_set_protocol(instance):
     # codes / pairs 返回 list
     assert isinstance(instance.codes(), list)
     assert isinstance(instance.pairs(), list)
+
+
+def test_stock_set_facade_exports_public_contract():
+    """兼容门面继续暴露历史公共导入路径。"""
+    from kan.core import stock_set
+
+    assert stock_set.__all__ == [
+        "AllStocksSet",
+        "CodeListSet",
+        "HoldingsSet",
+        "HotRankSet",
+        "IndustrySet",
+        "StockSet",
+        "ThemeSet",
+        "WatchlistHoldingsSet",
+        "WatchlistSet",
+        "from_flags",
+    ]
+    assert stock_set.WatchlistSet is WatchlistSet
+    assert stock_set.CodeListSet is CodeListSet
 
 
 # ─────────────── WatchlistSet ───────────────
