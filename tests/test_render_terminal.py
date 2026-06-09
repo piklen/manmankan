@@ -1,4 +1,4 @@
-"""kan/terminal.py · 5 个 builder + 2 个 title helper 单测。
+"""kan/terminal.py · rich table builder 单测。
 
 测试断言 _columns 名 + _rows 内容 · 不依赖具体颜色 markup(那由 format_pct 单测保证)。
 
@@ -11,9 +11,11 @@
   scan_title:   self+cutoff/industry/hot/theme/signal_only
   trend_title:  self+cutoff / industry+candle
 """
+import io
 from datetime import date
 
 import pandas as pd
+from rich.console import Console
 from rich.text import Text
 
 from kan.core.models import (
@@ -127,6 +129,89 @@ def _trend(symbol="600519", name="贵州茅台", *, streak=2, pct=3.5, days=None
             ("2026-05-20", 2.3),
             ("2026-05-19", -0.5),
         ],
+    )
+
+
+def _hold_summary():
+    from kan.core.positions import AccountView, PositionHealth, PositionsSummary, PositionView
+
+    rows = [
+        PositionView(
+            symbol="600519",
+            name="贵州 茅台",
+            cost=1680.5,
+            shares=100,
+            price=1700,
+            prev_close=1690.0,
+            market_value=170000.0,
+            cost_value=168050.0,
+            weight_pct=69.96,
+            daily_pnl=1000.0,
+            daily_pnl_pct=0.59,
+            total_pnl=1950.0,
+            total_pnl_pct=1.16,
+            positions={30: 20.0, 60: 50.0, 180: 80.0},
+            price_source="realtime",
+            price_status="ok",
+        ),
+        PositionView(
+            symbol="000858",
+            name="五粮液",
+            cost=150.0,
+            shares=200,
+            price=None,
+            prev_close=None,
+            market_value=None,
+            cost_value=30000.0,
+            weight_pct=None,
+            daily_pnl=None,
+            daily_pnl_pct=None,
+            total_pnl=-500.0,
+            total_pnl_pct=-1.2,
+            positions={30: None, 60: None, 180: None},
+            price_source="close_cache",
+            price_status="suspended",
+        ),
+        PositionView(
+            symbol="000001",
+            name="平安银行",
+            cost=10.0,
+            shares=100,
+            price=10.0,
+            prev_close=10.0,
+            market_value=1000.0,
+            cost_value=1000.0,
+            weight_pct=0.41,
+            daily_pnl=0.0,
+            daily_pnl_pct=0.0,
+            total_pnl=0.0,
+            total_pnl_pct=0.0,
+            positions={30: 10.0, 60: 20.0, 180: 30.0},
+            price_source="realtime",
+            price_status="ok",
+        ),
+    ]
+    return PositionsSummary(
+        results=rows,
+        account=AccountView(
+            cash=73000.0,
+            total_market_value=171000.0,
+            total_assets=244000.0,
+            total_position_pct=70.08,
+            daily_pnl=1000.0,
+            total_pnl=1450.0,
+        ),
+        health=PositionHealth(
+            high_count=1,
+            low_count=1,
+            middle_count=1,
+            profit_count=1,
+            loss_count=1,
+            flat_count=1,
+        ),
+        price_mode="realtime",
+        data_cutoff=date(2026, 6, 5),
+        notes=["盈亏按裸价差计算，未计佣金/印花税。"],
     )
 
 
@@ -359,6 +444,69 @@ def test_board_reference_label_helper_dispatches_by_meta_type():
     # hot / None 用 industry 默认 · 实际 caller 不会把 hot 当 reference 喂进来
     assert label_hot == "🏛️ 东财人气榜 板块指数"
     assert label_none == "🏛️ 自选股 板块指数"
+
+
+# ── hold_table ────────────────────────────────────────────────────────
+
+
+def test_hold_table_formats_position_rows():
+    table = terminal.hold_table(_hold_summary())
+
+    assert table.title == "慢慢看 · 持仓总览 · 数据截止 06-05 · 现价口径 realtime"
+    assert [c.header for c in table.columns] == [
+        "股票", "现价", "成本", "今日盈亏%", "累计盈亏%", "累计盈亏额",
+        "市值", "仓位%", "30日", "60日", "180日",
+    ]
+    assert table.row_count == 3
+    assert table.columns[0]._cells[0] == "💰 贵州茅台 600519"
+    assert table.columns[1]._cells[0] == "1700"
+    assert table.columns[2]._cells[0] == "1,680.5000"
+    assert table.columns[3]._cells[0].plain == "+0.59%"
+    assert table.columns[3]._cells[0].style == "red"
+    assert table.columns[4]._cells[1].plain == "-1.20%"
+    assert table.columns[4]._cells[1].style == "green"
+    assert table.columns[5]._cells[2].plain == "+0.00"
+    assert str(table.columns[0]._cells[1]).endswith(" 停牌")
+    assert table.columns[1]._cells[1] == "-"
+    assert table.columns[7]._cells[1] == "-"
+
+
+def test_hold_table_mask_hides_sensitive_values():
+    table = terminal.hold_table(_hold_summary(), mask=True)
+
+    assert table.columns[2]._cells[0] == "***"
+    assert table.columns[3]._cells[0].plain == "***"
+    assert table.columns[5]._cells[0].plain == "***"
+    assert table.columns[6]._cells[0] == "***"
+    assert table.columns[7]._cells[0] == "***"
+    # 位置百分位不是金额或持仓敏感字段，不随 mask 隐藏。
+    assert table.columns[8]._cells[0] == "20.0"
+
+
+def test_render_hold_footer_prints_account_health_notes_and_disclaimer():
+    buffer = io.StringIO()
+    console = Console(file=buffer, force_terminal=False, color_system=None, width=120)
+
+    terminal.render_hold_footer(_hold_summary(), console)
+
+    output = buffer.getvalue()
+    assert "账户" in output
+    assert "总市值 171,000.00" in output
+    assert "高位 1 只 · 低位 1 只" in output
+    assert "盈亏按裸价差计算" in output
+    assert "不构成买卖建议" in output
+
+
+def test_render_hold_footer_respects_mask():
+    buffer = io.StringIO()
+    console = Console(file=buffer, force_terminal=False, color_system=None, width=120)
+
+    terminal.render_hold_footer(_hold_summary(), console, mask=True)
+
+    output = buffer.getvalue()
+    assert "总市值 ***" in output
+    assert "现金 ***" in output
+    assert "今日总盈亏 ***" in output
 
 
 # ── info_table ────────────────────────────────────────────────────────
