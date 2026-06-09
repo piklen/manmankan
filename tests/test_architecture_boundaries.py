@@ -140,3 +140,23 @@ def test_stock_set_stays_split() -> None:
         if len(path.read_text(encoding="utf-8").splitlines()) > 500
     ]
     assert oversized == []
+
+
+def test_enrich_stays_split() -> None:
+    """enrich 公共入口保持薄门面，row/index/results/scan/RS 逻辑分文件维护。"""
+    root = Path(__file__).resolve().parents[1]
+    facade = root / "kan" / "core" / "enrich.py"
+    tree = ast.parse(facade.read_text(encoding="utf-8"), filename=str(facade))
+    definitions = [
+        node.name
+        for node in tree.body
+        if isinstance(node, ast.FunctionDef | ast.ClassDef)
+    ]
+    assert definitions == []
+
+    oversized = [
+        f"{path.relative_to(root)}:{len(path.read_text(encoding='utf-8').splitlines())}"
+        for path in (root / "kan" / "core").glob("enrich_*.py")
+        if len(path.read_text(encoding="utf-8").splitlines()) > 500
+    ]
+    assert oversized == []

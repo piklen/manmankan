@@ -9,8 +9,8 @@ import datetime
 
 import pandas as pd
 
-from kan.core import enrich
-from kan.core.models import PeriodResult, StockScanResult
+from kan.core import enrich, enrich_index, enrich_rows, enrich_scan
+from kan.core.models import CorporateActionMarker, PeriodResult, StockScanResult
 
 
 def _scan(symbol: str = "600519", name: str = "贵州茅台") -> StockScanResult:
@@ -103,6 +103,110 @@ class TestEnrichResults:
         monkeypatch.setattr("kan.data.metrics.fetch_metrics", lambda **_kw: df)
         out = enrich.enrich_results([_scan()])  # trade_date=None → latest
         assert out[0].valuation.trade_date == datetime.date(2026, 6, 1)
+
+    def test_attaches_chip_and_shareholder(self, monkeypatch):
+        monkeypatch.setattr("kan.data.metrics.fetch_metrics", lambda **_kw: pd.DataFrame())
+        monkeypatch.setattr(
+            "kan.data.chip.fetch_chip",
+            lambda **_kw: pd.DataFrame([{
+                "symbol": "600519",
+                "trade_date": datetime.date(2026, 5, 29),
+                "winner_rate": 55.5,
+                "_source": "tushare_cyq",
+            }]),
+        )
+        monkeypatch.setattr(
+            "kan.data.shareholder.fetch_shareholder",
+            lambda _symbols: {
+                "600519": pd.Series({
+                    "holder_end_date": datetime.date(2026, 3, 31),
+                    "holder_num": 1000,
+                    "top10_end_date": datetime.date(2026, 3, 31),
+                    "top10_float_ratio": 42.0,
+                    "_source": "tushare_shareholder",
+                }),
+            },
+        )
+
+        out = enrich.enrich_results(
+            [_scan()],
+            trade_date="20260529",
+            need_chip=True,
+            need_shareholder=True,
+        )
+
+        assert out[0].chip.winner_rate == 55.5
+        assert out[0].shareholder.top10_float_ratio == 42.0
+
+
+class TestEnrichRowAndIndexHelpers:
+    def test_row_helpers_cover_null_and_invalid_cells(self):
+        fallback = datetime.date(2026, 5, 29)
+
+        assert enrich_rows._opt_float("bad") is None
+        assert enrich_rows._row_to_fundamentals(
+            pd.Series({"end_date": "bad", "roe": "bad"}),
+        ).end_date is None
+
+        moneyflow = enrich_rows._row_to_moneyflow(
+            pd.Series({
+                "trade_date": None,
+                "net_amount": "bad",
+                "inflow_days": 2.0,
+                "outflow_days": "bad",
+                "_source": 123,
+            }),
+            fallback,
+        )
+        assert moneyflow.trade_date == fallback
+        assert moneyflow.net_amount is None
+        assert moneyflow.inflow_days == 2
+        assert moneyflow.outflow_days is None
+        assert moneyflow.source is None
+
+        technical = enrich_rows._row_to_technical(pd.Series({"trade_date": None}), fallback)
+        sentiment = enrich_rows._row_to_sentiment(
+            pd.Series({"trade_date": None, "first_time": 930, "limit": 1}),
+            fallback,
+        )
+        chip = enrich_rows._row_to_chip(pd.Series({"trade_date": None}), fallback)
+        shareholder = enrich_rows._row_to_shareholder(
+            pd.Series({"holder_end_date": "bad", "top10_end_date": "bad"}),
+        )
+
+        assert technical.trade_date == fallback
+        assert sentiment.trade_date == fallback
+        assert sentiment.first_time is None
+        assert sentiment.limit is None
+        assert chip.trade_date == fallback
+        assert shareholder.holder_end_date is None
+        assert shareholder.top10_end_date is None
+
+    def test_index_helpers_cover_empty_and_sparse_rows(self):
+        fallback = datetime.date(2026, 5, 29)
+
+        assert enrich_index._resolve_fallback_date("bad", lambda: fallback) == fallback
+        assert enrich_index._index_moneyflow(pd.DataFrame(), fallback) == {}
+        assert enrich_index._index_technical(pd.DataFrame(), fallback) == {}
+
+        sentiment = enrich_index._index_sentiment(
+            pd.DataFrame([
+                {"symbol": "", "trade_date": fallback, "limit": "U"},
+                {"symbol": "600519", "trade_date": fallback, "limit": "U"},
+            ]),
+            fallback,
+        )
+        chip = enrich_index._index_chip(
+            pd.DataFrame([{
+                "symbol": "600519",
+                "trade_date": fallback,
+                "winner_rate": 60.0,
+            }]),
+            fallback,
+        )
+
+        assert sentiment["600519"].limit == "U"
+        assert chip["600519"].winner_rate == 60.0
 
 
 class TestRelativeStrength:
@@ -314,9 +418,12 @@ class TestEnrichFundamentalsMoneyflow:
 
 
 class TestEnrichScanRows:
+    def test_empty_results_no_fetch(self):
+        assert enrich.enrich_scan_rows([]) == []
+
     def test_attaches_pe_moneyflow_5d_and_corporate_action(self, monkeypatch):
         dates = [datetime.date(2026, 5, d) for d in [25, 26, 27, 28, 29]]
-        monkeypatch.setattr(enrich, "_recent_trade_dates", lambda end, count: dates)
+        monkeypatch.setattr(enrich_scan, "_recent_trade_dates", lambda end, count: dates)
         monkeypatch.setattr(
             "kan.data.metrics.fetch_metrics",
             lambda **_kw: pd.DataFrame([{
@@ -391,3 +498,113 @@ class TestEnrichScanRows:
         assert row.moneyflow_5d_end_date == datetime.date(2026, 5, 29)
         assert row.corporate_action.ex_date == datetime.date(2026, 5, 29)
         assert row.corporate_action.reference_price == 10.0
+
+    def test_degrades_when_scan_sources_fail(self, monkeypatch):
+        monkeypatch.setattr(
+            "kan.data.metrics.fetch_metrics",
+            lambda **_kw: (_ for _ in ()).throw(RuntimeError("metrics down")),
+        )
+        monkeypatch.setattr(
+            "kan.data.moneyflow.fetch_moneyflow",
+            lambda *_a, **_kw: (_ for _ in ()).throw(RuntimeError("moneyflow down")),
+        )
+        monkeypatch.setattr("kan.data.fetcher.get_cached", lambda _sym: (_ for _ in ()).throw(RuntimeError("cache down")))
+        monkeypatch.setattr(
+            enrich_scan,
+            "_recent_trade_dates",
+            lambda end, count: [datetime.date(2026, 5, 29)],
+        )
+
+        out = enrich.enrich_scan_rows([_scan()], data_cutoff=datetime.date(2026, 5, 29))
+
+        assert out[0].pe_ttm is None
+        assert out[0].moneyflow_net_amount is None
+        assert out[0].corporate_action is None
+
+    def test_recent_trade_dates_weekday_fallback(self, monkeypatch):
+        monkeypatch.setattr(
+            "kan.core.trading_calendar.get_trade_dates",
+            lambda: (_ for _ in ()).throw(RuntimeError("calendar down")),
+        )
+
+        dates = enrich_scan._recent_trade_dates(datetime.date(2026, 5, 31), 3)
+
+        assert dates == [
+            datetime.date(2026, 5, 27),
+            datetime.date(2026, 5, 28),
+            datetime.date(2026, 5, 29),
+        ]
+
+    def test_moneyflow_5d_skips_failed_empty_and_invalid_rows(self, monkeypatch):
+        dates = [datetime.date(2026, 5, d) for d in [27, 28, 29]]
+        monkeypatch.setattr(enrich_scan, "_recent_trade_dates", lambda end, count: dates)
+
+        def fake_moneyflow(trade_date=None, symbols=None, force=False):
+            if trade_date == "20260527":
+                raise RuntimeError("down")
+            if trade_date == "20260528":
+                return pd.DataFrame()
+            return pd.DataFrame([
+                {"symbol": "", "net_amount": 1.0},
+                {"symbol": "000001", "net_amount": "bad"},
+                {"symbol": "600519", "net_amount": 12.345},
+            ])
+
+        monkeypatch.setattr("kan.data.moneyflow.fetch_moneyflow", fake_moneyflow)
+
+        out = enrich_scan._moneyflow_5d_by_symbol(
+            ["600519"],
+            end=datetime.date(2026, 5, 29),
+        )
+
+        assert out == {"600519": (12.35, datetime.date(2026, 5, 29))}
+
+    def test_corporate_action_marker_edge_paths(self, monkeypatch):
+        scan = _scan()
+        kline = pd.DataFrame({
+            "date": [datetime.date(2026, 5, 28), datetime.date(2026, 5, 29)],
+            "close": [10.2, 10.0],
+        })
+
+        assert enrich_scan._latest_corporate_action_marker(scan, None, CorporateActionMarker) is None
+        assert enrich_scan._latest_corporate_action_marker(
+            scan,
+            pd.DataFrame({"date": ["bad"]}),
+            CorporateActionMarker,
+        ) is None
+
+        monkeypatch.setattr("kan.data.dividend.latest_event_between", lambda *_a: None)
+        assert enrich_scan._latest_corporate_action_marker(scan, kline, CorporateActionMarker) is None
+
+        monkeypatch.setattr(
+            "kan.data.dividend.latest_event_between",
+            lambda *_a: {"ex_date": None},
+        )
+        assert enrich_scan._latest_corporate_action_marker(scan, kline, CorporateActionMarker) is None
+
+        monkeypatch.setattr(
+            "kan.data.dividend.latest_event_between",
+            lambda *_a: {
+                "ex_date": datetime.date(2026, 5, 29),
+                "record_date": pd.NaT,
+                "cash_div_tax": None,
+                "cash_div": 0.2,
+                "stk_div": 0.0,
+            },
+        )
+        marker = enrich_scan._latest_corporate_action_marker(
+            scan,
+            kline,
+            CorporateActionMarker,
+        )
+
+        assert marker.cash_div_tax == 0.2
+        assert marker.record_date is None
+        assert marker.reference_price == 10.0
+        assert enrich_scan._ex_reference_price(kline.iloc[[1]], datetime.date(2026, 5, 29), cash=0.0, stk_div=0.0) is None
+        assert enrich_scan._ex_reference_price(
+            pd.DataFrame({"date": [datetime.date(2026, 5, 28)], "close": ["bad"]}),
+            datetime.date(2026, 5, 29),
+            cash=0.0,
+            stk_div=0.0,
+        ) is None
