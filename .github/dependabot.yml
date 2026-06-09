@@ -13,9 +13,22 @@ updates:
           - "mypy"
           - "pytest*"
           - "ruff"
-      python-runtime:
+      python-runtime-patch:
         patterns:
           - "*"
+        update-types:
+          - "patch"
+    ignore:
+      - dependency-name: "pandas"
+        update-types:
+          - "version-update:semver-major"
+      - dependency-name: "pyarrow"
+        update-types:
+          - "version-update:semver-major"
+      - dependency-name: "typer"
+        update-types:
+          - "version-update:semver-minor"
+          - "version-update:semver-major"
     labels:
       - "dependencies"
       - "python"
