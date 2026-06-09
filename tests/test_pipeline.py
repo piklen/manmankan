@@ -464,7 +464,7 @@ def _patch_pipeline_deps(
     expected_date=date(2026, 5, 23),
     phase="post",
 ):
-    """mock _auto_fetch_stale + freshness 依赖 (calendar + fetcher)。
+    """mock auto_fetch_stale + freshness 依赖 (calendar + fetcher)。
 
     返回 fetched_targets 可观察容器供测试 assert auto-fetch 调用。
     """
@@ -473,7 +473,7 @@ def _patch_pipeline_deps(
     fetched_targets: list = []
 
     monkeypatch.setattr(
-        "kan.cli.helpers._auto_fetch_stale",
+        "kan.core.auto_fetch.auto_fetch_stale",
         lambda pairs: fetched_targets.append(pairs),
     )
     _patch_calendar(monkeypatch, expected_date=expected_date, phase=phase)
@@ -636,7 +636,7 @@ def test_run_data_pipeline_passes_fetch_days_to_auto_fetch(monkeypatch):
     targets = [("600519", "贵州茅台")]
     fetched_calls = []
     monkeypatch.setattr(
-        "kan.cli.helpers._auto_fetch_stale",
+        "kan.core.auto_fetch.auto_fetch_stale",
         lambda pairs, **kwargs: fetched_calls.append((pairs, kwargs)),
     )
     _patch_calendar(monkeypatch, expected_date=date(2026, 5, 23))

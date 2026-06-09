@@ -65,7 +65,7 @@ class StockSetResolveError(Exception):
 
 def _print_err(message: str) -> None:
     """CLI error printer adapter, kept patchable for existing tests."""
-    from kan.cli.helpers import _print_err as print_err
+    from kan.infra.console import print_err
 
     print_err(message)
 
@@ -227,8 +227,8 @@ def render_freshness_warning(freshness: Freshness, console: Any) -> None:
 
     console 参数 duck-typed · 任何有 .print(str) 方法的对象都接受(rich.Console / Mock 等)。
     """
-    from kan.cli.helpers import format_date_compact
     from kan.core.trading_calendar import PHASE_INTRADAY
+    from kan.infra.formatting import format_date_compact
 
     if freshness.is_stale:
         cutoff_str = (
@@ -308,7 +308,7 @@ def run_data_pipeline(
       - freshness 在原始 results 上算 · 命令侧 exclude_st / --signal / --down
         等过滤是「展示侧」选择,不应该改「我们刚加载了什么数据」的事实
     """
-    from kan.cli.helpers import _auto_fetch_stale
+    from kan.core.auto_fetch import auto_fetch_stale
 
     try:
         targets, meta = resolve_stock_set(stock_set)
@@ -318,15 +318,15 @@ def run_data_pipeline(
         raise_stock_set_resolve_exit(e)
     if show_progress:
         if fetch_days is None:
-            _auto_fetch_stale(targets)
+            auto_fetch_stale(targets)
         else:
-            _auto_fetch_stale(targets, days=fetch_days)
+            auto_fetch_stale(targets, days=fetch_days)
     else:
         with contextlib.redirect_stderr(io.StringIO()):
             if fetch_days is None:
-                _auto_fetch_stale(targets)
+                auto_fetch_stale(targets)
             else:
-                _auto_fetch_stale(targets, days=fetch_days)
+                auto_fetch_stale(targets, days=fetch_days)
     results = compute(targets, **compute_kwargs)
     freshness = freshness_of(r.symbol for r in results)
     return DataCtx(

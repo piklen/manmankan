@@ -261,7 +261,7 @@ def scan_runner(monkeypatch):
     monkeypatch.setattr("kan.cli.extreme_cmds._get_watchlist_pairs", lambda group=None: fake_pairs)
     monkeypatch.setattr("kan.storage.watchlist.load_watchlist", lambda group=None: fake_watchlist)
     monkeypatch.setattr("kan.storage.positions.load_positions", lambda: fake_positions)
-    monkeypatch.setattr("kan.cli.helpers._auto_fetch_stale", lambda _pairs, **_kw: None)
+    monkeypatch.setattr("kan.core.auto_fetch.auto_fetch_stale", lambda _pairs, **_kw: None)
     monkeypatch.setattr("kan.cli.extreme_cmds._auto_fetch_stale", lambda _pairs, **_kw: None)
     monkeypatch.setattr(
         "kan.core.scanner.scan_batch", lambda _pairs, mode="low", periods=None: [fake_scan_result]
