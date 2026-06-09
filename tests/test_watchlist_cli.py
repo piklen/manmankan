@@ -2,7 +2,7 @@
 
 测试策略:
 - 用 temp_kan_dir fixture 隔离 watchlist.json
-- mock _load_names_with_optional_spinner 返 fake name map (避免真跑 baostock/akshare)
+- mock watchlist_add._load_names_with_optional_spinner 返 fake name map (避免真跑 baostock/akshare)
 - CliRunner.invoke 跑实际命令 · assert stdout/stderr
 
 覆盖命令: add / remove / list / clear
@@ -57,14 +57,14 @@ def cli_runner(temp_kan_dir, fake_names, monkeypatch: pytest.MonkeyPatch) -> Cli
     """watchlist CLI CliRunner · mock 全部 name lookup 走 fake_names."""
     watchlist.STOCK_NAMES_CACHE.write_text(json.dumps(fake_names, ensure_ascii=False))
     monkeypatch.setattr(
-        "kan.cli.watchlist_cmds._load_names_with_optional_spinner",
+        "kan.cli.watchlist_add._load_names_with_optional_spinner",
         lambda _console: fake_names,
     )
     return CliRunner()
 
 
 # ════════════════════════════════════════════════════════════════
-# add 命令 (cli_watchlist_cmds.py:67-184)
+# add 命令
 # ════════════════════════════════════════════════════════════════
 def test_add_command_by_code_succeeds(cli_runner, fake_names):
     """`kan add 600519` 单只代码 · 添加成功"""
@@ -134,7 +134,7 @@ def test_add_many_codes_without_names_cache_uses_fast_path(temp_kan_dir, monkeyp
         raise AssertionError("numeric code fast path should not preload stock names")
 
     monkeypatch.setattr(
-        "kan.cli.watchlist_cmds._load_names_with_optional_spinner",
+        "kan.cli.watchlist_add._load_names_with_optional_spinner",
         fail_loader,
     )
 
@@ -162,7 +162,7 @@ def test_add_fetches_new_codes_when_requested(cli_runner, monkeypatch):
     """`kan add --fetch` 仅对新增代码触发拉取。"""
     fetched: list[list[str]] = []
     monkeypatch.setattr(
-        "kan.cli.watchlist_cmds._fetch_added",
+        "kan.cli.watchlist_add._fetch_added",
         lambda codes: fetched.append(list(codes)),
     )
 
@@ -173,7 +173,7 @@ def test_add_fetches_new_codes_when_requested(cli_runner, monkeypatch):
 
 
 # ════════════════════════════════════════════════════════════════
-# remove 命令 (cli_watchlist_cmds.py:186-215)
+# remove 命令
 # ════════════════════════════════════════════════════════════════
 def test_remove_command_existing_stock(cli_runner):
     """`kan remove 600519` 已存在股票 · 移除成功"""
@@ -196,7 +196,7 @@ def test_remove_command_nonexistent_stock(cli_runner):
 
 
 # ════════════════════════════════════════════════════════════════
-# list 命令 (cli_watchlist_cmds.py:217-239)
+# list 命令
 # ════════════════════════════════════════════════════════════════
 def test_list_command_empty(cli_runner):
     """`kan list` 空自选 · 应跑通不 crash"""
@@ -224,7 +224,7 @@ def test_list_command_with_stocks(cli_runner):
 
 
 # ════════════════════════════════════════════════════════════════
-# clear 命令 (cli_watchlist_cmds.py:258-281)
+# clear 命令
 # ════════════════════════════════════════════════════════════════
 def test_clear_command_with_yes_confirms(cli_runner):
     """`kan clear` + 'y' 确认 · 应清空"""
