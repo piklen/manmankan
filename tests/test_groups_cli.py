@@ -3,7 +3,7 @@
 
 测试策略:
 - temp_kan_dir 隔离 watchlist.json
-- mock _load_names_with_optional_spinner / _lookup_name (避免 baostock/akshare)
+- mock watchlist_add._load_names_with_optional_spinner / _lookup_name (避免 baostock/akshare)
 - CliRunner.invoke 跑实际命令 · assert stdout + exit code + 文件副作用
 """
 from __future__ import annotations
@@ -46,7 +46,7 @@ def fake_names() -> dict[str, str]:
 def runner(temp_kan_dir, fake_names, monkeypatch: pytest.MonkeyPatch) -> CliRunner:
     watchlist.STOCK_NAMES_CACHE.write_text(json.dumps(fake_names, ensure_ascii=False))
     monkeypatch.setattr(
-        "kan.cli.watchlist_cmds._load_names_with_optional_spinner",
+        "kan.cli.watchlist_add._load_names_with_optional_spinner",
         lambda _console: fake_names,
     )
     monkeypatch.setattr(
@@ -393,5 +393,4 @@ def test_from_flags_with_watchlist_group(temp_kan_dir):
 
 
 # ───────────────────── 整体回归 ─────────────────────
-
 
