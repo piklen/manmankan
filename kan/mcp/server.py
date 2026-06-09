@@ -15,6 +15,7 @@ from typing import Any
 from typer.testing import CliRunner
 
 from kan import __version__
+from kan.infra.log import redact_text
 
 SERVER_NAME = "manmankan"
 SERVER_VERSION = __version__
@@ -321,9 +322,10 @@ def _tool_list() -> list[dict[str, Any]]:
 
 
 def _text_result(payload: dict[str, Any]) -> dict[str, Any]:
-    text = payload.get("stdout") or ""
+    text = str(payload.get("stdout") or "")
     if payload.get("stderr"):
         text += ("\n" if text else "") + str(payload["stderr"])
+    text = redact_text(text)
     return {
         "content": [{"type": "text", "text": text}],
         "isError": int(payload.get("exit_code") or 0) != 0,
@@ -368,7 +370,11 @@ def _handle_request(req: dict[str, Any]) -> dict[str, Any] | None:
 
 
 def _error(req_id: Any, code: int, message: str) -> dict[str, Any]:
-    return {"jsonrpc": "2.0", "id": req_id, "error": {"code": code, "message": message}}
+    return {
+        "jsonrpc": "2.0",
+        "id": req_id,
+        "error": {"code": code, "message": redact_text(message)},
+    }
 
 
 def serve(infile=None, outfile=None) -> None:

@@ -29,9 +29,13 @@ def _read_import_source(source: str) -> str:
         import sys
 
         return sys.stdin.read()
+    from kan.storage.positions import MAX_IMPORT_SIZE
+
     path = Path(source)
     if not path.exists() or not path.is_file():
         raise ValueError(f"导入文件不存在或不是普通文件: {source}")
+    if path.stat().st_size > MAX_IMPORT_SIZE:
+        raise ValueError("导入文件超过 5 MB")
     return path.read_text(encoding="utf-8")
 
 

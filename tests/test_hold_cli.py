@@ -102,6 +102,21 @@ def test_hold_add_cash_import_and_echo(isolated_hold_storage) -> None:
     assert [p.symbol for p in book.positions] == ["600519", "000858"]
 
 
+def test_hold_import_rejects_large_file_before_decode(tmp_path, monkeypatch) -> None:
+    """文件路径导入先看大小，再解码内容。"""
+    from kan.storage import positions
+
+    monkeypatch.setattr(positions, "MAX_IMPORT_SIZE", 8)
+    source = tmp_path / "positions.csv"
+    source.write_bytes(b"\xff" * 9)
+
+    result = CliRunner().invoke(app, ["hold", "import", str(source)])
+
+    assert result.exit_code == 2
+    assert "导入文件超过" in result.output
+    assert "codec" not in result.output
+
+
 def test_hold_json_mask_keeps_disclaimer(monkeypatch) -> None:
     from kan.cli import hold_cmds
 

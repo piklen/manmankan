@@ -67,6 +67,56 @@ def test_mcp_hold_builds_cli_args(monkeypatch) -> None:
     ]
 
 
+def test_mcp_text_result_redacts_paths_and_tokens() -> None:
+    from kan.mcp import server
+
+    result = server._text_result({
+        "exit_code": 1,
+        "stdout": "path=/Users/alice/.kan/config.json?token=abcdefghi",
+        "stderr": '{"Authorization":"Bearer secret-token"}',
+    })
+
+    text = result["content"][0]["text"]
+    assert result["isError"] is True
+    assert "/Users/alice" not in text
+    assert "abcdefghi" not in text
+    assert "secret-token" not in text
+    assert "/Users/<user>" in text
+    assert "token=<redacted>" in text
+    assert '"Authorization":"<redacted>"' in text
+
+
+def test_mcp_tool_exception_is_redacted(monkeypatch) -> None:
+    from kan.mcp import server
+
+    def raise_private_error(_payload):
+        raise ValueError("读取失败: /Users/alice/.kan/config.json token abcdefghi")
+
+    monkeypatch.setitem(
+        server.TOOLS,
+        "boom",
+        server.ToolSpec(
+            name="boom",
+            description="test",
+            input_schema={"type": "object", "properties": {}},
+            handler=raise_private_error,
+        ),
+    )
+
+    response = server._handle_request({
+        "jsonrpc": "2.0",
+        "id": 1,
+        "method": "tools/call",
+        "params": {"name": "boom", "arguments": {}},
+    })
+
+    message = response["error"]["message"]
+    assert "/Users/alice" not in message
+    assert "abcdefghi" not in message
+    assert "/Users/<user>" in message
+    assert "token <redacted>" in message
+
+
 def test_mcp_install_dry_run_codex_uses_user_config(tmp_path, monkeypatch) -> None:
     monkeypatch.setenv("HOME", str(tmp_path))
     result = CliRunner().invoke(app, ["mcp", "install", "--client", "codex", "--dry-run"])
