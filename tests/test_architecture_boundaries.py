@@ -20,3 +20,23 @@ def test_lower_layers_do_not_import_cli_helpers() -> None:
                         if alias.name == "kan.cli.helpers":
                             offenders.append(f"{path.relative_to(root)}:{node.lineno}")
     assert offenders == []
+
+
+def test_storage_export_stays_split() -> None:
+    """export 公共入口应保持薄门面，命令族实现继续分文件维护。"""
+    root = Path(__file__).resolve().parents[1]
+    facade = root / "kan" / "storage" / "export.py"
+    tree = ast.parse(facade.read_text(encoding="utf-8"), filename=str(facade))
+    definitions = [
+        node.name
+        for node in tree.body
+        if isinstance(node, ast.FunctionDef | ast.ClassDef)
+    ]
+    assert definitions == []
+
+    oversized = [
+        f"{path.relative_to(root)}:{len(path.read_text(encoding='utf-8').splitlines())}"
+        for path in (root / "kan" / "storage").glob("export_*.py")
+        if len(path.read_text(encoding="utf-8").splitlines()) > 500
+    ]
+    assert oversized == []
