@@ -80,3 +80,23 @@ def test_watchlist_cli_entrypoint_stays_thin() -> None:
         if len(path.read_text(encoding="utf-8").splitlines()) > 500
     ]
     assert oversized == []
+
+
+def test_watchlist_storage_stays_split() -> None:
+    """watchlist storage 公共入口保持薄门面，模型/IO/名称/分组/股票操作分文件维护。"""
+    root = Path(__file__).resolve().parents[1]
+    facade = root / "kan" / "storage" / "watchlist.py"
+    tree = ast.parse(facade.read_text(encoding="utf-8"), filename=str(facade))
+    definitions = [
+        node.name
+        for node in tree.body
+        if isinstance(node, ast.FunctionDef | ast.ClassDef)
+    ]
+    assert definitions == []
+
+    oversized = [
+        f"{path.relative_to(root)}:{len(path.read_text(encoding='utf-8').splitlines())}"
+        for path in (root / "kan" / "storage").glob("watchlist_*.py")
+        if len(path.read_text(encoding="utf-8").splitlines()) > 500
+    ]
+    assert oversized == []

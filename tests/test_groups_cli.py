@@ -50,7 +50,7 @@ def runner(temp_kan_dir, fake_names, monkeypatch: pytest.MonkeyPatch) -> CliRunn
         lambda _console: fake_names,
     )
     monkeypatch.setattr(
-        "kan.storage.watchlist._load_stock_names",
+        "kan.storage.watchlist_names._load_stock_names",
         lambda: fake_names,
     )
     return CliRunner()
@@ -393,4 +393,3 @@ def test_from_flags_with_watchlist_group(temp_kan_dir):
 
 
 # ───────────────────── 整体回归 ─────────────────────
-

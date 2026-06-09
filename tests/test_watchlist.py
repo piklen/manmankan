@@ -7,7 +7,7 @@ from unittest.mock import patch
 import pytest
 
 from kan.core.models import Stock
-from kan.storage import paths, watchlist
+from kan.storage import paths, watchlist, watchlist_items, watchlist_names
 
 
 @pytest.fixture
@@ -56,7 +56,7 @@ def test_normalize_symbol_too_short():
 
 def _stub_names(monkeypatch, mapping):
     """让 _load_stock_names 直接返回测试用 mapping · 跳过 baostock/akshare 真网络。"""
-    monkeypatch.setattr(watchlist, "_load_stock_names", lambda: mapping)
+    monkeypatch.setattr(watchlist_names, "_load_stock_names", lambda: mapping)
 
 
 def test_resolve_symbol_or_name_pure_code(monkeypatch):
@@ -128,7 +128,7 @@ def test_save_and_load_watchlist(temp_kan_dir):
 
 
 def test_add_stock(temp_kan_dir):
-    with patch("kan.storage.watchlist._lookup_name", return_value="贵州茅台"):
+    with patch("kan.storage.watchlist_items._lookup_name", return_value="贵州茅台"):
         ok, msg = watchlist.add("600519")
     assert ok
     assert "600519" in msg
@@ -136,7 +136,7 @@ def test_add_stock(temp_kan_dir):
 
 
 def test_add_duplicate(temp_kan_dir):
-    with patch("kan.storage.watchlist._lookup_name", return_value="贵州茅台"):
+    with patch("kan.storage.watchlist_items._lookup_name", return_value="贵州茅台"):
         watchlist.add("600519")
         ok, msg = watchlist.add("600519")
     assert not ok
@@ -144,14 +144,14 @@ def test_add_duplicate(temp_kan_dir):
 
 
 def test_add_with_prefix_normalizes(temp_kan_dir):
-    with patch("kan.storage.watchlist._lookup_name", return_value="贵州茅台"):
+    with patch("kan.storage.watchlist_items._lookup_name", return_value="贵州茅台"):
         watchlist.add("sh600519")
     stocks = watchlist.list_all()
     assert stocks[0].symbol == "600519"
 
 
 def test_remove_stock(temp_kan_dir):
-    with patch("kan.storage.watchlist._lookup_name", return_value="贵州茅台"):
+    with patch("kan.storage.watchlist_items._lookup_name", return_value="贵州茅台"):
         watchlist.add("600519")
     ok, msg = watchlist.remove("600519")
     assert ok
@@ -166,7 +166,7 @@ def test_remove_nonexistent(temp_kan_dir):
 
 
 def test_clear_watchlist(temp_kan_dir):
-    with patch("kan.storage.watchlist._lookup_name", return_value="贵州茅台"):
+    with patch("kan.storage.watchlist_items._lookup_name", return_value="贵州茅台"):
         watchlist.add("600519")
         watchlist.add("000858")
     count = watchlist.clear()
@@ -178,7 +178,7 @@ def test_import_csv(temp_kan_dir, tmp_path):
     csv_path = tmp_path / "stocks.csv"
     csv_path.write_text("600519\n000858\n")
 
-    with patch("kan.storage.watchlist._lookup_name", return_value="测试股"):
+    with patch("kan.storage.watchlist_items._lookup_name", return_value="测试股"):
         success, skipped, errors = watchlist.import_csv(str(csv_path))
 
     assert success == 2
@@ -280,7 +280,7 @@ class TestImportCsvValidation:
 
     def test_reject_oversized_file(self, temp_kan_dir, tmp_path, monkeypatch):
         """大于 MAX_CSV_SIZE 的文件应抛 ValueError (防 OOM)"""
-        monkeypatch.setattr(watchlist, "MAX_CSV_SIZE", 100)  # 临时把上限调小到 100 字节
+        monkeypatch.setattr(watchlist_items, "MAX_CSV_SIZE", 100)  # 临时把上限调小到 100 字节
         big_path = tmp_path / "big.csv"
         big_path.write_text("600519\n" * 50)  # ~350 字节 > 100
 
@@ -419,9 +419,9 @@ class TestColdStartInvariants:
                 "akshare fallback should NOT be called when baostock succeeds"
             )
 
-        monkeypatch.setattr(watchlist, "_fetch_names_akshare", sentinel)
+        monkeypatch.setattr(watchlist_names, "_fetch_names_akshare", sentinel)
         monkeypatch.setattr(
-            watchlist, "_fetch_names_baostock",
+            watchlist_names, "_fetch_names_baostock",
             lambda: {"600519": "贵州茅台", "000858": "五粮液"},
         )
 
