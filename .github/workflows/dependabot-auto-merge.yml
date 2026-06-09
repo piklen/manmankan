@@ -37,6 +37,8 @@ jobs:
           number="$(jq -r '.number' <<<"${pr_json}")"
           title="$(jq -r '.title' <<<"${pr_json}")"
           body="$(jq -r '.body // ""' <<<"${pr_json}")"
+          commit_message="$(gh api "repos/${REPO}/commits/${HEAD_SHA}" --jq '.commit.message')"
+          metadata="${body}"$'\n'"${commit_message}"
 
           echo "PR #${number}: ${title}"
 
@@ -55,7 +57,7 @@ jobs:
           fi
 
           allow="$(
-            TITLE="${title}" BODY="${body}" python - <<'PY'
+            TITLE="${title}" BODY="${metadata}" python - <<'PY'
           import os
           import re
 
