@@ -100,7 +100,7 @@ def runner(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> CliRunner:
         "kan.cli.trend_cmds._get_watchlist_pairs",
         lambda group=None: [("600519", "测试跌5"), ("000001", "测试涨3"), ("002001", "测试平")],
     )
-    monkeypatch.setattr("kan.cli.helpers._auto_fetch_stale", lambda _pairs, **_kw: None)
+    monkeypatch.setattr("kan.core.auto_fetch.auto_fetch_stale", lambda _pairs, **_kw: None)
     monkeypatch.setattr("kan.core.scanner.trend_batch", _fake_trend_batch)
     monkeypatch.setattr("kan.data.fetcher.cache_age", lambda _sym: "2026-05-08 12:00")
     monkeypatch.setattr("kan.core.scanner.get_limit_threshold", lambda *a, **k: 10.0)

@@ -9,7 +9,7 @@
 - 自选股 / 数据加载：_load_names_with_optional_spinner / _get_watchlist_pairs / _auto_fetch_stale
 - 杂项：_NoopContext / _human_size
 
-lazy import 模式保留 · 顶层只 import 极轻的 stdlib + typer · rich/akshare 等重模块函数体内 lazy。
+lazy import 模式保留 · 顶层只 import 极轻依赖 · rich/akshare 等重模块函数体内 lazy。
 
 Helper 适用矩阵(防 6 命令使用漂移):
   helper                          scan trend low high info compare fetch
@@ -22,40 +22,29 @@ Helper 适用矩阵(防 6 命令使用漂移):
   format_date_compact              ✓   ✓    ✓   ✓   ✓    ✓       —
   format_fetched_at_compact        ✓   ✓    ✓   ✓   ✓    ✓       —
   pipeline.render_freshness_warning ✓ ✓   —   —   —    —       —"""
-import contextlib
 import os
 import re as _re
 from contextlib import contextmanager
-from datetime import date, datetime, timedelta
 
 import typer
 
-from kan.infra._time import today as _today
+from kan.core.auto_fetch import auto_fetch_stale
+from kan.infra.console import print_err
+from kan.infra.errors import network_error_msg, safe_error_msg
+from kan.infra.formatting import (
+    format_date_compact as _format_date_compact,
+)
+from kan.infra.formatting import (
+    format_fetched_at_compact as _format_fetched_at_compact,
+)
 from kan.infra.log import debug_log
 
-# 错误消息脱敏 · 防 traceback 泄漏本地路径（home / 绝对路径）
-_HOME_PREFIX = os.path.expanduser("~")
-_ABS_PATH_PATTERN = _re.compile(r"/[\w/.\-]+/([\w.\-]+)")
-
-
-def _safe_error_msg(e: Exception, max_len: int = 200) -> str:
-    """脱敏异常消息：替换 home 路径为 ~ · 隐藏绝对路径前缀 · 截断超长消息。"""
-    msg = str(e)
-    if _HOME_PREFIX and _HOME_PREFIX != "/":
-        msg = msg.replace(_HOME_PREFIX, "~")
-    msg = _ABS_PATH_PATTERN.sub(r"<...>/\1", msg)
-    if len(msg) > max_len:
-        msg = msg[: max_len - 3] + "..."
-    return msg
-
-
-def _print_err(msg: str) -> None:
-    """错误信号写到 stderr · 脚本调用者可 `kan ... 2>/dev/null` 过滤。
-
-    用于 raise typer.Exit(1) 配套的 console 输出 · 与正常表格/数据输出区分。
-    """
-    from rich.console import Console
-    Console(stderr=True).print(msg)
+_auto_fetch_stale = auto_fetch_stale
+_print_err = print_err
+_network_error_msg = network_error_msg
+_safe_error_msg = safe_error_msg
+format_date_compact = _format_date_compact
+format_fetched_at_compact = _format_fetched_at_compact
 
 
 def _parse_codes(raw: str) -> tuple[list[str], list[str]]:
@@ -126,76 +115,6 @@ class _NoopContext:
         return False
 
 
-# ── 日期格式化 helpers (散户友好压缩 · 同年隐藏年份) ────────────────
-# 背景: 今天的日期 helper 移到 kan/time.py (防 trading_calendar 反向 circular import)
-# 本 module 内通过 `_today()` local alias 调 `from kan.infra._time import today as _today`
-def format_date_compact(d: date) -> str:
-    """同年时省 year (`05-12`) · 跨年才显示完整 ISO (`2025-12-31`)。
-
-    背景: 80 列窄屏 title 不溢出 + 散户阅读减负。
-    """
-    today = _today()
-    if d.year == today.year:
-        return d.strftime("%m-%d")
-    return d.isoformat()
-
-
-def format_fetched_at_compact(fetched_str: str) -> str:
-    """从 ISO datetime string 提取最 compact 表示。
-
-    - 当天一般 (05:00-21:59): `16:05` (省日期 · 因为 user 知道今天)
-    - 当天凌晨 (00:00-04:59): `今晨 01:00` (防深夜跑 scan 时误判为下午)
-    - 昨天傍晚 (22:00-23:59): `昨晚 23:50` (对称提示 · 防早上 scan 时误判为今天)
-    - 同年不同天: `05-12 16:05`
-    - 跨年: `2025-12-31 16:05`
-    - 不可解析: 原样返回
-
-    背景: 凌晨日界提示防误判;背景: 80 列窄屏不溢出。
-    """
-    try:
-        dt = datetime.fromisoformat(fetched_str)
-    except (ValueError, TypeError):
-        return fetched_str
-    today = _today()
-    if dt.date() == today:
-        hour = dt.hour
-        time_str = dt.strftime("%H:%M")
-        if 0 <= hour < 5:
-            return f"今晨 {time_str}"
-        return time_str
-    if dt.date() == today - timedelta(days=1) and dt.hour >= 22:
-        return f"昨晚 {dt.strftime('%H:%M')}"
-    if dt.year == today.year:
-        return dt.strftime("%m-%d %H:%M")
-    return dt.strftime("%Y-%m-%d %H:%M")
-
-
-_NETWORK_ERR_KEYWORDS = (
-    "Max retries",
-    "Timeout",
-    "HTTPSConnection",
-    "HTTPConnection",
-    "ConnectionError",
-    "ConnectionResetError",
-    "Read timed out",
-    "URLError",
-    "RemoteDisconnected",
-    "Failed to establish",
-)
-
-
-def _network_error_msg(err: str) -> str:
-    """把网络异常 traceback 简化为用户友好提示。
-
-    避免暴露 host / port / query 参数等内部细节。
-    """
-    if any(k in err for k in _NETWORK_ERR_KEYWORDS):
-        return "网络异常 · 请检查连接或稍后重试"
-    if "无效股票代码或无数据" in err:
-        return "无数据（可能停牌 / 退市）"
-    return _safe_error_msg(ValueError(err), max_len=60)
-
-
 def _load_names_with_optional_spinner(console) -> dict[str, str]:
     """加载 A 股代码表 · cache 不新鲜时 spinner 包住初始化/刷新过程。
 
@@ -257,159 +176,6 @@ def _get_watchlist_pairs(group: str | None = None) -> list[tuple[str, str]]:
         )
         raise typer.Exit(1)
     return pairs
-
-
-def _auto_fetch_stale(
-    pairs: list[tuple[str, str]],
-    *,
-    days: int | None = None,
-) -> None:
-    """自动拉取缺失或过期（非今天）的自选股数据。
-
-    并发自适应: resolve_max_workers() · cpu_count*2 cap 12.
-    rich.Progress 进度条 + 网络异常友好提示.
-    避免串行 172 只可能阻塞 ≥ 9 分钟无反馈的体验问题。
-    """
-    from rich.console import Console
-    from rich.progress import (
-        BarColumn,
-        Progress,
-        SpinnerColumn,
-        TextColumn,
-        TimeElapsedColumn,
-    )
-
-    console = Console(stderr=True)
-    n_total = len(pairs)
-
-    # "检查缓存" 分 3 阶段 spinner
-    # 旧实现单句 "⏳ 检查缓存..." · 169 只 + akshare 冷启动可能 5-30s 无反馈 · 易被误判为卡死
-    # 新: import → trade_dates warm → ticking 数字进度 · 用户每秒看到工具在动
-    with console.status(
-        "[yellow]⏳ 加载数据模块...[/yellow]",
-        spinner="dots",
-    ) as status:
-        from kan.data.fetcher import fetch_batch, is_fresh
-
-        # Stage 2: explicit pre-warm trade_dates · 避免 ticking 阶段第 1 只时
-        # latent 触发 akshare 5-15s 拉取 (用户看到 spinner 停在 1/169 会困惑)
-        status.update(
-            f"[yellow]⏳ 加载交易日历 · {n_total} 只自选股待检查...[/yellow]"
-        )
-        from kan.core.trading_calendar import latest_trade_date
-        # latest_trade_date 现已 fail-soft · 不抛 RuntimeError ·
-        # 但保险 contextlib.suppress · 任何 upstream regression 不应 break 检查缓存
-        with contextlib.suppress(Exception):
-            _ = latest_trade_date()
-
-        # Stage 3: ticking 数字进度 (B+C · 每 5% update 一次 · 防闪烁)
-        status.update(
-            f"[yellow]⏳ 检查缓存 · 0/{n_total} 只 · "
-            f"首次稍慢 · 后续秒级[/yellow]"
-        )
-        stale: list[tuple[str, str]] = []
-        update_every = max(1, n_total // 20)
-        for i, (sym, name) in enumerate(pairs):
-            fresh = is_fresh(sym) if days is None else is_fresh(sym, min_rows=days)
-            if not fresh:
-                stale.append((sym, name))
-            if (i + 1) % update_every == 0 or i + 1 == n_total:
-                status.update(
-                    f"[yellow]⏳ 检查缓存 · {i + 1}/{n_total} 只 · "
-                    f"已发现 {len(stale)} 只 stale[/yellow]"
-                )
-    if not stale:
-        return
-
-    n = len(stale)
-
-    # 大量股票时给出明确预期 · 避免用户以为卡死
-    if n >= 30:
-        est_low = max(1, n // 60)
-        est_high = max(2, n // 20)
-        # 并发用 resolve_max_workers 启发式(cpu_count*2 · cap 12)
-        from kan.data.fetcher import resolve_max_workers
-        workers = resolve_max_workers()
-        console.print(
-            f"[yellow]需更新 {n} 只股票数据 · 并发 {workers} · "
-            f"预计 {est_low}-{est_high} 分钟[/yellow]"
-        )
-    elif n > 5:
-        console.print(f"[yellow]更新 {n} 只股票数据...[/yellow]")
-
-    name_map = dict(stale)
-
-    with Progress(
-        SpinnerColumn(),
-        TextColumn("[progress.description]{task.description}"),
-        BarColumn(),
-        TextColumn("[progress.percentage]{task.percentage:>3.0f}%"),
-        TextColumn("[dim]({task.completed}/{task.total})[/dim]"),
-        TimeElapsedColumn(),
-        console=console,
-    ) as progress:
-        task_id = progress.add_task("⏳ 拉取数据...", total=n)
-
-        # 背景: 累计失败 symbol · GIL 保护 list.append 原生 thread-safe
-        # 避免 nonlocal int += 的 read-modify-write race condition
-        fails: list[str] = []
-
-        def _on_done(symbol: str, ok: bool, _err_msg: str | None) -> None:
-            # 背景: spinner 加 stale 总数
-            # 背景: ✅/❌ emoji + 累计失败数
-            # 背景: truncate name to 4 char + 紧凑 desc · 80 列不折行
-            #   旧 "⏳ 补数据 · 169 只 stale · ❌ 失败: 中国铝业 · 失败 3" ≈ 99 列 (折行)
-            #   新 "⏳ 补数据 169 只 · ❌ 中国铝… · 失败 3" ≈ 64 列 (80 列 OK)
-            full_name = name_map.get(symbol, symbol).replace(" ", "")
-            # truncate 到 4 char 防长名占用视觉宽 (e.g. "中国神华" / "贵州茅台" 都 4 char OK)
-            name = full_name if len(full_name) <= 4 else full_name[:3] + "…"
-            if not ok:
-                fails.append(symbol)
-            current_fail = len(fails)
-            desc = (
-                f"⏳ 补数据 {n} 只 · ✅ {name}" if ok
-                else f"⏳ 补数据 {n} 只 · ❌ {name}"
-            )
-            if current_fail > 0:
-                desc += f" · 失败 {current_fail}"
-            progress.update(task_id, advance=1, description=desc)
-
-        try:
-            # 背景: max_workers 不再硬编码 · 由 fetch_batch 内部 resolve_max_workers() 启发式
-            fetch_kwargs = {"days": days} if days is not None else {}
-            results, errors = fetch_batch(
-                [s for s, _ in stale],
-                **fetch_kwargs,
-                force=True,
-                on_progress=_on_done,
-            )
-        except KeyboardInterrupt:
-            progress.stop()
-            console.print("\n  [yellow]已中断 · 已完成的数据已保存[/yellow]")
-            import os as _os
-            _os._exit(130)
-
-    # 汇总输出
-    success_count = len(results)
-    if errors:
-        console.print(
-            f"  [green]✅ 成功 {success_count}[/green] · "
-            f"[red]❌ 失败 {len(errors)}[/red]"
-        )
-        for i, (sym, raw_err) in enumerate(errors.items()):
-            if i >= 5:
-                console.print(
-                    f"  [dim]...及 {len(errors) - 5} 只失败 · "
-                    f"`kan fetch` 重试[/dim]"
-                )
-                break
-            name = name_map.get(sym, sym).replace(" ", "")
-            console.print(
-                f"  [red]· {name} ({sym}) · {_network_error_msg(raw_err)}[/red]"
-            )
-    else:
-        console.print(f"  [green]✅ {success_count} 只全部更新完成[/green]")
-    console.print()
 
 
 def _human_size(size_bytes: int) -> str:

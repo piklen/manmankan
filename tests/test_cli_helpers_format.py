@@ -64,22 +64,21 @@ class TestFormatDateCompact:
 class TestFormatFetchedAtCompact:
     """当天只时间 · 同年 mm-dd HH:MM · 跨年完整."""
 
-    # 背景: 由于 helpers 改用 _today()(kan/time.py · 单一来源)·
-    # patch path 从 "kan.cli.helpers.datetime" → "kan.cli.helpers._today" (更直接)
+    # 背景: 日期格式化移到 kan.infra.formatting，CLI helper 只保留兼容 re-export。
 
     def test_today_returns_time_only(self):
         """mock today=2026-05-14 · fetched=同天 → 只显示 HH:MM"""
-        with patch("kan.cli.helpers._today", return_value=date(2026, 5, 14)):
+        with patch("kan.infra.formatting._today", return_value=date(2026, 5, 14)):
             result = format_fetched_at_compact("2026-05-14 10:30")
         assert result == "10:30", "当天应只显示时间"
 
     def test_same_year_different_day_returns_md_hm(self):
-        with patch("kan.cli.helpers._today", return_value=date(2026, 5, 14)):
+        with patch("kan.infra.formatting._today", return_value=date(2026, 5, 14)):
             result = format_fetched_at_compact("2026-03-10 09:15")
         assert result == "03-10 09:15"
 
     def test_different_year_returns_full(self):
-        with patch("kan.cli.helpers._today", return_value=date(2026, 5, 14)):
+        with patch("kan.infra.formatting._today", return_value=date(2026, 5, 14)):
             result = format_fetched_at_compact("2025-12-31 23:59")
         assert result == "2025-12-31 23:59"
 
@@ -95,25 +94,25 @@ class TestFormatFetchedAtCompact:
     # ── 历史背景凌晨日界提示 ────────────────────────────
     def test_today_pre_dawn_shows_jinchen(self):
         """当天 00:00-04:59 → '今晨' 前缀防深夜误判"""
-        with patch("kan.cli.helpers._today", return_value=date(2026, 5, 14)):
+        with patch("kan.infra.formatting._today", return_value=date(2026, 5, 14)):
             result = format_fetched_at_compact("2026-05-14 01:00")
         assert result == "今晨 01:00"
 
     def test_today_04_59_jinchen_upper_boundary(self):
         """boundary: 04:59 仍是凌晨"""
-        with patch("kan.cli.helpers._today", return_value=date(2026, 5, 14)):
+        with patch("kan.infra.formatting._today", return_value=date(2026, 5, 14)):
             result = format_fetched_at_compact("2026-05-14 04:59")
         assert result == "今晨 04:59"
 
     def test_today_05_00_no_jinchen_boundary(self):
         """boundary: 05:00 不再是凌晨"""
-        with patch("kan.cli.helpers._today", return_value=date(2026, 5, 14)):
+        with patch("kan.infra.formatting._today", return_value=date(2026, 5, 14)):
             result = format_fetched_at_compact("2026-05-14 05:00")
         assert result == "05:00"
 
     def test_today_normal_hours_no_prefix(self):
         """当天 05:00-21:59 → 不加前缀"""
-        with patch("kan.cli.helpers._today", return_value=date(2026, 5, 14)):
+        with patch("kan.infra.formatting._today", return_value=date(2026, 5, 14)):
             for hour in [5, 9, 12, 17, 21]:
                 t = datetime(2026, 5, 14, hour, 0)
                 result = format_fetched_at_compact(t.isoformat())
@@ -121,19 +120,19 @@ class TestFormatFetchedAtCompact:
 
     def test_yesterday_late_night_shows_zuowan(self):
         """昨天 22:00-23:59 → '昨晚' 前缀"""
-        with patch("kan.cli.helpers._today", return_value=date(2026, 5, 14)):
+        with patch("kan.infra.formatting._today", return_value=date(2026, 5, 14)):
             result = format_fetched_at_compact("2026-05-13 23:50")
         assert result == "昨晚 23:50"
 
     def test_yesterday_22_00_zuowan_lower_boundary(self):
         """boundary: 昨天 22:00 是 '昨晚'"""
-        with patch("kan.cli.helpers._today", return_value=date(2026, 5, 14)):
+        with patch("kan.infra.formatting._today", return_value=date(2026, 5, 14)):
             result = format_fetched_at_compact("2026-05-13 22:00")
         assert result == "昨晚 22:00"
 
     def test_yesterday_21_59_no_zuowan(self):
         """boundary: 昨天 21:59 不是 '昨晚' · fall through 到 md-hm"""
-        with patch("kan.cli.helpers._today", return_value=date(2026, 5, 14)):
+        with patch("kan.infra.formatting._today", return_value=date(2026, 5, 14)):
             result = format_fetched_at_compact("2026-05-13 21:59")
         assert result == "05-13 21:59"
 

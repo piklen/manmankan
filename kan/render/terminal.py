@@ -16,7 +16,7 @@ from typing import TYPE_CHECKING
 from rich.table import Table
 from rich.text import Text
 
-from kan.cli.helpers import format_date_compact, format_fetched_at_compact
+from kan.infra.formatting import format_date_compact, format_fetched_at_compact
 from kan.render.base import format_pct
 
 if TYPE_CHECKING:
