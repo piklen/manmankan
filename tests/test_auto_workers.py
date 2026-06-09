@@ -113,12 +113,22 @@ class TestD1RuntimeBehavior:
         fake_progress.__exit__ = MagicMock(return_value=None)
         fake_progress.add_task = MagicMock(return_value=0)
 
+        error_map = errors or {}
+
+        def fake_fetch_batch(symbols, **kwargs):
+            on_progress = kwargs.get("on_progress")
+            if on_progress is not None:
+                for sym in symbols:
+                    on_progress(sym, sym not in error_map, error_map.get(sym))
+            results = {sym: object() for sym in symbols if sym not in error_map}
+            return results, error_map
+
         with patch("rich.console.Console", return_value=fake_console), \
              patch("rich.progress.Progress", return_value=fake_progress), \
              patch("kan.data.fetcher.is_fresh", return_value=False), \
              patch(
                  "kan.data.fetcher.fetch_batch",
-                 return_value=({}, errors or {})
+                 side_effect=fake_fetch_batch,
              ), \
              patch("kan.data.fetcher.resolve_max_workers", return_value=max_workers), \
              patch("kan.core.trading_calendar.latest_trade_date", return_value=None):
@@ -184,3 +194,18 @@ class TestD1RuntimeBehavior:
             f"应显示动态 '并发 8' · 实际 console prints: {result['console_prints']}"
         )
         assert "并发 5" not in all_prints, "不应硬编码 '并发 5'"
+
+    def test_medium_batch_error_summary_is_limited_and_user_friendly(self):
+        """6 只 stale 且全部失败时,提示中等批次进度、汇总和最多 5 条失败详情。"""
+        pairs = [(f"60000{i:04d}", f"测试股{i}") for i in range(6)]
+        errors = {sym: "Max retries exceeded while fetching" for sym, _ in pairs}
+        result = self._run_auto_fetch_stale(pairs, errors=errors)
+
+        all_prints = "\n".join(result["console_prints"])
+        all_progress = "\n".join(result["progress_descs"])
+        assert "更新 6 只股票数据" in all_prints
+        assert "成功 0" in all_prints
+        assert "失败 6" in all_prints
+        assert "...及 1 只失败" in all_prints
+        assert "网络异常 · 请检查连接或稍后重试" in all_prints
+        assert "失败 6" in all_progress
