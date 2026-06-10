@@ -190,3 +190,18 @@ def test_find_service_support_modules_stay_split() -> None:
         if len(path.read_text(encoding="utf-8").splitlines()) > 500
     ]
     assert oversized == []
+
+
+def test_find_filter_matchers_stay_split() -> None:
+    """find filter 入口保留 apply 编排，matcher 分组模块继续分文件维护。"""
+    root = Path(__file__).resolve().parents[1]
+    paths = [
+        root / "kan" / "core" / "find_filter.py",
+        *(root / "kan" / "core").glob("find_filter_*.py"),
+    ]
+    oversized = [
+        f"{path.relative_to(root)}:{len(path.read_text(encoding='utf-8').splitlines())}"
+        for path in paths
+        if len(path.read_text(encoding="utf-8").splitlines()) > 500
+    ]
+    assert oversized == []
