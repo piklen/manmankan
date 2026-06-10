@@ -178,6 +178,37 @@ def test_trend_streak_priority(monkeypatch: pytest.MonkeyPatch) -> None:
     assert sorted_results[0].name == "6天小跌", "6 天连跌 > 5 天连跌"
 
 
+def test_calc_trend_short_series_returns_flat_result() -> None:
+    import pandas as pd
+
+    from kan.core.scanner import calc_trend
+
+    df = pd.DataFrame([{"date": "2026-05-01", "open": 10.0, "close": 10.0}])
+
+    result = calc_trend(df, "000001", "短序列")
+
+    assert result.streak == 0
+    assert result.streak_pct == 0.0
+    assert result.daily_changes == []
+
+
+def test_calc_trend_flat_days_keep_current_direction() -> None:
+    import pandas as pd
+
+    from kan.core.scanner import calc_trend
+
+    df = pd.DataFrame([
+        {"date": "2026-05-01", "open": 10.0, "close": 10.0},
+        {"date": "2026-05-02", "open": 10.0, "close": 11.0},
+        {"date": "2026-05-03", "open": 11.0, "close": 11.0},
+    ])
+
+    result = calc_trend(df, "000001", "平盘穿透")
+
+    assert result.streak == 2
+    assert result.streak_pct == 10.0
+
+
 def test_trend_pct_tie_break(monkeypatch: pytest.MonkeyPatch) -> None:
     """同天数下累计幅度大的在前"""
     from kan.core.scanner import trend_batch

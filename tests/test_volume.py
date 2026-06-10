@@ -120,3 +120,8 @@ def test_volume_all_nan_returns_none():
 def test_volume_missing_column_returns_none():
     """无 volume 列 → None。"""
     assert calc_volume_state(pd.DataFrame({"close": [1, 2, 3, 4, 5, 6]})) is None
+
+
+def test_volume_zero_prior_average_returns_none():
+    """近 VOLUME_WINDOW 日均量为 0 → None，避免除零。"""
+    assert calc_volume_state(_df([0, 0, 0, 0, 0, 100])) is None
