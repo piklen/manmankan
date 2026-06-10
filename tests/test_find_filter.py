@@ -190,6 +190,23 @@ class TestApplyConditions:
         with pytest.raises(FrozenInstanceError):
             m.triggered = (TriggeredFilter(filter_type="pos", param="x", value=1.0),)
 
+    def test_legacy_matcher_monkeypatch_path_is_used(self, monkeypatch):
+        import kan.core.find_filter as find_filter
+
+        r = _mk_result(positions={180: 50.0})
+        cs = ConditionSet.from_flags(pos=["180:lt:5"])
+
+        def fake_match(_filter, _target):
+            return TriggeredFilter(filter_type="pos", param="patched", value=1.0)
+
+        monkeypatch.setattr(find_filter, "_match_pos", fake_match)
+        matches = find_filter.apply_conditions([r], cs)
+
+        assert len(matches) == 1
+        assert matches[0].triggered == (
+            TriggeredFilter(filter_type="pos", param="patched", value=1.0),
+        )
+
 
 class TestMoneyflowMatchers:
     """资金流 ScalarFilter matcher 单测."""
