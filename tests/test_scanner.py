@@ -8,7 +8,7 @@ import pandas as pd
 import pytest
 
 from kan.core.models import PeriodResult, StockScanResult
-from kan.core.scanner import save_snapshot, scan_stock
+from kan.core.scanner import compute_diff, load_snapshot, save_snapshot, scan_stock
 from kan.storage import paths
 
 
@@ -187,3 +187,60 @@ class TestSaveSnapshot:
 
         assert not old_file.exists()
         assert recent_file.exists()
+
+    def test_cleanup_ignores_non_date_snapshot_name(self, temp_snapshot_dir):
+        snapshots_dir = temp_snapshot_dir / "snapshots"
+        snapshots_dir.mkdir(parents=True, exist_ok=True)
+        invalid = snapshots_dir / "notadate.json"
+        invalid.write_text("[]")
+
+        save_snapshot([_make_scan_result()])
+
+        assert invalid.exists()
+
+
+class TestLoadSnapshot:
+    def test_missing_snapshot_returns_none(self, temp_snapshot_dir):
+        assert load_snapshot() is None
+
+    def test_loads_snapshot_by_symbol(self, temp_snapshot_dir):
+        save_snapshot([_make_scan_result()])
+
+        loaded = load_snapshot()
+
+        assert loaded == {"600519": {"5": {"pct": 50.0, "at_low": False, "at_high": False}}}
+
+
+def test_compute_diff_reports_enter_and_leave_extreme_zones():
+    current = StockScanResult(
+        symbol="600519",
+        name="贵州茅台",
+        current_price=100.0,
+        scan_date=date.today(),
+        periods=[
+            PeriodResult(period=5, n_low=95.0, n_high=105.0, position_pct=3.0, at_low=True, at_high=False),
+            PeriodResult(period=10, n_low=95.0, n_high=105.0, position_pct=50.0, at_low=False, at_high=False),
+            PeriodResult(period=30, n_low=95.0, n_high=105.0, position_pct=98.0, at_low=False, at_high=True),
+            PeriodResult(period=60, n_low=0.0, n_high=0.0, position_pct=0.0, at_low=False, at_high=False, insufficient=True),
+            PeriodResult(period=90, n_low=95.0, n_high=105.0, position_pct=50.0, at_low=False, at_high=False),
+        ],
+        low_resonance=1,
+        high_resonance=1,
+    )
+    prev = {
+        "600519": {
+            "5": {"pct": 50.0, "at_low": False, "at_high": False},
+            "10": {"pct": 2.0, "at_low": True, "at_high": False},
+            "30": {"pct": 50.0, "at_low": False, "at_high": False},
+            "90": {"pct": 98.0, "at_low": False, "at_high": True},
+        }
+    }
+
+    changes = compute_diff([current], prev)
+
+    assert changes == [
+        ("600519", "贵州茅台", 5, "新进入 5 日低点区 [3%]"),
+        ("600519", "贵州茅台", 10, "离开 10 日低点区 → 50%"),
+        ("600519", "贵州茅台", 30, "新进入 30 日高点区 [98%]"),
+        ("600519", "贵州茅台", 90, "离开 90 日高点区 → 50%"),
+    ]

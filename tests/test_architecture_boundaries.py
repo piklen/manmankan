@@ -160,3 +160,18 @@ def test_enrich_stays_split() -> None:
         if len(path.read_text(encoding="utf-8").splitlines()) > 500
     ]
     assert oversized == []
+
+
+def test_scanner_auxiliary_modules_stay_split() -> None:
+    """scanner 主筛选语义留在入口，快照/历史/趋势/量能辅助职责保持分文件维护。"""
+    root = Path(__file__).resolve().parents[1]
+    paths = [
+        root / "kan" / "core" / "scanner.py",
+        *(root / "kan" / "core").glob("scanner_*.py"),
+    ]
+    oversized = [
+        f"{path.relative_to(root)}:{len(path.read_text(encoding='utf-8').splitlines())}"
+        for path in paths
+        if len(path.read_text(encoding="utf-8").splitlines()) > 500
+    ]
+    assert oversized == []

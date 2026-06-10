@@ -86,9 +86,17 @@ def test_reader_no_snapshots_dir_returns_empty(tmp_path, monkeypatch):
 
 
 def test_reader_period_keys_are_int(snap_dir):
-    _write(snap_dir, "2026-05-23", [_entry(periods={"60": {"pct": 8.0, "at_low": False, "at_high": False}})])
+    _write(
+        snap_dir,
+        "2026-05-23",
+        [_entry(periods={
+            "bad": {"pct": 1.0, "at_low": True, "at_high": False},
+            "60": {"pct": 8.0, "at_low": False, "at_high": False},
+        })],
+    )
     entries = load_symbol_history("600519")
     assert 60 in entries[0].periods
+    assert "bad" not in entries[0].periods
     assert all(isinstance(k, int) for k in entries[0].periods)
 
 

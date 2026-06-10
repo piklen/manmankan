@@ -2,16 +2,53 @@
 
 from __future__ import annotations
 
-import json
-from dataclasses import dataclass
 from datetime import date
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
     import pandas as pd  # 背景: lazy import · 避免 top-level pandas 触发 cold-start cost
 
-from kan.core.models import PeriodResult, StockScanResult, VolumeState
+from kan.core.models import PeriodResult, StockScanResult
+from kan.core.scanner_history import (
+    SymbolHistoryEntry,
+    _iter_snapshot_files,
+    history_mark,
+    history_resonance,
+    load_symbol_history,
+    snapshot_symbol_names,
+)
+from kan.core.scanner_snapshot import compute_diff, load_snapshot, save_snapshot
+from kan.core.scanner_trend import TrendResult, calc_trend
+from kan.core.scanner_volume import VOLUME_WINDOW, calc_volume_state
 from kan.storage.paths import SNAPSHOT_PATH
+
+__all__ = [
+    "MAX_PERIOD",
+    "MIN_PERIOD",
+    "PERIODS",
+    "SNAPSHOT_PATH",
+    "ST_LIMIT_CHANGE_DATE",
+    "VOLUME_WINDOW",
+    "SymbolHistoryEntry",
+    "TrendResult",
+    "_calc_position",
+    "_iter_snapshot_files",
+    "_period_pct_key",
+    "calc_trend",
+    "calc_volume_state",
+    "compute_diff",
+    "filter_extreme",
+    "get_limit_threshold",
+    "history_mark",
+    "history_resonance",
+    "load_snapshot",
+    "load_symbol_history",
+    "save_snapshot",
+    "scan_batch",
+    "scan_stock",
+    "snapshot_symbol_names",
+    "trend_batch",
+]
 
 PERIODS = [3, 5, 7, 10, 15, 30, 60, 90, 120, 180]
 MIN_PERIOD = 2
@@ -196,42 +233,6 @@ def scan_stock(
     )
 
 
-VOLUME_WINDOW = 5
-
-
-def calc_volume_state(df: pd.DataFrame) -> VolumeState | None:
-    """今日成交量相对近 VOLUME_WINDOW 日均量的状态。
-
-    比值天然单位无关:同一缓存来自单一数据源(fetch_kline 整体重写整个
-    缓存文件),量纲在"今日量 / 均量"的比值里抵消,所以不受 baostock(股)
-    / 东财(手) 等跨源 volume 单位差异影响。
-    volume 缺失(腾讯源不返 volume / 旧缓存)或历史不足 → 返 None。
-    """
-    import pandas as pd
-
-    if "volume" not in df.columns or len(df) < VOLUME_WINDOW + 1:
-        return None
-    today = df["volume"].iloc[-1]
-    prior = df["volume"].iloc[-(VOLUME_WINDOW + 1):-1]
-    if pd.isna(today):
-        return None
-    avg = prior.mean()
-    if pd.isna(avg) or avg <= 0:
-        return None
-    ratio = round(float(today) / float(avg), 2)
-    if ratio >= 2.0:
-        label = "明显放大"
-    elif ratio >= 1.5:
-        label = "温和放大"
-    elif ratio >= 0.67:
-        label = "量能平稳"
-    elif ratio >= 0.5:
-        label = "温和萎缩"
-    else:
-        label = "明显萎缩"
-    return VolumeState(ratio=ratio, label=label, window=VOLUME_WINDOW)
-
-
 def _period_pct_key(r: StockScanResult, sentinel: float) -> tuple[float, ...]:
     """按 PERIODS 顺序生成 pct 元组 · insufficient 周期用 sentinel 占位。"""
     pcts = {p.period: p.position_pct for p in r.periods if not p.insufficient}
@@ -317,271 +318,6 @@ def filter_extreme(
             results_by_period[n] = hits
 
     return results_by_period
-
-
-# --- 增量快照 ---
-
-_SNAPSHOT_KEEP_DAYS = 240
-
-
-def save_snapshot(results: list[StockScanResult]) -> None:
-    """保存本次 scan 结果快照（last_scan.json + 按日归档）。"""
-    from kan.storage.paths import SNAPSHOTS_DIR, atomic_write_json, ensure_dirs
-    ensure_dirs()
-    data = []
-    for r in results:
-        data.append({
-            "symbol": r.symbol,
-            "name": r.name,
-            "periods": {
-                str(p.period): {"pct": p.position_pct, "at_low": p.at_low, "at_high": p.at_high}
-                for p in r.periods if not p.insufficient
-            },
-        })
-    atomic_write_json(SNAPSHOT_PATH, data, ensure_ascii=False)
-
-    daily = SNAPSHOTS_DIR / f"{date.today().isoformat()}.json"
-    atomic_write_json(daily, data, ensure_ascii=False)
-
-    cutoff = date.today() - __import__("datetime").timedelta(days=_SNAPSHOT_KEEP_DAYS)
-    for old in SNAPSHOTS_DIR.glob("*.json"):
-        try:
-            file_date = date.fromisoformat(old.stem)
-            if file_date < cutoff:
-                old.unlink()
-        except ValueError:
-            pass
-
-
-def load_snapshot() -> dict[str, dict[str, dict]] | None:
-    """加载上次快照。返回 {symbol: {period_str: {pct, at_low, at_high}}}"""
-    if not SNAPSHOT_PATH.exists():
-        return None
-    with open(SNAPSHOT_PATH, encoding="utf-8") as f:
-        data = json.load(f)
-    return {item["symbol"]: item["periods"] for item in data}
-
-
-def compute_diff(
-    current: list[StockScanResult], prev: dict[str, dict[str, dict]]
-) -> list[tuple[str, str, int, str]]:
-    """对比当前和上次快照，找出进入/离开极值区的变化。
-
-    返回 [(symbol, name, period, change_desc), ...]
-    """
-    changes: list[tuple[str, str, int, str]] = []
-
-    for r in current:
-        prev_stock = prev.get(r.symbol, {})
-        for p in r.periods:
-            if p.insufficient:
-                continue
-            pkey = str(p.period)
-            old = prev_stock.get(pkey)
-
-            if old is None:
-                continue
-
-            if p.at_low and not old["at_low"]:
-                changes.append((r.symbol, r.name, p.period, f"新进入 {p.period} 日低点区 [{p.position_pct:.0f}%]"))
-            elif not p.at_low and old["at_low"]:
-                changes.append((r.symbol, r.name, p.period, f"离开 {p.period} 日低点区 → {p.position_pct:.0f}%"))
-            if p.at_high and not old["at_high"]:
-                changes.append((r.symbol, r.name, p.period, f"新进入 {p.period} 日高点区 [{p.position_pct:.0f}%]"))
-            elif not p.at_high and old["at_high"]:
-                changes.append((r.symbol, r.name, p.period, f"离开 {p.period} 日高点区 → {p.position_pct:.0f}%"))
-
-    return changes
-
-
-# --- 历史位置回溯 (kan history) ---
-
-
-@dataclass
-class SymbolHistoryEntry:
-    """单只股票在某一快照日的位置记录。
-
-    periods: {period: {"pct", "at_low", "at_high"}} · 只含当日非 insufficient 的周期
-    (跟 save_snapshot 写入口径一致 · 缺的周期 = 那天历史不足)。
-    """
-
-    snapshot_date: date
-    name: str
-    periods: dict[int, dict]
-
-
-def _iter_snapshot_files():
-    """按文件名(= 快照日)升序遍历 snapshots/*.json · 文件名非法日期的跳过。
-
-    yield (date, list[dict]) · 文件损坏 / 不可读的整份 skip(跟 save_snapshot
-    的清理逻辑同样宽容 · 一份坏文件不该让整条历史不可用)。
-    """
-    from kan.storage.paths import SNAPSHOTS_DIR
-
-    if not SNAPSHOTS_DIR.exists():
-        return
-    for f in sorted(SNAPSHOTS_DIR.glob("*.json"), key=lambda p: p.stem):
-        try:
-            d = date.fromisoformat(f.stem)
-        except ValueError:
-            continue
-        try:
-            data = json.loads(f.read_text(encoding="utf-8"))
-        except (OSError, ValueError):
-            continue
-        if isinstance(data, list):
-            yield d, data
-
-
-def load_symbol_history(symbol: str) -> list[SymbolHistoryEntry]:
-    """读取单只股票跨快照日的位置历史 · 纯离线(只读 snapshots/)· 按日期降序(新→旧)。
-
-    只有曾进过自选、且当天跑过 `kan scan`(全量 · 非 industry/theme)的股票才有记录。
-    """
-    entries: list[SymbolHistoryEntry] = []
-    for d, data in _iter_snapshot_files():
-        for item in data:
-            if item.get("symbol") != symbol:
-                continue
-            raw = item.get("periods", {})
-            periods: dict[int, dict] = {}
-            for k, v in raw.items():
-                try:
-                    periods[int(k)] = v
-                except (ValueError, TypeError):
-                    continue
-            entries.append(SymbolHistoryEntry(d, item.get("name", symbol), periods))
-            break
-    entries.sort(key=lambda e: e.snapshot_date, reverse=True)
-    return entries
-
-
-def snapshot_symbol_names() -> dict[str, str]:
-    """所有快照里出现过的 {symbol: name} · 后出现(更新)的 name 覆盖旧的。
-
-    供 `kan history` 离线解析「名称 → 代码」· 解析域 = 有历史的股票本身,
-    天然不会解析到没历史的股(语义比全局代码-名称表更贴)。
-    """
-    out: dict[str, str] = {}
-    for _d, data in _iter_snapshot_files():
-        for item in data:
-            sym = item.get("symbol")
-            if sym:
-                out[sym] = item.get("name", sym)
-    return out
-
-
-def history_resonance(periods: dict[int, dict]) -> tuple[int, int]:
-    """某快照日的 (低点共振数, 高点共振数) · 跨该日所有已存周期统计。"""
-    low = sum(1 for v in periods.values() if v.get("at_low"))
-    high = sum(1 for v in periods.values() if v.get("at_high"))
-    return low, high
-
-
-def history_mark(periods: dict[int, dict]) -> tuple[int, str]:
-    """某快照日的 (共振数, 方向) · 方向 ∈ {"", "low", "high"} · 平局取 low(跟 scan 同口径)。
-
-    这是纯数据判定 · 终端 / md / json 各自映射到自己的字形 / 文案。
-    """
-    low, high = history_resonance(periods)
-    res = max(low, high)
-    if res == 0:
-        return 0, ""
-    return res, "low" if low >= high else "high"
-
-
-# --- 连续涨跌 ---
-
-class TrendResult:
-    def __init__(
-        self,
-        symbol: str,
-        name: str,
-        current_price: float,
-        streak: int,
-        streak_pct: float,
-        daily_changes: list[tuple[str, float]],
-    ):
-        self.symbol = symbol
-        self.name = name
-        self.current_price = current_price
-        self.streak = streak  # 正=连涨 负=连跌
-        self.streak_pct = streak_pct
-        self.daily_changes = daily_changes  # [(date_str, change_pct), ...]
-        self.moneyflow_net: float | None = None
-
-    @property
-    def direction(self) -> str:
-        if self.streak > 0:
-            return f"涨{self.streak}天"
-        elif self.streak < 0:
-            return f"跌{abs(self.streak)}天"
-        return "平"
-
-
-def calc_trend(
-    df: pd.DataFrame,
-    symbol: str,
-    name: str,
-    candle: bool = False,
-) -> TrendResult:
-    """计算连续涨跌。
-
-    candle=False: 收盘价口径（close vs 前日 close）
-    candle=True:  阳线阴线口径（close vs 当日 open）
-    """
-    if len(df) < 2:
-        return TrendResult(symbol, name, float(df["close"].iloc[-1]), 0, 0.0, [])
-
-    current_price = float(df["close"].iloc[-1])
-    daily: list[tuple[str, float]] = []
-
-    for i in range(1, min(len(df), 31)):
-        idx = len(df) - i
-        row = df.iloc[idx]
-        d = str(row["date"])
-
-        if candle:
-            change = (float(row["close"]) - float(row["open"])) / float(row["open"]) * 100
-        else:
-            prev_close = float(df.iloc[idx - 1]["close"])
-            change = (float(row["close"]) - prev_close) / prev_close * 100
-
-        daily.append((d, round(change, 2)))
-
-    # 计算连续天数（平盘穿透不断连续）
-    streak = 0
-    streak_pct = 0.0
-    if daily:
-        # 找到第一个非平盘的方向
-        first_dir = 0
-        for _, chg in daily:
-            if chg > 0:
-                first_dir = 1
-                break
-            elif chg < 0:
-                first_dir = -1
-                break
-
-        if first_dir != 0:
-            for _, chg in daily:
-                if chg == 0.0:
-                    # 平盘穿透：计入天数但不计入累计涨跌幅
-                    streak += first_dir
-                elif (first_dir > 0 and chg > 0) or (first_dir < 0 and chg < 0):
-                    streak += first_dir
-                    streak_pct += chg
-                else:
-                    break
-
-    return TrendResult(
-        symbol=symbol,
-        name=name,
-        current_price=current_price,
-        streak=streak,
-        streak_pct=round(streak_pct, 2),
-        daily_changes=daily,
-    )
 
 
 def trend_batch(
