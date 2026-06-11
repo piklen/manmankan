@@ -241,3 +241,40 @@ def test_index_json_invalid_code_error_envelope() -> None:
     assert payload["command"] == "index"
     assert payload["error"]["code"] == "invalid_index"
     assert "例:" in payload["error"]["hint"]
+
+
+def test_callback_routes_subcommand_when_argv_len_one(monkeypatch) -> None:
+    """回归: MCP server(kan-mcp 进程)的 sys.argv 恒为长度 1。
+
+    旧 root callback 用 len(sys.argv)==1 误判成"无子命令" → 打印命令速记并
+    raise Exit → 所有 in-process invoke(每个 MCP 工具)都塌缩成同一段 help。
+    改用 ctx.invoked_subcommand 后,argv 长度 1 仍能正确路由到子命令。
+
+    注: pytest 进程 argv 长度 >1 会掩盖此 bug,故必须 monkeypatch argv 复现。
+    """
+    import sys
+    monkeypatch.setattr(sys, "argv", ["kan-mcp"])
+
+    examples = CliRunner().invoke(app, ["examples"])
+    assert examples.exit_code == 0
+    assert "命令速记" not in examples.output
+    assert "kan scan --format json" in examples.output
+
+    fields = CliRunner().invoke(app, ["fields", "list", "--format", "json"])
+    assert fields.exit_code == 0
+    assert "命令速记" not in fields.output
+    assert "@moneyflow" in json.loads(fields.output)["presets"]
+
+
+def test_run_kan_routes_subcommand_when_argv_len_one(monkeypatch) -> None:
+    """回归(MCP 实际路径): _run_kan 经 CliRunner invoke,在 argv 长度 1 下
+    仍须路由到目标子命令而非命令速记。覆盖所有 MCP 工具的公共入口。
+    """
+    import sys
+    monkeypatch.setattr(sys, "argv", ["kan-mcp"])
+    from kan.mcp.server import _run_kan
+
+    r = _run_kan(["fields", "list", "--format", "json"])
+    assert r["exit_code"] == 0
+    assert "命令速记" not in r["stdout"]
+    assert "@moneyflow" in json.loads(r["stdout"])["presets"]
