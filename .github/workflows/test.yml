@@ -35,12 +35,8 @@ jobs:
     timeout-minutes: 20
     steps:
       - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10  # v6 (pinned 2026-05-27)
-      - uses: astral-sh/setup-uv@fac544c07dec837d0ccb6301d7b5580bf5edae39  # pinned 2026-05-27
-        with:
-          python-version: '3.12'
-          enable-cache: true
-          prune-cache: false
-          cache-local-path: ${{ runner.temp }}/uv-cache
+      - name: Set up uv and Python
+        run: bash scripts/ci/setup-uv.sh '3.12'
       - name: Lockfile is current
         run: uv lock --check
       - name: Install dependencies
@@ -111,12 +107,8 @@ jobs:
       - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10  # v6 (pinned 2026-05-27)
         with:
           fetch-depth: 0  # diff-cover 需要 base 分支历史做新代码覆盖率对比
-      - uses: astral-sh/setup-uv@fac544c07dec837d0ccb6301d7b5580bf5edae39  # pinned 2026-05-27
-        with:
-          python-version: ${{ matrix.python-version }}
-          enable-cache: true
-          prune-cache: false
-          cache-local-path: ${{ runner.temp }}/uv-cache
+      - name: Set up uv and Python
+        run: bash scripts/ci/setup-uv.sh '${{ matrix.python-version }}'
       - name: Install dependencies
         run: uv sync --frozen --all-groups --all-extras
       - name: Run tests
@@ -140,12 +132,8 @@ jobs:
         python-version: ['3.11', '3.12']
     steps:
       - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10  # v6 (pinned 2026-05-27)
-      - uses: astral-sh/setup-uv@fac544c07dec837d0ccb6301d7b5580bf5edae39  # pinned 2026-05-27
-        with:
-          python-version: ${{ matrix.python-version }}
-          enable-cache: true
-          prune-cache: false
-          cache-local-path: ${{ runner.temp }}/uv-cache
+      - name: Set up uv and Python
+        run: bash scripts/ci/setup-uv.sh '${{ matrix.python-version }}'
       - name: Build package
         run: uv build --clear
       - name: Install wheel in clean environment
@@ -210,12 +198,8 @@ jobs:
         python-version: ['3.11', '3.12']
     steps:
       - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10  # v6 (pinned 2026-05-27)
-      - uses: astral-sh/setup-uv@fac544c07dec837d0ccb6301d7b5580bf5edae39  # pinned 2026-05-27
-        with:
-          python-version: ${{ matrix.python-version }}
-          enable-cache: true
-          prune-cache: false
-          cache-local-path: ${{ runner.temp }}/uv-cache
+      - name: Set up uv and Python
+        run: bash scripts/ci/setup-uv.sh '${{ matrix.python-version }}'
       - name: Install dependencies + manmankan as tool
         run: |
           uv sync --frozen --all-groups --all-extras
