@@ -9,6 +9,9 @@ contact_links:
   - name: AI agent 快速开始
     url: https://github.com/piklen/manmankan/blob/main/docs/ai-quickstart.md
     about: 第一次让 AI 调用 CLI / JSON / MCP 前，先读这里。
+  - name: 第一次贡献代码
+    url: https://github.com/piklen/manmankan/blob/main/docs/contributor-quickstart.md
+    about: 选择 good first issue、本地验证、AI 协作和发 PR 前，先读这里。
   - name: MCP 接入说明
     url: https://github.com/piklen/manmankan/blob/main/docs/mcp.md
     about: 查看支持的客户端、dry-run 规则和故障排查入口。

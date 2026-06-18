@@ -10,6 +10,7 @@
 - MCP 客户端接入：[`docs/mcp.md`](docs/mcp.md)
 - JSON 字段和缺数据语义：[`docs/find.md`](docs/find.md)
 - 公开输出合规边界：[`docs/compliance.md`](docs/compliance.md)
+- 第一次贡献代码：[`docs/contributor-quickstart.md`](docs/contributor-quickstart.md)
 - 贡献代码：[`CONTRIBUTING.md`](CONTRIBUTING.md)
 
 ## 可以用 GitHub Issues 反馈

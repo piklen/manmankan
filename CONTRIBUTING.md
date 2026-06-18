@@ -2,6 +2,8 @@
 
 感谢你对慢慢看的兴趣！
 
+如果你是第一次贡献，先看 [`docs/contributor-quickstart.md`](docs/contributor-quickstart.md)。那里按“选题 → 本地跑起来 → 最短 smoke → 按改动验证 → 发 PR”给出一条更短的实操路径。
+
 ## 开发环境
 
 要求 Python 3.11+，推荐使用 [uv](https://docs.astral.sh/uv/)：
