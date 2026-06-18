@@ -15,6 +15,7 @@ concurrency:
 env:
   KAN_NO_COMPLETION_AUTOINSTALL: "1"
   KAN_NO_UPDATE_CHECK: "1"
+  UV_LOCK_TIMEOUT: "1200"
 
 jobs:
   network-smoke:
