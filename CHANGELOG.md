@@ -10,6 +10,7 @@ increment `D` unless the maintainer explicitly approves a larger bump.
 
 ### Added
 
+- 新增 `docs/mcp.md` 和 `SUPPORT.md`，补齐 MCP 客户端接入、dry-run 写入规则、agent 解释边界、issue 分流和安全报告入口；GitHub issue template config 增加 AI / MCP / security contact links。
 - 公开仓库新增 `AGENTS.md` 和 `docs/ai-quickstart.md`，分别服务 AI 编程助手贡献代码、AI agent 首次调用 CLI/JSON/MCP；README、site、`skills/manmankan-skill.md` 和 `kan examples` 同步为“结构 smoke / 真实行情坐标 / MCP dry-run”三步首用路径。
 - `kan scan --periods` 支持显式选择 2-360 周期集合，`--compact` / `--wide` 支持终端窄屏与全周期展示手动切换。
 - `kan board rank --period`、`kan compare --periods`、`kan history --period` 的周期边界统一到 2-360；`compare` 会按用户指定周期实际计算。

@@ -88,6 +88,8 @@ kan mcp serve
 
 MCP 工具仍沿用 CLI/JSON 契约。AI 调 MCP 时也要保留免责声明、检查错误 envelope，并把数据解释为研究输入而不是交易结论。
 
+支持的客户端和写入规则见 [`docs/mcp.md`](mcp.md)。
+
 ## 5. 错误处理
 
 JSON 模式下业务错误使用 envelope：
