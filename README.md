@@ -4,7 +4,7 @@
 >
 > 散户看得清，AI 调得动。只给数据，不给答案。
 
-[![License: Parity 7.0.0](https://img.shields.io/badge/License-Parity_7.0.0-orange.svg)](https://paritylicense.com/versions/7.0.0.html)
+[![License: AGPL v3](https://img.shields.io/badge/License-AGPL_v3-blue.svg)](https://www.gnu.org/licenses/agpl-3.0)
 [![Python 3.11+](https://img.shields.io/badge/python-3.11+-blue.svg)](https://www.python.org/downloads/)
 [![PyPI version](https://img.shields.io/pypi/v/manmankan.svg)](https://pypi.org/project/manmankan/)
 [![PyPI downloads](https://img.shields.io/pypi/dm/manmankan.svg)](https://pypi.org/project/manmankan/)
@@ -33,7 +33,7 @@ kan hold --format json --mask
 
 **manmankan** (*"take your time, see clearly"*) is an A-share data translation layer — it turns raw market data into structured, auditable CLI/JSON outputs for both retail investors and AI workflows. Watchlists, industries, themes, hot lists, full-market scans, or external code pools — one command, one clean output.
 
-Data, not decisions: no buy/sell advice, no ratings, no price targets. Python 3.11+ · local-first · A-share (architecture designed for multi-market extension) · [Parity Public License 7.0.0](LICENSE).
+Data, not decisions: no buy/sell advice, no ratings, no price targets. Python 3.11+ · local-first · A-share (architecture designed for multi-market extension) · [GNU AGPL-3.0](LICENSE).
 </details>
 
 ## 为什么存在
@@ -183,7 +183,7 @@ uv tool install manmankan --index-url https://pypi.org/simple/
 - 配置 TuShare token 后，token 只发往你配置的 TuShare API 端点。
 - `kan uninstall` 会清理本地数据并提示对应的软件包卸载命令。
 
-数据主要来自 AKShare 生态及公开行情源，可用性依赖上游。AKShare 数据限制为学术研究用途，本工具继承该限制；商业使用、SaaS、二次分发或衍生软件还需遵守 [LICENSE](LICENSE)、[NOTICE](NOTICE) 与上游数据条款。
+本项目代码和文档使用 [GNU AGPL-3.0](LICENSE)（`AGPL-3.0-only`）。如果你修改本项目并通过网络服务提供交互，需要按 AGPL 向用户提供对应源代码。市场数据主要来自 AKShare 生态及公开行情源，可用性依赖上游；第三方行情数据、API、SDK 和 TuShare Pro 权限不由本项目授权，使用时仍需遵守对应上游条款、额度和合规要求。
 
 ## 文档导航
 
@@ -225,8 +225,8 @@ git config core.hooksPath .githooks
 
 ## 许可证
 
-[Parity Public License 7.0.0](LICENSE) · 附 [Attribution Rider](NOTICE) · © 2026 piklen
+[GNU AGPL-3.0](LICENSE) · © 2026 piklen
 
-个人、学术、评估、非营利用途免费；衍生作品须同 license 公开。商业使用、付费服务、SaaS 或嵌入商业产品须先获得作者书面授权。衍生作品须在 README 显著位置标注 "Based on manmankan (https://github.com/piklen/manmankan)"。
+你可以在 `AGPL-3.0-only` 条款下使用、修改和分发本项目代码。修改版本、二次分发和网络服务使用需遵守 AGPL 的源码提供和同许可要求。项目许可证只覆盖本仓库的代码与文档，不替代第三方行情数据、API、SDK 或投资合规义务。
 
 Bug / 功能反馈走 [GitHub Issues](https://github.com/piklen/manmankan/issues) 或 [Discussions](https://github.com/piklen/manmankan/discussions)。

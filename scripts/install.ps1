@@ -26,7 +26,7 @@ function Step ([string]$title) { Say ""; Write-Host "━━━ $title ━━━"
 # ── Banner ───────────────────────────────────────────────────────
 Say ""
 Say "🐙 慢慢看 (manmankan) 一键安装脚本"
-Say "   A 股自选股位置工具 · 本地存储 · 个人自用免费 · source-available"
+Say "   A 股自选股位置工具 · 本地存储 · 开源 · AGPL-3.0"
 Say ""
 Say "📋 即将做这 4 件事："
 Say "   1. 检查你的系统 (Windows + PowerShell 版本)"

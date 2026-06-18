@@ -7,7 +7,7 @@ AI JSON 层 (AI 消费入口):
 - `--format json`:命中股票带全维度 metadata (triggered_filters + context + valuation)
 - `--format md`:markdown 表格
 - 无 filter + `--format json|md`:整池全维度 (= AI 取数环节 · 不带 filter = 数据 provider)
-- 强制 disclaimer 字段 (compliance §5/§7 · 衍生不可删 · 测试守护)
+- 强制 disclaimer 字段 (compliance §5/§7 · 项目内强制输出 · 测试守护)
 
 合规(manmankan/docs/compliance.md §7):
 - 用户显式指定 filter · 不内置筛选策略 preset

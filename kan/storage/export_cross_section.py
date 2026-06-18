@@ -202,7 +202,7 @@ def cross_section_payload(
         stale: 截面缓存是否滞后
         filters: rule.filters (--pe/--moneyflow 的 DSL · None=取数无 filter)
 
-    强制 disclaimer 字段 (compliance §5/§7 · 衍生不可删 · 测试守护)。
+    强制 disclaimer 字段 (compliance §5/§7 · 项目内强制输出 · 测试守护)。
     """
     from kan.render.base import FIND_DISCLAIMER_TEXT
 
@@ -261,7 +261,7 @@ def cross_section_markdown(
     title: str,
     pool_size: int,
 ) -> str:
-    """kan find --all --format md · 全市场截面简表 + disclaimer (衍生不可删)。
+    """kan find --all --format md · 全市场截面简表 + disclaimer (项目内强制输出)。
 
     列:股票 / 申万行业 / PE / PE 行业内分位 / 换手率% / 主力净额 (估值/质量/资金维度 · 裸 PE 放开
     + 换手率 + 主力净额 · PE 分位作对照 · 全字段 (PB/资金明细) 见 --format json)。

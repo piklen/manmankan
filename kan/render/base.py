@@ -9,7 +9,7 @@ DISCLAIMER = (
     "· 历史价格不预示未来 · 仅供参考，不构成投资建议"
 )
 
-# kan find 选股器专属免责 · compliance §5 强制文案 (背景 · 衍生不可删)。
+# kan find 选股器专属免责 · compliance §5 强制文案 (项目内强制输出)。
 # 单一 SOT:CLI Rich 渲染 (find_cmds.FIND_DISCLAIMER) 与 JSON/md 输出
 # (export.find_payload / find_markdown) 都引用此纯文本 · 避免文案漂移。
 FIND_DISCLAIMER_TEXT = (

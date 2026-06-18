@@ -42,7 +42,7 @@
     <text x="80" y="290" font-size="86" font-weight="800" fill="#e4e4e7" letter-spacing="-2">告诉你<tspan fill="url(#brand)">坐标</tspan></text>
     <text x="80" y="380" font-size="58" font-weight="600" fill="#71717a" letter-spacing="-1">不替你决策</text>
 
-    <text x="80" y="465" font-size="24" fill="#a1a1aa">A 股本地数据筛选器 · 人和 AI 共用 · source-available</text>
+    <text x="80" y="465" font-size="24" fill="#a1a1aa">A 股本地数据筛选器 · 人和 AI 共用 · AGPL-3.0</text>
 
     <!-- bottom row -->
     <g transform="translate(80, 540)">
