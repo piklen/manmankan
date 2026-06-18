@@ -10,6 +10,7 @@ increment `D` unless the maintainer explicitly approves a larger bump.
 
 ### Added
 
+- 许可证迁移至 GNU Affero General Public License v3.0（`AGPL-3.0-only`）；README、site、安装脚本、PyPI classifier、NOTICE 和合规边界同步更新，明确项目许可证覆盖代码 / 文档，不替代第三方行情数据、API、SDK 或投资合规义务。
 - GitHub Discussions 已启用；`SUPPORT.md`、issue contact links、README 文档导航和 site footer 同步区分 Discussions / Issues / Security 的支持入口。
 - 新增 `docs/china-quickstart.md`，面向中国 A 股用户和中国开发者补齐国内网络、PyPI 镜像、TuShare token、代理、Windows / PowerShell、issue 反馈信息的首用路径；README、docs index、SUPPORT、site 和 issue contact links 同步入口。
 - 新增 `docs/mcp.md` 和 `SUPPORT.md`，补齐 MCP 客户端接入、dry-run 写入规则、agent 解释边界、issue 分流和安全报告入口；GitHub issue template config 增加 AI / MCP / security contact links。

@@ -30,7 +30,7 @@ if TYPE_CHECKING:
     from kan.core.pipeline import Freshness
 
 def _find_disclaimer_quote() -> str:
-    """find 专属免责 → markdown 引用块 (compliance §5 · 衍生不可删)。"""
+    """find 专属免责 → markdown 引用块 (compliance §5 · 项目内强制输出)。"""
     from kan.render.base import FIND_DISCLAIMER_TEXT
 
     return "> " + FIND_DISCLAIMER_TEXT
@@ -325,7 +325,7 @@ def find_payload(
         matched_total: limit 前的总命中数 (stats.matched · len(entries)=shown)
         freshness: 数据新鲜度 (data_cutoff / stale)
 
-    强制 disclaimer 字段 (compliance §5/§7 · 衍生不可删 · 测试守护)。
+    强制 disclaimer 字段 (compliance §5/§7 · 项目内强制输出 · 测试守护)。
     """
     from kan.render.base import FIND_DISCLAIMER_TEXT
 
@@ -444,7 +444,7 @@ def find_markdown(
     pool_size: int,
     matched_total: int,
 ) -> str:
-    """kan find --format md · 命中股票表 + 触发 filter + disclaimer (衍生不可删)。"""
+    """kan find --format md · 命中股票表 + 触发 filter + disclaimer (项目内强制输出)。"""
     headers = ["股票", "现价", "触发 filter", "低共振", "高共振"]
     rows: list[list[str]] = []
     for m, er in entries:

@@ -4,7 +4,7 @@
 - 估值裸值 (pe_ttm / pb / ps_ttm / dv_ttm) 自整合-1 起**对外输出** (用户主导 filter ·
   推翻旧"估值不给裸值"设计)
 - fundamentals (ROE/增速) / moneyflow (主力净额) 裸值对外 (客观/单向正向因子)
-- 强制 disclaimer 字段 (衍生不可删)
+- 强制 disclaimer 字段 (项目内强制输出)
 - **仍守不动:不含 §3 黑名单判断词** (推荐/优质/低估 ...) — 放开的是数值不是判断词
 """
 from __future__ import annotations
@@ -890,7 +890,7 @@ class TestCrossSectionPayload:
         assert "600519" in md
         assert "食品饮料" in md          # 行业
         assert "62%" in md               # PE 行业内分位 (62.0 → 62%)
-        assert "候选 ≠ 买入信号" in md   # disclaimer 衍生不可删
+        assert "候选 ≠ 买入信号" in md   # disclaimer 项目内强制输出
         # 整合-1:个股估值裸值现在出 (PE 20.04) + 主力净额
         assert "20.04" in md
         assert "5,000" in md             # net_amount 5000.0 千分位

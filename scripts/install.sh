@@ -32,7 +32,7 @@ step() { say ""; say "${BLUE}━━━ $1 ━━━${NC}"; }
 # ── Banner ───────────────────────────────────────────────────────
 say ""
 say "🐙 慢慢看 (manmankan) 一键安装脚本"
-say "   A 股自选股位置工具 · 本地存储 · 个人自用免费 · source-available"
+say "   A 股自选股位置工具 · 本地存储 · 开源 · AGPL-3.0"
 say ""
 say "📋 即将做这 4 件事："
 say "   1. 检查你的系统 (mac / Linux)"
