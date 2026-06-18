@@ -26,9 +26,8 @@ jobs:
         with:
           version: "0.11.21"
           python-version: '3.12'
-          enable-cache: true
-          prune-cache: false
-          cache-local-path: ${{ runner.temp }}/uv-cache
+          # 低带宽 self-hosted runner 复用机器级 UV_CACHE_DIR，避免走 GitHub 云端 cache。
+          enable-cache: false
       - name: Install dependencies
         run: uv sync --frozen --all-groups --all-extras
       - name: Run network-marked smoke tests
