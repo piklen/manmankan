@@ -25,6 +25,23 @@ uv run pytest
 uv run pytest --cov=kan          # 带覆盖率
 ```
 
+## 适合先做的小改动
+
+如果你是第一次参与，可以从这些低风险范围开始：
+
+- 文档错别字、命令示例、FAQ 和安装说明。
+- `kan examples` / `kan --help` 中已经存在命令的说明补齐。
+- 不改 JSON schema 的测试补充。
+- 数据源失败时的错误提示改善（必须保留 `例:` 可复制命令）。
+
+不适合作为第一次 PR 的范围：
+
+- 新增数据源、改 JSON 顶层字段、改 release workflow。
+- 新增筛选规则或技术指标解释。
+- 任何可能被理解成买卖动作、评级、目标价或策略结论的输出。
+
+使用 AI 编程助手参与代码贡献时，先读 [`AGENTS.md`](AGENTS.md)；使用 AI agent 调用 CLI 时，先读 [`docs/ai-quickstart.md`](docs/ai-quickstart.md) 和 [`skills/manmankan-skill.md`](skills/manmankan-skill.md)。
+
 ## 代码风格
 
 - 使用 [ruff](https://docs.astral.sh/ruff/) 做 lint 和格式化：`uv run ruff check kan/`

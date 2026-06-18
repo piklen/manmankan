@@ -17,12 +17,14 @@
 
 ```bash
 uv tool install manmankan
-kan scan --codes 600519,000858
-kan scan --periods 5,20,60,180 --wide
-kan find --codes 600519,000858 --format json --compact
+kan find --codes 600519,000858 --format json
+kan scan --codes 600519,000858 --periods 5,20,60,180 --format json
+kan mcp install --dry-run
 kan hold add 600519 --cost 1680 --shares 100
 kan hold --format json --mask
 ```
+
+`kan find --codes ... --format json` 是不拉行情的结构 smoke；`kan scan --codes ... --format json` 会拉公开日 K 并输出真实位置坐标，首次运行可能需要几十秒建立本地缓存。
 
 如果你也想先把候选池数据说清楚，再交给人或 AI 慢慢研究，可以 star 关注后续版本。
 
@@ -59,6 +61,8 @@ Data, not decisions: no buy/sell advice, no ratings, no price targets. Python 3.
 | **MCP Server** | `kan mcp serve` 提供 stdio MCP；`kan mcp install --dry-run` 可预览写入常见 AI 客户端的用户级配置 |
 | **退出码即 API** | 每个命令的退出码有明确语义（0=成功，非 0=具体错误类别），AI 不需要解析 stderr 来判断成败 |
 
+AI agent 首次接入推荐读 [`docs/ai-quickstart.md`](docs/ai-quickstart.md)。它把“不拉行情的结构 smoke”和“会拉真实日 K 的数据路径”拆开，避免把代码池解析误当成行情取数。
+
 ## 快速开始
 
 ```bash
@@ -83,7 +87,8 @@ kan scan                                      # 扫默认池（自选 ∪ 持仓
 kan scan --codes 600519,000858               # 扫外部候选代码池
 kan scan --periods 5,20,60,180 --wide         # 自定义 2-360 周期并全量展示
 kan info 600519                               # 单股详情 + 所属行业位置均值/排名对照
-kan find --codes 600519,000858 --format json # 把候选池整理成 JSON
+kan find --codes 600519,000858 --format json # 不拉行情的代码池 JSON smoke
+kan scan --codes 600519,000858 --format json # 拉公开日 K 的真实坐标 JSON
 kan find --all --pe lt:20 --format json --compact
 kan hold add 600519 --cost 1680 --shares 100 # 手动录入真实持仓事实
 kan hold                                      # 持仓盈亏 + 仓位 + 位置总览
@@ -184,10 +189,12 @@ uv tool install manmankan --index-url https://pypi.org/simple/
 |---|---|
 | [`CHANGELOG.md`](CHANGELOG.md) | 版本变更记录 |
 | [`docs/architecture.md`](docs/architecture.md) | 架构愿景：三层定位、Source 模型、多市场路线、AI 消费设计 |
+| [`docs/ai-quickstart.md`](docs/ai-quickstart.md) | AI agent 首用路径、JSON / MCP 消费规则 |
 | [`docs/find.md`](docs/find.md) | `kan find` JSON schema、字段、缺数据语义 |
 | [`docs/compliance.md`](docs/compliance.md) | 合规边界、公开输出语言规范 |
 | [`docs/roadmap.md`](docs/roadmap.md) | 路线图和明确不做的方向 |
 | [`skills/manmankan-skill.md`](skills/manmankan-skill.md) | AI Agent 能力清单（给 AI 读的说明书） |
+| [`AGENTS.md`](AGENTS.md) | AI 编程助手进入本仓库时的开发边界和验证命令 |
 | [`kan/api.py`](kan/api.py) | Python API 公开 contract |
 | [`SECURITY.md`](SECURITY.md) | 安全与漏洞报告 |
 | [`CONTRIBUTING.md`](CONTRIBUTING.md) | 开发、测试、贡献规范 |
