@@ -1,5 +1,8 @@
 blank_issues_enabled: false
 contact_links:
+  - name: 用法讨论 / 环境排查
+    url: https://github.com/piklen/manmankan/discussions
+    about: 非明确 bug 的用法确认、国内网络、数据源现象、AI / MCP 接入经验，优先发 Discussions。
   - name: 中国用户 / 开发者快速开始
     url: https://github.com/piklen/manmankan/blob/main/docs/china-quickstart.md
     about: 国内网络、PyPI 镜像、TuShare token、代理和 Windows / PowerShell 首用问题先看这里。

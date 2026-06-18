@@ -21,6 +21,17 @@
 - 国内网络下 PyPI 下载、行情源访问、代理、TuShare 权限排查问题。
 - 文档示例和真实命令不一致。
 
+## 可以用 GitHub Discussions 交流
+
+如果不是明确 bug，而是用法确认、环境排查、数据源现象、AI / MCP 接入经验或新功能方向讨论，优先用 [GitHub Discussions](https://github.com/piklen/manmankan/discussions)。
+
+适合 Discussions 的问题：
+
+- 中国网络环境下安装慢、PyPI 镜像、代理、Windows / PowerShell 经验交流。
+- `kan find` / `kan scan` / `kan hold` 的使用口径确认。
+- AI agent 如何消费 JSON / MCP 的工作流讨论。
+- 还没形成明确复现步骤的想法或问题。
+
 报告 bug 时请贴：
 
 - `kan --version`
