@@ -37,6 +37,7 @@ jobs:
       - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10  # v6 (pinned 2026-05-27)
       - uses: astral-sh/setup-uv@fac544c07dec837d0ccb6301d7b5580bf5edae39  # pinned 2026-05-27
         with:
+          version: "0.11.21"
           python-version: '3.12'
           enable-cache: true
           prune-cache: false
@@ -90,6 +91,10 @@ jobs:
                   print(f"  - {p.name}")
               sys.exit(1)
           PY
+      - name: Clean CI runner workspace
+        if: always()
+        continue-on-error: true
+        uses: ./.github/actions/cleanup-runner
 
   # 保留独立 job 名，避免已有 branch protection 仍绑定旧检查名时被误断。
   privacy-scan:
@@ -99,6 +104,10 @@ jobs:
       - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10  # v6 (pinned 2026-05-27)
       - name: Privacy / public archive scan
         run: bash scripts/check-privacy-leaks.sh
+      - name: Clean CI runner workspace
+        if: always()
+        continue-on-error: true
+        uses: ./.github/actions/cleanup-runner
 
   test:
     runs-on: [self-hosted, manmankan-ci]
@@ -113,6 +122,7 @@ jobs:
           fetch-depth: 0  # diff-cover 需要 base 分支历史做新代码覆盖率对比
       - uses: astral-sh/setup-uv@fac544c07dec837d0ccb6301d7b5580bf5edae39  # pinned 2026-05-27
         with:
+          version: "0.11.21"
           python-version: ${{ matrix.python-version }}
           enable-cache: true
           prune-cache: false
@@ -130,6 +140,10 @@ jobs:
           fi
           git merge-base origin/main HEAD >/dev/null
           uv run diff-cover coverage.xml --compare-branch=origin/main --fail-under=85
+      - name: Clean CI runner workspace
+        if: always()
+        continue-on-error: true
+        uses: ./.github/actions/cleanup-runner
 
   package-smoke:
     runs-on: [self-hosted, manmankan-ci]
@@ -142,6 +156,7 @@ jobs:
       - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10  # v6 (pinned 2026-05-27)
       - uses: astral-sh/setup-uv@fac544c07dec837d0ccb6301d7b5580bf5edae39  # pinned 2026-05-27
         with:
+          version: "0.11.21"
           python-version: ${{ matrix.python-version }}
           enable-cache: true
           prune-cache: false
@@ -165,7 +180,7 @@ jobs:
           "$SMOKE_VENV/bin/kan" --help
           "$SMOKE_VENV/bin/kan" scan --help
           "$SMOKE_VENV/bin/kan" find --help
-          HOME="$(mktemp -d)" XDG_DATA_HOME="$(mktemp -d)" NO_COLOR=1 "$SMOKE_VENV/bin/kan" find --codes 600519,000858 --format json > "$SMOKE_JSON"
+          HOME="$(mktemp -d "$RUNNER_TEMP/kan-home-XXXXXX")" XDG_DATA_HOME="$(mktemp -d "$RUNNER_TEMP/kan-xdg-XXXXXX")" NO_COLOR=1 "$SMOKE_VENV/bin/kan" find --codes 600519,000858 --format json > "$SMOKE_JSON"
           NO_COLOR=1 "$SMOKE_VENV/bin/kan" find --help > "$SMOKE_HELP"
           python3 - <<'PY'
           import json
@@ -182,7 +197,7 @@ jobs:
           PY
           "$SMOKE_VENV/bin/kan" board rank --help
           "$SMOKE_VENV/bin/kan" history --help
-          tmp="$(mktemp -d)"
+          tmp="$(mktemp -d "$RUNNER_TEMP/kan-import-XXXXXX")"
           cd "$tmp"
           "$SMOKE_VENV/bin/python" - <<'PY'
           import os
@@ -199,6 +214,10 @@ jobs:
           assert callable(fetch)
           assert callable(from_flags)
           PY
+      - name: Clean CI runner workspace
+        if: always()
+        continue-on-error: true
+        uses: ./.github/actions/cleanup-runner
 
   # CI -m "not tty" 会排除 TTY 真测 · 在 VPS Linux runner 补真实终端覆盖。
   tty-test:
@@ -212,6 +231,7 @@ jobs:
       - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10  # v6 (pinned 2026-05-27)
       - uses: astral-sh/setup-uv@fac544c07dec837d0ccb6301d7b5580bf5edae39  # pinned 2026-05-27
         with:
+          version: "0.11.21"
           python-version: ${{ matrix.python-version }}
           enable-cache: true
           prune-cache: false
@@ -222,3 +242,7 @@ jobs:
           uv tool install --reinstall --force .
       - name: TTY real terminal tests on Linux (util-linux script)
         run: script -q -c "uv run pytest -q -m tty tests/test_cli_silent_period.py" /dev/null
+      - name: Clean CI runner workspace
+        if: always()
+        continue-on-error: true
+        uses: ./.github/actions/cleanup-runner
