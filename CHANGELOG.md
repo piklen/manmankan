@@ -10,6 +10,7 @@ increment `D` unless the maintainer explicitly approves a larger bump.
 
 ### Added
 
+- 新增 `docs/china-quickstart.md`，面向中国 A 股用户和中国开发者补齐国内网络、PyPI 镜像、TuShare token、代理、Windows / PowerShell、issue 反馈信息的首用路径；README、docs index、SUPPORT、site 和 issue contact links 同步入口。
 - 新增 `docs/mcp.md` 和 `SUPPORT.md`，补齐 MCP 客户端接入、dry-run 写入规则、agent 解释边界、issue 分流和安全报告入口；GitHub issue template config 增加 AI / MCP / security contact links。
 - 公开仓库新增 `AGENTS.md` 和 `docs/ai-quickstart.md`，分别服务 AI 编程助手贡献代码、AI agent 首次调用 CLI/JSON/MCP；README、site、`skills/manmankan-skill.md` 和 `kan examples` 同步为“结构 smoke / 真实行情坐标 / MCP dry-run”三步首用路径。
 - `kan scan --periods` 支持显式选择 2-360 周期集合，`--compact` / `--wide` 支持终端窄屏与全周期展示手动切换。

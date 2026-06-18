@@ -1,5 +1,8 @@
 blank_issues_enabled: false
 contact_links:
+  - name: 中国用户 / 开发者快速开始
+    url: https://github.com/piklen/manmankan/blob/main/docs/china-quickstart.md
+    about: 国内网络、PyPI 镜像、TuShare token、代理和 Windows / PowerShell 首用问题先看这里。
   - name: AI agent 快速开始
     url: https://github.com/piklen/manmankan/blob/main/docs/ai-quickstart.md
     about: 第一次让 AI 调用 CLI / JSON / MCP 前，先读这里。
