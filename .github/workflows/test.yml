@@ -35,16 +35,14 @@ jobs:
     timeout-minutes: 20
     steps:
       - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10  # v6 (pinned 2026-05-27)
-      - uses: astral-sh/setup-uv@fac544c07dec837d0ccb6301d7b5580bf5edae39  # pinned 2026-05-27
-        with:
-          version: "0.11.21"
-          python-version: '3.12'
-          # 低带宽 self-hosted runner 复用机器级 UV_CACHE_DIR，避免走 GitHub 云端 cache。
-          enable-cache: false
+      - name: Verify preinstalled uv runtime
+        run: |
+          uv --version
+          uv python find 3.12
       - name: Lockfile is current
         run: uv lock --check
       - name: Install dependencies
-        run: uv sync --frozen --all-groups --all-extras
+        run: uv sync --python 3.12 --frozen --all-groups --all-extras
       - name: Dependency upper-bound review
         run: uv run python scripts/check-dependency-bounds.py
       - name: Privacy / public archive scan
@@ -119,14 +117,12 @@ jobs:
       - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10  # v6 (pinned 2026-05-27)
         with:
           fetch-depth: 0  # diff-cover 需要 base 分支历史做新代码覆盖率对比
-      - uses: astral-sh/setup-uv@fac544c07dec837d0ccb6301d7b5580bf5edae39  # pinned 2026-05-27
-        with:
-          version: "0.11.21"
-          python-version: ${{ matrix.python-version }}
-          # 低带宽 self-hosted runner 复用机器级 UV_CACHE_DIR，避免走 GitHub 云端 cache。
-          enable-cache: false
+      - name: Verify preinstalled uv runtime
+        run: |
+          uv --version
+          uv python find ${{ matrix.python-version }}
       - name: Install dependencies
-        run: uv sync --frozen --all-groups --all-extras
+        run: uv sync --python ${{ matrix.python-version }} --frozen --all-groups --all-extras
       - name: Run tests
         run: uv run pytest -vv -m "not tty and not network" --durations=25 --durations-min=1.0 --cov=kan --cov-report=xml --cov-report=term-missing --cov-fail-under=73
       - name: Patch coverage (new code >= 85%)
@@ -152,12 +148,10 @@ jobs:
         python-version: ['3.11', '3.12']
     steps:
       - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10  # v6 (pinned 2026-05-27)
-      - uses: astral-sh/setup-uv@fac544c07dec837d0ccb6301d7b5580bf5edae39  # pinned 2026-05-27
-        with:
-          version: "0.11.21"
-          python-version: ${{ matrix.python-version }}
-          # 低带宽 self-hosted runner 复用机器级 UV_CACHE_DIR，避免走 GitHub 云端 cache。
-          enable-cache: false
+      - name: Verify preinstalled uv runtime
+        run: |
+          uv --version
+          uv python find ${{ matrix.python-version }}
       - name: Build package
         run: uv build --clear
       - name: Install wheel in clean environment
@@ -226,16 +220,14 @@ jobs:
         python-version: ['3.11', '3.12']
     steps:
       - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10  # v6 (pinned 2026-05-27)
-      - uses: astral-sh/setup-uv@fac544c07dec837d0ccb6301d7b5580bf5edae39  # pinned 2026-05-27
-        with:
-          version: "0.11.21"
-          python-version: ${{ matrix.python-version }}
-          # 低带宽 self-hosted runner 复用机器级 UV_CACHE_DIR，避免走 GitHub 云端 cache。
-          enable-cache: false
+      - name: Verify preinstalled uv runtime
+        run: |
+          uv --version
+          uv python find ${{ matrix.python-version }}
       - name: Install dependencies + manmankan as tool
         run: |
-          uv sync --frozen --all-groups --all-extras
-          uv tool install --reinstall --force .
+          uv sync --python ${{ matrix.python-version }} --frozen --all-groups --all-extras
+          uv tool install --python ${{ matrix.python-version }} --reinstall --force .
       - name: TTY real terminal tests on Linux (util-linux script)
         run: script -q -c "uv run pytest -q -m tty tests/test_cli_silent_period.py" /dev/null
       - name: Clean CI runner workspace

@@ -22,14 +22,12 @@ jobs:
     timeout-minutes: 20
     steps:
       - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10  # v6 (pinned 2026-05-27)
-      - uses: astral-sh/setup-uv@fac544c07dec837d0ccb6301d7b5580bf5edae39  # pinned 2026-05-27
-        with:
-          version: "0.11.21"
-          python-version: '3.12'
-          # 低带宽 self-hosted runner 复用机器级 UV_CACHE_DIR，避免走 GitHub 云端 cache。
-          enable-cache: false
+      - name: Verify preinstalled uv runtime
+        run: |
+          uv --version
+          uv python find 3.12
       - name: Install dependencies
-        run: uv sync --frozen --all-groups --all-extras
+        run: uv sync --python 3.12 --frozen --all-groups --all-extras
       - name: Run network-marked smoke tests
         run: uv run pytest -q -m network tests/network
       - name: Clean CI runner workspace
