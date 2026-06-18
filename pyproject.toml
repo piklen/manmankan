@@ -55,9 +55,9 @@ kan-mcp = "kan.mcp.server:main"
 dev = [
     "diff-cover>=9.0",
     "mypy>=2.1.0,<3",
-    "pytest>=8.0",
+    "pytest>=9.1.0",
     "pytest-cov>=7.1.0",
-    "ruff>=0.15.16",
+    "ruff>=0.15.17",
 ]
 
 [tool.ruff]
