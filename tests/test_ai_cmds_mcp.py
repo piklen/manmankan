@@ -11,10 +11,16 @@ from kan.cli import app
 
 
 def test_examples_command_runs() -> None:
+    from kan.cli.ai_cmds import _EXAMPLES
+
     result = CliRunner().invoke(app, ["examples"])
     assert result.exit_code == 0
-    assert "kan scan --format json" in result.output
-    assert "kan mcp install" in result.output
+    assert "首次结构 smoke" in result.output
+    assert "真实行情坐标 JSON" in result.output
+    commands = {row[1] for row in _EXAMPLES}
+    assert "kan find --codes 600519,000858 --format json" in commands
+    assert "kan scan --codes 600519,000858 --periods 5,20,60,180 --format json" in commands
+    assert "kan mcp install --dry-run" in commands
 
 
 def test_fields_list_json_includes_moneyflow_fields() -> None:
@@ -258,7 +264,8 @@ def test_callback_routes_subcommand_when_argv_len_one(monkeypatch) -> None:
     examples = CliRunner().invoke(app, ["examples"])
     assert examples.exit_code == 0
     assert "命令速记" not in examples.output
-    assert "kan scan --format json" in examples.output
+    assert "首次结构 smoke" in examples.output
+    assert "真实行情坐标 JSON" in examples.output
 
     fields = CliRunner().invoke(app, ["fields", "list", "--format", "json"])
     assert fields.exit_code == 0
