@@ -199,7 +199,7 @@ uv tool install manmankan --index-url https://pypi.org/simple/
 | [`docs/roadmap.md`](docs/roadmap.md) | 路线图和明确不做的方向 |
 | [`skills/manmankan-skill.md`](skills/manmankan-skill.md) | AI Agent 能力清单（给 AI 读的说明书） |
 | [`AGENTS.md`](AGENTS.md) | AI 编程助手进入本仓库时的开发边界和验证命令 |
-| [`SUPPORT.md`](SUPPORT.md) | 支持范围、issue 分流和安全报告入口 |
+| [`SUPPORT.md`](SUPPORT.md) | 支持范围、Discussions / Issues 分流和安全报告入口 |
 | [`kan/api.py`](kan/api.py) | Python API 公开 contract |
 | [`SECURITY.md`](SECURITY.md) | 安全与漏洞报告 |
 | [`CONTRIBUTING.md`](CONTRIBUTING.md) | 开发、测试、贡献规范 |
