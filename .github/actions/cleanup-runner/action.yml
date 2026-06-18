@@ -1,0 +1,89 @@
+name: Cleanup self-hosted runner workspace
+description: Remove reproducible build outputs left by a self-hosted runner job.
+runs:
+  using: composite
+  steps:
+    - shell: bash
+      run: |
+        set -Eeuo pipefail
+
+        workspace="${GITHUB_WORKSPACE:-}"
+        if [[ -z "$workspace" || ! -d "$workspace" ]]; then
+          echo "cleanup_skip reason=missing_workspace"
+          exit 0
+        fi
+
+        remove_workspace_path() {
+          local path="$1"
+          [[ -e "$path" || -L "$path" ]] || return 0
+          case "$path" in
+            "$workspace"/*) ;;
+            *) echo "cleanup_skip reason=outside_workspace path=$path"; return 0 ;;
+          esac
+          echo "cleanup_remove path=${path#$workspace/}"
+          rm -rf -- "$path"
+        }
+
+        remove_temp_path() {
+          local path="$1"
+          [[ -e "$path" || -L "$path" ]] || return 0
+          case "$path" in
+            "${RUNNER_TEMP:-}"/*) ;;
+            *) echo "cleanup_skip reason=outside_runner_temp path=$path"; return 0 ;;
+          esac
+          echo "cleanup_remove_temp path=$path"
+          rm -rf -- "$path"
+        }
+
+        for path in \
+          "$workspace/.venv" \
+          "$workspace/dist" \
+          "$workspace/build" \
+          "$workspace/htmlcov" \
+          "$workspace/.pytest_cache" \
+          "$workspace/.ruff_cache" \
+          "$workspace/.mypy_cache" \
+          "$workspace/.coverage" \
+          "$workspace/coverage.xml"; do
+          remove_workspace_path "$path"
+        done
+
+        find "$workspace" \
+          -path "$workspace/.git" -prune -o \
+          -type d \( \
+            -name node_modules -o \
+            -name .pytest_cache -o \
+            -name .ruff_cache -o \
+            -name .mypy_cache -o \
+            -name '*.egg-info' -o \
+            -name __pycache__ -o \
+            -name target -o \
+            -name dist -o \
+            -name build -o \
+            -name coverage -o \
+            -name .next -o \
+            -name .vite \
+          \) -prune -print0 |
+          while IFS= read -r -d '' path; do
+            remove_workspace_path "$path"
+          done
+
+        find "$workspace" \
+          -path "$workspace/.git" -prune -o \
+          -type f \( -name '.coverage*' -o -name 'coverage.xml' -o -name '*.pyc' -o -name '*.pyo' \) -print0 |
+          while IFS= read -r -d '' path; do
+            remove_workspace_path "$path"
+          done
+
+        if [[ -n "${RUNNER_TEMP:-}" && -d "$RUNNER_TEMP" ]]; then
+          find "$RUNNER_TEMP" -mindepth 1 -maxdepth 1 \( \
+            -name 'youzi-*' -o \
+            -name 'manmankan-*' -o \
+            -name 'kan-*' -o \
+            -name 'data-hub-*' -o \
+            -name 'zhiyan-*' \
+          \) -print0 |
+            while IFS= read -r -d '' path; do
+              remove_temp_path "$path"
+            done
+        fi
