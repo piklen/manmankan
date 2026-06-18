@@ -28,9 +28,14 @@ app.add_typer(mcp_app, name="mcp")
 
 _EXAMPLES = [
     (
-        "自选股日常扫描",
-        "kan scan --format json",
-        "输出自选股多周期位置、涨跌停事实、估值和 5 日资金流摘要。",
+        "首次结构 smoke",
+        "kan find --codes 600519,000858 --format json",
+        "不拉行情；确认 CLI、JSON envelope、退出码和免责声明正常。",
+    ),
+    (
+        "真实行情坐标 JSON",
+        "kan scan --codes 600519,000858 --periods 5,20,60,180 --format json",
+        "拉公开日 K；输出多周期位置、区间涨跌、共振和数据截止日。",
     ),
     (
         "按代码池筛选位置 + 资金",
@@ -48,9 +53,9 @@ _EXAMPLES = [
         "返回多周期位置、今日资金流拆分、连续净流入天数、涨跌停详情等事实。",
     ),
     (
-        "注册 MCP",
-        "kan mcp install",
-        "把 manmankan MCP 写入常见 AI 客户端的用户级配置。",
+        "预览 MCP 注册",
+        "kan mcp install --dry-run",
+        "预览写入哪些本机 AI 客户端配置；确认后再去掉 --dry-run。",
     ),
 ]
 

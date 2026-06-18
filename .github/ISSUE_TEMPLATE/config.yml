@@ -1,0 +1,11 @@
+blank_issues_enabled: false
+contact_links:
+  - name: AI agent 快速开始
+    url: https://github.com/piklen/manmankan/blob/main/docs/ai-quickstart.md
+    about: 第一次让 AI 调用 CLI / JSON / MCP 前，先读这里。
+  - name: MCP 接入说明
+    url: https://github.com/piklen/manmankan/blob/main/docs/mcp.md
+    about: 查看支持的客户端、dry-run 规则和故障排查入口。
+  - name: 安全漏洞报告
+    url: https://github.com/piklen/manmankan/security/advisories/new
+    about: 请不要在公开 issue 中披露安全漏洞。

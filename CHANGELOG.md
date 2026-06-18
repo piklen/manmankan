@@ -10,6 +10,8 @@ increment `D` unless the maintainer explicitly approves a larger bump.
 
 ### Added
 
+- 新增 `docs/mcp.md` 和 `SUPPORT.md`，补齐 MCP 客户端接入、dry-run 写入规则、agent 解释边界、issue 分流和安全报告入口；GitHub issue template config 增加 AI / MCP / security contact links。
+- 公开仓库新增 `AGENTS.md` 和 `docs/ai-quickstart.md`，分别服务 AI 编程助手贡献代码、AI agent 首次调用 CLI/JSON/MCP；README、site、`skills/manmankan-skill.md` 和 `kan examples` 同步为“结构 smoke / 真实行情坐标 / MCP dry-run”三步首用路径。
 - `kan scan --periods` 支持显式选择 2-360 周期集合，`--compact` / `--wide` 支持终端窄屏与全周期展示手动切换。
 - `kan board rank --period`、`kan compare --periods`、`kan history --period` 的周期边界统一到 2-360；`compare` 会按用户指定周期实际计算。
 - `kan info <code>` 增加所属申万一级行业的位置均值与低到高排名对照；无行业映射或本地样本不足时自动降级不展示。
@@ -18,6 +20,7 @@ increment `D` unless the maintainer explicitly approves a larger bump.
 
 ### Fixed
 
+- `tty-test` CI 的 `uv tool install` 增加 `--force`，避免自托管 runner 已存在 `kan` wrapper 时因 entry point 冲突失败。
 - **MCP server 全部工具修复** · root callback 此前用 `len(sys.argv) == 1` 判断"用户未敲子命令"，但 `kan-mcp` 进程的 `sys.argv` 长度恒为 1，导致每个工具经 in-process `CliRunner` invoke 时都被误判为无子命令 → 打印命令速记并 `raise Exit`，`kan_info` / `kan_scan` / `kan_find` / `kan_index` / `kan_fields` / `kan_hold` / `kan_examples` 全部塌缩成同一段 help、永远拿不到真数据。改用 `ctx.invoked_subcommand`（读 Click 解析结果，对真 CLI 与 in-process invoke 都正确），并补 argv 长度 1 下的回归测试（pytest 进程 argv 长度 > 1 会掩盖此 bug，故 monkeypatch argv 复现）。
 
 ## [0.0.6.9] - 2026-06-04

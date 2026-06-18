@@ -219,6 +219,6 @@ jobs:
       - name: Install dependencies + manmankan as tool
         run: |
           uv sync --frozen --all-groups --all-extras
-          uv tool install --reinstall .
+          uv tool install --reinstall --force .
       - name: TTY real terminal tests on Linux (util-linux script)
         run: script -q -c "uv run pytest -q -m tty tests/test_cli_silent_period.py" /dev/null

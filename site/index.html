@@ -17,7 +17,7 @@
 
   <!-- Primary SEO -->
   <title>慢慢看 · manmankan · A 股本地数据筛选器 · 告诉你坐标，不替你决策</title>
-  <meta name="description" content="慢慢看 (manmankan) 是人和 AI 共用的 A 股本地数据筛选器 · 告诉你坐标，不替你决策 · 多周期位置百分位 + 共振 + 用户主导筛选 + JSON 输出 · 本地存储 · 不登录 · 不上传自选 · 不遥测 · Parity Public License 7.0.0 source-available · 支持 mac/Linux/Windows。" />
+  <meta name="description" content="慢慢看 (manmankan) 是人和 AI 共用的 A 股本地数据筛选器 · 告诉你坐标，不替你决策 · 多周期位置百分位 + 共振 + 用户主导筛选 + JSON/MCP 输出 · 本地存储 · 不登录 · 不上传自选 · 不遥测 · Parity Public License 7.0.0 source-available · 支持 mac/Linux/Windows。" />
   <meta name="keywords" content="慢慢看,manmankan,A股,自选股,股票筛选,筛选 DSL,位置百分位,共振信号,命令行工具,CLI,股票工具,AI workflow,source-available,Parity License,本地运行,Python,散户,长线投资,K线,板块,题材扫描,东方财富热榜" />
   <meta name="author" content="piklen" />
   <meta name="robots" content="index,follow,max-image-preview:large" />
@@ -38,7 +38,7 @@
   <meta property="og:type" content="website" />
   <meta property="og:site_name" content="慢慢看 · manmankan" />
   <meta property="og:title" content="慢慢看 · manmankan · 告诉你坐标，不替你决策" />
-  <meta property="og:description" content="人和 AI 共用的 A 股本地数据筛选器。多周期位置 + 共振 + 用户主导筛选 + JSON 输出。纯命令行 · 完全本地 · 0 telemetry · Parity Public License 7.0.0。" />
+  <meta property="og:description" content="人和 AI 共用的 A 股本地数据筛选器。多周期位置 + 共振 + 用户主导筛选 + JSON/MCP 输出。纯命令行 · 完全本地 · 0 telemetry · Parity Public License 7.0.0。" />
   <meta property="og:url" content="https://piklen.github.io/manmankan/" />
   <meta property="og:image" content="https://piklen.github.io/manmankan/og.svg" />
   <meta property="og:image:width" content="1200" />
@@ -60,7 +60,7 @@
     "@type": "SoftwareApplication",
     "name": "manmankan",
     "alternateName": "慢慢看",
-    "description": "A 股本地数据筛选器 · 告诉你坐标，不替你决策 · 多周期位置百分位 + 共振信号 + 用户主导筛选 + JSON 输出 · 本地存储",
+    "description": "A 股本地数据筛选器 · 告诉你坐标，不替你决策 · 多周期位置百分位 + 共振信号 + 用户主导筛选 + JSON/MCP 输出 · 本地存储",
     "applicationCategory": "FinanceApplication",
     "applicationSubCategory": "InvestmentTool",
     "operatingSystem": "macOS, Linux, Windows",
@@ -351,6 +351,7 @@
         </a>
       </div>
       <div class="flex items-center gap-1 sm:gap-4 text-sm">
+        <a href="#ai" class="hidden sm:inline px-2 py-1" style="color: var(--text-soft);">AI</a>
         <a href="#install" class="hidden sm:inline px-2 py-1" style="color: var(--text-soft);">安装</a>
         <a href="#faq" class="hidden sm:inline px-2 py-1" style="color: var(--text-soft);">FAQ</a>
         <a href="https://pypi.org/project/manmankan/" class="px-2 py-1" style="color: var(--text-soft);">PyPI</a>
@@ -379,7 +380,7 @@
       <p class="text-lg sm:text-xl mb-12 leading-relaxed max-w-3xl mx-auto" style="color: var(--text-soft);">
         <b style="color: var(--text);">慢慢看</b> 是人和 AI 共用的 A 股本地数据筛选器 ——
         把自选、行业、题材、热榜、全市场和外部代码池整理成
-        <b style="color: var(--text);">多周期位置</b>、<span class="resonance font-mono px-1.5">×N</span> 共振、用户主导筛选和低噪声 JSON。
+        <b style="color: var(--text);">多周期位置</b>、<span class="resonance font-mono px-1.5">×N</span> 共振、用户主导筛选、低噪声 JSON 和本地 MCP。
         工具只给可复核的数据坐标，后续判断由你负责。
       </p>
 
@@ -402,6 +403,10 @@
           <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/><polyline points="3.27 6.96 12 12.01 20.73 6.96"/><line x1="12" y1="22.08" x2="12" y2="12"/></svg>
           PyPI 安装详情
         </a>
+        <a href="#ai" class="btn btn-secondary">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2v4"/><path d="M12 18v4"/><path d="m4.93 4.93 2.83 2.83"/><path d="m16.24 16.24 2.83 2.83"/><path d="M2 12h4"/><path d="M18 12h4"/><path d="m4.93 19.07 2.83-2.83"/><path d="m16.24 7.76 2.83-2.83"/><circle cx="12" cy="12" r="3"/></svg>
+          AI 快速接入
+        </a>
       </div>
 
       <!-- scroll hint -->
@@ -412,6 +417,61 @@
       </div>
     </div>
   </section>
+
+  <!-- ============ AI quickstart ============ -->
+  <section id="ai" class="max-w-6xl mx-auto px-6 py-20">
+    <div class="text-center mb-12">
+      <h2 class="text-3xl sm:text-4xl font-bold mb-3">AI agent 两分钟接入</h2>
+      <p class="max-w-3xl mx-auto leading-relaxed" style="color: var(--text-soft);">
+        先用结构 smoke 确认 JSON 契约，再跑真实行情坐标；需要工具调用时，用 MCP dry-run 预览本机客户端配置。
+      </p>
+    </div>
+
+    <div class="grid md:grid-cols-3 gap-4">
+      <button type="button" class="copy-card flex-col items-stretch !p-0 overflow-hidden" data-copy="kan find --codes 600519,000858 --format json" onclick="copyCmd(this)">
+        <span class="copy-hint">点击复制 ↗</span>
+        <div class="px-4 py-2.5 text-xs font-mono border-b" style="background: var(--bg-soft); border-color: var(--border); color: var(--text-muted);">1 · 结构 smoke · 不拉行情</div>
+        <div class="px-5 py-4 text-xs sm:text-sm font-mono break-all leading-relaxed" style="color: var(--text);">
+          <span style="color: var(--accent);">$</span> <span data-copy-label>kan find --codes 600519,000858 --format json</span>
+        </div>
+        <p class="px-5 mb-5 text-xs leading-relaxed" style="color: var(--text-soft);">验证安装、退出码、JSON envelope 和免责声明；结果只代表显式代码池事实。</p>
+        <span class="feedback" style="bottom: 16px; right: 22px; top: auto;">✓ 已复制</span>
+      </button>
+
+      <button type="button" class="copy-card flex-col items-stretch !p-0 overflow-hidden" data-copy="kan scan --codes 600519,000858 --periods 5,20,60,180 --format json" onclick="copyCmd(this)">
+        <span class="copy-hint">点击复制 ↗</span>
+        <div class="px-4 py-2.5 text-xs font-mono border-b" style="background: var(--bg-soft); border-color: var(--border); color: var(--text-muted);">2 · 真实行情坐标 · 会拉日 K</div>
+        <div class="px-5 py-4 text-xs sm:text-sm font-mono break-all leading-relaxed" style="color: var(--text);">
+          <span style="color: var(--accent);">$</span> <span data-copy-label>kan scan --codes 600519,000858 --periods 5,20,60,180 --format json</span>
+        </div>
+        <p class="px-5 mb-5 text-xs leading-relaxed" style="color: var(--text-soft);">输出多周期位置、区间涨跌、共振和数据截止日；首次缓存可能需要几十秒。</p>
+        <span class="feedback" style="bottom: 16px; right: 22px; top: auto;">✓ 已复制</span>
+      </button>
+
+      <button type="button" class="copy-card flex-col items-stretch !p-0 overflow-hidden" data-copy="kan mcp install --dry-run" onclick="copyCmd(this)">
+        <span class="copy-hint">点击复制 ↗</span>
+        <div class="px-4 py-2.5 text-xs font-mono border-b" style="background: var(--bg-soft); border-color: var(--border); color: var(--text-muted);">3 · MCP dry-run · 不写配置</div>
+        <div class="px-5 py-4 text-xs sm:text-sm font-mono break-all leading-relaxed" style="color: var(--text);">
+          <span style="color: var(--accent);">$</span> <span data-copy-label>kan mcp install --dry-run</span>
+        </div>
+        <p class="px-5 mb-5 text-xs leading-relaxed" style="color: var(--text-soft);">预览会写入哪些用户级客户端配置；确认后再指定 client 或去掉 dry-run。</p>
+        <span class="feedback" style="bottom: 16px; right: 22px; top: auto;">✓ 已复制</span>
+      </button>
+    </div>
+
+    <p class="text-center text-sm mt-10" style="color: var(--text-muted);">
+      完整规则见
+      <a href="https://github.com/piklen/manmankan/blob/main/docs/ai-quickstart.md" style="color: var(--accent);" class="hover:underline">AI quickstart</a>
+      ·
+      <a href="https://github.com/piklen/manmankan/blob/main/docs/mcp.md" style="color: var(--accent);" class="hover:underline">MCP guide</a>
+      ·
+      <a href="https://github.com/piklen/manmankan/blob/main/skills/manmankan-skill.md" style="color: var(--accent);" class="hover:underline">Agent skill</a>
+      ·
+      <a href="https://github.com/piklen/manmankan/blob/main/docs/find.md" style="color: var(--accent);" class="hover:underline">JSON contract</a>
+    </p>
+  </section>
+
+  <hr class="divider-grad max-w-6xl mx-auto" />
 
   <!-- ============ Terminal mock ============ -->
   <section class="max-w-5xl mx-auto px-6 pb-20">
@@ -677,7 +737,7 @@
         </p>
         <p>
           It stops at auditable data: <b style="color: var(--text);">no buy/sell advice, no ratings, no price targets, and no strategy conclusions.</b>
-          Local storage, CLI/JSON outputs, no login, no account, no telemetry. Data is delayed end-of-day K-line from the AKShare ecosystem (baostock primary).
+          Local storage, CLI/JSON/MCP outputs, no login, no account, no telemetry. Data is delayed end-of-day K-line from the AKShare/baostock ecosystem, with optional TuShare Pro sources when configured.
         </p>
         <p class="font-mono text-sm">
           <span style="color: var(--accent);">$</span> uv tool install manmankan
@@ -707,6 +767,8 @@
           <ul class="space-y-2 text-xs">
             <li><a href="https://github.com/piklen/manmankan" class="hover:underline" style="color: var(--text-muted);">GitHub 仓库</a></li>
             <li><a href="https://pypi.org/project/manmankan/" class="hover:underline" style="color: var(--text-muted);">PyPI</a></li>
+            <li><a href="https://github.com/piklen/manmankan/blob/main/docs/ai-quickstart.md" class="hover:underline" style="color: var(--text-muted);">AI quickstart</a></li>
+            <li><a href="https://github.com/piklen/manmankan/blob/main/docs/mcp.md" class="hover:underline" style="color: var(--text-muted);">MCP guide</a></li>
             <li><a href="https://github.com/piklen/manmankan/releases" class="hover:underline" style="color: var(--text-muted);">Release Notes</a></li>
             <li><a href="https://github.com/piklen/manmankan/blob/main/CHANGELOG.md" class="hover:underline" style="color: var(--text-muted);">CHANGELOG</a></li>
           </ul>

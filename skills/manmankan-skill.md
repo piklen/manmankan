@@ -14,6 +14,8 @@
 **命令入口**：终端执行 `kan <command> [options]`
 **安装**：`uv tool install manmankan`
 **市场**：当前仅 A 股（架构预留多市场扩展）
+**首用文档**：`docs/ai-quickstart.md`
+**MCP 文档**：`docs/mcp.md`
 
 ---
 
@@ -135,6 +137,21 @@
 
 ## 典型 AI 工作流
 
+### 工作流 0：首次接入 smoke
+
+```bash
+# 1. 不拉行情，只确认 CLI / JSON envelope / disclaimer 正常
+kan find --codes 600519,000858 --format json
+
+# 2. 拉公开日 K，拿真实多周期位置坐标
+kan scan --codes 600519,000858 --periods 5,20,60,180 --format json
+
+# 3. 预览本机 MCP 注册目标
+kan mcp install --dry-run
+```
+
+第 1 步只返回代码池事实，不代表行情维度已取到。第 2 步首次运行会建立本地缓存，可能需要几十秒；读取 `data_cutoff` / `fetched_at` 后再解释结果。
+
 ### 工作流 1：每日全市场扫描
 
 ```bash
@@ -212,6 +229,8 @@ Agent 可以通过以下方式发现 manmankan 的能力：
 5. **`kan mcp install --dry-run`**——预览可注册的本机 MCP 客户端和目标配置
 6. **`kan <command> --help`**——每个命令的详细参数
 7. **`docs/find.md`**——`kan find` 的完整 JSON schema 和字段定义
+8. **`docs/ai-quickstart.md`**——首次接入的结构 smoke、真实行情路径和 MCP 规则
+9. **`docs/mcp.md`**——MCP 支持客户端、dry-run、写入规则和 agent 解释边界
 
 建议 AI 在首次使用 manmankan 时：
 1. 读本文件了解全局能力

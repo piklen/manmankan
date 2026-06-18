@@ -12,7 +12,8 @@ keywords = [
     "stock", "a-share", "cli", "json", "ai-workflow", "data-analysis",
     "position", "scanner", "akshare", "tushare", "中国股市",
     "watchlist", "stock-screener", "terminal", "baostock", "A股", "自选股",
-    "ai-data-layer", "data-middleware", "agent-native", "mcp",
+    "ai-data-layer", "data-middleware", "agent-native", "mcp", "mcp-server",
+    "model-context-protocol", "ai-agent", "agent-tools",
 ]
 classifiers = [
     "Development Status :: 3 - Alpha",
