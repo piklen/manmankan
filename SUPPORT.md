@@ -5,6 +5,7 @@
 ## 先看这些文档
 
 - 首次安装和命令入口：[`README.md`](README.md)
+- 中国用户 / 开发者网络与数据源排查：[`docs/china-quickstart.md`](docs/china-quickstart.md)
 - AI agent 首次调用：[`docs/ai-quickstart.md`](docs/ai-quickstart.md)
 - MCP 客户端接入：[`docs/mcp.md`](docs/mcp.md)
 - JSON 字段和缺数据语义：[`docs/find.md`](docs/find.md)
@@ -17,6 +18,7 @@
 - JSON 字段缺失、schema 文档和实际输出不一致。
 - MCP 注册失败、客户端配置路径不正确、dry-run 输出不清楚。
 - 安装、Windows / macOS / Linux 环境兼容问题。
+- 国内网络下 PyPI 下载、行情源访问、代理、TuShare 权限排查问题。
 - 文档示例和真实命令不一致。
 
 报告 bug 时请贴：
@@ -41,4 +43,3 @@
 ## 数据源说明
 
 行情和截面数据依赖 AKShare / baostock 生态及可选 TuShare Pro。上游不可用时，命令应给出可继续操作的错误提示；但上游服务稳定性和数据口径本身不由本项目控制。
-

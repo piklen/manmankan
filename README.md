@@ -63,6 +63,8 @@ Data, not decisions: no buy/sell advice, no ratings, no price targets. Python 3.
 
 AI agent 首次接入推荐读 [`docs/ai-quickstart.md`](docs/ai-quickstart.md)。它把“不拉行情的结构 smoke”和“会拉真实日 K 的数据路径”拆开，避免把代码池解析误当成行情取数。
 
+中国用户 / 开发者如果遇到 PyPI 下载慢、行情源网络、TuShare token、Windows PowerShell 或代理问题，先看 [`docs/china-quickstart.md`](docs/china-quickstart.md)。
+
 ## 快速开始
 
 ```bash
@@ -189,6 +191,7 @@ uv tool install manmankan --index-url https://pypi.org/simple/
 |---|---|
 | [`CHANGELOG.md`](CHANGELOG.md) | 版本变更记录 |
 | [`docs/architecture.md`](docs/architecture.md) | 架构愿景：三层定位、Source 模型、多市场路线、AI 消费设计 |
+| [`docs/china-quickstart.md`](docs/china-quickstart.md) | 中国用户 / 开发者首用路径、国内网络、PyPI 镜像、TuShare 与代理排查 |
 | [`docs/ai-quickstart.md`](docs/ai-quickstart.md) | AI agent 首用路径、JSON / MCP 消费规则 |
 | [`docs/mcp.md`](docs/mcp.md) | MCP 支持客户端、dry-run、写入规则和 agent 解释边界 |
 | [`docs/find.md`](docs/find.md) | `kan find` JSON schema、字段、缺数据语义 |
