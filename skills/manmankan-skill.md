@@ -15,6 +15,7 @@
 **安装**：`uv tool install manmankan`
 **市场**：当前仅 A 股（架构预留多市场扩展）
 **首用文档**：`docs/ai-quickstart.md`
+**MCP 文档**：`docs/mcp.md`
 
 ---
 
@@ -229,6 +230,7 @@ Agent 可以通过以下方式发现 manmankan 的能力：
 6. **`kan <command> --help`**——每个命令的详细参数
 7. **`docs/find.md`**——`kan find` 的完整 JSON schema 和字段定义
 8. **`docs/ai-quickstart.md`**——首次接入的结构 smoke、真实行情路径和 MCP 规则
+9. **`docs/mcp.md`**——MCP 支持客户端、dry-run、写入规则和 agent 解释边界
 
 建议 AI 在首次使用 manmankan 时：
 1. 读本文件了解全局能力
