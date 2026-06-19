@@ -27,6 +27,7 @@ def test_examples_command_runs() -> None:
     assert "kan find --codes 600519,000858 --format json" in commands
     assert "kan scan --codes 600519,000858 --periods 5,20,60,180 --format json" in commands
     assert "kan mcp install --dry-run" in commands
+    assert "kan schema --format json --section find --compact" in commands
     assert all("--all --pe lt:20 --roe" not in command for command in commands)
     assert "@fundamentals" in FIND_FIELD_PRESETS
 
@@ -74,6 +75,102 @@ def test_fields_list_json_includes_moneyflow_fields() -> None:
     assert "sentiment.fd_amount" in paths
 
 
+def test_schema_command_json_is_machine_readable() -> None:
+    result = CliRunner().invoke(app, ["schema", "--format", "json"])
+    assert result.exit_code == 0
+    payload = json.loads(result.output)
+    assert payload["ok"] is True
+    assert payload["command"] == "schema"
+    assert payload["schema_version"] == 1
+    assert payload["section"] == "all"
+    assert {item["name"] for item in payload["commands"]} >= {"schema", "find", "scan"}
+    assert any(item["name"] == "pe" and item["flag"] == "--pe" for item in payload["find"]["filters"])
+    assert "@valuation" in payload["find"]["field_presets"]
+    assert "valuation.pe_ttm" in {item["path"] for item in payload["find"]["fields"]}
+    assert "kan_schema" in {item["name"] for item in payload["mcp"]["tools"]}
+    assert payload["errors"]["json_error_envelope"]["ok"] is False
+
+
+def test_schema_command_section_and_compact_reduce_payload() -> None:
+    result = CliRunner().invoke(
+        app,
+        ["schema", "--format", "json", "--section", "find", "--compact"],
+    )
+    assert result.exit_code == 0
+    payload = json.loads(result.output)
+    assert payload["section"] == "find"
+    assert payload["compact"] is True
+    assert set(payload) == {
+        "ok", "command", "schema_version", "package_version", "section", "compact", "find",
+    }
+    assert "needs_kline" not in payload["find"]["fields"][0]
+    assert "availability_fields" not in payload["find"]["data_dimensions"][0]
+
+
+def test_schema_command_commands_compact_is_low_context() -> None:
+    result = CliRunner().invoke(
+        app,
+        ["schema", "--format", "json", "--section", "commands", "--compact"],
+    )
+    assert result.exit_code == 0
+    payload = json.loads(result.output)
+    assert set(payload) == {
+        "ok", "command", "schema_version", "package_version", "section", "compact", "commands",
+    }
+    schema_cmd = payload["commands"][0]
+    assert schema_cmd["name"] == "schema"
+    assert schema_cmd["example"] == "kan schema --format json"
+    assert "purpose" not in schema_cmd
+
+
+def test_schema_command_mcp_compact_preserves_required_fields() -> None:
+    result = CliRunner().invoke(
+        app,
+        ["schema", "--format", "json", "--section", "mcp", "--compact"],
+    )
+    assert result.exit_code == 0
+    payload = json.loads(result.output)
+    tools = {item["name"]: item for item in payload["mcp"]["tools"]}
+    assert "kan_schema" in tools
+    assert tools["kan_info"]["inputSchema"]["required"] == ["code"]
+    assert "code" in tools["kan_info"]["inputSchema"]["properties"]
+
+
+def test_schema_command_errors_section_includes_agent_notes() -> None:
+    result = CliRunner().invoke(app, ["schema", "--format", "json", "--section", "errors"])
+    assert result.exit_code == 0
+    payload = json.loads(result.output)
+    assert payload["errors"]["json_error_envelope"]["error"]["code"] == "<machine_code>"
+    assert "Read data_availability" in payload["errors"]["notes"][2]
+
+
+def test_schema_command_markdown_and_terminal_render() -> None:
+    md = CliRunner().invoke(app, ["schema", "--format", "md"])
+    assert md.exit_code == 0
+    assert md.output.startswith("# manmankan Agent Schema")
+    assert "## Commands" in md.output
+    assert "## Find" in md.output
+    assert "## MCP Tools" in md.output
+    assert "## Errors" in md.output
+
+    terminal = CliRunner().invoke(app, ["schema"])
+    assert terminal.exit_code == 0
+    assert "Commands:" in terminal.output
+    assert "Find:" in terminal.output
+    assert "MCP tools:" in terminal.output
+    assert "JSON failures use ok:false" in terminal.output
+
+
+def test_schema_invalid_section_json_error_envelope() -> None:
+    result = CliRunner().invoke(app, ["schema", "--format", "json", "--section", "missing"])
+    assert result.exit_code == 2
+    payload = json.loads(result.output)
+    assert payload["ok"] is False
+    assert payload["command"] == "schema"
+    assert payload["error"]["code"] == "invalid_schema_section"
+    assert "all / commands / find / mcp / errors" in payload["error"]["hint"]
+
+
 def test_mcp_serve_lists_tools() -> None:
     from kan.mcp.server import serve
 
@@ -86,7 +183,7 @@ def test_mcp_serve_lists_tools() -> None:
     lines = [json.loads(line) for line in out.getvalue().splitlines()]
     assert lines[0]["result"]["serverInfo"]["name"] == "manmankan"
     tools = {t["name"] for t in lines[1]["result"]["tools"]}
-    assert {"kan_scan", "kan_find", "kan_info", "kan_index", "kan_hold"} <= tools
+    assert {"kan_scan", "kan_find", "kan_info", "kan_index", "kan_hold", "kan_schema"} <= tools
 
 
 def _start_mcp_http_server():
@@ -134,7 +231,7 @@ def test_mcp_http_post_lists_tools() -> None:
     assert headers["MCP-Protocol-Version"] == "2025-06-18"
     payload = json.loads(body)
     tools = {t["name"] for t in payload["result"]["tools"]}
-    assert {"kan_scan", "kan_find", "kan_info", "kan_index", "kan_hold"} <= tools
+    assert {"kan_scan", "kan_find", "kan_info", "kan_index", "kan_hold", "kan_schema"} <= tools
 
 
 def test_mcp_http_accepts_extra_allowed_origin() -> None:
@@ -365,6 +462,23 @@ def test_mcp_hold_builds_cli_args(monkeypatch) -> None:
     assert captured["args"] == [
         "hold", "add", "600519", "--cost", "1680", "--shares", "100", "--name", "贵州茅台",
     ]
+
+
+def test_mcp_schema_builds_cli_args(monkeypatch) -> None:
+    from kan.mcp import server
+
+    captured = {}
+
+    def fake_run(args):
+        captured["args"] = args
+        return {"exit_code": 0, "stdout": "ok", "stderr": ""}
+
+    monkeypatch.setattr(server, "_run_kan", fake_run)
+
+    result = server._kan_schema({"section": "find", "compact": True})
+
+    assert result["exit_code"] == 0
+    assert captured["args"] == ["schema", "--format", "json", "--section", "find", "--compact"]
 
 
 def test_mcp_text_result_redacts_paths_and_tokens() -> None:

@@ -13,9 +13,13 @@ KAN_NO_UPDATE_CHECK=1 kan find --codes 600519,000858 --format json
 源码 main 或支持示例清单的版本，可以继续发现更多命令：
 
 ```bash
+kan schema --format json --section commands --compact
+kan schema --format json --section find --compact
 kan examples --format json
 kan fields list --format json
 ```
+
+`kan schema --format json` 是给 agent 的统一发现入口；`--section` 可只取 `commands` / `find` / `mcp` / `errors`，`--compact` 用于降低上下文。
 
 `kan examples --format json` 会返回机器可读的候选命令清单。实际输出会包含更多示例，AI agent 可以先读 `examples[].command` 再选择最短命令：
 
@@ -44,11 +48,12 @@ kan fields list --format json
 ```bash
 uv sync
 KAN_NO_UPDATE_CHECK=1 uv run kan examples
+KAN_NO_UPDATE_CHECK=1 uv run kan schema --format json --section find --compact
 KAN_NO_UPDATE_CHECK=1 uv run kan examples --format json
 KAN_NO_UPDATE_CHECK=1 uv run kan fields list --format json
 ```
 
-源码调试时也可以用 `uv run kan examples --format json` 和 `uv run kan fields list --format json` 确认机器可读 examples 与字段 / preset 清单；这两个 smoke 都不拉行情。
+源码调试时也可以用 `uv run kan schema --format json --section find --compact`、`uv run kan examples --format json` 和 `uv run kan fields list --format json` 确认机器可读 schema、examples 与字段 / preset 清单；这些 discovery smoke 都不拉行情。
 
 Windows / PowerShell 源码调试时，环境变量要先写进 `$env:`：
 
@@ -56,11 +61,12 @@ Windows / PowerShell 源码调试时，环境变量要先写进 `$env:`：
 uv sync
 $env:KAN_NO_UPDATE_CHECK = "1"
 $env:PYTHONUTF8 = "1"
+uv run kan schema --format json --section find --compact
 uv run kan examples --format json
 uv run kan fields list --format json
 ```
 
-这两条 discovery smoke 用于确认机器可读 examples 与字段 / preset 清单，不拉行情；`$env:PYTHONUTF8 = "1"` 用于降低中文和 `≠`、`·` 等符号在部分 Windows 终端里的编码风险。
+这些 discovery smoke 用于确认机器可读 schema、examples 与字段 / preset 清单，不拉行情；`$env:PYTHONUTF8 = "1"` 用于降低中文和 `≠`、`·` 等符号在部分 Windows 终端里的编码风险。
 
 ## 2. 两条首用路径
 
@@ -140,6 +146,7 @@ kan find --codes 600519,000858 --roe gt:10 --fields @core,@fundamentals --format
 字段和 preset 以命令输出为准：
 
 ```bash
+kan schema --format json --section find --compact
 kan fields list --format json
 ```
 

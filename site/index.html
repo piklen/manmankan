@@ -425,15 +425,26 @@
     <div class="text-center mb-12">
       <h2 class="text-3xl sm:text-4xl font-bold mb-3">AI agent 两分钟接入</h2>
       <p class="max-w-3xl mx-auto leading-relaxed" style="color: var(--text-soft);">
-        先用结构 smoke 确认 JSON 契约，再跑真实行情坐标；需要工具调用时，用 MCP dry-run 预览本机客户端配置。
+        先用 schema 自发现拿到机器可读契约，再用结构 smoke 确认 JSON 输出，随后跑真实行情坐标；
+        需要工具调用时，用 MCP dry-run 预览本机客户端配置。
         首跑从 <code class="ci">kan find --codes ... --format json</code> 开始，避免把代码池解析误判成行情取数问题。
       </p>
     </div>
 
-    <div class="grid md:grid-cols-3 gap-4">
+    <div class="grid md:grid-cols-2 lg:grid-cols-4 gap-4">
+      <button type="button" class="copy-card flex-col items-stretch !p-0 overflow-hidden" data-copy="kan schema --format json --section find --compact" onclick="copyCmd(this)">
+        <span class="copy-hint">点击复制 ↗</span>
+        <div class="px-4 py-2.5 text-xs font-mono border-b" style="background: var(--bg-soft); border-color: var(--border); color: var(--text-muted);">1 · Schema 发现 · 不拉行情</div>
+        <div class="px-5 py-4 text-xs sm:text-sm font-mono break-all leading-relaxed" style="color: var(--text);">
+          <span style="color: var(--accent);">$</span> <span data-copy-label>kan schema --format json --section find --compact</span>
+        </div>
+        <p class="px-5 mb-5 text-xs leading-relaxed" style="color: var(--text-soft);">一次拿到 find DSL、字段白名单、缺数据语义和低上下文机器契约。</p>
+        <span class="feedback" style="bottom: 16px; right: 22px; top: auto;">✓ 已复制</span>
+      </button>
+
       <button type="button" class="copy-card flex-col items-stretch !p-0 overflow-hidden" data-copy="kan find --codes 600519,000858 --format json" onclick="copyCmd(this)">
         <span class="copy-hint">点击复制 ↗</span>
-        <div class="px-4 py-2.5 text-xs font-mono border-b" style="background: var(--bg-soft); border-color: var(--border); color: var(--text-muted);">1 · 结构 smoke · 不拉行情</div>
+        <div class="px-4 py-2.5 text-xs font-mono border-b" style="background: var(--bg-soft); border-color: var(--border); color: var(--text-muted);">2 · 结构 smoke · 不拉行情</div>
         <div class="px-5 py-4 text-xs sm:text-sm font-mono break-all leading-relaxed" style="color: var(--text);">
           <span style="color: var(--accent);">$</span> <span data-copy-label>kan find --codes 600519,000858 --format json</span>
         </div>
@@ -443,7 +454,7 @@
 
       <button type="button" class="copy-card flex-col items-stretch !p-0 overflow-hidden" data-copy="kan scan --codes 600519,000858 --periods 5,20,60,180 --format json" onclick="copyCmd(this)">
         <span class="copy-hint">点击复制 ↗</span>
-        <div class="px-4 py-2.5 text-xs font-mono border-b" style="background: var(--bg-soft); border-color: var(--border); color: var(--text-muted);">2 · 真实行情坐标 · 会拉日 K</div>
+        <div class="px-4 py-2.5 text-xs font-mono border-b" style="background: var(--bg-soft); border-color: var(--border); color: var(--text-muted);">3 · 真实行情坐标 · 会拉日 K</div>
         <div class="px-5 py-4 text-xs sm:text-sm font-mono break-all leading-relaxed" style="color: var(--text);">
           <span style="color: var(--accent);">$</span> <span data-copy-label>kan scan --codes 600519,000858 --periods 5,20,60,180 --format json</span>
         </div>
@@ -453,7 +464,7 @@
 
       <button type="button" class="copy-card flex-col items-stretch !p-0 overflow-hidden" data-copy="kan mcp install --dry-run" onclick="copyCmd(this)">
         <span class="copy-hint">点击复制 ↗</span>
-        <div class="px-4 py-2.5 text-xs font-mono border-b" style="background: var(--bg-soft); border-color: var(--border); color: var(--text-muted);">3 · MCP dry-run · 不写配置</div>
+        <div class="px-4 py-2.5 text-xs font-mono border-b" style="background: var(--bg-soft); border-color: var(--border); color: var(--text-muted);">4 · MCP dry-run · 不写配置</div>
         <div class="px-5 py-4 text-xs sm:text-sm font-mono break-all leading-relaxed" style="color: var(--text);">
           <span style="color: var(--accent);">$</span> <span data-copy-label>kan mcp install --dry-run</span>
         </div>

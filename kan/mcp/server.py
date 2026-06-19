@@ -142,6 +142,13 @@ def _kan_examples(_payload: dict[str, Any]) -> dict[str, Any]:
     return _run_kan(["examples"])
 
 
+def _kan_schema(payload: dict[str, Any]) -> dict[str, Any]:
+    args = ["schema", "--format", str(payload.get("format") or "json")]
+    _optional_arg(args, "--section", payload.get("section"))
+    _bool_flag(args, "--compact", payload.get("compact"))
+    return _run_kan(args)
+
+
 def _kan_fields(payload: dict[str, Any]) -> dict[str, Any]:
     args = ["fields", "list", "--format", str(payload.get("format") or "json")]
     return _run_kan(args)
@@ -287,6 +294,22 @@ TOOLS = {
         description="Show end-to-end manmankan workflows.",
         input_schema={"type": "object", "properties": {}},
         handler=_kan_examples,
+    ),
+    "kan_schema": ToolSpec(
+        name="kan_schema",
+        description="Discover CLI JSON contracts, find DSL, MCP tools, and error envelopes.",
+        input_schema={
+            "type": "object",
+            "properties": {
+                "section": {
+                    "type": "string",
+                    "enum": ["all", "commands", "find", "mcp", "errors"],
+                },
+                "compact": {"type": "boolean"},
+                "format": {"type": "string", "enum": ["json", "md"]},
+            },
+        },
+        handler=_kan_schema,
     ),
     "kan_fields": ToolSpec(
         name="kan_fields",
