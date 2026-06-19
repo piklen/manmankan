@@ -1,55 +1,77 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 630" width="1200" height="630" role="img" aria-label="慢慢看 · manmankan · A 股本地数据筛选器">
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1280 640" width="1280" height="640" role="img" aria-label="慢慢看 · manmankan · A 股本地数据筛选器">
   <defs>
-    <linearGradient id="bg" x1="0%" y1="0%" x2="100%" y2="100%">
-      <stop offset="0%" stop-color="#0a0a0a"/>
-      <stop offset="100%" stop-color="#18181b"/>
-    </linearGradient>
     <linearGradient id="brand" x1="0%" y1="0%" x2="100%" y2="0%">
-      <stop offset="0%" stop-color="#34d399"/>
-      <stop offset="100%" stop-color="#60a5fa"/>
+      <stop offset="0%" stop-color="#14b8a6"/>
+      <stop offset="100%" stop-color="#3b82f6"/>
     </linearGradient>
-    <pattern id="grid" width="40" height="40" patternUnits="userSpaceOnUse">
-      <path d="M 40 0 L 0 0 0 40" fill="none" stroke="#27272a" stroke-width="0.5"/>
+    <linearGradient id="panel" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#ffffff"/>
+      <stop offset="100%" stop-color="#f1f5f9"/>
+    </linearGradient>
+    <linearGradient id="code" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#0f172a"/>
+      <stop offset="100%" stop-color="#111827"/>
+    </linearGradient>
+    <pattern id="grid" width="44" height="44" patternUnits="userSpaceOnUse">
+      <path d="M 44 0 L 0 0 0 44" fill="none" stroke="#dbe4ed" stroke-width="1"/>
     </pattern>
+    <filter id="soft-shadow" x="-20%" y="-20%" width="140%" height="140%">
+      <feDropShadow dx="0" dy="22" stdDeviation="20" flood-color="#0f172a" flood-opacity="0.12"/>
+    </filter>
   </defs>
 
-  <rect width="1200" height="630" fill="url(#bg)"/>
-  <rect width="1200" height="630" fill="url(#grid)" opacity="0.4"/>
+  <rect width="1280" height="640" fill="#f8fafc"/>
+  <rect width="1280" height="640" fill="url(#grid)" opacity="0.58"/>
+  <path d="M0 0 H1280 V144 C1030 100 825 112 644 166 C440 226 238 234 0 190 Z" fill="#dff7ef" opacity="0.8"/>
+  <path d="M1280 640 H0 V502 C210 540 420 510 626 452 C836 392 1060 392 1280 444 Z" fill="#dbeafe" opacity="0.86"/>
 
-  <!-- decorative terminal frame, top-right -->
-  <g transform="translate(740, 80)" opacity="0.85">
-    <rect x="0" y="0" width="380" height="240" rx="10" fill="#0a0a0a" stroke="#27272a" stroke-width="1"/>
-    <rect x="0" y="0" width="380" height="32" rx="10" fill="#18181b"/>
-    <rect x="0" y="22" width="380" height="10" fill="#18181b"/>
-    <circle cx="20" cy="16" r="6" fill="#ef4444" opacity="0.7"/>
-    <circle cx="40" cy="16" r="6" fill="#fbbf24" opacity="0.7"/>
-    <circle cx="60" cy="16" r="6" fill="#34d399" opacity="0.7"/>
-    <g font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="13" fill="#e4e4e7">
-      <text x="20" y="60"><tspan fill="#34d399">$</tspan> kan scan</text>
-      <text x="20" y="92" fill="#a1a1aa">000300 <tspan fill="#e4e4e7">沪深300</tspan> <tspan fill="#34d399" font-weight="bold">[2%]</tspan>   <tspan fill="#fbbf24" font-weight="bold">×6</tspan></text>
-      <text x="20" y="114" fill="#a1a1aa">000016 <tspan fill="#e4e4e7">上证50</tspan>  <tspan fill="#34d399" font-weight="bold">[3%]</tspan>   <tspan fill="#fbbf24" font-weight="bold">×4</tspan></text>
-      <text x="20" y="136" fill="#a1a1aa">000905 <tspan fill="#e4e4e7">中证500</tspan> <tspan fill="#34d399" font-weight="bold">[0%]</tspan>   <tspan fill="#fbbf24" font-weight="bold">×8</tspan></text>
-      <text x="20" y="158" fill="#a1a1aa">000852 <tspan fill="#e4e4e7">中证1000</tspan><tspan fill="#34d399" font-weight="bold">[5%]</tspan>   <tspan fill="#fbbf24" font-weight="bold">×3</tspan></text>
-      <text x="20" y="190" fill="#52525b">[x%] = 触及 N 日低点(≤5%)</text>
-      <text x="20" y="210" fill="#52525b">×N  = 多周期共振</text>
-    </g>
-  </g>
-
-  <!-- main title -->
   <g font-family="-apple-system, BlinkMacSystemFont, 'PingFang SC', 'Microsoft YaHei', system-ui, sans-serif">
-    <text x="80" y="170" font-size="26" font-weight="500" fill="#34d399" letter-spacing="2">$ MANMANKAN · 慢慢看</text>
-
-    <text x="80" y="290" font-size="86" font-weight="800" fill="#e4e4e7" letter-spacing="-2">告诉你<tspan fill="url(#brand)">坐标</tspan></text>
-    <text x="80" y="380" font-size="58" font-weight="600" fill="#71717a" letter-spacing="-1">不替你决策</text>
-
-    <text x="80" y="465" font-size="24" fill="#a1a1aa">A 股本地数据筛选器 · 人和 AI 共用 · AGPL-3.0</text>
-
-    <!-- bottom row -->
-    <g transform="translate(80, 540)">
-      <rect x="0" y="-30" width="380" height="48" rx="8" fill="#18181b" stroke="#27272a" stroke-width="1"/>
-      <text x="20" y="0" font-family="ui-monospace, SFMono-Regular, Menlo, monospace" font-size="20" fill="#e4e4e7"><tspan fill="#34d399">$</tspan> uv tool install manmankan</text>
+    <g transform="translate(72 70)">
+      <rect width="268" height="46" rx="23" fill="#ffffff" stroke="#dbe4ed"/>
+      <circle cx="28" cy="23" r="5" fill="#14b8a6"/>
+      <text x="44" y="30" font-size="19" font-weight="700" fill="#111827">慢慢看 · manmankan</text>
     </g>
 
-    <text x="1120" y="570" font-size="18" fill="#52525b" text-anchor="end">piklen.github.io/manmankan</text>
+    <text x="72" y="224" font-size="78" font-weight="850" fill="#111827">告诉你<tspan fill="url(#brand)">坐标</tspan></text>
+    <text x="72" y="304" font-size="54" font-weight="760" fill="#64748b">不替你决策</text>
+    <text x="74" y="368" font-size="25" fill="#475569">人和 AI 共用的 A 股本地数据筛选器</text>
+    <text x="74" y="406" font-size="23" fill="#64748b">CLI / JSON / MCP · 本地运行 · 不登录 · 不上传自选</text>
+    <text x="74" y="442" font-size="22" fill="#64748b">AGPL-3.0 开源 · 适合中国用户和 AI agent</text>
+
+    <g transform="translate(72 490)">
+      <rect width="478" height="62" rx="12" fill="#111827"/>
+      <text x="26" y="40" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="22" fill="#e5e7eb"><tspan fill="#34d399">$</tspan> uv tool install manmankan</text>
+    </g>
   </g>
+
+  <g transform="translate(662 84)" filter="url(#soft-shadow)">
+    <rect width="514" height="430" rx="24" fill="url(#panel)" stroke="#dbe4ed"/>
+
+    <g transform="translate(34 34)">
+      <rect width="446" height="164" rx="16" fill="url(#code)"/>
+      <rect width="446" height="38" rx="16" fill="#1f2937"/>
+      <rect y="25" width="446" height="13" fill="#1f2937"/>
+      <circle cx="23" cy="19" r="5" fill="#ef4444"/>
+      <circle cx="42" cy="19" r="5" fill="#f59e0b"/>
+      <circle cx="61" cy="19" r="5" fill="#22c55e"/>
+      <text x="84" y="25" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="13" fill="#9ca3af">human terminal</text>
+      <g font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="18" fill="#e5e7eb">
+        <text x="24" y="78"><tspan fill="#34d399">$</tspan> kan scan --codes 600519,000858</text>
+        <text x="24" y="112" fill="#cbd5e1">600519 贵州茅台  180日位置 42%</text>
+        <text x="24" y="142" fill="#cbd5e1">000858 五粮液    180日位置 37%</text>
+      </g>
+    </g>
+
+    <g transform="translate(34 224)">
+      <rect width="446" height="156" rx="16" fill="#eef6ff" stroke="#c7ddf8"/>
+      <text x="24" y="40" font-family="-apple-system, BlinkMacSystemFont, 'PingFang SC', 'Microsoft YaHei', system-ui, sans-serif" font-size="18" font-weight="800" fill="#0f172a">AI-readable JSON</text>
+      <g font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="17" fill="#334155">
+        <text x="24" y="78">{ <tspan fill="#2563eb">"ok"</tspan>: <tspan fill="#059669">true</tspan>, <tspan fill="#2563eb">"command"</tspan>: <tspan fill="#b45309">"find"</tspan>,</text>
+        <text x="44" y="108"><tspan fill="#2563eb">"schema_version"</tspan>: <tspan fill="#b45309">"0.0.6.8"</tspan>,</text>
+        <text x="44" y="138"><tspan fill="#2563eb">"disclaimer"</tspan>: <tspan fill="#b45309">"候选 ≠ 买入信号"</tspan> }</text>
+      </g>
+    </g>
+  </g>
+
+  <text x="1178" y="585" font-family="-apple-system, BlinkMacSystemFont, 'PingFang SC', 'Microsoft YaHei', system-ui, sans-serif" font-size="20" fill="#64748b" text-anchor="end">piklen.github.io/manmankan</text>
 </svg>
