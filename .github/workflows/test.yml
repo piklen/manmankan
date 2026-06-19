@@ -125,7 +125,7 @@ jobs:
       - name: Install dependencies
         run: uv sync --python ${{ matrix.python-version }} --frozen --all-groups --all-extras
       - name: Run tests
-        run: uv run pytest -q -m "not tty and not network" -n 6 --dist loadscope --durations=25 --durations-min=1.0 --cov=kan --cov-report=xml --cov-report=term-missing --cov-fail-under=73
+        run: uv run pytest -q -m "not tty and not network" -n 8 --dist worksteal --durations=25 --durations-min=1.0 --cov=kan --cov-report=xml --cov-report=term-missing --cov-fail-under=73
       - name: Patch coverage (new code >= 85%)
         if: matrix.python-version == '3.12'
         run: |
@@ -213,7 +213,7 @@ jobs:
 
   # CI -m "not tty" 会排除 TTY 真测 · 在 VPS Linux runner 补真实终端覆盖。
   tty-test:
-    runs-on: [self-hosted, manmankan-ci]
+    runs-on: [self-hosted, manmankan-ci, hkg-vps]
     timeout-minutes: 25
     strategy:
       fail-fast: false
@@ -230,7 +230,7 @@ jobs:
           uv sync --python ${{ matrix.python-version }} --frozen --all-groups --all-extras
           uv tool install --python ${{ matrix.python-version }} --reinstall --force .
       - name: TTY real terminal tests on Linux (util-linux script)
-        run: script -q -c "uv run pytest -q -m tty tests/test_cli_silent_period.py" /dev/null
+        run: script -q -e -c "uv run pytest -q -m tty --tb=short tests/test_cli_silent_period.py" /dev/null
       - name: Clean CI runner workspace
         if: always()
         continue-on-error: true
