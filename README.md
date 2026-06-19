@@ -17,6 +17,7 @@
 
 ```bash
 uv tool install manmankan
+kan examples --format json
 kan find --codes 600519,000858 --format json
 kan scan --codes 600519,000858 --periods 5,20,60,180 --format json
 kan mcp install --dry-run
@@ -27,6 +28,14 @@ kan hold --format json --mask
 `kan find --codes ... --format json` 是不拉行情的结构 smoke；`kan scan --codes ... --format json` 会拉公开日 K 并输出真实位置坐标，首次运行可能需要几十秒建立本地缓存。
 
 如果你也想先把候选池数据说清楚，再交给人或 AI 慢慢研究，可以 star 关注后续版本。
+
+## 三类人从这里开始
+
+| 你是谁 | 先跑 / 先读 |
+|---|---|
+| 中国用户 / 开发者 | [`docs/china-quickstart.md`](docs/china-quickstart.md)：PyPI 镜像、行情源网络、TuShare、代理和 Windows / PowerShell |
+| AI agent / 自动化脚本 | `kan examples --format json` + [`docs/ai-quickstart.md`](docs/ai-quickstart.md) + [`skills/manmankan-skill.md`](skills/manmankan-skill.md) |
+| 第一次贡献者 | [`docs/contributor-quickstart.md`](docs/contributor-quickstart.md)：本地跑起来、验证命令、good first issue、合规边界 |
 
 <details>
 <summary><b>English summary</b></summary>
@@ -57,6 +66,7 @@ Data, not decisions: no buy/sell advice, no ratings, no price targets. Python 3.
 |----------|------|
 | **JSON 是产品，不是后门** | `--format json` 输出包含 `schema_version`、`data_availability`、`disclaimer`、`error` 信封——AI 不需要猜测字段含义或处理裸异常 |
 | **低上下文成本** | `--compact` / `--fields @core` / `--no-compact-context` 让 AI 按需索取，不浪费 token |
+| **示例可机器读取** | `kan examples --format json` 输出端到端命令清单，AI 可以先读示例再选择最短命令 |
 | **Skills.md 能力清单** | [`skills/manmankan-skill.md`](skills/manmankan-skill.md) 是给 AI Agent 的"说明书"——AI 读到它就知道 manmankan 能做什么、怎么调、错误怎么处理 |
 | **MCP Server** | `kan mcp serve` 提供 stdio MCP；`kan mcp install --dry-run` 可预览写入常见 AI 客户端的用户级配置，接入细节见 [`docs/mcp.md`](docs/mcp.md) |
 | **退出码即 API** | 每个命令的退出码有明确语义（0=成功，非 0=具体错误类别），AI 不需要解析 stderr 来判断成败 |

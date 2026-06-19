@@ -2,12 +2,14 @@ from __future__ import annotations
 
 import io
 import json
+import shlex
 from datetime import date, timedelta
 
 import pandas as pd
 from typer.testing import CliRunner
 
 from kan.cli import app
+from kan.core.find_registry import FIND_FIELD_PRESETS
 
 
 def test_examples_command_runs() -> None:
@@ -17,10 +19,44 @@ def test_examples_command_runs() -> None:
     assert result.exit_code == 0
     assert "首次结构 smoke" in result.output
     assert "真实行情坐标 JSON" in result.output
+    assert "┏" not in result.output
     commands = {row[1] for row in _EXAMPLES}
     assert "kan find --codes 600519,000858 --format json" in commands
     assert "kan scan --codes 600519,000858 --periods 5,20,60,180 --format json" in commands
     assert "kan mcp install --dry-run" in commands
+    assert all("--all --pe lt:20 --roe" not in command for command in commands)
+    assert "@fundamentals" in FIND_FIELD_PRESETS
+
+
+def test_examples_command_json_is_machine_readable() -> None:
+    result = CliRunner().invoke(app, ["examples", "--format", "json"])
+    assert result.exit_code == 0
+    payload = json.loads(result.output)
+    assert payload["command"] == "examples"
+    assert payload["examples"][0]["command"] == "kan find --codes 600519,000858 --format json"
+    assert all(item["command"].startswith("kan ") for item in payload["examples"])
+
+
+def test_examples_command_markdown_is_copyable() -> None:
+    result = CliRunner().invoke(app, ["examples", "--format", "md"])
+    assert result.exit_code == 0
+    assert result.output.startswith("# manmankan 工作流示例")
+    assert "```bash\nkan find --codes 600519,000858 --format json\n```" in result.output
+    assert "## 7. 预览 MCP 注册" in result.output
+
+
+def test_example_find_commands_do_not_use_impossible_field_combinations() -> None:
+    from kan.cli.ai_cmds import _EXAMPLES
+
+    for _, command, _ in _EXAMPLES:
+        parts = shlex.split(command)
+        if parts[:2] == ["kan", "find"]:
+            assert not ("--all" in parts and "--roe" in parts)
+            for part in parts:
+                if part.startswith("@"):
+                    for field in part.replace(",", " ").split():
+                        if field.startswith("@"):
+                            assert field in FIND_FIELD_PRESETS
 
 
 def test_fields_list_json_includes_moneyflow_fields() -> None:
@@ -28,8 +64,10 @@ def test_fields_list_json_includes_moneyflow_fields() -> None:
     assert result.exit_code == 0
     payload = json.loads(result.output)
     assert "@moneyflow" in payload["presets"]
+    assert "@fundamentals" in payload["presets"]
     paths = {row["path"] for row in payload["fields"]}
     assert "moneyflow.net_amount_5d" in paths
+    assert "fundamentals.roe" in paths
     assert "sentiment.fd_amount" in paths
 
 

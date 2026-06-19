@@ -38,14 +38,19 @@ _EXAMPLES = [
         "拉公开日 K；输出多周期位置、区间涨跌、共振和数据截止日。",
     ),
     (
-        "按代码池筛选位置 + 资金",
-        "kan find --codes 600519,000858 --pos 360:lt:30 --moneyflow-daily gt:0 --fields @core,@context,@moneyflow --format json",
-        "只在显式代码池内筛选，返回触发项和字段白名单内的客观数值。",
+        "按代码池筛选位置",
+        "kan find --codes 600519,000858 --pos 180:lt:30 --fields @core,@context --format json",
+        "只在显式代码池内筛选；输出触发条件和位置上下文字段。",
     ),
     (
-        "全市场估值 + 质量筛选",
-        "kan find --all --pe lt:20 --roe gt:10 --limit 20 --fields @core,@valuation,@fundamentals --format json",
-        "走截面数据，不依赖自选股；TuShare 不可用时相关字段为 null 或返回缺数提示。",
+        "全市场估值筛选",
+        "kan find --all --pe lt:20 --turnover gt:1 --limit 20 --fields @core,@valuation --format json",
+        "走截面数据，不依赖自选股；TuShare 不可用时返回缺数提示。",
+    ),
+    (
+        "小代码池 ROE 取数",
+        "kan find --codes 600519,000858 --roe gt:10 --fields @core,@fundamentals --format json",
+        "ROE 是逐股报告期数据；全市场模式不支持，先缩小代码池。",
     ),
     (
         "查看单股详情",
@@ -61,15 +66,49 @@ _EXAMPLES = [
 
 
 @app.command()
-def examples() -> None:
-    """查看 3-5 个端到端工作流。"""
-    table = Table(title="manmankan 工作流示例", show_lines=True)
-    table.add_column("场景", style="cyan", no_wrap=True)
-    table.add_column("命令", style="white")
-    table.add_column("输出", style="dim")
-    for title, command, detail in _EXAMPLES:
-        table.add_row(title, command, detail)
-    Console().print(table)
+def examples(
+    fmt: Annotated[
+        export.OutputFormat,
+        typer.Option("--format", help="输出格式：terminal（默认）/ md / json"),
+    ] = export.OutputFormat.terminal,
+) -> None:
+    """查看端到端工作流示例。"""
+    payload = {
+        "command": "examples",
+        "examples": [
+            {"title": title, "command": command, "detail": detail}
+            for title, command, detail in _EXAMPLES
+        ],
+    }
+    if fmt is export.OutputFormat.json:
+        typer.echo(export.to_json(payload))
+        return
+    if fmt is export.OutputFormat.md:
+        lines = ["# manmankan 工作流示例", ""]
+        for i, item in enumerate(payload["examples"], 1):
+            lines.extend([
+                f"## {i}. {item['title']}",
+                "",
+                "```bash",
+                str(item["command"]),
+                "```",
+                "",
+                str(item["detail"]),
+                "",
+            ])
+        typer.echo("\n".join(lines).rstrip() + "\n")
+        return
+
+    lines = ["慢慢看 · 工作流示例", ""]
+    for i, item in enumerate(payload["examples"], 1):
+        lines.extend([
+            f"{i}. {item['title']}",
+            f"   {item['command']}",
+            f"   {item['detail']}",
+            "",
+        ])
+    lines.append("复制命令时只复制缩进后的 kan ... 行。")
+    typer.echo("\n".join(lines))
 
 
 @fields_app.command("list")

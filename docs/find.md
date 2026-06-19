@@ -69,6 +69,7 @@ kan find --all --pe lt:20 --format json --compact --no-compact-context
 | `@context` | `context.positions` / `context.low_resonance` / `context.high_resonance` |
 | `@valuation` | `valuation.*` 常用估值、量价、市值字段 |
 | `@valuation_context` | 行业、行业样本、PE/PB 行业内分位和中位 |
+| `@fundamentals` | ROE、净利润同比、营收同比等逐股报告期字段；`--all` 不支持 |
 | `@moneyflow` | 主力净额和大单/超大单字段 |
 | `@technical` | RSI、MACD、KDJ、均线、ATR%、乖离率字段 |
 | `@sentiment` | 连板/开板/涨跌停事件字段 |

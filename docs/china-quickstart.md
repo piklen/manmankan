@@ -9,6 +9,7 @@
 ```bash
 uv tool install manmankan
 kan --version
+KAN_NO_UPDATE_CHECK=1 kan examples
 KAN_NO_UPDATE_CHECK=1 kan find --codes 600519,000858 --format json
 ```
 
@@ -137,4 +138,3 @@ bash scripts/check-privacy-leaks.sh
 - 错误输出：优先贴 `NO_COLOR=1` 后的完整文本或 JSON envelope
 
 安全漏洞不要开公开 issue，按 [`SECURITY.md`](../SECURITY.md) 走 GitHub Private Vulnerability Reporting。
-

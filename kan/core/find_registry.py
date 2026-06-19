@@ -499,6 +499,10 @@ FIND_FIELD_PRESETS = {
         "valuation_context.pe_industry_pct", "valuation_context.pb_industry_pct",
         "valuation_context.pe_industry_median", "valuation_context.pb_industry_median",
     ),
+    "@fundamentals": (
+        "fundamentals.end_date", "fundamentals.roe", "fundamentals.netprofit_yoy",
+        "fundamentals.or_yoy", "fundamentals.source",
+    ),
     "@moneyflow": (
         "moneyflow.trade_date", "moneyflow.net_amount", "moneyflow.buy_elg_amount",
         "moneyflow.buy_lg_amount", "moneyflow.buy_md_amount", "moneyflow.buy_sm_amount",
