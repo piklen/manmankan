@@ -50,6 +50,18 @@ KAN_NO_UPDATE_CHECK=1 uv run kan fields list --format json
 
 源码调试时也可以用 `uv run kan examples --format json` 和 `uv run kan fields list --format json` 确认机器可读 examples 与字段 / preset 清单；这两个 smoke 都不拉行情。
 
+Windows / PowerShell 源码调试时，环境变量要先写进 `$env:`：
+
+```powershell
+uv sync
+$env:KAN_NO_UPDATE_CHECK = "1"
+$env:PYTHONUTF8 = "1"
+uv run kan examples --format json
+uv run kan fields list --format json
+```
+
+这两条 discovery smoke 用于确认机器可读 examples 与字段 / preset 清单，不拉行情；`$env:PYTHONUTF8 = "1"` 用于降低中文和 `≠`、`·` 等符号在部分 Windows 终端里的编码风险。
+
 ## 2. 两条首用路径
 
 ### 结构 smoke：不拉行情
