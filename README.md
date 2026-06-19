@@ -22,7 +22,7 @@ uv tool install manmankan
 kan --version
 kan find --codes 600519,000858 --format json
 kan scan --codes 600519,000858 --periods 5,20,60,180 --format json
-kan mcp install --dry-run
+kan mcp install --dry-run --format json
 kan mcp http --host localhost --port 8765
 kan hold add 600519 --cost 1680 --shares 100
 kan hold --format json --mask
@@ -72,7 +72,7 @@ Data, not decisions: no buy/sell advice, no ratings, no price targets. Python 3.
 | **Schema 自发现** | `kan schema --format json` 返回 CLI JSON、find DSL、MCP tools 和错误 envelope 的机器可读契约；`--section find --compact` 可低上下文只取筛选契约 |
 | **示例可机器读取** | `kan examples --format json` 输出端到端命令清单，AI 可以先读示例再选择最短命令 |
 | **Skills.md 能力清单** | [`skills/manmankan-skill.md`](skills/manmankan-skill.md) 是给 AI Agent 的"说明书"——AI 读到它就知道 manmankan 能做什么、怎么调、错误怎么处理 |
-| **MCP Server** | `kan mcp serve` 提供 stdio MCP；`kan mcp http` 提供本机 Streamable HTTP endpoint；`kan mcp install --dry-run` 可预览写入常见 AI 客户端的用户级配置，接入细节见 [`docs/mcp.md`](docs/mcp.md) |
+| **MCP Server** | `kan mcp serve` 提供 stdio MCP；`kan mcp http` 提供本机 Streamable HTTP endpoint；`kan mcp install --dry-run --format json` 可机器读取常见 AI 客户端用户级配置预览，接入细节见 [`docs/mcp.md`](docs/mcp.md) |
 | **退出码即 API** | 每个命令的退出码有明确语义（0=成功，非 0=具体错误类别），AI 不需要解析 stderr 来判断成败 |
 
 AI agent 首次接入推荐读 [`docs/ai-quickstart.md`](docs/ai-quickstart.md)。它把“不拉行情的结构 smoke”和“会拉真实日 K 的数据路径”拆开，避免把代码池解析误当成行情取数。

@@ -243,20 +243,45 @@ def mcp_install(
         ),
     ] = None,
     dry_run: Annotated[bool, typer.Option("--dry-run", help="只预览，不写配置")] = False,
+    fmt: Annotated[
+        export.OutputFormat,
+        typer.Option("--format", help="输出格式：terminal（默认）/ md / json"),
+    ] = export.OutputFormat.terminal,
 ) -> None:
     """注册 manmankan MCP 到本机常见 AI 客户端的用户级配置。"""
-    from kan.mcp.install import SUPPORTED_CLIENTS, install_clients
+    from kan.mcp.install import SUPPORTED_CLIENTS, install_clients, install_results_payload
 
     selected = clients or list(SUPPORTED_CLIENTS)
     unknown = [c for c in selected if c not in SUPPORTED_CLIENTS]
     if unknown:
-        _print_err(
-            "❌ 不支持的 MCP client: "
-            + ", ".join(unknown)
-            + f" · 支持: {', '.join(SUPPORTED_CLIENTS)}"
+        _exit_ai_error(
+            "mcp install",
+            fmt,
+            code="invalid_mcp_client",
+            message="不支持的 MCP client: " + ", ".join(unknown),
+            hint=f"支持: {', '.join(SUPPORTED_CLIENTS)}",
+            exit_code=2,
         )
-        raise typer.Exit(2)
     results = install_clients(selected, dry_run=dry_run)
+    if not dry_run and results and all(r.status != "failed" for r in results):
+        from kan.cli.setup_helpers import mark_mcp_setup
+
+        mark_mcp_setup(True)
+    if fmt is export.OutputFormat.json:
+        typer.echo(export.to_json(install_results_payload(
+            results,
+            selected_clients=selected,
+            dry_run=dry_run,
+        )))
+        return
+    if fmt is export.OutputFormat.md:
+        rows = [[r.client, r.status, r.target, r.detail] for r in results]
+        typer.echo(
+            "# manmankan MCP 注册结果\n\n"
+            + export.md_table(["client", "status", "target", "detail"], rows)
+            + "\n\n> 重启对应客户端后生效；若已安装对应 CLI，会优先用 user scope 注册。"
+        )
+        return
     table = Table(title="manmankan MCP 注册结果")
     table.add_column("client", style="cyan")
     table.add_column("status")
@@ -267,10 +292,6 @@ def mcp_install(
     console = Console()
     console.print(table)
     console.print("[dim]重启对应客户端后生效；若已安装对应 CLI，会优先用 user scope 注册。[/dim]")
-    if not dry_run and results and all(r.status != "failed" for r in results):
-        from kan.cli.setup_helpers import mark_mcp_setup
-
-        mark_mcp_setup(True)
 
 
 def _index_row_payload(scan, *, code: str, name: str, data_available: bool) -> dict[str, Any]:

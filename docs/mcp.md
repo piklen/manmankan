@@ -7,11 +7,12 @@
 ```bash
 uv tool install manmankan
 kan mcp install --dry-run
+kan mcp install --dry-run --format json
 kan mcp install --client codex
 kan mcp http --port 8765
 ```
 
-先跑 `--dry-run`。确认目标客户端和配置路径无误后，再指定一个客户端写入配置；不要一开始对所有客户端批量写配置。
+先跑 `--dry-run`。人看终端表格；agent / 脚本用 `--format json` 读取 `results` 和 `summary`。确认目标客户端和配置路径无误后，再指定一个客户端写入配置；不要一开始对所有客户端批量写配置。
 
 Windows / PowerShell 不能用 `KAN_NO_UPDATE_CHECK=1 kan ...` 这种 Bash 写法，环境变量要先写进 `$env:`：
 
@@ -41,6 +42,39 @@ opencode        would-update  ~/.config/opencode/...        mcp.manmankan
 ```
 
 看到 `would-update` / `would-run` 说明这次只是预览。确认目标客户端无误后，再执行 `kan mcp install --client <client>` 写入单个客户端配置。
+
+Agent 或脚本可以直接取 JSON：
+
+```bash
+KAN_NO_UPDATE_CHECK=1 kan mcp install --client codex --dry-run --format json
+```
+
+脱敏摘录：
+
+```json
+{
+  "ok": true,
+  "command": "mcp install",
+  "dry_run": true,
+  "selected_clients": ["codex"],
+  "results": [
+    {
+      "client": "codex",
+      "status": "would-update",
+      "target": "~/.codex/config.toml",
+      "detail": "mcp_servers.manmankan"
+    }
+  ],
+  "summary": {
+    "total": 1,
+    "failed": 0,
+    "status_counts": {
+      "would-update": 1
+    },
+    "needs_restart": true
+  }
+}
+```
 
 直接启动 stdio server：
 

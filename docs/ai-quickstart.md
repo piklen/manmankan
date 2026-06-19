@@ -159,10 +159,10 @@ kan fields list --format json
 预览可写入的本机客户端配置：
 
 ```bash
-kan mcp install --dry-run
+kan mcp install --dry-run --format json
 ```
 
-`--dry-run` 只预览，不写配置；脱敏输出样例见 [`docs/mcp.md`](mcp.md)。
+`--dry-run` 只预览，不写配置；`--format json` 会返回 `results[].client/status/target/detail` 和 `summary.status_counts`，适合 agent 决定是否继续写入。脱敏输出样例见 [`docs/mcp.md`](mcp.md)。
 
 只注册指定客户端：
 

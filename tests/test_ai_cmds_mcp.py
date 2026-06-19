@@ -121,6 +121,8 @@ def test_schema_command_commands_compact_is_low_context() -> None:
     assert schema_cmd["name"] == "schema"
     assert schema_cmd["example"] == "kan schema --format json"
     assert "purpose" not in schema_cmd
+    commands = {item["name"]: item for item in payload["commands"]}
+    assert commands["mcp install"]["example"] == "kan mcp install --dry-run --format json"
 
 
 def test_schema_command_mcp_compact_preserves_required_fields() -> None:
@@ -559,6 +561,72 @@ def test_mcp_install_dry_run_default_covers_supported_clients(tmp_path, monkeypa
     ):
         assert client in result.output
     assert not (tmp_path / ".cursor" / "mcp.json").exists()
+
+
+def test_mcp_install_dry_run_json_is_machine_readable(tmp_path, monkeypatch) -> None:
+    monkeypatch.setenv("HOME", str(tmp_path))
+    monkeypatch.setenv("XDG_CONFIG_HOME", str(tmp_path / ".config"))
+
+    result = CliRunner().invoke(
+        app,
+        ["mcp", "install", "--client", "codex", "--client", "opencode", "--dry-run", "--format", "json"],
+    )
+
+    assert result.exit_code == 0
+    payload = json.loads(result.output)
+    assert payload["ok"] is True
+    assert payload["command"] == "mcp install"
+    assert payload["dry_run"] is True
+    assert payload["selected_clients"] == ["codex", "opencode"]
+    assert payload["server"]["env"]["KAN_NO_BOOT_BANNER"] == "1"
+    assert payload["summary"]["total"] == 2
+    assert payload["summary"]["failed"] == 0
+    assert payload["summary"]["needs_restart"] is True
+    assert {row["client"] for row in payload["results"]} == {"codex", "opencode"}
+    assert all(row["status"].startswith("would-") for row in payload["results"])
+    assert not (tmp_path / ".codex" / "config.toml").exists()
+    assert not (tmp_path / ".config" / "opencode" / "opencode.json").exists()
+
+
+def test_mcp_install_markdown_is_copyable(tmp_path, monkeypatch) -> None:
+    monkeypatch.setenv("HOME", str(tmp_path))
+    result = CliRunner().invoke(
+        app,
+        ["mcp", "install", "--client", "codex", "--dry-run", "--format", "md"],
+    )
+    assert result.exit_code == 0
+    assert result.output.startswith("# manmankan MCP 注册结果")
+    assert "| client | status | target | detail |" in result.output
+    assert "mcp_servers.manmankan" in result.output
+
+
+def test_mcp_install_unknown_client_json_error_envelope() -> None:
+    result = CliRunner().invoke(
+        app,
+        ["mcp", "install", "--client", "missing-client", "--format", "json"],
+    )
+    assert result.exit_code == 2
+    payload = json.loads(result.output)
+    assert payload["ok"] is False
+    assert payload["command"] == "mcp install"
+    assert payload["error"]["code"] == "invalid_mcp_client"
+    assert "missing-client" in payload["error"]["message"]
+
+
+def test_mcp_install_json_real_write_marks_setup(tmp_path, monkeypatch) -> None:
+    from kan.storage import config
+
+    monkeypatch.setenv("HOME", str(tmp_path))
+    monkeypatch.setattr(config, "CONFIG_PATH", tmp_path / "kan" / "config.json")
+
+    result = CliRunner().invoke(app, ["mcp", "install", "--client", "cursor", "--format", "json"])
+
+    assert result.exit_code == 0
+    payload = json.loads(result.output)
+    assert payload["dry_run"] is False
+    assert payload["results"][0]["status"] == "updated"
+    assert (tmp_path / ".cursor" / "mcp.json").exists()
+    assert config.load()["mcp_setup"] is True
 
 
 def test_mcp_install_cursor_writes_mcp_servers(tmp_path, monkeypatch) -> None:
