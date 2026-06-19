@@ -116,6 +116,18 @@ def _command_schemas(*, compact: bool) -> list[dict[str, Any]]:
             "success_keys": ["command", "period", "results"],
             "examples": ["kan index sh --period 60 --format json"],
         },
+        {
+            "name": "mcp install",
+            "purpose": "Preview or register the local MCP server in user-level AI client configs.",
+            "formats": ["terminal", "md", "json"],
+            "success_keys": [
+                "ok", "command", "dry_run", "selected_clients", "server", "results", "summary",
+            ],
+            "examples": [
+                "kan mcp install --dry-run --format json",
+                "kan mcp install --client codex --dry-run --format json",
+            ],
+        },
     ]
     if not compact:
         return commands

@@ -40,6 +40,46 @@ class InstallResult:
     detail: str
 
 
+def install_result_dict(result: InstallResult) -> dict[str, str]:
+    """Return a JSON-safe public representation of one install result."""
+    return {
+        "client": result.client,
+        "target": result.target,
+        "status": result.status,
+        "detail": result.detail,
+    }
+
+
+def install_results_payload(
+    results: list[InstallResult],
+    *,
+    selected_clients: list[str],
+    dry_run: bool,
+) -> dict[str, Any]:
+    """Build the machine-readable MCP install result payload."""
+    status_counts: dict[str, int] = {}
+    for result in results:
+        status_counts[result.status] = status_counts.get(result.status, 0) + 1
+    failed_count = status_counts.get("failed", 0)
+    return {
+        "ok": failed_count == 0,
+        "command": "mcp install",
+        "dry_run": dry_run,
+        "selected_clients": selected_clients,
+        "server": server_config(),
+        "results": [install_result_dict(result) for result in results],
+        "summary": {
+            "total": len(results),
+            "failed": failed_count,
+            "status_counts": status_counts,
+            "needs_restart": any(
+                result.status in {"updated", "would-update", "would-run"}
+                for result in results
+            ),
+        },
+    }
+
+
 @dataclass(frozen=True)
 class _JsonObject:
     data: dict[str, Any]
@@ -376,6 +416,8 @@ __all__ = [
     "InstallResult",
     "detect_clients",
     "install_clients",
+    "install_result_dict",
+    "install_results_payload",
     "server_command",
     "server_config",
 ]
