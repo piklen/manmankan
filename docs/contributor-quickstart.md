@@ -77,6 +77,7 @@ KAN_NO_UPDATE_CHECK=1 uv run kan mcp install --dry-run
 - PR 标题用 Conventional Commits：`docs: ...` / `fix: ...` / `test: ...`。
 - commit message 不带 AI co-author、generated-by 或工具广告。
 - 截图、日志和 issue 内容不要包含 token、真实持仓金额、私有路径或代理账号。
+- 提交 PR 或 issue 前先看 [`SUPPORT.md`](../SUPPORT.md) 区分入口；贴截图、日志或 JSON envelope 前先看 [`安全反馈说明`](china-quickstart.md#8-反馈问题时请带上这些信息) 并脱敏 token、代理账号、本机路径和真实持仓金额。
 - 如果改了用户可见输出，先读 [`docs/compliance.md`](compliance.md)。
 - 如果改了 JSON 字段、filter 或 error envelope，同步 [`docs/find.md`](find.md) 和测试。
 - 如果改了 AI / MCP 工作流，同步 [`docs/ai-quickstart.md`](ai-quickstart.md)、[`docs/mcp.md`](mcp.md) 或 [`skills/manmankan-skill.md`](../skills/manmankan-skill.md)。
