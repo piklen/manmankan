@@ -1,6 +1,6 @@
 # MCP 接入
 
-`manmankan` 提供本地 stdio MCP server，让 AI 客户端直接调用同一套 CLI / JSON 数据契约。MCP 只负责把结构化行情数据交给 agent，不提供买卖动作、评级、目标价或策略结论。
+`manmankan` 提供本地 MCP server，让 AI 客户端直接调用同一套 CLI / JSON 数据契约。当前支持 stdio 和本机 Streamable HTTP 两种 transport。MCP 只负责把结构化行情数据交给 agent，不提供买卖动作、评级、目标价或策略结论。
 
 ## 快速路径
 
@@ -8,6 +8,7 @@
 uv tool install manmankan
 kan mcp install --dry-run
 kan mcp install --client codex
+kan mcp http --port 8765
 ```
 
 先跑 `--dry-run`。确认目标客户端和配置路径无误后，再指定一个客户端写入配置；不要一开始对所有客户端批量写配置。
@@ -41,11 +42,19 @@ opencode        would-update  ~/.config/opencode/...        mcp.manmankan
 
 看到 `would-update` / `would-run` 说明这次只是预览。确认目标客户端无误后，再执行 `kan mcp install --client <client>` 写入单个客户端配置。
 
-直接启动 server：
+直接启动 stdio server：
 
 ```bash
 kan mcp serve
 ```
+
+启动本机 Streamable HTTP endpoint：
+
+```bash
+kan mcp http --host localhost --port 8765 --path /mcp
+```
+
+默认只绑定本机 loopback 地址，并检查浏览器 `Origin`，避免本地 MCP 被网页或 DNS rebinding 意外调用。`--allow-non-localhost` 只给可信内网或本机反向代理场景使用；对外入口应放在有鉴权和域名的上层网关后，不要直接裸露本机 MCP 端口。
 
 安装包同时提供 `kan-mcp` entry point。客户端配置会优先使用已安装的 `kan-mcp`，其次使用 `kan mcp serve`，源码调试时回退到当前 Python 解释器运行 `kan.mcp.server`。
 
@@ -77,6 +86,7 @@ kan mcp serve
 - 已存在 `manmankan` 配置时会覆盖同名配置；其他 MCP server 保持不变。
 - JSON 配置文件如果不是对象或 JSON 无效，会返回 `failed`，不会继续覆盖。
 - 写入后需要重启对应客户端。
+- `kan mcp http` 是独立启动命令，不会自动写入客户端配置；HTTP client 连接 `http://localhost:<port>/mcp`。
 
 ## Agent 解释规则
 

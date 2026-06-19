@@ -149,6 +149,9 @@ kan scan --codes 600519,000858 --periods 5,20,60,180 --format json
 
 # 3. 预览本机 MCP 注册目标
 kan mcp install --dry-run
+
+# 4. 如客户端支持 HTTP transport，可启动本机 endpoint
+kan mcp http --host localhost --port 8765 --path /mcp
 ```
 
 第 1 步只返回代码池事实，不代表行情维度已取到。第 2 步首次运行会建立本地缓存，可能需要几十秒；读取 `data_cutoff` / `fetched_at` 后再解释结果。
@@ -223,7 +226,7 @@ kan scan --group <组名>
 | 上游数据可能缺失或限流 | 相关维度返回 null / `data_unavailable` | 先看 `data_availability` 和 JSON error hint |
 | 部分逐股高成本维度不支持 `--all` | 如股东/ROE 类全市场模式不可用 | 改用行业/代码池小范围查询 |
 | 历史回溯依赖扫描快照 | 未记录过的周期显示 null / `-` | 先用 `kan scan --periods N` 积累后再查 |
-| MCP 仅提供本地 stdio | 远程 HTTP transport 尚未提供 | 先用 `kan mcp install --dry-run` 预览本机客户端注册 |
+| MCP 默认本地运行 | stdio 适合已集成客户端；本机 HTTP endpoint 适合支持 Streamable HTTP 的 agent | `kan mcp install --dry-run` 或 `kan mcp http --host localhost --port 8765` |
 | 持仓实时价只服务盈亏现价口径 | 位置 / 共振仍按日 K 计算 | 看 `price_mode` 和 `data_cutoff` |
 
 ---
@@ -237,10 +240,11 @@ Agent 可以通过以下方式发现 manmankan 的能力：
 3. **`kan examples`**——端到端工作流示例
 4. **`kan fields list --format json`**——字段 preset 和白名单
 5. **`kan mcp install --dry-run`**——预览可注册的本机 MCP 客户端和目标配置
-6. **`kan <command> --help`**——每个命令的详细参数
-7. **`docs/find.md`**——`kan find` 的完整 JSON schema 和字段定义
-8. **`docs/ai-quickstart.md`**——首次接入的结构 smoke、真实行情路径和 MCP 规则
-9. **`docs/mcp.md`**——MCP 支持客户端、dry-run、写入规则和 agent 解释边界
+6. **`kan mcp http --help`**——查看本机 Streamable HTTP endpoint 参数和安全开关
+7. **`kan <command> --help`**——每个命令的详细参数
+8. **`docs/find.md`**——`kan find` 的完整 JSON schema 和字段定义
+9. **`docs/ai-quickstart.md`**——首次接入的结构 smoke、真实行情路径和 MCP 规则
+10. **`docs/mcp.md`**——MCP 支持客户端、dry-run、HTTP transport、写入规则和 agent 解释边界
 
 建议 AI 在首次使用 manmankan 时：
 1. 读本文件了解全局能力

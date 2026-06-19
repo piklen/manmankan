@@ -161,6 +161,7 @@ def help_cmd() -> None:
   kan fields list           查看 find JSON 字段白名单
   kan mcp install           注册 manmankan MCP 到本机常见客户端
   kan mcp serve             启动 stdio MCP server
+  kan mcp http              启动本机 Streamable HTTP MCP endpoint
 
 [dim]涨跌停自动标记 · ST 默认显示，kan scan --exclude-st 可排除[/dim]
 [dim]任何命令加 --help / -h 看详细说明[/dim]

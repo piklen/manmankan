@@ -1,8 +1,10 @@
 from __future__ import annotations
 
+import http.client
 import io
 import json
 import shlex
+import threading
 from datetime import date, timedelta
 
 import pandas as pd
@@ -84,6 +86,112 @@ def test_mcp_serve_lists_tools() -> None:
     assert lines[0]["result"]["serverInfo"]["name"] == "manmankan"
     tools = {t["name"] for t in lines[1]["result"]["tools"]}
     assert {"kan_scan", "kan_find", "kan_info", "kan_index", "kan_hold"} <= tools
+
+
+def _start_mcp_http_server():
+    from kan.mcp.server import make_http_server
+
+    server = make_http_server("127.0.0.1", 0)
+    thread = threading.Thread(target=server.serve_forever, daemon=True)
+    thread.start()
+    return server, thread
+
+
+def _http_request(server, method: str, path: str, payload=None, *, origin: str | None = None):
+    body = b"" if payload is None else json.dumps(payload).encode("utf-8")
+    headers = {
+        "Accept": "application/json, text/event-stream",
+        "Content-Type": "application/json",
+    }
+    if origin:
+        headers["Origin"] = origin
+    conn = http.client.HTTPConnection("127.0.0.1", server.server_port, timeout=5)
+    try:
+        conn.request(method, path, body=body, headers=headers)
+        response = conn.getresponse()
+        data = response.read().decode("utf-8")
+        return response.status, dict(response.getheaders()), data
+    finally:
+        conn.close()
+
+
+def test_mcp_http_post_lists_tools() -> None:
+    server, thread = _start_mcp_http_server()
+    try:
+        status, headers, body = _http_request(
+            server,
+            "POST",
+            "/mcp",
+            {"jsonrpc": "2.0", "id": 1, "method": "tools/list"},
+        )
+    finally:
+        server.shutdown()
+        thread.join(timeout=2)
+
+    assert status == 200
+    assert headers["Content-Type"].startswith("application/json")
+    assert headers["MCP-Protocol-Version"] == "2025-06-18"
+    payload = json.loads(body)
+    tools = {t["name"] for t in payload["result"]["tools"]}
+    assert {"kan_scan", "kan_find", "kan_info", "kan_index", "kan_hold"} <= tools
+
+
+def test_mcp_http_rejects_invalid_origin() -> None:
+    server, thread = _start_mcp_http_server()
+    try:
+        status, _headers, body = _http_request(
+            server,
+            "POST",
+            "/mcp",
+            {"jsonrpc": "2.0", "id": 1, "method": "tools/list"},
+            origin="https://evil.example",
+        )
+    finally:
+        server.shutdown()
+        thread.join(timeout=2)
+
+    assert status == 403
+    payload = json.loads(body)
+    assert payload["error"]["code"] == -32003
+    assert "Origin" in payload["error"]["message"]
+
+
+def test_mcp_http_notification_returns_accepted() -> None:
+    server, thread = _start_mcp_http_server()
+    try:
+        status, headers, body = _http_request(
+            server,
+            "POST",
+            "/mcp",
+            {"jsonrpc": "2.0", "method": "notifications/initialized"},
+        )
+    finally:
+        server.shutdown()
+        thread.join(timeout=2)
+
+    assert status == 202
+    assert headers["Content-Length"] == "0"
+    assert body == ""
+
+
+def test_mcp_http_get_returns_405() -> None:
+    server, thread = _start_mcp_http_server()
+    try:
+        status, headers, body = _http_request(server, "GET", "/mcp")
+    finally:
+        server.shutdown()
+        thread.join(timeout=2)
+
+    assert status == 405
+    assert headers["Allow"] == "POST"
+    assert json.loads(body)["error"]["code"] == -32005
+
+
+def test_mcp_http_cli_rejects_non_localhost_host() -> None:
+    result = CliRunner().invoke(app, ["mcp", "http", "--host", "0.0.0.0"])
+
+    assert result.exit_code == 2
+    assert "默认只允许绑定" in result.output
 
 
 def test_mcp_hold_builds_cli_args(monkeypatch) -> None:

@@ -169,6 +169,14 @@ kan mcp install --client <client>
 kan mcp serve
 ```
 
+启动本机 Streamable HTTP endpoint：
+
+```bash
+kan mcp http --host localhost --port 8765 --path /mcp
+```
+
+HTTP transport 默认只绑定本机地址，并检查浏览器 `Origin`。它适合本机 agent、浏览器插件或调试工具连接；不要把本机 MCP 端口直接暴露成公网服务。
+
 MCP 工具仍沿用 CLI/JSON 契约。AI 调 MCP 时也要保留免责声明、检查错误 envelope，并把数据解释为研究输入而不是交易结论。
 
 支持的客户端和写入规则见 [`docs/mcp.md`](mcp.md)。

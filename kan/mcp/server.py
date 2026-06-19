@@ -1,8 +1,7 @@
-"""stdio MCP server for manmankan CLI.
+"""manmankan CLI 的 MCP server。
 
-The server intentionally wraps existing CLI commands instead of duplicating
-business logic. MCP clients get the same compliance text and data contracts as
-terminal users.
+server 只包装现有 CLI 命令，不复制业务逻辑。MCP client 拿到的合规文案和数据
+契约应与终端用户一致。
 """
 from __future__ import annotations
 
@@ -10,7 +9,10 @@ import json
 import sys
 from collections.abc import Callable
 from dataclasses import dataclass
+from http import HTTPStatus
+from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from typing import Any
+from urllib.parse import urlsplit
 
 from typer.testing import CliRunner
 
@@ -20,6 +22,8 @@ from kan.infra.log import redact_text
 SERVER_NAME = "manmankan"
 SERVER_VERSION = __version__
 PROTOCOL_VERSION = "2025-06-18"
+DEFAULT_HTTP_PATH = "/mcp"
+LOCAL_HTTP_HOSTS = {"127.0.0.1", "localhost", "::1"}
 
 
 @dataclass(frozen=True)
@@ -375,6 +379,190 @@ def _error(req_id: Any, code: int, message: str) -> dict[str, Any]:
         "id": req_id,
         "error": {"code": code, "message": redact_text(message)},
     }
+
+
+def is_local_http_host(host: str) -> bool:
+    """HTTP transport 默认只绑定本机，降低 DNS rebinding 暴露面。"""
+    return host.lower() in LOCAL_HTTP_HOSTS
+
+
+def _normalize_endpoint_path(path: str) -> str:
+    if not path.startswith("/"):
+        raise ValueError("MCP HTTP path 必须以 / 开头")
+    if len(path) > 1 and path.endswith("/"):
+        return path.rstrip("/")
+    return path
+
+
+def _origin_key(origin: str) -> tuple[str, str, int] | None:
+    try:
+        parsed = urlsplit(origin)
+    except ValueError:
+        return None
+    if parsed.scheme not in {"http", "https"} or not parsed.hostname:
+        return None
+    port = parsed.port
+    if port is None:
+        port = 443 if parsed.scheme == "https" else 80
+    return parsed.scheme, parsed.hostname.lower(), port
+
+
+def _allowed_origin_keys(
+    *,
+    host: str,
+    port: int,
+    allow_origins: list[str] | None = None,
+) -> set[tuple[str, str, int]]:
+    hosts = {host.lower()}
+    if is_local_http_host(host):
+        hosts.update(LOCAL_HTTP_HOSTS)
+    keys = {("http", item, port) for item in hosts}
+    for origin in allow_origins or []:
+        key = _origin_key(origin)
+        if key is not None:
+            keys.add(key)
+    return keys
+
+
+def _origin_allowed(origin: str | None, allowed: set[tuple[str, str, int]]) -> bool:
+    if not origin:
+        return True
+    key = _origin_key(origin)
+    return key in allowed if key is not None else False
+
+
+def _json_bytes(payload: dict[str, Any]) -> bytes:
+    return json.dumps(payload, ensure_ascii=False, separators=(",", ":")).encode("utf-8")
+
+
+def make_http_server(
+    host: str = "127.0.0.1",
+    port: int = 8765,
+    *,
+    path: str = DEFAULT_HTTP_PATH,
+    allow_origins: list[str] | None = None,
+) -> ThreadingHTTPServer:
+    """创建复用 stdio handler 的本机 Streamable HTTP MCP endpoint。
+
+    当前只实现 application/json 响应路径，不暴露长连接 SSE stream；因此 GET
+    按 MCP Streamable HTTP transport 允许的形态返回 405。
+    """
+    endpoint_path = _normalize_endpoint_path(path)
+    allowed_origins = _allowed_origin_keys(host=host, port=port, allow_origins=allow_origins)
+
+    class MCPHTTPHandler(BaseHTTPRequestHandler):
+        protocol_version = "HTTP/1.1"
+        server_version = f"{SERVER_NAME}-mcp/{SERVER_VERSION}"
+
+        def log_message(self, _format: str, *_args: Any) -> None:
+            return
+
+        def _send_empty(self, status: HTTPStatus, headers: dict[str, str] | None = None) -> None:
+            self.send_response(status.value)
+            for key, value in (headers or {}).items():
+                self.send_header(key, value)
+            self.send_header("Content-Length", "0")
+            self.end_headers()
+
+        def _send_json(
+            self,
+            status: HTTPStatus,
+            payload: dict[str, Any],
+            headers: dict[str, str] | None = None,
+        ) -> None:
+            data = _json_bytes(payload)
+            self.send_response(status.value)
+            self.send_header("Content-Type", "application/json; charset=utf-8")
+            self.send_header("Content-Length", str(len(data)))
+            self.send_header("MCP-Protocol-Version", PROTOCOL_VERSION)
+            for key, value in (headers or {}).items():
+                self.send_header(key, value)
+            self.end_headers()
+            self.wfile.write(data)
+
+        def _path_matches(self) -> bool:
+            return _normalize_endpoint_path(urlsplit(self.path).path or "/") == endpoint_path
+
+        def _origin_ok(self) -> bool:
+            return _origin_allowed(self.headers.get("Origin"), allowed_origins)
+
+        def do_POST(self) -> None:
+            if not self._path_matches():
+                self._send_json(
+                    HTTPStatus.NOT_FOUND,
+                    _error(None, -32004, f"未找到 MCP endpoint: {self.path}"),
+                )
+                return
+            if not self._origin_ok():
+                self._send_json(
+                    HTTPStatus.FORBIDDEN,
+                    _error(None, -32003, "本机 MCP HTTP transport 拒绝该 Origin header"),
+                )
+                return
+            try:
+                length = int(self.headers.get("Content-Length") or "0")
+                raw = self.rfile.read(length)
+                request = json.loads(raw.decode("utf-8"))
+                if not isinstance(request, dict):
+                    raise ValueError("JSON-RPC body 必须是 object")
+            except Exception as e:
+                self._send_json(
+                    HTTPStatus.BAD_REQUEST,
+                    _error(None, -32700, f"{type(e).__name__}: {e}"),
+                )
+                return
+
+            response = _handle_request(request)
+            if response is None:
+                self._send_empty(
+                    HTTPStatus.ACCEPTED,
+                    {"MCP-Protocol-Version": PROTOCOL_VERSION},
+                )
+                return
+            self._send_json(HTTPStatus.OK, response)
+
+        def do_GET(self) -> None:
+            if not self._path_matches():
+                self._send_json(
+                    HTTPStatus.NOT_FOUND,
+                    _error(None, -32004, f"未找到 MCP endpoint: {self.path}"),
+                )
+                return
+            if not self._origin_ok():
+                self._send_json(
+                    HTTPStatus.FORBIDDEN,
+                    _error(None, -32003, "本机 MCP HTTP transport 拒绝该 Origin header"),
+                )
+                return
+            self._send_json(
+                HTTPStatus.METHOD_NOT_ALLOWED,
+                _error(None, -32005, "当前本机 MCP transport 暂不支持 SSE stream"),
+                {"Allow": "POST"},
+            )
+
+        def do_DELETE(self) -> None:
+            self._send_json(
+                HTTPStatus.METHOD_NOT_ALLOWED,
+                _error(None, -32005, "当前 MCP session 为无状态实现，不能删除"),
+                {"Allow": "POST"},
+            )
+
+    return ThreadingHTTPServer((host, port), MCPHTTPHandler)
+
+
+def serve_http(
+    *,
+    host: str = "127.0.0.1",
+    port: int = 8765,
+    path: str = DEFAULT_HTTP_PATH,
+    allow_origins: list[str] | None = None,
+) -> None:
+    """启动本机 Streamable HTTP MCP endpoint，直到用户中断。"""
+    httpd = make_http_server(host, port, path=path, allow_origins=allow_origins)
+    try:
+        httpd.serve_forever()
+    finally:
+        httpd.server_close()
 
 
 def serve(infile=None, outfile=None) -> None:
