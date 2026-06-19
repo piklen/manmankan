@@ -41,6 +41,8 @@
 - 完整错误输出或 JSON envelope
 - 是否设置了 TuShare token（不要贴 token 原文）
 
+贴错误输出或 JSON envelope 前，先看 [`安全反馈说明`](docs/china-quickstart.md#8-反馈问题时请带上这些信息)，脱敏 token、代理账号、本机路径和持仓金额。
+
 ## 不适合用 Issues 解决
 
 - 个股买卖建议、持仓建议、目标价、涨跌预测。
