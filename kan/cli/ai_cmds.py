@@ -181,6 +181,49 @@ def mcp_serve() -> None:
     serve()
 
 
+@mcp_app.command("http")
+def mcp_http(
+    host: Annotated[
+        str,
+        typer.Option("--host", help="监听地址；默认仅绑定本机 127.0.0.1"),
+    ] = "127.0.0.1",
+    port: Annotated[
+        int,
+        typer.Option("--port", min=1, max=65535, help="监听端口"),
+    ] = 8765,
+    path: Annotated[
+        str,
+        typer.Option("--path", help="MCP HTTP endpoint 路径"),
+    ] = "/mcp",
+    allow_origin: Annotated[
+        list[str] | None,
+        typer.Option("--allow-origin", help="额外允许的浏览器 Origin，可重复"),
+    ] = None,
+    allow_non_localhost: Annotated[
+        bool,
+        typer.Option(
+            "--allow-non-localhost",
+            help="允许绑定非本机地址；只在可信内网或反向代理后使用",
+        ),
+    ] = False,
+) -> None:
+    """启动本机 Streamable HTTP MCP server。"""
+    from kan.mcp.server import is_local_http_host, serve_http
+
+    if not allow_non_localhost and not is_local_http_host(host):
+        _print_err(
+            "❌ 默认只允许绑定 127.0.0.1 / localhost / ::1\n"
+            "   若你确认在可信内网或本机反向代理后使用，例: "
+            f"kan mcp http --host {host} --allow-non-localhost"
+        )
+        raise typer.Exit(2)
+    typer.echo(
+        f"manmankan MCP HTTP server: http://{host}:{port}{path} · Ctrl+C 停止",
+        err=True,
+    )
+    serve_http(host=host, port=port, path=path, allow_origins=allow_origin)
+
+
 @mcp_app.command("install")
 def mcp_install(
     clients: Annotated[

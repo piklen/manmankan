@@ -111,7 +111,7 @@ manmankan 的每个命令都同时考虑两种输出形态：
 ### 3.3 Agent 消费（MCP + Skills.md）
 
 - **Skills.md**：`skills/manmankan-skill.md` 是给 AI Agent 的能力清单——Agent 读到就知道所有命令、参数和典型用法
-- **MCP Server**：`kan mcp serve` 在 CLI 契约上提供 stdio MCP；`kan mcp install` 负责注册到常见用户级客户端配置
+- **MCP Server**：`kan mcp serve` 在 CLI 契约上提供 stdio MCP；`kan mcp http` 提供本机 Streamable HTTP endpoint；`kan mcp install` 负责注册到常见用户级客户端配置
 - **退出码语义**：0=成功，非 0=具体错误类别，Agent 不需要解析 stderr
 
 ---
@@ -156,12 +156,12 @@ manmankan 的每个命令都同时考虑两种输出形态：
 ```
 现在 (v0.0.6.9+)         近期 (下一批)           中期                    远期
 ┌─────────────────┐    ┌─────────────────┐    ┌──────────────────┐    ┌──────────────────┐
-│ CLI + JSON 输出  │    │ + MCP HTTP      │    │ + Source 接口抽象 │    │ 多市场支持       │
+│ CLI + JSON 输出  │    │ + HTTP 接入样例 │    │ + Source 接口抽象 │    │ 多市场支持       │
 │ 位置扫描         │ →  │ + Web service   │ →  │ + 首个非A股Source│ →  │ 社区数据源生态   │
 │ 筛选 DSL         │    │ + JSON 兼容维护 │    │ + Hub 策展目录   │    │ "manmankan 协议" │
 │ 自选股管理       │    │ + Skills.md同步 │    │ + DataProvider   │    │ A 股 AI 数据标准 │
 │ 分组管理         │    │                  │    │ + 本地 Web 可视化│    │                  │
-│ MCP stdio        │    │                  │    │                  │    │                  │
+│ MCP stdio/http   │    │                  │    │                  │    │                  │
 └─────────────────┘    └─────────────────┘    └──────────────────┘    └──────────────────┘
 ```
 
