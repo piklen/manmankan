@@ -75,4 +75,6 @@ MCP 工具返回的数据仍然遵守 CLI / JSON 契约：
 - 用 `data_availability` 区分未请求、缺数据和当前模式不支持。
 - 把结果解释为研究输入，不输出买卖建议、预测、评级或策略结论。
 
+需要把 MCP 返回、JSON envelope、错误输出或 dry-run 输出贴到 GitHub 时，先看 [`SUPPORT.md`](../SUPPORT.md) 区分 Issues / Discussions；公开反馈前按 [`安全反馈说明`](china-quickstart.md#8-反馈问题时请带上这些信息) 脱敏 token、代理账号、本机路径和真实持仓金额。
+
 首次接入建议同时阅读 [`docs/ai-quickstart.md`](ai-quickstart.md) 和 [`docs/find.md`](find.md)。
