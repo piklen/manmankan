@@ -59,6 +59,19 @@ kan find --codes 600519,000858 --format json
 - 是否配置 TuShare token（只填“已配 / 未配”，不要贴 token）：
 - 是否使用代理（只填“直连 / 代理 / 公司内网”，不要贴代理账号）：
 
+## 脱敏示例
+
+可以贴：
+
+```text
+TUSHARE_TOKEN=<redacted>
+HTTPS_PROXY=http://<redacted>@proxy.example:7890
+config path: /Users/<user>/... 或 C:\Users\<user>\...
+持仓：约 N 只，金额已脱敏
+```
+
+不要贴真实 token、代理账号、完整本机路径、真实持仓金额或账户截图。
+
 ## 其他线索
 
 <!-- 截图 / 异常 traceback / 你的推测。不要贴 token、私有路径、真实持仓金额或代理账号。 -->
