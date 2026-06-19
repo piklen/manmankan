@@ -8,6 +8,7 @@ import threading
 from datetime import date, timedelta
 
 import pandas as pd
+import pytest
 from typer.testing import CliRunner
 
 from kan.cli import app
@@ -136,6 +137,28 @@ def test_mcp_http_post_lists_tools() -> None:
     assert {"kan_scan", "kan_find", "kan_info", "kan_index", "kan_hold"} <= tools
 
 
+def test_mcp_http_accepts_extra_allowed_origin() -> None:
+    from kan.mcp.server import make_http_server
+
+    server = make_http_server("127.0.0.1", 0, allow_origins=["https://agent.example"])
+    thread = threading.Thread(target=server.serve_forever, daemon=True)
+    thread.start()
+    try:
+        status, _headers, body = _http_request(
+            server,
+            "POST",
+            "/mcp",
+            {"jsonrpc": "2.0", "id": 1, "method": "tools/list"},
+            origin="https://agent.example",
+        )
+    finally:
+        server.shutdown()
+        thread.join(timeout=2)
+
+    assert status == 200
+    assert "tools" in json.loads(body)["result"]
+
+
 def test_mcp_http_rejects_invalid_origin() -> None:
     server, thread = _start_mcp_http_server()
     try:
@@ -154,6 +177,37 @@ def test_mcp_http_rejects_invalid_origin() -> None:
     payload = json.loads(body)
     assert payload["error"]["code"] == -32003
     assert "Origin" in payload["error"]["message"]
+
+
+def test_mcp_http_post_unknown_path_returns_404() -> None:
+    server, thread = _start_mcp_http_server()
+    try:
+        status, _headers, body = _http_request(
+            server,
+            "POST",
+            "/missing",
+            {"jsonrpc": "2.0", "id": 1, "method": "tools/list"},
+        )
+    finally:
+        server.shutdown()
+        thread.join(timeout=2)
+
+    assert status == 404
+    assert json.loads(body)["error"]["code"] == -32004
+
+
+def test_mcp_http_post_rejects_non_object_json() -> None:
+    server, thread = _start_mcp_http_server()
+    try:
+        status, _headers, body = _http_request(server, "POST", "/mcp", [])
+    finally:
+        server.shutdown()
+        thread.join(timeout=2)
+
+    assert status == 400
+    payload = json.loads(body)
+    assert payload["error"]["code"] == -32700
+    assert "JSON-RPC body" in payload["error"]["message"]
 
 
 def test_mcp_http_notification_returns_accepted() -> None:
@@ -187,11 +241,105 @@ def test_mcp_http_get_returns_405() -> None:
     assert json.loads(body)["error"]["code"] == -32005
 
 
+def test_mcp_http_get_unknown_path_returns_404() -> None:
+    server, thread = _start_mcp_http_server()
+    try:
+        status, _headers, body = _http_request(server, "GET", "/missing")
+    finally:
+        server.shutdown()
+        thread.join(timeout=2)
+
+    assert status == 404
+    assert json.loads(body)["error"]["code"] == -32004
+
+
+def test_mcp_http_get_rejects_invalid_origin() -> None:
+    server, thread = _start_mcp_http_server()
+    try:
+        status, _headers, body = _http_request(
+            server,
+            "GET",
+            "/mcp",
+            origin="https://evil.example",
+        )
+    finally:
+        server.shutdown()
+        thread.join(timeout=2)
+
+    assert status == 403
+    assert json.loads(body)["error"]["code"] == -32003
+
+
+def test_mcp_http_delete_returns_405() -> None:
+    server, thread = _start_mcp_http_server()
+    try:
+        status, headers, body = _http_request(server, "DELETE", "/mcp")
+    finally:
+        server.shutdown()
+        thread.join(timeout=2)
+
+    assert status == 405
+    assert headers["Allow"] == "POST"
+    assert json.loads(body)["error"]["code"] == -32005
+
+
 def test_mcp_http_cli_rejects_non_localhost_host() -> None:
     result = CliRunner().invoke(app, ["mcp", "http", "--host", "0.0.0.0"])
 
     assert result.exit_code == 2
     assert "默认只允许绑定" in result.output
+
+
+def test_mcp_http_cli_starts_with_fake_server(monkeypatch) -> None:
+    from kan.mcp import server
+
+    captured = {}
+
+    def fake_serve_http(**kwargs):
+        captured.update(kwargs)
+
+    monkeypatch.setattr(server, "serve_http", fake_serve_http)
+
+    result = CliRunner().invoke(app, ["mcp", "http", "--host", "localhost", "--port", "8765"])
+
+    assert result.exit_code == 0
+    assert captured["host"] == "localhost"
+    assert captured["port"] == 8765
+    assert "MCP HTTP server" in result.output
+
+
+def test_mcp_http_helpers_cover_origin_and_path_edges() -> None:
+    from kan.mcp import server
+
+    with pytest.raises(ValueError, match="必须以 / 开头"):
+        server.make_http_server("127.0.0.1", 0, path="mcp")
+    assert server._normalize_endpoint_path("/mcp/") == "/mcp"
+    assert server._origin_key("http://[::1") is None
+    assert server._origin_key("file://agent.example") is None
+
+
+def test_serve_http_closes_server(monkeypatch) -> None:
+    from kan.mcp import server
+
+    class FakeServer:
+        served = False
+        closed = False
+
+        def serve_forever(self):
+            self.served = True
+            raise KeyboardInterrupt
+
+        def server_close(self):
+            self.closed = True
+
+    fake = FakeServer()
+    monkeypatch.setattr(server, "make_http_server", lambda *_args, **_kwargs: fake)
+
+    with pytest.raises(KeyboardInterrupt):
+        server.serve_http()
+
+    assert fake.served is True
+    assert fake.closed is True
 
 
 def test_mcp_hold_builds_cli_args(monkeypatch) -> None:
