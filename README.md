@@ -69,6 +69,7 @@ Data, not decisions: no buy/sell advice, no ratings, no price targets. Python 3.
 |----------|------|
 | **JSON 是产品，不是后门** | `--format json` 输出包含 `schema_version`、`data_availability`、`disclaimer`、`error` 信封——AI 不需要猜测字段含义或处理裸异常 |
 | **低上下文成本** | `--compact` / `--fields @core` / `--no-compact-context` 让 AI 按需索取，不浪费 token |
+| **Schema 自发现** | `kan schema --format json` 返回 CLI JSON、find DSL、MCP tools 和错误 envelope 的机器可读契约；`--section find --compact` 可低上下文只取筛选契约 |
 | **示例可机器读取** | `kan examples --format json` 输出端到端命令清单，AI 可以先读示例再选择最短命令 |
 | **Skills.md 能力清单** | [`skills/manmankan-skill.md`](skills/manmankan-skill.md) 是给 AI Agent 的"说明书"——AI 读到它就知道 manmankan 能做什么、怎么调、错误怎么处理 |
 | **MCP Server** | `kan mcp serve` 提供 stdio MCP；`kan mcp http` 提供本机 Streamable HTTP endpoint；`kan mcp install --dry-run` 可预览写入常见 AI 客户端的用户级配置，接入细节见 [`docs/mcp.md`](docs/mcp.md) |
@@ -130,12 +131,13 @@ kan history 600519 --format json
 JSON 相关入口：
 
 ```bash
+kan schema --format json --section find --compact
 kan find --industry 半导体 --format json --fields @core,@valuation
 kan find --codes - --format json --compact
 kan find --all --format json --compact --no-compact-context
 ```
 
-JSON schema、字段分组、`data_availability`、缺数据语义、错误 envelope 见 [`docs/find.md`](docs/find.md)。脚本化入口以 [`kan/api.py`](kan/api.py) 文件头 docstring 为公开 contract。
+机器可读 schema 先看 `kan schema --format json`；完整 `kan find` 字段分组、`data_availability`、缺数据语义、错误 envelope 见 [`docs/find.md`](docs/find.md)。脚本化入口以 [`kan/api.py`](kan/api.py) 文件头 docstring 为公开 contract。
 
 ## 安装
 

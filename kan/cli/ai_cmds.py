@@ -62,6 +62,11 @@ _EXAMPLES = [
         "kan mcp install --dry-run",
         "预览写入哪些本机 AI 客户端配置；确认后再去掉 --dry-run。",
     ),
+    (
+        "Agent schema 发现",
+        "kan schema --format json --section find --compact",
+        "低上下文查看 CLI JSON、find DSL、MCP tools 和错误 envelope 契约。",
+    ),
 ]
 
 
@@ -314,6 +319,49 @@ def _exit_ai_error(
             text += f"\n   {hint}"
         _print_err(text)
     raise typer.Exit(exit_code)
+
+
+@app.command()
+def schema(
+    fmt: Annotated[
+        export.OutputFormat,
+        typer.Option("--format", help="输出格式：terminal（默认）/ md / json"),
+    ] = export.OutputFormat.terminal,
+    section: Annotated[
+        str,
+        typer.Option("--section", help="只输出局部 schema：all / commands / find / mcp / errors"),
+    ] = "all",
+    compact: Annotated[
+        bool,
+        typer.Option("--compact", help="低上下文输出；省略长说明和完整 inputSchema"),
+    ] = False,
+) -> None:
+    """发现 CLI JSON / find DSL / MCP / error envelope 契约。"""
+    from kan.service.schema_service import (
+        VALID_SCHEMA_SECTIONS,
+        build_schema_payload,
+        render_schema_markdown,
+        render_schema_terminal,
+    )
+
+    try:
+        payload = build_schema_payload(section=section, compact=compact)
+    except ValueError as e:
+        _exit_ai_error(
+            "schema",
+            fmt,
+            code="invalid_schema_section",
+            message=str(e),
+            hint="支持: " + " / ".join(VALID_SCHEMA_SECTIONS),
+            exit_code=2,
+        )
+    if fmt is export.OutputFormat.json:
+        typer.echo(export.to_json(payload))
+        return
+    if fmt is export.OutputFormat.md:
+        typer.echo(render_schema_markdown(payload))
+        return
+    typer.echo(render_schema_terminal(payload))
 
 
 @app.command()

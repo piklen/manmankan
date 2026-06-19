@@ -236,21 +236,23 @@ kan scan --group <组名>
 Agent 可以通过以下方式发现 manmankan 的能力：
 
 1. **本文件**（`skills/manmankan-skill.md`）——完整的能力清单
-2. **`kan --help` / `kan help`**——中文速记，含 group / JSON / fields / MCP 入口
-3. **`kan examples`**——端到端工作流示例
-4. **`kan fields list --format json`**——字段 preset 和白名单
-5. **`kan mcp install --dry-run`**——预览可注册的本机 MCP 客户端和目标配置
-6. **`kan mcp http --help`**——查看本机 Streamable HTTP endpoint 参数和安全开关
-7. **`kan <command> --help`**——每个命令的详细参数
-8. **`docs/find.md`**——`kan find` 的完整 JSON schema 和字段定义
-9. **`docs/ai-quickstart.md`**——首次接入的结构 smoke、真实行情路径和 MCP 规则
-10. **`docs/mcp.md`**——MCP 支持客户端、dry-run、HTTP transport、写入规则和 agent 解释边界
+2. **`kan schema --format json`**——机器可读发现 CLI JSON、find DSL、MCP tools 和错误 envelope
+3. **`kan --help` / `kan help`**——中文速记，含 group / JSON / fields / MCP 入口
+4. **`kan examples`**——端到端工作流示例
+5. **`kan fields list --format json`**——字段 preset 和白名单
+6. **`kan mcp install --dry-run`**——预览可注册的本机 MCP 客户端和目标配置
+7. **`kan mcp http --help`**——查看本机 Streamable HTTP endpoint 参数和安全开关
+8. **`kan <command> --help`**——每个命令的详细参数
+9. **`docs/find.md`**——`kan find` 的完整 JSON schema 和字段定义
+10. **`docs/ai-quickstart.md`**——首次接入的结构 smoke、真实行情路径和 MCP 规则
+11. **`docs/mcp.md`**——MCP 支持客户端、dry-run、HTTP transport、写入规则和 agent 解释边界
 
 建议 AI 在首次使用 manmankan 时：
 1. 读本文件了解全局能力
-2. 跑 `kan scan --help` 和 `kan find --help` 确认最新参数
-3. 跑 `kan fetch` 确保数据是最新的
+2. 跑 `kan schema --format json --section find --compact` 获取最新机器可读契约
+3. 跑 `kan scan --help` 和 `kan find --help` 确认人类可读参数说明
+4. 跑 `kan fetch` 确保数据是最新的
 
 ---
 
-*维护：manmankan 能力变更时同步更新本文件 · 最后更新：2026-06-06*
+*维护：manmankan 能力变更时同步更新本文件 · 最后更新：2026-06-19*

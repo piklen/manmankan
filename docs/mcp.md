@@ -92,6 +92,7 @@ kan mcp http --host localhost --port 8765 --path /mcp
 
 MCP 工具返回的数据仍然遵守 CLI / JSON 契约：
 
+- 首次接入可先调用 `kan_schema`，或在 CLI 侧跑 `kan schema --format json --section mcp --compact` 查看工具 schema。
 - 先检查 MCP `isError` 或 JSON `ok:false`。
 - 保留 `disclaimer`。
 - 读取 `data_cutoff` / `fetched_at`，不要假设数据实时。
