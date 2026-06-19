@@ -7,7 +7,12 @@
 ```bash
 uv tool install manmankan
 kan --version
-kan examples
+KAN_NO_UPDATE_CHECK=1 kan find --codes 600519,000858 --format json
+```
+
+源码 main 或支持示例清单的版本，可以继续发现更多命令：
+
+```bash
 kan examples --format json
 kan fields list --format json
 ```
