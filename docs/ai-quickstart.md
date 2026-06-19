@@ -179,6 +179,8 @@ JSON 模式下业务错误使用 envelope：
 3. 如果 `data_availability` 标记维度缺失，明确说明该维度未形成证据。
 4. 不要基于空字段补全推断。
 
+需要把 JSON envelope 或错误输出贴到 GitHub 时，先看 [`SUPPORT.md`](../SUPPORT.md) 区分 Issues / Discussions；公开反馈前按 [`安全反馈说明`](china-quickstart.md#8-反馈问题时请带上这些信息) 脱敏 token、代理账号、本机路径和真实持仓金额。
+
 ## 7. 合规输出边界
 
 可以说：
