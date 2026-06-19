@@ -185,8 +185,10 @@ def test_race_both_succeed_one_wins(sample_df):
 
 def test_race_slow_loser_does_not_hold_process_open():
     """慢 loser 不应在 race 已中标后拖住 CLI 进程退出。"""
-    slow_loser_sleep = 15.0
-    exit_timeout = 6.0
+    slow_loser_sleep = 20.0
+    # timeout 覆盖解释器启动和 pandas/import 成本，但仍短于慢源 sleep；
+    # 如果 race 退回到非 daemon worker，这里仍会被卡住并失败。
+    exit_timeout = 12.0
     code = r"""
 import time
 import pandas as pd

@@ -13,6 +13,8 @@
 [![CLI + JSON](https://img.shields.io/badge/output-CLI_%2B_JSON-blue.svg)](docs/find.md)
 [![Agent-Native](https://img.shields.io/badge/agent--native-Skills.md-purple.svg)](skills/manmankan-skill.md)
 
+![慢慢看 CLI 和 JSON 输出示意](docs/assets/readme-demo.svg)
+
 慢慢看是一个纯命令行工具。它把一批 A 股候选整理成"坐标清单"：多周期位置、共振、估值/资金/技术字段、命中规则和缺数据状态。人可以在终端里快速扫一眼，AI 可以直接消费低噪声 JSON 继续做解释、排序、研究清单或交叉验证。
 
 ```bash
