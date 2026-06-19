@@ -161,6 +161,7 @@ git config core.hooksPath .githooks
 ## 报告问题
 
 通过 [GitHub Issues](https://github.com/piklen/manmankan/issues) 报告 bug 或提出功能建议。
+反馈前先看 [`SUPPORT.md`](SUPPORT.md) 区分 Issues / Discussions；贴日志或 JSON envelope 前先看 [`安全反馈说明`](docs/china-quickstart.md#8-反馈问题时请带上这些信息)，脱敏 token、代理账号、本机路径和持仓金额。
 
 请提供：
 
