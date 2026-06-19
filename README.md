@@ -192,6 +192,7 @@ uv tool install manmankan --index-url https://pypi.org/simple/
 | [`CHANGELOG.md`](CHANGELOG.md) | 版本变更记录 |
 | [`docs/architecture.md`](docs/architecture.md) | 架构愿景：三层定位、Source 模型、多市场路线、AI 消费设计 |
 | [`docs/china-quickstart.md`](docs/china-quickstart.md) | 中国用户 / 开发者首用路径、国内网络、PyPI 镜像、TuShare 与代理排查 |
+| [`docs/contributor-quickstart.md`](docs/contributor-quickstart.md) | 首次贡献路径、good first issue、验证命令和 AI 协作边界 |
 | [`docs/ai-quickstart.md`](docs/ai-quickstart.md) | AI agent 首用路径、JSON / MCP 消费规则 |
 | [`docs/mcp.md`](docs/mcp.md) | MCP 支持客户端、dry-run、写入规则和 agent 解释边界 |
 | [`docs/find.md`](docs/find.md) | `kan find` JSON schema、字段、缺数据语义 |
@@ -221,7 +222,7 @@ uv run pytest -q -m "not network and not tty"
 git config core.hooksPath .githooks
 ```
 
-贡献前请读 [`CONTRIBUTING.md`](CONTRIBUTING.md)，尤其是公开输出的中性语言和合规边界。
+第一次贡献先读 [`docs/contributor-quickstart.md`](docs/contributor-quickstart.md)；贡献规范详见 [`CONTRIBUTING.md`](CONTRIBUTING.md)，尤其是公开输出的中性语言和合规边界。
 
 ## 许可证
 
