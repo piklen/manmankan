@@ -218,4 +218,15 @@ bash scripts/check-privacy-leaks.sh
 - 是否走代理：只说“直连 / 代理 / 公司内网”，不要贴代理账号
 - 错误输出：优先贴 `NO_COLOR=1` 后的完整文本或 JSON envelope
 
+可以贴的脱敏形态：
+
+```text
+TUSHARE_TOKEN=<redacted>
+HTTPS_PROXY=http://<redacted>@proxy.example:7890
+config path: /Users/<user>/... 或 C:\Users\<user>\...
+持仓：约 N 只，金额已脱敏
+```
+
+不要贴真实 token、代理账号、完整本机路径、真实持仓金额或账户截图。
+
 安全漏洞不要开公开 issue，按 [`SECURITY.md`](../SECURITY.md) 走 GitHub Private Vulnerability Reporting。
