@@ -31,9 +31,9 @@ env:
   UV_LOCK_TIMEOUT: "1200"
 
 jobs:
-  lockfile:
-    runs-on: [self-hosted, manmankan-ci]
-    timeout-minutes: 10
+  quality-gates:
+    runs-on: [self-hosted, manmankan-ci, hkg-vps]
+    timeout-minutes: 20
     steps:
       - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10  # v6 (pinned 2026-05-27)
       - name: Verify preinstalled uv runtime
@@ -42,70 +42,16 @@ jobs:
           uv python find 3.12
       - name: Lockfile is current
         run: uv lock --check
-      - name: Clean CI runner workspace
-        if: always()
-        continue-on-error: true
-        uses: ./.github/actions/cleanup-runner
-
-  dependency-review:
-    runs-on: [self-hosted, manmankan-ci]
-    timeout-minutes: 15
-    steps:
-      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10  # v6 (pinned 2026-05-27)
-      - name: Verify preinstalled uv runtime
-        run: |
-          uv --version
-          uv python find 3.12
       - name: Install dependencies
         run: uv sync --python 3.12 --frozen --all-groups --all-extras
       - name: Dependency upper-bound review
         run: uv run python scripts/check-dependency-bounds.py
-      - name: Clean CI runner workspace
-        if: always()
-        continue-on-error: true
-        uses: ./.github/actions/cleanup-runner
-
-  lint:
-    runs-on: [self-hosted, manmankan-ci]
-    timeout-minutes: 15
-    steps:
-      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10  # v6 (pinned 2026-05-27)
-      - name: Verify preinstalled uv runtime
-        run: |
-          uv --version
-          uv python find 3.12
-      - name: Install dependencies
-        run: uv sync --python 3.12 --frozen --all-groups --all-extras
+      - name: Privacy / public archive scan
+        run: bash scripts/check-privacy-leaks.sh
       - name: Lint source and tests
         run: uv run ruff check kan/ tests/
-      - name: Clean CI runner workspace
-        if: always()
-        continue-on-error: true
-        uses: ./.github/actions/cleanup-runner
-
-  typecheck:
-    runs-on: [self-hosted, manmankan-ci]
-    timeout-minutes: 15
-    steps:
-      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10  # v6 (pinned 2026-05-27)
-      - name: Verify preinstalled uv runtime
-        run: |
-          uv --version
-          uv python find 3.12
-      - name: Install dependencies
-        run: uv sync --python 3.12 --frozen --all-groups --all-extras
       - name: Type check core
         run: uv run mypy
-      - name: Clean CI runner workspace
-        if: always()
-        continue-on-error: true
-        uses: ./.github/actions/cleanup-runner
-
-  tracked-package-sanity:
-    runs-on: [self-hosted, manmankan-ci]
-    timeout-minutes: 10
-    steps:
-      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10  # v6 (pinned 2026-05-27)
       - name: Tracked package sanity
         run: |
           python3 - <<'PY'
@@ -127,20 +73,6 @@ jobs:
                   print(f"  - {path}")
               sys.exit(1)
           PY
-      - name: Clean CI runner workspace
-        if: always()
-        continue-on-error: true
-        uses: ./.github/actions/cleanup-runner
-
-  package-build:
-    runs-on: [self-hosted, manmankan-ci]
-    timeout-minutes: 15
-    steps:
-      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10  # v6 (pinned 2026-05-27)
-      - name: Verify preinstalled uv runtime
-        run: |
-          uv --version
-          uv python find 3.12
       - name: Build wheel and sdist
         run: |
           uv build --clear
@@ -162,43 +94,6 @@ jobs:
         continue-on-error: true
         uses: ./.github/actions/cleanup-runner
 
-  quality-gates:
-    # 保留旧检查名，避免 branch protection 仍绑定 quality-gates 时被误断。
-    needs:
-      - lockfile
-      - dependency-review
-      - privacy-scan
-      - lint
-      - typecheck
-      - tracked-package-sanity
-      - package-build
-    if: always()
-    runs-on: [self-hosted, manmankan-ci]
-    timeout-minutes: 5
-    steps:
-      - name: Verify quality gates
-        env:
-          NEEDS_JSON: ${{ toJSON(needs) }}
-        run: |
-          python3 - <<'PY'
-          import json
-          import os
-          import sys
-
-          needs = json.loads(os.environ["NEEDS_JSON"])
-          failed = {
-              name: meta["result"]
-              for name, meta in needs.items()
-              if meta["result"] != "success"
-          }
-          if failed:
-              print("Failed quality gates:")
-              for name, result in failed.items():
-                  print(f"  - {name}: {result}")
-              sys.exit(1)
-          print("All quality gates passed.")
-          PY
-
   # 保留独立 job 名，避免已有 branch protection 仍绑定旧检查名时被误断。
   privacy-scan:
     runs-on: [self-hosted, manmankan-ci]
@@ -213,7 +108,7 @@ jobs:
         uses: ./.github/actions/cleanup-runner
 
   test:
-    runs-on: [self-hosted, manmankan-ci]
+    runs-on: [self-hosted, manmankan-ci, hkg-vps]
     timeout-minutes: 35
     strategy:
       fail-fast: false
@@ -230,7 +125,7 @@ jobs:
       - name: Install dependencies
         run: uv sync --python ${{ matrix.python-version }} --frozen --all-groups --all-extras
       - name: Run tests
-        run: uv run pytest -q -m "not tty and not network" -n 4 --dist loadscope --durations=25 --durations-min=1.0 --cov=kan --cov-report=xml --cov-report=term-missing --cov-fail-under=73
+        run: uv run pytest -q -m "not tty and not network" -n 6 --dist loadscope --durations=25 --durations-min=1.0 --cov=kan --cov-report=xml --cov-report=term-missing --cov-fail-under=73
       - name: Patch coverage (new code >= 85%)
         if: matrix.python-version == '3.12'
         run: |
