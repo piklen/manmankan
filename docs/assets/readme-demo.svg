@@ -1,0 +1,58 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 540" role="img" aria-labelledby="title desc">
+  <title id="title">manmankan CLI and JSON demo</title>
+  <desc id="desc">慢慢看把 A 股候选池整理成终端可读输出和 AI 可读 JSON。</desc>
+
+  <rect width="1200" height="540" rx="24" fill="#09090b"/>
+  <rect x="1" y="1" width="1198" height="538" rx="23" fill="none" stroke="#27272a" stroke-width="2"/>
+
+  <g font-family="-apple-system, BlinkMacSystemFont, 'PingFang SC', 'Microsoft YaHei', system-ui, sans-serif">
+    <text x="56" y="70" font-size="30" font-weight="750" fill="#f4f4f5">慢慢看 · manmankan</text>
+    <text x="56" y="108" font-size="18" fill="#a1a1aa">A 股本地数据筛选器 · 人看终端，AI 读 JSON · 告诉你坐标，不替你决策</text>
+  </g>
+
+  <g transform="translate(56 145)">
+    <rect width="520" height="300" rx="16" fill="#0f172a" stroke="#27272a"/>
+    <rect width="520" height="42" rx="16" fill="#18181b"/>
+    <rect y="28" width="520" height="14" fill="#18181b"/>
+    <circle cx="24" cy="21" r="6" fill="#ef4444"/>
+    <circle cx="44" cy="21" r="6" fill="#f59e0b"/>
+    <circle cx="64" cy="21" r="6" fill="#22c55e"/>
+    <text x="92" y="28" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="13" fill="#a1a1aa">human terminal</text>
+
+    <g font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="18" fill="#e4e4e7">
+      <text x="26" y="82"><tspan fill="#34d399">$</tspan> kan examples</text>
+      <text x="26" y="125" fill="#f4f4f5">1. 首次结构 smoke</text>
+      <text x="46" y="155" fill="#a1a1aa">kan find --codes 600519,000858 --format json</text>
+      <text x="46" y="185" fill="#71717a">不拉行情；确认 JSON envelope 和免责声明。</text>
+
+      <text x="26" y="230" fill="#f4f4f5">2. 真实行情坐标 JSON</text>
+      <text x="46" y="260" fill="#a1a1aa">kan scan --codes 600519,000858 --format json</text>
+    </g>
+  </g>
+
+  <g transform="translate(624 145)">
+    <rect width="520" height="300" rx="16" fill="#0b1220" stroke="#27272a"/>
+    <rect width="520" height="42" rx="16" fill="#18181b"/>
+    <rect y="28" width="520" height="14" fill="#18181b"/>
+    <circle cx="24" cy="21" r="6" fill="#ef4444"/>
+    <circle cx="44" cy="21" r="6" fill="#f59e0b"/>
+    <circle cx="64" cy="21" r="6" fill="#22c55e"/>
+    <text x="92" y="28" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="13" fill="#a1a1aa">AI JSON</text>
+
+    <g font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="17" fill="#e4e4e7">
+      <text x="26" y="80">{</text>
+      <text x="48" y="110"><tspan fill="#60a5fa">"ok"</tspan>: <tspan fill="#34d399">true</tspan>,</text>
+      <text x="48" y="140"><tspan fill="#60a5fa">"command"</tspan>: <tspan fill="#fbbf24">"find"</tspan>,</text>
+      <text x="48" y="170"><tspan fill="#60a5fa">"results"</tspan>: [</text>
+      <text x="70" y="200">{ <tspan fill="#60a5fa">"code"</tspan>: <tspan fill="#fbbf24">"600519"</tspan>, <tspan fill="#60a5fa">"name"</tspan>: <tspan fill="#fbbf24">"贵州茅台"</tspan> },</text>
+      <text x="70" y="230">{ <tspan fill="#60a5fa">"code"</tspan>: <tspan fill="#fbbf24">"000858"</tspan>, <tspan fill="#60a5fa">"name"</tspan>: <tspan fill="#fbbf24">"五粮液"</tspan> }</text>
+      <text x="48" y="260">], <tspan fill="#71717a">"disclaimer": "候选 ≠ 买入信号"</tspan></text>
+      <text x="26" y="290">}</text>
+    </g>
+  </g>
+
+  <g transform="translate(56 486)" font-family="-apple-system, BlinkMacSystemFont, 'PingFang SC', 'Microsoft YaHei', system-ui, sans-serif">
+    <rect width="1088" height="1" fill="#27272a"/>
+    <text y="32" font-size="17" fill="#a1a1aa">本地运行 · 不登录 · 不上传自选 · 无遥测 · CLI / JSON / MCP · AGPL-3.0</text>
+  </g>
+</svg>
