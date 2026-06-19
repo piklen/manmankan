@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import sys
 from enum import StrEnum
 from typing import TYPE_CHECKING
 
@@ -14,6 +15,7 @@ if TYPE_CHECKING:
 # 字段集变更时才 bump · 加字段属向后兼容演进 (AI 见到更多字段 · 不破旧消费方)。
 FIND_SCHEMA_VERSION = "0.0.6.8"
 HOLD_SCHEMA_VERSION = 1
+_JSON_ENCODING_PROBE = "候选 ≠ 买入信号 · 贵州茅台"
 
 
 def _board_reference_kind(meta: BoardMeta | HotMeta | ThemeMeta | None) -> str:
@@ -31,9 +33,23 @@ class OutputFormat(StrEnum):
     json = "json"
 
 
+def _stdout_needs_ascii_json() -> bool:
+    """stdout 编码承载不了中文/符号时，JSON 自动退回 ASCII escape。"""
+    encoding = getattr(sys.stdout, "encoding", None)
+    if not encoding:
+        return False
+    try:
+        _JSON_ENCODING_PROBE.encode(encoding)
+    except LookupError:
+        return False
+    except UnicodeEncodeError:
+        return True
+    return False
+
+
 def to_json(payload: dict) -> str:
-    """统一 json 序列化 · 中文不转义 · 缩进 2。"""
-    return json.dumps(payload, ensure_ascii=False, indent=2)
+    """统一 json 序列化 · UTF-8 终端保留中文 · 非 UTF stdout 可安全输出。"""
+    return json.dumps(payload, ensure_ascii=_stdout_needs_ascii_json(), indent=2)
 
 
 def md_table(headers: list[str], rows: list[list[str]]) -> str:

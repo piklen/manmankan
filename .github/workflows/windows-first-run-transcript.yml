@@ -51,11 +51,19 @@ jobs:
           Write-Output '$ $env:KAN_NO_UPDATE_CHECK = "1"'
           $env:KAN_NO_UPDATE_CHECK = "1"
 
-          Write-Output '$ kan examples --help'
-          kan examples --help
-
+          Write-Output '$ $env:PYTHONUTF8 = "1"'
+          $env:PYTHONUTF8 = "1"
           Write-Output '$ $env:NO_COLOR = "1"'
           $env:NO_COLOR = "1"
 
           Write-Output '$ kan find --codes 600519,000858 --format json'
+          kan find --codes 600519,000858 --format json
+
+          Write-Output '$ uv tool install .'
+          uv tool install . --reinstall --force
+          if (Test-Path Env:PYTHONUTF8) {
+            Remove-Item Env:PYTHONUTF8
+          }
+
+          Write-Output '$ kan find --codes 600519,000858 --format json  # source checkout, no PYTHONUTF8'
           kan find --codes 600519,000858 --format json

@@ -1,6 +1,7 @@
 """导出渲染测试 · kan/export.py · markdown / json"""
 
 import json
+import sys
 from datetime import date
 from types import SimpleNamespace
 
@@ -63,6 +64,19 @@ def test_to_json_chinese_not_escaped():
     out = to_json({"name": "贵州茅台"})
     assert "贵州茅台" in out
     assert "\\u" not in out
+
+
+def test_to_json_escapes_when_stdout_cannot_encode_unicode(monkeypatch):
+    class Cp1252Stdout:
+        encoding = "cp1252"
+
+    monkeypatch.setattr(sys, "stdout", Cp1252Stdout())
+
+    out = to_json({"name": "贵州茅台", "disclaimer": "候选 ≠ 买入信号"})
+
+    assert "贵州茅台" not in out
+    assert "\\u8d35\\u5dde\\u8305\\u53f0" in out
+    assert json.loads(out)["name"] == "贵州茅台"
 
 
 def test_md_table_structure():
