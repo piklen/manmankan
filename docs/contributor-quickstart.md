@@ -43,10 +43,13 @@ git config core.hooksPath .githooks
 KAN_NO_UPDATE_CHECK=1 uv run kan --help
 KAN_NO_UPDATE_CHECK=1 uv run kan examples
 KAN_NO_UPDATE_CHECK=1 uv run kan examples --format json
+KAN_NO_UPDATE_CHECK=1 uv run kan fields list --format json
 KAN_NO_UPDATE_CHECK=1 uv run kan find --codes 600519,000858 --format json
 ```
 
 `kan examples --format json` 用于确认机器可读示例清单，不拉行情；AI agent 可先读 [`docs/ai-quickstart.md`](ai-quickstart.md#1-安装和发现) 再选择最短命令。
+
+`kan fields list --format json` 用于确认机器可读字段 / preset 清单，不拉行情。
 
 `kan find --codes ... --format json` 是结构 smoke，不拉行情；适合确认 JSON envelope、退出码和免责声明。
 
