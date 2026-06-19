@@ -194,10 +194,14 @@ git clone https://github.com/piklen/manmankan.git
 cd manmankan
 uv sync --frozen --all-groups --all-extras
 KAN_NO_UPDATE_CHECK=1 uv run kan --help
+KAN_NO_UPDATE_CHECK=1 uv run kan examples --format json
+KAN_NO_UPDATE_CHECK=1 uv run kan fields list --format json
 uv run pytest -q -m "not network and not tty"
 uv run ruff check kan/ tests/
 bash scripts/check-privacy-leaks.sh
 ```
+
+`kan examples --format json` 和 `kan fields list --format json` 用于确认机器可读 examples 与字段 / preset 清单，不拉行情；适合先验证 AI / 自动化入口，再决定是否跑真实行情或完整测试。
 
 如果依赖下载慢，优先使用用户级 `uv.toml` 或一次性 `--index-url`，不要改仓库的依赖配置。
 
