@@ -36,6 +36,8 @@ jobs:
     timeout-minutes: 20
     steps:
       - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10  # v6 (pinned 2026-05-27)
+        with:
+          persist-credentials: false
       - name: Verify preinstalled uv runtime
         run: |
           uv --version
@@ -100,6 +102,8 @@ jobs:
     timeout-minutes: 10
     steps:
       - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10  # v6 (pinned 2026-05-27)
+        with:
+          persist-credentials: false
       - name: Privacy / public archive scan
         run: bash scripts/check-privacy-leaks.sh
       - name: Clean CI runner workspace
@@ -149,6 +153,8 @@ jobs:
         python-version: ['3.11', '3.12']
     steps:
       - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10  # v6 (pinned 2026-05-27)
+        with:
+          persist-credentials: false
       - name: Verify preinstalled uv runtime
         run: |
           uv --version
@@ -221,6 +227,8 @@ jobs:
         python-version: ['3.11', '3.12']
     steps:
       - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10  # v6 (pinned 2026-05-27)
+        with:
+          persist-credentials: false
       - name: Verify preinstalled uv runtime
         run: |
           uv --version
