@@ -270,7 +270,7 @@
       transition: opacity 0.2s ease;
       font-family: -apple-system, BlinkMacSystemFont, sans-serif;
     }
-    .copy-card.copied .feedback { opacity: 1; }
+    .copy-card.copied .feedback { opacity: 1 !important; }
 
     /* ===== Theme toggle · 三态 cycle ===== */
     .theme-toggle {
@@ -424,6 +424,7 @@
       <h2 class="text-3xl sm:text-4xl font-bold mb-3">AI agent 两分钟接入</h2>
       <p class="max-w-3xl mx-auto leading-relaxed" style="color: var(--text-soft);">
         先用结构 smoke 确认 JSON 契约，再跑真实行情坐标；需要工具调用时，用 MCP dry-run 预览本机客户端配置。
+        机器可读示例从 <code class="ci">kan examples --format json</code> 开始。
       </p>
     </div>
 
@@ -772,6 +773,7 @@
             <li><a href="https://pypi.org/project/manmankan/" class="hover:underline" style="color: var(--text-muted);">PyPI</a></li>
             <li><a href="https://github.com/piklen/manmankan/blob/main/docs/china-quickstart.md" class="hover:underline" style="color: var(--text-muted);">中国用户快速开始</a></li>
             <li><a href="https://github.com/piklen/manmankan/blob/main/docs/contributor-quickstart.md" class="hover:underline" style="color: var(--text-muted);">首次贡献指南</a></li>
+            <li><a href="https://github.com/piklen/manmankan/issues?q=is%3Aissue%20is%3Aopen%20label%3A%22good%20first%20issue%22" class="hover:underline" style="color: var(--text-muted);">good first issue</a></li>
             <li><a href="https://github.com/piklen/manmankan/blob/main/docs/ai-quickstart.md" class="hover:underline" style="color: var(--text-muted);">AI quickstart</a></li>
             <li><a href="https://github.com/piklen/manmankan/blob/main/docs/mcp.md" class="hover:underline" style="color: var(--text-muted);">MCP guide</a></li>
             <li><a href="https://github.com/piklen/manmankan/releases" class="hover:underline" style="color: var(--text-muted);">Release Notes</a></li>
@@ -836,11 +838,19 @@
     function copyCmd(btn) {
       var text = btn.dataset.copy;
       if (!text) return;
+      var finished = false;
       var done = function () {
+        if (finished) return;
+        finished = true;
         btn.classList.add('copied');
         setTimeout(function () { btn.classList.remove('copied'); }, 1800);
       };
       if (navigator.clipboard && navigator.clipboard.writeText) {
+        setTimeout(function () {
+          if (finished) return;
+          fallbackCopy(text);
+          done();
+        }, 300);
         navigator.clipboard.writeText(text).then(done).catch(function () { fallbackCopy(text); done(); });
       } else {
         fallbackCopy(text);

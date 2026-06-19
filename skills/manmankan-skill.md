@@ -43,6 +43,7 @@
 | `--pos N:lt:M` | 位置筛选（N 日位置 < M%） | 如 `--pos 180:lt:10` = 180 日低位 |
 | `--resonance low:gte:N` | 共振筛选（至少 N 个周期同时低位） | 多周期共振比单周期更可靠 |
 | `--pe` / `--pb` / `--turnover` / `--market-cap` / `--volume-ratio` | 估值、换手、市值、量比筛选 | 来自截面指标；看 `data_availability` 区分缺数据 |
+| `--roe` | ROE 逐股报告期筛选 | 需要先缩小代码池 / 行业 / 题材；全市场模式不支持 |
 | `--moneyflow` / `--moneyflow-daily` / `--moneyflow-days` | 主力资金净额、单日资金、连续净流入天数 | 单位万元；输出分类资金流裸值 |
 | `--exclude-st` | 排除 ST 股 | **每次全市场扫描都必须加** |
 | `--gain N:OP:V` / `--ma-bias N:OP:V` | 2-360 周期涨幅和均线乖离率 | 周期直接写入 filter，如 `20:gt:5` |
@@ -161,8 +162,9 @@ kan fetch
 # 2. 全市场低位筛选（排除 ST）
 kan find --all --pos 180:lt:10 --exclude-st --format json --compact
 
-# 3. 叠加资金流和估值过滤
-kan find --all --pos 180:lt:10 --exclude-st --moneyflow gt:1000 --format json --compact
+# 3. 叠加资金流和估值过滤，控制字段量
+kan find --all --pos 180:lt:10 --exclude-st --moneyflow gt:1000 \
+  --fields @core,@context,@moneyflow --format json
 
 # 4. 对候选池做深度研判
 kan info <候选代码> --format json
@@ -191,7 +193,15 @@ kan scan
 kan find --only-holdings --format json
 ```
 
-### 工作流 4：自选股分组管理
+### 工作流 4：小代码池估值 / ROE 取数
+
+```bash
+# ROE 是逐股报告期数据；全市场模式不支持，先缩小代码池
+kan find --codes 600519,000858 --roe gt:10 \
+  --fields @core,@fundamentals --format json
+```
+
+### 工作流 5：自选股分组管理
 
 ```bash
 # 1. 从行业扫描导入一批候选

@@ -8,6 +8,7 @@
 uv tool install manmankan
 kan --version
 kan examples
+kan examples --format json
 kan fields list --format json
 ```
 
@@ -56,6 +57,7 @@ AI 处理规则：
 ```bash
 kan find --industry 半导体 --format json --fields @core,@context
 kan find --all --pe lt:20 --format json --compact --no-compact-context
+kan find --codes 600519,000858 --roe gt:10 --fields @core,@fundamentals --format json
 ```
 
 字段和 preset 以命令输出为准：
@@ -65,6 +67,8 @@ kan fields list --format json
 ```
 
 `--all`、估值、资金、技术、筹码、股东等维度可能依赖 TuShare token 或上游接口权限。用 `data_availability` 区分未请求、不可用和缺失。
+
+`@fundamentals` 是 ROE、净利润同比、营收同比等逐股报告期字段；全市场模式不支持这类逐股高成本维度，先用 `--codes`、`--industry` 或 `--theme` 缩小候选池。
 
 ## 4. MCP 接入
 
