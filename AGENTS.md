@@ -20,6 +20,10 @@ targets, stock picks, strategy conclusions, or hosted advisory workflows.
 - For architecture direction, read `docs/architecture.md`.
 - For contribution rules, read `CONTRIBUTING.md`.
 
+## youzi Private Environment Boundary
+
+Inside `/Library/Code/AI/youzi`, data-hub test/production endpoint mapping lives in the root workspace SOT (`projects/data-hub/status.md`) and private credentials. Daily manmankan testing, endpoint smoke, pressure tests, and ordinary deploy validation should use the test edge from that SOT; do not hit the production edge unless the maintainer explicitly asks for a stable production deployment. Keep concrete private domains out of public manmankan docs.
+
 ## Development Commands
 
 Use Python 3.11+ and `uv`.
