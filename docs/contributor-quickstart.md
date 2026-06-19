@@ -47,6 +47,18 @@ KAN_NO_UPDATE_CHECK=1 uv run kan fields list --format json
 KAN_NO_UPDATE_CHECK=1 uv run kan find --codes 600519,000858 --format json
 ```
 
+Windows / PowerShell 不能用 `KAN_NO_UPDATE_CHECK=1 uv run ...` 这种 Bash 写法，环境变量要先写进 `$env:`：
+
+```powershell
+$env:KAN_NO_UPDATE_CHECK = "1"
+$env:PYTHONUTF8 = "1"
+uv run kan --help
+uv run kan examples --format json
+uv run kan fields list --format json
+```
+
+`uv run kan examples --format json` 和 `uv run kan fields list --format json` 是 discovery smoke，用于确认机器可读示例与字段 / preset 清单，不拉行情。
+
 `kan examples --format json` 用于确认机器可读示例清单，不拉行情；AI agent 可先读 [`docs/ai-quickstart.md`](ai-quickstart.md#1-安装和发现) 再选择最短命令。
 
 `kan fields list --format json` 用于确认机器可读字段 / preset 清单，不拉行情。
