@@ -424,7 +424,7 @@
       <h2 class="text-3xl sm:text-4xl font-bold mb-3">AI agent 两分钟接入</h2>
       <p class="max-w-3xl mx-auto leading-relaxed" style="color: var(--text-soft);">
         先用结构 smoke 确认 JSON 契约，再跑真实行情坐标；需要工具调用时，用 MCP dry-run 预览本机客户端配置。
-        机器可读示例从 <code class="ci">kan examples --format json</code> 开始。
+        首跑从 <code class="ci">kan find --codes ... --format json</code> 开始，避免把代码池解析误判成行情取数问题。
       </p>
     </div>
 
@@ -591,14 +591,14 @@
         <span class="feedback" style="bottom: 16px; right: 22px; top: auto;">✓ 已复制</span>
       </button>
 
-      <button type="button" class="copy-card flex-col items-stretch !p-0 overflow-hidden" data-copy='powershell -ExecutionPolicy ByPass -c "irm https://astral.sh/uv/install.ps1 | iex"; uv tool install manmankan' onclick="copyCmd(this)" style="cursor: pointer;">
+      <button type="button" class="copy-card flex-col items-stretch !p-0 overflow-hidden" data-copy='irm https://astral.sh/uv/install.ps1 | iex; uv tool install manmankan' onclick="copyCmd(this)" style="cursor: pointer;">
         <span class="copy-hint">点击复制 ↗</span>
         <div class="px-4 py-2.5 text-xs font-mono flex items-center gap-2 border-b" style="background: var(--bg-soft); border-color: var(--border); color: var(--text-muted);">
           <span style="color: #ef4444;">●</span><span style="color: #fbbf24;">●</span><span style="color: #34d399;">●</span>
           <span class="ml-2">🪟 Windows · PowerShell</span>
         </div>
         <div class="px-5 py-4 text-xs sm:text-sm font-mono break-all leading-relaxed" style="color: var(--text);">
-          <span style="color: var(--accent);">&gt;</span> <span data-copy-label>powershell -ExecutionPolicy ByPass -c "irm https://astral.sh/uv/install.ps1 | iex"; uv tool install manmankan</span>
+          <span style="color: var(--accent);">&gt;</span> <span data-copy-label>irm https://astral.sh/uv/install.ps1 | iex; uv tool install manmankan</span>
         </div>
         <span class="feedback" style="bottom: 16px; right: 22px; top: auto;">✓ 已复制</span>
       </button>
@@ -624,6 +624,13 @@
           <span class="feedback text-xs">✓</span>
         </button>
       </div>
+    </div>
+
+    <div class="max-w-4xl mx-auto mt-6 p-4 rounded-lg text-sm leading-relaxed" style="background: var(--bg-card); border: 1px solid var(--border); color: var(--text-soft);">
+      Windows 首次复制 JSON 时，PowerShell 里先跑
+      <code class="ci">$env:KAN_NO_UPDATE_CHECK = "1"; $env:PYTHONUTF8 = "1"; $env:NO_COLOR = "1"</code>，
+      再执行 <code class="ci">kan find --codes 600519,000858 --format json</code>。完整样本见
+      <a href="https://github.com/piklen/manmankan/blob/main/docs/china-quickstart.md#2-windows--powershell-首跑样本" style="color: var(--accent);" class="hover:underline">Windows / PowerShell 首跑说明</a>。
     </div>
 
     <div class="max-w-4xl mx-auto mt-7 p-4 rounded-lg text-sm leading-relaxed" style="background: var(--warn-soft); border: 1px solid var(--warn); color: var(--text-soft);">
@@ -718,7 +725,9 @@
       更多问题 →
       <a href="https://github.com/piklen/manmankan#故障排查-faq" style="color: var(--accent);" class="hover:underline">完整 FAQ</a>
       ·
-      <a href="https://github.com/piklen/manmankan/issues" style="color: var(--accent);" class="hover:underline">GitHub Issues 提问</a>
+      <a href="https://github.com/piklen/manmankan/discussions" style="color: var(--accent);" class="hover:underline">Discussions 交流</a>
+      ·
+      <a href="https://github.com/piklen/manmankan/issues/new/choose" style="color: var(--accent);" class="hover:underline">带复现信息提 Issue</a>
     </p>
   </section>
 

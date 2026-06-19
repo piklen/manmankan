@@ -10,6 +10,27 @@ assignees: ""
 
 <!-- 你看到了什么？最好贴 terminal 完整输出（敏感信息脱敏）-->
 
+## 最小 smoke
+
+请先跑下面两条，并贴完整输出。它们不拉行情，只验证安装、入口、JSON envelope 和免责声明。
+
+macOS / Linux:
+
+```bash
+KAN_NO_UPDATE_CHECK=1 kan --version
+NO_COLOR=1 KAN_NO_UPDATE_CHECK=1 kan find --codes 600519,000858 --format json
+```
+
+Windows / PowerShell:
+
+```powershell
+kan --version
+$env:KAN_NO_UPDATE_CHECK = "1"
+$env:PYTHONUTF8 = "1"
+$env:NO_COLOR = "1"
+kan find --codes 600519,000858 --format json
+```
+
 ## 复现步骤
 
 1.
@@ -31,9 +52,13 @@ assignees: ""
 ## 数据相关
 
 - 你跑的命令：
+- `kan find --codes ...` 是否正常：
+- `kan scan --codes ...` 是否正常：
 - 自选股池大小（`kan list | wc -l`）：约 N 只
 - 数据是今天的吗（看 `kan scan` 标题"X 更新"）？
+- 是否配置 TuShare token（只填“已配 / 未配”，不要贴 token）：
+- 是否使用代理（只填“直连 / 代理 / 公司内网”，不要贴代理账号）：
 
 ## 其他线索
 
-<!-- 截图 / 异常 traceback / 你的推测 -->
+<!-- 截图 / 异常 traceback / 你的推测。不要贴 token、私有路径、真实持仓金额或代理账号。 -->
