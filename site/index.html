@@ -606,6 +606,25 @@
       </button>
     </div>
 
+    <!-- Windows JSON 首跑验证 -->
+    <div class="max-w-4xl mx-auto mb-6">
+      <button type="button" class="copy-card flex-col items-stretch !p-0 overflow-hidden" data-copy="$env:KAN_NO_UPDATE_CHECK = &quot;1&quot;&#10;$env:PYTHONUTF8 = &quot;1&quot;&#10;$env:NO_COLOR = &quot;1&quot;&#10;kan find --codes 600519,000858 --format json" onclick="copyCmd(this)" style="cursor: pointer;">
+        <span class="copy-hint">点击复制 ↗</span>
+        <div class="px-4 py-2.5 text-xs font-mono flex flex-wrap items-center gap-2 border-b" style="background: var(--bg-soft); border-color: var(--border); color: var(--text-muted);">
+          <span style="color: #ef4444;">●</span><span style="color: #fbbf24;">●</span><span style="color: #34d399;">●</span>
+          <span class="ml-2">🪟 Windows · PowerShell JSON 首跑验证</span>
+        </div>
+        <div class="px-5 py-4 text-xs sm:text-sm font-mono text-left leading-relaxed" style="color: var(--text); white-space: pre-wrap; overflow-wrap: anywhere;"><span data-copy-label>$env:KAN_NO_UPDATE_CHECK = "1"
+$env:PYTHONUTF8 = "1"
+$env:NO_COLOR = "1"
+kan find --codes 600519,000858 --format json</span></div>
+        <div class="px-5 pb-4 text-xs sm:text-sm text-left leading-relaxed" style="color: var(--text-soft);">
+          不拉行情；只验证安装、入口、JSON envelope、免责声明和 Windows UTF-8 输出，适合新用户或 AI agent 做安装 smoke。
+        </div>
+        <span class="feedback" style="bottom: 16px; right: 22px; top: auto;">✓ 已复制</span>
+      </button>
+    </div>
+
     <!-- 老手 3 行 -->
     <div class="max-w-4xl mx-auto">
       <p class="text-sm mb-3 font-medium" style="color: var(--text-soft);">老手 1 行装（任选其一 · 点击复制）：</p>
@@ -629,9 +648,8 @@
     </div>
 
     <div class="max-w-4xl mx-auto mt-6 p-4 rounded-lg text-sm leading-relaxed" style="background: var(--bg-card); border: 1px solid var(--border); color: var(--text-soft);">
-      Windows 首次复制 JSON 时，PowerShell 里先跑
-      <code class="ci">$env:KAN_NO_UPDATE_CHECK = "1"; $env:PYTHONUTF8 = "1"; $env:NO_COLOR = "1"</code>，
-      再执行 <code class="ci">kan find --codes 600519,000858 --format json</code>。完整样本见
+      Windows 首次复制 JSON 时，直接用上方「Windows · PowerShell JSON 首跑验证」卡片。
+      这条结构 smoke 不请求行情数据；完整样本见
       <a href="https://github.com/piklen/manmankan/blob/main/docs/china-quickstart.md#2-windows--powershell-首跑样本" style="color: var(--accent);" class="hover:underline">Windows / PowerShell 首跑说明</a>。
     </div>
 
@@ -822,9 +840,9 @@
     </div>
   </footer>
 
-  <!-- ============ JS · theme cycle + copy ============ -->
+  <!-- ============ JS · 主题切换 + 点击复制 ============ -->
   <script>
-    // Theme cycle: dark → light → system → dark
+    // 主题循环：dark → light → system → dark
     function applyTheme(t) {
       var sys = window.matchMedia('(prefers-color-scheme: dark)').matches;
       var dark = t === 'dark' || (t === 'system' && sys);
@@ -838,14 +856,14 @@
       localStorage.setItem('theme', next);
       applyTheme(next);
     }
-    // re-apply on system change while in system mode
+    // system 模式下跟随系统主题变化
     if (window.matchMedia) {
       window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', function () {
         if (localStorage.getItem('theme') === 'system') applyTheme('system');
       });
     }
 
-    // Click-to-copy on install commands
+    // 安装命令点击复制
     function copyCmd(btn) {
       var text = btn.dataset.copy;
       if (!text) return;
