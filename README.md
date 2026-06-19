@@ -234,7 +234,7 @@ uv run pytest -q -m "not network and not tty"
 git config core.hooksPath .githooks
 ```
 
-第一次贡献先读 [`docs/contributor-quickstart.md`](docs/contributor-quickstart.md)；贡献规范详见 [`CONTRIBUTING.md`](CONTRIBUTING.md)，尤其是公开输出的中性语言和合规边界。
+第一次贡献先读 [`docs/contributor-quickstart.md`](docs/contributor-quickstart.md)，也可以先从 [`good first issue`](https://github.com/piklen/manmankan/issues?q=is%3Aissue%20is%3Aopen%20label%3A%22good%20first%20issue%22) 开始；贡献规范详见 [`CONTRIBUTING.md`](CONTRIBUTING.md)，尤其是公开输出的中性语言和合规边界。
 
 ## 许可证
 
