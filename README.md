@@ -19,7 +19,7 @@
 
 ```bash
 uv tool install manmankan
-kan examples --format json
+kan --version
 kan find --codes 600519,000858 --format json
 kan scan --codes 600519,000858 --periods 5,20,60,180 --format json
 kan mcp install --dry-run
@@ -36,7 +36,7 @@ kan hold --format json --mask
 | 你是谁 | 先跑 / 先读 |
 |---|---|
 | 中国用户 / 开发者 | [`docs/china-quickstart.md`](docs/china-quickstart.md)：PyPI 镜像、行情源网络、TuShare、代理和 Windows / PowerShell |
-| AI agent / 自动化脚本 | `kan examples --format json` + [`docs/ai-quickstart.md`](docs/ai-quickstart.md) + [`skills/manmankan-skill.md`](skills/manmankan-skill.md) |
+| AI agent / 自动化脚本 | `kan find --codes 600519,000858 --format json` + [`docs/ai-quickstart.md`](docs/ai-quickstart.md) + [`skills/manmankan-skill.md`](skills/manmankan-skill.md) |
 | 第一次贡献者 | [`docs/contributor-quickstart.md`](docs/contributor-quickstart.md)：本地跑起来、验证命令、good first issue、合规边界 |
 
 <details>

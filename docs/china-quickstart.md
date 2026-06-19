@@ -9,8 +9,8 @@
 ```bash
 uv tool install manmankan
 kan --version
-KAN_NO_UPDATE_CHECK=1 kan examples
-KAN_NO_UPDATE_CHECK=1 kan find --codes 600519,000858 --format json
+KAN_NO_UPDATE_CHECK=1 kan --help
+NO_COLOR=1 KAN_NO_UPDATE_CHECK=1 kan find --codes 600519,000858 --format json
 ```
 
 这条 `kan find --codes ...` 是结构 smoke：只验证安装、入口、JSON envelope、免责声明和退出码，不拉行情数据。
@@ -23,7 +23,41 @@ KAN_NO_UPDATE_CHECK=1 kan scan --codes 600519,000858 --periods 5,20,60,180 --for
 
 首次运行会下载并缓存日 K，可能需要几十秒。后续同日运行会明显更快。
 
-## 2. PyPI 下载慢
+## 2. Windows / PowerShell 首跑样本
+
+PowerShell 不能用 `KAN_NO_UPDATE_CHECK=1 kan ...` 这种 Bash 写法，环境变量要先写进 `$env:`。如果你要复制 JSON，建议同时打开 `NO_COLOR` 和 `PYTHONUTF8`：
+
+```powershell
+uv tool install manmankan
+kan --version
+$env:KAN_NO_UPDATE_CHECK = "1"
+$env:PYTHONUTF8 = "1"
+$env:NO_COLOR = "1"
+kan find --codes 600519,000858 --format json
+```
+
+脱敏后的实测输出形态应接近：
+
+```text
+Installed 1 executable: kan
+kan 0.0.6.9
+```
+
+```json
+{
+  "ok": true,
+  "command": "find",
+  "mode": "code_pool",
+  "stats": {
+    "matched": 2
+  },
+  "disclaimer": "候选 ≠ 买入信号 · 工具仅返回符合您设置规则的股票数据 · 不构成任何形式的推荐或建议 · 用户自行评估"
+}
+```
+
+`$env:PYTHONUTF8 = "1"` 用来避免部分 Windows 终端在输出中文或 `≠`、`·` 这类符号时触发编码错误。保留这行没有副作用。
+
+## 3. PyPI 下载慢
 
 如果访问 PyPI 慢，可以临时指定镜像：
 
@@ -49,7 +83,7 @@ default = true
 
 注意：不要把个人或公司内网镜像配置提交到本仓库的 `pyproject.toml`。项目级配置会影响所有贡献者和 CI；本地网络问题应放在用户级 `uv.toml` 或一次性命令参数里解决。
 
-## 3. 行情源和网络代理
+## 4. 行情源和网络代理
 
 常见现象要分开判断：
 
@@ -72,7 +106,7 @@ KAN_KEEP_PROXY=1 kan scan --codes 600519,000858
 NO_COLOR=1 KAN_NO_UPDATE_CHECK=1 kan find --codes 600519,000858 --format json
 ```
 
-## 4. TuShare 配置
+## 5. TuShare 配置
 
 不配置 TuShare 也能跑自选、行业、题材、外部代码池的 K 线位置类能力。以下能力通常需要 TuShare token 或上游权限：
 
@@ -106,7 +140,7 @@ TUSHARE_TOKEN=<你的_token> kan find --all --pe lt:20 --format json --compact
 
 不要把 token 贴到 issue、日志、截图或文档里。`kan config get` 会 mask token；`KAN_DEBUG=1` 也会做脱敏，但公开反馈前仍应人工检查。
 
-## 5. 读懂 `data_unavailable`
+## 6. 读懂 `data_unavailable`
 
 `data_unavailable` 表示当前命令依赖的数据维度没有形成可用证据。它不是安装失败，也不是“没有符合条件的股票”。先看 `error.message` 判断缺的是哪类数据，再决定是配置 TuShare、换更小的代码池，还是去掉对应 filter。
 
@@ -153,13 +187,13 @@ NO_COLOR=1 KAN_NO_UPDATE_CHECK=1 kan find --all --pe lt:20 --format json --compa
 
 如果命令返回 `ok:true` 但某些字段是 `null`，说明这只影响对应维度，不等于整条命令失败。公开反馈时贴 envelope 即可，不要贴 token、私有路径、代理账号或账户截图。
 
-## 6. 中国开发者贡献路径
+## 7. 中国开发者贡献路径
 
 ```bash
 git clone https://github.com/piklen/manmankan.git
 cd manmankan
 uv sync --frozen --all-groups --all-extras
-KAN_NO_UPDATE_CHECK=1 uv run kan examples
+KAN_NO_UPDATE_CHECK=1 uv run kan --help
 uv run pytest -q -m "not network and not tty"
 uv run ruff check kan/ tests/
 bash scripts/check-privacy-leaks.sh
@@ -174,7 +208,7 @@ bash scripts/check-privacy-leaks.sh
 - [`docs/compliance.md`](compliance.md)
 - [`docs/mcp.md`](mcp.md)
 
-## 7. 反馈问题时请带上这些信息
+## 8. 反馈问题时请带上这些信息
 
 - 操作系统：Windows / macOS / Linux / WSL
 - Python 版本：`python --version`
