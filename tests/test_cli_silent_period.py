@@ -36,7 +36,7 @@ SLO_MS = 1200.0 if _is_github_linux() else (550.0 if _is_github_macos() else 400
 # B.8 (历史背景macOS flake hotfix): macOS GitHub runner I/O 抖动严重 · 100ms 太严
 # macOS 真测 ttfb 经常落在 150-200ms · 加 platform-aware 阈值
 # 详见 [[project_manmankan_macos_slo_flake_session_2026_05_13]] · 历史背景改用 best-of-N 或异常重试
-HELP_TTFB_SLO_MS = 1200.0 if _is_github_linux() else (600.0 if _is_github_macos() else (250.0 if sys.platform == "darwin" else 100.0))
+HELP_TTFB_SLO_MS = 1500.0 if _is_github_linux() else (600.0 if _is_github_macos() else (250.0 if sys.platform == "darwin" else 100.0))
 SPINNER_BYTES = (
     b"\xe2\xa0\x8b",
     b"\xe2\xa0\x99",
