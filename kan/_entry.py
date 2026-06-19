@@ -9,6 +9,22 @@ _BOOT_BANNER_COMMANDS = {
     "add", "scan", "fetch", "low", "high", "info", "trend", "find", "theme", "board",
     "index",
 }
+_FAST_ROOT_HELP_ARGS = {(), ("help",), ("--help",), ("-h",)}
+
+
+def _is_shell_completion_run() -> bool:
+    return bool(
+        os.environ.get("_KAN_COMPLETE")
+        or os.environ.get("_TYPER_COMPLETE_ARGS")
+    )
+
+
+def _should_print_fast_help(argv: list[str] | None = None) -> bool:
+    """Return whether the console script can render root help without full CLI import."""
+    if _is_shell_completion_run():
+        return False
+    args = tuple((argv or sys.argv)[1:])
+    return args in _FAST_ROOT_HELP_ARGS
 
 
 def _maybe_print_boot_banner() -> None:
@@ -38,8 +54,17 @@ def _write_install_error(e: ImportError | ModuleNotFoundError) -> None:
     )
 
 
+def _print_fast_help() -> None:
+    from kan.help_text import print_root_help
+
+    print_root_help()
+
+
 def main() -> None:
     _maybe_print_boot_banner()
+    if _should_print_fast_help():
+        _print_fast_help()
+        return
     try:
         from kan.cli import cli_main
     except (ImportError, ModuleNotFoundError) as e:

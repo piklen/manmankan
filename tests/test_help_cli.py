@@ -7,6 +7,7 @@ sys.argv 预处理把 root-level --help 替换为 help 子命令。
 
 from __future__ import annotations
 
+import builtins
 import re
 import sys
 from unittest.mock import patch
@@ -64,6 +65,43 @@ def test_root_help_returns_chinese_cheatsheet() -> None:
     assert "位置扫描" in result_help_dash.stdout
     assert "连续涨跌" in result_help_dash.stdout
     assert "命令速记" in result_help_dash.stdout
+
+
+def test_console_script_root_help_bypasses_full_cli_import(
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    """kan --help 走 entrypoint fast path,避免加载全部命令注册图。"""
+    from kan import _entry
+
+    real_import = builtins.__import__
+
+    def guarded_import(name: str, *args, **kwargs):
+        if name == "kan.cli" or name.startswith("kan.cli."):
+            raise AssertionError("root help fast path imported full CLI")
+        return real_import(name, *args, **kwargs)
+
+    monkeypatch.setattr(sys, "argv", ["kan", "--help"])
+    monkeypatch.delenv("_KAN_COMPLETE", raising=False)
+    monkeypatch.delenv("_TYPER_COMPLETE_ARGS", raising=False)
+    monkeypatch.setattr(_entry, "_maybe_print_boot_banner", lambda: None)
+    monkeypatch.setattr(_entry, "_print_fast_help", lambda: print("FAST_HELP"))
+    monkeypatch.setattr(builtins, "__import__", guarded_import)
+
+    _entry.main()
+
+    assert capsys.readouterr().out.strip() == "FAST_HELP"
+
+
+def test_console_script_root_help_skips_completion_env(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """completion 子调用必须交回 Typer,不能被 fast help 污染输出。"""
+    from kan import _entry
+
+    monkeypatch.setenv("_KAN_COMPLETE", "complete_zsh")
+
+    assert not _entry._should_print_fast_help(["kan", "--help"])
 
 
 def test_root_help_uses_real_config_key_spelling() -> None:

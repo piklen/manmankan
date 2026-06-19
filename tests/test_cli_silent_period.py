@@ -37,6 +37,11 @@ SLO_MS = 1200.0 if _is_github_linux() else (550.0 if _is_github_macos() else 400
 # macOS 真测 ttfb 经常落在 150-200ms · 加 platform-aware 阈值
 # 详见 [[project_manmankan_macos_slo_flake_session_2026_05_13]] · 历史背景改用 best-of-N 或异常重试
 HELP_TTFB_SLO_MS = 1500.0 if _is_github_linux() else (600.0 if _is_github_macos() else (250.0 if sys.platform == "darwin" else 100.0))
+# Rich status 会先写出 message/control bytes，再按 refresh tick 输出动画帧。
+# 这里把"按回车后有可见反馈"和"spinner 帧最终开始转动"分开守门：
+# - ttfb 仍用 SLO_MS 抓真正沉默；
+# - spinner 帧只做硬上限，避免 self-hosted runner 负载抖动把 main 打红。
+SPINNER_FRAME_HARD_CAP_MS = 2500.0 if _is_github_linux() else (1400.0 if _is_github_macos() else 1200.0)
 SPINNER_BYTES = (
     b"\xe2\xa0\x8b",
     b"\xe2\xa0\x99",
@@ -168,6 +173,7 @@ def _measure_best_of_three(
     best = dict(results[0])
     best["ttfb_ms"] = min(ttfbs) if ttfbs else None
     best["spinner_first_frame_ms"] = min(spinners) if spinners else None
+    best["attempts_json"] = json.dumps(results, ensure_ascii=False)
     return best
 
 
@@ -225,5 +231,7 @@ def test_heavy_commands_show_spinner_within_slo(
         _seed_watchlist(xdg_home)
 
     result = _measure_best_of_three(args, xdg_home)
+    assert result["ttfb_ms"] is not None, result
+    assert result["ttfb_ms"] <= SLO_MS, result
     assert result["spinner_first_frame_ms"] is not None, result
-    assert result["spinner_first_frame_ms"] <= SLO_MS, result
+    assert result["spinner_first_frame_ms"] <= SPINNER_FRAME_HARD_CAP_MS, result
