@@ -45,9 +45,10 @@ kan fields list --format json
 uv sync
 KAN_NO_UPDATE_CHECK=1 uv run kan examples
 KAN_NO_UPDATE_CHECK=1 uv run kan examples --format json
+KAN_NO_UPDATE_CHECK=1 uv run kan fields list --format json
 ```
 
-源码调试时也可以用 `uv run kan examples --format json` 确认机器可读 examples 清单；这个 smoke 不拉行情。
+源码调试时也可以用 `uv run kan examples --format json` 和 `uv run kan fields list --format json` 确认机器可读 examples 与字段 / preset 清单；这两个 smoke 都不拉行情。
 
 ## 2. 两条首用路径
 
