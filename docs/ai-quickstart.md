@@ -100,6 +100,8 @@ kan fields list --format json
 kan mcp install --dry-run
 ```
 
+`--dry-run` 只预览，不写配置；脱敏输出样例见 [`docs/mcp.md`](mcp.md)。
+
 只注册指定客户端：
 
 ```bash

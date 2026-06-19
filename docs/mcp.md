@@ -12,6 +12,22 @@ kan mcp install --client codex
 
 先跑 `--dry-run`。确认目标客户端和配置路径无误后，再指定一个客户端写入配置；不要一开始对所有客户端批量写配置。
 
+`--dry-run` 会列出可写入的客户端、动作和目标配置，但不会创建或修改文件。真实输出会按终端宽度换行，下面是脱敏后的 compact 形态：
+
+```text
+$ KAN_NO_UPDATE_CHECK=1 kan mcp install --dry-run
+client          status        target                       detail
+codex           would-update  ~/.codex/config.toml          mcp_servers.manmankan
+claude-code     would-run     claude mcp add --scope user   kan-mcp
+claude-desktop  would-update  <desktop app config>          mcpServers.manmankan
+cursor          would-update  ~/.cursor/mcp.json            mcpServers.manmankan
+vscode          would-update  ~/.vscode/mcp.json            servers.manmankan
+gemini-cli      would-update  ~/.gemini/settings.json       mcpServers.manmankan
+opencode        would-update  ~/.config/opencode/...        mcp.manmankan
+```
+
+看到 `would-update` / `would-run` 说明这次只是预览。确认目标客户端无误后，再执行 `kan mcp install --client <client>` 写入单个客户端配置。
+
 直接启动 server：
 
 ```bash
