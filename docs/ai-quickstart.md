@@ -44,7 +44,10 @@ kan fields list --format json
 ```bash
 uv sync
 KAN_NO_UPDATE_CHECK=1 uv run kan examples
+KAN_NO_UPDATE_CHECK=1 uv run kan examples --format json
 ```
+
+源码调试时也可以用 `uv run kan examples --format json` 确认机器可读 examples 清单；这个 smoke 不拉行情。
 
 ## 2. 两条首用路径
 
