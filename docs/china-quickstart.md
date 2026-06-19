@@ -106,7 +106,54 @@ TUSHARE_TOKEN=<你的_token> kan find --all --pe lt:20 --format json --compact
 
 不要把 token 贴到 issue、日志、截图或文档里。`kan config get` 会 mask token；`KAN_DEBUG=1` 也会做脱敏，但公开反馈前仍应人工检查。
 
-## 5. 中国开发者贡献路径
+## 5. 读懂 `data_unavailable`
+
+`data_unavailable` 表示当前命令依赖的数据维度没有形成可用证据。它不是安装失败，也不是“没有符合条件的股票”。先看 `error.message` 判断缺的是哪类数据，再决定是配置 TuShare、换更小的代码池，还是去掉对应 filter。
+
+小代码池 ROE 取数缺少财务数据时，JSON 形态类似：
+
+```bash
+NO_COLOR=1 KAN_NO_UPDATE_CHECK=1 \
+  kan find --codes 600519,000858 --roe gt:10 --fields @core,@fundamentals --format json
+```
+
+```json
+{
+  "ok": false,
+  "command": "find",
+  "error": {
+    "code": "data_unavailable",
+    "message": "当前候选池缺少财务数据，无法执行 --roe filter",
+    "hint": "例: kan config set tushare-token <你的_token>；或去掉对应 filter"
+  },
+  "schema_version": "0.0.6.8",
+  "disclaimer": "候选 ≠ 买入信号 · 工具仅返回符合您设置规则的股票数据 · 不构成任何形式的推荐或建议 · 用户自行评估"
+}
+```
+
+全市场估值截面不可用时，常见形态是：
+
+```bash
+NO_COLOR=1 KAN_NO_UPDATE_CHECK=1 kan find --all --pe lt:20 --format json --compact
+```
+
+```json
+{
+  "ok": false,
+  "command": "find",
+  "error": {
+    "code": "data_unavailable",
+    "message": "全市场截面无数据",
+    "hint": "估值/量价/资金/行业分位依赖 tushare；例: kan config set tushare-token <你的_token>"
+  },
+  "schema_version": "0.0.6.8",
+  "disclaimer": "候选 ≠ 买入信号 · 工具仅返回符合您设置规则的股票数据 · 不构成任何形式的推荐或建议 · 用户自行评估"
+}
+```
+
+如果命令返回 `ok:true` 但某些字段是 `null`，说明这只影响对应维度，不等于整条命令失败。公开反馈时贴 envelope 即可，不要贴 token、私有路径、代理账号或账户截图。
+
+## 6. 中国开发者贡献路径
 
 ```bash
 git clone https://github.com/piklen/manmankan.git
@@ -127,7 +174,7 @@ bash scripts/check-privacy-leaks.sh
 - [`docs/compliance.md`](compliance.md)
 - [`docs/mcp.md`](mcp.md)
 
-## 6. 反馈问题时请带上这些信息
+## 7. 反馈问题时请带上这些信息
 
 - 操作系统：Windows / macOS / Linux / WSL
 - Python 版本：`python --version`
