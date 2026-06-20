@@ -96,7 +96,8 @@ def _command_schemas(*, compact: bool) -> list[dict[str, Any]]:
                 "results", "data_availability", "stats",
             ],
             "examples": [
-                "kan find --codes 600519,000858 --format json",
+                "kan find --codes 600519,000858 --format json --dry-run",
+                "kan find --codes 600519,000858 --fields @core,@valuation,@moneyflow,@technical --format json",
                 "kan find --all --pe lt:20 --fields @core,@valuation --format json",
             ],
         },
@@ -105,7 +106,7 @@ def _command_schemas(*, compact: bool) -> list[dict[str, Any]]:
             "purpose": "Scan watchlist/code pool/industry/theme positions across periods.",
             "formats": ["terminal", "md", "json"],
             "success_keys": [
-                "command", "mode", "data_cutoff", "fetched_at", "stale", "results",
+                "ok", "schema_version", "command", "query_time", "stats", "results",
             ],
             "examples": ["kan scan --codes 600519,000858 --periods 5,20,60 --format json"],
         },
@@ -113,8 +114,22 @@ def _command_schemas(*, compact: bool) -> list[dict[str, Any]]:
             "name": "info",
             "purpose": "Return one stock's position, valuation, moneyflow, and limit facts.",
             "formats": ["terminal", "md", "json"],
-            "success_keys": ["command", "disclaimer", "result"],
+            "success_keys": ["ok", "schema_version", "command", "query_time", "stats", "result"],
             "examples": ["kan info 600519 --format json"],
+        },
+        {
+            "name": "history",
+            "purpose": "Return local scan snapshot history for one stock.",
+            "formats": ["terminal", "md", "json"],
+            "success_keys": ["ok", "schema_version", "command", "query_time", "stats", "series"],
+            "examples": ["kan history 600519 --period 60 --format json"],
+        },
+        {
+            "name": "board rank",
+            "purpose": "Return objective board-level moneyflow, gain, or position rows.",
+            "formats": ["terminal", "md", "json"],
+            "success_keys": ["ok", "schema_version", "command", "query_time", "stats", "results"],
+            "examples": ["kan board rank --kind industry --by moneyflow --format json"],
         },
         {
             "name": "hold",
@@ -128,7 +143,7 @@ def _command_schemas(*, compact: bool) -> list[dict[str, Any]]:
             "name": "index",
             "purpose": "Return common A-share index_daily position rows.",
             "formats": ["terminal", "md", "json"],
-            "success_keys": ["command", "period", "results"],
+            "success_keys": ["ok", "schema_version", "command", "query_time", "period", "results"],
             "examples": ["kan index sh --period 60 --format json"],
         },
         {
@@ -212,7 +227,12 @@ def _find_schema(*, compact: bool) -> dict[str, Any]:
         "filters": filters,
         "field_presets": {k: list(v) for k, v in FIND_FIELD_PRESETS.items()},
         "fields": fields,
-        "result_schemas": ["code_pool", "full", "compact", "fields"],
+        "result_schemas": ["full", "compact", "fields", "agent_summary", "delta"],
+        "agent_options": {
+            "dry_run": "--dry-run / --explain returns mode=query_plan without fetching data",
+            "agent_summary": "--agent-summary returns field coverage, missing counts, distributions, and samples",
+            "snapshot_delta": "--snapshot returns snapshot.id; --since <id> returns snapshot_delta",
+        },
     }
 
 
@@ -230,10 +250,15 @@ def _mcp_schema(*, compact: bool) -> dict[str, Any]:
                 input_schema["required"] = schema["required"]
         else:
             input_schema = schema
+        output_schema = spec.output_schema or {"type": "object", "additionalProperties": True}
         tools.append({
             "name": spec.name,
             "description": spec.description,
             "inputSchema": input_schema,
+            "outputSchema": (
+                {"type": output_schema.get("type", "object")}
+                if compact else output_schema
+            ),
         })
     return {
         "server": {"name": SERVER_NAME, "version": SERVER_VERSION},
@@ -249,8 +274,10 @@ def _error_schema(*, compact: bool) -> dict[str, Any]:
             "command": "<command>",
             "error": {
                 "code": "<machine_code>",
+                "reason": "<machine_code>",
                 "message": "<human_readable_message>",
                 "hint": "<optional_next_step>",
+                "next_command": "<optional_copyable_command>",
             },
             "disclaimer": "<present for stock-data commands>",
         },

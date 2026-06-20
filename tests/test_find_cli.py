@@ -378,51 +378,47 @@ class TestFindJsonOutput:
         assert payload["error"]["code"] == "empty_watchlist"
         assert "terminal 模式至少需要一个 filter" not in (out + err)
 
-    def test_codes_no_filter_json_returns_code_pool_without_kline_fetch(self, tmp_path):
-        """显式代码池无 filter 是轻量取数,不应触发 K 线/交易日历网络链路。"""
+    def test_codes_no_filter_json_dry_run_returns_query_plan_without_kline_fetch(self, tmp_path):
+        """显式代码池轻量 smoke 改用 --dry-run,不触发 K 线/交易日历网络链路。"""
         ec, out, err = _run_isolated(
-            ["find", "--codes", "600519,000858", "--format", "json"], tmp_path,
+            ["find", "--codes", "600519,000858", "--format", "json", "--dry-run"], tmp_path,
         )
         assert ec == 0
         assert err == ""
         payload = json.loads(out)
         assert payload["ok"] is True
-        assert payload["mode"] == "code_pool"
+        assert payload["mode"] == "query_plan"
+        assert payload["dry_run"] is True
         assert payload["rule"]["pools"] == ["codes:2"]
-        assert payload["stats"]["matched"] == 2
-        assert [r["code"] for r in payload["results"]] == ["600519", "000858"]
-        assert all(r["name"] for r in payload["results"])
+        assert payload["data_plan"]["pool_size_estimate"] == 2
 
-    def test_codes_no_filter_json_rejects_unavailable_fields(self, tmp_path):
+    def test_codes_no_filter_json_dry_run_accepts_price_field(self, tmp_path):
         ec, out, _err = _run_isolated(
             [
                 "find", "--codes", "600519,000858", "--format", "json",
-                "--fields", "code,price",
+                "--fields", "code,price", "--dry-run",
             ],
             tmp_path,
         )
-        assert ec == 2
+        assert ec == 0
         payload = json.loads(out)
-        assert payload["ok"] is False
-        assert payload["error"]["code"] == "invalid_fields"
-        assert "code/name" in payload["error"]["message"]
+        assert payload["ok"] is True
+        assert payload["mode"] == "query_plan"
+        assert payload["output"]["fields"] == ["code", "price"]
 
-    def test_codes_no_filter_json_can_return_permission_fields(self, tmp_path):
+    def test_codes_no_filter_json_dry_run_accepts_permission_fields(self, tmp_path):
         ec, out, err = _run_isolated(
             [
                 "find", "--codes", "688981,920000", "--format", "json",
-                "--fields", "code,market_board,permission_note",
+                "--fields", "code,market_board,permission_note", "--dry-run",
             ],
             tmp_path,
         )
         assert ec == 0
         assert err == ""
         payload = json.loads(out)
-        assert payload["mode"] == "code_pool"
-        assert payload["results"] == [
-            {"code": "688981", "market_board": "科创板", "permission_note": "需科创板权限"},
-            {"code": "920000", "market_board": "北交所", "permission_note": "需北交所权限"},
-        ]
+        assert payload["mode"] == "query_plan"
+        assert payload["output"]["fields"] == ["code", "market_board", "permission_note"]
 
     @pytest.mark.skipif(
         not os.environ.get("KAN_RUN_FIND_DATA_TEST"),

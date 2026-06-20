@@ -163,8 +163,20 @@ def rank_cmd(
     title = f"慢慢看 · {kind_label}板块榜 · 按{metric_label}排序"
 
     if fmt is export.OutputFormat.json:
-        typer.echo(export.to_json({
-            "command": "board_rank",
+        payload = export.success_envelope(
+            "board_rank",
+            disclaimer=DISCLAIMER.strip(),
+            stats={
+                "shown": len(rows),
+                "errors_count": len(errors),
+                "period": period,
+            },
+            data_availability={
+                "basis": "board_rank",
+                "pool_size": len(rows),
+            },
+        )
+        payload.update({
             "kind": kind.value,
             "sort": by.value,
             "period": period,
@@ -172,8 +184,8 @@ def rank_cmd(
             "shown": len(rows),
             "errors_count": len(errors),
             "results": _rows_payload(rows),
-            "disclaimer": DISCLAIMER.strip(),
-        }))
+        })
+        typer.echo(export.to_json(payload))
         return
     if fmt is export.OutputFormat.md:
         typer.echo(_markdown(rows, title=title))

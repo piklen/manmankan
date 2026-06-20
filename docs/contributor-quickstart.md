@@ -44,7 +44,7 @@ KAN_NO_UPDATE_CHECK=1 uv run kan --help
 KAN_NO_UPDATE_CHECK=1 uv run kan examples
 KAN_NO_UPDATE_CHECK=1 uv run kan examples --format json
 KAN_NO_UPDATE_CHECK=1 uv run kan fields list --format json
-KAN_NO_UPDATE_CHECK=1 uv run kan find --codes 600519,000858 --format json
+KAN_NO_UPDATE_CHECK=1 uv run kan find --codes 600519,000858 --format json --dry-run
 KAN_NO_UPDATE_CHECK=1 uv run kan mcp install --dry-run --format json
 ```
 
@@ -65,7 +65,7 @@ uv run kan mcp install --dry-run --format json
 
 `kan fields list --format json` 用于确认机器可读字段 / preset 清单，不拉行情。
 
-`kan find --codes ... --format json` 是结构 smoke，不拉行情；适合确认 JSON envelope、退出码和免责声明。
+`kan find --codes ... --format json --dry-run` 是结构 smoke，不拉行情；适合确认 JSON envelope、退出码、免责声明和查询计划。
 
 `kan mcp install --dry-run --format json` 用于确认 MCP 注册预览 payload，不写用户配置。
 

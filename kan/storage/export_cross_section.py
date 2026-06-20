@@ -33,6 +33,7 @@ from kan.storage.export_find_results import (
     _positions_dict,
     _select_find_fields,
 )
+from kan.storage.export_find_summary import agent_summary as _agent_summary
 
 if TYPE_CHECKING:
     from datetime import date
@@ -203,6 +204,7 @@ def cross_section_payload(
     fields: tuple[str, ...] = (),
     compact_context: bool = True,
     match_mode: str = "all",
+    agent_summary: bool = False,
 ) -> dict:
     """kan find --all --format json 截面取数/筛选 payload (全市场截面层 + 估值/质量/资金维度 截面 filter)。
 
@@ -235,42 +237,61 @@ def cross_section_payload(
     if compact and not result_dimensions and compact_dimensions is None:
         result_dimensions = _infer_included_dimensions(rows_for_availability)
 
-    return {
+    stats = {
+        "pool_size": pool_size,
+        "matched": len(entries) if matched_total is None else matched_total,
+        "shown": len(entries),
+        "data_cutoff": data_cutoff.isoformat() if data_cutoff else None,
+        "stale": stale,
+    }
+    data_availability = _data_availability(
+        rows_for_availability,
+        included_dimensions=included_dimensions,
+        unsupported_dimensions=DIMENSIONS_UNSUPPORTED_IN_ALL,
+    )
+    results = [
+        _select_find_fields(_cross_section_result_field_source(r, t), fields)
+        if fields
+        else (
+            _cross_section_result_compact_dict(
+                r,
+                t,
+                included_dimensions=result_dimensions,
+                include_context=compact_context,
+            )
+            if compact else _cross_section_result_dict(r, t)
+        )
+        for r, t in entries
+    ]
+    payload = {
         "ok": True,
         "schema_version": FIND_SCHEMA_VERSION,
         "command": "find",
         "mode": "cross_section",
-        "result_schema": "fields" if fields else ("compact" if compact else "full"),
+        "result_schema": (
+            "agent_summary"
+            if agent_summary else
+            ("fields" if fields else ("compact" if compact else "full"))
+        ),
         "query_time": query_time,
         "rule": {"pools": ["all"], "filters": filters or [], "match": match_mode},
-        "results": [
-            _select_find_fields(_cross_section_result_field_source(r, t), fields)
-            if fields
-            else (
-                _cross_section_result_compact_dict(
-                    r,
-                    t,
-                    included_dimensions=result_dimensions,
-                    include_context=compact_context,
-                )
-                if compact else _cross_section_result_dict(r, t)
-            )
-            for r, t in entries
-        ],
+        "results": results[:5] if agent_summary else results,
         "disclaimer": FIND_DISCLAIMER_TEXT,
-        "data_availability": _data_availability(
-            rows_for_availability,
-            included_dimensions=included_dimensions,
-            unsupported_dimensions=DIMENSIONS_UNSUPPORTED_IN_ALL,
-        ),
-        "stats": {
-            "pool_size": pool_size,
-            "matched": len(entries) if matched_total is None else matched_total,
-            "shown": len(entries),
-            "data_cutoff": data_cutoff.isoformat() if data_cutoff else None,
-            "stale": stale,
-        },
+        "data_availability": data_availability,
+        "stats": stats,
     }
+    if payload["stats"]["matched"] == 0:
+        payload["result_state"] = {
+            "reason": "empty_match" if pool_size else "empty_pool",
+            "next_command": "kan find --all --format json --agent-summary",
+        }
+    if agent_summary:
+        payload["agent_summary"] = _agent_summary(
+            results,
+            stats=stats,
+            data_availability=data_availability,
+        )
+    return payload
 
 
 def cross_section_markdown(
@@ -347,13 +368,27 @@ def history_payload(
             "direction": direction or None,
         })
     return {
+        "ok": True,
+        "schema_version": 1,
         "command": "history",
+        "query_time": _query_time(),
         "symbol": symbol,
         "name": name,
         "period": period,
         "disclaimer": _disclaimer_text(),
+        "stats": {"shown": len(series), "period": period},
+        "data_availability": {
+            "basis": "history_series",
+            "pool_size": len(series),
+        },
         "series": series,
     }
+
+
+def _query_time() -> str:
+    from kan.storage.export_base import query_time_now
+
+    return query_time_now()
 
 
 def history_markdown(

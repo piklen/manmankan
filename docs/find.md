@@ -11,6 +11,9 @@ kan find --all --pe lt:20 --format json --compact
 kan find --all --pe lt:20 --format json --compact --no-compact-context
 kan find --industry 半导体 --format json --fields @core,@valuation
 kan find --codes 600519,688981 --format json --fields @core,@retail
+kan find --codes 600519,688981 --format json --fields @core,@valuation,@moneyflow,@technical
+kan find --codes 600519,688981 --format json --dry-run
+kan find --industry 半导体 --format json --agent-summary
 ```
 
 两种 JSON 共享顶层字段:
@@ -21,9 +24,9 @@ kan find --codes 600519,688981 --format json --fields @core,@retail
 | `schema_version` | `kan find` JSON 契约版本,与包版本不同 |
 | `command` | 固定为 `find` |
 | `mode` | 仅 `--all` 路径为 `cross_section` |
-| `result_schema` | `full`、`compact` 或 `fields` |
+| `result_schema` | `full`、`compact`、`fields`、`agent_summary` 或 `delta` |
 | `rule` | 候选池和用户输入的 filter |
-| `results` | 返回结果,已按 `--limit` 截断 |
+| `results` | 返回结果,已按 `--limit` 截断；`agent_summary` 模式只保留少量样本 |
 | `data_availability` | 本次候选池维度可用性统计 |
 | `stats` | 候选池、命中数、展示数、数据截止日、stale |
 | `disclaimer` | `kan find` 强制免责声明 |
@@ -54,6 +57,13 @@ kan find --all --pe lt:20 --format json --compact --no-compact-context
 ### fields
 
 `--format json --fields LIST` 是 `result_schema=fields`:只输出白名单里显式请求的字段,适合把结果继续交给外部程序或模型时控制上下文成本。
+
+`--codes` 显式代码池即使没有 filter，也会走同一套字段补全路径。也就是说，下面的命令会直接补 `@valuation`、`@moneyflow`、`@technical` 等客观字段，不需要加一个永远为真的 filter：
+
+```bash
+kan find --codes 600519,000858 --format json \
+  --fields @core,@valuation,@moneyflow,@technical
+```
 
 字段语法:
 
@@ -88,6 +98,52 @@ kan find --industry 半导体 --format json \
 ```
 
 未知字段或未知 preset 会返回 `invalid_fields`。`--fields` 请求某个维度时,该维度会计入 `data_availability`;未请求的维度仍是 `not_requested`。在 `--all` 下,`--fields` 也会反向驱动截面取数,未请求的 moneyflow / technical / sentiment / chip 不会主动拉取。
+
+### query plan / dry-run
+
+`--dry-run` 和 `--explain` 返回 `mode=query_plan`，只验证参数、候选池和字段计划，不取行情或高成本维度：
+
+```bash
+kan find --codes 600519,000858 --fields @core,@valuation --format json --dry-run
+```
+
+典型字段：
+
+- `rule.pools` / `rule.filters`：候选池和用户显式 filter。
+- `output.fields` / `output.included_dimensions`：本次会尝试输出或取数的字段维度。
+- `data_plan.data_sources`：预计涉及的本地缓存或 TuShare 数据源。
+- `data_plan.high_cost_dimensions`：逐股高成本维度，例如 fundamentals / shareholder。
+- `data_plan.unsupported_dimensions`：当前模式不支持的维度。
+
+查询计划只描述数据路径和成本，不承诺耗时、命中质量或数据完整性。
+
+### agent-summary
+
+`--agent-summary` 返回 `result_schema=agent_summary`，适合大池首轮读取：
+
+```bash
+kan find --all --pe lt:20 --format json --agent-summary
+```
+
+输出会保留：
+
+- `stats` 和 `data_availability`。
+- `agent_summary.field_coverage`：字段非空覆盖情况。
+- `agent_summary.distributions`：部分数值字段的 min / median / max。
+- 少量 `results` 样本。
+
+摘要只描述事实分布和缺数，不输出强弱判断、评分、排序结论或买卖动作。
+
+### snapshot / delta
+
+`--snapshot` 显式写入本地 agent 快照，并返回 `snapshot.id`。普通查询不会自动写状态。
+
+```bash
+kan find --codes 600519,000858 --fields @core,@valuation --format json --snapshot
+kan find --codes 600519,000858 --fields @core,@valuation --format json --since <snapshot_id>
+```
+
+`--since` 返回 `snapshot_delta`，按 `code` 比较结构化结果行的 `added`、`removed`、`changed`。delta 只比较字段值变化，不解释变化含义。
 
 ### match mode
 
@@ -188,7 +244,13 @@ kan find --industry 半导体 --pos 20:lt:30 --sort pos_20:asc --limit 30 --form
   "ok": false,
   "command": "find",
   "schema_version": "0.0.6.8",
-  "error": {"code": "data_unavailable", "message": "...", "hint": "..."},
+  "error": {
+    "code": "data_unavailable",
+    "reason": "data_unavailable",
+    "message": "...",
+    "hint": "...",
+    "next_command": "kan find ..."
+  },
   "disclaimer": "..."
 }
 ```

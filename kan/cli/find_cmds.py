@@ -16,6 +16,8 @@ AI JSON 层 (AI 消费入口):
 """
 from __future__ import annotations
 
+import typer
+
 import kan.cli.find_options as opt
 from kan.app import app
 from kan.cli.find_io import _exit_find_error, _resolve_code_pairs_or_exit_json
@@ -77,6 +79,11 @@ def find(
     compact: opt.CompactOption = False,
     compact_context: opt.CompactContextOption = True,
     fields: opt.FieldsOption = [],  # noqa: B006 · typer multi-option 需要 list 默认值
+    explain: opt.ExplainOption = False,
+    dry_run: opt.DryRunOption = False,
+    agent_summary: opt.AgentSummaryOption = False,
+    snapshot: opt.SnapshotOption = False,
+    since: opt.SinceOption = None,
 ) -> None:
     """按你的规则筛股 · 不替你定规则。
 
@@ -135,6 +142,9 @@ def find(
       --compact          json 低字段量输出 · 适合脚本/外部模型首轮筛选
       --no-compact-context  compact 不输出 positions/resonance,避免无 K 线 filter 时取快照
       --fields LIST      json 字段白名单或 @preset · 例 @core,@valuation
+      --agent-summary    json 低上下文摘要:字段覆盖/缺数/分布/样本
+      --dry-run/--explain  json 查询计划:数据源/维度/成本提示,不实际取数
+      --snapshot/--since json 显式会话快照 / delta
       --format md        markdown 表格
 
     池 selector (跟 kan scan 一致 · 三者互斥):
@@ -154,6 +164,14 @@ def find(
     console = Console()
     find_disclaimer = f"[bold dim]{FIND_DISCLAIMER_TEXT}[/bold dim]"
     is_export = fmt is not export.OutputFormat.terminal
+    if (explain or dry_run or agent_summary or snapshot or since) and fmt is not export.OutputFormat.json:
+        _exit_find_error(
+            fmt,
+            code="invalid_agent_option",
+            message="--explain/--dry-run/--agent-summary/--snapshot/--since 仅支持 --format json",
+            hint="例: kan find --codes 600519,000858 --format json --dry-run",
+            exit_code=2,
+        )
     if compact and fmt is not export.OutputFormat.json:
         _exit_find_error(
             fmt,
@@ -359,6 +377,34 @@ def find(
             exit_code=2,
         )
     code_pairs = _resolve_code_pairs_or_exit_json(codes, fmt) if codes is not None else None
+    if explain or dry_run:
+        from kan.service.find_plan import build_find_query_plan
+        from kan.service.find_service_models import FindOutputProfile
+
+        output = FindOutputProfile(
+            mode=fmt.value,
+            compact=compact,
+            compact_context=compact_context,
+            field_paths=field_paths,
+            field_dimensions=frozenset(field_dimensions),
+            agent_summary=agent_summary,
+        )
+        typer.echo(export.to_json(build_find_query_plan(
+            conditions=conditions,
+            output=output,
+            industry=industry,
+            hot=hot,
+            theme=theme,
+            group=group,
+            code_pairs=code_pairs,
+            only_holdings=only_holdings,
+            all_stocks=all_stocks,
+            limit=limit,
+            offset=offset,
+            sort=sort_spec,
+            dry_run=dry_run,
+        )))
+        return
     # 2.5 全市场截面取数 (--all) · 不走 K 线管线 · 早返回不读自选
     if all_stocks:
         _run_all_stocks_path(
@@ -374,6 +420,9 @@ def find(
             offset=offset,
             sort=sort_spec,
             rs_index_code=rs_index_code,
+            agent_summary=agent_summary,
+            snapshot=snapshot,
+            since=since,
         )
         return
 
@@ -401,4 +450,7 @@ def find(
         rs_index_code=rs_index_code,
         console=console,
         find_disclaimer=find_disclaimer,
+        agent_summary=agent_summary,
+        snapshot=snapshot,
+        since=since,
     )

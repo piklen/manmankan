@@ -22,8 +22,8 @@
     <g font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="18" fill="#e4e4e7">
       <text x="26" y="82"><tspan fill="#34d399">$</tspan> kan examples</text>
       <text x="26" y="125" fill="#f4f4f5">1. 首次结构 smoke</text>
-      <text x="46" y="155" fill="#a1a1aa">kan find --codes 600519,000858 --format json</text>
-      <text x="46" y="185" fill="#71717a">不拉行情；确认 JSON envelope 和免责声明。</text>
+      <text x="46" y="155" fill="#a1a1aa">kan find --codes 600519,000858 --format json --dry-run</text>
+      <text x="46" y="185" fill="#71717a">不取数；确认 JSON envelope 和查询计划。</text>
 
       <text x="26" y="230" fill="#f4f4f5">2. 真实行情坐标 JSON</text>
       <text x="46" y="260" fill="#a1a1aa">kan scan --codes 600519,000858 --format json</text>

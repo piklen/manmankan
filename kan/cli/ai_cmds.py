@@ -29,8 +29,13 @@ app.add_typer(mcp_app, name="mcp")
 _EXAMPLES = [
     (
         "首次结构 smoke",
-        "kan find --codes 600519,000858 --format json",
-        "不拉行情；确认 CLI、JSON envelope、退出码和免责声明正常。",
+        "kan find --codes 600519,000858 --format json --dry-run",
+        "只返回查询计划；确认 CLI、JSON envelope、退出码和免责声明正常。",
+    ),
+    (
+        "代码池字段补全",
+        "kan find --codes 600519,000858 --fields @core,@valuation,@moneyflow,@technical --format json",
+        "显式代码池无 filter 也会按字段补客观数据，不需要伪造永真 filter。",
     ),
     (
         "真实行情坐标 JSON",
@@ -435,9 +440,18 @@ def index(
         rows.append(_index_row_payload(scan, code=code, name=name, data_available=True))
 
     payload = {
-        "command": "index",
+        **export.success_envelope(
+            "index",
+            disclaimer=DISCLAIMER.strip(),
+            stats={"shown": len(rows), "period": period},
+            data_availability={
+                "basis": "index_daily",
+                "pool_size": len(rows),
+                "available": sum(1 for row in rows if row["data_available"]),
+                "missing": sum(1 for row in rows if not row["data_available"]),
+            },
+        ),
         "period": period,
-        "disclaimer": DISCLAIMER.strip(),
         "results": rows,
     }
     if fmt is export.OutputFormat.json:

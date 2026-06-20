@@ -30,6 +30,7 @@ def _find_output_profile(
     compact_context: bool,
     field_paths: tuple[str, ...],
     field_dimensions: set[str],
+    agent_summary: bool = False,
 ) -> FindOutputProfile:
     return FindOutputProfile(
         mode=fmt.value,
@@ -37,6 +38,7 @@ def _find_output_profile(
         compact_context=compact_context,
         field_paths=field_paths,
         field_dimensions=frozenset(field_dimensions),
+        agent_summary=agent_summary,
     )
 
 
@@ -122,6 +124,9 @@ def _run_all_stocks_path(
     offset: int,
     sort: tuple[str, str] | None,
     rs_index_code: str,
+    agent_summary: bool = False,
+    snapshot: bool = False,
+    since: str | None = None,
 ) -> None:
     """`kan find --all` 全市场截面 service 的 CLI adapter。"""
     output = _find_output_profile(
@@ -130,6 +135,7 @@ def _run_all_stocks_path(
         compact_context=compact_context,
         field_paths=field_paths,
         field_dimensions=field_dimensions,
+        agent_summary=agent_summary,
     )
     try:
         result = run_find_cross_section(FindCrossSectionRequest(
@@ -145,7 +151,9 @@ def _run_all_stocks_path(
         _exit_find_service_error(fmt, e)
 
     if fmt is export.OutputFormat.json:
-        typer.echo(export.to_json(export.cross_section_payload(
+        from kan.storage.agent_snapshots import attach_find_snapshot_metadata
+
+        payload = export.cross_section_payload(
             result.limited,
             query_time=result.query_time,
             pool_size=result.ctx.pool_size,
@@ -160,6 +168,12 @@ def _run_all_stocks_path(
             compact_dimensions=result.compact_dimensions,
             fields=field_paths,
             compact_context=compact_context,
+            agent_summary=agent_summary,
+        )
+        typer.echo(export.to_json(attach_find_snapshot_metadata(
+            payload,
+            snapshot=snapshot,
+            since=since,
         )))
     else:
         typer.echo(export.cross_section_markdown(
@@ -194,6 +208,9 @@ def _run_kline_path(
     rs_index_code: str,
     console: Any,
     find_disclaimer: str,
+    agent_summary: bool = False,
+    snapshot: bool = False,
+    since: str | None = None,
 ) -> None:
     """非 `--all` K 线路径 find service 的 CLI adapter。"""
     output = _find_output_profile(
@@ -202,6 +219,7 @@ def _run_kline_path(
         compact_context=compact_context,
         field_paths=field_paths,
         field_dimensions=field_dimensions,
+        agent_summary=agent_summary,
     )
     try:
         result = run_find_kline(FindKlineRequest(
@@ -256,7 +274,9 @@ def _run_kline_path(
 
     if is_export:
         if fmt is export.OutputFormat.json:
-            typer.echo(export.to_json(export.find_payload(
+            from kan.storage.agent_snapshots import attach_find_snapshot_metadata
+
+            payload = export.find_payload(
                 result.entries,
                 query_time=result.query_time,
                 pools=result.pools,
@@ -271,6 +291,12 @@ def _run_kline_path(
                 compact_dimensions=result.compact_dimensions,
                 fields=field_paths,
                 compact_context=compact_context,
+                agent_summary=agent_summary,
+            )
+            typer.echo(export.to_json(attach_find_snapshot_metadata(
+                payload,
+                snapshot=snapshot,
+                since=since,
             )))
         else:
             typer.echo(export.find_markdown(

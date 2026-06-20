@@ -32,6 +32,13 @@ class ToolSpec:
     description: str
     input_schema: dict[str, Any]
     handler: Callable[[dict[str, Any]], dict[str, Any]]
+    output_schema: dict[str, Any] | None = None
+
+
+DEFAULT_OUTPUT_SCHEMA: dict[str, Any] = {
+    "type": "object",
+    "additionalProperties": True,
+}
 
 
 def _run_kan(args: list[str]) -> dict[str, Any]:
@@ -96,6 +103,7 @@ def _kan_find(payload: dict[str, Any]) -> dict[str, Any]:
         ("group", "--group"),
         ("sort", "--sort"),
         ("fields", "--fields"),
+        ("since", "--since"),
     ):
         value = payload.get(key)
         if value is None:
@@ -114,9 +122,24 @@ def _kan_find(payload: dict[str, Any]) -> dict[str, Any]:
         ("moneyflow_days", "--moneyflow-days"),
         ("pe", "--pe"),
         ("pb", "--pb"),
+        ("turnover", "--turnover"),
+        ("market_cap", "--market-cap"),
+        ("volume_ratio", "--volume-ratio"),
         ("roe", "--roe"),
         ("rsi", "--rsi"),
+        ("macd_dif", "--macd-dif"),
+        ("macd", "--macd"),
+        ("kdj_j", "--kdj-j"),
         ("streak", "--streak"),
+        ("winner", "--winner"),
+        ("holders", "--holders"),
+        ("top10", "--top10"),
+        ("north", "--north"),
+        ("resonance", "--resonance"),
+        ("atr_pct", "--atr-pct"),
+        ("up_days", "--up-days"),
+        ("rs_index", "--rs-index"),
+        ("rs_board", "--rs-board"),
     ):
         for value in _str_list(payload.get(key)):
             args.extend([flag, value])
@@ -125,7 +148,13 @@ def _kan_find(payload: dict[str, Any]) -> dict[str, Any]:
     _bool_flag(args, "--all", payload.get("all"))
     _bool_flag(args, "--any", payload.get("any"))
     _bool_flag(args, "--compact", payload.get("compact"))
+    _bool_flag(args, "--dry-run", payload.get("dry_run"))
+    _bool_flag(args, "--explain", payload.get("explain"))
+    _bool_flag(args, "--agent-summary", payload.get("agent_summary"))
+    _bool_flag(args, "--snapshot", payload.get("snapshot"))
     _bool_flag(args, "--exclude-st", payload.get("exclude_st"))
+    _bool_flag(args, "--exclude-star", payload.get("exclude_star"))
+    _bool_flag(args, "--exclude-bj", payload.get("exclude_bj"))
     _bool_flag(args, "--only-holdings", payload.get("only_holdings"))
     return _run_kan(args)
 
@@ -161,6 +190,19 @@ def _kan_index(payload: dict[str, Any]) -> dict[str, Any]:
     _optional_arg(args, "--period", payload.get("period"))
     _optional_arg(args, "--days", payload.get("days"))
     return _run_kan(args)
+
+
+def _kan_screen_then_hydrate(payload: dict[str, Any]) -> dict[str, Any]:
+    """One MCP call for explicit screen filters plus requested field hydration."""
+    delegated = dict(payload)
+    delegated["format"] = "json"
+    delegated["fields"] = (
+        payload.get("hydrate_fields")
+        or payload.get("fields")
+        or "@core,@valuation,@moneyflow,@technical"
+    )
+    delegated.pop("hydrate_fields", None)
+    return _kan_find(delegated)
 
 
 def _kan_hold(payload: dict[str, Any]) -> dict[str, Any]:
@@ -220,6 +262,7 @@ TOOLS = {
             },
         },
         handler=_kan_scan,
+        output_schema=DEFAULT_OUTPUT_SCHEMA,
     ),
     "kan_find": ToolSpec(
         name="kan_find",
@@ -239,8 +282,13 @@ TOOLS = {
                 "pb": {"description": "List like lt:2"},
                 "roe": {"description": "List like gt:10"},
                 "rsi": {"description": "List like lt:30"},
-                "streak": {"description": "List like up:gte:2"},
+                "streak": {"description": "List like gte:3"},
                 "fields": {"description": "Field preset/path list, e.g. @core,@moneyflow"},
+                "agent_summary": {"type": "boolean"},
+                "dry_run": {"type": "boolean"},
+                "explain": {"type": "boolean"},
+                "snapshot": {"type": "boolean"},
+                "since": {"type": "string"},
                 "sort": {"type": "string"},
                 "limit": {"type": "integer"},
                 "offset": {"type": "integer"},
@@ -252,6 +300,39 @@ TOOLS = {
             },
         },
         handler=_kan_find,
+        output_schema=DEFAULT_OUTPUT_SCHEMA,
+    ),
+    "kan_screen_then_hydrate": ToolSpec(
+        name="kan_screen_then_hydrate",
+        description=(
+            "Run explicit find filters and hydrate requested objective fields in one call; "
+            "does not add ranking, scoring, or buy/sell advice."
+        ),
+        input_schema={
+            "type": "object",
+            "properties": {
+                "codes": {"description": "Comma string or list of 6-digit stock codes"},
+                "industry": {"type": "string"},
+                "theme": {"type": "string"},
+                "hot": {"type": "string", "enum": ["rank", "surge"]},
+                "all": {"type": "boolean"},
+                "pos": {"description": "List like 180:lt:20"},
+                "gain": {"description": "List like 30:gt:10"},
+                "moneyflow": {"description": "List like gt:0"},
+                "pe": {"description": "List like lt:20"},
+                "pb": {"description": "List like lt:3"},
+                "rsi": {"description": "List like lt:30"},
+                "hydrate_fields": {
+                    "description": "Field preset/path list, default @core,@valuation,@moneyflow,@technical",
+                },
+                "agent_summary": {"type": "boolean"},
+                "limit": {"type": "integer"},
+                "offset": {"type": "integer"},
+                "sort": {"type": "string"},
+            },
+        },
+        handler=_kan_screen_then_hydrate,
+        output_schema=DEFAULT_OUTPUT_SCHEMA,
     ),
     "kan_info": ToolSpec(
         name="kan_info",
@@ -265,6 +346,7 @@ TOOLS = {
             "required": ["code"],
         },
         handler=_kan_info,
+        output_schema=DEFAULT_OUTPUT_SCHEMA,
     ),
     "kan_hold": ToolSpec(
         name="kan_hold",
@@ -288,12 +370,14 @@ TOOLS = {
             },
         },
         handler=_kan_hold,
+        output_schema=DEFAULT_OUTPUT_SCHEMA,
     ),
     "kan_examples": ToolSpec(
         name="kan_examples",
         description="Show end-to-end manmankan workflows.",
         input_schema={"type": "object", "properties": {}},
         handler=_kan_examples,
+        output_schema=DEFAULT_OUTPUT_SCHEMA,
     ),
     "kan_schema": ToolSpec(
         name="kan_schema",
@@ -310,6 +394,7 @@ TOOLS = {
             },
         },
         handler=_kan_schema,
+        output_schema=DEFAULT_OUTPUT_SCHEMA,
     ),
     "kan_fields": ToolSpec(
         name="kan_fields",
@@ -319,6 +404,7 @@ TOOLS = {
             "properties": {"format": {"type": "string", "enum": ["json", "md"]}},
         },
         handler=_kan_fields,
+        output_schema=DEFAULT_OUTPUT_SCHEMA,
     ),
     "kan_index": ToolSpec(
         name="kan_index",
@@ -333,6 +419,7 @@ TOOLS = {
             },
         },
         handler=_kan_index,
+        output_schema=DEFAULT_OUTPUT_SCHEMA,
     ),
 }
 
@@ -343,20 +430,45 @@ def _tool_list() -> list[dict[str, Any]]:
             "name": spec.name,
             "description": spec.description,
             "inputSchema": spec.input_schema,
+            "outputSchema": spec.output_schema or DEFAULT_OUTPUT_SCHEMA,
         }
         for spec in TOOLS.values()
     ]
 
 
+def _redact_json_value(value: Any) -> Any:
+    if isinstance(value, str):
+        return redact_text(value)
+    if isinstance(value, list):
+        return [_redact_json_value(item) for item in value]
+    if isinstance(value, dict):
+        return {key: _redact_json_value(item) for key, item in value.items()}
+    return value
+
+
+def _structured_content(stdout: str) -> dict[str, Any] | None:
+    try:
+        parsed = json.loads(stdout)
+    except Exception:
+        return None
+    if not isinstance(parsed, dict):
+        return None
+    return _redact_json_value(parsed)
+
+
 def _text_result(payload: dict[str, Any]) -> dict[str, Any]:
     text = str(payload.get("stdout") or "")
+    structured = _structured_content(text)
     if payload.get("stderr"):
         text += ("\n" if text else "") + str(payload["stderr"])
     text = redact_text(text)
-    return {
+    result = {
         "content": [{"type": "text", "text": text}],
         "isError": int(payload.get("exit_code") or 0) != 0,
     }
+    if structured is not None:
+        result["structuredContent"] = structured
+    return result
 
 
 def _handle_request(req: dict[str, Any]) -> dict[str, Any] | None:

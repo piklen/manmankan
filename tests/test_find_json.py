@@ -304,6 +304,53 @@ class TestFindPayload:
         assert r0["fundamentals"]["roe"] == 15.2
         assert r0["moneyflow"]["net_amount"] == 5000.0
 
+    def test_agent_summary_result_schema(self):
+        entries = [
+            _entry(
+                "600519",
+                valuation=_valuation(),
+                moneyflow=_moneyflow(),
+                technical=_technical(),
+            ),
+            _entry(
+                "000858",
+                valuation=_valuation(),
+                moneyflow=_moneyflow(),
+                technical=_technical(),
+            ),
+        ]
+        p = export.find_payload(
+            entries,
+            query_time="2026-05-29T15:30:00+08:00",
+            pools=["codes:2"],
+            filters=[],
+            pool_size=2,
+            matched_total=2,
+            freshness=_freshness(),
+            agent_summary=True,
+        )
+
+        assert p["result_schema"] == "agent_summary"
+        assert len(p["results"]) == 2
+        assert p["agent_summary"]["stats"]["matched"] == 2
+        assert p["agent_summary"]["data_availability"]["moneyflow"]["status"] == "included"
+        assert p["agent_summary"]["field_coverage"]["code"]["available"] == 2
+        assert p["agent_summary"]["distributions"]["valuation.pe_ttm"]["count"] == 2
+
+    def test_empty_result_has_reason_and_next_command(self):
+        p = export.find_payload(
+            [],
+            query_time="2026-05-29T15:30:00+08:00",
+            pools=["codes:2"],
+            filters=[{"name": "--pe", "param": "lt:1"}],
+            pool_size=2,
+            matched_total=0,
+            freshness=_freshness(),
+        )
+
+        assert p["result_state"]["reason"] == "empty_match"
+        assert p["result_state"]["next_command"].startswith("kan find")
+
     def test_pe_roe_moneyflow_triggered_echo_raw(self):
         """整合-1 · --pe/--roe/--moneyflow triggered 回显裸值 + flag 名正确。"""
         tpe = TriggeredFilter(filter_type="pe", param="lt:30", value=20.04)
