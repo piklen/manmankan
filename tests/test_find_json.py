@@ -48,6 +48,11 @@ _BANNED = [
 
 
 def _scan(symbol: str = "600519", name: str = "贵州茅台", **kw) -> StockScanResult:
+    kw.setdefault("lot_cost", 132600.0)
+    kw.setdefault("cash_usage_pct", None)
+    kw.setdefault("market_board", "主板")
+    kw.setdefault("permission_note", None)
+    kw.setdefault("volume_price_state", None)
     return StockScanResult(
         symbol=symbol, name=name, current_price=1326.0,
         scan_date=datetime.date(2026, 5, 29),
@@ -288,6 +293,8 @@ class TestFindPayload:
         r0 = p["results"][0]
         assert r0["code"] == "600519"
         assert r0["price"] == 1326.0
+        assert r0["lot_cost"] == 132600.0
+        assert r0["market_board"] == "主板"
         assert r0["triggered_filters"][0]["filter"] == "--pos"
         assert r0["triggered_filters"][0]["value"] == 38.7
         assert r0["context"]["positions"]["180"] == 38.7
@@ -397,6 +404,8 @@ class TestFindPayload:
         assert compact["result_schema"] == "compact"
         assert r0["code"] == "600519"
         assert r0["price"] == 1326.0
+        assert r0["lot_cost"] == 132600.0
+        assert r0["market_board"] == "主板"
         assert r0["positions"] == {"60": 81.5, "180": 38.7}
         assert r0["low_resonance"] == 2
         assert r0["valuation"]["pe_ttm"] == 20.04
@@ -440,13 +449,22 @@ class TestFindPayload:
             pool_size=1, matched_total=1, freshness=_freshness(),
             availability_results=[entries[0][1]],
             included_dimensions={"valuation", "moneyflow", "technical"},
-            fields=("code", "name", "context.positions", "valuation.pe_ttm", "moneyflow.net_amount"),
+            fields=(
+                "code", "name", "lot_cost", "cash_usage_pct", "market_board",
+                "permission_note", "volume_price_state", "context.positions",
+                "valuation.pe_ttm", "moneyflow.net_amount",
+            ),
         )
         r0 = p["results"][0]
         assert p["result_schema"] == "fields"
         assert r0 == {
             "code": "600519",
             "name": "贵州茅台",
+            "lot_cost": 132600.0,
+            "cash_usage_pct": None,
+            "market_board": "主板",
+            "permission_note": None,
+            "volume_price_state": None,
             "context": {"positions": {"60": 81.5, "180": 38.7}},
             "valuation": {"pe_ttm": 20.04},
             "moneyflow": {"net_amount": 5000.0},
@@ -469,6 +487,15 @@ class TestFindRegistry:
         assert "valuation.pe_ttm" in fields
         assert fields.count("valuation.pe_ttm") == 1
         assert dimensions_from_fields(fields) == {"valuation"}
+
+    def test_parse_fields_expands_retail_preset(self):
+        fields = parse_find_fields(["@retail,code"])
+        assert fields == (
+            "lot_cost", "cash_usage_pct", "market_board", "permission_note",
+            "volume_price_state", "code",
+        )
+        assert dimensions_from_fields(fields) == set()
+        assert fields_need_kline(fields) is True
 
     def test_parse_fields_rejects_unknown_preset(self):
         try:
@@ -683,6 +710,8 @@ class TestCrossSectionPayload:
         }
         r0 = p["results"][0]
         assert r0["code"] == "600519"
+        assert r0["lot_cost"] == 132600.0
+        assert r0["market_board"] == "主板"
         assert r0["valuation_context"]["pe_industry_pct"] == 62.0
         assert r0["valuation_context"]["pe_industry_median"] == 28.5
 
@@ -822,6 +851,8 @@ class TestCrossSectionPayload:
         r0 = p["results"][0]
         assert p["result_schema"] == "compact"
         assert r0["code"] == "600519"
+        assert r0["lot_cost"] == 132600.0
+        assert r0["market_board"] == "主板"
         assert r0["positions"] == {"30": 63.0}
         assert r0["gains"] == {"30": 8.5}
         assert r0["valuation"]["pe_ttm"] == 20.04
@@ -863,13 +894,19 @@ class TestCrossSectionPayload:
         p = export.cross_section_payload(
             self._entries(self._row()), query_time="t",
             pool_size=1, data_cutoff=datetime.date(2026, 5, 29), stale=False,
-            fields=("code", "price", "valuation.pe_ttm", "valuation_context.industry"),
+            fields=(
+                "code", "price", "lot_cost", "market_board", "permission_note",
+                "valuation.pe_ttm", "valuation_context.industry",
+            ),
             included_dimensions={"valuation", "moneyflow", "technical", "sentiment", "chip"},
         )
         assert p["result_schema"] == "fields"
         assert p["results"][0] == {
             "code": "600519",
             "price": 1326.0,
+            "lot_cost": 132600.0,
+            "market_board": "主板",
+            "permission_note": None,
             "valuation": {"pe_ttm": 20.04},
             "valuation_context": {"industry": "食品饮料"},
         }

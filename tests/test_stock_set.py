@@ -413,11 +413,10 @@ def test_from_flags_passes_only_watchlist_to_hot():
     assert s.only_watchlist is True
 
 
-def test_from_flags_watchlist_default_ignores_extras():
-    """三源都 None → 默认自选 ∪ 持仓 · watchlist_pairs/only_watchlist 忽略。"""
+def test_from_flags_only_watchlist_without_source_uses_watchlist_pool():
+    """三源都 None + only_watchlist=True → 自选池。"""
     s = from_flags(watchlist_pairs=[("600519", "贵州茅台")], only_watchlist=True)
-    assert isinstance(s, WatchlistHoldingsSet)
-    # 默认池不存这两参数 · 不报错即可
+    assert isinstance(s, WatchlistSet)
 
 
 def test_from_flags_hot_accepts_str_or_enum():

@@ -135,6 +135,16 @@ def scan_stock(
             position_pct = 50.0
         else:
             position_pct = round((current_price - n_low) / (n_high - n_low) * 100, 1)
+        distance_to_low = round(current_price - n_low, 2)
+        distance_to_low_pct = (
+            round((current_price - n_low) / n_low * 100, 2)
+            if n_low > 0 else None
+        )
+        distance_to_high = round(current_price - n_high, 2)
+        distance_to_high_pct = (
+            round((current_price - n_high) / n_high * 100, 2)
+            if n_high > 0 else None
+        )
 
         at_low = position_pct <= 5.0
         at_high = position_pct >= 95.0
@@ -172,6 +182,10 @@ def scan_stock(
             at_high=at_high,
             trend=trend,
             gain_pct=gain_pct,
+            distance_to_low=distance_to_low,
+            distance_to_low_pct=distance_to_low_pct,
+            distance_to_high=distance_to_high,
+            distance_to_high_pct=distance_to_high_pct,
         ))
 
     # ST 检测
@@ -179,6 +193,8 @@ def scan_stock(
 
     limit_up = False
     limit_down = False
+    price_direction = None
+    volume_price = None
     if len(df) >= 2:
         prev_close = float(df["close"].iloc[-2])
         if prev_close > 0:
@@ -186,6 +202,13 @@ def scan_stock(
             threshold = get_limit_threshold(symbol, name, as_of=scan_date)
             limit_up = change_pct >= threshold - 0.1
             limit_down = change_pct <= -(threshold - 0.1)
+            from kan.core.retail_facts import volume_price_state
+
+            price_direction, volume_price = volume_price_state(
+                volume_ratio=_local_volume_ratio(df),
+                close=current_price,
+                prev_close=prev_close,
+            )
 
     # 连阳天数 (candle 口径:close>open 连续根数 · 从最新往前数 · 当前非阳线=0)
     # 涨速/加速裸值 · 区别于 limit_times 连板 (涨跌停口径) · 不判 "强势/妖股"。
@@ -229,8 +252,25 @@ def scan_stock(
         ma_10=_ma(10),
         ma_20=_ma(20),
         recent_low_20=recent_low_20,
+        volume_price_state=volume_price or price_direction,
         ma_biases=ma_biases,
     )
+
+
+def _local_volume_ratio(df: pd.DataFrame) -> float | None:
+    """用本地 K 线估算今日量 / 近 5 日均量。"""
+    import pandas as pd
+
+    if "volume" not in df.columns or len(df) < VOLUME_WINDOW + 1:
+        return None
+    today = df["volume"].iloc[-1]
+    prior = df["volume"].iloc[-(VOLUME_WINDOW + 1):-1]
+    if pd.isna(today):
+        return None
+    avg = prior.mean()
+    if pd.isna(avg) or avg <= 0:
+        return None
+    return round(float(today) / float(avg), 2)
 
 
 def _period_pct_key(r: StockScanResult, sentinel: float) -> tuple[float, ...]:

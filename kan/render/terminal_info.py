@@ -38,14 +38,16 @@ def info_table(
     table.add_column("最低", justify="right", style="dim", min_width=8)
     table.add_column("最高", justify="right", style="dim", min_width=8)
     table.add_column("位置", justify="right", min_width=8)
+    table.add_column("距低", justify="right", min_width=10)
+    table.add_column("距高", justify="right", min_width=10)
 
     for pr in result.periods:
         if pr.insufficient:
             if is_industry:
-                table.add_row(f"{pr.period}日", "-", "-", "-")
+                table.add_row(f"{pr.period}日", "-", "-", "-", "-", "-")
             else:
                 table.add_row(
-                    f"{pr.period}日", "-", "-", Text("-", style="dim"),
+                    f"{pr.period}日", "-", "-", Text("-", style="dim"), "-", "-",
                 )
         else:
             table.add_row(
@@ -53,9 +55,17 @@ def info_table(
                 f"{pr.n_low:.2f}",
                 f"{pr.n_high:.2f}",
                 format_pct(pr),
+                _fmt_distance(pr.distance_to_low, pr.distance_to_low_pct),
+                _fmt_distance(pr.distance_to_high, pr.distance_to_high_pct),
             )
 
     return table
+
+
+def _fmt_distance(value: float | None, pct: float | None) -> str:
+    if value is None or pct is None:
+        return "-"
+    return f"{value:+.2f}/{pct:+.1f}%"
 
 
 def board_position_table(context: BoardPositionContext) -> Table:

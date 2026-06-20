@@ -28,6 +28,10 @@ class PeriodResult(BaseModel):
     insufficient: bool = False
     trend: str = ""  # ↑ 反弹 / ↓ 下行 / → 持平
     gain_pct: float | None = None  # 近 period 日涨幅 % (K 线衍生 · 不足 period+1 根→None)
+    distance_to_low: float | None = None      # 当前价 - N 日最低价 · 元
+    distance_to_low_pct: float | None = None  # 相对 N 日最低价的距离 %
+    distance_to_high: float | None = None     # 当前价 - N 日最高价 · 元
+    distance_to_high_pct: float | None = None # 相对 N 日最高价的距离 %
 
 
 class CorporateActionMarker(BaseModel):
@@ -77,6 +81,11 @@ class StockScanResult(BaseModel):
     moneyflow_5d_end_date: date | None = None
     ma_biases: dict[int, float] = Field(default_factory=dict)  # K 线衍生 BIAS · key=周期
     corporate_action: CorporateActionMarker | None = None
+    lot_cost: float | None = None          # A 股 1 手(100 股)金额 · 纯事实
+    cash_usage_pct: float | None = None    # 1 手占已配置现金比例 · 未配置现金为 None
+    market_board: str | None = None        # 主板 / 创业板 / 科创板 / 北交所 / B股 / 未识别
+    permission_note: str | None = None     # 需对应交易权限等客观提示 · 非建议
+    volume_price_state: str | None = None  # 量价事实组合 · 例: 量增·收涨
     in_watchlist: bool = False
     in_holding: bool = False
 
@@ -374,6 +383,8 @@ class VolumeState(BaseModel):
     ratio: float   # 今日成交量 / 近 window 日均量
     label: str     # 明显放大 / 温和放大 / 量能平稳 / 温和萎缩 / 明显萎缩
     window: int    # 比较窗口(交易日数)
+    price_direction: str | None = None  # 收涨 / 收跌 / 收平
+    state: str | None = None            # 量价事实组合 · 例: 量增·收跌
 
 
 class Board(BaseModel):

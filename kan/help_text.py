@@ -44,7 +44,9 @@ def root_help_text() -> str:
 [bold cyan]位置扫描[/bold cyan]
   新手从 kan scan 和 kan find 开始
   kan scan                  默认池全景扫描（自选 ∪ 持仓）
+  kan scan --only-watchlist  只扫描自选
   kan scan --only-holdings  只扫描真实持仓池
+  kan scan --exclude-star --exclude-bj  排除科创板 / 北交所
   kan scan --wide           窄屏也展示全部周期
   kan scan --compact        只展示短/中/长关键周期
   kan scan --periods 5,20,60,180  自定义 2-360 周期集合
@@ -84,6 +86,8 @@ def root_help_text() -> str:
   kan find --pos 60:lt:10 --resonance low:gte:2  多条件 AND
   kan find --any --pos 20:lt:10 --moneyflow-daily gt:10000  多条件任一命中
   kan find --exclude-st --pos 180:lt:5         排 ST · 位置 filter
+  kan find --exclude-star --exclude-bj --pos 180:lt:5  排科创板 / 北交所
+  kan find --only-watchlist --format json      自选池取数
   kan find --only-holdings --format json       真实持仓池取数
   kan find --industry 半导体 --pos 180:lt:10   行业池里筛 180 日位置 < 10%
   kan find --codes 600519,000858 --gain 30:gt:10  任意代码池里筛近 30 日涨幅
@@ -118,7 +122,7 @@ def root_help_text() -> str:
   kan board rank --kind theme --by pos -p 30      题材位置分位榜
 
   [dim]scan / low / high / trend / fetch 全部支持 --industry / --hot / --theme 自由切换[/dim]
-  [dim]find 支持 --industry / --hot / --theme / --all / --codes / --only-holdings 候选池 · 池参数互斥[/dim]
+  [dim]find 支持 --industry / --hot / --theme / --all / --codes / --only-watchlist / --only-holdings 候选池 · 池参数互斥[/dim]
 
 [bold cyan]导出格式[/bold cyan]
   kan scan --format md      markdown 表格输出
@@ -155,6 +159,8 @@ def root_help_text() -> str:
 
 [bold cyan]AI / MCP[/bold cyan]
   kan examples              查看 3-5 个端到端工作流
+  kan guide                 按意图查看可复制命令
+  kan daily                 默认池一日事实概览
   kan fields list           查看 find JSON 字段白名单
   kan mcp install           注册 manmankan MCP 到本机常见客户端
   kan mcp serve             启动 stdio MCP server

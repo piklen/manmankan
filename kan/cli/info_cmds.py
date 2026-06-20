@@ -286,6 +286,15 @@ def info(
         raise typer.Exit(1)
 
     result = scan_stock(df, symbol, name)
+    try:
+        from kan.storage.positions import load_positions
+
+        cash = load_positions().cash
+    except Exception:
+        cash = None
+    from kan.core.retail_facts import apply_retail_facts
+
+    result = apply_retail_facts(result, cash=cash)
     trend_result = calc_trend(df, symbol, name)
     volume_state = calc_volume_state(df)
     moneyflow = None
@@ -354,6 +363,13 @@ def info(
     else:
         cum_str = f"{abs(trend_result.streak_pct):.2f}%"
     console.print(f"  现价 {result.current_price:.2f} · {trend_result.direction} · 累计 {cum_str}")
+    lot = f"{result.lot_cost:,.0f}" if result.lot_cost is not None else "-"
+    cash_pct = (
+        f"{result.cash_usage_pct:.1f}%"
+        if result.cash_usage_pct is not None else "-"
+    )
+    perm = result.permission_note or result.market_board or "-"
+    console.print(f"  1手 {lot} 元 · 占现金 {cash_pct} · 权限 {perm}")
     console.print()
 
     # 全周期位置表
@@ -368,9 +384,10 @@ def info(
         console.print(terminal.board_position_table(board_context))
     console.print(f"\n  低点共振 ×{result.low_resonance} · 高点共振 ×{result.high_resonance}")
     if volume_state is not None:
+        suffix = f" · {volume_state.state}" if volume_state.state else ""
         console.print(
             f"  成交量 · 今日是近 {volume_state.window} 日均量的 "
-            f"{volume_state.ratio} 倍 · {volume_state.label}"
+            f"{volume_state.ratio} 倍 · {volume_state.label}{suffix}"
         )
     if moneyflow is not None and (
         moneyflow.net_amount is not None

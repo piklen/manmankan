@@ -34,6 +34,8 @@ def find(
     pos: opt.PosOption = [],  # noqa: B006 · typer multi-option 需要 list 默认值
     resonance: opt.ResonanceOption = [],  # noqa: B006 · typer multi-option 需要 list 默认值
     exclude_st: opt.ExcludeStOption = False,
+    exclude_star: opt.ExcludeStarOption = False,
+    exclude_bj: opt.ExcludeBjOption = False,
     match_any: opt.MatchAnyOption = False,
     pe: opt.PeOption = [],  # noqa: B006 · typer multi-option 需要 list 默认值
     pb: opt.PbOption = [],  # noqa: B006 · typer multi-option 需要 list 默认值
@@ -102,6 +104,8 @@ def find(
         --pos PERIOD:OP:VAL    PERIOD 取 2-360 任意整数 · OP 取 lt/lte/gt/gte/eq/ne
         --resonance LEVEL:OP:VAL   LEVEL 取 low/high · OP 同上 · VAL 取 [0, 10]
         --exclude-st           排 ST (quiet · 不记 triggered)
+        --exclude-star         排科创板
+        --exclude-bj           排北交所
       估值 / 质量 / 资金:
         --pe OP:VAL            PE TTM 裸值筛 · 例 lt:20
         --pb OP:VAL            PB 裸值筛 · 例 lt:3
@@ -136,7 +140,7 @@ def find(
     池 selector (跟 kan scan 一致 · 三者互斥):
       --industry NAME / --hot rank|surge / --theme NAME (不指定默认自选)
       --codes LIST (逗号/空格/换行分隔 · `--codes -` 从 stdin 读)
-      --only-watchlist (需配合 pool · 取交集)
+      --only-watchlist 只查自选；配合 pool 时取交集
       --only-holdings 只查真实持仓
       --group GROUP (选自选股具名组)
     """
@@ -346,16 +350,15 @@ def find(
             hint="例: kan find --only-holdings --format json",
             exit_code=2,
         )
-    code_pairs = _resolve_code_pairs_or_exit_json(codes, fmt) if codes is not None else None
-    if only_watchlist and not source_mode:
+    if all_stocks and (exclude_star or exclude_bj):
         _exit_find_error(
             fmt,
-            code="invalid_only_watchlist",
-            message="--only-watchlist 需配合 --industry/--hot/--theme",
-            hint="例: kan find --industry 半导体 --only-watchlist --pos 180:lt:10",
-            exit_code=1,
+            code="unsupported_all_filter",
+            message="--all 暂不支持 --exclude-star / --exclude-bj",
+            hint="例: kan find --codes 600519,688981 --exclude-star --format json",
+            exit_code=2,
         )
-
+    code_pairs = _resolve_code_pairs_or_exit_json(codes, fmt) if codes is not None else None
     # 2.5 全市场截面取数 (--all) · 不走 K 线管线 · 早返回不读自选
     if all_stocks:
         _run_all_stocks_path(
@@ -382,6 +385,8 @@ def find(
         theme=theme,
         only_watchlist=only_watchlist,
         only_holdings=only_holdings,
+        exclude_star=exclude_star,
+        exclude_bj=exclude_bj,
         group=group,
         conditions=conditions,
         field_dimensions=field_dimensions,

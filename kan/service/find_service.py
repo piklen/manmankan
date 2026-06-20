@@ -265,6 +265,15 @@ def run_find_kline(
         )
     else:
         pool_results = ctx.results
+    try:
+        from kan.storage.positions import load_positions
+
+        cash = load_positions().cash
+    except Exception:
+        cash = None
+    from kan.core.retail_facts import apply_retail_facts
+
+    pool_results = [apply_retail_facts(r, cash=cash) for r in pool_results]
     if request.conditions.needs_relative_strength():
         pool_results = attach_relative_strength(
             pool_results,
@@ -272,6 +281,14 @@ def run_find_kline(
             board_periods=request.conditions.rs_board_periods(),
             index_code=request.rs_index_code,
         )
+    if request.exclude_star or request.exclude_bj:
+        from kan.core.retail_facts import market_board
+
+        pool_results = [
+            r for r in pool_results
+            if not (request.exclude_star and market_board(r.symbol) == "科创板")
+            and not (request.exclude_bj and market_board(r.symbol) == "北交所")
+        ]
     gap = _find_data_gap(request.conditions, pool_results)
     if gap is not None:
         code, message, hint = gap

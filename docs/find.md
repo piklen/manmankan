@@ -10,6 +10,7 @@ kan find --industry 半导体 --pos 180:lt:10 --format json --compact
 kan find --all --pe lt:20 --format json --compact
 kan find --all --pe lt:20 --format json --compact --no-compact-context
 kan find --industry 半导体 --format json --fields @core,@valuation
+kan find --codes 600519,688981 --format json --fields @core,@retail
 ```
 
 两种 JSON 共享顶层字段:
@@ -34,6 +35,7 @@ kan find --industry 半导体 --format json --fields @core,@valuation
 `--format json --compact` 是 `result_schema=compact`:每只股票只保留首轮筛选常用字段:
 
 - `code` / `name` / `price`
+- `lot_cost` / `cash_usage_pct` / `market_board` / `permission_note` / `volume_price_state`
 - `triggered_filters`
 - `positions` / `low_resonance` / `high_resonance`
 - 若本次规则请求了对应维度,保留该维度摘要,例如 `valuation.pe_ttm`、`moneyflow.net_amount`、`technical.rsi_6`
@@ -57,7 +59,7 @@ kan find --all --pe lt:20 --format json --compact --no-compact-context
 
 - `LIST` 支持逗号或空白分隔,可多次传入,会去重并保持首次出现顺序
 - 只接受白名单字段或 registry preset,不做动态嵌套路径解析
-- 可用字段示例:`code`、`name`、`price`、`data_time`、`triggered_filters`、`context.positions`、`context.low_resonance`、`valuation.pe_ttm`、`moneyflow.net_amount`、`technical.rsi_6`
+- 可用字段示例:`code`、`name`、`price`、`lot_cost`、`market_board`、`permission_note`、`volume_price_state`、`data_time`、`triggered_filters`、`context.positions`、`context.low_resonance`、`valuation.pe_ttm`、`moneyflow.net_amount`、`technical.rsi_6`
 - `--fields` 不能和 `--compact` 同时使用;二者都定义结果字段形态
 - `--all` 不支持逐股高成本维度字段,例如 `fundamentals.*`、`shareholder.*`
 
@@ -66,6 +68,7 @@ kan find --all --pe lt:20 --format json --compact --no-compact-context
 | preset | 展开内容 |
 |---|---|
 | `@core` | `code` / `name` / `price` / `data_time` / `triggered_filters` |
+| `@retail` | `lot_cost` / `cash_usage_pct` / `market_board` / `permission_note` / `volume_price_state` |
 | `@context` | `context.positions` / `context.low_resonance` / `context.high_resonance` |
 | `@valuation` | `valuation.*` 常用估值、量价、市值字段 |
 | `@valuation_context` | 行业、行业样本、PE/PB 行业内分位和中位 |
@@ -160,6 +163,8 @@ kan find --industry 半导体 --pos 20:lt:30 --sort pos_20:asc --limit 30 --form
 | `--north` | TuShare `stk_holdernumber` + `top10_floatholders` 衍生 | 是 | 否 | 季度/披露期 | 未披露或未进前十大流通可为 `None`;整池缺失时返回 `data_unavailable` |
 | `--exclude-st` | 股票名称 / 候选池元数据 | 否 | 是 | 随候选池 | 静默过滤,不写入 `triggered_filters` |
 
+权限过滤是候选池层面的客观过滤，不写入 `triggered_filters`:`--exclude-star` 排除科创板，`--exclude-bj` 排除北交所；`--all` 暂不支持这两个过滤。
+
 ## 候选池
 
 | 池 | 说明 |
@@ -167,6 +172,7 @@ kan find --industry 半导体 --pos 20:lt:30 --sort pos_20:asc --limit 30 --form
 | 默认 | 当前 default 自选组 ∪ 真实持仓 |
 | `--group` | 指定自选分组 |
 | `--only-holdings` | 只查真实持仓 |
+| `--only-watchlist` | 只查自选；配合 `--industry` / `--hot` / `--theme` 时取交集 |
 | `--industry` | 申万行业成分股 |
 | `--theme` | 题材成分股;题材分类来自上游口径 |
 | `--hot rank\|surge` | 东方财富热榜 |

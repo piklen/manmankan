@@ -20,10 +20,12 @@
 ```bash
 uv tool install manmankan
 kan --version
+kan guide
 kan find --codes 600519,000858 --format json
 kan scan --codes 600519,000858 --periods 5,20,60,180 --format json
 kan mcp install --dry-run --format json
 kan mcp http --host localhost --port 8765
+kan hold cash 50000
 kan hold add 600519 --cost 1680 --shares 100
 kan hold --format json --mask
 ```
@@ -91,6 +93,8 @@ kan scan
 
 ```bash
 kan help
+kan guide
+kan daily
 kan setup --dry-run
 kan scan --help
 kan find --help
@@ -100,12 +104,16 @@ kan find --help
 
 ```bash
 kan scan                                      # 扫默认池（自选 ∪ 持仓）
+kan scan --only-watchlist                     # 只扫自选
+kan scan --exclude-star --exclude-bj          # 排除科创板 / 北交所
 kan scan --codes 600519,000858               # 扫外部候选代码池
 kan scan --periods 5,20,60,180 --wide         # 自定义 2-360 周期并全量展示
 kan info 600519                               # 单股详情 + 所属行业位置均值/排名对照
 kan find --codes 600519,000858 --format json # 不拉行情的代码池 JSON smoke
+kan find --codes 600519,688981 --format json --fields @core,@retail
 kan scan --codes 600519,000858 --format json # 拉公开日 K 的真实坐标 JSON
 kan find --all --pe lt:20 --format json --compact
+kan hold cash 50000                           # 录入现金,用于展示一手占现金比例
 kan hold add 600519 --cost 1680 --shares 100 # 手动录入真实持仓事实
 kan hold                                      # 持仓盈亏 + 仓位 + 位置总览
 kan hold --format json --mask                 # AI/脚本消费；金额脱敏
@@ -123,6 +131,7 @@ kan history 600519 --format json
 
 - 多周期位置百分位：3 / 5 / 7 / 10 / 15 / 30 / 60 / 90 / 120 / 180 日。
 - 共振：同一候选在多个周期同时接近低位或高位。
+- 散户事实：一手金额、占已录入现金比例、科创/北交/创业板权限提示、距区间高低点距离、量价方向组合。
 - 候选池：自选、行业、题材、热榜、全市场、外部 `--codes` 或 stdin。
 - 真实持仓：用户 CLI 录入成本 / 股数 / 现金，本地计算市值、仓位、今日和累计盈亏。
 - 筛选条件：位置、共振、涨跌、连阳连阴、估值、质量、资金、技术指标、筹码、股东、除权除息事件等。

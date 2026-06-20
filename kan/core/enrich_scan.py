@@ -35,6 +35,12 @@ def enrich_scan_rows(
     end = data_cutoff or latest_trade_date()
     trade_date = end.strftime("%Y%m%d")
     symbols = [r.symbol for r in results]
+    try:
+        from kan.storage.positions import load_positions
+
+        cash = load_positions().cash
+    except Exception:
+        cash = None
 
     val_by_symbol: dict[str, ValuationMetrics] = {}
     try:
@@ -110,7 +116,10 @@ def enrich_scan_rows(
             "moneyflow_5d_end_date": mf[1] if mf is not None else None,
             "corporate_action": action,
         }
-        out.append(r.model_copy(update=updates))
+        enriched = r.model_copy(update=updates)
+        from kan.core.retail_facts import apply_retail_facts
+
+        out.append(apply_retail_facts(enriched, cash=cash))
     return out
 
 

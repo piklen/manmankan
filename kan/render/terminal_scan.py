@@ -93,12 +93,24 @@ def scan_table(
     is_hot = isinstance(meta, HotMeta)
     highlight = meta.highlight if meta else set()
     rank_map = meta.rank_map if is_hot else {}
+    show_lot = any(getattr(r, "lot_cost", None) is not None for r in results)
+    show_cash = any(getattr(r, "cash_usage_pct", None) is not None for r in results)
+    show_permission = any(getattr(r, "permission_note", None) for r in results)
+    show_volume_price = any(getattr(r, "volume_price_state", None) for r in results)
 
     table = Table(title=title, show_lines=False, pad_edge=False, padding=(0, 1))
     if is_hot:
         table.add_column("榜", justify="right", style="cyan", min_width=3)
     table.add_column("股票", style="white", no_wrap=True)
     table.add_column("现价", justify="right", style="white", min_width=8)
+    if show_lot:
+        table.add_column("1手元", justify="right", min_width=7)
+    if show_cash:
+        table.add_column("现金%", justify="right", min_width=6)
+    if show_permission:
+        table.add_column("权限", justify="right", min_width=6)
+    if show_volume_price:
+        table.add_column("量价", justify="right", min_width=6)
     if show_context:
         table.add_column("PE", justify="right", min_width=6)
         table.add_column("5日主力(万)", justify="right", min_width=10)
@@ -115,6 +127,14 @@ def scan_table(
             _board_reference_label(board_index_result.name, meta),
         ]
         brow.append(f"{board_index_result.current_price:.2f}")
+        if show_lot:
+            brow.append("-")
+        if show_cash:
+            brow.append("-")
+        if show_permission:
+            brow.append("-")
+        if show_volume_price:
+            brow.append("-")
         if show_context:
             brow.extend(["-", "-", "-", "-", "-", "-"])
         for p in display_periods:
@@ -144,6 +164,14 @@ def scan_table(
         hold = "💰 " if getattr(r, "in_holding", False) else ""
         row.append(f"{hold}{star}{name_short} {r.symbol}{tag}")
         row.append(f"{r.current_price:.2f}")
+        if show_lot:
+            row.append(_fmt_money_yuan(getattr(r, "lot_cost", None)))
+        if show_cash:
+            row.append(_fmt_cash_pct(getattr(r, "cash_usage_pct", None)))
+        if show_permission:
+            row.append(getattr(r, "permission_note", None) or "-")
+        if show_volume_price:
+            row.append(getattr(r, "volume_price_state", None) or "-")
         if show_context:
             row.extend([
                 _fmt_scan_number(getattr(r, "pe_ttm", None), digits=1),
@@ -184,6 +212,18 @@ def _fmt_money_wan(value: float | None) -> str:
     if value is None:
         return "-"
     return f"{value:,.0f}"
+
+
+def _fmt_money_yuan(value: float | None) -> str:
+    if value is None:
+        return "-"
+    return f"{value:,.0f}"
+
+
+def _fmt_cash_pct(value: float | None) -> str:
+    if value is None:
+        return "-"
+    return f"{value:.1f}%"
 
 
 def _fmt_corporate_action(action) -> str:

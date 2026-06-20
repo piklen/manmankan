@@ -166,6 +166,8 @@ def scan(
     signal: Annotated[bool, typer.Option("--signal", "-S", "-s", help="仅显示有共振信号的股票")] = False,
     diff: Annotated[bool, typer.Option("--diff", "-d", help="增量模式：显示与上次扫描的变化")] = False,
     exclude_st: Annotated[bool, typer.Option("--exclude-st", help="排除 ST/*ST 股票")] = False,
+    exclude_star: Annotated[bool, typer.Option("--exclude-star", help="排除科创板股票")] = False,
+    exclude_bj: Annotated[bool, typer.Option("--exclude-bj", help="排除北交所股票")] = False,
     codes: Annotated[
         str | None,
         typer.Option("--codes", help="只扫描指定代码池（逗号/空格/换行分隔；- 从 stdin 读）"),
@@ -184,7 +186,7 @@ def scan(
     ] = None,
     only_watchlist: Annotated[
         bool,
-        typer.Option("--only-watchlist", help="仅显示自选 ∩ 行业/热榜/题材(需配合 --industry / --hot / --theme)"),
+        typer.Option("--only-watchlist", help="只看自选；配合 --industry / --hot / --theme 时取交集"),
     ] = False,
     only_holdings: Annotated[
         bool,
@@ -290,14 +292,6 @@ def scan(
             _load_watchlist_pairs(group) if source_mode else _get_watchlist_pairs(group)
         )
     )
-    if only_watchlist and not source_mode:
-        _exit_scan_error(
-            fmt,
-            code="invalid_only_watchlist",
-            message="--only-watchlist 需配合 --industry / --hot / --theme 使用",
-            hint="例: kan scan --industry 半导体 --only-watchlist",
-            exit_code=1,
-        )
     if code_pairs is not None and only_watchlist:
         _exit_scan_error(
             fmt,
@@ -346,6 +340,8 @@ def scan(
             periods=period_list,
             signal_only=signal,
             exclude_st=exclude_st,
+            exclude_star=exclude_star,
+            exclude_bj=exclude_bj,
             show_progress=fmt is export.OutputFormat.terminal,
         ))
     except StockSetResolveError as e:
@@ -362,12 +358,29 @@ def scan(
 
     board_index_result = service_result.board_index_result
 
+    if not ctx.targets:
+        if only_holdings:
+            _exit_scan_error(
+                fmt,
+                code="empty_holdings",
+                message="真实持仓为空",
+                hint="例: kan hold add 600519 --cost 1680 --shares 100",
+                exit_code=1,
+            )
+        if only_watchlist and not source_mode:
+            _exit_scan_error(
+                fmt,
+                code="empty_watchlist",
+                message="自选股为空",
+                hint="例: kan add 600519 000858",
+                exit_code=1,
+            )
     if not ctx.results:
         _exit_scan_error(
             fmt,
             code="data_unavailable",
             message="无缓存数据",
-            hint="例: kan fetch",
+            hint="例: kan fetch；或 kan scan 自动拉取默认池 K 线",
             exit_code=1,
         )
 
@@ -408,13 +421,14 @@ def scan(
     is_compact = len(display_periods) < len(period_list)
 
     is_hot = isinstance(board_meta, HotMeta)
+    show_context_columns = console.width >= 140 and not wide and periods is None
     table = terminal.scan_table(
         ctx, results,
         display_periods=display_periods,
         high_mode=high,
         signal_only=signal,
         board_index_result=board_index_result,
-        show_context=True,
+        show_context=show_context_columns,
     )
     # 头部 1 行 disclaimer 呼应(自选 100+ 只表格 · 防底部 disclaimer 滚屏顶掉)
     console.print("[dim]💡 慢慢看是观察工具 · 不预测涨跌 · 详见底部免责[/dim]")

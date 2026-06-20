@@ -57,6 +57,10 @@ def hot_runner(monkeypatch):
         "kan.core.scanner.scan_batch",
         lambda pairs, mode="low", periods=None: [_fake_scan_result(s, n) for s, n in pairs],
     )
+    monkeypatch.setattr(
+        "kan.core.enrich.enrich_scan_rows",
+        lambda rows, **_kw: rows,
+    )
     monkeypatch.setattr("kan.data.fetcher.cache_age", lambda _s: "2026-05-21 12:00")
     monkeypatch.setattr(
         "kan.data.fetcher.data_cutoff_date", lambda _s: date(2026, 5, 21)
@@ -110,11 +114,10 @@ def test_scan_hot_only_watchlist_intersects(hot_runner):
     assert "京东方" not in result.output     # 京东方不在自选
 
 
-def test_only_watchlist_needs_source(hot_runner):
+def test_only_watchlist_without_source_is_allowed(hot_runner):
     from kan.app import app
     result = hot_runner.invoke(app, ["scan", "--only-watchlist"])
-    assert result.exit_code == 1
-    assert "--only-watchlist" in result.output
+    assert "需配合" not in result.output
 
 
 def test_low_hot_runs(hot_runner, monkeypatch):

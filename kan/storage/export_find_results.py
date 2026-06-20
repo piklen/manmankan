@@ -46,6 +46,7 @@ def _find_result_dict(match: FindMatch, enriched: EnrichedResult) -> dict:
         "is_st": er.is_st,
         "limit_up": er.limit_up,
         "limit_down": er.limit_down,
+        **_retail_fact_dict(er),
         "triggered_filters": [
             {
                 "filter": TRIGGER_FLAG.get(t.filter_type, t.filter_type),
@@ -73,6 +74,17 @@ def _find_result_dict(match: FindMatch, enriched: EnrichedResult) -> dict:
         "relative_strength": _relative_strength_public_dict(
             getattr(er, "relative_strength", None)
         ),
+    }
+
+
+def _retail_fact_dict(result: StockScanResult) -> dict:
+    """散户体验事实字段 · 顶层输出,不表达交易动作。"""
+    return {
+        "lot_cost": result.lot_cost,
+        "cash_usage_pct": result.cash_usage_pct,
+        "market_board": result.market_board,
+        "permission_note": result.permission_note,
+        "volume_price_state": result.volume_price_state,
     }
 
 
@@ -188,6 +200,7 @@ def _find_result_compact_dict(
         "price": er.current_price,
         "data_time": er.scan_date.isoformat(),
         "triggered_filters": _triggered_filters_public(match),
+        **_retail_fact_dict(er),
     }
     if include_context:
         result.update({
@@ -393,17 +406,24 @@ def code_pool_payload(
     """
     from kan.render.base import FIND_DISCLAIMER_TEXT
 
-    allowed = {"code", "name"}
+    allowed = {"code", "name", "market_board", "permission_note"}
     selected = tuple(fields or ("code", "name"))
     unsupported = [f for f in selected if f not in allowed]
     if unsupported:
         raise ValueError(
-            "外部代码池无 filter 取数只支持 code/name 字段；"
+            "外部代码池无 filter 取数只支持 code/name/market_board/permission_note 字段；"
             f"不支持: {', '.join(unsupported)}"
         )
 
     def _row(code: str, name: str) -> dict:
-        source = {"code": code, "name": name.replace(" ", "")}
+        from kan.core.retail_facts import market_board, permission_note
+
+        source = {
+            "code": code,
+            "name": name.replace(" ", ""),
+            "market_board": market_board(code),
+            "permission_note": permission_note(code),
+        }
         return {k: source[k] for k in selected}
 
     return {

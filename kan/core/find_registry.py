@@ -447,6 +447,11 @@ _BASE_FIELD_SPECS = [
     _field("is_st"),
     _field("limit_up"),
     _field("limit_down"),
+    _field("lot_cost"),
+    _field("cash_usage_pct"),
+    _field("market_board"),
+    _field("permission_note"),
+    _field("volume_price_state", needs_kline=True),
     _field("triggered_filters"),
     _field("context.positions", needs_kline=True),
     _field("context.low_resonance", needs_kline=True),
@@ -484,6 +489,10 @@ FIND_FIELD_SPECS = {
 FIND_FIELD_PRESETS = {
     "@core": (
         "code", "name", "price", "data_time", "triggered_filters",
+    ),
+    "@retail": (
+        "lot_cost", "cash_usage_pct", "market_board", "permission_note",
+        "volume_price_state",
     ),
     "@context": (
         "context.positions", "context.low_resonance", "context.high_resonance",

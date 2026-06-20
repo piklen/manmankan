@@ -82,10 +82,10 @@ class TestFindCli:
         assert ec == 2
         assert "互斥" in out
 
-    def test_only_watchlist_without_pool_exits_one(self):
+    def test_only_watchlist_without_pool_is_watchlist_pool(self):
         ec, out = _run(["find", "--pos", "180:lt:5", "--only-watchlist"])
-        assert ec == 1
-        assert "--only-watchlist" in out
+        assert ec in (0, 1)
+        assert "需配合" not in out
 
     def test_help_includes_examples(self):
         ec, out = _run(["find", "--help"])
@@ -298,7 +298,6 @@ class TestFindCli:
             ["find", "--pos", "180:lt:5", "--fields", "code"],
             ["find", "--pos", "180:lt:5", "--limit", "0"],
             ["find", "--pos", "180:lt:5", "--industry", "X", "--theme", "Y"],
-            ["find", "--pos", "180:lt:5", "--only-watchlist"],
             ["find", "--all", "--pe", "lt:20"],
             ["find", "--all", "--roe", "gte:15", "--format", "json"],
         ]
@@ -407,6 +406,23 @@ class TestFindJsonOutput:
         assert payload["ok"] is False
         assert payload["error"]["code"] == "invalid_fields"
         assert "code/name" in payload["error"]["message"]
+
+    def test_codes_no_filter_json_can_return_permission_fields(self, tmp_path):
+        ec, out, err = _run_isolated(
+            [
+                "find", "--codes", "688981,920000", "--format", "json",
+                "--fields", "code,market_board,permission_note",
+            ],
+            tmp_path,
+        )
+        assert ec == 0
+        assert err == ""
+        payload = json.loads(out)
+        assert payload["mode"] == "code_pool"
+        assert payload["results"] == [
+            {"code": "688981", "market_board": "科创板", "permission_note": "需科创板权限"},
+            {"code": "920000", "market_board": "北交所", "permission_note": "需北交所权限"},
+        ]
 
     @pytest.mark.skipif(
         not os.environ.get("KAN_RUN_FIND_DATA_TEST"),
