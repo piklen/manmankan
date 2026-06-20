@@ -44,6 +44,7 @@ class FindOutputProfile:
     compact_context: bool = True
     field_paths: tuple[str, ...] = ()
     field_dimensions: frozenset[str] = frozenset()
+    agent_summary: bool = False
 
     @property
     def is_export(self) -> bool:

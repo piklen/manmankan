@@ -8,7 +8,7 @@
 uv tool install manmankan
 kan --version
 KAN_NO_UPDATE_CHECK=1 kan guide
-KAN_NO_UPDATE_CHECK=1 kan find --codes 600519,000858 --format json
+KAN_NO_UPDATE_CHECK=1 kan find --codes 600519,000858 --format json --dry-run
 ```
 
 源码 main 或支持示例清单的版本，可以继续发现更多命令：
@@ -32,8 +32,13 @@ kan fields list --format json
   "examples": [
     {
       "title": "首次结构 smoke",
-      "command": "kan find --codes 600519,000858 --format json",
-      "detail": "不拉行情；确认 CLI、JSON envelope、退出码和免责声明正常。"
+      "command": "kan find --codes 600519,000858 --format json --dry-run",
+      "detail": "只返回查询计划；确认 CLI、JSON envelope、退出码和免责声明正常。"
+    },
+    {
+      "title": "代码池字段补全",
+      "command": "kan find --codes 600519,000858 --fields @core,@valuation,@moneyflow,@technical --format json",
+      "detail": "显式代码池无 filter 也会按字段补客观数据，不需要伪造永真 filter。"
     },
     {
       "title": "真实行情坐标 JSON",
@@ -56,7 +61,7 @@ KAN_NO_UPDATE_CHECK=1 uv run kan examples --format json
 KAN_NO_UPDATE_CHECK=1 uv run kan fields list --format json
 ```
 
-源码调试时也可以用 `uv run kan schema --format json --section find --compact`、`uv run kan examples --format json` 和 `uv run kan fields list --format json` 确认机器可读 schema、examples 与字段 / preset 清单；这些 discovery smoke 都不拉行情。
+源码调试时也可以用 `uv run kan schema --format json --section find --compact`、`uv run kan examples --format json` 和 `uv run kan fields list --format json` 确认机器可读 schema、examples 与字段 / preset 清单；这些 discovery smoke 都不拉行情。需要验证某个 `find` 调用路径但不取数时，用 `--dry-run`。
 
 Windows / PowerShell 源码调试时，环境变量要先写进 `$env:`：
 
@@ -69,23 +74,40 @@ uv run kan examples --format json
 uv run kan fields list --format json
 ```
 
-这些 discovery smoke 用于确认机器可读 schema、examples 与字段 / preset 清单，不拉行情；`$env:PYTHONUTF8 = "1"` 用于降低中文和 `≠`、`·` 等符号在部分 Windows 终端里的编码风险。
+这些 discovery smoke 用于确认机器可读 schema、examples 与字段 / preset 清单，不拉行情；需要验证某个 `find` 调用路径但不取数时，用 `--dry-run`。`$env:PYTHONUTF8 = "1"` 用于降低中文和 `≠`、`·` 等符号在部分 Windows 终端里的编码风险。
 
 ## 2. 两条首用路径
 
-### 结构 smoke：不拉行情
+### 查询计划 smoke：不取数
 
-用于确认安装、入口、JSON envelope、免责声明和退出码都正常。这个命令只解析显式代码池，不触发行情拉取。
+用于确认安装、入口、JSON envelope、免责声明、退出码和查询路径都正常。这个命令只返回计划，不触发行情拉取。
 
 ```bash
-kan find --codes 600519,000858 --format json
+kan find --codes 600519,000858 --format json --dry-run
 ```
 
 AI 处理规则：
 
 - 先检查 `ok` 或命令退出码。
-- `results` 只有代码池事实，不代表行情维度已拉取。
+- `mode=query_plan` 表示还没有形成行情事实。
+- 读取 `data_plan.data_sources`、`data_plan.high_cost_dimensions` 和 `output.included_dimensions`，再决定是否真实取数。
 - `disclaimer` 必须保留到下游输出。
+
+### 代码池字段补全：无 filter 也取宽表
+
+用于 agent 已有一批代码后，直接补估值、资金、技术等客观字段，不需要伪造永真 filter：
+
+```bash
+kan find --codes 600519,000858 \
+  --fields @core,@valuation,@moneyflow,@technical \
+  --format json
+```
+
+AI 处理规则：
+
+- 先读 `data_availability`，区分已请求、缺数据和未请求。
+- `triggered_filters` 为空是正常状态，表示这次是字段补全，不是条件筛选。
+- 不要把某个字段值解释成买卖信号。
 
 ### 真实行情坐标：会拉公开日 K
 
@@ -109,11 +131,11 @@ AI 处理规则：
 ### 解释 JSON 字段和缺数据状态
 
 ```text
-你是 A 股数据解释助手。下面是 `kan find --codes 600519,000858 --format json` 的输出。
+你是 A 股数据解释助手。下面是 `kan find --codes 600519,000858 --fields @core,@valuation,@moneyflow,@technical --format json` 的输出。
 
 请先检查 `ok`、`error`、`data_availability` 和 `disclaimer`，再用中文说明：
 1. 每个顶层字段的含义。
-2. `results` 只代表显式代码池事实，不代表行情位置已经取到。
+2. `triggered_filters` 为空时说明这是字段补全，不是筛选命中。
 3. 哪些维度已形成证据，哪些维度未请求、不可用或缺失。
 
 不要输出买卖建议、持仓建议、目标价、涨跌预测或股票评级。最后原样保留免责声明。
@@ -143,6 +165,7 @@ JSON:
 ```bash
 kan find --industry 半导体 --format json --fields @core,@context
 kan find --codes 600519,688981 --format json --fields @core,@retail
+kan find --codes 600519,688981 --format json --agent-summary
 kan find --all --pe lt:20 --format json --compact --no-compact-context
 kan find --codes 600519,000858 --roe gt:10 --fields @core,@fundamentals --format json
 ```
@@ -157,6 +180,17 @@ kan fields list --format json
 `--all`、估值、资金、技术、筹码、股东等维度可能依赖 TuShare token 或上游接口权限。用 `data_availability` 区分未请求、不可用和缺失。
 
 `@fundamentals` 是 ROE、净利润同比、营收同比等逐股报告期字段；全市场模式不支持这类逐股高成本维度，先用 `--codes`、`--industry` 或 `--theme` 缩小候选池。
+
+`--agent-summary` 只返回字段覆盖、缺数、分布和少量样本，适合大池首轮读取；明细再用 `--limit/--offset` 分页取。
+
+需要跨同一 agent 会话减少重复输出时，可以显式使用本地快照：
+
+```bash
+kan find --codes 600519,000858 --fields @core,@valuation --format json --snapshot
+kan find --codes 600519,000858 --fields @core,@valuation --format json --since <snapshot_id>
+```
+
+`snapshot_delta` 只比较结构化字段值的 added / removed / changed，不解释变化含义。
 
 ## 5. MCP 接入
 
@@ -188,7 +222,7 @@ kan mcp http --host localhost --port 8765 --path /mcp
 
 HTTP transport 默认只绑定本机地址，并检查浏览器 `Origin`。它适合本机 agent、浏览器插件或调试工具连接；不要把本机 MCP 端口直接暴露成公网服务。
 
-MCP 工具仍沿用 CLI/JSON 契约。AI 调 MCP 时也要保留免责声明、检查错误 envelope，并把数据解释为研究输入而不是交易结论。
+MCP 工具仍沿用 CLI/JSON 契约。`tools/list` 会暴露 `inputSchema` 和 `outputSchema`；`tools/call` 保留 text content，同时在 JSON 输出可解析时返回 `structuredContent`。AI 调 MCP 时也要保留免责声明、检查 `isError` / `ok:false`，并把数据解释为研究输入而不是交易结论。
 
 支持的客户端和写入规则见 [`docs/mcp.md`](mcp.md)。
 

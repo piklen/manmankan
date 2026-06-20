@@ -244,10 +244,14 @@ def test_format_json_structure(snap_dir, runner):
     result = runner.invoke(app, ["history", "600519", "--period", "30", "--format", "json"])
     assert result.exit_code == 0
     payload = json.loads(result.output)
+    assert payload["ok"] is True
+    assert payload["schema_version"] == 1
     assert payload["command"] == "history"
+    assert "query_time" in payload
     assert payload["symbol"] == "600519"
     assert payload["period"] == 30
     assert "disclaimer" in payload
+    assert payload["stats"]["shown"] == 1
     assert len(payload["series"]) == 1
     row = payload["series"][0]
     assert row["date"] == "2026-05-23"

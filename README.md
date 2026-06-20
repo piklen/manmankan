@@ -21,7 +21,8 @@
 uv tool install manmankan
 kan --version
 kan guide
-kan find --codes 600519,000858 --format json
+kan find --codes 600519,000858 --format json --dry-run
+kan find --codes 600519,000858 --format json --fields @core,@valuation,@moneyflow,@technical
 kan scan --codes 600519,000858 --periods 5,20,60,180 --format json
 kan mcp install --dry-run --format json
 kan mcp http --host localhost --port 8765
@@ -30,7 +31,7 @@ kan hold add 600519 --cost 1680 --shares 100
 kan hold --format json --mask
 ```
 
-`kan find --codes ... --format json` 是不拉行情的结构 smoke；`kan scan --codes ... --format json` 会拉公开日 K 并输出真实位置坐标，首次运行可能需要几十秒建立本地缓存。
+`kan find --codes ... --format json --dry-run` 是不取数的结构 smoke；去掉 `--dry-run` 后，`kan find --codes ... --fields ... --format json` 会按显式字段补估值、资金、技术等客观数据，不需要伪造永真 filter。`kan scan --codes ... --format json` 会拉公开日 K 并输出真实位置坐标，首次运行可能需要几十秒建立本地缓存。
 
 如果你也想先把候选池数据说清楚，再交给人或 AI 慢慢研究，可以 star 关注后续版本。
 
@@ -39,7 +40,7 @@ kan hold --format json --mask
 | 你是谁 | 先跑 / 先读 |
 |---|---|
 | 中国用户 / 开发者 | [`docs/china-quickstart.md`](docs/china-quickstart.md)：PyPI 镜像、行情源网络、TuShare、代理和 Windows / PowerShell |
-| AI agent / 自动化脚本 | `kan find --codes 600519,000858 --format json` + [`docs/ai-quickstart.md`](docs/ai-quickstart.md) + [`skills/manmankan-skill.md`](skills/manmankan-skill.md) |
+| AI agent / 自动化脚本 | `kan find --codes 600519,000858 --format json --dry-run` + [`docs/ai-quickstart.md`](docs/ai-quickstart.md) + [`skills/manmankan-skill.md`](skills/manmankan-skill.md) |
 | 第一次贡献者 | [`docs/contributor-quickstart.md`](docs/contributor-quickstart.md)：本地跑起来、验证命令、good first issue、合规边界 |
 
 <details>
@@ -69,15 +70,16 @@ Data, not decisions: no buy/sell advice, no ratings, no price targets. Python 3.
 
 | 设计决策 | 说明 |
 |----------|------|
-| **JSON 是产品，不是后门** | `--format json` 输出包含 `schema_version`、`data_availability`、`disclaimer`、`error` 信封——AI 不需要猜测字段含义或处理裸异常 |
-| **低上下文成本** | `--compact` / `--fields @core` / `--no-compact-context` 让 AI 按需索取，不浪费 token |
+| **JSON 是产品，不是后门** | `--format json` 输出包含 `ok`、`schema_version`、`query_time`、`data_availability`、`disclaimer`、`error` 信封——AI 不需要猜测字段含义或处理裸异常 |
+| **低上下文成本** | `--compact` / `--fields @core` / `--agent-summary` / `--no-compact-context` 让 AI 按需索取，不浪费 token |
 | **Schema 自发现** | `kan schema --format json` 返回 CLI JSON、find DSL、MCP tools 和错误 envelope 的机器可读契约；`--section find --compact` 可低上下文只取筛选契约 |
+| **查询计划和 delta** | `kan find --dry-run` 预演数据源与高成本维度；`--snapshot` / `--since` 支持显式本地会话 delta |
 | **示例可机器读取** | `kan examples --format json` 输出端到端命令清单，AI 可以先读示例再选择最短命令 |
 | **Skills.md 能力清单** | [`skills/manmankan-skill.md`](skills/manmankan-skill.md) 是给 AI Agent 的"说明书"——AI 读到它就知道 manmankan 能做什么、怎么调、错误怎么处理 |
-| **MCP Server** | `kan mcp serve` 提供 stdio MCP；`kan mcp http` 提供本机 Streamable HTTP endpoint；`kan mcp install --dry-run --format json` 可机器读取常见 AI 客户端用户级配置预览，接入细节见 [`docs/mcp.md`](docs/mcp.md) |
+| **MCP Server** | `kan mcp serve` 提供 stdio MCP；`kan mcp http` 提供本机 Streamable HTTP endpoint；tools/list 暴露 `outputSchema`，tools/call 同时返回 text 与 `structuredContent`；接入细节见 [`docs/mcp.md`](docs/mcp.md) |
 | **退出码即 API** | 每个命令的退出码有明确语义（0=成功，非 0=具体错误类别），AI 不需要解析 stderr 来判断成败 |
 
-AI agent 首次接入推荐读 [`docs/ai-quickstart.md`](docs/ai-quickstart.md)。它把“不拉行情的结构 smoke”和“会拉真实日 K 的数据路径”拆开，避免把代码池解析误当成行情取数。
+AI agent 首次接入推荐读 [`docs/ai-quickstart.md`](docs/ai-quickstart.md)。它把“查询计划 smoke”和“真实取数路径”拆开，避免把预演当成已经形成行情证据。
 
 中国用户 / 开发者如果遇到 PyPI 下载慢、行情源网络、TuShare token、Windows PowerShell 或代理问题，先看 [`docs/china-quickstart.md`](docs/china-quickstart.md)。
 
@@ -109,8 +111,9 @@ kan scan --exclude-star --exclude-bj          # 排除科创板 / 北交所
 kan scan --codes 600519,000858               # 扫外部候选代码池
 kan scan --periods 5,20,60,180 --wide         # 自定义 2-360 周期并全量展示
 kan info 600519                               # 单股详情 + 所属行业位置均值/排名对照
-kan find --codes 600519,000858 --format json # 不拉行情的代码池 JSON smoke
+kan find --codes 600519,000858 --format json --dry-run # 不取数的查询计划 smoke
 kan find --codes 600519,688981 --format json --fields @core,@retail
+kan find --codes 600519,688981 --format json --fields @core,@valuation,@moneyflow,@technical
 kan scan --codes 600519,000858 --format json # 拉公开日 K 的真实坐标 JSON
 kan find --all --pe lt:20 --format json --compact
 kan hold cash 50000                           # 录入现金,用于展示一手占现金比例
@@ -143,6 +146,8 @@ JSON 相关入口：
 kan schema --format json --section find --compact
 kan find --industry 半导体 --format json --fields @core,@valuation
 kan find --codes - --format json --compact
+kan find --codes 600519,000858 --format json --agent-summary
+kan find --codes 600519,000858 --format json --snapshot
 kan find --all --format json --compact --no-compact-context
 ```
 

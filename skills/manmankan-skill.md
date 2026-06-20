@@ -133,6 +133,8 @@
 - **`schema_version` 用于版本适配**——当前为 1
 - **紧凑模式**：`kan find --compact` 降低 JSON 字段量；`kan scan --compact` 降低终端横向宽度
 - **字段白名单**：`--fields @core,@valuation,@moneyflow` 只返回指定字段组，节省 token
+- **查询计划**：`kan find ... --dry-run` 只返回数据源和字段计划，不取数
+- **会话 delta**：`kan find ... --snapshot` / `--since <snapshot_id>` 显式保存和比较结构化结果
 
 ---
 
@@ -141,20 +143,25 @@
 ### 工作流 0：首次接入 smoke
 
 ```bash
-# 1. 不拉行情，只确认 CLI / JSON envelope / disclaimer 正常
-kan find --codes 600519,000858 --format json
+# 1. 不取数，只确认 CLI / JSON envelope / query plan / disclaimer 正常
+kan find --codes 600519,000858 --format json --dry-run
 
-# 2. 拉公开日 K，拿真实多周期位置坐标
+# 2. 代码池宽表补全；无 filter 也会按字段补客观数据
+kan find --codes 600519,000858 \
+  --fields @core,@valuation,@moneyflow,@technical \
+  --format json
+
+# 3. 拉公开日 K，拿真实多周期位置坐标
 kan scan --codes 600519,000858 --periods 5,20,60,180 --format json
 
-# 3. 预览本机 MCP 注册目标
+# 4. 预览本机 MCP 注册目标
 kan mcp install --dry-run --format json
 
-# 4. 如客户端支持 HTTP transport，可启动本机 endpoint
+# 5. 如客户端支持 HTTP transport，可启动本机 endpoint
 kan mcp http --host localhost --port 8765 --path /mcp
 ```
 
-第 1 步只返回代码池事实，不代表行情维度已取到。第 2 步首次运行会建立本地缓存，可能需要几十秒；读取 `data_cutoff` / `fetched_at` 后再解释结果。
+第 1 步只返回查询计划，不代表行情维度已取到。第 2 步返回字段补全事实，`triggered_filters=[]` 是正常状态。第 3 步首次运行会建立本地缓存，可能需要几十秒；读取 `data_cutoff` / `fetched_at` 后再解释结果。
 
 ### 工作流 1：每日全市场扫描
 

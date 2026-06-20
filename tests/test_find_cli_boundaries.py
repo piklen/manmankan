@@ -87,7 +87,9 @@ def test_find_codes_invalid_json_envelope(capsys) -> None:
     payload = json.loads(capsys.readouterr().out)
     assert payload["ok"] is False
     assert payload["error"]["code"] == "invalid_codes"
+    assert payload["error"]["reason"] == "invalid_codes"
     assert payload["error"]["hint"].startswith("例: kan find --codes")
+    assert payload["error"]["next_command"].startswith("kan find --codes")
 
 
 def test_find_codes_empty_terminal_error(monkeypatch) -> None:

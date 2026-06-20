@@ -92,12 +92,17 @@ def test_scan_payload_shape():
         [_result()], mode="low", data_cutoff=date(2026, 5, 21),
         fetched_at="2026-05-21 23:00", stale=False,
     )
+    assert payload["ok"] is True
+    assert payload["schema_version"] == 1
     assert payload["command"] == "scan"
+    assert "query_time" in payload
     assert payload["mode"] == "low"
     assert payload["data_cutoff"] == "2026-05-21"
     assert "disclaimer" in payload
     assert payload["stale"] is False
     assert len(payload["results"]) == 1
+    assert payload["stats"]["shown"] == 1
+    assert payload["data_availability"]["kline"]["status"] == "included"
     assert payload["results"][0]["symbol"] == "600519"
     assert payload["results"][0]["periods"][0]["period"] == 3  # 嵌套也序列化
 
@@ -351,11 +356,15 @@ def test_info_payload_shape():
         _result(), _fake_trend(), volume=None, data_cutoff=date(2026, 5, 21),
         fetched_at="2026-05-21 23:00", stale=False,
     )
+    assert payload["ok"] is True
+    assert payload["schema_version"] == 1
     assert payload["command"] == "info"
+    assert "query_time" in payload
     assert payload["symbol"] == "600519"
     assert "disclaimer" in payload
     assert payload["trend"]["direction"] == "跌2天"
     assert payload["result"]["low_resonance"] == 1
+    assert payload["stats"]["shown"] == 1
     assert payload["volume"] is None
 
 

@@ -54,7 +54,11 @@ def test_board_rank_json(monkeypatch):
     result = CliRunner().invoke(app, ["board", "rank", "--format", "json"])
     assert result.exit_code == 0
     payload = json.loads(result.output)
+    assert payload["ok"] is True
+    assert payload["schema_version"] == 1
     assert payload["command"] == "board_rank"
+    assert "query_time" in payload
+    assert payload["stats"]["shown"] == 2
     assert payload["results"][0]["moneyflow_net"] == 120000.0
     assert "disclaimer" in payload
 

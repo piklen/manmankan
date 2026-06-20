@@ -11,10 +11,10 @@ uv tool install manmankan
 kan --version
 KAN_NO_UPDATE_CHECK=1 kan --help
 KAN_NO_UPDATE_CHECK=1 kan guide
-NO_COLOR=1 KAN_NO_UPDATE_CHECK=1 kan find --codes 600519,000858 --format json
+NO_COLOR=1 KAN_NO_UPDATE_CHECK=1 kan find --codes 600519,000858 --format json --dry-run
 ```
 
-这条 `kan find --codes ...` 是结构 smoke：只验证安装、入口、JSON envelope、免责声明和退出码，不拉行情数据。
+这条 `kan find --codes ... --dry-run` 是结构 smoke：只验证安装、入口、JSON envelope、免责声明、退出码和查询计划，不拉行情数据。
 
 要验证真实日 K 数据路径：
 
@@ -36,7 +36,7 @@ kan --version
 $env:KAN_NO_UPDATE_CHECK = "1"
 $env:PYTHONUTF8 = "1"
 $env:NO_COLOR = "1"
-kan find --codes 600519,000858 --format json
+kan find --codes 600519,000858 --format json --dry-run
 ```
 
 脱敏后的实测输出形态应接近：
@@ -50,9 +50,11 @@ kan 0.0.6.9
 {
   "ok": true,
   "command": "find",
-  "mode": "code_pool",
-  "stats": {
-    "matched": 2
+  "mode": "query_plan",
+  "dry_run": true,
+  "rule": {
+    "pools": ["codes:2"],
+    "filters": []
   },
   "disclaimer": "候选 ≠ 买入信号 · 工具仅返回符合您设置规则的股票数据 · 不构成任何形式的推荐或建议 · 用户自行评估"
 }
@@ -93,7 +95,7 @@ default = true
 | 现象 | 更可能的原因 | 先试什么 |
 |---|---|---|
 | `uv tool install` 慢 | Python 包下载慢 | 指定 PyPI 镜像 |
-| `kan find --codes ...` 可用，但 `kan scan ...` 慢或失败 | 行情数据源网络 / 限流 / 本地代理 | 稍后重试，或检查代理 |
+| `kan find --codes ... --dry-run` 可用，但 `kan scan ...` 慢或失败 | 行情数据源网络 / 限流 / 本地代理 | 稍后重试，或检查代理 |
 | `kan find --all --pe ...` 报缺数据 | 需要 TuShare token 或积分权限 | 配置 TuShare token |
 | `kan` 每次退出前卡在版本检查 | PyPI update check 慢 | 设置 `KAN_NO_UPDATE_CHECK=1` |
 
@@ -106,7 +108,7 @@ KAN_KEEP_PROXY=1 kan scan --codes 600519,000858
 如果你只想验证 JSON 输出，不想受颜色控制码影响：
 
 ```bash
-NO_COLOR=1 KAN_NO_UPDATE_CHECK=1 kan find --codes 600519,000858 --format json
+NO_COLOR=1 KAN_NO_UPDATE_CHECK=1 kan find --codes 600519,000858 --format json --dry-run
 ```
 
 ## 5. TuShare 配置

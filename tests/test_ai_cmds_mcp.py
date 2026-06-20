@@ -21,10 +21,15 @@ def test_examples_command_runs() -> None:
     result = CliRunner().invoke(app, ["examples"])
     assert result.exit_code == 0
     assert "首次结构 smoke" in result.output
+    assert "代码池字段补全" in result.output
     assert "真实行情坐标 JSON" in result.output
     assert "┏" not in result.output
     commands = {row[1] for row in _EXAMPLES}
-    assert "kan find --codes 600519,000858 --format json" in commands
+    assert "kan find --codes 600519,000858 --format json --dry-run" in commands
+    assert (
+        "kan find --codes 600519,000858 --fields @core,@valuation,@moneyflow,@technical --format json"
+        in commands
+    )
     assert "kan scan --codes 600519,000858 --periods 5,20,60,180 --format json" in commands
     assert "kan mcp install --dry-run" in commands
     assert "kan schema --format json --section find --compact" in commands
@@ -37,7 +42,7 @@ def test_examples_command_json_is_machine_readable() -> None:
     assert result.exit_code == 0
     payload = json.loads(result.output)
     assert payload["command"] == "examples"
-    assert payload["examples"][0]["command"] == "kan find --codes 600519,000858 --format json"
+    assert payload["examples"][0]["command"] == "kan find --codes 600519,000858 --format json --dry-run"
     assert all(item["command"].startswith("kan ") for item in payload["examples"])
 
 
@@ -45,8 +50,8 @@ def test_examples_command_markdown_is_copyable() -> None:
     result = CliRunner().invoke(app, ["examples", "--format", "md"])
     assert result.exit_code == 0
     assert result.output.startswith("# manmankan 工作流示例")
-    assert "```bash\nkan find --codes 600519,000858 --format json\n```" in result.output
-    assert "## 7. 预览 MCP 注册" in result.output
+    assert "```bash\nkan find --codes 600519,000858 --format json --dry-run\n```" in result.output
+    assert "## 8. 预览 MCP 注册" in result.output
 
 
 def test_example_find_commands_do_not_use_impossible_field_combinations() -> None:
@@ -87,7 +92,12 @@ def test_schema_command_json_is_machine_readable() -> None:
     assert any(item["name"] == "pe" and item["flag"] == "--pe" for item in payload["find"]["filters"])
     assert "@valuation" in payload["find"]["field_presets"]
     assert "valuation.pe_ttm" in {item["path"] for item in payload["find"]["fields"]}
-    assert "kan_schema" in {item["name"] for item in payload["mcp"]["tools"]}
+    mcp_tools = {item["name"]: item for item in payload["mcp"]["tools"]}
+    assert "kan_schema" in mcp_tools
+    assert "kan_screen_then_hydrate" in mcp_tools
+    assert mcp_tools["kan_find"]["outputSchema"]["type"] == "object"
+    assert "agent_summary" in payload["find"]["result_schemas"]
+    assert "delta" in payload["find"]["result_schemas"]
     assert payload["errors"]["json_error_envelope"]["ok"] is False
 
 
@@ -136,6 +146,7 @@ def test_schema_command_mcp_compact_preserves_required_fields() -> None:
     assert "kan_schema" in tools
     assert tools["kan_info"]["inputSchema"]["required"] == ["code"]
     assert "code" in tools["kan_info"]["inputSchema"]["properties"]
+    assert tools["kan_find"]["outputSchema"]["type"] == "object"
 
 
 def test_schema_command_errors_section_includes_agent_notes() -> None:
@@ -144,6 +155,32 @@ def test_schema_command_errors_section_includes_agent_notes() -> None:
     payload = json.loads(result.output)
     assert payload["errors"]["json_error_envelope"]["error"]["code"] == "<machine_code>"
     assert "Read data_availability" in payload["errors"]["notes"][2]
+
+
+def test_find_dry_run_returns_query_plan(monkeypatch) -> None:
+    def fail_pipeline(*_args, **_kwargs):
+        raise AssertionError("dry-run should not fetch data")
+
+    monkeypatch.setattr("kan.service.find_service.run_data_pipeline", fail_pipeline)
+
+    result = CliRunner().invoke(
+        app,
+        [
+            "find", "--codes", "600519,000858", "--fields", "@core,@valuation",
+            "--format", "json", "--dry-run",
+        ],
+    )
+
+    assert result.exit_code == 0
+    payload = json.loads(result.output)
+    assert payload["ok"] is True
+    assert payload["mode"] == "query_plan"
+    assert payload["dry_run"] is True
+    assert payload["rule"]["pools"] == ["codes:2"]
+    assert payload["output"]["result_schema"] == "fields"
+    assert "valuation" in payload["output"]["included_dimensions"]
+    assert payload["data_plan"]["pool_size_estimate"] == 2
+    assert payload["data_plan"]["requires_tushare"] is True
 
 
 def test_schema_command_markdown_and_terminal_render() -> None:
@@ -184,8 +221,12 @@ def test_mcp_serve_lists_tools() -> None:
     serve(inp, out)
     lines = [json.loads(line) for line in out.getvalue().splitlines()]
     assert lines[0]["result"]["serverInfo"]["name"] == "manmankan"
-    tools = {t["name"] for t in lines[1]["result"]["tools"]}
-    assert {"kan_scan", "kan_find", "kan_info", "kan_index", "kan_hold", "kan_schema"} <= tools
+    tools = {t["name"]: t for t in lines[1]["result"]["tools"]}
+    assert {
+        "kan_scan", "kan_find", "kan_info", "kan_index", "kan_hold", "kan_schema",
+        "kan_screen_then_hydrate",
+    } <= set(tools)
+    assert tools["kan_find"]["outputSchema"]["type"] == "object"
 
 
 def _start_mcp_http_server():
@@ -232,8 +273,9 @@ def test_mcp_http_post_lists_tools() -> None:
     assert headers["Content-Type"].startswith("application/json")
     assert headers["MCP-Protocol-Version"] == "2025-06-18"
     payload = json.loads(body)
-    tools = {t["name"] for t in payload["result"]["tools"]}
-    assert {"kan_scan", "kan_find", "kan_info", "kan_index", "kan_hold", "kan_schema"} <= tools
+    tools = {t["name"]: t for t in payload["result"]["tools"]}
+    assert {"kan_scan", "kan_find", "kan_info", "kan_index", "kan_hold", "kan_schema"} <= set(tools)
+    assert tools["kan_find"]["outputSchema"]["type"] == "object"
 
 
 def test_mcp_http_accepts_extra_allowed_origin() -> None:
@@ -483,6 +525,59 @@ def test_mcp_schema_builds_cli_args(monkeypatch) -> None:
     assert captured["args"] == ["schema", "--format", "json", "--section", "find", "--compact"]
 
 
+def test_mcp_find_builds_agent_args(monkeypatch) -> None:
+    from kan.mcp import server
+
+    captured = {}
+
+    def fake_run(args):
+        captured["args"] = args
+        return {"exit_code": 0, "stdout": '{"ok":true,"command":"find"}', "stderr": ""}
+
+    monkeypatch.setattr(server, "_run_kan", fake_run)
+
+    result = server._kan_find({
+        "codes": ["600519", "000858"],
+        "fields": ["@core", "@valuation"],
+        "dry_run": True,
+        "agent_summary": True,
+        "snapshot": True,
+        "since": "abc12345",
+    })
+
+    assert result["exit_code"] == 0
+    assert captured["args"] == [
+        "find", "--format", "json", "--codes", "600519,000858",
+        "--fields", "@core,@valuation", "--since", "abc12345",
+        "--dry-run", "--agent-summary", "--snapshot",
+    ]
+
+
+def test_mcp_composite_hydrate_delegates_to_find(monkeypatch) -> None:
+    from kan.mcp import server
+
+    captured = {}
+
+    def fake_run(args):
+        captured["args"] = args
+        return {"exit_code": 0, "stdout": '{"ok":true,"command":"find"}', "stderr": ""}
+
+    monkeypatch.setattr(server, "_run_kan", fake_run)
+
+    result = server._kan_screen_then_hydrate({
+        "codes": "600519,000858",
+        "pe": ["lt:30"],
+        "hydrate_fields": "@core,@valuation,@moneyflow",
+        "limit": 20,
+    })
+
+    assert result["exit_code"] == 0
+    assert captured["args"] == [
+        "find", "--format", "json", "--codes", "600519,000858",
+        "--fields", "@core,@valuation,@moneyflow", "--pe", "lt:30", "--limit", "20",
+    ]
+
+
 def test_mcp_text_result_redacts_paths_and_tokens() -> None:
     from kan.mcp import server
 
@@ -500,6 +595,21 @@ def test_mcp_text_result_redacts_paths_and_tokens() -> None:
     assert "/Users/<user>" in text
     assert "token=<redacted>" in text
     assert '"Authorization":"<redacted>"' in text
+
+
+def test_mcp_text_result_includes_structured_content() -> None:
+    from kan.mcp import server
+
+    result = server._text_result({
+        "exit_code": 0,
+        "stdout": '{"ok":true,"command":"find","path":"/Users/alice/.kan/config.json"}',
+        "stderr": "",
+    })
+
+    assert result["isError"] is False
+    assert result["structuredContent"]["ok"] is True
+    assert result["structuredContent"]["command"] == "find"
+    assert result["structuredContent"]["path"] == "/Users/<user>/.kan/config.json"
 
 
 def test_mcp_tool_exception_is_redacted(monkeypatch) -> None:
@@ -709,6 +819,11 @@ def test_index_json_uses_tushare_index_daily_adapter(monkeypatch) -> None:
 
     assert result.exit_code == 0
     payload = json.loads(result.output)
+    assert payload["ok"] is True
+    assert payload["schema_version"] == 1
+    assert payload["command"] == "index"
+    assert "query_time" in payload
+    assert payload["stats"]["shown"] == 1
     row = payload["results"][0]
     assert row["code"] == "000001.SH"
     assert row["data_available"] is True

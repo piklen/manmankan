@@ -353,3 +353,43 @@ FieldsOption = Annotated[
         ),
     ),
 ]
+
+ExplainOption = Annotated[
+    bool,
+    typer.Option(
+        "--explain",
+        help="仅输出查询计划：候选池、数据源、字段维度和成本提示，不实际取数",
+    ),
+]
+
+DryRunOption = Annotated[
+    bool,
+    typer.Option(
+        "--dry-run",
+        help="等价于 --explain；用于 agent 调用前预演查询路径",
+    ),
+]
+
+AgentSummaryOption = Annotated[
+    bool,
+    typer.Option(
+        "--agent-summary",
+        help="仅用于 --format json:返回字段覆盖、缺数、分布和少量样本",
+    ),
+]
+
+SnapshotOption = Annotated[
+    bool,
+    typer.Option(
+        "--snapshot",
+        help="仅用于 --format json:显式保存本次结构化结果，返回 snapshot.id",
+    ),
+]
+
+SinceOption = Annotated[
+    str | None,
+    typer.Option(
+        "--since",
+        help="仅用于 --format json:和指定 snapshot.id 比较，返回 delta",
+    ),
+]

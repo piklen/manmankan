@@ -174,21 +174,6 @@ def run_find_kline(
             only_holdings=request.only_holdings,
         )
 
-    if request.code_pairs is not None and output.is_export and request.conditions.is_empty():
-        return FindCodePoolResult(
-            stock_set=stock_set,
-            code_pairs=request.code_pairs,
-            pools=find_pools(
-                request.industry,
-                request.hot,
-                request.theme,
-                request.group,
-                request.code_pairs,
-                request.only_holdings,
-            ),
-            query_time=_query_time(),
-        )
-
     scan_periods = kline_scan_periods(request.conditions)
     ma_bias_periods = kline_ma_bias_periods(request.conditions)
     fetch_days = max(scan_periods) if scan_periods else None
@@ -227,11 +212,11 @@ def run_find_kline(
                 "或 kan find --codes 600519 --format json"
             ),
         )
-    if not ctx.results and not output.is_export:
+    if not ctx.results:
         raise FindServiceError(
             code="data_unavailable",
-            message="无缓存数据 · 请先拉取数据",
-            hint="例: kan fetch；或 kan scan 自动拉取自选股 K 线",
+            message="候选池无可用 K 线数据 · 请先拉取数据或使用 --dry-run 预演查询计划",
+            hint="例: kan scan --codes 600519,000858 --format json；或 kan find --codes 600519,000858 --format json --dry-run",
             exit_code=1,
         )
 

@@ -2,6 +2,8 @@
 
 `manmankan` 提供本地 MCP server，让 AI 客户端直接调用同一套 CLI / JSON 数据契约。当前支持 stdio 和本机 Streamable HTTP 两种 transport。MCP 只负责把结构化行情数据交给 agent，不提供买卖动作、评级、目标价或策略结论。
 
+MCP `tools/list` 会返回每个工具的 `inputSchema` 和 `outputSchema`。`tools/call` 保留兼容旧客户端的 text content；当 CLI 输出是 JSON object 时，同时返回 `structuredContent`，客户端可以直接校验和读取结构，不需要再从文本里二次解析 JSON。
+
 ## 快速路径
 
 ```bash
@@ -128,10 +130,13 @@ MCP 工具返回的数据仍然遵守 CLI / JSON 契约：
 
 - 首次接入可先调用 `kan_schema`，或在 CLI 侧跑 `kan schema --format json --section mcp --compact` 查看工具 schema。
 - 先检查 MCP `isError` 或 JSON `ok:false`。
+- 优先读取 `structuredContent`；没有该字段时再回退到 text content。
 - 保留 `disclaimer`。
 - 读取 `data_cutoff` / `fetched_at`，不要假设数据实时。
 - 用 `data_availability` 区分未请求、缺数据和当前模式不支持。
 - 把结果解释为研究输入，不输出买卖建议、预测、评级或策略结论。
+
+`kan_screen_then_hydrate` 是复合 MCP tool：用用户显式 filter 做一次 `find`，并在同一次调用里按 `hydrate_fields` 补字段。默认字段是 `@core,@valuation,@moneyflow,@technical`。它只减少 tool 往返，不会添加默认策略、评分、排名结论或买卖建议。
 
 需要把 MCP 返回、JSON envelope、错误输出或 dry-run 输出贴到 GitHub 时，先看 [`SUPPORT.md`](../SUPPORT.md) 区分 Issues / Discussions；公开反馈前按 [`安全反馈说明`](china-quickstart.md#8-反馈问题时请带上这些信息) 脱敏 token、代理账号、本机路径和真实持仓金额。
 

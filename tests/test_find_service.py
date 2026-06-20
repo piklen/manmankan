@@ -8,7 +8,6 @@ import pytest
 from kan.core.find_dsl import ConditionSet
 from kan.core.pipeline import StockSetResolveError
 from kan.service.find_service import (
-    FindCodePoolResult,
     FindCrossSectionRequest,
     FindKlineRequest,
     FindKlineResult,
@@ -20,11 +19,55 @@ from kan.service.find_service import (
 )
 
 
-def test_code_pool_without_filters_skips_kline_pipeline(monkeypatch) -> None:
-    def fail_pipeline(*_args, **_kwargs):
-        raise AssertionError("code-pool metadata path should not scan K-lines")
+def _scan_result():
+    import datetime
 
-    monkeypatch.setattr("kan.service.find_service.run_data_pipeline", fail_pipeline)
+    from kan.core.models import PeriodResult, StockScanResult
+
+    return StockScanResult(
+        symbol="600519",
+        name="贵州茅台",
+        current_price=100.0,
+        scan_date=datetime.date(2026, 5, 29),
+        periods=[
+            PeriodResult(
+                period=60,
+                n_low=90.0,
+                n_high=110.0,
+                position_pct=50.0,
+                at_low=False,
+                at_high=False,
+            ),
+        ],
+        low_resonance=0,
+        high_resonance=0,
+    )
+
+
+def test_codes_without_filters_uses_kline_enrichment_path(monkeypatch) -> None:
+    captured = {}
+    scan = _scan_result()
+
+    def fake_pipeline(
+        stock_set, *, compute, mode, periods, ma_bias_periods, fetch_days,
+        show_progress, exit_on_resolve_error,
+    ):
+        captured["stock_set_name"] = stock_set.name
+        captured["periods"] = periods
+        return type(
+            "Ctx",
+            (),
+                {
+                    "targets": [("600519", "贵州茅台"), ("000858", "五粮液")],
+                    "meta": None,
+                    "results": [scan],
+                    "freshness": None,
+                    "source_name": stock_set.name,
+                },
+            )()
+
+    monkeypatch.setattr("kan.service.find_service.run_data_pipeline", fake_pipeline)
+    monkeypatch.setattr("kan.core.enrich.enrich_results", lambda results, **_kw: results)
 
     result = run_find_kline(FindKlineRequest(
         conditions=ConditionSet.from_flags(),
@@ -32,9 +75,39 @@ def test_code_pool_without_filters_skips_kline_pipeline(monkeypatch) -> None:
         code_pairs=[("600519", "贵州茅台"), ("000858", "五粮液")],
     ))
 
-    assert isinstance(result, FindCodePoolResult)
+    assert isinstance(result, FindKlineResult)
     assert result.pools == ["codes:2"]
-    assert result.code_pairs == [("600519", "贵州茅台"), ("000858", "五粮液")]
+    assert captured["stock_set_name"] == "自定义代码池(2只)"
+
+
+def test_kline_path_empty_results_reports_data_unavailable(monkeypatch) -> None:
+    def fake_pipeline(
+        stock_set, *, compute, mode, periods, ma_bias_periods, fetch_days,
+        show_progress, exit_on_resolve_error,
+    ):
+        return type(
+            "Ctx",
+            (),
+            {
+                "targets": [("600519", "贵州茅台")],
+                "meta": None,
+                "results": [],
+                "freshness": None,
+                "source_name": stock_set.name,
+            },
+        )()
+
+    monkeypatch.setattr("kan.service.find_service.run_data_pipeline", fake_pipeline)
+
+    with pytest.raises(FindServiceError) as exc_info:
+        run_find_kline(FindKlineRequest(
+            conditions=ConditionSet.from_flags(),
+            output=FindOutputProfile(mode="json"),
+            code_pairs=[("600519", "贵州茅台")],
+        ))
+
+    assert exc_info.value.code == "data_unavailable"
+    assert "--dry-run" in str(exc_info.value.hint)
 
 
 def test_default_and_holdings_find_pools() -> None:
@@ -51,6 +124,7 @@ def test_named_source_find_pools() -> None:
 
 def test_only_holdings_kline_path_skips_watchlist_load(monkeypatch) -> None:
     captured = {}
+    scan = _scan_result()
 
     def fail_watchlist(*_args, **_kwargs):
         raise AssertionError("--only-holdings 不应读取自选池")
@@ -63,17 +137,18 @@ def test_only_holdings_kline_path_skips_watchlist_load(monkeypatch) -> None:
         return type(
             "Ctx",
             (),
-            {
-                "targets": [("600519", "贵州茅台")],
-                "meta": None,
-                "results": [],
-                "freshness": None,
-                "source_name": stock_set.name,
-            },
-        )()
+                {
+                    "targets": [("600519", "贵州茅台")],
+                    "meta": None,
+                    "results": [scan],
+                    "freshness": None,
+                    "source_name": stock_set.name,
+                },
+            )()
 
     monkeypatch.setattr("kan.service.find_service._load_find_watchlist_pairs", fail_watchlist)
     monkeypatch.setattr("kan.service.find_service.run_data_pipeline", fake_pipeline)
+    monkeypatch.setattr("kan.core.enrich.enrich_results", lambda results, **_kw: results)
 
     result = run_find_kline(FindKlineRequest(
         conditions=ConditionSet.from_flags(),

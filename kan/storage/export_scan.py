@@ -5,10 +5,13 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 
 from kan.storage.export_base import (
+    JSON_SCHEMA_VERSION,
     _board_reference_kind,
     _disclaimer_quote,
     _disclaimer_text,
     md_table,
+    query_time_now,
+    success_envelope,
 )
 from kan.storage.export_find_dimensions import (
     _moneyflow_public_dict,
@@ -61,15 +64,32 @@ def scan_payload(
     stale: bool,
 ) -> dict:
     """kan scan --format json 的结构化 payload。"""
-    return {
-        "command": "scan",
+    results_payload = [r.model_dump(mode="json") for r in results]
+    payload = success_envelope(
+        "scan",
+        stats={
+            "shown": len(results_payload),
+            "data_cutoff": data_cutoff.isoformat() if data_cutoff else None,
+            "stale": stale,
+        },
+        data_availability={
+            "basis": "scan_results",
+            "pool_size": len(results_payload),
+            "kline": {
+                "status": "included",
+                "available": len(results_payload),
+                "missing": 0,
+            },
+        },
+    )
+    payload.update({
         "mode": mode,
-        "disclaimer": _disclaimer_text(),
         "data_cutoff": data_cutoff.isoformat() if data_cutoff else None,
         "fetched_at": fetched_at or None,
         "stale": stale,
-        "results": [r.model_dump(mode="json") for r in results],
-    }
+        "results": results_payload,
+    })
+    return payload
 
 
 def scan_markdown(
@@ -157,12 +177,20 @@ def extreme_payload(
     `payload['reference']['periods']` 跟成分股 hits 对照。
     """
     payload: dict = {
+        "ok": True,
+        "schema_version": JSON_SCHEMA_VERSION,
         "command": mode,  # "low" / "high"
+        "query_time": query_time_now(),
         "disclaimer": _disclaimer_text(),
         "results_by_period": {
             str(n): [r.model_dump(mode="json") for r, _ in hits]
             for n, hits in results_by_period.items()
         },
+        "stats": {
+            "periods": len(results_by_period),
+            "shown": sum(len(hits) for hits in results_by_period.values()),
+        },
+        "data_availability": {"basis": "results_by_period"},
     }
     if board_index_result is not None:
         payload["reference"] = {
@@ -269,11 +297,32 @@ def info_payload(
     valuation_context (全市场截面层):估值位置对照 · 历史分位 + 行业内分位 + 行业中位 ·
     只承载分位 + 中位参照,不重复承载个股估值裸值 · 无数据时 None。
     """
-    return {
-        "command": "info",
+    payload = success_envelope(
+        "info",
+        stats={
+            "shown": 1,
+            "data_cutoff": data_cutoff.isoformat() if data_cutoff else None,
+            "stale": stale,
+        },
+        data_availability={
+            "basis": "single_stock",
+            "pool_size": 1,
+            "kline": {"status": "included", "available": 1, "missing": 0},
+            "valuation": {
+                "status": "included" if valuation is not None else "not_available",
+                "available": 1 if valuation is not None else 0,
+                "missing": 0 if valuation is not None else 1,
+            },
+            "moneyflow": {
+                "status": "included" if moneyflow is not None else "not_available",
+                "available": 1 if moneyflow is not None else 0,
+                "missing": 0 if moneyflow is not None else 1,
+            },
+        },
+    )
+    payload.update({
         "symbol": result.symbol,
         "name": result.name,
-        "disclaimer": _disclaimer_text(),
         "data_cutoff": data_cutoff.isoformat() if data_cutoff else None,
         "fetched_at": fetched_at or None,
         "stale": stale,
@@ -293,7 +342,8 @@ def info_payload(
         "board_position_context": (
             board_context.model_dump() if board_context else None
         ),
-    }
+    })
+    return payload
 
 
 def _board_position_context_markdown(context: BoardPositionContext) -> str:
