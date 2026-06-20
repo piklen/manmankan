@@ -178,7 +178,7 @@ jobs:
           "$SMOKE_VENV/bin/kan" --help
           "$SMOKE_VENV/bin/kan" scan --help
           "$SMOKE_VENV/bin/kan" find --help
-          HOME="$(mktemp -d "$RUNNER_TEMP/kan-home-XXXXXX")" XDG_DATA_HOME="$(mktemp -d "$RUNNER_TEMP/kan-xdg-XXXXXX")" NO_COLOR=1 "$SMOKE_VENV/bin/kan" find --codes 600519,000858 --format json > "$SMOKE_JSON"
+          HOME="$(mktemp -d "$RUNNER_TEMP/kan-home-XXXXXX")" XDG_DATA_HOME="$(mktemp -d "$RUNNER_TEMP/kan-xdg-XXXXXX")" NO_COLOR=1 "$SMOKE_VENV/bin/kan" find --codes 600519,000858 --format json --dry-run > "$SMOKE_JSON"
           NO_COLOR=1 "$SMOKE_VENV/bin/kan" find --help > "$SMOKE_HELP"
           python3 - <<'PY'
           import json
@@ -190,8 +190,9 @@ jobs:
           assert "--compact" in text
           assert "--fields" in text
           payload = json.loads(Path(os.environ["SMOKE_JSON"]).read_text())
-          assert payload["mode"] == "code_pool"
-          assert payload["stats"]["matched"] == 2
+          assert payload["mode"] == "query_plan"
+          assert payload["dry_run"] is True
+          assert payload["data_plan"]["pool_size_estimate"] == 2
           PY
           "$SMOKE_VENV/bin/kan" board rank --help
           "$SMOKE_VENV/bin/kan" history --help
