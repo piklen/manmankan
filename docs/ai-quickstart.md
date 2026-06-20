@@ -7,6 +7,7 @@
 ```bash
 uv tool install manmankan
 kan --version
+KAN_NO_UPDATE_CHECK=1 kan guide
 KAN_NO_UPDATE_CHECK=1 kan find --codes 600519,000858 --format json
 ```
 
@@ -15,6 +16,8 @@ KAN_NO_UPDATE_CHECK=1 kan find --codes 600519,000858 --format json
 ```bash
 kan schema --format json --section commands --compact
 kan schema --format json --section find --compact
+kan guide
+kan daily --format json
 kan examples --format json
 kan fields list --format json
 ```
@@ -139,6 +142,7 @@ JSON:
 
 ```bash
 kan find --industry 半导体 --format json --fields @core,@context
+kan find --codes 600519,688981 --format json --fields @core,@retail
 kan find --all --pe lt:20 --format json --compact --no-compact-context
 kan find --codes 600519,000858 --roe gt:10 --fields @core,@fundamentals --format json
 ```

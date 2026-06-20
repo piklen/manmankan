@@ -10,6 +10,7 @@
 uv tool install manmankan
 kan --version
 KAN_NO_UPDATE_CHECK=1 kan --help
+KAN_NO_UPDATE_CHECK=1 kan guide
 NO_COLOR=1 KAN_NO_UPDATE_CHECK=1 kan find --codes 600519,000858 --format json
 ```
 
@@ -22,6 +23,8 @@ KAN_NO_UPDATE_CHECK=1 kan scan --codes 600519,000858 --periods 5,20,60,180 --for
 ```
 
 首次运行会下载并缓存日 K，可能需要几十秒。后续同日运行会明显更快。
+
+如果已经有自选或持仓，`KAN_NO_UPDATE_CHECK=1 kan daily` 可以给默认池输出一日事实概览；如需录入现金用于展示一手占现金比例，先跑 `kan hold cash <金额>`。
 
 ## 2. Windows / PowerShell 首跑样本
 

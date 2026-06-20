@@ -31,6 +31,7 @@ def from_flags(
 
     - all_stocks=True → AllStocksSet (全市场截面池 · 与 industry/hot/theme 互斥)
     - only_holdings=True → HoldingsSet
+    - 三者全 None + only_watchlist=True → WatchlistSet · 只看自选
     - 三者全 None + 无 group → WatchlistHoldingsSet · 默认自选 ∪ 持仓
     - 三者全 None + 有 group → WatchlistSet · 走 watchlist_group 指定组
     - 任一非 None → 对应 Set · 同时把 watchlist_pairs + only_watchlist 注入
@@ -72,6 +73,8 @@ def from_flags(
             watchlist_pairs=wl_pairs,
             only_watchlist=only_watchlist,
         )
+    if only_watchlist:
+        return WatchlistSet(group=watchlist_group)
     if watchlist_group is None:
         return WatchlistHoldingsSet()
     return WatchlistSet(group=watchlist_group)

@@ -41,4 +41,25 @@ def calc_volume_state(df: pd.DataFrame) -> VolumeState | None:
         label = "温和萎缩"
     else:
         label = "明显萎缩"
-    return VolumeState(ratio=ratio, label=label, window=VOLUME_WINDOW)
+    prev_close = None
+    if len(df) >= 2 and "close" in df.columns:
+        prev_close = df["close"].iloc[-2]
+    close = df["close"].iloc[-1] if "close" in df.columns else None
+    close_value = None if close is None or pd.isna(close) else float(close)
+    prev_close_value = (
+        None if prev_close is None or pd.isna(prev_close) else float(prev_close)
+    )
+    from kan.core.retail_facts import volume_price_state
+
+    direction, state = volume_price_state(
+        volume_ratio=ratio,
+        close=close_value,
+        prev_close=prev_close_value,
+    )
+    return VolumeState(
+        ratio=ratio,
+        label=label,
+        window=VOLUME_WINDOW,
+        price_direction=direction,
+        state=state,
+    )

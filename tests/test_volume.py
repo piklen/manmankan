@@ -13,9 +13,12 @@ import pandas as pd
 from kan.core.scanner import VOLUME_WINDOW, calc_volume_state
 
 
-def _df(volumes):
+def _df(volumes, closes=None):
     """构造只含 volume 列的最小 df。"""
-    return pd.DataFrame({"volume": volumes})
+    data = {"volume": volumes}
+    if closes is not None:
+        data["close"] = closes
+    return pd.DataFrame(data)
 
 
 def test_volume_surge():
@@ -25,6 +28,19 @@ def test_volume_surge():
     assert v.ratio == 3.0
     assert v.label == "明显放大"
     assert v.window == VOLUME_WINDOW
+
+
+def test_volume_state_includes_price_direction_when_close_exists():
+    """有 close 列时补充收盘方向与量价组合事实。"""
+    v = calc_volume_state(
+        _df(
+            [100, 100, 100, 100, 100, 180],
+            closes=[10, 10, 10, 10, 10, 11],
+        )
+    )
+    assert v is not None
+    assert v.price_direction == "收涨"
+    assert v.state == "量增·收涨"
 
 
 def test_volume_shrink():

@@ -10,6 +10,7 @@ increment `D` unless the maintainer explicitly approves a larger bump.
 
 ### Added
 
+- 散户体验事实字段与入口：`scan` / `find` / `info` 输出一手金额、占已录入现金比例、科创/北交/创业板权限提示、距区间高低点距离和量价方向组合；新增 `--exclude-star` / `--exclude-bj` 权限过滤、`kan guide` 意图导航、`kan daily` 默认池一日事实概览，以及 `find --fields @retail` 字段 preset。
 - 新增 `docs/contributor-quickstart.md`，面向首次贡献者补齐 good first issue 选择、本地 smoke、验证命令、PR 自检和 AI 协作边界；README、docs index、SUPPORT、issue contact links 和 site footer 同步入口。
 - 许可证迁移至 GNU Affero General Public License v3.0（`AGPL-3.0-only`）；README、site、安装脚本、PyPI classifier、NOTICE 和合规边界同步更新，明确项目许可证覆盖代码 / 文档，不替代第三方行情数据、API、SDK 或投资合规义务。
 - GitHub Discussions 已启用；`SUPPORT.md`、issue contact links、README 文档导航和 site footer 同步区分 Discussions / Issues / Security 的支持入口。

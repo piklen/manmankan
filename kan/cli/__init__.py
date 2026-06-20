@@ -16,6 +16,7 @@ from kan.cli import (
     board_cmds,
     compare_cmds,
     config_cmds,
+    daily_cmds,
     extreme_cmds,
     fetch_cmds,
     find_cmds,

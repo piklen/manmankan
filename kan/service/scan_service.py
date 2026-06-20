@@ -25,6 +25,8 @@ class ScanRequest:
     periods: list[int] | None = None
     signal_only: bool = False
     exclude_st: bool = False
+    exclude_star: bool = False
+    exclude_bj: bool = False
     show_progress: bool = True
 
 
@@ -70,6 +72,8 @@ def run_scan(request: ScanRequest) -> ScanServiceResult:
         mode=request.mode,
         signal_only=request.signal_only,
         exclude_st=request.exclude_st,
+        exclude_star=request.exclude_star,
+        exclude_bj=request.exclude_bj,
     )
     return ScanServiceResult(
         ctx=ctx,
@@ -86,8 +90,18 @@ def _filter_scan_results(
     mode: ScanMode,
     signal_only: bool,
     exclude_st: bool,
+    exclude_star: bool,
+    exclude_bj: bool,
 ) -> list[StockScanResult]:
     filtered = [r for r in results if not r.is_st] if exclude_st else list(results)
+    if exclude_star or exclude_bj:
+        from kan.core.retail_facts import market_board
+
+        filtered = [
+            r for r in filtered
+            if not (exclude_star and market_board(r.symbol) == "科创板")
+            and not (exclude_bj and market_board(r.symbol) == "北交所")
+        ]
     if not signal_only:
         return filtered
     if mode == "high":

@@ -264,6 +264,30 @@ def test_scan_table_basic_columns_and_row():
     assert table.row_count == 1
 
 
+def test_scan_table_adds_retail_fact_columns_when_present():
+    table = terminal.scan_table(
+        _ctx(),
+        [
+            _stock(
+                lot_cost=1500.0,
+                cash_usage_pct=3.0,
+                permission_note="需科创板权限",
+                volume_price_state="量增·收涨",
+            )
+        ],
+        display_periods=[30],
+        high_mode=False,
+    )
+    col_headers = [c.header for c in table.columns]
+    assert col_headers == [
+        "股票", "现价", "1手元", "现金%", "权限", "量价", "30日", "共振",
+    ]
+    assert table.columns[2]._cells == ["1,500"]
+    assert table.columns[3]._cells == ["3.0%"]
+    assert table.columns[4]._cells == ["需科创板权限"]
+    assert table.columns[5]._cells == ["量增·收涨"]
+
+
 def test_scan_table_context_columns():
     table = terminal.scan_table(
         _ctx(),

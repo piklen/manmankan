@@ -65,6 +65,21 @@ def _command_schemas(*, compact: bool) -> list[dict[str, Any]]:
             "examples": ["kan examples --format json"],
         },
         {
+            "name": "guide",
+            "purpose": "Show copyable commands by user intent.",
+            "formats": ["terminal"],
+            "success_keys": [],
+            "examples": ["kan guide --topic holdings"],
+        },
+        {
+            "name": "daily",
+            "purpose": "Summarize the default pool with factual daily context.",
+            "formats": ["terminal", "md", "json"],
+            "schema_version": "0.1",
+            "success_keys": ["ok", "schema_version", "command", "pool", "facts"],
+            "examples": ["kan daily --format json"],
+        },
+        {
             "name": "fields list",
             "purpose": "List kan find JSON field presets and exact field whitelist.",
             "formats": ["terminal", "md", "json"],

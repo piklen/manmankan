@@ -30,6 +30,16 @@ ExcludeStOption = Annotated[
     typer.Option("--exclude-st", help="排除 ST/*ST 股票"),
 ]
 
+ExcludeStarOption = Annotated[
+    bool,
+    typer.Option("--exclude-star", help="排除科创板股票"),
+]
+
+ExcludeBjOption = Annotated[
+    bool,
+    typer.Option("--exclude-bj", help="排除北交所股票"),
+]
+
 MatchAnyOption = Annotated[
     bool,
     typer.Option("--any", help="任一 filter 命中即返回；默认所有 filter 都需命中"),
@@ -254,7 +264,7 @@ OnlyWatchlistOption = Annotated[
     bool,
     typer.Option(
         "--only-watchlist",
-        help="池仅自选 ∩ industry/hot/theme · 需配合 pool flag",
+        help="只查自选；配合 industry/hot/theme 时取交集",
     ),
 ]
 

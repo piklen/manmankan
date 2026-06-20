@@ -60,6 +60,8 @@ class FindKlineRequest:
     theme: str | None = None
     only_watchlist: bool = False
     only_holdings: bool = False
+    exclude_star: bool = False
+    exclude_bj: bool = False
     group: str | None = None
     limit: int | None = None
     offset: int = 0

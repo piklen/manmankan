@@ -144,7 +144,7 @@ def test_scan_payload_includes_ai_daily_metrics():
 def test_scan_markdown_has_header_and_table():
     md = scan_markdown([_result()], periods=[3, 5], mode="low", title="测试标题")
     assert md.startswith("# 测试标题")
-    assert "| 股票 | 现价 | 3日 | 5日 | 共振 |" in md
+    assert "| 股票 | 现价 | 1手元 | 现金% | 权限 | 量价 | 3日 | 5日 | 共振 |" in md
     assert "贵州茅台 600519" in md
     assert "投资建议" in md  # disclaimer
 
@@ -177,8 +177,8 @@ def test_scan_markdown_context_columns():
         title="t",
         show_context=True,
     )
-    assert "| 股票 | 现价 | PE | 5日主力(万) | 10日线 | 20日线 | 20日低 | 除权除息 | 3日 | 共振 |" in md
-    assert "| 贵州茅台 600519 | 100.00 | 20.4 | 12,345 | 101.23 | 98.76 | 90.12 | - | 50% | ×1 |" in md
+    assert "| 股票 | 现价 | 1手元 | 现金% | 权限 | 量价 | PE | 5日主力(万) | 10日线 | 20日线 | 20日低 | 除权除息 | 3日 | 共振 |" in md
+    assert "| 贵州茅台 600519 | 100.00 | - | - | - | - | 20.4 | 12,345 | 101.23 | 98.76 | 90.12 | - | 50% | ×1 |" in md
 
 
 def _fake_trend(**kw):

@@ -81,7 +81,7 @@ def scan_markdown(
     show_context: bool = False,
 ) -> str:
     """kan scan --format md · 全周期(导出不做终端宽度裁剪)。"""
-    headers = ["股票", "现价"]
+    headers = ["股票", "现价", "1手元", "现金%", "权限", "量价"]
     if show_context:
         headers += ["PE", "5日主力(万)", "10日线", "20日线", "20日低", "除权除息"]
     headers += [f"{p}日" for p in periods]
@@ -90,7 +90,14 @@ def scan_markdown(
     for r in results:
         name_short = r.name.replace(" ", "")
         tag = " 涨停" if r.limit_up else (" 跌停" if r.limit_down else "")
-        cells = [f"{name_short} {r.symbol}{tag}", f"{r.current_price:.2f}"]
+        cells = [
+            f"{name_short} {r.symbol}{tag}",
+            f"{r.current_price:.2f}",
+            _money_yuan(getattr(r, "lot_cost", None)),
+            _cash_pct(getattr(r, "cash_usage_pct", None)),
+            getattr(r, "permission_note", None) or "-",
+            getattr(r, "volume_price_state", None) or "-",
+        ]
         if show_context:
             cells += [
                 _scan_num(getattr(r, "pe_ttm", None), digits=1),
@@ -115,6 +122,14 @@ def _scan_num(value: float | None, *, digits: int = 2) -> str:
 
 def _money_wan(value: float | None) -> str:
     return "-" if value is None else f"{value:,.0f}"
+
+
+def _money_yuan(value: float | None) -> str:
+    return "-" if value is None else f"{value:,.0f}"
+
+
+def _cash_pct(value: float | None) -> str:
+    return "-" if value is None else f"{value:.1f}%"
 
 
 def _corporate_action_cell(action) -> str:
@@ -318,31 +333,39 @@ def info_markdown(
     elif result.limit_down:
         tags.append("跌停")
     tag_str = (" · " + " ".join(tags)) if tags else ""
-    headers = ["周期", "最低", "最高", "位置"]
+    headers = ["周期", "最低", "最高", "位置", "距低", "距高"]
     rows: list[list[str]] = []
     for pr in result.periods:
         if pr.insufficient:
-            rows.append([f"{pr.period}日", "-", "-", "-"])
+            rows.append([f"{pr.period}日", "-", "-", "-", "-", "-"])
         else:
             rows.append([
                 f"{pr.period}日",
                 f"{pr.n_low:.2f}",
                 f"{pr.n_high:.2f}",
                 _pct_cell(pr),
+                _distance_cell(pr.distance_to_low, pr.distance_to_low_pct),
+                _distance_cell(pr.distance_to_high, pr.distance_to_high_pct),
             ])
     sections = [
         f"# {title}{tag_str}",
         f"现价 {result.current_price:.2f} · {trend.direction} · "
         f"累计 {abs(trend.streak_pct):.2f}%",
+        (
+            f"1手 {_money_yuan(result.lot_cost)} 元 · "
+            f"占现金 {_cash_pct(result.cash_usage_pct)} · "
+            f"权限 {result.permission_note or result.market_board or '-'}"
+        ),
         md_table(headers, rows),
         f"低点共振 ×{result.low_resonance} · 高点共振 ×{result.high_resonance}",
     ]
     if board_context is not None:
         sections.append(_board_position_context_markdown(board_context))
     if volume is not None:
+        suffix = f" · {volume.state}" if volume.state else ""
         sections.append(
             f"成交量 · 今日是近 {volume.window} 日均量的 "
-            f"{volume.ratio} 倍 · {volume.label}"
+            f"{volume.ratio} 倍 · {volume.label}{suffix}"
         )
     if moneyflow is not None and (
         moneyflow.net_amount is not None
@@ -373,6 +396,12 @@ def info_markdown(
         )
     sections.append(_disclaimer_quote())
     return "\n\n".join(sections)
+
+
+def _distance_cell(value: float | None, pct: float | None) -> str:
+    if value is None or pct is None:
+        return "-"
+    return f"{value:+.2f} / {pct:+.1f}%"
 
 
 # ── trend ─────────────────────────────────────────────────────────────

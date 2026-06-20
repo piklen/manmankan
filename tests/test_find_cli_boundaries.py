@@ -39,6 +39,8 @@ def _runner_kwargs(**overrides):
         "theme": None,
         "only_watchlist": False,
         "only_holdings": False,
+        "exclude_star": False,
+        "exclude_bj": False,
         "group": None,
         "conditions": _Conditions(),
         "field_dimensions": set(),

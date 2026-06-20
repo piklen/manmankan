@@ -84,6 +84,20 @@ def _row_data_time(row: CrossSectionRow) -> str | None:
     return None
 
 
+def _cross_section_retail_fact_dict(row: CrossSectionRow) -> dict:
+    """全市场截面可推导的散户事实字段。"""
+    from kan.core.retail_facts import lot_cost, market_board, permission_note
+
+    scan = row.scan
+    return {
+        "lot_cost": lot_cost(_row_price(row)),
+        "cash_usage_pct": getattr(scan, "cash_usage_pct", None),
+        "market_board": market_board(row.code),
+        "permission_note": permission_note(row.code),
+        "volume_price_state": getattr(scan, "volume_price_state", None),
+    }
+
+
 def _cross_section_result_compact_dict(
     row: CrossSectionRow,
     triggered: tuple[TriggeredFilter, ...] = (),
@@ -105,6 +119,7 @@ def _cross_section_result_compact_dict(
             }
             for t in triggered
         ],
+        **_cross_section_retail_fact_dict(row),
     }
     if include_context and row.scan is not None:
         result.update({
@@ -148,6 +163,9 @@ def _cross_section_result_dict(
     return {
         "code": row.code,
         "name": row.name.replace(" ", ""),
+        "price": _row_price(row),
+        "data_time": _row_data_time(row),
+        **_cross_section_retail_fact_dict(row),
         "context": _scan_context_public_dict(row.scan),
         "valuation": _valuation_public_dict(row.valuation),
         "valuation_context": (

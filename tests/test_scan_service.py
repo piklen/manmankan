@@ -196,3 +196,42 @@ def test_run_scan_applies_watchlist_and_holding_markers(monkeypatch) -> None:
     assert result.all_results[0].in_holding is True
     assert result.all_results[1].in_watchlist is False
     assert result.all_results[1].in_holding is True
+
+
+def test_run_scan_excludes_permission_boards(monkeypatch) -> None:
+    raw_results = [
+        _scan_result("600519", "Alpha"),
+        _scan_result("688981", "Star"),
+        _scan_result("920184", "Bj"),
+    ]
+    stock_set = CodeListSet([
+        ("600519", "Alpha"),
+        ("688981", "Star"),
+        ("920184", "Bj"),
+    ])
+
+    def fake_run_data_pipeline(
+        stock_set_arg, *, compute, mode, periods, fetch_days, show_progress, exit_on_resolve_error,
+    ):
+        return DataCtx(
+            targets=stock_set_arg.pairs(),
+            meta=None,
+            results=raw_results,
+            freshness=_freshness(),
+            source_name=stock_set_arg.name,
+        )
+
+    monkeypatch.setattr("kan.core.pipeline.run_data_pipeline", fake_run_data_pipeline)
+    monkeypatch.setattr(
+        "kan.core.enrich.enrich_scan_rows",
+        lambda results, *, data_cutoff: list(results),
+    )
+
+    result = run_scan(ScanRequest(
+        stock_set=stock_set,
+        exclude_star=True,
+        exclude_bj=True,
+        show_progress=False,
+    ))
+
+    assert [r.symbol for r in result.results] == ["600519"]

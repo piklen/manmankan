@@ -75,6 +75,10 @@ def industry_runner(monkeypatch):
         "kan.core.scanner.scan_stock",
         lambda df, sym, name, periods=None: _fake_scan_result(sym, name),
     )
+    monkeypatch.setattr(
+        "kan.core.enrich.enrich_scan_rows",
+        lambda rows, **_kw: rows,
+    )
     monkeypatch.setattr("kan.data.fetcher.cache_age", lambda _s: "2026-05-21 12:00")
     monkeypatch.setattr(
         "kan.data.fetcher.data_cutoff_date", lambda _s: date(2026, 5, 21)
@@ -119,11 +123,10 @@ def test_scan_industry_data_unavailable(industry_runner, monkeypatch):
     assert "数据源暂时不可用" in result.output
 
 
-def test_only_watchlist_needs_industry(industry_runner):
+def test_only_watchlist_without_industry_is_allowed(industry_runner):
     from kan.app import app
     result = industry_runner.invoke(app, ["scan", "--only-watchlist"])
-    assert result.exit_code == 1
-    assert "--only-watchlist" in result.output
+    assert "需配合" not in result.output
 
 
 def test_low_industry_runs(industry_runner, monkeypatch):

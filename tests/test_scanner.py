@@ -16,6 +16,7 @@ def _make_df(
     closes: list[float],
     highs: list[float] | None = None,
     lows: list[float] | None = None,
+    volumes: list[float] | None = None,
 ) -> pd.DataFrame:
     """构造测试用 DataFrame。默认 OHLC 全等于 close（无价差），可单独指定 high/low。"""
     n = len(closes)
@@ -24,13 +25,15 @@ def _make_df(
         highs = closes
     if lows is None:
         lows = closes
+    if volumes is None:
+        volumes = [10000] * n
     return pd.DataFrame({
         "date": [base_date + timedelta(days=i) for i in range(n)],
         "open": closes,
         "high": highs,
         "low": lows,
         "close": closes,
-        "volume": [10000] * n,
+        "volume": volumes,
     })
 
 
@@ -116,6 +119,30 @@ def test_high_low_uses_correct_columns():
     assert p10.n_low == 10.0
     assert p10.n_high == 20.0
     assert p10.position_pct == 50.0
+
+
+def test_period_result_includes_distance_to_key_levels():
+    """输出距区间低/高点的绝对距离和百分比 · 纯价格事实。"""
+    closes = [15.0] * 9 + [16.0]
+    highs = [20.0] * 9 + [16.0]
+    lows = [10.0] * 9 + [16.0]
+    df = _make_df(closes, highs=highs, lows=lows)
+    result = scan_stock(df, "000001", "测试股")
+    p10 = next(p for p in result.periods if p.period == 10)
+    assert p10.distance_to_low == 6.0
+    assert p10.distance_to_low_pct == 60.0
+    assert p10.distance_to_high == -4.0
+    assert p10.distance_to_high_pct == -20.0
+
+
+def test_scan_stock_includes_volume_price_state():
+    """scan 行输出量价方向组合,避免只看到量比不知道收涨/收跌。"""
+    df = _make_df(
+        [10.0, 10.0, 10.0, 10.0, 10.0, 11.0],
+        volumes=[100, 100, 100, 100, 100, 180],
+    )
+    result = scan_stock(df, "000001", "测试股")
+    assert result.volume_price_state == "量增·收涨"
 
 
 # --- save_snapshot 按日归档 ---

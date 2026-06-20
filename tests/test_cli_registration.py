@@ -28,6 +28,7 @@ REPO_ROOT = Path(__file__).resolve().parents[1]
 # - cli_trend_cmds (1):     trend
 # - cli_meta_cmds (4):      update / uninstall / completion / setup
 # - cli_ai_cmds (3):        examples / schema / index
+# - cli_daily_cmds (2):     guide / daily
 # - cli_move_export_cmds (2): move / export   (历史背景多分组管理)
 # - cli_find_cmds (1):      find             (历史背景选股 DSL)
 # - cli_history_cmds (1):   history          (位置历史回溯)
@@ -55,6 +56,8 @@ _EXPECTED_COMMANDS = {
     "examples",
     "schema",
     "index",
+    "guide",
+    "daily",
     "move",
     "export",
     "find",
