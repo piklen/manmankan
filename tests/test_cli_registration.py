@@ -100,7 +100,7 @@ def test_release_version_matches_package_metadata_and_changelog_top_entry() -> N
     """发布版本必须在 runtime / pyproject / CHANGELOG 顶部三处一致。"""
     pyproject = tomllib.loads((REPO_ROOT / "pyproject.toml").read_text())
     changelog = (REPO_ROOT / "CHANGELOG.md").read_text()
-    match = re.search(r"^## \[(?P<version>\d+\.\d+\.\d+(?:\.\d+)?)\]", changelog, re.M)
+    match = re.search(r"^## \[(?P<version>\d+(?:\.\d+){2,})\]", changelog, re.M)
     assert match is not None, "CHANGELOG.md must start with a versioned release section"
 
     assert __version__ == pyproject["project"]["version"] == match.group("version")

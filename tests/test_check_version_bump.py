@@ -4,7 +4,7 @@
 - 跨 minor (v0.0.6.x → v0.0.7) → exit 1 + 含 "minor 跨越"
 - 跨 major (v0.0.x → v0.1.x) → exit 1 + 含 "major 跨越"
 - 跨 epoch (v0.x.x → v1.x.x) → exit 1 + 含 "epoch 跨越"
-- patch 累加 (v0.0.6.8) → exit 0
+- patch 累加 (v0.0.6.8 / v0.0.6.9.1) → exit 0
 - 无版本号 → exit 0
 - 3 段等价 baseline (v0.0.6) → exit 0
 - 多个版本号混合 → 仅 block 违规的
@@ -58,6 +58,13 @@ def test_epoch_jump_blocked(tmp_path: Path) -> None:
 def test_patch_increment_passes(tmp_path: Path) -> None:
     """v0.0.6.X+1 patch 累加 · 必须 pass。"""
     r = _run("feat: v0.0.6.8 + chain fix", tmp_path)
+    assert r.returncode == 0
+    assert r.stderr == ""
+
+
+def test_multi_segment_patch_tail_passes(tmp_path: Path) -> None:
+    """v0.0.6.X.Y 仍属于同一稳定段 patch tail · 必须 pass。"""
+    r = _run("release: v0.0.6.9.1", tmp_path)
     assert r.returncode == 0
     assert r.stderr == ""
 
