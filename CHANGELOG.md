@@ -3,10 +3,13 @@
 All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
-and this project uses PEP 440 four-part releases (`A.B.C.D`); routine patches
-increment `D` unless the maintainer explicitly approves a larger bump.
+and this project uses PEP 440 numeric release segments (`A.B.C[.D...]`);
+routine patches keep the first three segments stable unless the maintainer
+explicitly approves a larger bump.
 
 ## [Unreleased]
+
+## [0.0.6.9.1] - 2026-06-23
 
 ### Added
 
@@ -262,7 +265,8 @@ increment `D` unless the maintainer explicitly approves a larger bump.
 - **Shell 补全** · zsh / bash / fish / powershell
 - **合规与隐私** · 强制风险提示 + 关键词黑名单（无买卖建议 / 无目标价 / 无评级）· 数据全本地
 
-[Unreleased]: https://github.com/piklen/manmankan/compare/v0.0.6.9...HEAD
+[Unreleased]: https://github.com/piklen/manmankan/compare/v0.0.6.9.1...HEAD
+[0.0.6.9.1]: https://github.com/piklen/manmankan/compare/v0.0.6.9...v0.0.6.9.1
 [0.0.6.9]: https://github.com/piklen/manmankan/compare/v0.0.6.8...v0.0.6.9
 [0.0.6.8]: https://github.com/piklen/manmankan/compare/v0.0.6.6...v0.0.6.8
 [0.0.6.6]: https://github.com/piklen/manmankan/compare/v0.0.6.5...v0.0.6.6

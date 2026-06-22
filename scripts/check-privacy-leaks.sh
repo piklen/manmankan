@@ -235,7 +235,7 @@ CHANGELOG_VERSION=$(python3 - <<'PY'
 import re
 from pathlib import Path
 
-match = re.search(r"^## \[(\d+\.\d+\.\d+(?:\.\d+)?)\]", Path("CHANGELOG.md").read_text(), re.M)
+match = re.search(r"^## \[(\d+(?:\.\d+){2,})\]", Path("CHANGELOG.md").read_text(), re.M)
 print(match.group(1) if match else "")
 PY
 )
@@ -257,7 +257,7 @@ import re
 from pathlib import Path
 
 text = Path("CHANGELOG.md").read_text()
-versions = re.findall(r"^## \[(\d+\.\d+\.\d+(?:\.\d+)?)\]", text, re.M)
+versions = re.findall(r"^## \[(\d+(?:\.\d+){2,})\]", text, re.M)
 errors = []
 
 if versions:
@@ -317,7 +317,7 @@ if [ -n "$VERSION_LEAKS" ]; then
   exit 1
 fi
 
-USER_VERSION_PATTERN='v?0\.0\.[0-9]+(\.[0-9]+)?|softwareVersion|当前 v'
+USER_VERSION_PATTERN='v?0\.0\.[0-9]+(\.[0-9]+)*|softwareVersion|当前 v'
 USER_VERSION_SURFACES=(
   "README.md"
   "docs/README.md"

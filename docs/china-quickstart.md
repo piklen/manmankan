@@ -43,7 +43,7 @@ kan find --codes 600519,000858 --format json --dry-run
 
 ```text
 Installed 1 executable: kan
-kan 0.0.6.9
+kan <version>
 ```
 
 ```json

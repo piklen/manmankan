@@ -60,7 +60,7 @@ jobs:
           init_text = Path("kan/__init__.py").read_text()
           init_match = re.search(r'__version__\s*=\s*"([^"]+)"', init_text)
           changelog = Path("CHANGELOG.md").read_text()
-          changelog_match = re.search(r"^## \[(\d+\.\d+\.\d+(?:\.\d+)?)\]", changelog, re.M)
+          changelog_match = re.search(r"^## \[(\d+(?:\.\d+){2,})\]", changelog, re.M)
 
           actual = {
               "tag": version,
