@@ -133,8 +133,11 @@ jobs:
           assert Path(kan.__file__).resolve().is_relative_to(Path("/tmp/manmankan-release-smoke").resolve())
           payload = json.loads(Path(os.environ["FIND_JSON"]).read_text())
           assert payload["ok"] is True
-          assert payload["mode"] == "code_pool"
+          assert payload["command"] == "find"
+          assert payload["result_schema"] == "full"
           assert payload["stats"]["matched"] == 2
+          assert len(payload["results"]) == 2
+          assert payload["disclaimer"]
           PY
       - name: Compute install.sh / install.ps1 SHA256
         run: |
