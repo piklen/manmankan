@@ -467,7 +467,7 @@ class TestEnrichScanRows:
         monkeypatch.setattr("kan.data.fetcher.get_cached", lambda _sym: kline)
         monkeypatch.setattr(
             "kan.data.dividend.latest_event_between",
-            lambda symbol, start, end: {
+            lambda symbol, start, end, **_kw: {
                 "ex_date": datetime.date(2026, 5, 29),
                 "record_date": datetime.date(2026, 5, 28),
                 "cash_div_tax": 0.2,
@@ -573,18 +573,18 @@ class TestEnrichScanRows:
             CorporateActionMarker,
         ) is None
 
-        monkeypatch.setattr("kan.data.dividend.latest_event_between", lambda *_a: None)
+        monkeypatch.setattr("kan.data.dividend.latest_event_between", lambda *_a, **_kw: None)
         assert enrich_scan._latest_corporate_action_marker(scan, kline, CorporateActionMarker) is None
 
         monkeypatch.setattr(
             "kan.data.dividend.latest_event_between",
-            lambda *_a: {"ex_date": None},
+            lambda *_a, **_kw: {"ex_date": None},
         )
         assert enrich_scan._latest_corporate_action_marker(scan, kline, CorporateActionMarker) is None
 
         monkeypatch.setattr(
             "kan.data.dividend.latest_event_between",
-            lambda *_a: {
+            lambda *_a, **_kw: {
                 "ex_date": datetime.date(2026, 5, 29),
                 "record_date": pd.NaT,
                 "cash_div_tax": None,

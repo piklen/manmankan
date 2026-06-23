@@ -9,6 +9,13 @@ explicitly approves a larger bump.
 
 ## [Unreleased]
 
+## [0.0.6.9.2] - 2026-06-23
+
+### Fixed
+
+- `kan scan` 的 PE/PB、资金与除权事件等可选增强字段增加 8 秒硬超时；外部数据源慢或卡住时自动降级为本地 K 线位置扫描，避免主命令长时间无输出。
+- `kan scan` 除权除息标记只读本地 dividend 缓存（允许过期），不再在扫描主路径逐股刷新远端 dividend 数据；完整缓存刷新仍交给显式数据更新流程。
+
 ## [0.0.6.9.1] - 2026-06-23
 
 ### Added
@@ -265,7 +272,8 @@ explicitly approves a larger bump.
 - **Shell 补全** · zsh / bash / fish / powershell
 - **合规与隐私** · 强制风险提示 + 关键词黑名单（无买卖建议 / 无目标价 / 无评级）· 数据全本地
 
-[Unreleased]: https://github.com/piklen/manmankan/compare/v0.0.6.9.1...HEAD
+[Unreleased]: https://github.com/piklen/manmankan/compare/v0.0.6.9.2...HEAD
+[0.0.6.9.2]: https://github.com/piklen/manmankan/compare/v0.0.6.9.1...v0.0.6.9.2
 [0.0.6.9.1]: https://github.com/piklen/manmankan/compare/v0.0.6.9...v0.0.6.9.1
 [0.0.6.9]: https://github.com/piklen/manmankan/compare/v0.0.6.8...v0.0.6.9
 [0.0.6.8]: https://github.com/piklen/manmankan/compare/v0.0.6.6...v0.0.6.8

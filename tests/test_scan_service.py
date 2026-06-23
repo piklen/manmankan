@@ -1,6 +1,8 @@
 """Unit tests for the render-neutral scan service."""
 from __future__ import annotations
 
+import threading
+import time
 from datetime import date
 from typing import Any
 
@@ -196,6 +198,75 @@ def test_run_scan_applies_watchlist_and_holding_markers(monkeypatch) -> None:
     assert result.all_results[0].in_holding is True
     assert result.all_results[1].in_watchlist is False
     assert result.all_results[1].in_holding is True
+
+
+def test_run_scan_enrichment_timeout_falls_back_to_raw_results(monkeypatch) -> None:
+    """scan 主路径不能被可选外部增强字段长时间阻塞。"""
+    raw_results = [_scan_result("600519", "Alpha")]
+    stock_set = CodeListSet([("600519", "Alpha")])
+    started = threading.Event()
+    release = threading.Event()
+
+    def fake_run_data_pipeline(
+        stock_set_arg, *, compute, mode, periods, fetch_days, show_progress, exit_on_resolve_error,
+    ):
+        return DataCtx(
+            targets=stock_set_arg.pairs(),
+            meta=None,
+            results=raw_results,
+            freshness=_freshness(),
+            source_name=stock_set_arg.name,
+        )
+
+    def slow_enrich_scan_rows(results, *, data_cutoff):
+        started.set()
+        release.wait(timeout=2.0)
+        return []
+
+    monkeypatch.setattr("kan.core.pipeline.run_data_pipeline", fake_run_data_pipeline)
+    monkeypatch.setattr("kan.core.enrich.enrich_scan_rows", slow_enrich_scan_rows)
+
+    t0 = time.monotonic()
+    try:
+        result = run_scan(ScanRequest(
+            stock_set=stock_set,
+            show_progress=False,
+            enrich_timeout_seconds=0.01,
+        ))
+    finally:
+        release.set()
+
+    assert started.wait(timeout=0.5)
+    assert time.monotonic() - t0 < 0.5
+    assert result.all_results == raw_results
+    assert result.results == raw_results
+
+
+def test_run_scan_enrichment_error_falls_back_to_raw_results(monkeypatch) -> None:
+    raw_results = [_scan_result("600519", "Alpha")]
+    stock_set = CodeListSet([("600519", "Alpha")])
+
+    def fake_run_data_pipeline(
+        stock_set_arg, *, compute, mode, periods, fetch_days, show_progress, exit_on_resolve_error,
+    ):
+        return DataCtx(
+            targets=stock_set_arg.pairs(),
+            meta=None,
+            results=raw_results,
+            freshness=_freshness(),
+            source_name=stock_set_arg.name,
+        )
+
+    def broken_enrich_scan_rows(results, *, data_cutoff):
+        raise RuntimeError("metrics source stuck")
+
+    monkeypatch.setattr("kan.core.pipeline.run_data_pipeline", fake_run_data_pipeline)
+    monkeypatch.setattr("kan.core.enrich.enrich_scan_rows", broken_enrich_scan_rows)
+
+    result = run_scan(ScanRequest(stock_set=stock_set, show_progress=False))
+
+    assert result.all_results == raw_results
+    assert result.results == raw_results
 
 
 def test_run_scan_excludes_permission_boards(monkeypatch) -> None:
