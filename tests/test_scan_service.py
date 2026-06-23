@@ -200,7 +200,45 @@ def test_run_scan_applies_watchlist_and_holding_markers(monkeypatch) -> None:
     assert result.all_results[1].in_holding is True
 
 
-def test_run_scan_enrichment_timeout_falls_back_to_raw_results(monkeypatch) -> None:
+def test_run_scan_can_skip_external_context_but_keep_local_retail_facts(monkeypatch) -> None:
+    """窄终端 scan 可跳过 PE/资金外部增强,但不丢本地散户事实字段。"""
+    raw_results = [_scan_result("688981", "Star")]
+    stock_set = CodeListSet([("688981", "Star")])
+
+    def fake_run_data_pipeline(
+        stock_set_arg, *, compute, mode, periods, fetch_days, show_progress, exit_on_resolve_error,
+    ):
+        return DataCtx(
+            targets=stock_set_arg.pairs(),
+            meta=None,
+            results=raw_results,
+            freshness=_freshness(),
+            source_name=stock_set_arg.name,
+        )
+
+    def unexpected_enrich_scan_rows(results, *, data_cutoff):
+        raise AssertionError("external enrich should be skipped")
+
+    monkeypatch.setattr("kan.core.pipeline.run_data_pipeline", fake_run_data_pipeline)
+    monkeypatch.setattr("kan.core.enrich.enrich_scan_rows", unexpected_enrich_scan_rows)
+    monkeypatch.setattr(
+        "kan.storage.positions.load_positions",
+        lambda: type("Book", (), {"cash": 20000.0})(),
+    )
+
+    result = run_scan(ScanRequest(
+        stock_set=stock_set,
+        show_progress=False,
+        include_external_context=False,
+    ))
+
+    assert result.all_results[0].symbol == "688981"
+    assert result.all_results[0].lot_cost == 10000.0
+    assert result.all_results[0].cash_usage_pct == 50.0
+    assert result.all_results[0].permission_note == "需科创板权限"
+
+
+def test_run_scan_enrichment_timeout_falls_back_to_local_retail_facts(monkeypatch) -> None:
     """scan 主路径不能被可选外部增强字段长时间阻塞。"""
     raw_results = [_scan_result("600519", "Alpha")]
     stock_set = CodeListSet([("600519", "Alpha")])
@@ -238,11 +276,12 @@ def test_run_scan_enrichment_timeout_falls_back_to_raw_results(monkeypatch) -> N
 
     assert started.wait(timeout=0.5)
     assert time.monotonic() - t0 < 0.5
-    assert result.all_results == raw_results
-    assert result.results == raw_results
+    assert [r.symbol for r in result.all_results] == ["600519"]
+    assert result.all_results[0].lot_cost == 10000.0
+    assert [r.symbol for r in result.results] == ["600519"]
 
 
-def test_run_scan_enrichment_error_falls_back_to_raw_results(monkeypatch) -> None:
+def test_run_scan_enrichment_error_falls_back_to_local_retail_facts(monkeypatch) -> None:
     raw_results = [_scan_result("600519", "Alpha")]
     stock_set = CodeListSet([("600519", "Alpha")])
 
@@ -265,8 +304,48 @@ def test_run_scan_enrichment_error_falls_back_to_raw_results(monkeypatch) -> Non
 
     result = run_scan(ScanRequest(stock_set=stock_set, show_progress=False))
 
+    assert [r.symbol for r in result.all_results] == ["600519"]
+    assert result.all_results[0].lot_cost == 10000.0
+    assert [r.symbol for r in result.results] == ["600519"]
+
+
+def test_run_scan_retail_facts_error_keeps_raw_results(monkeypatch) -> None:
+    """本地散户字段降级也不能影响 scan 主结果。"""
+    raw_results = [_scan_result("600519", "Alpha")]
+    stock_set = CodeListSet([("600519", "Alpha")])
+    logs: list[tuple[str, str]] = []
+
+    def fake_run_data_pipeline(
+        stock_set_arg, *, compute, mode, periods, fetch_days, show_progress, exit_on_resolve_error,
+    ):
+        return DataCtx(
+            targets=stock_set_arg.pairs(),
+            meta=None,
+            results=raw_results,
+            freshness=_freshness(),
+            source_name=stock_set_arg.name,
+        )
+
+    def broken_apply_retail_facts(result, *, cash=None):
+        raise RuntimeError("retail facts broken")
+
+    def fake_debug_log(module, message, exc):
+        logs.append((module, message))
+        assert isinstance(exc, RuntimeError)
+
+    monkeypatch.setattr("kan.core.pipeline.run_data_pipeline", fake_run_data_pipeline)
+    monkeypatch.setattr("kan.core.retail_facts.apply_retail_facts", broken_apply_retail_facts)
+    monkeypatch.setattr("kan.infra.log.debug_log", fake_debug_log)
+
+    result = run_scan(ScanRequest(
+        stock_set=stock_set,
+        show_progress=False,
+        include_external_context=False,
+    ))
+
     assert result.all_results == raw_results
     assert result.results == raw_results
+    assert logs == [("kan.service.scan_service", "scan retail facts failed")]
 
 
 def test_run_scan_excludes_permission_boards(monkeypatch) -> None:

@@ -370,6 +370,187 @@ def test_scan_command_basic_runs(scan_runner):
     assert "测试" in result.output or "600519" in result.output
 
 
+def test_scan_terminal_narrow_skips_external_context(scan_runner, monkeypatch):
+    """窄终端默认 scan 不展示 PE/资金列,不应等待外部增强。"""
+    from datetime import date
+
+    from kan.app import app
+    from kan.core.models import PeriodResult, StockScanResult
+    from kan.core.pipeline import DataCtx, Freshness
+    from kan.service.scan_service import ScanServiceResult
+
+    captured = {}
+    row = StockScanResult(
+        symbol="600519",
+        name="测试",
+        current_price=100.0,
+        scan_date=date(2026, 6, 6),
+        periods=[
+            PeriodResult(
+                period=30,
+                n_low=90.0,
+                n_high=110.0,
+                position_pct=50.0,
+                at_low=False,
+                at_high=False,
+            )
+        ],
+        low_resonance=0,
+        high_resonance=0,
+        lot_cost=10000.0,
+        permission_note="测试权限",
+    )
+    freshness = Freshness(
+        data_cutoff=date(2026, 6, 6),
+        fetched_at="2026-06-06 15:30",
+        expected_cutoff=date(2026, 6, 6),
+        is_stale=False,
+        phase="post",
+    )
+
+    def fake_run_scan(request):
+        captured["include_external_context"] = request.include_external_context
+        return ScanServiceResult(
+            ctx=DataCtx(
+                targets=[("600519", "测试")],
+                meta=None,
+                results=[row],
+                freshness=freshness,
+                source_name="自选股",
+            ),
+            mode=request.mode,
+            all_results=[row],
+            results=[row],
+        )
+
+    monkeypatch.setattr("kan.service.scan_service.run_scan", fake_run_scan)
+
+    result = scan_runner.invoke(app, ["scan"], env={"COLUMNS": "100"})
+
+    assert result.exit_code == 0, result.output
+    assert captured["include_external_context"] is False
+    assert "1手元" not in result.output
+    assert "测试权限" not in result.output
+
+
+def test_scan_compact_skips_external_context(scan_runner, monkeypatch):
+    """显式 compact 也是窄输出,不应等待隐藏的外部增强字段。"""
+    from datetime import date
+
+    from kan.app import app
+    from kan.core.models import PeriodResult, StockScanResult
+    from kan.core.pipeline import DataCtx, Freshness
+    from kan.service.scan_service import ScanServiceResult
+
+    captured = {}
+    row = StockScanResult(
+        symbol="600519",
+        name="测试",
+        current_price=100.0,
+        scan_date=date(2026, 6, 6),
+        periods=[
+            PeriodResult(
+                period=30,
+                n_low=90.0,
+                n_high=110.0,
+                position_pct=50.0,
+                at_low=False,
+                at_high=False,
+            )
+        ],
+        low_resonance=0,
+        high_resonance=0,
+    )
+    freshness = Freshness(
+        data_cutoff=date(2026, 6, 6),
+        fetched_at="2026-06-06 15:30",
+        expected_cutoff=date(2026, 6, 6),
+        is_stale=False,
+        phase="post",
+    )
+
+    def fake_run_scan(request):
+        captured["include_external_context"] = request.include_external_context
+        return ScanServiceResult(
+            ctx=DataCtx(
+                targets=[("600519", "测试")],
+                meta=None,
+                results=[row],
+                freshness=freshness,
+                source_name="自选股",
+            ),
+            mode=request.mode,
+            all_results=[row],
+            results=[row],
+        )
+
+    monkeypatch.setattr("kan.service.scan_service.run_scan", fake_run_scan)
+
+    result = scan_runner.invoke(app, ["scan", "--compact"], env={"COLUMNS": "100"})
+
+    assert result.exit_code == 0, result.output
+    assert captured["include_external_context"] is False
+
+
+def test_scan_json_keeps_external_context(scan_runner, monkeypatch):
+    """结构化输出仍需要 PE/资金/除权除息等外部增强字段。"""
+    from datetime import date
+
+    from kan.app import app
+    from kan.core.models import PeriodResult, StockScanResult
+    from kan.core.pipeline import DataCtx, Freshness
+    from kan.service.scan_service import ScanServiceResult
+
+    captured = {}
+    row = StockScanResult(
+        symbol="600519",
+        name="测试",
+        current_price=100.0,
+        scan_date=date(2026, 6, 6),
+        periods=[
+            PeriodResult(
+                period=30,
+                n_low=90.0,
+                n_high=110.0,
+                position_pct=50.0,
+                at_low=False,
+                at_high=False,
+            )
+        ],
+        low_resonance=0,
+        high_resonance=0,
+    )
+    freshness = Freshness(
+        data_cutoff=date(2026, 6, 6),
+        fetched_at="2026-06-06 15:30",
+        expected_cutoff=date(2026, 6, 6),
+        is_stale=False,
+        phase="post",
+    )
+
+    def fake_run_scan(request):
+        captured["include_external_context"] = request.include_external_context
+        return ScanServiceResult(
+            ctx=DataCtx(
+                targets=[("600519", "测试")],
+                meta=None,
+                results=[row],
+                freshness=freshness,
+                source_name="自选股",
+            ),
+            mode=request.mode,
+            all_results=[row],
+            results=[row],
+        )
+
+    monkeypatch.setattr("kan.service.scan_service.run_scan", fake_run_scan)
+
+    result = scan_runner.invoke(app, ["scan", "--format", "json"], env={"COLUMNS": "100"})
+
+    assert result.exit_code == 0, result.output
+    assert captured["include_external_context"] is True
+
+
 def test_scan_default_uses_holdings_when_watchlist_empty(monkeypatch):
     """默认 scan = 自选 ∪ 持仓；自选空但持仓非空时不能被旧 guard 拦截。"""
     import json as _json

@@ -30,6 +30,7 @@ class ScanRequest:
     exclude_star: bool = False
     exclude_bj: bool = False
     show_progress: bool = True
+    include_external_context: bool = True
     enrich_timeout_seconds: float | None = SCAN_ENRICH_TIMEOUT_SECONDS
 
 
@@ -67,10 +68,14 @@ def run_scan(request: ScanRequest) -> ScanServiceResult:
         exit_on_resolve_error=False,
     )
     board_index_result = _scan_board_index(ctx.meta, periods=request.periods)
-    all_results = _enrich_scan_rows_best_effort(
-        ctx.results,
-        data_cutoff=ctx.freshness.data_cutoff,
-        timeout_seconds=request.enrich_timeout_seconds,
+    all_results = (
+        _enrich_scan_rows_best_effort(
+            ctx.results,
+            data_cutoff=ctx.freshness.data_cutoff,
+            timeout_seconds=request.enrich_timeout_seconds,
+        )
+        if request.include_external_context
+        else _apply_retail_facts_best_effort(ctx.results)
     )
     _apply_membership_markers(all_results, request.stock_set)
     results = _filter_scan_results(
@@ -138,7 +143,7 @@ def _enrich_scan_rows_best_effort(
             "scan enrich timeout",
             TimeoutError(f">{timeout_seconds:.1f}s"),
         )
-        return list(results)
+        return _apply_retail_facts_best_effort(results)
 
     if kind == "ok":
         return cast(list[StockScanResult], payload)
@@ -147,7 +152,30 @@ def _enrich_scan_rows_best_effort(
 
     err = payload if isinstance(payload, BaseException) else RuntimeError(str(payload))
     debug_log(__name__, "scan enrich failed", err)
-    return list(results)
+    return _apply_retail_facts_best_effort(results)
+
+
+def _apply_retail_facts_best_effort(
+    results: list[StockScanResult],
+) -> list[StockScanResult]:
+    """Attach local retail facts without touching external data sources."""
+    if not results:
+        return []
+    try:
+        from kan.storage.positions import load_positions
+
+        cash = load_positions().cash
+    except Exception:
+        cash = None
+    try:
+        from kan.core.retail_facts import apply_retail_facts
+
+        return [apply_retail_facts(r, cash=cash) for r in results]
+    except Exception as e:
+        from kan.infra.log import debug_log
+
+        debug_log(__name__, "scan retail facts failed", e)
+        return list(results)
 
 
 def _filter_scan_results(

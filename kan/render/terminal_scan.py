@@ -69,6 +69,7 @@ def scan_table(
     signal_only: bool = False,
     board_index_result: StockScanResult | None = None,
     show_context: bool = False,
+    show_retail_facts: bool = True,
 ) -> Table:
     """kan scan 10-周期全景表 · 支持板块指数 row + 热榜名次 + 自选 ⭐ 高亮。
 
@@ -93,9 +94,15 @@ def scan_table(
     is_hot = isinstance(meta, HotMeta)
     highlight = meta.highlight if meta else set()
     rank_map = meta.rank_map if is_hot else {}
-    show_lot = any(getattr(r, "lot_cost", None) is not None for r in results)
-    show_cash = any(getattr(r, "cash_usage_pct", None) is not None for r in results)
-    show_permission = any(getattr(r, "permission_note", None) for r in results)
+    show_lot = show_retail_facts and any(
+        getattr(r, "lot_cost", None) is not None for r in results
+    )
+    show_cash = show_retail_facts and any(
+        getattr(r, "cash_usage_pct", None) is not None for r in results
+    )
+    show_permission = show_retail_facts and any(
+        getattr(r, "permission_note", None) for r in results
+    )
     show_volume_price = any(getattr(r, "volume_price_state", None) for r in results)
 
     table = Table(title=title, show_lines=False, pad_edge=False, padding=(0, 1))

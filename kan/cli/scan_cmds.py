@@ -333,6 +333,21 @@ def scan(
             only_holdings=only_holdings,
         )
     )
+    if wide or periods is not None:
+        display_periods = period_list
+    elif compact:
+        display_periods = _compact_display_periods(period_list)
+    else:
+        display_periods = responsive_periods(console.width - 56, period_list)
+    show_context_columns = (
+        fmt is export.OutputFormat.terminal
+        and console.width >= 140
+        and not wide
+        and periods is None
+    )
+    include_external_context = (
+        fmt is not export.OutputFormat.terminal or show_context_columns
+    )
     try:
         service_result = run_scan(ScanRequest(
             stock_set=stock_set,
@@ -343,6 +358,7 @@ def scan(
             exclude_star=exclude_star,
             exclude_bj=exclude_bj,
             show_progress=fmt is export.OutputFormat.terminal,
+            include_external_context=include_external_context,
         ))
     except StockSetResolveError as e:
         raise_stock_set_resolve_exit(e)
@@ -412,16 +428,9 @@ def scan(
             save_snapshot(all_results)
         return
 
-    if wide or periods is not None:
-        display_periods = period_list
-    elif compact:
-        display_periods = _compact_display_periods(period_list)
-    else:
-        display_periods = responsive_periods(console.width - 56, period_list)
     is_compact = len(display_periods) < len(period_list)
 
     is_hot = isinstance(board_meta, HotMeta)
-    show_context_columns = console.width >= 140 and not wide and periods is None
     table = terminal.scan_table(
         ctx, results,
         display_periods=display_periods,
@@ -429,6 +438,7 @@ def scan(
         signal_only=signal,
         board_index_result=board_index_result,
         show_context=show_context_columns,
+        show_retail_facts=include_external_context,
     )
     # 头部 1 行 disclaimer 呼应(自选 100+ 只表格 · 防底部 disclaimer 滚屏顶掉)
     console.print("[dim]💡 慢慢看是观察工具 · 不预测涨跌 · 详见底部免责[/dim]")

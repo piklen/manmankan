@@ -9,6 +9,13 @@ explicitly approves a larger bump.
 
 ## [Unreleased]
 
+## [0.0.6.9.3] - 2026-06-23
+
+### Fixed
+
+- `kan scan` 在窄终端默认输出不再等待 PE/PB、资金流和除权事件等外部增强字段；这些字段未展示时直接走本地 K 线扫描，避免盘中资金流缓存过期后每次卡在外部刷新超时边界。
+- `kan scan` 外部增强超时或异常降级时仍保留一手金额、现金占比、交易权限等本地散户事实字段；窄终端渲染不会因此额外挤出“1手元/权限”等列，保持原有紧凑表格。
+
 ## [0.0.6.9.2] - 2026-06-23
 
 ### Fixed
@@ -272,7 +279,8 @@ explicitly approves a larger bump.
 - **Shell 补全** · zsh / bash / fish / powershell
 - **合规与隐私** · 强制风险提示 + 关键词黑名单（无买卖建议 / 无目标价 / 无评级）· 数据全本地
 
-[Unreleased]: https://github.com/piklen/manmankan/compare/v0.0.6.9.2...HEAD
+[Unreleased]: https://github.com/piklen/manmankan/compare/v0.0.6.9.3...HEAD
+[0.0.6.9.3]: https://github.com/piklen/manmankan/compare/v0.0.6.9.2...v0.0.6.9.3
 [0.0.6.9.2]: https://github.com/piklen/manmankan/compare/v0.0.6.9.1...v0.0.6.9.2
 [0.0.6.9.1]: https://github.com/piklen/manmankan/compare/v0.0.6.9...v0.0.6.9.1
 [0.0.6.9]: https://github.com/piklen/manmankan/compare/v0.0.6.8...v0.0.6.9
