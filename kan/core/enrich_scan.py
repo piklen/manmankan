@@ -1,4 +1,5 @@
 """scan 行补充估值、资金与除权除息事件。"""
+
 from __future__ import annotations
 
 from typing import TYPE_CHECKING
@@ -88,30 +89,14 @@ def enrich_scan_rows(
             "total_mv": val.total_mv if val is not None else None,
             "circ_mv": val.circ_mv if val is not None else None,
             "valuation_trade_date": val.trade_date if val is not None else None,
-            "moneyflow_net_amount": (
-                daily_mf.net_amount if daily_mf is not None else None
-            ),
-            "moneyflow_buy_elg_amount": (
-                daily_mf.buy_elg_amount if daily_mf is not None else None
-            ),
-            "moneyflow_buy_lg_amount": (
-                daily_mf.buy_lg_amount if daily_mf is not None else None
-            ),
-            "moneyflow_buy_md_amount": (
-                daily_mf.buy_md_amount if daily_mf is not None else None
-            ),
-            "moneyflow_buy_sm_amount": (
-                daily_mf.buy_sm_amount if daily_mf is not None else None
-            ),
-            "moneyflow_inflow_days": (
-                daily_mf.inflow_days if daily_mf is not None else None
-            ),
-            "moneyflow_outflow_days": (
-                daily_mf.outflow_days if daily_mf is not None else None
-            ),
-            "moneyflow_trade_date": (
-                daily_mf.trade_date if daily_mf is not None else None
-            ),
+            "moneyflow_net_amount": (daily_mf.net_amount if daily_mf is not None else None),
+            "moneyflow_buy_elg_amount": (daily_mf.buy_elg_amount if daily_mf is not None else None),
+            "moneyflow_buy_lg_amount": (daily_mf.buy_lg_amount if daily_mf is not None else None),
+            "moneyflow_buy_md_amount": (daily_mf.buy_md_amount if daily_mf is not None else None),
+            "moneyflow_buy_sm_amount": (daily_mf.buy_sm_amount if daily_mf is not None else None),
+            "moneyflow_inflow_days": (daily_mf.inflow_days if daily_mf is not None else None),
+            "moneyflow_outflow_days": (daily_mf.outflow_days if daily_mf is not None else None),
+            "moneyflow_trade_date": (daily_mf.trade_date if daily_mf is not None else None),
             "moneyflow_5d_net_amount": mf[0] if mf is not None else None,
             "moneyflow_5d_end_date": mf[1] if mf is not None else None,
             "corporate_action": action,
@@ -146,7 +131,9 @@ def _recent_trade_dates(end: date, count: int) -> list[date]:
 
 
 def _moneyflow_5d_by_symbol(
-    symbols: list[str], *, end: date,
+    symbols: list[str],
+    *,
+    end: date,
 ) -> dict[str, tuple[float, date]]:
     """近 5 个交易日主力净额合计 · 单位万元 · 无数据的 symbol 不入 dict。"""
     from kan.data.moneyflow import fetch_moneyflow
@@ -192,7 +179,12 @@ def _latest_corporate_action_marker(
     if not valid_dates:
         return None
     start = valid_dates[-180] if len(valid_dates) >= 180 else valid_dates[0]
-    event = latest_event_between(result.symbol, start, result.scan_date)
+    event = latest_event_between(
+        result.symbol,
+        start,
+        result.scan_date,
+        allow_stale=True,
+    )
     if not event:
         return None
     ex_date = event.get("ex_date")
@@ -214,7 +206,11 @@ def _latest_corporate_action_marker(
 
 
 def _ex_reference_price(
-    df: pd.DataFrame, ex_date: date, *, cash: float, stk_div: float,
+    df: pd.DataFrame,
+    ex_date: date,
+    *,
+    cash: float,
+    stk_div: float,
 ) -> float | None:
     """用前一交易日收盘粗算除权除息参考价 · 前复权缓存下为同口径参考。"""
     import pandas as pd

@@ -3,6 +3,7 @@
 本模块只提供客观事件数据:除权除息日、股权登记日、每股现金分红、每股送转。
 K 线复权由数据源层保证;这里的事件标记用于提醒 scan 消费方该区间存在价格口径事件。
 """
+
 from __future__ import annotations
 
 import re
@@ -64,9 +65,14 @@ def _normalize_dividend(df: pd.DataFrame, symbol: str) -> pd.DataFrame:
         out[col], _bad = to_numeric_checked(out[col])
     out["_source"] = _SOURCE
     out = out.dropna(subset=["ex_date"])
-    return out.sort_values("ex_date").drop_duplicates(
-        subset=["symbol", "ex_date"], keep="last",
-    ).reset_index(drop=True)
+    return (
+        out.sort_values("ex_date")
+        .drop_duplicates(
+            subset=["symbol", "ex_date"],
+            keep="last",
+        )
+        .reset_index(drop=True)
+    )
 
 
 def _load_cache(path: Path) -> pd.DataFrame | None:
@@ -136,16 +142,32 @@ def _fetch_tushare_dividend(symbol: str) -> pd.DataFrame | None:
         return None
 
 
-def fetch_dividends(symbol: str, *, force: bool = False) -> pd.DataFrame:
-    """取单股分红送股事件 · 无 token/无数据返回空表,不抛业务异常。"""
+def fetch_dividends(
+    symbol: str,
+    *,
+    force: bool = False,
+    allow_stale: bool = False,
+) -> pd.DataFrame:
+    """取单股分红送股事件 · 无 token/无数据返回空表,不抛业务异常。
+
+    allow_stale=True 用于 scan 这类延迟敏感路径：除权除息标记是可选提示，
+    可以读过期缓存，但不能为了刷新逐股事件拖住主路径。
+    """
     if not _SYMBOL_PATTERN.match(symbol):
         return _empty_df()
     ensure_dirs()
     cache = _cache_path(symbol)
-    if not force and cache.exists() and (time.time() - cache.stat().st_mtime) < _DIVIDEND_TTL:
-        cached = _load_cache(cache)
-        if cached is not None:
-            return cached
+    if not force:
+        if cache.exists():
+            fresh = (time.time() - cache.stat().st_mtime) < _DIVIDEND_TTL
+            if fresh or allow_stale:
+                cached = _load_cache(cache)
+                if cached is not None:
+                    return cached
+                if allow_stale:
+                    return _empty_df()
+        elif allow_stale:
+            return _empty_df()
 
     raw = _fetch_tushare_dividend(symbol)
     if raw is None or raw.empty:
@@ -155,9 +177,17 @@ def fetch_dividends(symbol: str, *, force: bool = False) -> pd.DataFrame:
     return df
 
 
-def latest_event_between(symbol: str, start: date, end: date) -> dict | None:
+def latest_event_between(
+    symbol: str,
+    start: date,
+    end: date,
+    *,
+    allow_stale: bool = False,
+) -> dict | None:
     """返回 [start,end] 内最新除权除息事件 dict · 无则 None。"""
-    df = fetch_dividends(symbol)
+    df = (
+        fetch_dividends(symbol, allow_stale=allow_stale) if allow_stale else fetch_dividends(symbol)
+    )
     if df.empty:
         return None
     sub = df[(df["ex_date"] >= start) & (df["ex_date"] <= end)]

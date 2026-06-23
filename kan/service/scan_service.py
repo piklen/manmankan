@@ -7,13 +7,15 @@ same result object instead of copying CLI command logic.
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Literal
+from datetime import date
+from typing import Literal, cast
 
 from kan.core.models import BoardMeta, HotMeta, StockScanResult, ThemeMeta
 from kan.core.pipeline import DataCtx
 from kan.core.stock_set import StockSet
 
 ScanMode = Literal["low", "high"]
+SCAN_ENRICH_TIMEOUT_SECONDS = 8.0
 
 
 @dataclass(frozen=True)
@@ -28,6 +30,7 @@ class ScanRequest:
     exclude_star: bool = False
     exclude_bj: bool = False
     show_progress: bool = True
+    enrich_timeout_seconds: float | None = SCAN_ENRICH_TIMEOUT_SECONDS
 
 
 @dataclass(frozen=True)
@@ -51,7 +54,6 @@ class ScanServiceResult:
 
 def run_scan(request: ScanRequest) -> ScanServiceResult:
     """Run the scan data pipeline and return a render-neutral result."""
-    from kan.core.enrich import enrich_scan_rows
     from kan.core.pipeline import run_data_pipeline
     from kan.core.scanner import scan_batch
 
@@ -65,7 +67,11 @@ def run_scan(request: ScanRequest) -> ScanServiceResult:
         exit_on_resolve_error=False,
     )
     board_index_result = _scan_board_index(ctx.meta, periods=request.periods)
-    all_results = enrich_scan_rows(ctx.results, data_cutoff=ctx.freshness.data_cutoff)
+    all_results = _enrich_scan_rows_best_effort(
+        ctx.results,
+        data_cutoff=ctx.freshness.data_cutoff,
+        timeout_seconds=request.enrich_timeout_seconds,
+    )
     _apply_membership_markers(all_results, request.stock_set)
     results = _filter_scan_results(
         all_results,
@@ -82,6 +88,66 @@ def run_scan(request: ScanRequest) -> ScanServiceResult:
         results=results,
         board_index_result=board_index_result,
     )
+
+
+def _enrich_scan_rows_best_effort(
+    results: list[StockScanResult],
+    *,
+    data_cutoff: date | None,
+    timeout_seconds: float | None,
+) -> list[StockScanResult]:
+    """Best-effort optional scan enrichment.
+
+    位置扫描是主路径；PE/PB、资金、除权事件来自外部源，只能增益，不能拖死
+    `kan scan`。这里用 daemon thread + queue，而不是 ThreadPoolExecutor：
+    executor shutdown 会等待不可取消的网络调用，反而失去超时意义。
+    """
+    if not results:
+        return []
+    if timeout_seconds is None or timeout_seconds <= 0:
+        from kan.core.enrich import enrich_scan_rows
+
+        return enrich_scan_rows(results, data_cutoff=data_cutoff)
+
+    import queue
+    import threading
+
+    out: queue.Queue[tuple[str, list[StockScanResult] | Exception]] = queue.Queue(maxsize=1)
+
+    def _worker() -> None:
+        try:
+            from kan.core.enrich import enrich_scan_rows
+
+            out.put(("ok", enrich_scan_rows(results, data_cutoff=data_cutoff)))
+        except Exception as e:
+            out.put(("err", e))
+
+    threading.Thread(
+        target=_worker,
+        name="kan-scan-enrich",
+        daemon=True,
+    ).start()
+
+    try:
+        kind, payload = out.get(timeout=timeout_seconds)
+    except queue.Empty:
+        from kan.infra.log import debug_log
+
+        debug_log(
+            __name__,
+            "scan enrich timeout",
+            TimeoutError(f">{timeout_seconds:.1f}s"),
+        )
+        return list(results)
+
+    if kind == "ok":
+        return cast(list[StockScanResult], payload)
+
+    from kan.infra.log import debug_log
+
+    err = payload if isinstance(payload, BaseException) else RuntimeError(str(payload))
+    debug_log(__name__, "scan enrich failed", err)
+    return list(results)
 
 
 def _filter_scan_results(
