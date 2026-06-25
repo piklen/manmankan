@@ -30,6 +30,7 @@ def to_numeric_checked(series: pd.Series) -> tuple[pd.Series, int]:
     """
     import pandas as pd
 
-    converted = pd.to_numeric(series, errors="coerce")
-    bad_count = int((converted.isna() & series.notna()).sum())
+    blank = series.astype("string").str.strip().eq("").fillna(False)
+    converted = pd.to_numeric(series.mask(blank), errors="coerce")
+    bad_count = int((converted.isna() & series.notna() & ~blank).sum())
     return converted, bad_count

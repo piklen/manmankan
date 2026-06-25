@@ -263,6 +263,19 @@ class TestNormalizeKline:
             fetcher._normalize_kline(raw, source="sina")
         assert caplog.records == []
 
+    def test_blank_volume_amount_do_not_warn(self, caplog):
+        """baostock 偶发 volume/amount 空串是缺口 · 不应刷成无法解析 warning。"""
+        raw = pd.DataFrame({
+            "date": ["2026-05-08"],
+            "open": ["100"], "high": ["101"], "low": ["99"], "close": ["100.5"],
+            "volume": [""], "amount": ["   "],
+        })
+        with caplog.at_level(logging.WARNING, logger="kan.data.fetcher"):
+            df = fetcher._normalize_kline(raw, source="baostock", symbol="002131")
+        assert caplog.records == []
+        assert pd.isna(df["volume"].iloc[0])
+        assert pd.isna(df["amount"].iloc[0])
+
     def test_multiple_bad_columns_single_warning(self, caplog):
         raw = pd.DataFrame({
             "date": ["2026-05-08"],

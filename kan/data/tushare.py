@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import os
 import re
+import time
 from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
@@ -51,6 +52,19 @@ class TushareApiError:
     code: int
     msg: str
     api_name: str
+    retryable: bool = False
+    retry_after: int | None = None
+
+
+_DATA_HUB_RETRYABLE_CODES = {40203, 50002, 50003, 50004}
+"""data-hub/TuShare 兼容协议里的可重试业务错误。
+
+这些错误说明当前请求被限流、排队、超时或回源背压；它们不等价于
+TuShare 源全局不可用，不能写入 manmankan 本地 5 分钟熔断。
+"""
+
+_DATA_HUB_RETRYABLE_HEADER = "X-Data-Hub-Error-Retryable"
+_DATA_HUB_RETRY_AFTER_HEADER = "X-Data-Hub-Retry-After"
 
 
 def _make_session() -> requests.Session:
@@ -226,15 +240,57 @@ def _post_tushare_api(
         raw_msg = str(body.get("msg") or "(server msg 为空)")
         # redact 防 server msg 偶尔含 token 字符串("您的 token xxx 失效" 模式)
         sanitized_msg = redact_text(raw_msg)
+        headers = getattr(resp, "headers", {}) or {}
+        retryable = (
+            str(headers.get(_DATA_HUB_RETRYABLE_HEADER, "")).lower() in {"1", "true", "yes"}
+            or int(biz_code) in _DATA_HUB_RETRYABLE_CODES
+        )
+        retry_after = _parse_retry_after(headers.get(_DATA_HUB_RETRY_AFTER_HEADER))
         debug_log(
             __name__,
             f"tushare api code={biz_code} msg={sanitized_msg}",
             RuntimeError("api refused"),
         )
         return None, TushareApiError(
-            code=biz_code, msg=sanitized_msg, api_name=api_name,
+            code=biz_code,
+            msg=sanitized_msg,
+            api_name=api_name,
+            retryable=retryable,
+            retry_after=retry_after,
         )
     return body.get("data"), None
+
+
+def _parse_retry_after(raw: object) -> int | None:
+    """解析 data-hub Retry-After header · 非法值忽略。"""
+    try:
+        value = int(str(raw).strip())
+    except (TypeError, ValueError):
+        return None
+    return value if value > 0 else None
+
+
+def _should_trip_tushare_circuit(err: TushareApiError | None) -> bool:
+    """哪些错误应让本地 tushare 源进入 down 窗口。
+
+    data-hub 的 40203/50002/50003/50004 是请求级背压 / 限流 / 排队，
+    上游和 endpoint 仍可能健康；让它们触发 5 分钟整源熔断会把后续
+    股票全部误降级到 baostock。
+    """
+    if err is None:
+        return False
+    return not err.retryable
+
+
+def _retryable_sleep_seconds(err: TushareApiError, attempt: int) -> float | None:
+    """短退避 · 只处理能在秒级恢复的 data-hub 请求级错误。"""
+    if not err.retryable:
+        return None
+    if err.retry_after is not None:
+        return float(min(max(err.retry_after, 1), 2))
+    if err.code in {50002, 50003, 50004}:
+        return 0.5 + attempt * 0.5
+    return None
 
 
 def _to_kline_df(data: dict | None) -> pd.DataFrame | None:
@@ -311,24 +367,30 @@ def _fetch_tushare(symbol: str, start: str) -> pd.DataFrame | None:
         return None
 
     try:
-        data, _err = _post_tushare_api(
-            endpoint=endpoint,
-            token=token,
-            api_name="stk_factor_pro",
-            params={"ts_code": ts_code, "start_date": start},
-            fields=_QFQ_KLINE_FIELDS,
-        )
-        # 个股 daily 走多源 fallback chain (TuShare → baostock → akshare → 腾讯)
-        # · error 已被 _post_tushare_api 写进 debug_log · 不上抛 caller
-        if data is None:
-            cb.record("tushare", ok=False)
-            return None
-        df = _to_qfq_kline_df(data)
-        if df is None or df.empty:
-            cb.record("tushare", ok=False)
-            return None
-        cb.record("tushare", ok=True)
-        return df
+        for attempt in range(3):
+            data, err = _post_tushare_api(
+                endpoint=endpoint,
+                token=token,
+                api_name="stk_factor_pro",
+                params={"ts_code": ts_code, "start_date": start},
+                fields=_QFQ_KLINE_FIELDS,
+            )
+            # 个股 daily 走多源 fallback chain (TuShare → baostock → akshare → 腾讯)
+            # · error 已被 _post_tushare_api 写进 debug_log · 不上抛 caller
+            if data is None:
+                if _should_trip_tushare_circuit(err):
+                    cb.record("tushare", ok=False)
+                sleep_s = _retryable_sleep_seconds(err, attempt) if err else None
+                if sleep_s is not None and attempt < 2:
+                    time.sleep(sleep_s)
+                    continue
+                return None
+            df = _to_qfq_kline_df(data)
+            if df is None or df.empty:
+                return None
+            cb.record("tushare", ok=True)
+            return df
+        return None
     except Exception as e:
         debug_log(__name__, "fetch tushare 失败", e)
         cb.record("tushare", ok=False)
