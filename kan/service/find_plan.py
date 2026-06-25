@@ -8,6 +8,7 @@ from kan.core.find_registry import (
     DIMENSIONS_UNSUPPORTED_IN_ALL,
     fields_need_kline,
 )
+from kan.render.base import FIND_DISCLAIMER_TEXT
 from kan.service.find_service_metadata import availability_dimensions, find_filters, find_pools
 from kan.storage.export_base import FIND_SCHEMA_VERSION, query_time_now
 
@@ -111,6 +112,7 @@ def build_find_query_plan(
             "high_cost_dimensions": high_cost,
             "unsupported_dimensions": unsupported,
         },
+        "disclaimer": FIND_DISCLAIMER_TEXT,
         "next_command": "kan find ... --format json",
     }
 
