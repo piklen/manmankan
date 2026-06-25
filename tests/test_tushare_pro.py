@@ -169,6 +169,33 @@ class TestPostTushareApi:
         assert err.code == 40203
         assert "频率超限" in err.msg
         assert err.api_name == "ths_daily"
+        assert err.retryable
+
+    def test_data_hub_retry_headers_are_preserved(self, monkeypatch):
+        """data-hub 协议层可重试错误是 HTTP 200 + header/body code。"""
+        class _FakeSession:
+            def post(self, url, json, timeout):
+                mock = MagicMock()
+                mock.status_code = 200
+                mock.headers = {
+                    "X-Data-Hub-Error-Retryable": "1",
+                    "X-Data-Hub-Retry-After": "2",
+                }
+                mock.json.return_value = {
+                    "code": 50003,
+                    "msg": "回源繁忙",
+                    "data": None,
+                }
+                return mock
+
+        monkeypatch.setattr(tushare, "_get_session", lambda: _FakeSession())
+        data, err = tushare._post_tushare_api(
+            "http://data.example.com", "tk", "stk_factor_pro", {}, "x")
+        assert data is None
+        assert err is not None
+        assert err.code == 50003
+        assert err.retryable
+        assert err.retry_after == 2
 
     def test_http_5xx_returns_error(self, monkeypatch):
         """HTTP 非 2xx 返 (None, error with code=-2)。"""
@@ -354,3 +381,62 @@ class TestFetchTushare:
         tushare._fetch_tushare("600519", "20260101")
         cb = circuit_breaker.get_breaker()
         assert cb.is_down("tushare")
+
+    def test_retryable_data_hub_error_does_not_trip_breaker(self, temp_env, monkeypatch):
+        from kan.infra import circuit_breaker
+        config.save({**config.DEFAULT_CONFIG, "tushare_token": "tk"})
+
+        err = tushare.TushareApiError(
+            code=50003,
+            msg="回源繁忙",
+            api_name="stk_factor_pro",
+            retryable=True,
+            retry_after=None,
+        )
+        monkeypatch.setattr(tushare, "_post_tushare_api", lambda *a, **kw: (None, err))
+        monkeypatch.setattr(tushare.time, "sleep", lambda *_a, **_kw: None)
+
+        assert tushare._fetch_tushare("600519", "20260101") is None
+        assert not circuit_breaker.get_breaker().is_down("tushare")
+
+    def test_retryable_data_hub_error_short_retries_then_succeeds(
+        self, temp_env, monkeypatch,
+    ):
+        from kan.infra import circuit_breaker
+        config.save({**config.DEFAULT_CONFIG, "tushare_token": "tk"})
+
+        err = tushare.TushareApiError(
+            code=50003,
+            msg="回源繁忙",
+            api_name="stk_factor_pro",
+            retryable=True,
+            retry_after=1,
+        )
+        payload = {
+            "fields": [
+                "trade_date", "open_qfq", "high_qfq", "low_qfq", "close_qfq",
+                "vol", "amount",
+            ],
+            "items": [[
+                "20260102", 1490.0, 1520.0, 1480.0, 1510.0,
+                100000.0, 150000000.0,
+            ]],
+        }
+        calls = {"n": 0}
+        sleeps: list[float] = []
+
+        def fake_post(*_a, **_kw):
+            calls["n"] += 1
+            if calls["n"] == 1:
+                return None, err
+            return payload, None
+
+        monkeypatch.setattr(tushare, "_post_tushare_api", fake_post)
+        monkeypatch.setattr(tushare.time, "sleep", lambda s: sleeps.append(s))
+
+        df = tushare._fetch_tushare("600519", "20260101")
+        assert df is not None
+        assert len(df) == 1
+        assert calls["n"] == 2
+        assert sleeps == [1.0]
+        assert not circuit_breaker.get_breaker().is_down("tushare")
