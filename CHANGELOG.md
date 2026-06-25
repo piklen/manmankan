@@ -9,6 +9,14 @@ explicitly approves a larger bump.
 
 ## [Unreleased]
 
+## [0.0.6.9.4] - 2026-06-26
+
+### Fixed
+
+- TuShare 兼容网关的可重试业务错误（限流、排队、超时、异步排队）不再触发本地 5 分钟 TuShare 熔断；命令会短重试，避免临时波动后整批 K 线降级到 baostock。
+- K 线数值清洗将空白字符串按缺失值处理，不再把 baostock 返回的空 `volume` / `amount` 误报为“无法解析的数值”。
+- `kan find --dry-run --format json` 查询计划补回顶层 `disclaimer`，与普通 `find` JSON 和公开文档保持一致。
+
 ## [0.0.6.9.3] - 2026-06-23
 
 ### Fixed
@@ -279,7 +287,8 @@ explicitly approves a larger bump.
 - **Shell 补全** · zsh / bash / fish / powershell
 - **合规与隐私** · 强制风险提示 + 关键词黑名单（无买卖建议 / 无目标价 / 无评级）· 数据全本地
 
-[Unreleased]: https://github.com/piklen/manmankan/compare/v0.0.6.9.3...HEAD
+[Unreleased]: https://github.com/piklen/manmankan/compare/v0.0.6.9.4...HEAD
+[0.0.6.9.4]: https://github.com/piklen/manmankan/compare/v0.0.6.9.3...v0.0.6.9.4
 [0.0.6.9.3]: https://github.com/piklen/manmankan/compare/v0.0.6.9.2...v0.0.6.9.3
 [0.0.6.9.2]: https://github.com/piklen/manmankan/compare/v0.0.6.9.1...v0.0.6.9.2
 [0.0.6.9.1]: https://github.com/piklen/manmankan/compare/v0.0.6.9...v0.0.6.9.1

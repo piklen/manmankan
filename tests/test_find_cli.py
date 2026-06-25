@@ -391,6 +391,7 @@ class TestFindJsonOutput:
         assert payload["dry_run"] is True
         assert payload["rule"]["pools"] == ["codes:2"]
         assert payload["data_plan"]["pool_size_estimate"] == 2
+        assert "候选 ≠ 买入信号" in payload["disclaimer"]
 
     def test_codes_no_filter_json_dry_run_accepts_price_field(self, tmp_path):
         ec, out, _err = _run_isolated(
