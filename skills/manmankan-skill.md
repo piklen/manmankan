@@ -29,6 +29,7 @@
 | `kan scan --only-holdings` | 只扫描真实持仓池 | 单独查看持仓位置 |
 | `kan scan --group <组名>` | 扫描指定分组 | 分组巡检 |
 | `kan scan --codes <代码列表>` | 扫描外部代码 | 临时查看一批候选 |
+| `kan scan --all` | 扫描 A 股全市场池 | 首次较慢；适合全市场位置坐标巡检 |
 | `kan scan --periods 5,20,60,180 --wide` | 自定义 2-360 周期并全量展示 | 避免窄屏只看到部分周期 |
 | `kan scan --compact` | 终端只展示短/中/长关键周期 | 控制终端 token 和横向宽度 |
 | `kan scan --industry <行业>` | 扫描申万行业成分股 | 行业维度扫描 |
@@ -70,9 +71,10 @@
 |------|------|------------|
 | `kan history <代码> --period N [--format json]` | 位置历史回溯 | N 支持 2-360；只展示快照中已记录周期 |
 | `kan trend [--up/down N]` | 连续涨跌跟踪 | 发现异动 |
+| `kan trend --all [--up/down N]` | 全市场连续涨跌跟踪 | 大池首轮看分布，必要时再缩小候选池 |
 | `kan board rank --kind industry --by moneyflow --format json` | 板块资金排名 | 板块级客观裸值聚合 |
 | `kan index [sh sz cyb hs300] --format json` | 常用指数日线位置参照 | 补大盘基准 |
-| `kan low N` / `kan high N` | N 日新低/新高 | 极端位置发现 |
+| `kan low N` / `kan high N` | N 日新低/新高 | 极端位置发现；支持 `--all` 全市场池 |
 
 ### 5. 真实持仓
 
@@ -94,6 +96,7 @@
 |------|------|------------|
 | `kan fetch` | 更新当前自选数据 | 每日首次使用前跑一次；默认摘要输出 |
 | `kan fetch 600519 000858` | 更新指定股票 | 新加入自选股后 |
+| `kan fetch --all` | 预拉全市场 K 线缓存 | 耗时较久；给 `scan/trend/low/high --all` 预热 |
 | `kan fetch --verbose` | 逐只输出拉取状态 | 排障时使用 |
 
 ---
@@ -166,17 +169,20 @@ kan mcp http --host localhost --port 8765 --path /mcp
 ### 工作流 1：每日全市场扫描
 
 ```bash
-# 1. 更新数据
-kan fetch
+# 1. 可选：预热全市场 K 线缓存（首次较慢）
+kan fetch --all
 
-# 2. 全市场低位筛选（排除 ST）
+# 2. 全市场位置坐标巡检
+kan scan --all --periods 20,60,180 --format json
+
+# 3. 全市场低位筛选（排除 ST）
 kan find --all --pos 180:lt:10 --exclude-st --format json --compact
 
-# 3. 叠加资金流和估值过滤，控制字段量
+# 4. 叠加资金流和估值过滤，控制字段量
 kan find --all --pos 180:lt:10 --exclude-st --moneyflow gt:1000 \
   --fields @core,@context,@moneyflow --format json
 
-# 4. 对候选池做深度研判
+# 5. 对候选池做深度研判
 kan info <候选代码> --format json
 ```
 

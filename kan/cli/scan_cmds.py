@@ -184,6 +184,10 @@ def scan(
         str | None,
         typer.Option("--theme", help="扫指定题材全成分股 · 自选 ⭐ 高亮 · 题材 ≠ 行业,一股归多个"),
     ] = None,
+    all_stocks: Annotated[
+        bool,
+        typer.Option("--all", help="扫描 A 股全市场池（约 5500 只；首次会补 K 线缓存，耗时较久）"),
+    ] = False,
     only_watchlist: Annotated[
         bool,
         typer.Option("--only-watchlist", help="只看自选；配合 --industry / --hot / --theme 时取交集"),
@@ -252,20 +256,51 @@ def scan(
         _resolve_scan_code_pairs(raw_codes, command="kan scan", fmt=fmt)
         if raw_codes else None
     )
-    if sum(1 for x in (industry, hot, theme, code_pairs) if x is not None) > 1:
+    pool_count = sum(1 for x in (industry, hot, theme, code_pairs) if x is not None) + int(all_stocks)
+    if pool_count > 1:
         _exit_scan_error(
             fmt,
             code="mutually_exclusive_pool",
-            message="--industry / --hot / --theme / --codes 四者互斥 · 同时只能用一个",
-            hint="例: kan scan --industry 半导体；或 kan scan --codes 600519,000858",
+            message="--industry / --hot / --theme / --codes / --all 互斥 · 同时只能用一个",
+            hint="例: kan scan --all；或 kan scan --industry 半导体；或 kan scan --codes 600519,000858",
             exit_code=2,
         )
-    source_mode = industry is not None or hot is not None or theme is not None or code_pairs is not None
+    source_mode = (
+        industry is not None
+        or hot is not None
+        or theme is not None
+        or code_pairs is not None
+        or all_stocks
+    )
+    if all_stocks and only_watchlist:
+        _exit_scan_error(
+            fmt,
+            code="invalid_all_pool",
+            message="--all 与 --only-watchlist 不能同时使用",
+            hint="例: kan scan --all",
+            exit_code=2,
+        )
+    if all_stocks and group is not None:
+        _exit_scan_error(
+            fmt,
+            code="invalid_all_pool",
+            message="--all 已指定全市场池，不再叠加 --group",
+            hint="例: kan scan --all；或 kan scan --group <组名>",
+            exit_code=2,
+        )
+    if all_stocks and diff:
+        _exit_scan_error(
+            fmt,
+            code="invalid_diff_pool",
+            message="--diff 仅支持默认池 / 自选池扫描 · 全市场池不写入扫描快照",
+            hint="例: kan scan --diff；或 kan scan --all",
+            exit_code=2,
+        )
     if only_holdings and source_mode:
         _exit_scan_error(
             fmt,
             code="invalid_holdings_pool",
-            message="--only-holdings 不能和 --industry / --hot / --theme / --codes 同时使用",
+            message="--only-holdings 不能和 --industry / --hot / --theme / --codes / --all 同时使用",
             hint="例: kan scan --only-holdings",
             exit_code=2,
         )
@@ -286,7 +321,7 @@ def scan(
             exit_code=2,
         )
     watchlist_pairs = (
-        [] if code_pairs is not None or only_holdings or (
+        [] if code_pairs is not None or all_stocks or only_holdings or (
             not source_mode and group is None
         ) else (
             _load_watchlist_pairs(group) if source_mode else _get_watchlist_pairs(group)
@@ -331,6 +366,7 @@ def scan(
             only_watchlist=only_watchlist,
             watchlist_group=group,
             only_holdings=only_holdings,
+            all_stocks=all_stocks,
         )
     )
     if wide or periods is not None:
@@ -375,6 +411,14 @@ def scan(
     board_index_result = service_result.board_index_result
 
     if not ctx.targets:
+        if all_stocks:
+            _exit_scan_error(
+                fmt,
+                code="empty_all_stocks",
+                message="全市场股票池为空",
+                hint="例: kan config set tushare-token <YOUR_TOKEN>；或稍后重试",
+                exit_code=1,
+            )
         if only_holdings:
             _exit_scan_error(
                 fmt,

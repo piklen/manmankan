@@ -27,6 +27,10 @@ def fetch(
         str | None,
         typer.Option("--theme", help="预拉某题材全部成分股 K 线"),
     ] = None,
+    all_stocks: Annotated[
+        bool,
+        typer.Option("--all", help="预拉 A 股全市场 K 线缓存（约 5500 只，耗时较久）"),
+    ] = False,
     only_watchlist: Annotated[
         bool,
         typer.Option("--only-watchlist", help="仅拉自选 ∩ 行业/热榜/题材"),
@@ -47,12 +51,22 @@ def fetch(
     with _with_heavy_imports_spinner(status_console, "⏳ 加载数据模块..."):
         from kan.data.fetcher import fetch_kline, is_fresh
 
-    if sum(1 for x in (industry, hot, theme) if x is not None) > 1:
-        typer.echo("--industry / --hot / --theme 三者互斥 · 同时只能用一个", err=True)
+    pool_count = sum(1 for x in (industry, hot, theme) if x is not None) + int(all_stocks)
+    if pool_count > 1:
+        typer.echo("--industry / --hot / --theme / --all 互斥 · 同时只能用一个", err=True)
         raise typer.Exit(2)
-    if industry is not None or hot is not None or theme is not None:
+    if all_stocks and symbols:
+        typer.echo("--all 与股票代码不能同时使用", err=True)
+        raise typer.Exit(2)
+    if all_stocks and only_watchlist:
+        typer.echo("--all 与 --only-watchlist 不能同时使用", err=True)
+        raise typer.Exit(2)
+    if all_stocks and group is not None:
+        typer.echo("--all 已指定全市场池，不再叠加 --group", err=True)
+        raise typer.Exit(2)
+    if industry is not None or hot is not None or theme is not None or all_stocks:
         if symbols:
-            typer.echo("--industry / --hot / --theme 与股票代码不能同时使用", err=True)
+            typer.echo("--industry / --hot / --theme / --all 与股票代码不能同时使用", err=True)
             raise typer.Exit(2)
         # OOP 路径:from_flags → resolve_stock_set_or_exit
         from kan.core.pipeline import resolve_stock_set_or_exit
@@ -70,9 +84,16 @@ def fetch(
             watchlist_pairs=wl_pairs,
             only_watchlist=only_watchlist,
             watchlist_group=group,
+            all_stocks=all_stocks,
         )
         symbols = stock_set.codes()
         resolve_stock_set_or_exit(stock_set)  # 触发 .pairs() lazy fetch + 转 typer.Exit · 上一行 .codes() 已触发了 fetch · 这里走 cache 不再 IO
+        if not symbols and all_stocks:
+            typer.echo(
+                "全市场股票池为空 · 例: kan config set tushare-token <YOUR_TOKEN>；或稍后重试",
+                err=True,
+            )
+            raise typer.Exit(1)
 
     if not symbols:
         from kan.storage.watchlist import GroupNotFoundError, load_watchlist

@@ -145,6 +145,11 @@ def test_root_help_lists_batch_sources_and_theme_watchlist_commands() -> None:
     assert "kan scan --periods 5,20,60,180" in output
     assert "kan scan --wide" in output
     assert "kan scan --compact" in output
+    assert "kan scan --all" in output
+    assert "kan trend --all" in output
+    assert "kan low 60 --all" in output
+    assert "kan high 30 --all" in output
+    assert "kan fetch --all" in output
 
 
 def test_root_help_lists_find_registry_flags_and_presets() -> None:

@@ -106,6 +106,7 @@ kan find --help
 
 ```bash
 kan scan                                      # 扫默认池（自选 ∪ 持仓）
+kan scan --all                                # 扫 A 股全市场池（首次较慢）
 kan scan --only-watchlist                     # 只扫自选
 kan scan --exclude-star --exclude-bj          # 排除科创板 / 北交所
 kan scan --codes 600519,000858               # 扫外部候选代码池
@@ -116,6 +117,7 @@ kan find --codes 600519,688981 --format json --fields @core,@retail
 kan find --codes 600519,688981 --format json --fields @core,@valuation,@moneyflow,@technical
 kan scan --codes 600519,000858 --format json # 拉公开日 K 的真实坐标 JSON
 kan find --all --pe lt:20 --format json --compact
+kan trend --all --down 3                      # 全市场连续下跌看板
 kan hold cash 50000                           # 录入现金,用于展示一手占现金比例
 kan hold add 600519 --cost 1680 --shares 100 # 手动录入真实持仓事实
 kan hold                                      # 持仓盈亏 + 仓位 + 位置总览
@@ -149,6 +151,7 @@ kan find --codes - --format json --compact
 kan find --codes 600519,000858 --format json --agent-summary
 kan find --codes 600519,000858 --format json --snapshot
 kan find --all --format json --compact --no-compact-context
+kan scan --all --format json
 ```
 
 机器可读 schema 先看 `kan schema --format json`；完整 `kan find` 字段分组、`data_availability`、缺数据语义、错误 envelope 见 [`docs/find.md`](docs/find.md)。脚本化入口以 [`kan/api.py`](kan/api.py) 文件头 docstring 为公开 contract。

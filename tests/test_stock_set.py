@@ -484,6 +484,8 @@ def test_from_flags_only_holdings():
     {"all_stocks": True, "industry": "白酒"},
     {"all_stocks": True, "hot": "rank"},
     {"all_stocks": True, "theme": "AI"},
+    {"all_stocks": True, "only_watchlist": True},
+    {"all_stocks": True, "watchlist_group": "观察"},
     {"all_stocks": True, "only_holdings": True},
 ])
 def test_from_flags_all_stocks_mutual_exclusion(kwargs):

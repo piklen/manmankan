@@ -44,6 +44,10 @@ def trend(
         str | None,
         typer.Option("--theme", help="扫指定题材全成分股 · 自选 ⭐ 高亮"),
     ] = None,
+    all_stocks: Annotated[
+        bool,
+        typer.Option("--all", help="扫描 A 股全市场连续涨跌（约 5500 只；首次会补 K 线缓存）"),
+    ] = False,
     only_watchlist: Annotated[
         bool,
         typer.Option("--only-watchlist", help="仅显示自选 ∩ 行业/热榜/题材(需配合 --industry / --hot / --theme)"),
@@ -62,6 +66,9 @@ def trend(
     # 引导到 `kan info <ticker>` · 接口未来计划改为收 ticker
     if extra_args:
         first = extra_args[0]
+        if first.lower() == "all" or first == "全市场":
+            _print_err("💡 全市场趋势用 `kan trend --all` · 可叠加 --down / --up / --latest")
+            raise typer.Exit(2)
         # 判断:6 位数字 → 像股票代码 · isalpha 含非 ASCII(中文) / ASCII(英文)→ 像股票名
         # 用 .isdigit / .isalpha / .isascii 避开 unicode 字符范围正则
         looks_like_code = first.isdigit() and len(first) == 6
@@ -85,12 +92,27 @@ def trend(
         from kan.render.base import DISCLAIMER, max_trend_dates
 
     console = Console()
-    if sum(1 for x in (industry, hot, theme) if x is not None) > 1:
-        _print_err("❌ --industry / --hot / --theme 三者互斥 · 同时只能用一个")
+    pool_count = sum(1 for x in (industry, hot, theme) if x is not None) + int(all_stocks)
+    if pool_count > 1:
+        _print_err("❌ --industry / --hot / --theme / --all 互斥 · 同时只能用一个")
         raise typer.Exit(2)
-    source_mode = industry is not None or hot is not None or theme is not None
+    source_mode = industry is not None or hot is not None or theme is not None or all_stocks
+    if all_stocks and only_watchlist:
+        _print_err(
+            "❌ --all 与 --only-watchlist 不能同时使用\n"
+            "   例: kan trend --all"
+        )
+        raise typer.Exit(2)
+    if all_stocks and group is not None:
+        _print_err(
+            "❌ --all 已指定全市场池，不再叠加 --group\n"
+            "   例: kan trend --all；或 kan trend --group <组名>"
+        )
+        raise typer.Exit(2)
     watchlist_pairs = (
-        _load_watchlist_pairs(group) if source_mode else _get_watchlist_pairs(group)
+        [] if all_stocks else (
+            _load_watchlist_pairs(group) if source_mode else _get_watchlist_pairs(group)
+        )
     )
     if only_watchlist and not source_mode:
         _print_err(
@@ -116,6 +138,7 @@ def trend(
         watchlist_pairs=watchlist_pairs,
         only_watchlist=only_watchlist,
         watchlist_group=group,
+        all_stocks=all_stocks,
     )
     ctx = run_data_pipeline(stock_set, compute=trend_batch, candle=candle)
     results = ctx.results
@@ -125,6 +148,12 @@ def trend(
     is_stale = ctx.freshness.is_stale  # JSON/MD payload 仍引用
     freshness = ctx.freshness  # 给 render_freshness_warning 用
 
+    if not ctx.targets and all_stocks:
+        _print_err(
+            "❌ 全市场股票池为空\n"
+            "   例: kan config set tushare-token <YOUR_TOKEN>；或稍后重试"
+        )
+        raise typer.Exit(1)
     if not results:
         _print_err("无缓存数据 · 请先 `kan fetch` 拉取数据")
         raise typer.Exit(1)

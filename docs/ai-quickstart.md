@@ -167,6 +167,8 @@ kan find --industry 半导体 --format json --fields @core,@context
 kan find --codes 600519,688981 --format json --fields @core,@retail
 kan find --codes 600519,688981 --format json --agent-summary
 kan find --all --pe lt:20 --format json --compact --no-compact-context
+kan scan --all --periods 20,60,180 --format json
+kan trend --all --down 3 --format json
 kan find --codes 600519,000858 --roe gt:10 --fields @core,@fundamentals --format json
 ```
 
@@ -178,6 +180,8 @@ kan fields list --format json
 ```
 
 `--all`、估值、资金、技术、筹码、股东等维度可能依赖 TuShare token 或上游接口权限。用 `data_availability` 区分未请求、不可用和缺失。
+
+`--all` 可作为股票池 selector 用在 `find`、`scan`、`trend`、`low`、`high`、`fetch`。`find --all` 走截面数据；`scan/trend/low/high/fetch --all` 走全市场 K 线池，首次可能需要更久补缓存。
 
 `@fundamentals` 是 ROE、净利润同比、营收同比等逐股报告期字段；全市场模式不支持这类逐股高成本维度，先用 `--codes`、`--industry` 或 `--theme` 缩小候选池。
 

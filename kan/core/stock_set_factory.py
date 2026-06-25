@@ -29,7 +29,7 @@ def from_flags(
 ) -> StockSet:
     """从 CLI flags 构造对应 StockSet (一类 factory)。
 
-    - all_stocks=True → AllStocksSet (全市场截面池 · 与 industry/hot/theme 互斥)
+    - all_stocks=True → AllStocksSet (全市场池 · 与其他池 selector 互斥)
     - only_holdings=True → HoldingsSet
     - 三者全 None + only_watchlist=True → WatchlistSet · 只看自选
     - 三者全 None + 无 group → WatchlistHoldingsSet · 默认自选 ∪ 持仓
@@ -38,9 +38,15 @@ def from_flags(
     - 任意两个或三个同时非 None → ValueError (互斥)
     """
     if all_stocks:
-        if only_holdings or any(x is not None for x in (industry, hot, theme)):
+        if (
+            only_watchlist
+            or only_holdings
+            or watchlist_group is not None
+            or any(x is not None for x in (industry, hot, theme))
+        ):
             raise ValueError(
-                "all_stocks 与 industry / hot / theme / only_holdings 互斥 · 同时只能指定一个池"
+                "all_stocks 与 industry / hot / theme / only_watchlist / "
+                "only_holdings / group 互斥 · 同时只能指定一个池"
             )
         return AllStocksSet()
     if only_holdings:
