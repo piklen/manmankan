@@ -233,7 +233,7 @@ kan find --industry 半导体 --pos 20:lt:30 --sort pos_20:asc --limit 30 --form
 | `--theme` | 题材成分股;题材分类来自上游口径 |
 | `--hot rank\|surge` | 东方财富热榜 |
 | `--codes` | 外部传入代码池,不写入自选 |
-| `--all` | 全市场截面池,仅属于 `kan find`;逐股高成本维度不支持 |
+| `--all` | 在 `kan find` 中为全市场截面池；同名 selector 也可用于 `scan` / `trend` / `low` / `high` / `fetch` 的全市场 K 线池；逐股高成本维度不支持 |
 
 ## 错误语义
 

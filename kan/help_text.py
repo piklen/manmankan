@@ -44,6 +44,7 @@ def root_help_text() -> str:
 [bold cyan]位置扫描[/bold cyan]
   新手从 kan scan 和 kan find 开始
   kan scan                  默认池全景扫描（自选 ∪ 持仓）
+  kan scan --all            全市场位置扫描（首次较慢）
   kan scan --only-watchlist  只扫描自选
   kan scan --only-holdings  只扫描真实持仓池
   kan scan --exclude-star --exclude-bj  排除科创板 / 北交所
@@ -57,7 +58,9 @@ def root_help_text() -> str:
 [bold cyan]低点/高点筛选[/bold cyan]
   kan low 60                谁在 60 日低点？（find --pos 快捷入口）
   kan low 30 60 120         多周期一次看
+  kan low 60 --all          全市场 60 日低点
   kan high 30               谁在 30 日高点？（find --pos 快捷入口）
+  kan high 30 --all         全市场 30 日高点
 
 [bold cyan]单只详情 / 多股对比 / 历史回溯[/bold cyan]
   kan info 600519                    单只股票全周期位置 + 涨跌 + 共振
@@ -67,6 +70,7 @@ def root_help_text() -> str:
 
 [bold cyan]连续涨跌[/bold cyan]
   kan trend                 连续涨跌看板（不筛选）
+  kan trend --all           全市场连续涨跌看板
   kan trend --down          只看连跌 ≥ 3 天（默认值）
   kan trend --down 5        只看连跌 ≥ 5 天
   kan trend --up            只看连涨 ≥ 3 天（默认值）
@@ -121,7 +125,7 @@ def root_help_text() -> str:
   kan board rank --kind industry --by moneyflow  行业资金净额榜
   kan board rank --kind theme --by pos -p 30      题材位置分位榜
 
-  [dim]scan / low / high / trend / fetch 全部支持 --industry / --hot / --theme 自由切换[/dim]
+  [dim]scan / low / high / trend / fetch 全部支持 --industry / --hot / --theme / --all 自由切换[/dim]
   [dim]find 支持 --industry / --hot / --theme / --all / --codes / --only-watchlist / --only-holdings 候选池 · 池参数互斥[/dim]
 
 [bold cyan]导出格式[/bold cyan]
@@ -139,6 +143,7 @@ def root_help_text() -> str:
   kan fetch --industry X    预拉某行业全部成分股
   kan fetch --hot rank      预拉东财人气榜股票
   kan fetch --theme AI      预拉某题材全部成分股
+  kan fetch --all           预拉全市场 K 线缓存（耗时较久）
 
 [bold cyan]配置（tushare-pro 凭证）[/bold cyan]
   kan config get                              查看当前配置（全部）

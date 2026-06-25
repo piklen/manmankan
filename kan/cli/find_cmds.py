@@ -320,6 +320,30 @@ def find(
             exit_code=2,
         )
     source_mode = industry is not None or hot is not None or theme is not None or codes is not None
+    if all_stocks and source_mode:
+        _exit_find_error(
+            fmt,
+            code="mutually_exclusive_pool",
+            message="--all 与 --industry / --hot / --theme / --codes 互斥",
+            hint="例: kan find --all --pe lt:20 --format json",
+            exit_code=2,
+        )
+    if all_stocks and only_watchlist:
+        _exit_find_error(
+            fmt,
+            code="invalid_all_pool",
+            message="--all 与 --only-watchlist 不能同时使用",
+            hint="例: kan find --all --pe lt:20 --format json",
+            exit_code=2,
+        )
+    if all_stocks and group is not None:
+        _exit_find_error(
+            fmt,
+            code="invalid_all_pool",
+            message="--all 已指定全市场池，不再叠加 --group",
+            hint="例: kan find --all --pe lt:20 --format json；或 kan find --group <组名> --format json",
+            exit_code=2,
+        )
     if codes is not None and only_watchlist:
         _exit_find_error(
             fmt,

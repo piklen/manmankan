@@ -22,6 +22,7 @@ def _filter_extreme_cmd(
     industry: str | None = None, only_watchlist: bool = False,
     hot: HotList | None = None,
     theme: str | None = None,
+    all_stocks: bool = False,
     group: str | None = None,
 ) -> None:
     """low/high 共享实现 (--group 切换自选分组)"""
@@ -42,12 +43,27 @@ def _filter_extreme_cmd(
 
     label = "低点" if mode == "low" else "高点"
 
-    if sum(1 for x in (industry, hot, theme) if x is not None) > 1:
-        _print_err("❌ --industry / --hot / --theme 三者互斥 · 同时只能用一个")
+    pool_count = sum(1 for x in (industry, hot, theme) if x is not None) + int(all_stocks)
+    if pool_count > 1:
+        _print_err("❌ --industry / --hot / --theme / --all 互斥 · 同时只能用一个")
         raise typer.Exit(2)
-    source_mode = industry is not None or hot is not None or theme is not None
+    source_mode = industry is not None or hot is not None or theme is not None or all_stocks
+    if all_stocks and only_watchlist:
+        _print_err(
+            "❌ --all 与 --only-watchlist 不能同时使用\n"
+            "   例: kan low 30 --all"
+        )
+        raise typer.Exit(2)
+    if all_stocks and group is not None:
+        _print_err(
+            "❌ --all 已指定全市场池，不再叠加 --group\n"
+            "   例: kan low 30 --all；或 kan low 30 --group <组名>"
+        )
+        raise typer.Exit(2)
     watchlist_pairs = (
-        _load_watchlist_pairs(group) if source_mode else _get_watchlist_pairs(group)
+        [] if all_stocks else (
+            _load_watchlist_pairs(group) if source_mode else _get_watchlist_pairs(group)
+        )
     )
     if only_watchlist and not source_mode:
         _print_err(
@@ -64,8 +80,15 @@ def _filter_extreme_cmd(
         watchlist_pairs=watchlist_pairs,
         only_watchlist=only_watchlist,
         watchlist_group=group,
+        all_stocks=all_stocks,
     )
     targets, board_meta = resolve_stock_set_or_exit(stock_set)
+    if not targets and all_stocks:
+        _print_err(
+            "❌ 全市场股票池为空\n"
+            "   例: kan config set tushare-token <YOUR_TOKEN>；或稍后重试"
+        )
+        raise typer.Exit(1)
     highlight = board_meta.highlight if board_meta else set()
     is_hot = isinstance(board_meta, HotMeta)
     rank_map = board_meta.rank_map if is_hot else {}
@@ -126,6 +149,8 @@ def _filter_extreme_cmd(
             where = board_meta.list_name
         elif isinstance(board_meta, ThemeMeta):
             where = f"{board_meta.theme.name} 题材成分股"
+        elif all_stocks:
+            where = "A股全市场"
         else:
             where = "自选股"
         if board_index_result is not None:
@@ -208,6 +233,10 @@ def low(
         str | None,
         typer.Option("--theme", help="扫指定题材全成分股 · 自选 ⭐ 高亮"),
     ] = None,
+    all_stocks: Annotated[
+        bool,
+        typer.Option("--all", help="扫描 A 股全市场池（约 5500 只；首次会补 K 线缓存）"),
+    ] = False,
     only_watchlist: Annotated[
         bool,
         typer.Option("--only-watchlist", help="仅显示自选 ∩ 行业/热榜/题材(需配合 --industry / --hot / --theme)"),
@@ -221,7 +250,7 @@ def low(
     _filter_extreme_cmd(
         periods or _DEFAULT_PERIODS, mode="low", fmt=fmt,
         industry=industry, only_watchlist=only_watchlist, hot=hot, theme=theme,
-        group=group,
+        all_stocks=all_stocks, group=group,
     )
 
 
@@ -247,6 +276,10 @@ def high(
         str | None,
         typer.Option("--theme", help="扫指定题材全成分股 · 自选 ⭐ 高亮"),
     ] = None,
+    all_stocks: Annotated[
+        bool,
+        typer.Option("--all", help="扫描 A 股全市场池（约 5500 只；首次会补 K 线缓存）"),
+    ] = False,
     only_watchlist: Annotated[
         bool,
         typer.Option("--only-watchlist", help="仅显示自选 ∩ 行业/热榜/题材(需配合 --industry / --hot / --theme)"),
@@ -260,5 +293,5 @@ def high(
     _filter_extreme_cmd(
         periods or _DEFAULT_PERIODS, mode="high", fmt=fmt,
         industry=industry, only_watchlist=only_watchlist, hot=hot, theme=theme,
-        group=group,
+        all_stocks=all_stocks, group=group,
     )

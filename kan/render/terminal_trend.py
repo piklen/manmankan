@@ -46,7 +46,11 @@ def trend_title(
             f"慢慢看 · {meta.theme.name} 题材连续涨跌"
             f" · {mode_label}{filter_label}"
         )
-    title = f"慢慢看 · 连续涨跌看板 · {mode_label}{filter_label}"
+    source_name = getattr(ctx, "source_name", "")
+    if source_name == "A股全市场":
+        title = f"慢慢看 · {source_name}连续涨跌 · {mode_label}{filter_label}"
+    else:
+        title = f"慢慢看 · 连续涨跌看板 · {mode_label}{filter_label}"
     if data_cutoff:
         title += f" · 数据截止 {format_date_compact(data_cutoff)} 收盘"
     if fetched_at:
