@@ -9,6 +9,13 @@ explicitly approves a larger bump.
 
 ## [Unreleased]
 
+## [0.0.6.9.5] - 2026-06-26
+
+### Added
+
+- `kan scan --all` / `kan trend --all` / `kan low --all` / `kan high --all` / `kan fetch --all` 支持全市场股票池；`find --all` 补齐与分组、自选池限制参数的互斥校验，避免把全市场扫描误跑成自选池或混合池。
+- `kan trend all` 等误用参数会提示改用显式 `--all`；`scan --all --diff` 保持拒绝，避免全市场快照污染自选池日内 diff。
+
 ## [0.0.6.9.4] - 2026-06-26
 
 ### Fixed
@@ -287,7 +294,8 @@ explicitly approves a larger bump.
 - **Shell 补全** · zsh / bash / fish / powershell
 - **合规与隐私** · 强制风险提示 + 关键词黑名单（无买卖建议 / 无目标价 / 无评级）· 数据全本地
 
-[Unreleased]: https://github.com/piklen/manmankan/compare/v0.0.6.9.4...HEAD
+[Unreleased]: https://github.com/piklen/manmankan/compare/v0.0.6.9.5...HEAD
+[0.0.6.9.5]: https://github.com/piklen/manmankan/compare/v0.0.6.9.4...v0.0.6.9.5
 [0.0.6.9.4]: https://github.com/piklen/manmankan/compare/v0.0.6.9.3...v0.0.6.9.4
 [0.0.6.9.3]: https://github.com/piklen/manmankan/compare/v0.0.6.9.2...v0.0.6.9.3
 [0.0.6.9.2]: https://github.com/piklen/manmankan/compare/v0.0.6.9.1...v0.0.6.9.2
