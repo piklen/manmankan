@@ -57,13 +57,19 @@ def auto_fetch_stale(
 
     n = len(stale)
 
+    initial_workers: int | None = None
     if n >= 30:
         est_low = max(1, n // 60)
         est_high = max(2, n // 20)
-        from kan.data.fetcher import resolve_max_workers
-        workers = resolve_max_workers()
+        from kan.data.fetcher import resolve_batch_worker_bounds
+        initial_workers, max_workers = resolve_batch_worker_bounds()
+        worker_label = (
+            f"动态并发 {initial_workers}"
+            if initial_workers == max_workers
+            else f"动态并发 {initial_workers}-{max_workers}"
+        )
         console.print(
-            f"[yellow]需更新 {n} 只股票数据 · 并发 {workers} · "
+            f"[yellow]需更新 {n} 只股票数据 · {worker_label} · "
             f"预计 {est_low}-{est_high} 分钟[/yellow]"
         )
     elif n > 5:
@@ -83,6 +89,7 @@ def auto_fetch_stale(
         task_id = progress.add_task("⏳ 拉取数据...", total=n)
 
         fails: list[str] = []
+        current_workers = initial_workers
 
         def _on_done(symbol: str, ok: bool, _err_msg: str | None) -> None:
             full_name = name_map.get(symbol, symbol).replace(" ", "")
@@ -94,9 +101,15 @@ def auto_fetch_stale(
                 f"⏳ 补数据 {n} 只 · ✅ {name}" if ok
                 else f"⏳ 补数据 {n} 只 · ❌ {name}"
             )
+            if current_workers is not None:
+                desc += f" · 并发 {current_workers}"
             if current_fail > 0:
                 desc += f" · 失败 {current_fail}"
             progress.update(task_id, advance=1, description=desc)
+
+        def _on_progress_state(state) -> None:
+            nonlocal current_workers
+            current_workers = state.concurrency
 
         try:
             fetch_kwargs = {"days": days} if days is not None else {}
@@ -105,6 +118,7 @@ def auto_fetch_stale(
                 **fetch_kwargs,
                 force=True,
                 on_progress=_on_done,
+                on_progress_state=_on_progress_state,
             )
         except KeyboardInterrupt:
             progress.stop()

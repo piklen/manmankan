@@ -9,6 +9,12 @@ explicitly approves a larger bump.
 
 ## [Unreleased]
 
+## [0.0.6.9.6] - 2026-06-26
+
+### Changed
+
+- 全市场 K 线补缓存从固定并发改为自适应并发:默认从现有启发式并发起跑,健康窗口内最多探到 20；遇到限流、超时、背压或失败会快速降并发。`KAN_WORKERS` 和调用方显式 `max_workers` 仍作为硬上限。
+
 ## [0.0.6.9.5] - 2026-06-26
 
 ### Added
@@ -294,7 +300,8 @@ explicitly approves a larger bump.
 - **Shell 补全** · zsh / bash / fish / powershell
 - **合规与隐私** · 强制风险提示 + 关键词黑名单（无买卖建议 / 无目标价 / 无评级）· 数据全本地
 
-[Unreleased]: https://github.com/piklen/manmankan/compare/v0.0.6.9.5...HEAD
+[Unreleased]: https://github.com/piklen/manmankan/compare/v0.0.6.9.6...HEAD
+[0.0.6.9.6]: https://github.com/piklen/manmankan/compare/v0.0.6.9.5...v0.0.6.9.6
 [0.0.6.9.5]: https://github.com/piklen/manmankan/compare/v0.0.6.9.4...v0.0.6.9.5
 [0.0.6.9.4]: https://github.com/piklen/manmankan/compare/v0.0.6.9.3...v0.0.6.9.4
 [0.0.6.9.3]: https://github.com/piklen/manmankan/compare/v0.0.6.9.2...v0.0.6.9.3

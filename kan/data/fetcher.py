@@ -14,7 +14,10 @@
 from __future__ import annotations
 
 import logging
+import os
 import re
+from collections import deque
+from dataclasses import dataclass
 from datetime import date, datetime, timedelta
 from pathlib import Path
 from typing import TYPE_CHECKING
@@ -40,6 +43,96 @@ KLINE_COLUMNS = KLINE_REQUIRED + KLINE_OPTIONAL
 # 6 位纯数字股票代码 · 防止 path traversal
 _SYMBOL_PATTERN = re.compile(r"^\d{6}$")
 DEFAULT_KLINE_DAYS = 360
+DEFAULT_ADAPTIVE_MAX_WORKERS = 20
+_ADAPTIVE_WINDOW_SIZE = 20
+_BACKPRESSURE_KEYWORDS = (
+    "40203",
+    "429",
+    "rate limit",
+    "retry-after",
+    "too many requests",
+    "timeout",
+    "timed out",
+    "backpressure",
+    "限流",
+    "频率",
+    "排队",
+    "超时",
+)
+
+
+@dataclass(frozen=True)
+class FetchProgress:
+    """批量 K 线拉取进度快照 · 给终端显示当前自适应并发用。"""
+
+    symbol: str
+    ok: bool
+    error: str | None
+    elapsed_seconds: float
+    concurrency: int
+    max_concurrency: int
+    inflight: int
+    completed: int
+    total: int
+
+
+class _AdaptiveConcurrency:
+    """轻量 AIMD 控制器 · 用请求延迟和错误反馈调节提交窗口。"""
+
+    def __init__(self, *, initial: int, maximum: int, minimum: int = 1) -> None:
+        self.minimum = max(1, minimum)
+        self.maximum = max(self.minimum, maximum)
+        self.limit = min(max(initial, self.minimum), self.maximum)
+        self._latencies: deque[float] = deque(maxlen=_ADAPTIVE_WINDOW_SIZE)
+        self._baseline: float | None = None
+        self._success_since_adjust = 0
+
+    def record(self, *, ok: bool, error: str | None, elapsed_seconds: float) -> None:
+        elapsed = max(elapsed_seconds, 0.001)
+        self._latencies.append(elapsed)
+        if ok and (self._baseline is None or elapsed < self._baseline):
+            self._baseline = elapsed
+
+        if not ok:
+            self._success_since_adjust = 0
+            self._decrease(aggressive=_is_backpressure_error(error))
+            return
+
+        self._success_since_adjust += 1
+        if len(self._latencies) < min(8, _ADAPTIVE_WINDOW_SIZE):
+            return
+
+        sample = _percentile(list(self._latencies), 0.90)
+        baseline = self._baseline or min(self._latencies)
+        if sample > baseline * 3.0:
+            self._success_since_adjust = 0
+            self._decrease(aggressive=False)
+            return
+
+        if self._success_since_adjust >= _ADAPTIVE_WINDOW_SIZE and self.limit < self.maximum:
+            self.limit += 1
+            self._success_since_adjust = 0
+
+    def _decrease(self, *, aggressive: bool) -> None:
+        if self.limit <= self.minimum:
+            return
+        next_limit = self.limit // 2 if aggressive else self.limit - 1
+        self.limit = max(self.minimum, next_limit)
+
+
+def _percentile(values: list[float], pct: float) -> float:
+    if not values:
+        return 0.0
+    ordered = sorted(values)
+    idx = min(len(ordered) - 1, max(0, round((len(ordered) - 1) * pct)))
+    return ordered[idx]
+
+
+def _is_backpressure_error(error: str | None) -> bool:
+    if not error:
+        return False
+    text = error.lower()
+    return any(keyword in text for keyword in _BACKPRESSURE_KEYWORDS)
 
 
 def _normalize_kline(
@@ -259,20 +352,43 @@ def resolve_max_workers() -> int:
     - 16 核 Mac Studio: cpu_count=16 → workers=12 (cap · 防限流)
     - Docker / cgroup 返宿主机核数: cap 12 天然缓解
 
-    KAN_WORKERS env var 可显式 override (整数 · 1-50 范围 · 越界回退默认).
+    KAN_WORKERS env var 可显式 override (整数 · 1-20 范围 · 越界回退默认).
     """
-    import os
-    raw = os.environ.get("KAN_WORKERS")
-    if raw:
-        try:
-            n = int(raw)
-            # 上限从 50 收紧到 20 · 防 KAN_WORKERS=50 反射 DoS akshare
-            # akshare 限流阈值实测约 10-15 req/s · 20 并发已超 · 50 必触发限流
-            if 1 <= n <= 20:
-                return n
-        except ValueError:
-            pass
+    override = _worker_override_from_env()
+    if override is not None:
+        return override
     return min((os.cpu_count() or 4) * 2, 12)
+
+
+def resolve_batch_worker_bounds(max_workers: int | None = None) -> tuple[int, int]:
+    """返回批量 fetch 的 (起跑并发, 自适应上限)。
+
+    - 显式 `max_workers` 或 `KAN_WORKERS` 代表用户手动控速,不越过该上限。
+    - 默认从历史启发式起跑,健康时最多探到 20；失败/限流时控制器会回落。
+    """
+    if max_workers is not None and max_workers >= 1:
+        workers = min(max_workers, DEFAULT_ADAPTIVE_MAX_WORKERS)
+        return workers, workers
+
+    initial = resolve_max_workers()
+    if _worker_override_from_env() is not None:
+        return initial, initial
+    return initial, max(initial, DEFAULT_ADAPTIVE_MAX_WORKERS)
+
+
+def _worker_override_from_env() -> int | None:
+    import os
+
+    raw = os.environ.get("KAN_WORKERS")
+    if not raw:
+        return None
+    try:
+        n = int(raw)
+    except ValueError:
+        return None
+    # 上限从 50 收紧到 20 · 防 KAN_WORKERS=50 反射 DoS akshare
+    # akshare 限流阈值实测约 10-15 req/s · 20 并发已超 · 50 必触发限流
+    return n if 1 <= n <= DEFAULT_ADAPTIVE_MAX_WORKERS else None
 
 
 def fetch_batch(
@@ -281,52 +397,93 @@ def fetch_batch(
     force: bool = False,
     max_workers: int | None = None,
     on_progress: Callable | None = None,
+    on_progress_state: Callable[[FetchProgress], None] | None = None,
 ) -> tuple[dict[str, pd.DataFrame], dict[str, str]]:
-    """批量拉取 · ThreadPoolExecutor 并发 + 可选 progress callback.
+    """批量拉取 · 自适应提交窗口 + 可选 progress callback.
 
     max_workers=None → resolve_max_workers() 启发式 (cpu_count*2 cap 12).
+    未显式设置上限时,控制器可在健康窗口内继续升到 20；遇到限流/超时/失败回落。
     """
-    from concurrent.futures import ThreadPoolExecutor, as_completed
+    from concurrent.futures import FIRST_COMPLETED, ThreadPoolExecutor, wait
 
-    # max_workers None / 0 / 负数 都退化到 resolve_max_workers
-    # 防御 ThreadPoolExecutor(max_workers=0) 抛 ValueError 的边界
-    if max_workers is None or max_workers < 1:
-        max_workers = resolve_max_workers()
+    if not symbols:
+        return {}, {}
+
+    initial_workers, worker_cap = resolve_batch_worker_bounds(max_workers)
+    worker_cap = min(worker_cap, len(symbols))
+    initial_workers = min(initial_workers, worker_cap)
+    controller = _AdaptiveConcurrency(initial=initial_workers, maximum=worker_cap)
 
     results: dict[str, pd.DataFrame] = {}
     errors: dict[str, str] = {}
 
-    def _safe_one(symbol: str) -> tuple[str, pd.DataFrame | None, str | None]:
+    def _safe_one(symbol: str) -> tuple[str, pd.DataFrame | None, str | None, float]:
         import time
 
+        started = time.monotonic()
         for attempt in range(2):
             try:
                 df = fetch_kline(symbol, days=days, force=force)
-                return symbol, df, None
+                return symbol, df, None, time.monotonic() - started
             except Exception as e:
                 # fetch_batch retry path · 加 debug log
                 debug_log(__name__, f"fetch_batch retry {attempt}", e)
                 if attempt == 0:
                     time.sleep(1)
                     continue
-                return symbol, None, str(e)
-        return symbol, None, "unknown error"
+                return symbol, None, str(e), time.monotonic() - started
+        return symbol, None, "unknown error", time.monotonic() - started
 
-    with ThreadPoolExecutor(max_workers=max_workers) as executor:
-        futures = [executor.submit(_safe_one, s) for s in symbols]
+    pending = iter(symbols)
+    exhausted = False
+    future_symbols = {}
+    completed = 0
+
+    with ThreadPoolExecutor(max_workers=worker_cap) as executor:
+        def _submit_available() -> None:
+            nonlocal exhausted
+            while not exhausted and len(future_symbols) < controller.limit:
+                try:
+                    symbol = next(pending)
+                except StopIteration:
+                    exhausted = True
+                    return
+                future_symbols[executor.submit(_safe_one, symbol)] = symbol
+
+        _submit_available()
         try:
-            for future in as_completed(futures):
-                symbol, df, err = future.result()
-                if err is None and df is not None:
-                    results[symbol] = df
-                    if on_progress:
-                        on_progress(symbol, True, None)
-                else:
-                    errors[symbol] = err or "unknown error"
-                    if on_progress:
-                        on_progress(symbol, False, err)
+            while future_symbols:
+                done, _ = wait(future_symbols, return_when=FIRST_COMPLETED)
+                for future in done:
+                    future_symbols.pop(future)
+                    symbol, df, err, elapsed = future.result()
+                    completed += 1
+                    ok = err is None and df is not None
+                    controller.record(ok=ok, error=err, elapsed_seconds=elapsed)
+                    state = FetchProgress(
+                        symbol=symbol,
+                        ok=ok,
+                        error=err,
+                        elapsed_seconds=elapsed,
+                        concurrency=controller.limit,
+                        max_concurrency=worker_cap,
+                        inflight=len(future_symbols),
+                        completed=completed,
+                        total=len(symbols),
+                    )
+                    if on_progress_state:
+                        on_progress_state(state)
+                    if err is None and df is not None:
+                        results[symbol] = df
+                        if on_progress:
+                            on_progress(symbol, True, None)
+                    else:
+                        errors[symbol] = err or "unknown error"
+                        if on_progress:
+                            on_progress(symbol, False, err)
+                _submit_available()
         except KeyboardInterrupt:
-            for f in futures:
+            for f in future_symbols:
                 f.cancel()
             raise
 
