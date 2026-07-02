@@ -123,7 +123,14 @@ def test_trend_all_uses_all_stocks_pool(
         lambda group=None: (_ for _ in ()).throw(AssertionError("不应读取自选")),
     )
 
-    def fake_trend(input_pairs, candle=False):
+    # --all 走截面路径 · mock fetch_recent_daily_bars(返空 panel) + trend_batch_cross_section(接收 targets)
+    def fake_recent_daily_bars(days, **kw):
+        captured["fetch_symbols"] = kw.get("symbols")
+        return pd.DataFrame(columns=["symbol", "date", "open", "close"])
+
+    monkeypatch.setattr("kan.data.kline_snapshot.fetch_recent_daily_bars", fake_recent_daily_bars)
+
+    def fake_trend_cross(input_pairs, *, candle=False, panel=None):
         captured["pairs"] = list(input_pairs)
         return [
             TrendResult(
@@ -137,12 +144,16 @@ def test_trend_all_uses_all_stocks_pool(
             for symbol, name in input_pairs
         ]
 
-    monkeypatch.setattr("kan.core.scanner.trend_batch", fake_trend)
+    monkeypatch.setattr(
+        "kan.core.scanner_trend.trend_batch_cross_section",
+        fake_trend_cross,
+    )
 
     result = all_pool_runner.invoke(app, ["trend", "--all"])
 
     assert result.exit_code == 0, result.output
     assert captured["pairs"] == ALL_PAIRS
+    assert captured["fetch_symbols"] == ["600519", "000858"]
     assert "A股全市场连续涨跌" in result.output
 
 

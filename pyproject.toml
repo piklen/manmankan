@@ -1,6 +1,6 @@
 [project]
 name = "manmankan"
-version = "0.0.6.9.6"
+version = "0.0.6.9.7"
 description = "A股行情翻译官 · 先看清再决定 · 散户看得清，AI 调得动"
 requires-python = ">=3.11"
 license = { file = "LICENSE" }

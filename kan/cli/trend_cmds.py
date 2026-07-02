@@ -46,7 +46,7 @@ def trend(
     ] = None,
     all_stocks: Annotated[
         bool,
-        typer.Option("--all", help="扫描 A 股全市场连续涨跌（约 5500 只；首次会补 K 线缓存）"),
+        typer.Option("--all", help="扫描 A 股全市场连续涨跌（约 5500 只；首次会补每日截面缓存）"),
     ] = False,
     only_watchlist: Annotated[
         bool,
@@ -131,7 +131,13 @@ def trend(
 
     # OOP 路径
     from kan.core.models import ThemeMeta
-    from kan.core.pipeline import run_data_pipeline
+    from kan.core.pipeline import (
+        DataCtx,
+        freshness_of,
+        render_freshness_warning,
+        resolve_stock_set_or_exit,
+        run_data_pipeline,
+    )
     from kan.core.stock_set import from_flags
     stock_set = from_flags(
         industry=industry, hot=hot, theme=theme,
@@ -140,7 +146,40 @@ def trend(
         watchlist_group=group,
         all_stocks=all_stocks,
     )
-    ctx = run_data_pipeline(stock_set, compute=trend_batch, candle=candle)
+
+    if all_stocks:
+        # 截面 fast-path:拉近 31 天全市场 daily panel · 31 次 HTTP · 避开逐股 auto_fetch 4137 次 HTTP
+        # 与 cross_section.py 同款思路 · trend --all 不走 run_data_pipeline(K 线管线逐股 = 灾难)
+        from kan.core.scanner_trend import TREND_STREAK_CAP, trend_batch_cross_section
+
+        targets, board_meta = resolve_stock_set_or_exit(stock_set)
+        if not targets:
+            _print_err(
+                "❌ 全市场股票池为空\n"
+                "   例: kan config set tushare-token <YOUR_TOKEN>；或稍后重试"
+            )
+            raise typer.Exit(1)
+
+        # streak 算 30 天 → 需 31 个交易日(含起点前置日算第一日 change)
+        from kan.data.kline_snapshot import fetch_recent_daily_bars
+
+        panel = fetch_recent_daily_bars(
+            TREND_STREAK_CAP + 1,
+            symbols=[symbol for symbol, _name in targets],
+        )
+        results = trend_batch_cross_section(targets, candle=candle, panel=panel)
+        freshness = freshness_of(r.symbol for r in results)
+        ctx = DataCtx(
+            targets=targets,
+            meta=board_meta,
+            results=results,
+            freshness=freshness,
+            source_name=getattr(stock_set, "name", ""),
+        )
+    else:
+        # 非 --all:走逐股 K 线管线(自选股/行业/热榜/题材 · 通常 < 数百只 · 逐股 fetch 可接受)
+        ctx = run_data_pipeline(stock_set, compute=trend_batch, candle=candle)
+
     results = ctx.results
     board_meta = ctx.meta
     data_cutoff = ctx.freshness.data_cutoff
