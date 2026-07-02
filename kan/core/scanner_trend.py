@@ -3,8 +3,14 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
+from kan.infra.log import debug_log
+
 if TYPE_CHECKING:
     import pandas as pd
+
+
+# streak 算法 cap · 与 calc_trend 的 min(len(df), 31) 对齐
+TREND_STREAK_CAP = 30
 
 
 class TrendResult:
@@ -97,3 +103,44 @@ def calc_trend(
         streak_pct=round(streak_pct, 2),
         daily_changes=daily,
     )
+
+
+def trend_batch_cross_section(
+    watchlist: list[tuple[str, str]],
+    *,
+    candle: bool = False,
+    panel: pd.DataFrame | None = None,
+) -> list[TrendResult]:
+    """截面版 trend_batch · 用全市场 daily panel 算 streak · trend --all 专用。
+
+    与 `trend_batch` 的逐股 get_cached 路径等价输出,但数据源是 `fetch_recent_daily_bars`
+    拉的近 31 天全市场截面(31 次 HTTP · vs 逐股 4137 次 HTTP)。
+
+    - panel: 调用方预先拉的 (symbol,date,open,close,...) DataFrame · None 时本函数返回空
+    - 输出只保留 watchlist 目标池内股票,避免上游日截面混入目标池外代码
+    - 连续天数上限沿用 calc_trend 的 30 天 cap,保持与逐股路径同契约
+    """
+    if panel is None or panel.empty:
+        return []
+
+    name_map = dict(watchlist)
+    results: list[TrendResult] = []
+
+    # panel 按 symbol 分组 · 每组按 date 升序 · 喂 calc_trend
+    for symbol, group in panel.groupby("symbol", sort=False):
+        symbol_str = str(symbol)
+        if symbol_str not in name_map:
+            continue
+        if group.empty:
+            continue
+        group = group.sort_values("date").reset_index(drop=True)
+        name = name_map[symbol_str]
+        try:
+            result = calc_trend(group, symbol_str, name, candle=candle)
+        except Exception as e:
+            debug_log(__name__, f"cross-section calc_trend failed · symbol={symbol}", e)
+            continue
+        results.append(result)
+
+    results.sort(key=lambda r: (-abs(r.streak), -abs(r.streak_pct)))
+    return results

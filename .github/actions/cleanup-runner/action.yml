@@ -77,11 +77,8 @@ runs:
 
         if [[ -n "${RUNNER_TEMP:-}" && -d "$RUNNER_TEMP" ]]; then
           find "$RUNNER_TEMP" -mindepth 1 -maxdepth 1 \( \
-            -name 'youzi-*' -o \
             -name 'manmankan-*' -o \
-            -name 'kan-*' -o \
-            -name 'data-hub-*' -o \
-            -name 'zhiyan-*' \
+            -name 'kan-*' \
           \) -print0 |
             while IFS= read -r -d '' path; do
               remove_temp_path "$path"

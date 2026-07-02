@@ -9,6 +9,16 @@ explicitly approves a larger bump.
 
 ## [Unreleased]
 
+## [0.0.6.9.7] - 2026-07-02
+
+### Changed
+
+- `kan trend --all` 改用近 31 个交易日的全市场 daily 截面计算连续涨跌,避免全市场扫描逐股补 K 线触发数千次请求；输出严格限制在目标股票池内,并同步每日截面缓存提示。
+
+### Fixed
+
+- 公开档案隐私自检不再因维护者本地环境说明和 runner 临时目录清理模式命中。
+
 ## [0.0.6.9.6] - 2026-06-26
 
 ### Changed
@@ -300,7 +310,8 @@ explicitly approves a larger bump.
 - **Shell 补全** · zsh / bash / fish / powershell
 - **合规与隐私** · 强制风险提示 + 关键词黑名单（无买卖建议 / 无目标价 / 无评级）· 数据全本地
 
-[Unreleased]: https://github.com/piklen/manmankan/compare/v0.0.6.9.6...HEAD
+[Unreleased]: https://github.com/piklen/manmankan/compare/v0.0.6.9.7...HEAD
+[0.0.6.9.7]: https://github.com/piklen/manmankan/compare/v0.0.6.9.6...v0.0.6.9.7
 [0.0.6.9.6]: https://github.com/piklen/manmankan/compare/v0.0.6.9.5...v0.0.6.9.6
 [0.0.6.9.5]: https://github.com/piklen/manmankan/compare/v0.0.6.9.4...v0.0.6.9.5
 [0.0.6.9.4]: https://github.com/piklen/manmankan/compare/v0.0.6.9.3...v0.0.6.9.4

@@ -41,3 +41,42 @@ def test_fetch_kline_snapshot_builds_position_gain_and_up_days(monkeypatch, tmp_
     assert row["pos_3"] is not None
     assert row["gain_3"] > 0
     assert row["up_days"] == 6
+
+
+def test_fetch_recent_daily_bars_merges_recent_dates_and_filters_symbols(monkeypatch, tmp_path):
+    monkeypatch.setattr("kan.storage.paths.DATA_DIR", tmp_path)
+    monkeypatch.setattr(kline_snapshot, "DATA_DIR", tmp_path)
+    days = [date(2026, 5, 27) + timedelta(days=i) for i in range(3)]
+    monkeypatch.setattr(kline_snapshot, "_recent_trade_dates", lambda _end, _count: days)
+
+    def fake_daily(td, *, symbols=None, force=False):
+        d = date.fromisoformat(f"{td[:4]}-{td[4:6]}-{td[6:]}")
+        return pd.DataFrame([
+            {
+                "symbol": "600519",
+                "date": d,
+                "open": 100.0,
+                "high": 102.0,
+                "low": 99.0,
+                "close": 101.0,
+                "volume": 1000,
+                "amount": 10000,
+            },
+            {
+                "symbol": "000001",
+                "date": d,
+                "open": 10.0,
+                "high": 11.0,
+                "low": 9.0,
+                "close": 10.5,
+                "volume": 2000,
+                "amount": 20000,
+            },
+        ])
+
+    monkeypatch.setattr(kline_snapshot, "fetch_daily_bars", fake_daily)
+    out = kline_snapshot.fetch_recent_daily_bars(3, end_date="20260529", symbols=["600519"])
+
+    assert len(out) == 3
+    assert set(out["symbol"]) == {"600519"}
+    assert list(out["date"]) == days

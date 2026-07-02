@@ -160,6 +160,42 @@ def _recent_trade_dates(end_date: date, count: int) -> list[date]:
     return sorted(out)
 
 
+def fetch_recent_daily_bars(
+    days: int,
+    *,
+    end_date: str | None = None,
+    symbols: list[str] | None = None,
+    force: bool = False,
+) -> pd.DataFrame:
+    """拉近 `days` 个交易日的全市场 daily OHLC panel · trend --all 截面路径专用。
+
+    相比逐股 `fetch_kline` 的 N×HTTP,这里按交易日循环调 `fetch_daily_bars`,
+    每日一次 `stk_factor_pro(trade_date=)` 拉全市场截面 · concat 成 (symbol,date,OHLC) panel。
+
+    - days: 需要的交易日数(含 end_date)· trend 算 30 天 streak → 拉 31 天(含起点前置日用于算第一日 change)
+    - end_date: 截止交易日(YYYYMMDD)· None 用 latest_trade_date()
+    - symbols: 可选 symbol 过滤 · None 返回全市场
+    - force: 强刷每日截面缓存
+    """
+    import pandas as pd
+
+    if days < 1:
+        return _empty_daily_df()
+    td = _validate_trade_date(end_date or _latest_trade_date_str())
+    end = _date_from_trade_date(td)
+    dates = _recent_trade_dates(end, days)
+    frames: list[pd.DataFrame] = []
+    for d in dates:
+        daily = fetch_daily_bars(d.strftime("%Y%m%d"), force=force)
+        if not daily.empty:
+            frames.append(daily)
+    if not frames:
+        return _empty_daily_df()
+    panel = pd.concat(frames, ignore_index=True)
+    panel = panel.sort_values(["symbol", "date"]).reset_index(drop=True)
+    return _filter_symbols(panel, symbols)
+
+
 def _snapshot_columns(periods: list[int]) -> list[str]:
     cols = ["symbol", "trade_date", "close", "up_days", "low_resonance", "high_resonance"]
     for p in periods:
@@ -264,4 +300,9 @@ def fetch_kline_snapshot(
     return _filter_symbols(snapshot, symbols)
 
 
-__all__ = ["DAILY_BAR_COLUMNS", "fetch_daily_bars", "fetch_kline_snapshot"]
+__all__ = [
+    "DAILY_BAR_COLUMNS",
+    "fetch_daily_bars",
+    "fetch_kline_snapshot",
+    "fetch_recent_daily_bars",
+]
