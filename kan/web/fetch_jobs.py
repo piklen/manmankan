@@ -10,7 +10,6 @@ from datetime import UTC, datetime
 from typing import Literal
 
 from kan.core.stock_set import from_flags
-from kan.service.scan_service import ScanRequest, run_scan
 
 FetchStatus = Literal["running", "done", "error"]
 ProgressCallback = Callable[[str, int, int], None]
@@ -120,16 +119,38 @@ def _run_job(job: FetchJob, runner: FetchRunner) -> None:
 
 
 def _run_scan_fetch(progress: ProgressCallback) -> None:
+    """检查本地池新鲜度并逐股拉取,把每只完成情况转成 SSE 进度事件。
+
+    不走 run_scan:补数据只需要 resolve + fetch,跑整条 scan 管线是纯浪费,
+    且 pipeline 内的 auto_fetch 进度是终端进度条,无法回流到 SSE。
+    """
+    from kan.core.pipeline import resolve_stock_set
+    from kan.data.fetcher import fetch_batch, is_fresh
+
     progress("读取本地池", 0, 0)
-    result = run_scan(ScanRequest(
-        stock_set=from_flags(),
-        show_progress=False,
-        allow_auto_fetch=True,
-        include_external_context=False,
-        enrich_timeout_seconds=0,
-    ))
-    total = len(result.ctx.targets)
-    progress("刷新本地数据", len(result.results), total)
+    targets, _meta = resolve_stock_set(from_flags())
+    stale = [(symbol, name) for symbol, name in targets if not is_fresh(symbol)]
+    total = len(stale)
+    if not stale:
+        progress("本地数据已是最新", 0, 0)
+        return
+
+    name_map = dict(stale)
+    done = 0
+
+    def _on_done(symbol: str, _ok: bool, _err: str | None) -> None:
+        nonlocal done
+        done += 1
+        progress(f"刷新 {name_map.get(symbol, symbol)}", done, total)
+
+    progress("刷新本地数据", 0, total)
+    _results, errors = fetch_batch(
+        [symbol for symbol, _name in stale],
+        force=True,
+        on_progress=_on_done,
+    )
+    if errors:
+        progress(f"刷新完成 · {len(errors)} 只未更新", done, total)
 
 
 def _record(

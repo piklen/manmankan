@@ -20,31 +20,31 @@ def _kline_df() -> pd.DataFrame:
     })
 
 
-def test_fetch_batch_adaptive_workers_increase_on_healthy_window(monkeypatch):
-    """健康窗口内应从起跑并发继续向上探测,不是永远固定在初始值。"""
+def test_adaptive_controller_increases_after_healthy_windows():
+    """连续健康窗口后提交窗口应确定性爬升,不是永远固定在初始值。
+
+    直测控制器而非 fetch_batch 集成:集成层的时延来自真实时钟,慢 CI 上
+    p90 抖动会误触降并发,曾导致偶发失败(issue #213)。控制器直测时钟无关。
+    """
+    controller = fetcher._AdaptiveConcurrency(initial=2, maximum=20)
+    for _ in range(80):
+        controller.record(ok=True, error=None, elapsed_seconds=0.001)
+    # 80 个均匀成功 · 每满一个健康窗口 limit+1 · 必然离开初始值
+    assert controller.limit > 2
+    assert controller.limit <= 20
+
+
+def test_fetch_batch_reports_full_progress_stream(monkeypatch):
+    """fetch_batch 应完成全部任务并输出逐个进度状态(时序无关断言)。"""
     monkeypatch.delenv("KAN_WORKERS", raising=False)
     monkeypatch.setattr(fetcher, "resolve_max_workers", lambda: 2)
 
-    active = 0
-    max_seen = 0
-    lock = threading.Lock()
-
-    def fake_fetch_kline(symbol: str, *, days: int, force: bool) -> pd.DataFrame:
-        del symbol, days, force
-        nonlocal active, max_seen
-        with lock:
-            active += 1
-            max_seen = max(max_seen, active)
-        try:
-            time.sleep(0.01)
-            return _kline_df()
-        finally:
-            with lock:
-                active -= 1
+    df = _kline_df()
+    monkeypatch.setattr(
+        fetcher, "fetch_kline", lambda symbol, *, days, force: df
+    )
 
     states: list[fetcher.FetchProgress] = []
-    monkeypatch.setattr(fetcher, "fetch_kline", fake_fetch_kline)
-
     results, errors = fetcher.fetch_batch(
         [f"{i:06d}" for i in range(80)],
         force=True,
@@ -53,8 +53,8 @@ def test_fetch_batch_adaptive_workers_increase_on_healthy_window(monkeypatch):
 
     assert len(results) == 80
     assert errors == {}
-    assert max_seen > 2
-    assert any(state.concurrency > 2 for state in states)
+    assert len(states) == 80
+    assert states[-1].completed == 80
     assert all(state.max_concurrency == fetcher.DEFAULT_ADAPTIVE_MAX_WORKERS for state in states)
 
 

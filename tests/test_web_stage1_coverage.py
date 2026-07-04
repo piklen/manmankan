@@ -153,6 +153,32 @@ def test_hold_service_uses_realtime_and_computes_account(monkeypatch) -> None:
     assert summary.results[0].positions[180] is not None
 
 
+def test_hold_service_resolves_placeholder_names(monkeypatch) -> None:
+    from kan.service.hold_service import HoldRequest, build_hold_summary
+
+    book = PositionsBook(
+        cash=0.0,
+        positions=[
+            Position(symbol="600519", name="600519", cost=90.0, shares=100, added_at=date(2026, 1, 1)),
+            Position(symbol="000858", name="自定义名", cost=120.0, shares=10, added_at=date(2026, 1, 1)),
+        ],
+    )
+    monkeypatch.setattr("kan.storage.positions.load_positions", lambda: book)
+    monkeypatch.setattr("kan.data.fetcher.get_cached", lambda _symbol: _kline())
+    monkeypatch.setattr("kan.core.trading_calendar.market_phase", lambda: "post")
+    monkeypatch.setattr("kan.core.trading_calendar.latest_trade_date", lambda: date(2026, 5, 23))
+    monkeypatch.setattr(
+        "kan.storage.watchlist_names.load_stock_names_cache",
+        lambda *, allow_stale: {"600519": "贵州茅台"},
+    )
+
+    summary = build_hold_summary(HoldRequest(no_refresh=True, check_corporate_actions=False))
+
+    names = {row.symbol: row.name for row in summary.results}
+    assert names["600519"] == "贵州茅台"
+    assert names["000858"] == "自定义名"
+
+
 def test_hold_service_empty_and_realtime_fail_soft_falls_back_to_close(monkeypatch) -> None:
     from kan.service.hold_service import HoldRequest, build_hold_summary
 
@@ -633,14 +659,34 @@ def test_fetch_jobs_edges(monkeypatch) -> None:
     assert error_job.status == "error"
     assert error_job.error == "数据不可用"
 
-    events = []
-    result = SimpleNamespace(
-        ctx=SimpleNamespace(targets=[("600519", "贵州茅台"), ("000858", "五粮液")]),
-        results=[object()],
+    targets = [("600519", "贵州茅台"), ("000858", "五粮液")]
+    monkeypatch.setattr(
+        "kan.core.pipeline.resolve_stock_set", lambda _stock_set: (targets, None)
     )
-    monkeypatch.setattr("kan.web.fetch_jobs.run_scan", lambda request: result)
+    monkeypatch.setattr("kan.data.fetcher.is_fresh", lambda _symbol: False)
+
+    def fake_fetch_batch(symbols, *, force, on_progress):
+        for symbol in symbols:
+            on_progress(symbol, symbol != "000858", None)
+        return {}, {"000858": "boom"}
+
+    monkeypatch.setattr("kan.data.fetcher.fetch_batch", fake_fetch_batch)
+    events = []
     fetch_jobs._run_scan_fetch(lambda stage, completed, total: events.append((stage, completed, total)))
-    assert events == [("读取本地池", 0, 0), ("刷新本地数据", 1, 2)]
+    assert events == [
+        ("读取本地池", 0, 0),
+        ("刷新本地数据", 0, 2),
+        ("刷新 贵州茅台", 1, 2),
+        ("刷新 五粮液", 2, 2),
+        ("刷新完成 · 1 只未更新", 2, 2),
+    ]
+
+    monkeypatch.setattr("kan.data.fetcher.is_fresh", lambda _symbol: True)
+    fresh_events = []
+    fetch_jobs._run_scan_fetch(
+        lambda stage, completed, total: fresh_events.append((stage, completed, total))
+    )
+    assert fresh_events == [("读取本地池", 0, 0), ("本地数据已是最新", 0, 0)]
 
 
 def test_finalizer_guard_fallback_and_no_del(monkeypatch) -> None:

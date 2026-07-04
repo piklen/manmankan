@@ -100,17 +100,31 @@ def fetch_index_daily(
     days: int = 420,
     end_date: date | None = None,
 ) -> pd.DataFrame | None:
-    """Fetch index_daily for one index.
+    """Fetch daily kline for one index.
 
-    Returns None when TuShare is unavailable, token is missing, or the interface
-    returns no rows. Callers display null/empty data instead of failing loudly.
+    主路径 TuShare index_daily;无 token、接口未覆盖或返回空时 fallback 到
+    akshare 新浪指数源,让指数参照对零 token 用户也可用。两路都失败返回
+    None,调用方按 data_available=False 呈现,不硬报错。
     """
+    ts_code = normalize_index_code(code)
+    df = _fetch_index_tushare(ts_code, days=days, end_date=end_date)
+    if df is not None:
+        return df
+    return _fetch_index_akshare(ts_code, days=days, end_date=end_date)
+
+
+def _fetch_index_tushare(
+    ts_code: str,
+    *,
+    days: int,
+    end_date: date | None,
+) -> pd.DataFrame | None:
+    """TuShare index_daily 主路径;token 缺失或无数据返回 None。"""
     from kan.data.tushare import _post_tushare_api, _resolve_config
 
     token, endpoint = _resolve_config()
     if not token:
         return None
-    ts_code = normalize_index_code(code)
     if end_date is None:
         from kan.core.trading_calendar import latest_trade_date
 
@@ -136,6 +150,46 @@ def fetch_index_daily(
     if df is None or df.empty:
         return None
     return df.tail(days).reset_index(drop=True)
+
+
+def _akshare_index_symbol(ts_code: str) -> str:
+    """TuShare ts_code → akshare 新浪指数 symbol(如 000001.SH → sh000001)。"""
+    code, _, exchange = ts_code.partition(".")
+    return f"{exchange.lower()}{code}"
+
+
+def _fetch_index_akshare(
+    ts_code: str,
+    *,
+    days: int,
+    end_date: date | None,
+) -> pd.DataFrame | None:
+    """akshare 新浪指数日线 fallback;失败静默返回 None,细节进 debug log。"""
+    import pandas as pd
+
+    try:
+        import akshare as ak
+
+        from kan.infra.finalizer_guard import defuse_mini_racer_finalizer
+
+        defuse_mini_racer_finalizer()
+        raw = ak.stock_zh_index_daily(symbol=_akshare_index_symbol(ts_code))
+    except Exception as e:
+        debug_log(__name__, "akshare index fallback failed", e)
+        return None
+    if raw is None or raw.empty or "date" not in raw.columns:
+        return None
+    df = raw.copy()
+    df["date"] = pd.to_datetime(df["date"], errors="coerce").dt.date
+    for col in ("open", "high", "low", "close", "volume"):
+        if col in df.columns:
+            df[col] = pd.to_numeric(df[col], errors="coerce")
+    df = df.dropna(subset=["date", "open", "high", "low", "close"])
+    if end_date is not None:
+        df = df[df["date"] <= end_date]
+    if df.empty:
+        return None
+    return df.sort_values("date").tail(days).reset_index(drop=True)
 
 
 __all__ = ["DEFAULT_INDEXES", "IndexSpec", "fetch_index_daily", "index_name", "normalize_index_code"]
