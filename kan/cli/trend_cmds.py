@@ -84,7 +84,9 @@ def trend(
 
     from rich.console import Console
 
-    status_console = Console(stderr=True)
+    from kan.infra.progress import cli_status, determinate_progress, feedback_console
+
+    status_console = feedback_console()
     with _with_heavy_imports_spinner(status_console, "⏳ 加载数据模块..."):
         from kan.core.pipeline import render_freshness_warning
         from kan.core.scanner import trend_batch
@@ -152,7 +154,8 @@ def trend(
         # 与 cross_section.py 同款思路 · trend --all 不走 run_data_pipeline(K 线管线逐股 = 灾难)
         from kan.core.scanner_trend import TREND_STREAK_CAP, trend_batch_cross_section
 
-        targets, board_meta = resolve_stock_set_or_exit(stock_set)
+        with cli_status("⏳ 加载全市场股票池...", console=status_console):
+            targets, board_meta = resolve_stock_set_or_exit(stock_set)
         if not targets:
             _print_err(
                 "❌ 全市场股票池为空\n"
@@ -163,11 +166,37 @@ def trend(
         # streak 算 30 天 → 需 31 个交易日(含起点前置日算第一日 change)
         from kan.data.kline_snapshot import fetch_recent_daily_bars
 
-        panel = fetch_recent_daily_bars(
-            TREND_STREAK_CAP + 1,
-            symbols=[symbol for symbol, _name in targets],
-        )
-        results = trend_batch_cross_section(targets, candle=candle, panel=panel)
+        symbols = [symbol for symbol, _name in targets]
+        days = TREND_STREAK_CAP + 1
+        with determinate_progress(console=status_console, transient=True) as progress:
+            task_id = progress.add_task(
+                f"⏳ 拉取全市场日线截面 · 0/{days} 日 · {len(symbols)} 只",
+                total=days,
+            )
+
+            def _on_daily_loaded(
+                done: int,
+                total: int,
+                trade_day,
+                row_count: int,
+            ) -> None:
+                progress.update(
+                    task_id,
+                    completed=done,
+                    description=(
+                        "⏳ 拉取全市场日线截面"
+                        f" · {done}/{total} 日 · {trade_day:%m-%d}"
+                        f" · {row_count} 行"
+                    ),
+                )
+
+            panel = fetch_recent_daily_bars(
+                days,
+                symbols=symbols,
+                on_progress=_on_daily_loaded,
+            )
+        with cli_status(f"⏳ 计算连续涨跌 · {len(symbols)} 只...", console=status_console):
+            results = trend_batch_cross_section(targets, candle=candle, panel=panel)
         freshness = freshness_of(r.symbol for r in results)
         ctx = DataCtx(
             targets=targets,

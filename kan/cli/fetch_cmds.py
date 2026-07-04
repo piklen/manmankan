@@ -1,6 +1,7 @@
 """fetch · 拉取股票历史 K 线数据 (含 --industry / --hot / --theme 批量预拉)。"""
 from __future__ import annotations
 
+from contextlib import nullcontext
 from time import perf_counter
 from typing import Annotated
 
@@ -45,9 +46,9 @@ def fetch(
     ] = False,
 ) -> None:
     """拉取股票历史 K 线数据 (--group 切换分组)"""
-    from rich.console import Console
+    from kan.infra.progress import cli_status, determinate_progress, feedback_console
 
-    status_console = Console(stderr=True)
+    status_console = feedback_console()
     with _with_heavy_imports_spinner(status_console, "⏳ 加载数据模块..."):
         from kan.data.fetcher import fetch_kline, is_fresh
 
@@ -118,29 +119,64 @@ def fetch(
     updated = 0
     failed = 0
     errors: list[tuple[str, str]] = []
-    for sym in symbols:
-        if not force and is_fresh(sym):
-            if verbose:
-                typer.echo(f"  {sym} 已是最新（今日已拉取）")
-            fresh += 1
-            success += 1
-            continue
-        try:
-            with status_console.status(
-                f"[yellow]⏳ 拉取数据... {sym}[/yellow]",
-                spinner="dots",
-            ):
-                df = fetch_kline(sym, force=force)
-            if verbose:
-                typer.echo(f"  ✅ {sym} 拉取成功（{len(df)} 条 K 线）")
-            updated += 1
-            success += 1
-        except Exception as e:
-            msg = _safe_error_msg(e)
-            if verbose:
-                typer.echo(f"  ❌ {sym} 拉取失败：{msg}", err=True)
-            errors.append((sym, msg))
-            failed += 1
+    show_batch_progress = len(symbols) > 1 and not verbose
+    progress_cm = (
+        determinate_progress(console=status_console)
+        if show_batch_progress else nullcontext(None)
+    )
+    with progress_cm as progress:
+        task_id = None
+        if progress is not None:
+            task_id = progress.add_task(
+                f"⏳ 检查/拉取 K 线 · 0/{len(symbols)} 只",
+                total=len(symbols),
+            )
+        for idx, sym in enumerate(symbols, start=1):
+            if progress is not None and task_id is not None:
+                progress.update(
+                    task_id,
+                    description=f"⏳ 检查/拉取 K 线 · {idx}/{len(symbols)} 只 · {sym}",
+                )
+            if not force and is_fresh(sym):
+                if verbose:
+                    typer.echo(f"  {sym} 已是最新（今日已拉取）")
+                fresh += 1
+                success += 1
+                if progress is not None and task_id is not None:
+                    progress.update(
+                        task_id,
+                        advance=1,
+                        description=f"⏳ 检查/拉取 K 线 · ✅ 已最新 {sym}",
+                    )
+                continue
+            try:
+                if progress is None:
+                    with cli_status(f"⏳ 拉取数据... {sym}", console=status_console):
+                        df = fetch_kline(sym, force=force)
+                else:
+                    df = fetch_kline(sym, force=force)
+                if verbose:
+                    typer.echo(f"  ✅ {sym} 拉取成功（{len(df)} 条 K 线）")
+                updated += 1
+                success += 1
+                if progress is not None and task_id is not None:
+                    progress.update(
+                        task_id,
+                        advance=1,
+                        description=f"⏳ 检查/拉取 K 线 · ✅ 更新 {sym}",
+                    )
+            except Exception as e:
+                msg = _safe_error_msg(e)
+                if verbose:
+                    typer.echo(f"  ❌ {sym} 拉取失败：{msg}", err=True)
+                errors.append((sym, msg))
+                failed += 1
+                if progress is not None and task_id is not None:
+                    progress.update(
+                        task_id,
+                        advance=1,
+                        description=f"⏳ 检查/拉取 K 线 · ❌ 失败 {sym}",
+                    )
 
     elapsed = perf_counter() - started
     if failed:
