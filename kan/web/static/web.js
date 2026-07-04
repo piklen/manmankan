@@ -273,7 +273,9 @@ function kanHoldPage(initialHold) {
     },
     formatCost(value) {
       if (this.masked && value !== null) return "***";
-      return value === null ? "—" : Number(value).toFixed(4);
+      if (value === null) return "—";
+      // 与 CLI 同为最多 4 位小数(摊薄成本精度),但去掉尾随零免得整数成本显示成 x.0000
+      return String(Number(Number(value).toFixed(4)));
     },
     formatPrice(value) {
       return value === null ? "—" : Number(value).toFixed(2);

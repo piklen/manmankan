@@ -61,7 +61,7 @@
         <template x-for="row in hold.rows" :key="row.code">
           <tr>
             <td>
-              <span x-text="row.name"></span>
+              <span x-show="row.name !== row.code" x-text="row.name"></span>
               <span class="code" x-text="row.code"></span>
             </td>
             <td x-text="formatCost(row.cost)"></td>
