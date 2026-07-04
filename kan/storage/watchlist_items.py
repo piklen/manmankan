@@ -17,6 +17,7 @@ from kan.storage.watchlist_store import (
     _save_grouped_watchlist,
     load_grouped_watchlist,
     load_watchlist,
+    with_watchlist_lock,
 )
 
 
@@ -28,6 +29,7 @@ def add_stock(wl: Watchlist, symbol: str, name: str) -> bool:
     return True
 
 
+@with_watchlist_lock
 def add(symbol: str, group: str | None = None) -> tuple[bool, str]:
     """添加股票到指定组 (不传走 default 组)。返回 (是否新增, 消息)。"""
     symbol = _normalize_symbol(symbol)
@@ -55,6 +57,7 @@ def add(symbol: str, group: str | None = None) -> tuple[bool, str]:
     return True, f"✅ 已添加 {name} ({symbol}){suffix}"
 
 
+@with_watchlist_lock
 def remove(symbol: str, group: str | None = None) -> tuple[bool, str]:
     """从指定组移除股票 (不传走 default 组)。返回 (是否移除, 消息)。"""
     symbol = _normalize_symbol(symbol)
@@ -146,6 +149,7 @@ def import_csv(
     return success, skipped, errors
 
 
+@with_watchlist_lock
 def clear(group: str | None = None) -> int:
     """清空指定组 (不传走 default 组) · 不影响其他组 · 返回被清除的股数。"""
     gw = load_grouped_watchlist()

@@ -1,10 +1,11 @@
 """Web 补数据后台任务。"""
 from __future__ import annotations
 
+import asyncio
 import json
 import threading
 import uuid
-from collections.abc import Callable, Iterator
+from collections.abc import AsyncIterator, Callable
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from typing import Literal
@@ -41,6 +42,10 @@ class FetchJob:
 _state_lock = threading.Lock()
 _current_job: FetchJob | None = None
 
+# SSE 消费端轮询节奏 · 测试会 monkeypatch 成 0 以免真等。
+_SSE_POLL_SECONDS = 0.25
+_SSE_KEEPALIVE_SECONDS = 15.0
+
 
 def start_fetch_job(runner: FetchRunner | None = None) -> FetchJob:
     """启动一个补数据任务；已有运行任务时返回同一个任务。"""
@@ -67,26 +72,34 @@ def get_fetch_job(job_id: str) -> FetchJob | None:
     return None
 
 
-def iter_sse(job: FetchJob) -> Iterator[str]:
-    """按 text/event-stream 格式输出任务事件。"""
+async def iter_sse(job: FetchJob) -> AsyncIterator[str]:
+    """按 text/event-stream 格式输出任务事件 · async 短轮询,不占 AnyIO 线程池。
+
+    生产端(_record)在后台 daemon 线程里 append 事件;消费端在 event loop 里
+    轮询快照。持 job.condition 锁只做 O(1) 读、与 _record 的原子写互斥,不阻塞;
+    无新事件时 await asyncio.sleep 让出 event loop(不占线程池 worker),每
+    _SSE_KEEPALIVE_SECONDS 发一次 keep-alive。客户端断开时生成器被 aclose,
+    在 sleep 处干净退出。
+    """
     index = 0
+    idle = 0.0
     while True:
-        keepalive = False
         with job.condition:
-            while index >= len(job.events) and job.status == "running":
-                job.condition.wait(timeout=15)
-                if index >= len(job.events) and job.status == "running":
-                    keepalive = True
-                    break
             events = job.events[index:]
             index = len(job.events)
-            finished = job.status != "running" and index >= len(job.events)
-        if keepalive:
-            yield ": keep-alive\n\n"
+            running = job.status == "running"
         for event in events:
             yield _format_sse(event)
-        if finished:
+        if not running:
             break
+        if events:
+            idle = 0.0
+            continue
+        await asyncio.sleep(_SSE_POLL_SECONDS)
+        idle += _SSE_POLL_SECONDS
+        if idle >= _SSE_KEEPALIVE_SECONDS:
+            idle = 0.0
+            yield ": keep-alive\n\n"
 
 
 def _run_job(job: FetchJob, runner: FetchRunner) -> None:

@@ -1,7 +1,11 @@
 """watchlist v2 schema 读写。"""
 from __future__ import annotations
 
+import contextlib
+import functools
 import json
+from collections.abc import Callable, Iterator
+from typing import ParamSpec, TypeVar
 
 from kan.core.models import Stock
 from kan.storage import paths
@@ -103,3 +107,44 @@ def _save_grouped_watchlist(gw: GroupedWatchlist) -> None:
 def save_grouped_watchlist(gw: GroupedWatchlist) -> None:
     """公开 wrapper · cli/group_cmds 直接 import 调用 · 跟 save_watchlist 同形。"""
     _save_grouped_watchlist(gw)
+
+
+_P = ParamSpec("_P")
+_R = TypeVar("_R")
+
+
+@contextlib.contextmanager
+def watchlist_lock() -> Iterator[None]:
+    """跨进程串行化 watchlist 写事务(load→mutate→save),防 web/CLI 并发丢更新。
+
+    原子写只保证单次写不损坏,挡不住「A 读→B 读→A 写→B 写覆盖 A」的丢更新;
+    这里用 fcntl.flock 建议锁把整段读改写事务串起来。不支持 fcntl 的平台(如
+    Windows)降级为无锁、退回既有行为(本工具主力平台为 macOS/Linux)。
+
+    注意:flock 是 per-fd 建议锁,同进程嵌套两个 fd 锁同一文件会自锁死,
+    因此只在叶子写事务(add/remove/clear)加锁,别在批量外层(import_csv)再套。
+    """
+    paths.ensure_dirs()
+    try:
+        import fcntl
+    except ImportError:
+        yield
+        return
+    lock_path = paths.WATCHLIST_PATH.with_suffix(".lock")
+    with open(lock_path, "w") as handle:
+        fcntl.flock(handle, fcntl.LOCK_EX)
+        try:
+            yield
+        finally:
+            fcntl.flock(handle, fcntl.LOCK_UN)
+
+
+def with_watchlist_lock(fn: Callable[_P, _R]) -> Callable[_P, _R]:
+    """把整段写事务纳入 watchlist_lock 的装饰器 · 保留原签名。"""
+
+    @functools.wraps(fn)
+    def wrapper(*args: _P.args, **kwargs: _P.kwargs) -> _R:
+        with watchlist_lock():
+            return fn(*args, **kwargs)
+
+    return wrapper

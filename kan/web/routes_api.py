@@ -22,6 +22,7 @@ from kan.service.info_service import (
 from kan.service.scan_service import ScanRequest, run_scan
 from kan.storage import config, watchlist
 from kan.storage.watchlist_names import _lookup_name
+from kan.storage.watchlist_store import watchlist_lock
 from kan.web.fetch_jobs import get_fetch_job, iter_sse, start_fetch_job
 from kan.web.find_adapter import run_web_find
 from kan.web.security import host_allowed
@@ -74,25 +75,27 @@ def add_watchlist(payload: Annotated[dict[str, Any], Body()]) -> dict:
         repeated = sorted({symbol for symbol in symbols if symbols.count(symbol) > 1})
         if repeated:
             raise ValueError(f"重复代码: {', '.join(repeated)}")
-        gw = watchlist.load_grouped_watchlist()
-        target = gw.default
-        if target not in gw.groups:
-            raise watchlist.GroupNotFoundError(
-                f"组「{target}」不存在 · 跑 `kan group create {target}` 新建"
-            )
-        existing = {stock.symbol for stock in gw.groups[target]}
-        duplicates = [symbol for symbol in symbols if symbol in existing]
-        if duplicates:
-            raise ValueError(f"代码已在自选列表中: {', '.join(duplicates)}")
-        names = {symbol: _lookup_name(symbol) for symbol in symbols}
-        for symbol in symbols:
-            gw.groups[target].append(Stock(
-                symbol=symbol,
-                name=names[symbol],
-                added_at=date.today(),
-            ))
-        watchlist.save_grouped_watchlist(gw)
-        messages = [f"✅ 已添加 {names[symbol]} ({symbol})" for symbol in symbols]
+        # 锁包住 load→mutate→save 整段:防 web 多 tab / web 与 CLI 并发写丢更新。
+        with watchlist_lock():
+            gw = watchlist.load_grouped_watchlist()
+            target = gw.default
+            if target not in gw.groups:
+                raise watchlist.GroupNotFoundError(
+                    f"组「{target}」不存在 · 跑 `kan group create {target}` 新建"
+                )
+            existing = {stock.symbol for stock in gw.groups[target]}
+            duplicates = [symbol for symbol in symbols if symbol in existing]
+            if duplicates:
+                raise ValueError(f"代码已在自选列表中: {', '.join(duplicates)}")
+            names = {symbol: _lookup_name(symbol) for symbol in symbols}
+            for symbol in symbols:
+                gw.groups[target].append(Stock(
+                    symbol=symbol,
+                    name=names[symbol],
+                    added_at=date.today(),
+                ))
+            watchlist.save_grouped_watchlist(gw)
+            messages = [f"✅ 已添加 {names[symbol]} ({symbol})" for symbol in symbols]
     except (ValueError, watchlist.GroupNotFoundError) as e:
         raise HTTPException(status_code=400, detail=str(e)) from e
     return {"ok": True, "messages": messages}
@@ -153,13 +156,16 @@ def info(code: str) -> dict:
 @router.get("/history/{code}")
 def history(
     code: str,
-    period: int = Query(60, ge=2, le=360),
+    # 不在 Query 层夹 ge/le:交给 service 的 MIN_PERIOD/MAX_PERIOD 校验,
+    # 让 web 与 CLI 的越界报错文案一致(带范围 hint),而非 FastAPI 通用 422。
+    period: int = Query(60),
 ) -> dict:
     try:
         result = get_symbol_history(HistoryRequest(symbol_or_name=code, period=period))
     except HistoryServiceError as e:
         status = 400 if e.exit_code == 2 else 404
-        raise HTTPException(status_code=status, detail=e.message) from e
+        detail = f"{e.message} · {e.hint}" if e.hint else e.message
+        raise HTTPException(status_code=status, detail=detail) from e
     return serialize_history(result)
 
 
