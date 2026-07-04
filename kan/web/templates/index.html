@@ -18,6 +18,27 @@
       <span class="meta" x-show="fetchMessage" x-text="fetchMessage"></span>
     </div>
   </div>
+  <div class="index-strip">
+    <template x-if="indexLoading">
+      <span>指数数据读取中</span>
+    </template>
+    <template x-if="!indexLoading && !indexData.ok">
+      <span>指数数据不可用</span>
+    </template>
+    <template x-if="!indexLoading && indexData.ok">
+      <div class="status-line">
+        <template x-for="row in indexData.rows" :key="row.code">
+          <span class="index-item">
+            <strong x-text="row.name"></strong>
+            <span x-text="formatPrice(row.close)"></span>
+            <template x-for="period in indexData.periods" :key="period">
+              <span x-text="`${period}日 ${formatPct(indexPct(row, period))}`"></span>
+            </template>
+          </span>
+        </template>
+      </div>
+    </template>
+  </div>
 
   <div class="toolbar">
     <div class="tabs" role="tablist" aria-label="视图">

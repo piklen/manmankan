@@ -9,10 +9,13 @@ function kanScanDesk(initialScan) {
     heatmapPage: 0,
     heatmapPageSize: 60,
     chart: null,
+    indexLoading: true,
+    indexData: { ok: false, periods: [], rows: [] },
     fetching: false,
     fetchMessage: "",
     eventSource: null,
     init() {
+      this.loadIndex();
       window.addEventListener("resize", () => {
         if (this.chart) this.chart.resize();
       });
@@ -89,8 +92,10 @@ function kanScanDesk(initialScan) {
       if (this.activeTab !== "heatmap" || !window.echarts) return;
       const el = document.getElementById("scan-heatmap");
       if (!el) return;
+      if (this.heatmapPage >= this.heatmapPageCount) this.heatmapPage = this.heatmapPageCount - 1;
       const start = this.heatmapPage * this.heatmapPageSize;
       const rows = this.sortedRows.slice(start, start + this.heatmapPageSize);
+      el.style.height = `${Math.max(320, rows.length * 14 + 110)}px`;
       const names = rows.map((row) => `${row.name} ${row.code}`);
       const codes = new Set(rows.map((row) => row.code));
       const periods = this.scan.periods;
@@ -138,6 +143,21 @@ function kanScanDesk(initialScan) {
       });
       this.chart.resize();
     },
+    async loadIndex() {
+      this.indexLoading = true;
+      try {
+        const response = await fetch("/api/index");
+        this.indexData = response.ok ? await response.json() : { ok: false, periods: [], rows: [] };
+      } catch (_error) {
+        this.indexData = { ok: false, periods: [], rows: [] };
+      } finally {
+        this.indexLoading = false;
+      }
+    },
+    indexPct(row, period) {
+      const item = row.periods[String(period)];
+      return item ? item.position_pct : null;
+    },
     async startFetch() {
       this.fetching = true;
       this.fetchMessage = "准备";
@@ -184,6 +204,100 @@ function kanScanDesk(initialScan) {
         this.scan = await response.json();
         this.heatmapPage = 0;
         this.$nextTick(() => this.renderHeatmap());
+      }
+    },
+  };
+}
+
+function kanHoldPage(initialHold) {
+  return {
+    hold: initialHold,
+    masked: false,
+    formatMoney(value) {
+      if (this.masked && value !== null) return "***";
+      return value === null ? "—" : Number(value).toLocaleString("zh-CN", {
+        minimumFractionDigits: 2,
+        maximumFractionDigits: 2,
+      });
+    },
+    formatCost(value) {
+      if (this.masked && value !== null) return "***";
+      return value === null ? "—" : Number(value).toFixed(4);
+    },
+    formatPrice(value) {
+      return value === null ? "—" : Number(value).toFixed(2);
+    },
+    formatInt(value) {
+      return value === null ? "—" : String(value);
+    },
+    formatPct(value) {
+      return value === null ? "—" : `${Number(value).toFixed(1)}%`;
+    },
+    formatPnl(value, pct) {
+      if (value === null) return "—";
+      const pctText = pct === null ? "" : ` (${Number(pct).toFixed(2)}%)`;
+      if (this.masked) return `***${pctText}`;
+      const sign = value > 0 ? "+" : "";
+      return `${sign}${this.formatMoney(value)}${pctText}`;
+    },
+    pnlClass(value) {
+      if (value === null || value === 0) return "";
+      return value > 0 ? "change-up" : "change-down";
+    },
+    positionClass(value) {
+      if (value === null) return "";
+      if (value <= 20) return "pct-low";
+      if (value >= 80) return "pct-high";
+      return "";
+    },
+  };
+}
+
+function kanSettingsPage(initialToken) {
+  return {
+    token: initialToken,
+    tokenInput: "",
+    message: "",
+    get tokenText() {
+      return this.token.configured ? `已配置 ${this.token.masked}` : "未配置";
+    },
+    async saveToken() {
+      this.message = "保存中";
+      try {
+        const response = await fetch("/api/config/token", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "X-Kan-Web": "1",
+          },
+          body: JSON.stringify({ token: this.tokenInput }),
+        });
+        if (!response.ok) {
+          this.message = "保存失败";
+          return;
+        }
+        this.token = await response.json();
+        this.tokenInput = "";
+        this.message = "已保存";
+      } catch (_error) {
+        this.message = "保存失败";
+      }
+    },
+    async clearToken() {
+      this.message = "清除中";
+      try {
+        const response = await fetch("/api/config/token", {
+          method: "DELETE",
+          headers: { "X-Kan-Web": "1" },
+        });
+        if (!response.ok) {
+          this.message = "清除失败";
+          return;
+        }
+        this.token = await response.json();
+        this.message = "已清除";
+      } catch (_error) {
+        this.message = "清除失败";
       }
     },
   };

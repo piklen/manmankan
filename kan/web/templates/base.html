@@ -42,11 +42,31 @@
       align-items: baseline;
       justify-content: space-between;
       gap: 16px;
+      flex-wrap: wrap;
+    }
+    .brand-row,
+    .nav-links {
+      display: flex;
+      align-items: baseline;
+      gap: 14px;
+      flex-wrap: wrap;
     }
     h1 {
       margin: 0;
       font-size: 24px;
       font-weight: 700;
+    }
+    .nav-links a {
+      color: var(--muted);
+      text-decoration: none;
+      font-size: 14px;
+      padding: 5px 0;
+      border-bottom: 2px solid transparent;
+    }
+    .nav-links a.active {
+      color: var(--accent);
+      border-color: var(--accent);
+      font-weight: 650;
     }
     .meta {
       color: var(--muted);
@@ -76,11 +96,43 @@
     }
     .status-line,
     .toolbar,
-    .tabs {
+    .tabs,
+    .summary-grid,
+    .index-strip {
       display: flex;
       align-items: center;
       gap: 10px;
       flex-wrap: wrap;
+    }
+    .summary-grid {
+      padding: 14px 16px;
+      align-items: stretch;
+    }
+    .summary-cell {
+      min-width: 160px;
+      flex: 1 1 160px;
+      padding: 10px 12px;
+      border: 1px solid var(--line);
+      border-radius: 6px;
+      background: #fbfcfd;
+    }
+    .summary-cell .field-label { margin-bottom: 4px; }
+    .index-strip {
+      padding: 10px 16px;
+      border-bottom: 1px solid var(--line);
+      color: var(--muted);
+      font-size: 13px;
+    }
+    .index-item {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      min-height: 26px;
+      padding: 0 8px;
+      border: 1px solid var(--line);
+      border-radius: 6px;
+      background: #fbfcfd;
+      color: var(--text);
     }
     .toolbar {
       padding: 12px 16px;
@@ -208,6 +260,35 @@
       color: var(--muted);
       font-size: 12px;
     }
+    .form-row {
+      display: flex;
+      gap: 10px;
+      flex-wrap: wrap;
+      align-items: center;
+      padding: 14px 16px;
+      border-bottom: 1px solid var(--line);
+    }
+    input[type="password"],
+    input[type="text"] {
+      min-height: 34px;
+      min-width: min(360px, 100%);
+      border: 1px solid var(--line);
+      border-radius: 6px;
+      padding: 0 10px;
+      font: inherit;
+      font-size: 14px;
+    }
+    .fact-list {
+      padding: 6px 16px 16px;
+    }
+    .fact-row {
+      display: grid;
+      grid-template-columns: 180px 1fr;
+      gap: 12px;
+      padding: 10px 0;
+      border-bottom: 1px solid var(--line);
+    }
+    .fact-row:last-child { border-bottom: 0; }
     .grid-fields {
       display: grid;
       grid-template-columns: repeat(4, minmax(0, 1fr));
@@ -312,14 +393,21 @@
 <body>
   <header>
     <div class="topbar">
-      <h1>慢慢看 Web</h1>
+      <div class="brand-row">
+        <h1>慢慢看 Web</h1>
+        <nav class="nav-links" aria-label="主导航">
+          <a href="/" class="{% if request.url.path == '/' or request.url.path.startswith('/stock') %}active{% endif %}">看盘台</a>
+          <a href="/hold" class="{% if request.url.path.startswith('/hold') %}active{% endif %}">持仓</a>
+          <a href="/settings" class="{% if request.url.path.startswith('/settings') %}active{% endif %}">设置</a>
+        </nav>
+      </div>
       <div class="meta">本地私有服务 · 127.0.0.1</div>
     </div>
   </header>
   <main>
     {% block content %}{% endblock %}
   </main>
-  <footer>{{ disclaimer }}</footer>
+  <footer>{{ disclaimer }}{% block footer_extra %}{% endblock %}</footer>
   {% block scripts %}{% endblock %}
 </body>
 </html>

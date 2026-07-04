@@ -54,6 +54,26 @@ def test_service_does_not_import_fastapi() -> None:
     assert offenders == []
 
 
+def test_new_web_services_do_not_import_cli_or_render_frameworks() -> None:
+    """新 Web 复用 service 不应依赖 Typer/Rich/Console。"""
+    root = Path(__file__).resolve().parents[1]
+    offenders: list[str] = []
+    forbidden_imports = {"typer", "rich", "rich.console"}
+    for path in (
+        root / "kan" / "service" / "hold_service.py",
+        root / "kan" / "service" / "index_service.py",
+    ):
+        tree = ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
+        for node in ast.walk(tree):
+            if isinstance(node, ast.ImportFrom) and node.module in forbidden_imports:
+                offenders.append(f"{path.relative_to(root)}:{node.lineno}")
+            elif isinstance(node, ast.Import):
+                for alias in node.names:
+                    if alias.name in forbidden_imports:
+                        offenders.append(f"{path.relative_to(root)}:{node.lineno}")
+    assert offenders == []
+
+
 def test_storage_export_stays_split() -> None:
     """export 公共入口应保持薄门面，命令族实现继续分文件维护。"""
     root = Path(__file__).resolve().parents[1]

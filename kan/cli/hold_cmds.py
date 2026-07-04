@@ -70,56 +70,15 @@ def _echo_position_confirm(prefix: str, position) -> None:
 
 
 def _build_summary(*, no_refresh: bool, check_corporate_actions: bool = True):
-    from kan.core.positions import PriceSnapshot, evaluate_positions, price_from_kline
-    from kan.core.scanner import scan_stock
-    from kan.core.trading_calendar import PHASE_INTRADAY, latest_trade_date, market_phase
-    from kan.data.fetcher import get_cached
-    from kan.storage.positions import load_positions
+    from kan.cli.helpers import _auto_fetch_stale
+    from kan.service.hold_service import HoldRequest, build_hold_summary
 
-    book = load_positions()
-    pairs = [(p.symbol, p.name) for p in book.positions]
-    if pairs and not no_refresh:
-        from kan.cli.helpers import _auto_fetch_stale
-
-        _auto_fetch_stale(pairs, days=180)
-
-    cached = {symbol: get_cached(symbol) for symbol, _name in pairs}
-    prices = {symbol: price_from_kline(symbol, df) for symbol, df in cached.items()}
-    scans = {}
-    for symbol, name in pairs:
-        df = cached.get(symbol)
-        if df is None or getattr(df, "empty", True):
-            continue
-        scans[symbol] = scan_stock(df, symbol, name, periods=[30, 60, 180])
-
-    phase = market_phase()
-    price_mode = "close"
-    if phase == PHASE_INTRADAY and pairs and not no_refresh:
-        from kan.data.realtime import fetch_realtime_quotes
-
-        quotes = fetch_realtime_quotes([symbol for symbol, _name in pairs])
-        if quotes:
-            price_mode = "realtime"
-        for symbol, quote in quotes.items():
-            fallback = prices.get(symbol)
-            prices[symbol] = PriceSnapshot(
-                symbol=symbol,
-                price=quote.price,
-                prev_close=quote.prev_close or (fallback.prev_close if fallback else None),
-                source=quote.source,
-                data_cutoff=fallback.data_cutoff if fallback else None,
-                trade_time=quote.trade_time,
-                status=quote.status,
-            )
-
-    return evaluate_positions(
-        book,
-        prices=prices,
-        scans=scans,
-        price_mode=price_mode,
-        as_of=latest_trade_date(),
+    return build_hold_summary(HoldRequest(
+        no_refresh=no_refresh,
         check_corporate_actions=check_corporate_actions,
-    )
+        refresh_stale=lambda pairs, days: _auto_fetch_stale(pairs, days=days),
+        realtime_fail_soft=False,
+    ))
 
 
 def _render_overview(

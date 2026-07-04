@@ -6,7 +6,9 @@ from __future__ import annotations
 
 from typing import Any
 
+from kan.core.positions import PositionsSummary
 from kan.service.history_service import HistoryServiceResult
+from kan.service.index_service import IndexServiceResult
 from kan.service.info_service import InfoServiceResult
 from kan.service.scan_service import ScanServiceResult
 
@@ -168,4 +170,96 @@ def serialize_history(result: HistoryServiceResult) -> dict[str, Any]:
         "period": result.period,
         "series": series,
         "stats": {"shown": len(series)},
+    }
+
+
+def serialize_hold(result: PositionsSummary) -> dict[str, Any]:
+    """持仓页数据。"""
+    rows = []
+    for row in result.results:
+        rows.append({
+            "code": row.symbol,
+            "name": row.name.replace(" ", ""),
+            "cost": _round(row.cost, 4),
+            "shares": row.shares,
+            "price": _round(row.price),
+            "prev_close": _round(row.prev_close),
+            "market_value": _round(row.market_value),
+            "daily_pnl": _round(row.daily_pnl),
+            "daily_pnl_pct": _round(row.daily_pnl_pct),
+            "total_pnl": _round(row.total_pnl),
+            "total_pnl_pct": _round(row.total_pnl_pct),
+            "weight_pct": _round(row.weight_pct),
+            "p30_pct": _round(row.positions.get(30), 1),
+            "p60_pct": _round(row.positions.get(60), 1),
+            "p180_pct": _round(row.positions.get(180), 1),
+            "price_source": row.price_source,
+            "price_status": row.price_status,
+        })
+    return {
+        "ok": True,
+        "price_mode": result.price_mode,
+        "data_cutoff": _date_text(result.data_cutoff),
+        "account": {
+            "cash": _round(result.account.cash),
+            "total_market_value": _round(result.account.total_market_value),
+            "total_assets": _round(result.account.total_assets),
+            "total_position_pct": _round(result.account.total_position_pct),
+            "daily_pnl": _round(result.account.daily_pnl),
+            "total_pnl": _round(result.account.total_pnl),
+        },
+        "rows": rows,
+        "notes": list(result.notes),
+    }
+
+
+def empty_hold_payload(*, error: str | None = None) -> dict[str, Any]:
+    """持仓不可用时的中性降级 payload。"""
+    return {
+        "ok": error is None,
+        "error": error,
+        "price_mode": None,
+        "data_cutoff": None,
+        "account": {
+            "cash": None,
+            "total_market_value": None,
+            "total_assets": None,
+            "total_position_pct": None,
+            "daily_pnl": None,
+            "total_pnl": None,
+        },
+        "rows": [],
+        "notes": [],
+    }
+
+
+def serialize_index(result: IndexServiceResult) -> dict[str, Any]:
+    """首页指数对照条。"""
+    rows = []
+    for row in result.rows:
+        periods = {
+            str(period.period): {
+                "position_pct": _round(period.position_pct, 1),
+                "gain_pct": _round(period.gain_pct),
+            }
+            for period in row.periods
+        }
+        rows.append({
+            "code": row.code,
+            "name": row.name,
+            "data_available": row.data_available,
+            "data_date": _date_text(row.data_date),
+            "close": _round(row.close),
+            "periods": periods,
+        })
+    available = sum(1 for row in result.rows if row.data_available)
+    return {
+        "ok": available > 0,
+        "periods": result.periods,
+        "rows": rows,
+        "stats": {
+            "shown": len(rows),
+            "available": available,
+            "missing": len(rows) - available,
+        },
     }
