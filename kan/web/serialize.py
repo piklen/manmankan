@@ -4,6 +4,7 @@ Web 只输出页面友好的扁平结构;AI JSON 契约继续由 kan/storage/exp
 """
 from __future__ import annotations
 
+import math
 from typing import Any
 
 from kan.core.positions import PositionsSummary
@@ -18,7 +19,13 @@ def _date_text(value: Any) -> str | None:
 
 
 def _round(value: float | None, digits: int = 2) -> float | None:
-    return None if value is None else round(float(value), digits)
+    # NaN/Inf 必须归一成 None:Starlette JSONResponse 用 allow_nan=False,
+    # 任何非法浮点会在路由 return 之后的渲染阶段抛 ValueError → 500,
+    # 且路由内 try/except 兜不住(渲染发生在路由作用域之外)。
+    if value is None:
+        return None
+    f = float(value)
+    return None if math.isnan(f) or math.isinf(f) else round(f, digits)
 
 
 def serialize_scan(result: ScanServiceResult) -> dict[str, Any]:
@@ -90,7 +97,7 @@ def serialize_info(result: InfoServiceResult) -> dict[str, Any]:
     if result.volume is not None:
         volume = {
             "window": result.volume.window,
-            "ratio": result.volume.ratio,
+            "ratio": _round(result.volume.ratio),
             "label": result.volume.label,
             "state": result.volume.state,
         }
@@ -134,7 +141,7 @@ def serialize_info(result: InfoServiceResult) -> dict[str, Any]:
         "high_resonance": result.result.high_resonance,
         "trend": {
             "streak": result.trend.streak,
-            "streak_pct": result.trend.streak_pct,
+            "streak_pct": _round(result.trend.streak_pct),
             "direction": result.trend.direction,
         },
         "volume": volume,
@@ -155,7 +162,7 @@ def serialize_history(result: HistoryServiceResult) -> dict[str, Any]:
         resonance, direction = history_mark(entry.periods)
         series.append({
             "date": entry.snapshot_date.isoformat(),
-            "position_pct": cell["pct"] if cell else None,
+            "position_pct": _round(cell["pct"], 1) if cell else None,
             "at_low": bool(cell["at_low"]) if cell else None,
             "at_high": bool(cell["at_high"]) if cell else None,
             "low_resonance": low_res,

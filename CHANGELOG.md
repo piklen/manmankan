@@ -26,6 +26,10 @@ explicitly approves a larger bump.
 - `kan scan --all` 不再覆写默认池的 diff 快照。
 - 交易日历依赖的 py_mini_racer 在 dylib 加载失败机器上不再向终端输出裸 traceback。
 - 自适应并发测试不再依赖真实线程调度时序,消除 CI 偶发失败。
+- 看盘台序列化对 NaN/Inf 统一归一为 None(与 AI 导出口径对齐),避免个别股票非法浮点在 JSON 渲染阶段触发 500(该阶段在路由 return 之后,路由内 try/except 兜不住)。
+- 补数据进度流(SSE)改为 async 生成器,不再占用请求线程池 worker;多标签页或客户端中途断开不会拖垮其他页面。
+- 自选写入(看盘台与 CLI 的 add/remove/clear)加 fcntl 跨进程文件锁,消除并发写「读—改—写」丢更新;无 fcntl 平台降级为无锁、退回既有行为。
+- 看盘台个股历史周期越界改由 service 校验返回 400 并带范围提示,与 CLI 报错一致(此前被 Query 层通用 422 掩盖)。
 
 ## [0.0.6.9.7] - 2026-07-02
 

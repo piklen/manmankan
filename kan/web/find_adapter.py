@@ -1,6 +1,7 @@
 """Web find 表单到 service request 的适配层。"""
 from __future__ import annotations
 
+import math
 import shlex
 from typing import Any
 
@@ -196,7 +197,11 @@ def _metrics(row: Any, dimensions: set[str]) -> list[dict[str, Any]]:
 
 
 def _round(value: float | None, digits: int = 2) -> float | None:
-    return None if value is None else round(float(value), digits)
+    # 见 serialize._round:NaN/Inf → None,防 Starlette allow_nan=False 渲染 500。
+    if value is None:
+        return None
+    f = float(value)
+    return None if math.isnan(f) or math.isinf(f) else round(f, digits)
 
 
 def _gap_message(skipped_no_cache: int) -> str | None:

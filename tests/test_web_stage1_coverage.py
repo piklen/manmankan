@@ -638,21 +638,25 @@ def test_fetch_jobs_edges(monkeypatch) -> None:
     monkeypatch.setattr(fetch_jobs, "_current_job", fetch_jobs.FetchJob(id="known", status="done"))
     assert fetch_jobs.get_fetch_job("missing") is None
 
+    import asyncio
+
     job = fetch_jobs.FetchJob(id="keep")
-    waited = {"done": False}
+    monkeypatch.setattr(fetch_jobs, "_SSE_POLL_SECONDS", 0.0)
+    monkeypatch.setattr(fetch_jobs, "_SSE_KEEPALIVE_SECONDS", 0.0)
 
-    def fake_wait(timeout=None):
-        waited["done"] = True
+    async def _drive() -> list[str]:
+        chunks: list[str] = []
+        stream = fetch_jobs.iter_sse(job)
+        # 无事件 + keepalive 阈值=0 → 首个产出是 keep-alive
+        chunks.append(await stream.__anext__())
+        with job.condition:
+            job.status = "done"
+            job.condition.notify_all()
+        async for chunk in stream:
+            chunks.append(chunk)
+        return chunks
 
-    with job.condition:
-        job.condition.wait = fake_wait  # type: ignore[method-assign]
-    iterator = fetch_jobs.iter_sse(job)
-    assert next(iterator) == ": keep-alive\n\n"
-    with job.condition:
-        job.status = "done"
-        job.condition.notify_all()
-    assert list(iterator) == []
-    assert waited["done"] is True
+    assert asyncio.run(_drive()) == [": keep-alive\n\n"]
 
     error_job = fetch_jobs.FetchJob(id="err")
     fetch_jobs._run_job(error_job, lambda _progress: (_ for _ in ()).throw(RuntimeError("boom")))
@@ -961,3 +965,56 @@ def test_hold_page_unavailable_is_neutral(monkeypatch) -> None:
     assert response.status_code == 200
     assert '"ok": false' in response.text
     assert "\\u6301\\u4ed3\\u6570\\u636e\\u4e0d\\u53ef\\u7528" in response.text
+
+
+def test_history_period_out_of_range_maps_to_400() -> None:
+    # 越界 period 交给 service 校验 → 400 + 范围 hint(不再被 Query 层拦成 422)。
+    low = _client().get("/api/history/600519?period=1")
+    assert low.status_code == 400
+    assert "周期" in low.json()["detail"]
+    high = _client().get("/api/history/600519?period=500")
+    assert high.status_code == 400
+    # 非数字仍由 int 类型校验拦成 422。
+    assert _client().get("/api/history/600519?period=abc").status_code == 422
+
+
+def test_watchlist_write_ops_are_lock_wrapped() -> None:
+    from kan.storage import watchlist_items
+
+    # add/remove/clear 必须被 with_watchlist_lock 包裹(functools.wraps 设 __wrapped__)。
+    assert hasattr(watchlist_items.add, "__wrapped__")
+    assert hasattr(watchlist_items.remove, "__wrapped__")
+    assert hasattr(watchlist_items.clear, "__wrapped__")
+
+
+def test_watchlist_lock_is_mutually_exclusive() -> None:
+    import threading
+    import time
+
+    from kan.storage.watchlist_store import watchlist_lock
+
+    try:
+        import fcntl  # noqa: F401
+    except ImportError:
+        import pytest
+
+        pytest.skip("平台无 fcntl · 锁降级为无锁")
+
+    order: list[str] = []
+    started = threading.Event()
+
+    def worker() -> None:
+        started.wait()
+        with watchlist_lock():
+            order.append("B-in")
+
+    thread = threading.Thread(target=worker)
+    with watchlist_lock():
+        thread.start()
+        started.set()
+        time.sleep(0.1)  # 给 B 抢锁的窗口:有锁时 B 必须阻塞
+        order.append("A-holding")
+    thread.join()
+
+    # B 必须等 A 释放锁后才进入 → 证明跨 fd 互斥
+    assert order == ["A-holding", "B-in"]
