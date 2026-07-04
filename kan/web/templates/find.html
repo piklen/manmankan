@@ -1,0 +1,135 @@
+{% extends "base.html" %}
+
+{% block title %}慢慢看 Web · 筛选{% endblock %}
+
+{% block content %}
+<section class="band" x-data="kanFindPage()" x-cloak>
+  <div class="band-title">
+    <span>符合条件的股票</span>
+    <span class="meta">用户填写 filter 后执行</span>
+  </div>
+
+  <div class="stack">
+    <div class="field-label">候选池</div>
+    <div class="controls">
+      <label class="check"><input type="radio" value="watchlist" x-model="pool.type"> 自选</label>
+      <label class="check"><input type="radio" value="holdings" x-model="pool.type"> 持仓</label>
+      <label class="check"><input type="radio" value="codes" x-model="pool.type"> 自定义代码</label>
+      <label class="check"><input type="radio" value="industry" x-model="pool.type"> 行业</label>
+      <label class="check"><input type="radio" value="theme" x-model="pool.type"> 题材</label>
+    </div>
+    <textarea x-show="pool.type === 'codes'" x-model="pool.value" placeholder="600519,000858 或每行一个代码"></textarea>
+    <input x-show="pool.type === 'industry'" type="text" x-model="pool.value" placeholder="行业名称">
+    <input x-show="pool.type === 'theme'" type="text" x-model="pool.value" placeholder="题材名称">
+  </div>
+
+  <div class="stack">
+    <div class="toolbar" style="padding:0;border-bottom:0;">
+      <span>条件输入</span>
+      <div class="controls">
+        <label class="check"><input type="checkbox" x-model="excludeSt"> 排除 ST</label>
+        <button type="button" @click="addFilter()" :disabled="filters.length >= 6">添加条件</button>
+      </div>
+    </div>
+    <template x-if="filters.length === 0">
+      <div class="empty" style="padding:10px 0;">尚未填写 filter</div>
+    </template>
+    <template x-for="(filter, index) in filters" :key="filter.id">
+      <div class="filter-row">
+        <select x-model="filter.type" aria-label="条件类型">
+          <option value="">选择条件</option>
+          <option value="pos">位置 --pos</option>
+          <option value="resonance">共振 --resonance</option>
+          <option value="pe">PE --pe</option>
+          <option value="moneyflow">主力净额 --moneyflow</option>
+        </select>
+        <select x-show="filter.type === 'pos'" x-model="filter.period" aria-label="周期">
+          <option value="">周期</option>
+          <option value="30">30日</option>
+          <option value="60">60日</option>
+          <option value="180">180日</option>
+          <option value="360">360日</option>
+        </select>
+        <select x-show="filter.type === 'resonance'" x-model="filter.level" aria-label="共振方向">
+          <option value="">方向</option>
+          <option value="low">低点</option>
+          <option value="high">高点</option>
+        </select>
+        <span x-show="filter.type !== 'pos' && filter.type !== 'resonance'"></span>
+        <select x-show="filter.type !== 'resonance'" x-model="filter.op" aria-label="运算符">
+          <option value="">lt/gt</option>
+          <option value="lt">lt</option>
+          <option value="gt">gt</option>
+        </select>
+        <span x-show="filter.type === 'resonance'" class="meta">≥</span>
+        <input type="number" step="any" x-model="filter.value" placeholder="数值">
+        <span class="meta" x-text="filterUnit(filter)"></span>
+        <span class="row-actions">
+          <button type="button" @click="removeFilter(index)">删除</button>
+        </span>
+      </div>
+    </template>
+  </div>
+
+  <div class="stack">
+    <div class="toolbar" style="padding:0;border-bottom:0;">
+      <span>等价 CLI 命令</span>
+      <button type="button" @click="copyCommand()">复制</button>
+    </div>
+    <pre class="command-box" x-text="cliCommand"></pre>
+    <div class="meta" x-text="copyMessage"></div>
+  </div>
+
+  <div class="toolbar">
+    <div class="controls">
+      <button class="primary" type="button" @click="submit()" :disabled="loading">筛选</button>
+      <span class="meta" x-show="message" x-text="message"></span>
+    </div>
+  </div>
+
+  <template x-if="result && result.message">
+    <div class="toolbar"><span class="notice" x-text="result.message"></span></div>
+  </template>
+
+  <template x-if="result && result.rows.length === 0">
+    <div class="empty">没有符合条件的股票</div>
+  </template>
+
+  <div x-show="result && result.rows.length > 0" class="table-wrap">
+    <table>
+      <thead>
+        <tr>
+          <th>代码</th>
+          <th>名称</th>
+          <th>现价</th>
+          <th>命中条件</th>
+          <th>相关字段值</th>
+          <template x-for="period in resultPeriods" :key="period">
+            <th x-text="`${period}日位置%`"></th>
+          </template>
+        </tr>
+      </thead>
+      <tbody>
+        <template x-for="row in (result ? result.rows : [])" :key="row.code">
+          <tr @click="openStock(row.code)">
+            <td x-text="row.code"></td>
+            <td x-text="row.name"></td>
+            <td x-text="formatPrice(row.price)"></td>
+            <td x-text="formatTriggers(row.triggered_filters)"></td>
+            <td x-text="formatMetrics(row.metrics)"></td>
+            <template x-for="period in resultPeriods" :key="period">
+              <td x-text="formatPct(row.positions[String(period)] ?? null)"></td>
+            </template>
+          </tr>
+        </template>
+      </tbody>
+    </table>
+  </div>
+</section>
+{% endblock %}
+
+{% block footer_extra %}<br>{{ find_disclaimer }}{% endblock %}
+
+{% block scripts %}
+<script src="/static/find.js"></script>
+{% endblock %}

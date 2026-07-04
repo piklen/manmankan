@@ -12,6 +12,9 @@
         {% if scan.stats.data_cutoff %} · 数据截止 {{ scan.stats.data_cutoff }}{% endif %}
       </span>
       {% if scan.stats.stale %}<span class="notice">数据可能滞后</span>{% endif %}
+      <input type="text" x-model="addCodes" placeholder="添加自选代码">
+      <button type="button" @click="addWatchlist()" :disabled="!addCodes.trim()">添加自选</button>
+      <span class="meta" x-show="watchlistMessage" x-text="watchlistMessage"></span>
       <button class="primary" type="button" @click="startFetch()" :disabled="fetching">
         <span x-text="fetching ? '补数据中' : '补数据'"></span>
       </button>
@@ -83,6 +86,7 @@
             <th>{{ p }}日位置%</th>
           {% endfor %}
           <th>共振 ×N</th>
+          <th>操作</th>
         </tr>
       </thead>
       <tbody>
@@ -100,6 +104,13 @@
               <td :class="periodClass(row, {{ p }})" x-text="formatPct(periodPct(row, {{ p }}))"></td>
             {% endfor %}
             <td x-text="'×' + resonance(row)"></td>
+            <td>
+              <button
+                type="button"
+                x-show="row.in_watchlist"
+                @click.stop="removeWatchlist(row.code)"
+              >移除自选</button>
+            </td>
           </tr>
         </template>
       </tbody>

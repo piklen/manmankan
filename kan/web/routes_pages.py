@@ -7,7 +7,7 @@ from fastapi import APIRouter, Request
 from fastapi.responses import HTMLResponse
 from fastapi.templating import Jinja2Templates
 
-from kan.render.base import DISCLAIMER, HOLD_DISCLAIMER_TEXT
+from kan.render.base import DISCLAIMER, FIND_DISCLAIMER_TEXT, HOLD_DISCLAIMER_TEXT
 from kan.service.hold_service import build_hold_summary
 from kan.service.info_service import (
     InfoDataUnavailableError,
@@ -21,6 +21,7 @@ router = APIRouter()
 TEMPLATE_DIR = Path(__file__).with_name("templates")
 templates = Jinja2Templates(directory=str(TEMPLATE_DIR))
 templates.env.globals["disclaimer"] = DISCLAIMER.strip()
+templates.env.globals["find_disclaimer"] = FIND_DISCLAIMER_TEXT
 templates.env.globals["hold_disclaimer"] = HOLD_DISCLAIMER_TEXT
 
 
@@ -32,6 +33,11 @@ def index(request: Request):
         "index.html",
         {"scan": scan},
     )
+
+
+@router.get("/find", response_class=HTMLResponse)
+def find(request: Request):
+    return templates.TemplateResponse(request, "find.html", {})
 
 
 @router.get("/stock/{code}", response_class=HTMLResponse)

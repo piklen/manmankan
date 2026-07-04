@@ -177,6 +177,9 @@ def run_find_kline(
     scan_periods = kline_scan_periods(request.conditions)
     ma_bias_periods = kline_ma_bias_periods(request.conditions)
     fetch_days = max(scan_periods) if scan_periods else None
+    pipeline_kwargs = {}
+    if not request.allow_auto_fetch:
+        pipeline_kwargs["auto_fetch"] = False
 
     try:
         ctx = run_data_pipeline(
@@ -188,6 +191,7 @@ def run_find_kline(
             fetch_days=fetch_days,
             show_progress=not output.is_export,
             exit_on_resolve_error=False,
+            **pipeline_kwargs,
         )
     except StockSetResolveError as e:
         raise _find_error_from_stock_set(e) from e

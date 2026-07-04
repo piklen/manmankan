@@ -63,6 +63,7 @@ class FindKlineRequest:
     only_holdings: bool = False
     exclude_star: bool = False
     exclude_bj: bool = False
+    allow_auto_fetch: bool = True
     group: str | None = None
     limit: int | None = None
     offset: int = 0

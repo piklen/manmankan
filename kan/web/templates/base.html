@@ -269,7 +269,9 @@
       border-bottom: 1px solid var(--line);
     }
     input[type="password"],
-    input[type="text"] {
+    input[type="text"],
+    input[type="number"],
+    textarea {
       min-height: 34px;
       min-width: min(360px, 100%);
       border: 1px solid var(--line);
@@ -277,6 +279,45 @@
       padding: 0 10px;
       font: inherit;
       font-size: 14px;
+    }
+    textarea {
+      min-height: 88px;
+      padding: 8px 10px;
+      resize: vertical;
+    }
+    .stack {
+      display: grid;
+      gap: 12px;
+      padding: 14px 16px;
+      border-bottom: 1px solid var(--line);
+    }
+    .filter-row {
+      display: grid;
+      grid-template-columns: 130px repeat(4, minmax(92px, 1fr)) 74px;
+      gap: 8px;
+      align-items: center;
+    }
+    .filter-row input,
+    .filter-row select {
+      min-width: 0;
+      width: 100%;
+    }
+    .command-box {
+      display: block;
+      margin: 0;
+      padding: 12px;
+      overflow-x: auto;
+      border: 1px solid var(--line);
+      border-radius: 6px;
+      background: #111827;
+      color: #f8fafc;
+      font-size: 13px;
+      white-space: pre;
+    }
+    .row-actions {
+      display: inline-flex;
+      gap: 6px;
+      justify-content: flex-end;
     }
     .fact-list {
       padding: 6px 16px 16px;
@@ -387,6 +428,9 @@
       .range-row > .meta {
         grid-column: 2;
       }
+      .filter-row {
+        grid-template-columns: 1fr;
+      }
     }
   </style>
 </head>
@@ -397,6 +441,7 @@
         <h1>慢慢看 Web</h1>
         <nav class="nav-links" aria-label="主导航">
           <a href="/" class="{% if request.url.path == '/' or request.url.path.startswith('/stock') %}active{% endif %}">看盘台</a>
+          <a href="/find" class="{% if request.url.path.startswith('/find') %}active{% endif %}">筛选</a>
           <a href="/hold" class="{% if request.url.path.startswith('/hold') %}active{% endif %}">持仓</a>
           <a href="/settings" class="{% if request.url.path.startswith('/settings') %}active{% endif %}">设置</a>
         </nav>

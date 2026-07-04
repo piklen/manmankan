@@ -18,8 +18,9 @@ from kan.service.info_service import (
     get_stock_info,
 )
 from kan.service.scan_service import ScanRequest, run_scan
-from kan.storage import config
+from kan.storage import config, watchlist
 from kan.web.fetch_jobs import get_fetch_job, iter_sse, start_fetch_job
+from kan.web.find_adapter import run_web_find
 from kan.web.security import host_allowed
 from kan.web.serialize import (
     empty_hold_payload,
@@ -50,6 +51,43 @@ def default_scan_payload() -> dict:
 @router.get("/scan")
 def scan() -> dict:
     return default_scan_payload()
+
+
+@router.post("/find")
+def find(payload: Annotated[dict[str, Any], Body()]) -> dict:
+    return run_web_find(payload)
+
+
+@router.post("/watchlist")
+def add_watchlist(payload: Annotated[dict[str, Any], Body()]) -> dict:
+    raw = payload.get("codes")
+    if not isinstance(raw, str) or not raw.strip():
+        raise HTTPException(status_code=400, detail="请填写股票代码")
+    tokens = [part for part in raw.replace(",", " ").replace("，", " ").split() if part]
+    if not tokens:
+        raise HTTPException(status_code=400, detail="请填写股票代码")
+    messages: list[str] = []
+    try:
+        for token in tokens:
+            watchlist._normalize_symbol(token)
+        for token in tokens:
+            _ok, msg = watchlist.add(token)
+            messages.append(msg)
+    except (ValueError, watchlist.GroupNotFoundError) as e:
+        raise HTTPException(status_code=400, detail=str(e)) from e
+    return {"ok": True, "messages": messages}
+
+
+@router.delete("/watchlist/{code}")
+def remove_watchlist(code: str) -> dict:
+    try:
+        removed, msg = watchlist.remove(code)
+    except (ValueError, watchlist.GroupNotFoundError) as e:
+        raise HTTPException(status_code=400, detail=str(e)) from e
+    status = 200 if removed else 404
+    if not removed:
+        raise HTTPException(status_code=status, detail=msg)
+    return {"ok": True, "message": msg}
 
 
 @router.post("/fetch")
@@ -157,11 +195,12 @@ def delete_config_token() -> dict:
 
 def _token_status() -> dict[str, Any]:
     token = config.load().get("tushare_token")
-    configured = bool(isinstance(token, str) and token.strip())
+    token_text = token.strip() if isinstance(token, str) else ""
+    configured = bool(token_text)
     return {
         "ok": True,
         "configured": configured,
-        "masked": config.mask_token(token.strip()) if configured else None,
+        "masked": config.mask_token(token_text) if configured else None,
     }
 
 

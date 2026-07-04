@@ -14,6 +14,8 @@ function kanScanDesk(initialScan) {
     fetching: false,
     fetchMessage: "",
     eventSource: null,
+    addCodes: "",
+    watchlistMessage: "",
     init() {
       this.loadIndex();
       window.addEventListener("resize", () => {
@@ -204,6 +206,48 @@ function kanScanDesk(initialScan) {
         this.scan = await response.json();
         this.heatmapPage = 0;
         this.$nextTick(() => this.renderHeatmap());
+      }
+    },
+    async addWatchlist() {
+      this.watchlistMessage = "添加中";
+      try {
+        const response = await fetch("/api/watchlist", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "X-Kan-Web": "1",
+          },
+          body: JSON.stringify({ codes: this.addCodes }),
+        });
+        const payload = await response.json();
+        if (!response.ok) {
+          this.watchlistMessage = payload.detail || "添加失败";
+          return;
+        }
+        this.addCodes = "";
+        this.watchlistMessage = (payload.messages || []).join(" · ") || "已添加";
+        await this.reloadScan();
+      } catch (_error) {
+        this.watchlistMessage = "添加失败";
+      }
+    },
+    async removeWatchlist(code) {
+      if (!window.confirm(`确认移除自选 ${code}？`)) return;
+      this.watchlistMessage = "移除中";
+      try {
+        const response = await fetch(`/api/watchlist/${encodeURIComponent(code)}`, {
+          method: "DELETE",
+          headers: { "X-Kan-Web": "1" },
+        });
+        const payload = await response.json();
+        if (!response.ok) {
+          this.watchlistMessage = payload.detail || "移除失败";
+          return;
+        }
+        this.watchlistMessage = payload.message || "已移除";
+        await this.reloadScan();
+      } catch (_error) {
+        this.watchlistMessage = "移除失败";
       }
     },
   };
