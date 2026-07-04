@@ -123,6 +123,7 @@ scan_files_z() {
 SELF_EXCLUDES=(
   "scripts/check-privacy-leaks.sh"
   "CONTRIBUTING.md"
+  "kan/web/static/vendor/"
   ".ai/private/"
 )
 
@@ -305,6 +306,7 @@ VERSION_LEAKS=$(scan_files_z | xargs -0 grep -nEH "$VERSION_PATTERN" 2>/dev/null
   | grep -v '^CHANGELOG\.md:' \
   | grep -v '^docs/reviews/' \
   | grep -v '^CODE_OF_CONDUCT\.md:' \
+  | grep -v '^kan/web/static/vendor/' \
   || true)
 
 if [ -n "$VERSION_LEAKS" ]; then

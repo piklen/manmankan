@@ -186,6 +186,11 @@ def _fetch_from_akshare() -> set[date]:
     except ImportError as e:
         raise RuntimeError(f"akshare/pandas 导入失败: {e}") from e
 
+    # akshare 间接依赖的 py_mini_racer 在 dylib 加载失败机器上会析构喷裸 traceback
+    from kan.infra.finalizer_guard import defuse_mini_racer_finalizer
+
+    defuse_mini_racer_finalizer()
+
     try:
         df = ak.tool_trade_date_hist_sina()
         if df is None or df.empty:

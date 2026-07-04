@@ -1,0 +1,50 @@
+{% extends "base.html" %}
+
+{% block title %}慢慢看 Web · 设置{% endblock %}
+
+{% block content %}
+<section class="band" x-data="kanSettingsPage(window.KAN_TOKEN)" x-cloak>
+  <div class="band-title">
+    <span>TuShare Pro token</span>
+    <span class="meta" x-text="tokenText"></span>
+  </div>
+  <div class="form-row">
+    <input type="password" x-model="tokenInput" autocomplete="off" placeholder="输入 token">
+    <button class="primary" type="button" @click="saveToken()">保存</button>
+    <button type="button" @click="clearToken()" :disabled="!token.configured">清除</button>
+    <span class="meta" x-text="message"></span>
+  </div>
+  <div class="toolbar">
+    <span class="meta">
+      不配置 token 时，位置/共振/K 线维度仍可用；配置后可使用估值/资金等 TuShare 维度。
+    </span>
+  </div>
+</section>
+
+<section class="band">
+  <div class="band-title">
+    <span>本地数据</span>
+    <span class="meta">只读事实</span>
+  </div>
+  <div class="fact-list">
+    <div class="fact-row">
+      <span class="meta">数据目录路径</span>
+      <span>{{ facts.data_dir }}</span>
+    </div>
+    <div class="fact-row">
+      <span class="meta">K 线缓存文件数</span>
+      <span>{{ facts.kline_cache_files }}</span>
+    </div>
+    <div class="fact-row">
+      <span class="meta">TuShare endpoint</span>
+      <span>{{ facts.tushare_endpoint_domain or "—" }}</span>
+    </div>
+  </div>
+</section>
+{% endblock %}
+
+{% block scripts %}
+<script>
+  window.KAN_TOKEN = {{ token|tojson }};
+</script>
+{% endblock %}

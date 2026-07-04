@@ -15,94 +15,6 @@ from kan.cli.helpers import (
 )
 from kan.storage import export
 
-_MIN_BOARD_CONTEXT_SAMPLE = 3
-
-
-def _build_board_position_context(result):
-    """所属申万行业内的位置均值/排名 · 仅用本地 K 线缓存,失败时静默降级。"""
-    try:
-        from kan.core.models import BoardPositionContext, BoardPositionPeriod
-        from kan.core.scanner import scan_stock
-        from kan.data import boards
-        from kan.data.fetcher import get_cached
-        from kan.data.industry_map import fetch_sw_l1_map
-        from kan.infra.log import debug_log
-
-        target_periods = [p.period for p in result.periods if not p.insufficient]
-        if not target_periods:
-            return None
-
-        industry = fetch_sw_l1_map().get(result.symbol)
-        if not industry:
-            return None
-
-        board = boards.search_industry(industry)
-        constituents = boards.get_industry_constituents(board)
-        positions: dict[int, list[float]] = {p: [] for p in target_periods}
-        seen_codes: set[str] = set()
-        cached_codes: set[str] = set()
-
-        for code, name in constituents:
-            if code == result.symbol:
-                peer = result
-            else:
-                df = get_cached(code)
-                if df is None or df.empty:
-                    continue
-                try:
-                    peer = scan_stock(df, code, name, periods=target_periods)
-                except Exception as e:
-                    debug_log(__name__, f"info board peer scan failed · {code}", e)
-                    continue
-            seen_codes.add(code)
-            has_position = False
-            for pr in peer.periods:
-                if pr.insufficient or pr.period not in positions:
-                    continue
-                positions[pr.period].append(float(pr.position_pct))
-                has_position = True
-            if has_position:
-                cached_codes.add(code)
-
-        if result.symbol not in seen_codes:
-            for pr in result.periods:
-                if pr.insufficient or pr.period not in positions:
-                    continue
-                positions[pr.period].append(float(pr.position_pct))
-                cached_codes.add(result.symbol)
-
-        periods = []
-        for pr in result.periods:
-            if pr.insufficient:
-                continue
-            vals = positions.get(pr.period, [])
-            if len(vals) < _MIN_BOARD_CONTEXT_SAMPLE:
-                continue
-            rank = 1 + sum(v < pr.position_pct for v in vals)
-            periods.append(BoardPositionPeriod(
-                period=pr.period,
-                position_pct=round(float(pr.position_pct), 1),
-                board_avg_pct=round(sum(vals) / len(vals), 1),
-                rank_low_to_high=rank,
-                sample=len(vals),
-            ))
-
-        if not periods:
-            return None
-        return BoardPositionContext(
-            industry=industry,
-            board_code=getattr(board, "code", None),
-            board_level=getattr(board, "level", None),
-            constituent_count=len(constituents),
-            cached_sample=len(cached_codes),
-            periods=periods,
-        )
-    except Exception as e:
-        from kan.infra.log import debug_log
-
-        debug_log(__name__, f"info board context failed · {result.symbol}", e)
-        return None
-
 
 def _info_industry(industry: str, fmt: export.OutputFormat) -> None:
     """kan info --industry · 簡版板块档案。"""
@@ -254,87 +166,69 @@ def info(
 
     status_console = Console(stderr=True)
     with _with_heavy_imports_spinner(status_console, "⏳ 加载数据模块..."):
-        from kan.core.scanner import calc_trend, calc_volume_state, scan_stock
-        from kan.data.fetcher import cache_age, data_cutoff_date, fetch_kline, get_cached, is_fresh
         from kan.render import terminal
         from kan.render.base import DISCLAIMER
-        from kan.storage.watchlist import resolve_symbol_or_name
+        from kan.service.info_service import (
+            InfoDataUnavailableError,
+            InfoFetchError,
+            InfoRequest,
+            get_stock_info,
+        )
 
     console = Console()
 
+    def _fetch_status(sym: str, stock_name: str):
+        return status_console.status(
+            f"[yellow]⏳ 拉取数据... {stock_name.replace(' ', '')} ({sym})[/yellow]",
+            spinner="dots",
+        )
+
     try:
-        symbol, name = resolve_symbol_or_name(symbol)
+        info_result = get_stock_info(InfoRequest(
+            symbol_or_name=symbol,
+            include_valuation_context=fmt is export.OutputFormat.json,
+            fetch_status=_fetch_status,
+        ))
     except ValueError as e:
         _print_err(f"❌ {e}")
         raise typer.Exit(1) from e
+    except InfoFetchError as e:
+        from rich.console import Console as _ErrConsole
 
-    if not is_fresh(symbol):
-        try:
-            with status_console.status(
-                f"[yellow]⏳ 拉取数据... {name.replace(' ', '')} ({symbol})[/yellow]",
-                spinner="dots",
-            ):
-                fetch_kline(symbol, force=True)
-        except Exception as e:
-            from rich.console import Console as _ErrConsole
-            _ErrConsole(stderr=True).print(f"❌ 拉取失败：{_safe_error_msg(e)}")
-            raise typer.Exit(1) from e
-
-    df = get_cached(symbol)
-    if df is None:
+        _ErrConsole(stderr=True).print(f"❌ 拉取失败：{_safe_error_msg(e.cause)}")
+        raise typer.Exit(1) from e
+    except InfoDataUnavailableError as e:
         _print_err("无数据")
-        raise typer.Exit(1)
+        raise typer.Exit(1) from e
 
-    result = scan_stock(df, symbol, name)
-    try:
-        from kan.storage.positions import load_positions
-
-        cash = load_positions().cash
-    except Exception:
-        cash = None
-    from kan.core.retail_facts import apply_retail_facts
-
-    result = apply_retail_facts(result, cash=cash)
-    trend_result = calc_trend(df, symbol, name)
-    volume_state = calc_volume_state(df)
-    moneyflow = None
-    sentiment = None
-    valuation = None
-    try:
-        from kan.core.enrich import enrich_results
-
-        enriched = enrich_results([result], need_moneyflow=True, need_sentiment=True)[0]
-        moneyflow = enriched.moneyflow
-        sentiment = enriched.sentiment
-        valuation = enriched.valuation
-    except Exception as e:
-        from kan.infra.log import debug_log
-
-        debug_log(__name__, f"info enrich failed · {symbol}", e)
+    symbol = info_result.symbol
+    name = info_result.name
+    result = info_result.result
+    trend_result = info_result.trend
+    volume_state = info_result.volume
+    moneyflow = info_result.moneyflow
+    sentiment = info_result.sentiment
+    valuation = info_result.valuation
+    board_context = info_result.board_context
     name_short = name.replace(" ", "")
 
     # 背景: 数据截止 / 拉取时间分离展示
-    cutoff = data_cutoff_date(symbol)
-    fetched_at = cache_age(symbol) or ""
+    cutoff = info_result.data_cutoff
+    fetched_at = info_result.fetched_at or ""
     title = f"慢慢看 · {name_short} {symbol}"
     if cutoff:
         title += f" · 数据截止 {format_date_compact(cutoff)} 收盘"
     if fetched_at:
         title += f" · {format_fetched_at_compact(fetched_at)} 拉取"
-    board_context = _build_board_position_context(result)
 
     if fmt is not export.OutputFormat.terminal:
-        from kan.core.trading_calendar import latest_trade_date
-        is_stale = cutoff is None or cutoff < latest_trade_date()
         if fmt is export.OutputFormat.json:
             # AI JSON 层:enrich 截面市场指标 · 全市场截面层:估值位置对照 (历史分位+行业中位)
             # 无 token → 均 None · 优雅降级 (info 仍出位置/涨跌/量能)
-            from kan.core.valuation_context import build_valuation_context
-            valuation_context = build_valuation_context(symbol)
             typer.echo(export.to_json(export.info_payload(
                 result, trend_result, volume=volume_state, data_cutoff=cutoff,
-                fetched_at=fetched_at or None, stale=is_stale,
-                valuation=valuation, valuation_context=valuation_context,
+                fetched_at=info_result.fetched_at, stale=info_result.stale,
+                valuation=valuation, valuation_context=info_result.valuation_context,
                 moneyflow=moneyflow, sentiment=sentiment, board_context=board_context,
             )))
         else:

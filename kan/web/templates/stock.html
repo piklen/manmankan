@@ -1,0 +1,127 @@
+{% extends "base.html" %}
+
+{% block title %}
+  {% if info %}{{ info.name }} {{ info.code }} · 慢慢看 Web{% else %}未找到 · 慢慢看 Web{% endif %}
+{% endblock %}
+
+{% block content %}
+{% if not_found %}
+<section class="band">
+  <div class="band-title">
+    <span>本地缓存没有该代码数据</span>
+    <a class="meta" href="/">返回看盘台</a>
+  </div>
+  <div class="empty">代码：{{ code }}</div>
+</section>
+{% else %}
+<div x-data="kanStockPage(window.KAN_STOCK)" x-init="init()" x-cloak>
+  <section class="band">
+    <div class="band-title">
+      <div>
+        <span>{{ info.name }} {{ info.code }}</span>
+        <span class="code">现价 {{ "%.2f"|format(info.price) if info.price is not none else "—" }}</span>
+        {% if info.change_pct is not none %}
+          <span class="{% if info.change_pct >= 0 %}change-up{% else %}change-down{% endif %}">
+            {{ "%+.2f%%"|format(info.change_pct) }}
+          </span>
+        {% else %}
+          <span class="meta">—</span>
+        {% endif %}
+      </div>
+      <a class="meta" href="/">返回看盘台</a>
+    </div>
+  </section>
+
+  <section class="band">
+    <div class="band-title">
+      <span>位置标尺</span>
+      <span class="meta">0=N日最低 · 100=N日最高</span>
+    </div>
+    <div class="range-list">
+      {% for period in info.periods %}
+        <div class="range-row">
+          <strong>{{ period.period }}日</strong>
+          {% if period.position_pct is not none %}
+            <div>
+              <div class="range-track">
+                <span class="range-dot" style="--pct: {{ period.position_pct }}%;"></span>
+              </div>
+              <div class="range-labels">
+                <span>区间低点 {{ "%.2f"|format(period.n_low) if period.n_low is not none else "—" }}</span>
+                <span>区间高点 {{ "%.2f"|format(period.n_high) if period.n_high is not none else "—" }}</span>
+              </div>
+            </div>
+            <span class="meta">{{ "%.1f%%"|format(period.position_pct) }}</span>
+          {% else %}
+            <div class="meta">数据不可用</div>
+            <span class="meta">—</span>
+          {% endif %}
+        </div>
+      {% endfor %}
+    </div>
+  </section>
+
+  <section class="band">
+    <div class="band-title">
+      <span>位置走势</span>
+      <div class="tabs">
+        <button type="button" :class="{active: period === 30}" @click="setPeriod(30)">30日</button>
+        <button type="button" :class="{active: period === 60}" @click="setPeriod(60)">60日</button>
+        <button type="button" :class="{active: period === 180}" @click="setPeriod(180)">180日</button>
+      </div>
+    </div>
+    <div id="history-chart" class="chart" x-show="historyReady"></div>
+    <div class="empty" x-show="!historyReady" x-text="historyMessage"></div>
+  </section>
+
+  <section class="band">
+    <div class="band-title">
+      <span>基础字段</span>
+      <span class="meta">缺失项显示为 —</span>
+    </div>
+    <div class="grid-fields">
+      <div class="field">
+        <div class="field-label">量价方向</div>
+        <div class="field-value">{{ info.volume_price_state or (info.volume.state if info.volume else "—") }}</div>
+      </div>
+      <div class="field">
+        <div class="field-label">低点共振</div>
+        <div class="field-value">×{{ info.low_resonance }}</div>
+      </div>
+      <div class="field">
+        <div class="field-label">高点共振</div>
+        <div class="field-value">×{{ info.high_resonance }}</div>
+      </div>
+      <div class="field">
+        <div class="field-label">PE TTM</div>
+        <div class="field-value">{{ "%.2f"|format(info.valuation.pe_ttm) if info.valuation.pe_ttm is not none else "—" }}</div>
+      </div>
+      <div class="field">
+        <div class="field-label">PB</div>
+        <div class="field-value">{{ "%.2f"|format(info.valuation.pb) if info.valuation.pb is not none else "—" }}</div>
+      </div>
+      <div class="field">
+        <div class="field-label">换手率</div>
+        <div class="field-value">{{ "%.2f%%"|format(info.valuation.turnover_rate) if info.valuation.turnover_rate is not none else "—" }}</div>
+      </div>
+      <div class="field">
+        <div class="field-label">估值日期</div>
+        <div class="field-value">{{ info.valuation.trade_date or "—" }}</div>
+      </div>
+      <div class="field">
+        <div class="field-label">数据说明</div>
+        <div class="field-value"><span class="pill">数据不可用</span></div>
+      </div>
+    </div>
+  </section>
+</div>
+{% endif %}
+{% endblock %}
+
+{% block scripts %}
+{% if info %}
+<script>
+  window.KAN_STOCK = {{ info|tojson }};
+</script>
+{% endif %}
+{% endblock %}

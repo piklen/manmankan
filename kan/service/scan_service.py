@@ -8,7 +8,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from datetime import date
-from typing import Literal, cast
+from typing import Any, Literal, cast
 
 from kan.core.models import BoardMeta, HotMeta, StockScanResult, ThemeMeta
 from kan.core.pipeline import DataCtx
@@ -30,6 +30,7 @@ class ScanRequest:
     exclude_star: bool = False
     exclude_bj: bool = False
     show_progress: bool = True
+    allow_auto_fetch: bool = True
     include_external_context: bool = True
     enrich_timeout_seconds: float | None = SCAN_ENRICH_TIMEOUT_SECONDS
 
@@ -58,14 +59,20 @@ def run_scan(request: ScanRequest) -> ScanServiceResult:
     from kan.core.pipeline import run_data_pipeline
     from kan.core.scanner import scan_batch
 
+    fetch_days = max(request.periods) if request.periods else None
+    pipeline_kwargs: dict[str, Any] = {}
+    if not request.allow_auto_fetch:
+        # 只读缓存路径（本地 Web 等）显式关闭补数据;默认不传参,兼容既有测试假管线签名
+        pipeline_kwargs["auto_fetch"] = False
     ctx = run_data_pipeline(
         request.stock_set,
         compute=scan_batch,
         mode=request.mode,
         periods=request.periods,
-        fetch_days=max(request.periods) if request.periods else None,
+        fetch_days=fetch_days,
         show_progress=request.show_progress,
         exit_on_resolve_error=False,
+        **pipeline_kwargs,
     )
     board_index_result = _scan_board_index(ctx.meta, periods=request.periods)
     all_results = (

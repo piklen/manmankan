@@ -284,6 +284,7 @@ def run_data_pipeline(
     show_progress: bool = True,
     exit_on_resolve_error: bool = True,
     fetch_days: int | None = None,
+    auto_fetch: bool = True,
     **compute_kwargs: Any,
 ) -> DataCtx:
     """resolve → auto_fetch → compute → freshness 的统一编排 (StockSet 单签名)。
@@ -307,6 +308,7 @@ def run_data_pipeline(
         本 helper 不关心也不解释
       - freshness 在原始 results 上算 · 命令侧 exclude_st / --signal / --down
         等过滤是「展示侧」选择,不应该改「我们刚加载了什么数据」的事实
+      - auto_fetch=False 是本地 Web/测试等只读缓存路径的显式开关;默认 True 保持 CLI 行为
     """
     from kan.core.auto_fetch import auto_fetch_stale
 
@@ -316,17 +318,18 @@ def run_data_pipeline(
         if not exit_on_resolve_error:
             raise
         raise_stock_set_resolve_exit(e)
-    if show_progress:
-        if fetch_days is None:
-            auto_fetch_stale(targets)
-        else:
-            auto_fetch_stale(targets, days=fetch_days)
-    else:
-        with contextlib.redirect_stderr(io.StringIO()):
+    if auto_fetch:
+        if show_progress:
             if fetch_days is None:
                 auto_fetch_stale(targets)
             else:
                 auto_fetch_stale(targets, days=fetch_days)
+        else:
+            with contextlib.redirect_stderr(io.StringIO()):
+                if fetch_days is None:
+                    auto_fetch_stale(targets)
+                else:
+                    auto_fetch_stale(targets, days=fetch_days)
     results = compute(targets, **compute_kwargs)
     freshness = freshness_of(r.symbol for r in results)
     return DataCtx(

@@ -22,6 +22,58 @@ def test_lower_layers_do_not_import_cli_helpers() -> None:
     assert offenders == []
 
 
+def test_web_does_not_import_typer() -> None:
+    """web 层不应依赖 CLI 参数框架。"""
+    root = Path(__file__).resolve().parents[1]
+    offenders: list[str] = []
+    for path in (root / "kan" / "web").rglob("*.py"):
+        tree = ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
+        for node in ast.walk(tree):
+            if isinstance(node, ast.ImportFrom) and node.module == "typer":
+                offenders.append(f"{path.relative_to(root)}:{node.lineno}")
+            elif isinstance(node, ast.Import):
+                for alias in node.names:
+                    if alias.name == "typer":
+                        offenders.append(f"{path.relative_to(root)}:{node.lineno}")
+    assert offenders == []
+
+
+def test_service_does_not_import_fastapi() -> None:
+    """service 层不应反向依赖 Web 框架。"""
+    root = Path(__file__).resolve().parents[1]
+    offenders: list[str] = []
+    for path in (root / "kan" / "service").rglob("*.py"):
+        tree = ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
+        for node in ast.walk(tree):
+            if isinstance(node, ast.ImportFrom) and node.module == "fastapi":
+                offenders.append(f"{path.relative_to(root)}:{node.lineno}")
+            elif isinstance(node, ast.Import):
+                for alias in node.names:
+                    if alias.name == "fastapi":
+                        offenders.append(f"{path.relative_to(root)}:{node.lineno}")
+    assert offenders == []
+
+
+def test_new_web_services_do_not_import_cli_or_render_frameworks() -> None:
+    """新 Web 复用 service 不应依赖 Typer/Rich/Console。"""
+    root = Path(__file__).resolve().parents[1]
+    offenders: list[str] = []
+    forbidden_imports = {"typer", "rich", "rich.console"}
+    for path in (
+        root / "kan" / "service" / "hold_service.py",
+        root / "kan" / "service" / "index_service.py",
+    ):
+        tree = ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
+        for node in ast.walk(tree):
+            if isinstance(node, ast.ImportFrom) and node.module in forbidden_imports:
+                offenders.append(f"{path.relative_to(root)}:{node.lineno}")
+            elif isinstance(node, ast.Import):
+                for alias in node.names:
+                    if alias.name in forbidden_imports:
+                        offenders.append(f"{path.relative_to(root)}:{node.lineno}")
+    assert offenders == []
+
+
 def test_storage_export_stays_split() -> None:
     """export 公共入口应保持薄门面，命令族实现继续分文件维护。"""
     root = Path(__file__).resolve().parents[1]

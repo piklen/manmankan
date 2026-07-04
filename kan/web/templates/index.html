@@ -1,0 +1,138 @@
+{% extends "base.html" %}
+
+{% block title %}慢慢看 Web · 看盘台{% endblock %}
+
+{% block content %}
+<section class="band" x-data="kanScanDesk(window.KAN_SCAN)" x-init="init()" x-cloak>
+  <div class="band-title">
+    <span>{{ scan.source_name }}</span>
+    <div class="status-line">
+      <span class="meta">
+        {{ scan.stats.shown }}/{{ scan.stats.targets }} 只
+        {% if scan.stats.data_cutoff %} · 数据截止 {{ scan.stats.data_cutoff }}{% endif %}
+      </span>
+      {% if scan.stats.stale %}<span class="notice">数据可能滞后</span>{% endif %}
+      <input type="text" x-model="addCodes" placeholder="添加自选代码">
+      <button type="button" @click="addWatchlist()" :disabled="!addCodes.trim()">添加自选</button>
+      <span class="meta" x-show="watchlistMessage" x-text="watchlistMessage"></span>
+      <button class="primary" type="button" @click="startFetch()" :disabled="fetching">
+        <span x-text="fetching ? '补数据中' : '补数据'"></span>
+      </button>
+      <span class="meta" x-show="fetchMessage" x-text="fetchMessage"></span>
+    </div>
+  </div>
+  <div class="index-strip">
+    <template x-if="indexLoading">
+      <span>指数数据读取中</span>
+    </template>
+    <template x-if="!indexLoading && !indexData.ok">
+      <span>指数数据不可用</span>
+    </template>
+    <template x-if="!indexLoading && indexData.ok">
+      <div class="status-line">
+        <template x-for="row in indexData.rows" :key="row.code">
+          <span class="index-item">
+            <strong x-text="row.name"></strong>
+            <span x-text="formatPrice(row.close)"></span>
+            <template x-for="period in indexData.periods" :key="period">
+              <span x-text="`${period}日 ${formatPct(indexPct(row, period))}`"></span>
+            </template>
+          </span>
+        </template>
+      </div>
+    </template>
+  </div>
+
+  <div class="toolbar">
+    <div class="tabs" role="tablist" aria-label="视图">
+      <button type="button" :class="{active: activeTab === 'table'}" @click="setTab('table')">
+        数据表
+      </button>
+      <button type="button" :class="{active: activeTab === 'heatmap'}" @click="setTab('heatmap')">
+        位置热力图
+      </button>
+    </div>
+    <div class="controls">
+      <select x-model="mode" aria-label="共振模式">
+        <option value="low">低点</option>
+        <option value="high">高点</option>
+      </select>
+      <label class="check">
+        <input type="checkbox" x-model="resonanceOnly">
+        只看共振
+      </label>
+      <select x-model="sortKey" aria-label="排序字段">
+        <option value="resonance">共振数</option>
+        {% for p in scan.periods %}
+          <option value="p{{ p }}">{{ p }}日位置</option>
+        {% endfor %}
+      </select>
+      <button type="button" @click="toggleSortDir()" x-text="sortDir === 'desc' ? '降序' : '升序'"></button>
+    </div>
+  </div>
+
+  <template x-if="scan.rows.length === 0">
+    <div class="empty">本地缓存暂无可展示数据</div>
+  </template>
+
+  <div x-show="scan.rows.length > 0 && activeTab === 'table'" class="table-wrap">
+    <table>
+      <thead>
+        <tr>
+          <th>序号</th>
+          <th>代码 / 名称</th>
+          <th>现价</th>
+          {% for p in scan.periods %}
+            <th>{{ p }}日位置%</th>
+          {% endfor %}
+          <th>共振 ×N</th>
+          <th>操作</th>
+        </tr>
+      </thead>
+      <tbody>
+        <template x-for="(row, index) in sortedRows" :key="row.code">
+          <tr tabindex="0" @click="openStock(row.code)" @keydown.enter="openStock(row.code)">
+            <td x-text="index + 1"></td>
+            <td>
+              <span x-text="row.code"></span>
+              <span class="code" x-text="row.name"></span>
+              <span class="tag" x-show="row.in_watchlist">⭐ 自选</span>
+              <span class="tag" x-show="row.in_holding">💰 持仓</span>
+            </td>
+            <td x-text="formatPrice(row.price)"></td>
+            {% for p in scan.periods %}
+              <td :class="periodClass(row, {{ p }})" x-text="formatPct(periodPct(row, {{ p }}))"></td>
+            {% endfor %}
+            <td x-text="'×' + resonance(row)"></td>
+            <td>
+              <button
+                type="button"
+                x-show="row.in_watchlist"
+                @click.stop="removeWatchlist(row.code)"
+              >移除自选</button>
+            </td>
+          </tr>
+        </template>
+      </tbody>
+    </table>
+  </div>
+
+  <div x-show="scan.rows.length > 0 && activeTab === 'heatmap'" x-effect="activeTab === 'heatmap' && renderHeatmap()">
+    <div id="scan-heatmap" class="chart tall" aria-label="位置热力图"></div>
+    <div class="toolbar">
+      <span class="meta">0=N日最低 · 100=N日最高</span>
+      <div class="controls">
+        <button type="button" @click="prevHeatmapPage()" :disabled="heatmapPage === 0">上一页</button>
+        <span class="meta" x-text="heatmapPageText"></span>
+        <button type="button" @click="nextHeatmapPage()" :disabled="heatmapPage >= heatmapPageCount - 1">下一页</button>
+      </div>
+    </div>
+  </div>
+</section>
+{% endblock %}
+
+{% block scripts %}
+<script>
+  window.KAN_SCAN = {{ scan|tojson }};
+</script>
+{% endblock %}

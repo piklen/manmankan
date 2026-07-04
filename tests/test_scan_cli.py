@@ -627,6 +627,68 @@ def test_scan_default_uses_holdings_when_watchlist_empty(monkeypatch):
     assert payload["results"][0]["in_watchlist"] is False
 
 
+def test_scan_only_holdings_does_not_write_shared_snapshot(monkeypatch):
+    """`kan hold scan` 走 only_holdings 时不能覆盖默认池 diff 基线。"""
+    from datetime import date
+
+    from typer.testing import CliRunner
+
+    from kan.app import app
+    from kan.core.models import PeriodResult, StockScanResult
+    from kan.core.pipeline import DataCtx, Freshness
+    from kan.service.scan_service import ScanServiceResult
+
+    row = StockScanResult(
+        symbol="600519",
+        name="贵州茅台",
+        current_price=100.0,
+        scan_date=date(2026, 6, 6),
+        periods=[
+            PeriodResult(
+                period=30,
+                n_low=90.0,
+                n_high=110.0,
+                position_pct=50.0,
+                at_low=False,
+                at_high=False,
+            )
+        ],
+        low_resonance=0,
+        high_resonance=0,
+    )
+    freshness = Freshness(
+        data_cutoff=date(2026, 6, 6),
+        fetched_at="2026-06-06 15:30",
+        expected_cutoff=date(2026, 6, 6),
+        is_stale=False,
+        phase="post",
+    )
+    saved = []
+
+    def fake_run_scan(request):
+        return ScanServiceResult(
+            ctx=DataCtx(
+                targets=[("600519", "贵州茅台")],
+                meta=None,
+                results=[row],
+                freshness=freshness,
+                source_name="真实持仓",
+            ),
+            mode=request.mode,
+            all_results=[row],
+            results=[row],
+        )
+
+    monkeypatch.setattr("kan.service.scan_service.run_scan", fake_run_scan)
+    monkeypatch.setattr("kan.core.scanner.save_snapshot", lambda results: saved.append(results))
+    monkeypatch.setattr("kan.data.fetcher.data_cutoff_date", lambda _symbol: date(2026, 6, 6))
+
+    result = CliRunner().invoke(app, ["scan", "--only-holdings"], env={"COLUMNS": "120"})
+
+    assert result.exit_code == 0, result.output
+    assert saved == []
+
+
 def test_scan_command_high_mode(scan_runner):
     """`kan scan --high` 高点模式 · 应跑通"""
     from kan.app import app

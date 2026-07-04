@@ -299,29 +299,6 @@ def mcp_install(
     console.print("[dim]重启对应客户端后生效；若已安装对应 CLI，会优先用 user scope 注册。[/dim]")
 
 
-def _index_row_payload(scan, *, code: str, name: str, data_available: bool) -> dict[str, Any]:
-    if scan is None:
-        return {
-            "code": code,
-            "name": name,
-            "data_available": data_available,
-            "data_date": None,
-            "close": None,
-            "position_pct": None,
-            "gain_pct": None,
-        }
-    period = scan.periods[0] if scan.periods else None
-    return {
-        "code": code,
-        "name": name,
-        "data_available": data_available,
-        "data_date": scan.scan_date.isoformat(),
-        "close": scan.current_price,
-        "position_pct": None if period is None or period.insufficient else period.position_pct,
-        "gain_pct": None if period is None else period.gain_pct,
-    }
-
-
 def _exit_ai_error(
     command: str,
     fmt: export.OutputFormat,
@@ -404,40 +381,30 @@ def index(
     ] = export.OutputFormat.terminal,
 ) -> None:
     """查看常用 A 股指数日线位置参照（TuShare index_daily）。"""
-    from kan.core.scanner import MAX_PERIOD, MIN_PERIOD, scan_stock
-    from kan.data.index import DEFAULT_INDEXES, fetch_index_daily, index_name, normalize_index_code
     from kan.render.base import DISCLAIMER
+    from kan.service.index_service import (
+        IndexRequest,
+        IndexServiceError,
+        get_index_reference,
+        index_row_payload,
+    )
 
-    if period < MIN_PERIOD or period > MAX_PERIOD:
+    try:
+        result = get_index_reference(IndexRequest(
+            codes=codes,
+            periods=[period],
+            days=days,
+        ))
+    except IndexServiceError as e:
         _exit_ai_error(
             "index",
             fmt,
-            code="invalid_period",
-            message=f"周期 {period} 无效（范围 {MIN_PERIOD}-{MAX_PERIOD}）",
-            hint="例: kan index sh --period 60 --format json",
-            exit_code=2,
+            code=e.code,
+            message=e.message,
+            hint=e.hint,
+            exit_code=e.exit_code,
         )
-    raw_codes = codes or [spec.code for spec in DEFAULT_INDEXES]
-    rows: list[dict[str, Any]] = []
-    for raw in raw_codes:
-        try:
-            code = normalize_index_code(raw)
-        except ValueError as e:
-            _exit_ai_error(
-                "index",
-                fmt,
-                code="invalid_index",
-                message=str(e),
-                hint="支持: sh / sz / cyb / hs300 · 例: kan index sh --format json",
-                exit_code=2,
-            )
-        name = index_name(code)
-        df = fetch_index_daily(code, days=max(days, period + 40))
-        if df is None or len(df) < period:
-            rows.append(_index_row_payload(None, code=code, name=name, data_available=False))
-            continue
-        scan = scan_stock(df, code, name, periods=[period])
-        rows.append(_index_row_payload(scan, code=code, name=name, data_available=True))
+    rows = [index_row_payload(row) for row in result.rows]
 
     payload = {
         **export.success_envelope(

@@ -1,0 +1,96 @@
+{% extends "base.html" %}
+
+{% block title %}慢慢看 Web · 持仓{% endblock %}
+
+{% block content %}
+<section class="band" x-data="kanHoldPage(window.KAN_HOLD)" x-cloak>
+  <div class="band-title">
+    <span>持仓</span>
+    <div class="status-line">
+      <label class="check">
+        <input type="checkbox" x-model="masked">
+        脱敏
+      </label>
+      <span class="meta">
+        {% if hold.data_cutoff %}数据截止 {{ hold.data_cutoff }} · {% endif %}
+        现价口径 {{ hold.price_mode or "—" }}
+      </span>
+    </div>
+  </div>
+
+  <div class="summary-grid">
+    <div class="summary-cell">
+      <div class="field-label">市值</div>
+      <div class="field-value" x-text="formatMoney(hold.account.total_market_value)"></div>
+    </div>
+    <div class="summary-cell">
+      <div class="field-label">现金</div>
+      <div class="field-value" x-text="formatMoney(hold.account.cash)"></div>
+    </div>
+    <div class="summary-cell">
+      <div class="field-label">总仓位</div>
+      <div class="field-value" x-text="formatPct(hold.account.total_position_pct)"></div>
+    </div>
+  </div>
+
+  <template x-if="hold.rows.length === 0">
+    <div class="empty">
+      <div>暂无持仓记录</div>
+      <div class="meta">示例：<code>kan hold add 600519 --cost 1680 --shares 100</code></div>
+      <div class="meta">示例：<code>kan hold cash 50000</code></div>
+    </div>
+  </template>
+
+  <div x-show="hold.rows.length > 0" class="table-wrap">
+    <table>
+      <thead>
+        <tr>
+          <th>名称代码</th>
+          <th>成本</th>
+          <th>股数</th>
+          <th>现价</th>
+          <th>今日盈亏</th>
+          <th>累计盈亏</th>
+          <th>仓位%</th>
+          <th>30日位置%</th>
+          <th>60日位置%</th>
+          <th>180日位置%</th>
+        </tr>
+      </thead>
+      <tbody>
+        <template x-for="row in hold.rows" :key="row.code">
+          <tr>
+            <td>
+              <span x-text="row.name"></span>
+              <span class="code" x-text="row.code"></span>
+            </td>
+            <td x-text="formatCost(row.cost)"></td>
+            <td x-text="formatInt(row.shares)"></td>
+            <td x-text="formatPrice(row.price)"></td>
+            <td :class="pnlClass(row.daily_pnl)" x-text="formatPnl(row.daily_pnl, row.daily_pnl_pct)"></td>
+            <td :class="pnlClass(row.total_pnl)" x-text="formatPnl(row.total_pnl, row.total_pnl_pct)"></td>
+            <td x-text="formatPct(row.weight_pct)"></td>
+            <td :class="positionClass(row.p30_pct)" x-text="formatPct(row.p30_pct)"></td>
+            <td :class="positionClass(row.p60_pct)" x-text="formatPct(row.p60_pct)"></td>
+            <td :class="positionClass(row.p180_pct)" x-text="formatPct(row.p180_pct)"></td>
+          </tr>
+        </template>
+      </tbody>
+    </table>
+  </div>
+
+  <div class="toolbar" x-show="hold.notes.length > 0">
+    <template x-for="note in hold.notes" :key="note">
+      <span class="meta" x-text="note"></span>
+    </template>
+  </div>
+</section>
+{% endblock %}
+
+{% block footer_extra %}<br>{{ hold_disclaimer }}{% endblock %}
+
+{% block scripts %}
+<script>
+  window.KAN_HOLD = {{ hold|tojson }};
+</script>
+{% endblock %}
