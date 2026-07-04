@@ -30,6 +30,7 @@ def build_hold_summary(request: HoldRequest | None = None) -> PositionsSummary:
     from kan.storage.positions import load_positions
 
     book = load_positions()
+    _resolve_placeholder_names(book)
     pairs = [(p.symbol, p.name) for p in book.positions]
     if pairs and not request.no_refresh:
         refresh = request.refresh_stale or _refresh_stale_silent
@@ -78,6 +79,20 @@ def build_hold_summary(request: HoldRequest | None = None) -> PositionsSummary:
         as_of=latest_trade_date(),
         check_corporate_actions=request.check_corporate_actions,
     )
+
+
+def _resolve_placeholder_names(book) -> None:
+    """用本地名称缓存补 `name == symbol` 的占位名;只读 cache,不触发网络。"""
+    placeholders = [p for p in book.positions if p.name == p.symbol]
+    if not placeholders:
+        return
+    from kan.storage.watchlist_names import load_stock_names_cache
+
+    names = load_stock_names_cache(allow_stale=True) or {}
+    for position in placeholders:
+        resolved = names.get(position.symbol)
+        if resolved:
+            position.name = resolved
 
 
 def _refresh_stale_silent(pairs: list[tuple[str, str]], days: int | None) -> None:
