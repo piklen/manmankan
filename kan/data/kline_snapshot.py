@@ -15,6 +15,7 @@ from __future__ import annotations
 
 import re
 import time
+from collections.abc import Callable
 from datetime import date, datetime, timedelta
 from hashlib import sha1
 from pathlib import Path
@@ -166,6 +167,7 @@ def fetch_recent_daily_bars(
     end_date: str | None = None,
     symbols: list[str] | None = None,
     force: bool = False,
+    on_progress: Callable[[int, int, date, int], None] | None = None,
 ) -> pd.DataFrame:
     """拉近 `days` 个交易日的全市场 daily OHLC panel · trend --all 截面路径专用。
 
@@ -176,6 +178,7 @@ def fetch_recent_daily_bars(
     - end_date: 截止交易日(YYYYMMDD)· None 用 latest_trade_date()
     - symbols: 可选 symbol 过滤 · None 返回全市场
     - force: 强刷每日截面缓存
+    - on_progress: 每个交易日截面完成后回调 (已完成数, 总数, 交易日, 行数)
     """
     import pandas as pd
 
@@ -185,10 +188,13 @@ def fetch_recent_daily_bars(
     end = _date_from_trade_date(td)
     dates = _recent_trade_dates(end, days)
     frames: list[pd.DataFrame] = []
-    for d in dates:
+    total = len(dates)
+    for idx, d in enumerate(dates, start=1):
         daily = fetch_daily_bars(d.strftime("%Y%m%d"), force=force)
         if not daily.empty:
             frames.append(daily)
+        if on_progress is not None:
+            on_progress(idx, total, d, len(daily))
     if not frames:
         return _empty_daily_df()
     panel = pd.concat(frames, ignore_index=True)

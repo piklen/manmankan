@@ -1,6 +1,7 @@
 """股票池型命令 --all 回归测试 · 不打真实网络。"""
 from __future__ import annotations
 
+import json
 from datetime import date
 
 import pandas as pd
@@ -116,7 +117,7 @@ def test_trend_all_uses_all_stocks_pool(
     all_pool_runner: CliRunner,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    captured: dict[str, list[tuple[str, str]]] = {}
+    captured: dict[str, object] = {}
 
     monkeypatch.setattr(
         "kan.cli.trend_cmds._get_watchlist_pairs",
@@ -126,6 +127,8 @@ def test_trend_all_uses_all_stocks_pool(
     # --all 走截面路径 · mock fetch_recent_daily_bars(返空 panel) + trend_batch_cross_section(接收 targets)
     def fake_recent_daily_bars(days, **kw):
         captured["fetch_symbols"] = kw.get("symbols")
+        captured["on_progress"] = kw.get("on_progress")
+        kw["on_progress"](1, days, date(2026, 6, 26), len(ALL_PAIRS))
         return pd.DataFrame(columns=["symbol", "date", "open", "close"])
 
     monkeypatch.setattr("kan.data.kline_snapshot.fetch_recent_daily_bars", fake_recent_daily_bars)
@@ -154,7 +157,53 @@ def test_trend_all_uses_all_stocks_pool(
     assert result.exit_code == 0, result.output
     assert captured["pairs"] == ALL_PAIRS
     assert captured["fetch_symbols"] == ["600519", "000858"]
+    assert callable(captured["on_progress"])
     assert "A股全市场连续涨跌" in result.output
+
+
+@pytest.mark.parametrize("fmt", ["json", "md"])
+def test_trend_all_progress_does_not_pollute_structured_stdout(
+    all_pool_runner: CliRunner,
+    monkeypatch: pytest.MonkeyPatch,
+    fmt: str,
+) -> None:
+    """全市场进度反馈只能走 stderr，不能污染 JSON / Markdown stdout。"""
+
+    def fake_recent_daily_bars(days, **kw):
+        kw["on_progress"](1, days, date(2026, 6, 26), len(ALL_PAIRS))
+        return pd.DataFrame(columns=["symbol", "date", "open", "close"])
+
+    monkeypatch.setattr("kan.data.kline_snapshot.fetch_recent_daily_bars", fake_recent_daily_bars)
+
+    def fake_trend_cross(input_pairs, *, candle=False, panel=None):
+        return [
+            TrendResult(
+                symbol=symbol,
+                name=name,
+                current_price=100.0,
+                streak=2,
+                streak_pct=1.5,
+                daily_changes=[("2026-06-26", 0.8)],
+            )
+            for symbol, name in input_pairs
+        ]
+
+    monkeypatch.setattr(
+        "kan.core.scanner_trend.trend_batch_cross_section",
+        fake_trend_cross,
+    )
+
+    result = all_pool_runner.invoke(app, ["trend", "--all", "--format", fmt])
+
+    assert result.exit_code == 0, result.output
+    for progress_text in ("加载全市场股票池", "拉取全市场日线截面", "计算连续涨跌"):
+        assert progress_text not in result.stdout
+    if fmt == "json":
+        data = json.loads(result.stdout)
+        assert data["command"] == "trend"
+        assert len(data["results"]) == len(ALL_PAIRS)
+    else:
+        assert "慢慢看 · A股全市场连续涨跌" in result.stdout
 
 
 def test_trend_plain_all_arg_points_to_flag(all_pool_runner: CliRunner) -> None:

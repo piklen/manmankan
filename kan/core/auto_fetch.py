@@ -12,22 +12,12 @@ def auto_fetch_stale(
     days: int | None = None,
 ) -> None:
     """自动拉取缺失或过期（非今天）的自选股数据。"""
-    from rich.console import Console
-    from rich.progress import (
-        BarColumn,
-        Progress,
-        SpinnerColumn,
-        TextColumn,
-        TimeElapsedColumn,
-    )
+    from kan.infra.progress import cli_status, determinate_progress, feedback_console
 
-    console = Console(stderr=True)
+    console = feedback_console()
     n_total = len(pairs)
 
-    with console.status(
-        "[yellow]⏳ 加载数据模块...[/yellow]",
-        spinner="dots",
-    ) as status:
+    with cli_status("⏳ 加载数据模块...", console=console) as status:
         from kan.data.fetcher import fetch_batch, is_fresh
 
         status.update(
@@ -77,15 +67,7 @@ def auto_fetch_stale(
 
     name_map = dict(stale)
 
-    with Progress(
-        SpinnerColumn(),
-        TextColumn("[progress.description]{task.description}"),
-        BarColumn(),
-        TextColumn("[progress.percentage]{task.percentage:>3.0f}%"),
-        TextColumn("[dim]({task.completed}/{task.total})[/dim]"),
-        TimeElapsedColumn(),
-        console=console,
-    ) as progress:
+    with determinate_progress(console=console) as progress:
         task_id = progress.add_task("⏳ 拉取数据...", total=n)
 
         fails: list[str] = []
