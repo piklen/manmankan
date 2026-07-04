@@ -679,6 +679,18 @@ def test_info_service_error_and_context_branches(monkeypatch) -> None:
     monkeypatch.setattr("kan.data.fetcher.is_fresh", lambda _symbol: False)
     monkeypatch.setattr(
         "kan.data.fetcher.fetch_kline",
+        lambda *_args, **_kwargs: None,
+    )
+    with pytest.raises(InfoFetchError) as status_exc:
+        get_stock_info(InfoRequest(
+            "600519",
+            allow_fetch=True,
+            fetch_status=lambda _symbol, _name: (_ for _ in ()).throw(RuntimeError("status failed")),
+        ))
+    assert "status failed" in str(status_exc.value.cause)
+
+    monkeypatch.setattr(
+        "kan.data.fetcher.fetch_kline",
         lambda *_args, **_kwargs: (_ for _ in ()).throw(RuntimeError("fetch failed")),
     )
     with pytest.raises(InfoFetchError) as exc_info:

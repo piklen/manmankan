@@ -111,7 +111,7 @@
       </thead>
       <tbody>
         <template x-for="row in (result ? result.rows : [])" :key="row.code">
-          <tr @click="openStock(row.code)">
+          <tr tabindex="0" @click="openStock(row.code)" @keydown.enter="openStock(row.code)">
             <td x-text="row.code"></td>
             <td x-text="row.name"></td>
             <td x-text="formatPrice(row.price)"></td>

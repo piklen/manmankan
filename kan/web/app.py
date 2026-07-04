@@ -9,7 +9,7 @@ from fastapi.staticfiles import StaticFiles
 
 from kan.web.routes_api import router as api_router
 from kan.web.routes_pages import router as pages_router
-from kan.web.security import MUTATING_METHODS, mutating_request_error
+from kan.web.security import MUTATING_METHODS, host_allowed, mutating_request_error
 
 STATIC_DIR = Path(__file__).with_name("static")
 
@@ -28,6 +28,8 @@ def create_app() -> FastAPI:
 
     @app.middleware("http")
     async def csrf_guard(request: Request, call_next):
+        if not host_allowed(request.headers.get("host")):
+            return JSONResponse({"ok": False, "error": "host not allowed"}, status_code=403)
         if request.method in MUTATING_METHODS:
             error = mutating_request_error(request)
             if error is not None:

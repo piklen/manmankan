@@ -406,7 +406,12 @@ def scan(
     freshness = ctx.freshness  # 给 render_freshness_warning 用
 
     is_code_mode = code_pairs is not None
-    can_write_snapshot = board_meta is None and not is_code_mode and not all_stocks
+    can_write_snapshot = (
+        board_meta is None
+        and not is_code_mode
+        and not all_stocks
+        and not only_holdings
+    )
     prev_snapshot = load_snapshot() if (diff and can_write_snapshot) else None
 
     board_index_result = service_result.board_index_result

@@ -163,17 +163,24 @@ function kanScanDesk(initialScan) {
     async startFetch() {
       this.fetching = true;
       this.fetchMessage = "准备";
-      const response = await fetch("/api/fetch", {
-        method: "POST",
-        headers: { "X-Kan-Web": "1" },
-      });
-      const payload = await response.json();
-      if (!response.ok) {
-        this.fetching = false;
+      let listening = false;
+      try {
+        const response = await fetch("/api/fetch", {
+          method: "POST",
+          headers: { "X-Kan-Web": "1" },
+        });
+        if (!response.ok) {
+          this.fetchMessage = "数据不可用";
+          return;
+        }
+        const payload = await response.json();
+        this.listenFetch(payload.job);
+        listening = true;
+      } catch (_error) {
         this.fetchMessage = "数据不可用";
-        return;
+      } finally {
+        if (!listening) this.fetching = false;
       }
-      this.listenFetch(payload.job);
     },
     listenFetch(job) {
       if (this.eventSource) this.eventSource.close();
@@ -368,19 +375,23 @@ function kanStockPage(info) {
     async loadHistory() {
       this.historyReady = false;
       this.historyMessage = "读取本地快照";
-      const response = await fetch(`/api/history/${this.info.code}?period=${this.period}`);
-      if (!response.ok) {
+      try {
+        const response = await fetch(`/api/history/${this.info.code}?period=${this.period}`);
+        if (!response.ok) {
+          this.historyMessage = "该周期本地快照暂无足够历史 · 可切换周期,或多跑几天 kan scan 积累快照";
+          return;
+        }
+        const payload = await response.json();
+        const series = payload.series.filter((item) => item.position_pct !== null);
+        if (series.length === 0) {
+          this.historyMessage = "该周期本地快照暂无足够历史 · 可切换周期,或多跑几天 kan scan 积累快照";
+          return;
+        }
+        this.historyReady = true;
+        this.$nextTick(() => this.renderHistory(series));
+      } catch (_error) {
         this.historyMessage = "该周期本地快照暂无足够历史 · 可切换周期,或多跑几天 kan scan 积累快照";
-        return;
       }
-      const payload = await response.json();
-      const series = payload.series.filter((item) => item.position_pct !== null);
-      if (series.length === 0) {
-        this.historyMessage = "该周期本地快照暂无足够历史 · 可切换周期,或多跑几天 kan scan 积累快照";
-        return;
-      }
-      this.historyReady = true;
-      this.$nextTick(() => this.renderHistory(series));
     },
     renderHistory(series) {
       const el = document.getElementById("history-chart");

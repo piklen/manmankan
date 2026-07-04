@@ -80,6 +80,16 @@ def test_api_scan_is_web_shape_without_ai_schema(monkeypatch) -> None:
     assert "data_availability" not in payload
 
 
+def test_get_with_forged_host_is_forbidden(monkeypatch) -> None:
+    monkeypatch.setattr("kan.web.routes_api.default_scan_payload", _scan_payload)
+    client = TestClient(create_app(), base_url="http://127.0.0.1")
+
+    response = client.get("/api/scan", headers={"host": "evil.example"})
+
+    assert response.status_code == 403
+    assert response.json()["error"] == "host not allowed"
+
+
 def test_mutating_api_requires_web_header() -> None:
     client = TestClient(create_app(), base_url="http://127.0.0.1")
 
@@ -181,6 +191,20 @@ def test_hold_page_empty_state(monkeypatch) -> None:
     assert "kan hold add 600519 --cost 1680 --shares 100" in response.text
 
 
+def test_index_page_unavailable_is_neutral(monkeypatch) -> None:
+    monkeypatch.setattr(
+        "kan.web.routes_pages.default_scan_payload",
+        lambda: (_ for _ in ()).throw(RuntimeError("scan down")),
+    )
+    client = TestClient(create_app(), base_url="http://127.0.0.1")
+
+    response = client.get("/")
+
+    assert response.status_code == 200
+    assert "数据暂不可用" in response.text
+    assert "本地缓存暂无可展示数据" in response.text
+
+
 def test_api_index_returns_reference_rows(monkeypatch) -> None:
     from kan.service.index_service import IndexPeriodView, IndexRow, IndexServiceResult
 
@@ -247,6 +271,19 @@ def test_settings_page_shows_masked_token_and_facts(tmp_path, monkeypatch) -> No
     assert "abc12345" not in response.text
     assert "/tmp/kan/data" in response.text
     assert "api.tushare.pro" in response.text
+
+
+def test_settings_page_unavailable_is_neutral(monkeypatch) -> None:
+    monkeypatch.setattr(
+        "kan.web.routes_api._token_status",
+        lambda: (_ for _ in ()).throw(RuntimeError("config down")),
+    )
+    client = TestClient(create_app(), base_url="http://127.0.0.1")
+
+    response = client.get("/settings")
+
+    assert response.status_code == 200
+    assert "数据暂不可用" in response.text
 
 
 def test_config_token_api_masks_full_token(tmp_path, monkeypatch) -> None:

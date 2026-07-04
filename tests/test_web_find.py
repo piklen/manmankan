@@ -11,6 +11,7 @@ from kan.core.models import (
     EnrichedResult,
     MoneyflowMetrics,
     PeriodResult,
+    Stock,
     StockScanResult,
     ValuationMetrics,
 )
@@ -105,19 +106,14 @@ def test_api_find_industry_cold_cache_hint(monkeypatch) -> None:
     assert "该池大部分股票无本地缓存" in response.text
 
 
-def test_watchlist_post_and_delete(monkeypatch) -> None:
-    calls = []
+def test_watchlist_post_and_delete(tmp_path, monkeypatch) -> None:
+    from kan.storage import paths, watchlist
 
-    def fake_add(code):
-        calls.append(("add", code))
-        return True, f"已添加 {code}"
-
-    def fake_remove(code):
-        calls.append(("remove", code))
-        return True, f"已移除 {code}"
-
-    monkeypatch.setattr("kan.web.routes_api.watchlist.add", fake_add)
-    monkeypatch.setattr("kan.web.routes_api.watchlist.remove", fake_remove)
+    monkeypatch.setattr(paths, "WATCHLIST_PATH", tmp_path / "watchlist.json")
+    monkeypatch.setattr(
+        "kan.web.routes_api._lookup_name",
+        lambda code: {"600519": "贵州茅台", "000858": "五粮液"}[code],
+    )
     client = _client()
 
     post = client.post(
@@ -125,11 +121,58 @@ def test_watchlist_post_and_delete(monkeypatch) -> None:
         headers={"X-Kan-Web": "1"},
         json={"codes": "600519,000858"},
     )
-    delete = client.delete("/api/watchlist/600519", headers={"X-Kan-Web": "1"})
 
     assert post.status_code == 200
+    assert [stock.symbol for stock in watchlist.list_all()] == ["600519", "000858"]
+
+    def fake_remove(code):
+        return True, f"已移除 {code}"
+
+    monkeypatch.setattr("kan.web.routes_api.watchlist.remove", fake_remove)
+
+    delete = client.delete("/api/watchlist/600519", headers={"X-Kan-Web": "1"})
+
     assert delete.status_code == 200
-    assert calls == [("add", "600519"), ("add", "000858"), ("remove", "600519")]
+
+
+def test_watchlist_post_duplicate_is_atomic(tmp_path, monkeypatch) -> None:
+    from kan.storage import paths, watchlist
+    from kan.storage.watchlist_models import DEFAULT_GROUP_NAME, GroupedWatchlist
+
+    monkeypatch.setattr(paths, "WATCHLIST_PATH", tmp_path / "watchlist.json")
+    watchlist.save_grouped_watchlist(GroupedWatchlist(groups={
+        DEFAULT_GROUP_NAME: [Stock(symbol="600519", name="贵州茅台", added_at=date(2026, 1, 1))],
+    }))
+    monkeypatch.setattr(
+        "kan.web.routes_api._lookup_name",
+        lambda code: {"000858": "五粮液"}[code],
+    )
+
+    response = _client().post(
+        "/api/watchlist",
+        headers={"X-Kan-Web": "1"},
+        json={"codes": "600519,000858"},
+    )
+
+    assert response.status_code == 400
+    assert "代码已在自选列表中" in response.text
+    assert [stock.symbol for stock in watchlist.list_all()] == ["600519"]
+
+
+def test_watchlist_post_repeated_input_is_atomic(tmp_path, monkeypatch) -> None:
+    from kan.storage import paths, watchlist
+
+    monkeypatch.setattr(paths, "WATCHLIST_PATH", tmp_path / "watchlist.json")
+
+    response = _client().post(
+        "/api/watchlist",
+        headers={"X-Kan-Web": "1"},
+        json={"codes": "600519,600519"},
+    )
+
+    assert response.status_code == 400
+    assert "重复代码" in response.text
+    assert watchlist.list_all() == []
 
 
 def test_watchlist_post_invalid_code() -> None:

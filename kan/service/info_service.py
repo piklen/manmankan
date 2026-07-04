@@ -84,12 +84,12 @@ def get_stock_info(request: InfoRequest) -> InfoServiceResult:
     symbol, name = resolve_symbol_or_name(request.symbol_or_name)
 
     if request.allow_fetch and not is_fresh(symbol):
-        cm = (
-            request.fetch_status(symbol, name)
-            if request.fetch_status is not None
-            else nullcontext()
-        )
         try:
+            cm = (
+                request.fetch_status(symbol, name)
+                if request.fetch_status is not None
+                else nullcontext()
+            )
             with cm:
                 fetch_kline(symbol, force=True)
         except Exception as e:

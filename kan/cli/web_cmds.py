@@ -25,7 +25,6 @@ def web(
     """启动本地私有 Web 看盘台。"""
     from kan.web.server import run_server
 
-    typer.echo("本地私有服务 · 仅监听 127.0.0.1 · 数据不出本机")
     try:
         run_server(port=port, open_browser=not no_open)
     except RuntimeError as e:

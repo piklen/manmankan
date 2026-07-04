@@ -91,7 +91,7 @@
       </thead>
       <tbody>
         <template x-for="(row, index) in sortedRows" :key="row.code">
-          <tr @click="openStock(row.code)">
+          <tr tabindex="0" @click="openStock(row.code)" @keydown.enter="openStock(row.code)">
             <td x-text="index + 1"></td>
             <td>
               <span x-text="row.code"></span>

@@ -14,6 +14,7 @@ def run_server(port: int, open_browser: bool) -> None:
     """启动本地 Web 服务。"""
     _ensure_port_available(port)
     url = f"http://{WEB_HOST}:{port}/"
+    print("本地私有服务 · 仅监听 127.0.0.1 · 数据不出本机")
     print(f"访问地址: {url}")
     if open_browser:
         webbrowser.open(url)

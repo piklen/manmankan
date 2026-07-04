@@ -27,7 +27,26 @@ templates.env.globals["hold_disclaimer"] = HOLD_DISCLAIMER_TEXT
 
 @router.get("/", response_class=HTMLResponse)
 def index(request: Request):
-    scan = default_scan_payload()
+    try:
+        scan = default_scan_payload()
+    except Exception as e:
+        from kan.infra.log import debug_log
+
+        debug_log(__name__, "web index page unavailable", e)
+        scan = {
+            "ok": False,
+            "source_name": "数据暂不可用",
+            "mode": "low",
+            "periods": [30, 60, 180],
+            "stats": {
+                "targets": 0,
+                "shown": 0,
+                "data_cutoff": None,
+                "stale": False,
+            },
+            "rows": [],
+            "heatmap": [],
+        }
     return templates.TemplateResponse(
         request,
         "index.html",
@@ -84,11 +103,24 @@ def hold(request: Request):
 def settings(request: Request):
     from kan.web.routes_api import _token_status
 
+    try:
+        token = _token_status()
+        facts = settings_facts()
+    except Exception as e:
+        from kan.infra.log import debug_log
+
+        debug_log(__name__, "web settings page unavailable", e)
+        token = {"ok": False, "configured": False, "masked": None}
+        facts = {
+            "data_dir": "数据暂不可用",
+            "kline_cache_files": 0,
+            "tushare_endpoint_domain": "数据暂不可用",
+        }
     return templates.TemplateResponse(
         request,
         "settings.html",
         {
-            "token": _token_status(),
-            "facts": settings_facts(),
+            "token": token,
+            "facts": facts,
         },
     )

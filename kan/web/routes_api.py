@@ -1,12 +1,14 @@
 """Web JSON API 路由。"""
 from __future__ import annotations
 
+from datetime import date
 from typing import Annotated, Any
 from urllib.parse import urlsplit
 
 from fastapi import APIRouter, Body, HTTPException, Query, Request
 from fastapi.responses import StreamingResponse
 
+from kan.core.models import Stock
 from kan.core.pipeline import StockSetResolveError
 from kan.core.stock_set import from_flags
 from kan.service.history_service import HistoryRequest, HistoryServiceError, get_symbol_history
@@ -19,6 +21,7 @@ from kan.service.info_service import (
 )
 from kan.service.scan_service import ScanRequest, run_scan
 from kan.storage import config, watchlist
+from kan.storage.watchlist_names import _lookup_name
 from kan.web.fetch_jobs import get_fetch_job, iter_sse, start_fetch_job
 from kan.web.find_adapter import run_web_find
 from kan.web.security import host_allowed
@@ -66,13 +69,30 @@ def add_watchlist(payload: Annotated[dict[str, Any], Body()]) -> dict:
     tokens = [part for part in raw.replace(",", " ").replace("，", " ").split() if part]
     if not tokens:
         raise HTTPException(status_code=400, detail="请填写股票代码")
-    messages: list[str] = []
     try:
-        for token in tokens:
-            watchlist._normalize_symbol(token)
-        for token in tokens:
-            _ok, msg = watchlist.add(token)
-            messages.append(msg)
+        symbols = [watchlist._normalize_symbol(token) for token in tokens]
+        repeated = sorted({symbol for symbol in symbols if symbols.count(symbol) > 1})
+        if repeated:
+            raise ValueError(f"重复代码: {', '.join(repeated)}")
+        gw = watchlist.load_grouped_watchlist()
+        target = gw.default
+        if target not in gw.groups:
+            raise watchlist.GroupNotFoundError(
+                f"组「{target}」不存在 · 跑 `kan group create {target}` 新建"
+            )
+        existing = {stock.symbol for stock in gw.groups[target]}
+        duplicates = [symbol for symbol in symbols if symbol in existing]
+        if duplicates:
+            raise ValueError(f"代码已在自选列表中: {', '.join(duplicates)}")
+        names = {symbol: _lookup_name(symbol) for symbol in symbols}
+        for symbol in symbols:
+            gw.groups[target].append(Stock(
+                symbol=symbol,
+                name=names[symbol],
+                added_at=date.today(),
+            ))
+        watchlist.save_grouped_watchlist(gw)
+        messages = [f"✅ 已添加 {names[symbol]} ({symbol})" for symbol in symbols]
     except (ValueError, watchlist.GroupNotFoundError) as e:
         raise HTTPException(status_code=400, detail=str(e)) from e
     return {"ok": True, "messages": messages}
