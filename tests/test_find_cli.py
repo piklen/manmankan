@@ -24,12 +24,12 @@ def _strip_ansi(text: str) -> str:
 
 def _run(args: list[str]) -> tuple[int, str]:
     """Run `kan find ARGS` via uv subprocess · returns (exit_code, combined output)."""
-    with tempfile.TemporaryDirectory() as data_home:
+    with tempfile.TemporaryDirectory() as xdg_home:
         env = {
             **os.environ,
             "KAN_NO_BOOT_BANNER": "1",
             "NO_COLOR": "1",
-            "XDG_DATA_HOME": data_home,
+            "XDG_DATA_HOME": xdg_home,
         }
         result = subprocess.run(
             ["uv", "run", "kan", *args],
@@ -44,12 +44,12 @@ def _run(args: list[str]) -> tuple[int, str]:
 
 def _run_with_input(args: list[str], input_text: str) -> tuple[int, str]:
     """Run `kan find ARGS` with stdin · returns (exit_code, combined output)."""
-    with tempfile.TemporaryDirectory() as data_home:
+    with tempfile.TemporaryDirectory() as xdg_home:
         env = {
             **os.environ,
             "KAN_NO_BOOT_BANNER": "1",
             "NO_COLOR": "1",
-            "XDG_DATA_HOME": data_home,
+            "XDG_DATA_HOME": xdg_home,
         }
         result = subprocess.run(
             ["uv", "run", "kan", *args],

@@ -132,10 +132,9 @@ def _load_names_with_optional_spinner(console) -> dict[str, str]:
         return preload_stock_names()
 
     t_start = time.monotonic()
-    with console.status(
-        "[yellow]⏳ 首次运行 · 初始化 A 股代码表...[/yellow]",
-        spinner="dots",
-    ):
+    from kan.infra.progress import cli_status
+
+    with cli_status("⏳ 首次运行 · 初始化 A 股代码表...", console=console):
         from kan.storage.watchlist import preload_stock_names
         names = preload_stock_names()
     elapsed = time.monotonic() - t_start
@@ -146,7 +145,9 @@ def _load_names_with_optional_spinner(console) -> dict[str, str]:
 @contextmanager
 def _with_heavy_imports_spinner(console, message: str):
     """在重模块 import 前先打开 spinner，避免 CLI 路由后出现 启动反馈。"""
-    with console.status(f"[yellow]{message}[/yellow]", spinner="dots") as status:
+    from kan.infra.progress import cli_status
+
+    with cli_status(message, console=console) as status:
         yield status
 
 
