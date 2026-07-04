@@ -128,6 +128,14 @@ kan history 600519 --format json
 
 `kan scan` 面向终端阅读；`kan find --format json` 和 `kan hold --format json` 面向脚本和 AI 消费。
 
+## 本地看盘台
+
+```bash
+kan web
+```
+
+在浏览器里看同一份本地数据：自选/持仓多维数据表、位置热力图、个股位置标尺与走势、持仓盈亏、条件筛选（附等价 CLI 命令，方便回到终端）。仅监听本机回环地址，不上传数据；TuShare token 可在设置页配置。
+
 ## 数据契约
 
 慢慢看的核心输出不是"推荐"，而是可组合的数据事实。

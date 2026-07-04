@@ -152,6 +152,10 @@ def root_help_text() -> str:
   kan config set tushare-endpoint https://x   设 tushare API 端点
   kan config unset tushare-token              清凭证
 
+[bold cyan]本地看盘台 (Web)[/bold cyan]
+  kan web                   浏览器打开本地看盘台（数据表 / 位置热力图 / 持仓 / 筛选）
+  kan web --port 8876 --no-open  指定端口 · 不自动开浏览器（仅监听本机回环）
+
 [bold cyan]版本管理[/bold cyan]
   kan update                检查并升级到最新版（会 prompt 确认）
   kan update --check        仅检查不升级

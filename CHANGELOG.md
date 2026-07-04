@@ -9,6 +9,16 @@ explicitly approves a larger bump.
 
 ## [Unreleased]
 
+### Added
+
+- 新增 `kan web` 本地看盘台:数据表 / 位置热力图双视图、个股位置标尺与走势、持仓页、筛选页(带等价 CLI 命令)、token 设置页;仅监听本机回环,补数据走后台任务加进度流。
+- 首页新增大盘指数多周期位置对照(上证/深证/创业板/沪深300),数据不可用时中性降级。
+
+### Fixed
+
+- `kan scan --all` 不再覆写默认池的 diff 快照。
+- 交易日历依赖的 py_mini_racer 在 dylib 加载失败机器上不再向终端输出裸 traceback。
+
 ## [0.0.6.9.7] - 2026-07-02
 
 ### Changed
