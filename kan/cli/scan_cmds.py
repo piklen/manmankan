@@ -406,7 +406,8 @@ def scan(
     freshness = ctx.freshness  # 给 render_freshness_warning 用
 
     is_code_mode = code_pairs is not None
-    prev_snapshot = load_snapshot() if (diff and board_meta is None and not is_code_mode) else None
+    can_write_snapshot = board_meta is None and not is_code_mode and not all_stocks
+    prev_snapshot = load_snapshot() if (diff and can_write_snapshot) else None
 
     board_index_result = service_result.board_index_result
 
@@ -449,7 +450,7 @@ def scan(
 
     if signal and not results and fmt is export.OutputFormat.terminal:
         console.print("没有股票触及极值区 · 无共振信号")
-        if board_meta is None and not is_code_mode:
+        if can_write_snapshot:
             save_snapshot(all_results)
         return
 
@@ -460,7 +461,7 @@ def scan(
             results, mode=mode, data_cutoff=data_cutoff,
             fetched_at=fetched_at, stale=is_stale,
         )))
-        if board_meta is None and not is_code_mode:
+        if can_write_snapshot:
             save_snapshot(all_results)
         return
     if fmt is export.OutputFormat.md:
@@ -468,7 +469,7 @@ def scan(
             results, periods=period_list, mode=mode, title=title,
             show_context=True,
         ))
-        if board_meta is None and not is_code_mode:
+        if can_write_snapshot:
             save_snapshot(all_results)
         return
 
@@ -500,7 +501,7 @@ def scan(
     _render_cutoff_summary(all_results, console)
 
     # 增量对比 · 仅自选模式 (board_meta is None) · industry/hot 模式不做 diff/snapshot
-    if board_meta is None and not is_code_mode and diff and prev_snapshot:
+    if can_write_snapshot and diff and prev_snapshot:
         changes = compute_diff(all_results, prev_snapshot)
         if changes:
             console.print()
@@ -517,7 +518,7 @@ def scan(
         console.print("\n  [dim]首次扫描，无历史对比（下次 --diff 将显示变化）[/dim]")
 
     # 保存快照供下次 diff 用 · 仅自选模式
-    if board_meta is None and not is_code_mode:
+    if can_write_snapshot:
         save_snapshot(all_results)
 
     console.print()

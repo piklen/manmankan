@@ -11,3 +11,10 @@ not add terms to or modify the GNU Affero General Public License version 3.
 Third-party market data, market-data APIs, and upstream SDKs are not licensed
 by this project. Use of upstream data sources remains subject to their own
 terms, quotas, availability, and compliance requirements.
+
+Vendored web assets:
+
+- Apache ECharts, licensed under the Apache License 2.0.
+  Source: https://echarts.apache.org/
+- Alpine.js, licensed under the MIT License.
+  Source: https://alpinejs.dev/

@@ -32,5 +32,6 @@ from kan.cli import (
     theme_cmds,
     trend_cmds,
     watchlist_cmds,
+    web_cmds,
 )
 from kan.cli.main import cli_main

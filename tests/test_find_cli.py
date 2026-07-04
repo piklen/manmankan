@@ -10,6 +10,7 @@ import os
 import re
 import subprocess
 import sys
+import tempfile
 
 import pytest
 
@@ -23,30 +24,42 @@ def _strip_ansi(text: str) -> str:
 
 def _run(args: list[str]) -> tuple[int, str]:
     """Run `kan find ARGS` via uv subprocess · returns (exit_code, combined output)."""
-    env = {**os.environ, "KAN_NO_BOOT_BANNER": "1", "NO_COLOR": "1"}
-    result = subprocess.run(
-        ["uv", "run", "kan", *args],
-        cwd=REPO_ROOT,
-        env=env,
-        capture_output=True,
-        text=True,
-        timeout=60,
-    )
+    with tempfile.TemporaryDirectory() as data_home:
+        env = {
+            **os.environ,
+            "KAN_NO_BOOT_BANNER": "1",
+            "NO_COLOR": "1",
+            "XDG_DATA_HOME": data_home,
+        }
+        result = subprocess.run(
+            ["uv", "run", "kan", *args],
+            cwd=REPO_ROOT,
+            env=env,
+            capture_output=True,
+            text=True,
+            timeout=60,
+        )
     return result.returncode, result.stdout + result.stderr
 
 
 def _run_with_input(args: list[str], input_text: str) -> tuple[int, str]:
     """Run `kan find ARGS` with stdin · returns (exit_code, combined output)."""
-    env = {**os.environ, "KAN_NO_BOOT_BANNER": "1", "NO_COLOR": "1"}
-    result = subprocess.run(
-        ["uv", "run", "kan", *args],
-        cwd=REPO_ROOT,
-        env=env,
-        input=input_text,
-        capture_output=True,
-        text=True,
-        timeout=60,
-    )
+    with tempfile.TemporaryDirectory() as data_home:
+        env = {
+            **os.environ,
+            "KAN_NO_BOOT_BANNER": "1",
+            "NO_COLOR": "1",
+            "XDG_DATA_HOME": data_home,
+        }
+        result = subprocess.run(
+            ["uv", "run", "kan", *args],
+            cwd=REPO_ROOT,
+            env=env,
+            input=input_text,
+            capture_output=True,
+            text=True,
+            timeout=60,
+        )
     return result.returncode, result.stdout + result.stderr
 
 
