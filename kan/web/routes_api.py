@@ -1,7 +1,8 @@
 """Web JSON API 路由。"""
 from __future__ import annotations
 
-from fastapi import APIRouter, HTTPException, Query
+from fastapi import APIRouter, HTTPException, Query, Request
+from fastapi.responses import StreamingResponse
 
 from kan.core.pipeline import StockSetResolveError
 from kan.core.stock_set import from_flags
@@ -12,6 +13,8 @@ from kan.service.info_service import (
     get_stock_info,
 )
 from kan.service.scan_service import ScanRequest, run_scan
+from kan.web.fetch_jobs import get_fetch_job, iter_sse, start_fetch_job
+from kan.web.security import host_allowed
 from kan.web.serialize import serialize_history, serialize_info, serialize_scan
 
 router = APIRouter(prefix="/api")
@@ -34,6 +37,29 @@ def default_scan_payload() -> dict:
 @router.get("/scan")
 def scan() -> dict:
     return default_scan_payload()
+
+
+@router.post("/fetch")
+def fetch() -> dict:
+    job = start_fetch_job()
+    return {"ok": True, "job": job.id, "status": job.status}
+
+
+@router.get("/fetch/events")
+def fetch_events(request: Request, job: str = Query(..., min_length=1)) -> StreamingResponse:
+    if not host_allowed(request.headers.get("host")):
+        raise HTTPException(status_code=403, detail="host not allowed")
+    fetch_job = get_fetch_job(job)
+    if fetch_job is None:
+        raise HTTPException(status_code=404, detail="任务不存在")
+    return StreamingResponse(
+        iter_sse(fetch_job),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache",
+            "X-Accel-Buffering": "no",
+        },
+    )
 
 
 @router.get("/info/{code}")

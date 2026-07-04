@@ -92,11 +92,38 @@ def serialize_info(result: InfoServiceResult) -> dict[str, Any]:
             "label": result.volume.label,
             "state": result.volume.state,
         }
+    valuation = {
+        "trade_date": _date_text(result.result.valuation_trade_date),
+        "pe_ttm": _round(result.result.pe_ttm),
+        "pb": _round(result.result.pb),
+        "ps_ttm": _round(result.result.ps_ttm),
+        "dv_ttm": _round(result.result.dv_ttm),
+        "turnover_rate": _round(result.result.turnover_rate),
+        "volume_ratio": _round(result.result.volume_ratio),
+        "total_mv": _round(result.result.total_mv),
+        "circ_mv": _round(result.result.circ_mv),
+    }
+    if result.valuation is not None:
+        valuation.update({
+            "trade_date": _date_text(result.valuation.trade_date),
+            "pe_ttm": _round(result.valuation.pe_ttm),
+            "pb": _round(result.valuation.pb),
+            "ps_ttm": _round(result.valuation.ps_ttm),
+            "dv_ttm": _round(result.valuation.dv_ttm),
+            "turnover_rate": _round(result.valuation.turnover_rate),
+            "volume_ratio": _round(result.valuation.volume_ratio),
+            "total_mv": _round(result.valuation.total_mv),
+            "circ_mv": _round(result.valuation.circ_mv),
+        })
+    change_pct = None
+    if result.trend.daily_changes:
+        change_pct = _round(result.trend.daily_changes[0][1])
     return {
         "ok": True,
         "code": result.symbol,
         "name": result.name.replace(" ", ""),
         "price": _round(result.result.current_price),
+        "change_pct": change_pct,
         "scan_date": _date_text(result.result.scan_date),
         "data_cutoff": _date_text(result.data_cutoff),
         "fetched_at": result.fetched_at,
@@ -109,6 +136,8 @@ def serialize_info(result: InfoServiceResult) -> dict[str, Any]:
             "direction": result.trend.direction,
         },
         "volume": volume,
+        "volume_price_state": result.result.volume_price_state,
+        "valuation": valuation,
         "periods": periods,
     }
 

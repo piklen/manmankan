@@ -1,127 +1,106 @@
 {% extends "base.html" %}
 
-{% block title %}慢慢看 Web · 总览{% endblock %}
+{% block title %}慢慢看 Web · 看盘台{% endblock %}
 
 {% block content %}
-<section class="band">
+<section class="band" x-data="kanScanDesk(window.KAN_SCAN)" x-init="init()" x-cloak>
   <div class="band-title">
     <span>{{ scan.source_name }}</span>
-    <span class="meta">
-      {{ scan.stats.shown }}/{{ scan.stats.targets }} 只
-      {% if scan.stats.data_cutoff %} · 数据截止 {{ scan.stats.data_cutoff }}{% endif %}
-    </span>
-  </div>
-  {% if scan.rows %}
-    <div id="scan-heatmap" class="chart" aria-label="位置热力图"></div>
-  {% else %}
-    <div class="empty">本地缓存暂无可展示数据</div>
-  {% endif %}
-</section>
-
-<section class="band">
-  <div class="band-title">
-    <span>概要表</span>
-    <span class="meta">低点 / 高点共振与多周期位置</span>
-  </div>
-  {% if scan.rows %}
-    <div class="table-wrap">
-      <table>
-        <thead>
-          <tr>
-            <th>名称</th>
-            <th>代码</th>
-            <th>现价</th>
-            <th>低点共振</th>
-            <th>高点共振</th>
-            {% for p in scan.periods %}
-              <th>{{ p }}日</th>
-            {% endfor %}
-          </tr>
-        </thead>
-        <tbody>
-          {% for row in scan.rows %}
-            <tr>
-              <td>
-                {{ row.name }}
-                {% if row.in_watchlist %}<span class="tag">自选</span>{% endif %}
-                {% if row.in_holding %}<span class="tag">持仓</span>{% endif %}
-              </td>
-              <td>{{ row.code }}</td>
-              <td>{{ "%.2f"|format(row.price) if row.price is not none else "-" }}</td>
-              <td>{{ row.low_resonance }}</td>
-              <td>{{ row.high_resonance }}</td>
-              {% for p in scan.periods %}
-                {% set pct = row["p" ~ p ~ "_pct"] %}
-                {% set at_low = row["p" ~ p ~ "_at_low"] %}
-                {% set at_high = row["p" ~ p ~ "_at_high"] %}
-                <td class="{% if at_low %}pct-low{% elif at_high %}pct-high{% endif %}">
-                  {{ "%.1f%%"|format(pct) if pct is not none else "-" }}
-                </td>
-              {% endfor %}
-            </tr>
-          {% endfor %}
-        </tbody>
-      </table>
+    <div class="status-line">
+      <span class="meta">
+        {{ scan.stats.shown }}/{{ scan.stats.targets }} 只
+        {% if scan.stats.data_cutoff %} · 数据截止 {{ scan.stats.data_cutoff }}{% endif %}
+      </span>
+      {% if scan.stats.stale %}<span class="notice">数据可能滞后</span>{% endif %}
+      <button class="primary" type="button" @click="startFetch()" :disabled="fetching">
+        <span x-text="fetching ? '补数据中' : '补数据'"></span>
+      </button>
+      <span class="meta" x-show="fetchMessage" x-text="fetchMessage"></span>
     </div>
-  {% else %}
-    <div class="empty">运行 scan 后会在这里展示本地快照</div>
-  {% endif %}
+  </div>
+
+  <div class="toolbar">
+    <div class="tabs" role="tablist" aria-label="视图">
+      <button type="button" :class="{active: activeTab === 'table'}" @click="setTab('table')">
+        数据表
+      </button>
+      <button type="button" :class="{active: activeTab === 'heatmap'}" @click="setTab('heatmap')">
+        位置热力图
+      </button>
+    </div>
+    <div class="controls">
+      <select x-model="mode" aria-label="共振模式">
+        <option value="low">低点</option>
+        <option value="high">高点</option>
+      </select>
+      <label class="check">
+        <input type="checkbox" x-model="resonanceOnly">
+        只看共振
+      </label>
+      <select x-model="sortKey" aria-label="排序字段">
+        <option value="resonance">共振数</option>
+        {% for p in scan.periods %}
+          <option value="p{{ p }}">{{ p }}日位置</option>
+        {% endfor %}
+      </select>
+      <button type="button" @click="toggleSortDir()" x-text="sortDir === 'desc' ? '降序' : '升序'"></button>
+    </div>
+  </div>
+
+  <template x-if="scan.rows.length === 0">
+    <div class="empty">本地缓存暂无可展示数据</div>
+  </template>
+
+  <div x-show="scan.rows.length > 0 && activeTab === 'table'" class="table-wrap">
+    <table>
+      <thead>
+        <tr>
+          <th>序号</th>
+          <th>代码 / 名称</th>
+          <th>现价</th>
+          {% for p in scan.periods %}
+            <th>{{ p }}日位置%</th>
+          {% endfor %}
+          <th>共振 ×N</th>
+        </tr>
+      </thead>
+      <tbody>
+        <template x-for="(row, index) in sortedRows" :key="row.code">
+          <tr @click="openStock(row.code)">
+            <td x-text="index + 1"></td>
+            <td>
+              <span x-text="row.code"></span>
+              <span class="code" x-text="row.name"></span>
+              <span class="tag" x-show="row.in_watchlist">⭐ 自选</span>
+              <span class="tag" x-show="row.in_holding">💰 持仓</span>
+            </td>
+            <td x-text="formatPrice(row.price)"></td>
+            {% for p in scan.periods %}
+              <td :class="periodClass(row, {{ p }})" x-text="formatPct(periodPct(row, {{ p }}))"></td>
+            {% endfor %}
+            <td x-text="'×' + resonance(row)"></td>
+          </tr>
+        </template>
+      </tbody>
+    </table>
+  </div>
+
+  <div x-show="scan.rows.length > 0 && activeTab === 'heatmap'" x-effect="activeTab === 'heatmap' && renderHeatmap()">
+    <div id="scan-heatmap" class="chart tall" aria-label="位置热力图"></div>
+    <div class="toolbar">
+      <span class="meta">0=N日最低 · 100=N日最高</span>
+      <div class="controls">
+        <button type="button" @click="prevHeatmapPage()" :disabled="heatmapPage === 0">上一页</button>
+        <span class="meta" x-text="heatmapPageText"></span>
+        <button type="button" @click="nextHeatmapPage()" :disabled="heatmapPage >= heatmapPageCount - 1">下一页</button>
+      </div>
+    </div>
+  </div>
 </section>
 {% endblock %}
 
 {% block scripts %}
 <script>
-  const scanPayload = {{ scan|tojson }};
-  const chartEl = document.getElementById("scan-heatmap");
-  if (chartEl && window.echarts && scanPayload.rows.length > 0) {
-    const rows = scanPayload.rows.slice(0, 24);
-    const names = rows.map((row) => `${row.name} ${row.code}`);
-    const periods = scanPayload.periods;
-    const rowCodes = new Set(rows.map((row) => row.code));
-    const cells = scanPayload.heatmap
-      .filter((cell) => rowCodes.has(cell.code))
-      .map((cell) => [
-        periods.indexOf(cell.period),
-        names.findIndex((name) => name.endsWith(cell.code)),
-        cell.position_pct,
-      ])
-      .filter((cell) => cell[0] >= 0 && cell[1] >= 0 && cell[2] !== null);
-    const chart = echarts.init(chartEl);
-    chart.setOption({
-      grid: { left: 120, right: 24, top: 24, bottom: 44 },
-      tooltip: {
-        formatter(params) {
-          const period = periods[params.value[0]];
-          const name = names[params.value[1]];
-          return `${name}<br>${period}日 · ${params.value[2].toFixed(1)}%`;
-        }
-      },
-      xAxis: {
-        type: "category",
-        data: periods.map((period) => `${period}日`),
-        splitArea: { show: true },
-      },
-      yAxis: {
-        type: "category",
-        data: names,
-        splitArea: { show: true },
-      },
-      visualMap: {
-        min: 0,
-        max: 100,
-        calculable: false,
-        orient: "horizontal",
-        left: "center",
-        bottom: 8,
-        inRange: { color: ["#0f766e", "#f8fafc", "#b42318"] },
-      },
-      series: [{
-        type: "heatmap",
-        data: cells,
-        emphasis: { itemStyle: { borderColor: "#111827", borderWidth: 1 } },
-      }],
-    });
-    window.addEventListener("resize", () => chart.resize());
-  }
+  window.KAN_SCAN = {{ scan|tojson }};
 </script>
 {% endblock %}
