@@ -7,6 +7,7 @@ from __future__ import annotations
 import math
 from typing import Any
 
+from kan.core.models import StockScanResult
 from kan.core.positions import PositionsSummary
 from kan.service.daily_service import DailyOverview
 from kan.service.history_service import HistoryServiceResult
@@ -109,7 +110,7 @@ def serialize_daily_overview(result: DailyOverview) -> dict[str, Any]:
     }
 
 
-def _overview_row(row) -> dict[str, Any]:
+def _overview_row(row: StockScanResult) -> dict[str, Any]:
     p180 = next(
         (period for period in row.periods if period.period == 180 and not period.insufficient),
         None,

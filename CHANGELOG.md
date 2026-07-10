@@ -30,7 +30,10 @@ explicitly approves a larger bump.
 
 ### Fixed
 
-- 自托管 CI 的测试数据目录与 `uv tool` 安装目录按 run / job / Python 版本隔离,并发门禁不再串用本机缓存或覆盖 `kan` wrapper。
+- 自托管 CI 的测试数据目录与 `uv tool` 安装目录按 run / job / Python 版本隔离,特性分支统一由 PR 门禁验证,避免 push / PR 重复任务争抢 runner 后误报 TTY 性能失败。
+- 题材成分股按上游真实页数完整拉取并限制异常页数,THS 会话 Cookie 失效会刷新重试;东财名称未匹配不再误触发全局熔断。
+- Windows 自选文件的冲突令牌统一按原始字节计算,CRLF 不再导致同一文件误报“已被其他窗口修改”。
+- Web 更新不存在的持仓返回 404,非法代码仍返回 400;题材/行业上游异常详情只写 debug 日志,不再直接展示给用户。
 - 移除会与 AkShare 新版 `mini-racer` 覆盖同名包的 `adata` 依赖,题材数据改走内置 AkShare / 公开 HTTP 适配器;全新 macOS / Windows 安装不再因 ABI 混装导致交易日历失效。
 - `kan` 空参数改为精简的普通用户启动页;`kan --help` / `kan help` 才展示完整命令表。
 - `kan add 123` 等非 6 位纯数字输入立即提示格式错误,不再先加载全市场名称表。

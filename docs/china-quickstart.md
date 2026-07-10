@@ -36,9 +36,10 @@ kan --version
 $env:KAN_NO_UPDATE_CHECK = "1"
 $env:PYTHONUTF8 = "1"
 $env:NO_COLOR = "1"
-kan web
 kan find --codes 600519,000858 --format json --dry-run
 ```
+
+观察台请在另一个 PowerShell 窗口单独运行 `kan web`；该命令会持续占用前台，按 `Ctrl+C` 才会退出。
 
 脱敏后的实测输出形态应接近：
 

@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import sys
 from dataclasses import dataclass
+from unittest.mock import Mock
 
 import pandas as pd
 import pytest
@@ -100,6 +101,7 @@ def test_fetch_ths_constituents_skips_non_ths_code():
 class _Response:
     text: str = ""
     payload: dict | None = None
+    status_code: int = 200
 
     def raise_for_status(self) -> None:
         return None
@@ -136,6 +138,59 @@ def test_fetch_ths_constituents_parses_pages(monkeypatch: pytest.MonkeyPatch):
         {"stock_code": "600519", "short_name": "贵州茅台"},
         {"stock_code": "000858", "short_name": "五粮液"},
     ]
+
+
+def test_fetch_ths_constituents_reads_more_than_five_pages(
+    monkeypatch: pytest.MonkeyPatch,
+):
+    def fake_get(url: str, **_kwargs):
+        page = int(url.split("page/", 1)[1].split("/", 1)[0])
+        return _Response(text=(
+            f'<span class="page_info">{page}/6</span><table><tr><th>x</th></tr>'
+            f"<tr><td>{page}</td><td>600{page:03d}</td><td>测试{page}</td></tr></table>"
+        ))
+
+    monkeypatch.setattr(requests, "get", fake_get)
+    monkeypatch.setattr(concepts, "_ths_headers", lambda: {"User-Agent": "test"})
+
+    frame = concepts.fetch_ths_constituents(
+        Theme(code="301558", name="阿里巴巴概念", source="ths")
+    )
+
+    assert frame is not None
+    assert len(frame) == 6
+    assert frame.iloc[-1]["stock_code"] == "600006"
+
+
+def test_fetch_ths_constituents_rejects_unreasonable_page_count(
+    monkeypatch: pytest.MonkeyPatch,
+):
+    monkeypatch.setattr(
+        requests,
+        "get",
+        lambda *_args, **_kwargs: _Response(
+            text='<span class="page_info">1/51</span><table><tr><th>x</th></tr></table>'
+        ),
+    )
+    monkeypatch.setattr(concepts, "_ths_headers", lambda: {"User-Agent": "test"})
+
+    with pytest.raises(RuntimeError, match="超过安全上限"):
+        concepts.fetch_ths_constituents(
+            Theme(code="301558", name="阿里巴巴概念", source="ths")
+        )
+
+
+def test_request_ths_page_refreshes_rejected_cookie(monkeypatch: pytest.MonkeyPatch):
+    responses = [_Response(status_code=403), _Response(status_code=200)]
+    monkeypatch.setattr(requests, "get", lambda *_args, **_kwargs: responses.pop(0))
+    headers = Mock(side_effect=[{"Cookie": "v=old"}, {"Cookie": "v=new"}])
+    headers.cache_clear = Mock()
+    monkeypatch.setattr(concepts, "_ths_headers", headers)
+
+    response = concepts._request_ths_page("https://q.10jqka.com.cn/gn/test")
+
+    assert response.status_code == 200
+    headers.cache_clear.assert_called_once_with()
 
 
 def test_fetch_em_constituents_normalizes(monkeypatch: pytest.MonkeyPatch):

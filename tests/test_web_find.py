@@ -42,6 +42,8 @@ def test_find_page_contains_disclaimer_and_cli_area() -> None:
     assert 'aria-label="自定义股票代码"' in response.text
     assert 'aria-label="行业名称"' in response.text
     assert 'aria-label="题材名称"' in response.text
+    assert 'aria-live="polite" x-text="message"' in response.text
+    assert 'x-show="message"' not in response.text
 
 
 def test_api_find_returns_web_shape(monkeypatch) -> None:

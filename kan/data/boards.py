@@ -141,7 +141,8 @@ def get_industry_constituents(
     try:
         df = ak.index_component_sw(symbol=board.code)
     except Exception as e:
-        raise BoardDataUnavailableError(f"申万成分股拉取失败 {board.code}: {e}") from e
+        debug_log(__name__, f"申万成分股拉取失败 {board.code}", e)
+        raise BoardDataUnavailableError(f"申万成分股暂不可用: {board.code}") from e
     if df is None or df.empty:
         raise BoardDataUnavailableError(f"申万成分股为空: {board.code}")
     pairs = [
@@ -196,7 +197,8 @@ def fetch_industry_kline(board: Board, force: bool = False) -> pd.DataFrame:
     try:
         raw = ak.index_hist_sw(symbol=board.code, period="day")
     except Exception as e:
-        raise BoardDataUnavailableError(f"申万指数K线拉取失败 {board.code}: {e}") from e
+        debug_log(__name__, f"申万指数 K 线拉取失败 {board.code}", e)
+        raise BoardDataUnavailableError(f"申万指数 K 线暂不可用: {board.code}") from e
     if raw is None or raw.empty:
         raise BoardDataUnavailableError(f"申万指数K线为空: {board.code}")
     df = raw.rename(columns=_SW_KLINE_RENAME)
@@ -262,7 +264,8 @@ def load_theme_catalog(force: bool = False) -> list[Theme]:
         if stale is not None:
             debug_log(__name__, "load concept catalog", e)
             return stale
-        raise ThemeDataUnavailableError(f"题材清单首次拉取失败: {e}") from e
+        debug_log(__name__, "题材清单首次拉取失败", e)
+        raise ThemeDataUnavailableError("题材清单暂不可用 · 请稍后重试") from e
 
     if df is None or df.empty:
         stale = _load_themes_from_cache(cache)
@@ -396,7 +399,8 @@ def fetch_theme_kline(theme: Theme, force: bool = False) -> pd.DataFrame:
     try:
         raw = fetch_em_kline(theme)
     except Exception as e:
-        raise ThemeDataUnavailableError(f"题材指数 K 线拉取失败 {theme.code}: {e}") from e
+        debug_log(__name__, f"题材指数 K 线拉取失败 {theme.code}", e)
+        raise ThemeDataUnavailableError(f"题材指数 K 线暂不可用: {theme.code}") from e
 
     if raw is None or raw.empty:
         raise ThemeDataUnavailableError(f"题材指数 K 线为空: {theme.code}")

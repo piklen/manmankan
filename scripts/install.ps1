@@ -1,4 +1,4 @@
-# manmankan 一键安装脚本 · Windows PowerShell
+﻿# manmankan 一键安装脚本 · Windows PowerShell
 #
 # 推荐安装：
 #   uv tool install manmankan

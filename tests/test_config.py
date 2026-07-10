@@ -97,6 +97,7 @@ def test_save_creates_parent_directory(tmp_path, monkeypatch):
     assert json.loads(nested.read_text())["auto_update"] is False
 
 
+@pytest.mark.skipif(sys.platform.startswith("win"), reason="Windows chmod 不支持 POSIX mode")
 def test_save_tightens_existing_parent_and_file_permissions(tmp_path, monkeypatch):
     parent = tmp_path / "legacy-kan"
     parent.mkdir(mode=0o755)

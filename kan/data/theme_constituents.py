@@ -135,6 +135,9 @@ class EmConstituentSource:
         breaker = get_breaker()
         try:
             df = fetch_em_constituents(theme)
+        except LookupError as e:
+            debug_log(__name__, f"EM concept_constituent_east({theme.code}) 未匹配", e)
+            return None
         except Exception as e:
             breaker.record(self.name, ok=False)
             debug_log(__name__, f"EM concept_constituent_east({theme.code})", e)

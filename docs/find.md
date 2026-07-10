@@ -2,6 +2,10 @@
 
 `kan find` 是用户主导的条件筛选器。规则必须由命令参数显式给出;工具只返回符合规则的数据,不提供评分、评级、目标价、买卖建议或策略 preset。
 
+## Web 适配契约
+
+本地观察台的 `POST /api/find` 是页面专用的扁平响应，不等同于下文 CLI JSON 契约。页面结果使用 `rows[].triggered_text: string[]` 保存可直接展示的中文条件说明，不返回 CLI 的结构化 `rows[].triggered_filters`；需要稳定的机器可读筛选审计时，应使用 `kan find --format json`。
+
 ## JSON 输出
 
 ```bash

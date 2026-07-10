@@ -57,7 +57,7 @@ manmankan
   │     ├── DataProvider: akshare (K线/行业/概念)
   │     ├── DataProvider: tushare (PE/PB/资金流)
   │     ├── DataProvider: baostock (K线备选)
-  │     └── DataProvider: AkShare / 公开 HTTP (题材位置)
+  │     └── DataProvider: TuShare Pro 优先 / AkShare THS + 东财 EM fallback (题材位置)
   │
   ├── Source: usstock (远期)
   │     ├── DataProvider: yfinance

@@ -20,6 +20,7 @@ def _isolate(tmp_path, monkeypatch):
     bdir = tmp_path / "boards"
     bdir.mkdir()
     monkeypatch.setattr(boards, "BOARDS_DIR", bdir)
+    monkeypatch.setattr(boards, "ensure_dirs", lambda: None)
     monkeypatch.setattr("kan.storage.paths.BOARDS_DIR", bdir)
     monkeypatch.setattr("kan.storage.paths.ensure_dirs", lambda: None)
     return tmp_path

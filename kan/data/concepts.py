@@ -12,12 +12,14 @@ from kan.data.tushare import _normalize_symbol_to_ts
 
 if TYPE_CHECKING:
     import pandas as pd
+    from requests import Response
 
     from kan.core.models import Theme
 
 
 _EM_CODE_LOCK = threading.Lock()
 _em_code_by_name: dict[str, str] | None = None
+_THS_MAX_PAGES = 50
 _P = ParamSpec("_P")
 _R = TypeVar("_R")
 
@@ -86,10 +88,26 @@ def _ths_headers() -> dict[str, str]:
         racer.eval(_get_file_content_ths("ths.js"))
         value = str(racer.call("v"))
     return {
-        "User-Agent": "Mozilla/5.0",
+        "User-Agent": (
+            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+            "AppleWebKit/537.36 (KHTML, like Gecko) "
+            "Chrome/89.0.4389.90 Safari/537.36"
+        ),
         "Referer": "https://q.10jqka.com.cn/gn/",
         "Cookie": f"v={value}",
     }
+
+
+def _request_ths_page(url: str) -> Response:
+    """请求 THS 页面；会话 Cookie 失效时刷新一次再交给 fallback。"""
+    import requests
+
+    response = requests.get(url, headers=_ths_headers(), timeout=10)
+    if response.status_code in {401, 403}:
+        _ths_headers.cache_clear()
+        response = requests.get(url, headers=_ths_headers(), timeout=10)
+    response.raise_for_status()
+    return response
 
 
 def fetch_ths_constituents(theme: Theme) -> pd.DataFrame | None:
@@ -98,25 +116,27 @@ def fetch_ths_constituents(theme: Theme) -> pd.DataFrame | None:
         return None
 
     import pandas as pd
-    import requests
     from bs4 import BeautifulSoup
 
     rows: list[dict[str, str]] = []
     total_pages = 1
-    headers = _ths_headers()
-    for page in range(1, 6):
+    for page in range(1, _THS_MAX_PAGES + 1):
         if page > total_pages:
             break
         url = (
             "https://q.10jqka.com.cn/gn/detail/field/199112/order/desc/"
             f"page/{page}/ajax/1/code/{theme.code}"
         )
-        response = requests.get(url, headers=headers, timeout=10)
-        response.raise_for_status()
+        response = _request_ths_page(url)
         soup = BeautifulSoup(response.text, "html.parser")
         page_info = soup.find("span", {"class": "page_info"})
         if page_info and "/" in page_info.text:
-            total_pages = min(5, int(page_info.text.split("/", 1)[1]))
+            reported_pages = int(page_info.text.split("/", 1)[1])
+            if reported_pages > _THS_MAX_PAGES:
+                raise RuntimeError(
+                    f"同花顺题材成分页数 {reported_pages} 超过安全上限 {_THS_MAX_PAGES}"
+                )
+            total_pages = max(1, reported_pages)
         for tr in soup.find_all("tr")[1:]:
             cells = tr.find_all("td")
             if len(cells) < 3:

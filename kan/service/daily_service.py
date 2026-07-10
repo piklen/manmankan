@@ -81,6 +81,10 @@ def _period_matches(
     minimum: float | None = None,
     maximum: float | None = None,
 ) -> list[StockScanResult]:
+    if minimum is None and maximum is None:
+        raise ValueError("minimum 和 maximum 至少提供一个")
+    if minimum is not None and maximum is not None and minimum > maximum:
+        raise ValueError("minimum 不能大于 maximum")
     matches: list[StockScanResult] = []
     for row in rows:
         value = next(
@@ -93,11 +97,11 @@ def _period_matches(
         )
         if value is None:
             continue
-        if (
-            (maximum is not None and value <= maximum)
-            or (minimum is not None and value >= minimum)
-        ):
-            matches.append(row)
+        if minimum is not None and value < minimum:
+            continue
+        if maximum is not None and value > maximum:
+            continue
+        matches.append(row)
     return matches
 
 

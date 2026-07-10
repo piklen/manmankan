@@ -86,6 +86,24 @@ def test_public_watchlist_can_be_saved_twice_by_same_owner(temp_kan_dir):
     assert [row.symbol for row in watchlist.list_all()] == ["600519", "000858"]
 
 
+def test_crlf_watchlist_source_token_matches_raw_file(temp_kan_dir):
+    payload = {
+        "version": 2,
+        "default": "自选",
+        "groups": {"自选": {"stocks": []}},
+    }
+    raw = json.dumps(payload, ensure_ascii=False, indent=2).replace("\n", "\r\n").encode()
+    paths.WATCHLIST_PATH.write_bytes(raw)
+    grouped = watchlist.load_grouped_watchlist()
+    grouped.groups["自选"].append(
+        Stock(symbol="600519", name="贵州茅台", added_at=date(2026, 7, 10))
+    )
+
+    watchlist.save_grouped_watchlist(grouped)
+
+    assert [row.symbol for row in watchlist.list_all()] == ["600519"]
+
+
 def test_concurrent_group_creates_preserve_all_groups(temp_kan_dir):
     with ThreadPoolExecutor(max_workers=4) as executor:
         list(executor.map(watchlist.create_group, ["银行", "白酒", "新能源", "红利"]))

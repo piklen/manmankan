@@ -181,6 +181,17 @@ def test_em_source_exception_records_breaker_down(sample_theme, isolated_breaker
     assert isolated_breaker.is_down("em_push2_concept")
 
 
+def test_em_source_name_miss_does_not_trip_global_breaker(sample_theme, isolated_breaker):
+    src = EmConstituentSource()
+    with patch.object(
+        concepts,
+        "fetch_em_constituents",
+        side_effect=LookupError("unmapped theme"),
+    ):
+        assert src.fetch(sample_theme) is None
+    assert not isolated_breaker.is_down("em_push2_concept")
+
+
 def test_em_source_unavailable_when_breaker_down(sample_theme, isolated_breaker):
     """em_push2_concept 熔断中 · is_available 返 False (chain skip)。"""
     isolated_breaker.record("em_push2_concept", ok=False)

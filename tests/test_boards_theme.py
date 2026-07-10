@@ -95,11 +95,12 @@ def test_load_theme_catalog_raises_when_adapter_fails_and_no_cache(monkeypatch, 
     """适配器抛错 + 无 cache → ThemeDataUnavailableError。"""
 
     def raising():
-        raise ConnectionError("source down")
+        raise ConnectionError("secret upstream detail")
 
     monkeypatch.setattr("kan.data.concepts.fetch_theme_catalog", raising)
-    with pytest.raises(ThemeDataUnavailableError):
+    with pytest.raises(ThemeDataUnavailableError) as exc_info:
         boards.load_theme_catalog()
+    assert "secret upstream detail" not in str(exc_info.value)
 
 
 def test_load_theme_catalog_falls_back_to_stale_cache_on_failure(monkeypatch, _isolate_boards_dir):
@@ -364,6 +365,19 @@ def test_fetch_theme_kline_raises_on_empty(monkeypatch, _isolate_boards_dir):
     theme = Theme(code="BK1629", name="AI应用", source="em")
     with pytest.raises(ThemeDataUnavailableError):
         boards.fetch_theme_kline(theme)
+
+
+def test_fetch_theme_kline_hides_upstream_error(monkeypatch, _isolate_boards_dir):
+    monkeypatch.setattr(
+        "kan.data.concepts.fetch_em_kline",
+        lambda _theme: (_ for _ in ()).throw(ConnectionError("secret endpoint")),
+    )
+    theme = Theme(code="BK1629", name="AI应用", source="em")
+
+    with pytest.raises(ThemeDataUnavailableError) as exc_info:
+        boards.fetch_theme_kline(theme)
+
+    assert "secret endpoint" not in str(exc_info.value)
 
 
 # ── get_themes_of_stock · EM datacenter 反查 ──────────────────────────

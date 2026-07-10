@@ -207,11 +207,11 @@ def freshness_of(symbols: Iterable[str], *, min_rows: int | None = None) -> Fres
 
     symbol_list = list(symbols)
     cutoffs: list[date] = []
-    cutoff_by_symbol: dict[str, date | None] = {}
+    cutoff_entries: list[tuple[str, date | None]] = []
     fetched_at: str | None = None
     for sym in symbol_list:
         d = data_cutoff_date(sym)
-        cutoff_by_symbol[sym] = d
+        cutoff_entries.append((sym, d))
         if d is not None:
             cutoffs.append(d)
         t = cache_age(sym)
@@ -226,7 +226,7 @@ def freshness_of(symbols: Iterable[str], *, min_rows: int | None = None) -> Fres
     history_incomplete_count = (
         sum(
             1
-            for symbol, cutoff in cutoff_by_symbol.items()
+            for symbol, cutoff in cutoff_entries
             if cutoff is not None and not cache_has_min_rows(symbol, required_rows)
         )
         if required_rows is not None

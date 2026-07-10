@@ -42,7 +42,7 @@ def _atomic_write_json(path: Path, data: Any) -> None:
 
 @contextlib.contextmanager
 def config_lock() -> Iterator[None]:
-    """串行化配置的 load→修改→save，兼容 POSIX 与 Windows。"""
+    """串行化配置的 load→修改→save；文件锁不可重入，调用方不得嵌套。"""
     with _CONFIG_THREAD_LOCK:
         CONFIG_PATH.parent.mkdir(mode=0o700, parents=True, exist_ok=True)
         with contextlib.suppress(OSError):

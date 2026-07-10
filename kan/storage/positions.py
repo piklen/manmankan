@@ -99,6 +99,10 @@ class PositionsCorruptError(Exception):
     """positions.json 解析失败。"""
 
 
+class PositionNotFoundError(ValueError):
+    """指定股票不在当前持仓中。"""
+
+
 @dataclass(frozen=True)
 class ImportRow:
     symbol: str
@@ -327,7 +331,7 @@ def update_position(
     book = load_positions()
     existing = book.find(symbol)
     if existing is None:
-        raise ValueError(f"{symbol} 没有持仓")
+        raise PositionNotFoundError(f"{symbol} 没有持仓")
     payload: dict[str, Any] = {}
     if cost is not None:
         payload["cost"] = cost
@@ -350,7 +354,7 @@ def reduce_position(symbol: str, *, shares: int) -> tuple[Position, bool]:
     book = load_positions()
     existing = book.find(symbol)
     if existing is None:
-        raise ValueError(f"{symbol} 没有持仓")
+        raise PositionNotFoundError(f"{symbol} 没有持仓")
     if shares > existing.shares:
         raise ValueError(f"减少股数 {shares} 超过当前持股 {existing.shares}")
     if shares == existing.shares:
@@ -369,7 +373,7 @@ def remove_position(symbol: str) -> Position:
     book = load_positions()
     existing = book.find(symbol)
     if existing is None:
-        raise ValueError(f"{symbol} 没有持仓")
+        raise PositionNotFoundError(f"{symbol} 没有持仓")
     book.positions = [p for p in book.positions if p.symbol != symbol]
     save_positions(book)
     return existing

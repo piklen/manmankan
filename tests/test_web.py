@@ -370,6 +370,30 @@ def test_positions_put_requires_web_header() -> None:
     assert response.status_code == 403
 
 
+def test_positions_update_missing_is_404_and_invalid_delete_is_400(monkeypatch) -> None:
+    from kan.storage.positions import PositionNotFoundError
+
+    monkeypatch.setattr(
+        "kan.web.routes_api.positions.update_position",
+        lambda *_args, **_kwargs: (_ for _ in ()).throw(
+            PositionNotFoundError("600519 没有持仓")
+        ),
+    )
+    missing = _client().put(
+        "/api/positions/600519",
+        headers={"X-Kan-Web": "1"},
+        json={"cost": 10, "shares": 100},
+    )
+    assert missing.status_code == 404
+
+    monkeypatch.setattr(
+        "kan.web.routes_api.positions.remove_position",
+        lambda *_args, **_kwargs: (_ for _ in ()).throw(ValueError("股票代码必须是 6 位数字")),
+    )
+    invalid = _client().delete("/api/positions/bad", headers={"X-Kan-Web": "1"})
+    assert invalid.status_code == 400
+
+
 def test_positions_api_explains_corrupt_local_file(monkeypatch) -> None:
     from kan.storage.positions import PositionsCorruptError
 

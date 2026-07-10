@@ -76,7 +76,7 @@ def load_grouped_watchlist() -> GroupedWatchlist:
     if not paths.WATCHLIST_PATH.exists():
         return GroupedWatchlist(source_token=_MISSING_SOURCE_TOKEN)
     try:
-        raw = paths.WATCHLIST_PATH.read_text(encoding="utf-8")
+        raw = paths.WATCHLIST_PATH.read_bytes()
         data = json.loads(raw)
     except json.JSONDecodeError as e:
         raise WatchlistCorruptError(
@@ -104,7 +104,7 @@ def load_grouped_watchlist() -> GroupedWatchlist:
     return GroupedWatchlist(
         groups=groups,
         default=default,
-        source_token=hashlib.sha256(raw.encode("utf-8")).hexdigest(),
+        source_token=hashlib.sha256(raw).hexdigest(),
     )
 
 

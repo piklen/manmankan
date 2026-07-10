@@ -3,9 +3,11 @@ from __future__ import annotations
 
 from datetime import date
 
+import pytest
+
 from kan.core.models import PeriodResult, StockScanResult
 from kan.core.pipeline import DataCtx, Freshness
-from kan.service.daily_service import build_daily_overview
+from kan.service.daily_service import _period_matches, build_daily_overview
 from kan.service.scan_service import ScanServiceResult
 from kan.web.serialize import serialize_daily_overview, serialize_scan
 
@@ -85,6 +87,16 @@ def test_scan_freshness_explains_current_and_stale_data() -> None:
     assert stale["freshness"]["status"] == "stale"
     assert "正常应至少到 2026-07-10" in stale["freshness"]["detail"]
     assert stale["freshness"]["action_label"] == "立即更新"
+
+
+def test_period_matches_applies_both_bounds() -> None:
+    rows = [_row("600519", "低", 3.0), _row("000858", "中", 50.0), _row("300750", "高", 96.0)]
+
+    matches = _period_matches(rows, period=180, minimum=10, maximum=90)
+
+    assert [row.symbol for row in matches] == ["000858"]
+    with pytest.raises(ValueError, match="至少提供一个"):
+        _period_matches(rows, period=180)
 
 
 def test_web_daily_snapshot_failure_does_not_hide_scan(monkeypatch) -> None:

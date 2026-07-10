@@ -134,6 +134,19 @@ def test_get_constituents_uses_cache(monkeypatch, _isolate_boards_dir):
     assert boards.get_industry_constituents(board) == [("600519", "贵州茅台")]
 
 
+def test_get_constituents_hides_upstream_error(monkeypatch):
+    monkeypatch.setattr(
+        "akshare.index_component_sw",
+        lambda _symbol: (_ for _ in ()).throw(ConnectionError("secret endpoint")),
+    )
+    board = Board(code="801016", name="种植业", level=2, size=20)
+
+    with pytest.raises(boards.BoardDataUnavailableError) as exc_info:
+        boards.get_industry_constituents(board, force=True)
+
+    assert "secret endpoint" not in str(exc_info.value)
+
+
 def test_fetch_industry_kline_normalizes_schema(monkeypatch):
     raw = pd.DataFrame(
         {
@@ -169,3 +182,16 @@ def test_fetch_industry_kline_empty_raises(monkeypatch):
     board = Board(code="801016", name="种植业", level=2, size=20)
     with pytest.raises(boards.BoardDataUnavailableError):
         boards.fetch_industry_kline(board, force=True)
+
+
+def test_fetch_industry_kline_hides_upstream_error(monkeypatch):
+    monkeypatch.setattr(
+        "akshare.index_hist_sw",
+        lambda *_args, **_kwargs: (_ for _ in ()).throw(ConnectionError("secret endpoint")),
+    )
+    board = Board(code="801016", name="种植业", level=2, size=20)
+
+    with pytest.raises(boards.BoardDataUnavailableError) as exc_info:
+        boards.fetch_industry_kline(board, force=True)
+
+    assert "secret endpoint" not in str(exc_info.value)

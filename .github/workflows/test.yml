@@ -2,16 +2,7 @@ name: Test
 
 on:
   push:
-    branches:
-      - main
-      - 'feat/**'
-      - 'fix/**'
-      - 'chore/**'
-      - 'docs/**'
-      - 'refactor/**'
-      - 'test/**'
-      - 'codex/**'
-      - 'feature/**'
+    branches: [main]
   pull_request:
     branches: [main]
   workflow_dispatch:
@@ -30,6 +21,7 @@ env:
   KAN_NO_UPDATE_CHECK: "1"
   UV_LINK_MODE: "copy"
   UV_LOCK_TIMEOUT: "1200"
+  UV_VERSION: "0.11.21"
 
 jobs:
   quality-gates:
@@ -53,6 +45,7 @@ jobs:
       - name: Verify uv runtime
         run: |
           uv --version
+          test "$(uv --version | cut -d' ' -f2)" = "$UV_VERSION"
           uv python find 3.12
       - name: Lockfile is current
         run: uv lock --check
@@ -159,6 +152,7 @@ jobs:
       - name: Verify uv runtime
         run: |
           uv --version
+          test "$(uv --version | cut -d' ' -f2)" = "$UV_VERSION"
           uv python find ${{ matrix.python-version }}
       - name: Install dependencies
         run: uv sync --python ${{ matrix.python-version }} --frozen --all-groups --all-extras
@@ -203,6 +197,7 @@ jobs:
       - name: Verify uv runtime
         run: |
           uv --version
+          test "$(uv --version | cut -d' ' -f2)" = "$UV_VERSION"
           uv python find ${{ matrix.python-version }}
       - name: Build package
         run: uv build --clear
@@ -302,6 +297,7 @@ jobs:
       - name: Verify uv runtime
         run: |
           uv --version
+          test "$(uv --version | cut -d' ' -f2)" = "$UV_VERSION"
           uv python find ${{ matrix.python-version }}
       - name: Install dependencies + manmankan as tool
         run: |

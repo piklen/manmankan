@@ -351,6 +351,24 @@ def test_freshness_of_requires_enough_history_for_requested_period(monkeypatch):
     assert freshness.is_stale is True
 
 
+def test_freshness_history_count_preserves_duplicate_symbols(monkeypatch):
+    _patch_calendar(monkeypatch, expected_date=date(2026, 5, 23))
+    _patch_fetcher(
+        monkeypatch,
+        cutoffs={"600519": date(2026, 5, 23)},
+        ages={},
+    )
+    monkeypatch.setattr(
+        "kan.data.fetcher.cache_has_min_rows",
+        lambda _symbol, _rows: False,
+    )
+
+    freshness = pipeline.freshness_of(["600519", "600519"], min_rows=180)
+
+    assert freshness.target_count == 2
+    assert freshness.history_incomplete_count == 2
+
+
 def test_freshness_of_skips_falsy_cache_age(monkeypatch):
     """cache_age 返回 None / 空串 → 跳过(沿用现状 `if t and ...` 判定)。"""
     _patch_calendar(monkeypatch, expected_date=date(2026, 5, 23))

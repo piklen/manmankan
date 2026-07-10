@@ -270,6 +270,8 @@ def update_position(code: str, payload: Annotated[dict[str, Any], Body()]) -> di
         row = positions.update_position(code, cost=cost, shares=shares)
     except positions.PositionsCorruptError as e:
         raise HTTPException(status_code=409, detail=_positions_corrupt_detail()) from e
+    except positions.PositionNotFoundError as e:
+        raise HTTPException(status_code=404, detail=str(e)) from e
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e)) from e
     return {
@@ -285,8 +287,10 @@ def delete_position(code: str) -> dict:
         row = positions.remove_position(code)
     except positions.PositionsCorruptError as e:
         raise HTTPException(status_code=409, detail=_positions_corrupt_detail()) from e
-    except ValueError as e:
+    except positions.PositionNotFoundError as e:
         raise HTTPException(status_code=404, detail=str(e)) from e
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e)) from e
     return {
         "ok": True,
         "code": row.symbol,
