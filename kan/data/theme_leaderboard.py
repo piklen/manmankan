@@ -6,15 +6,15 @@
 两条数据源路径(运行时选择):
 - TuShare Pro 路径(优先 · 配 token 时启用):走 ths_daily batch 接口 ·
   60 次 HTTP 拿所有题材 60 天历史 · 服务端聚合 · 客户端 group by code
-- adata EM 路径(fallback · 默认):走 get_market_concept_east 单题材 ·
+- AkShare EM 路径(fallback · 默认):走东财单题材行情 ·
   ThreadPoolExecutor 默认 16 worker · `KAN_THEME_TOP_PARALLEL` env 覆盖(1-32)
 
-为啥两路:adata EM datacenter 不稳定(2026-05-25 实测整体 RemoteDisconnected)·
+为啥两路:EM datacenter 可能波动(2026-05-25 实测整体 RemoteDisconnected)·
 没 stale cache 兜底时第一次跑 kan theme trend 直接全挂。TuShare 是有 token 用户
 的稳定回避路径(自部署代理 / 官方 endpoint 都支持)。
 
 设计要点:
-- cache 复用:adata 路径用 `fetch_theme_kline` 已有 24h parquet · TuShare 路径
+- cache 复用:EM 路径用 `fetch_theme_kline` 已有 24h parquet · TuShare 路径
   用 `tushare_load_theme_klines` 独立 12h batch parquet
 - 失败容忍:单题材失败不阻塞整榜 · 收集到 errors 列表 · caller 决定如何提示
 - 进度条:caller 传 `progress_console` 显示 rich.Progress · None 时静默(测试 / pipe 用)
@@ -107,13 +107,13 @@ def load_theme_leaderboard(
 
     数据源选择(运行时):
     - TuShare token 配置 + ths_daily batch 通 → 走 TuShare 路径(快 · 稳定 · source='tushare')
-    - 否则 → 走 adata EM 路径(EM 并行实现 · source='em')
+    - 否则 → 走 AkShare EM 路径(EM 并行实现 · source='em')
 
     Args:
         candle: True=阳线阴线口径 / False=收盘价口径 · 透传 calc_trend。
-        force: True 时忽略 cache 强刷(adata EM 路径)· TuShare 路径目前忽略 force
+        force: True 时忽略 cache 强刷(EM 路径)· TuShare 路径目前忽略 force
                (TuShare cache 12h · 当日强刷可手动删 boards/klines_tushare_*.parquet)。
-        parallel: adata EM 路径 worker 数 · None 时走 _resolve_parallel(env / 默认 16)。
+        parallel: EM 路径 worker 数 · None 时走 _resolve_parallel(env / 默认 16)。
         progress_console: rich.Console · 不为 None 时显示 rich.Progress 进度条 ·
                           None 时静默(测试 / `--format json` pipe 场景)。
 

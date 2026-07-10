@@ -5,24 +5,34 @@
 """
 from __future__ import annotations
 
+import contextlib
 import csv
+import functools
 import json
+import math
 import os
 import re
+import threading
+from collections.abc import Callable, Iterator
 from contextlib import suppress
 from dataclasses import dataclass
 from datetime import date
 from io import StringIO
 from pathlib import Path
-from typing import Any
+from typing import Any, ParamSpec, TypeVar
 
-from pydantic import BaseModel, Field, field_validator
+from pydantic import BaseModel, Field, field_validator, model_validator
 
 from kan.storage.paths import POSITIONS_PATH, ensure_dirs
 
 SCHEMA_VERSION = 1
 MAX_IMPORT_SIZE = 5 * 1024 * 1024
+MIN_POSITION_COST = 0.0001
+MAX_POSITION_COST = 10_000_000.0
+MAX_POSITION_SHARES = 10_000_000_000
+MAX_ACCOUNT_VALUE = 1_000_000_000_000_000.0
 _SYMBOL_RE = re.compile(r"^\d{6}$")
+_POSITIONS_THREAD_LOCK = threading.RLock()
 
 
 class Position(BaseModel):
@@ -43,16 +53,27 @@ class Position(BaseModel):
     @field_validator("cost")
     @classmethod
     def _valid_cost(cls, value: float) -> float:
-        if value <= 0:
-            raise ValueError("成本必须大于 0")
-        return round(float(value), 4)
+        rounded = round(float(value), 4)
+        if not math.isfinite(rounded) or rounded < MIN_POSITION_COST:
+            raise ValueError("成本至少为 0.0001")
+        if rounded > MAX_POSITION_COST:
+            raise ValueError("成本超出可录入范围")
+        return rounded
 
     @field_validator("shares")
     @classmethod
     def _valid_shares(cls, value: int) -> int:
         if int(value) != value or value <= 0:
             raise ValueError("股数必须是正整数")
+        if value > MAX_POSITION_SHARES:
+            raise ValueError("股数超出可录入范围")
         return int(value)
+
+    @model_validator(mode="after")
+    def _valid_position_value(self) -> Position:
+        if not math.isfinite(self.cost * self.shares) or self.cost * self.shares > MAX_ACCOUNT_VALUE:
+            raise ValueError("持仓金额超出可录入范围")
+        return self
 
 
 class PositionsBook(BaseModel):
@@ -63,8 +84,10 @@ class PositionsBook(BaseModel):
     @field_validator("cash")
     @classmethod
     def _valid_cash(cls, value: float) -> float:
-        if value < 0:
+        if not math.isfinite(value) or value < 0:
             raise ValueError("现金不能为负数")
+        if value > MAX_ACCOUNT_VALUE:
+            raise ValueError("现金超出可录入范围")
         return round(float(value), 2)
 
     def find(self, symbol: str) -> Position | None:
@@ -174,16 +197,74 @@ def save_positions(book: PositionsBook) -> None:
     _atomic_write_json(POSITIONS_PATH, payload)
 
 
+@contextlib.contextmanager
+def positions_lock() -> Iterator[None]:
+    """串行化持仓的 load→修改→save 事务，避免 Web/CLI 并发覆盖。"""
+    with _POSITIONS_THREAD_LOCK:
+        ensure_dirs()
+        lock_path = POSITIONS_PATH.with_suffix(".lock")
+        lock_path.parent.mkdir(mode=0o700, parents=True, exist_ok=True)
+        with open(lock_path, "a+b") as handle:
+            with suppress(OSError):
+                os.chmod(lock_path, 0o600)
+            try:
+                import fcntl
+            except ImportError:
+                yield from _windows_positions_lock(handle)
+            else:
+                fcntl.flock(handle, fcntl.LOCK_EX)
+                try:
+                    yield
+                finally:
+                    fcntl.flock(handle, fcntl.LOCK_UN)
+
+
+def _windows_positions_lock(handle) -> Iterator[None]:
+    """Windows 使用 msvcrt 锁定文件首字节；不可用时仍保留进程内锁。"""
+    try:
+        import msvcrt
+    except ImportError:
+        yield
+        return
+    if handle.seek(0, os.SEEK_END) == 0:
+        handle.write(b"\0")
+        handle.flush()
+    handle.seek(0)
+    msvcrt.locking(handle.fileno(), msvcrt.LK_LOCK, 1)
+    try:
+        yield
+    finally:
+        handle.seek(0)
+        msvcrt.locking(handle.fileno(), msvcrt.LK_UNLCK, 1)
+
+
+_P = ParamSpec("_P")
+_R = TypeVar("_R")
+
+
+def with_positions_lock(fn: Callable[_P, _R]) -> Callable[_P, _R]:
+    """为叶子写事务增加持仓文件锁。"""
+
+    @functools.wraps(fn)
+    def wrapper(*args: _P.args, **kwargs: _P.kwargs) -> _R:
+        with positions_lock():
+            return fn(*args, **kwargs)
+
+    return wrapper
+
+
 def list_positions() -> list[Position]:
     return list(load_positions().positions)
 
 
+@with_positions_lock
 def set_cash(amount: float) -> PositionsBook:
     book = PositionsBook(**load_positions().model_copy(update={"cash": amount}).model_dump())
     save_positions(book)
     return book
 
 
+@with_positions_lock
 def add_position(
     symbol: str,
     *,
@@ -209,20 +290,30 @@ def add_position(
         )
         book.positions.append(pos)
     else:
-        new_shares = existing.shares + int(shares)
+        incoming = Position(
+            symbol=symbol,
+            name=_resolve_name(symbol, name or existing.name),
+            cost=cost,
+            shares=shares,
+            added_at=existing.added_at,
+        )
+        new_shares = existing.shares + incoming.shares
         new_cost = (
-            existing.cost * existing.shares + float(cost) * int(shares)
+            existing.cost * existing.shares + incoming.cost * incoming.shares
         ) / new_shares
-        pos = existing.model_copy(update={
-            "cost": round(new_cost, 4),
-            "shares": new_shares,
-            "name": _resolve_name(symbol, name or existing.name),
-        })
+        pos = Position(
+            symbol=symbol,
+            name=incoming.name,
+            cost=new_cost,
+            shares=new_shares,
+            added_at=existing.added_at,
+        )
         book.positions = [pos if p.symbol == symbol else p for p in book.positions]
     save_positions(book)
     return pos
 
 
+@with_positions_lock
 def update_position(
     symbol: str,
     *,
@@ -250,6 +341,7 @@ def update_position(
     return pos
 
 
+@with_positions_lock
 def reduce_position(symbol: str, *, shares: int) -> tuple[Position, bool]:
     """减少持股数；减到 0 时删除该持仓。返回 (原/新持仓, 是否清仓)。"""
     symbol = normalize_symbol(symbol)
@@ -271,6 +363,7 @@ def reduce_position(symbol: str, *, shares: int) -> tuple[Position, bool]:
     return pos, False
 
 
+@with_positions_lock
 def remove_position(symbol: str) -> Position:
     symbol = normalize_symbol(symbol)
     book = load_positions()
@@ -282,6 +375,7 @@ def remove_position(symbol: str) -> Position:
     return existing
 
 
+@with_positions_lock
 def clear_positions() -> int:
     book = load_positions()
     count = len(book.positions)
@@ -289,6 +383,7 @@ def clear_positions() -> int:
     return count
 
 
+@with_positions_lock
 def add_positions(rows: list[ImportRow]) -> ImportSummary:
     """批量建仓；已有持仓不覆盖，避免误解析静默污染。"""
     book = load_positions()
@@ -393,6 +488,7 @@ def _pick_index(index: dict[str, int], keys: tuple[str, ...], default: int) -> i
     return default
 
 
+@with_positions_lock
 def import_positions(rows: list[ImportRow]) -> ImportSummary:
     """批量导入按纠错覆盖处理：同代码覆盖成本/股数，避免重复污染。"""
     book = load_positions()

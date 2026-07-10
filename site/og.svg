@@ -1,4 +1,4 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1280 640" width="1280" height="640" role="img" aria-label="慢慢看 · manmankan · A 股本地数据筛选器">
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1280 640" width="1280" height="640" role="img" aria-label="慢慢看 · 普通 A 股散户的本地观察台">
   <defs>
     <linearGradient id="brand" x1="0%" y1="0%" x2="100%" y2="0%">
       <stop offset="0%" stop-color="#14b8a6"/>
@@ -32,15 +32,15 @@
       <text x="44" y="30" font-size="19" font-weight="700" fill="#111827">慢慢看 · manmankan</text>
     </g>
 
-    <text x="72" y="224" font-size="78" font-weight="850" fill="#111827">告诉你<tspan fill="url(#brand)">坐标</tspan></text>
-    <text x="72" y="304" font-size="54" font-weight="760" fill="#64748b">不替你决策</text>
-    <text x="74" y="368" font-size="25" fill="#475569">人和 AI 共用的 A 股本地数据筛选器</text>
-    <text x="74" y="406" font-size="23" fill="#64748b">CLI / JSON / MCP · 本地运行 · 不登录 · 不上传自选</text>
-    <text x="74" y="442" font-size="22" fill="#64748b">AGPL-3.0 开源 · 适合中国用户和 AI agent</text>
+    <text x="72" y="224" font-size="78" font-weight="850" fill="#111827">先看<tspan fill="url(#brand)">今天</tspan></text>
+    <text x="72" y="304" font-size="54" font-weight="760" fill="#64748b">发生了什么</text>
+    <text x="74" y="368" font-size="25" fill="#475569">普通 A 股散户的本地观察台</text>
+    <text x="74" y="406" font-size="23" fill="#64748b">今日 / 自选 / 持仓 / 找股票 · 不登录 · 不上传</text>
+    <text x="74" y="442" font-size="22" fill="#64748b">本地 Web 是第一入口 · CLI / JSON / MCP 保持兼容</text>
 
     <g transform="translate(72 490)">
-      <rect width="478" height="62" rx="12" fill="#111827"/>
-      <text x="26" y="40" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="22" fill="#e5e7eb"><tspan fill="#34d399">$</tspan> uv tool install manmankan</text>
+      <rect width="550" height="62" rx="12" fill="#111827"/>
+      <text x="26" y="40" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="20" fill="#e5e7eb"><tspan fill="#34d399">$</tspan> uv tool install manmankan &amp;&amp; kan web</text>
     </g>
   </g>
 
@@ -54,17 +54,17 @@
       <circle cx="23" cy="19" r="5" fill="#ef4444"/>
       <circle cx="42" cy="19" r="5" fill="#f59e0b"/>
       <circle cx="61" cy="19" r="5" fill="#22c55e"/>
-      <text x="84" y="25" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="13" fill="#9ca3af">human terminal</text>
+      <text x="84" y="25" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="13" fill="#9ca3af">local web</text>
       <g font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="18" fill="#e5e7eb">
-        <text x="24" y="78"><tspan fill="#34d399">$</tspan> kan scan --codes 600519,000858</text>
-        <text x="24" y="112" fill="#cbd5e1">600519 贵州茅台  180日位置 42%</text>
-        <text x="24" y="142" fill="#cbd5e1">000858 五粮液    180日位置 37%</text>
+        <text x="24" y="78"><tspan fill="#34d399">$</tspan> kan web</text>
+        <text x="24" y="112" fill="#cbd5e1">行情已更新至正常交易日</text>
+        <text x="24" y="142" fill="#cbd5e1">180日接近低位 2只 · 变化 1条</text>
       </g>
     </g>
 
     <g transform="translate(34 224)">
       <rect width="446" height="156" rx="16" fill="#eef6ff" stroke="#c7ddf8"/>
-      <text x="24" y="40" font-family="-apple-system, BlinkMacSystemFont, 'PingFang SC', 'Microsoft YaHei', system-ui, sans-serif" font-size="18" font-weight="800" fill="#0f172a">AI-readable JSON</text>
+      <text x="24" y="40" font-family="-apple-system, BlinkMacSystemFont, 'PingFang SC', 'Microsoft YaHei', system-ui, sans-serif" font-size="18" font-weight="800" fill="#0f172a">今日概览 · 自选与持仓</text>
       <g font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="17" fill="#334155">
         <text x="24" y="78">{ <tspan fill="#2563eb">"ok"</tspan>: <tspan fill="#059669">true</tspan>, <tspan fill="#2563eb">"command"</tspan>: <tspan fill="#b45309">"find"</tspan>,</text>
         <text x="44" y="108"><tspan fill="#2563eb">"schema_version"</tspan>: <tspan fill="#b45309">"0.0.6.8"</tspan>,</text>

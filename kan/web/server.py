@@ -2,10 +2,13 @@
 from __future__ import annotations
 
 import logging
+import secrets
 import socket
 import webbrowser
+from urllib.parse import urlencode
 
 from kan.web.app import create_app
+from kan.web.security import SESSION_QUERY_NAME
 
 WEB_HOST = "127.0.0.1"
 
@@ -13,9 +16,11 @@ WEB_HOST = "127.0.0.1"
 def run_server(port: int, open_browser: bool) -> None:
     """启动本地 Web 服务。"""
     _ensure_port_available(port)
-    url = f"http://{WEB_HOST}:{port}/"
+    session_token = secrets.token_urlsafe(32)
+    query = urlencode({SESSION_QUERY_NAME: session_token})
+    url = f"http://{WEB_HOST}:{port}/?{query}"
     print("本地私有服务 · 仅监听 127.0.0.1 · 数据不出本机")
-    print(f"访问地址: {url}")
+    print(f"访问地址（本次启动有效）: {url}")
     if open_browser:
         webbrowser.open(url)
     logging.getLogger(__name__).info("Starting kan web server")
@@ -23,7 +28,7 @@ def run_server(port: int, open_browser: bool) -> None:
     import uvicorn
 
     uvicorn.run(
-        create_app(),
+        create_app(session_token=session_token),
         host=WEB_HOST,
         port=port,
         log_level="warning",

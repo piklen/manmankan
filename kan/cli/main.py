@@ -11,26 +11,20 @@ from kan.app import app
 def cli_main() -> None:
     """CLI entry point · sys.argv 预处理后再交给 typer。
 
-    实现细节：环境设置提示推迟到命令完成后（atexit）执行，
-    防止其 stderr 输出跟 add 命令的 Live Display spinner 共享 stderr 时
-    buffer 竞争（用户可能看不到 spinner 动画的 corner case）。
-
     背景: 顶层 try/except (ImportError, ModuleNotFoundError) 兜底 ·
     防安装不完整时抛 60+ 行 traceback · 给用户清晰 reinstall 引导。
     """
     import atexit
 
     try:
-        from kan.cli.atexit import _auto_install_completion, _check_updates_atexit
+        from kan.cli.atexit import _check_updates_atexit
         from kan.cli.helpers import _normalize_help_args, _normalize_streak_args
         from kan.storage.stock_names_refresh import maybe_start_stock_names_refresh
 
         maybe_start_stock_names_refresh()
         _normalize_help_args()
         _normalize_streak_args()
-        # 命令结束后才提示环境设置 + 检查更新 · 不抢主流程 stderr
-        # atexit LIFO 执行 · 后注册先跑 · update 检查先于环境设置提示
-        atexit.register(_auto_install_completion)
+        # 环境设置只由 kan setup / completion / mcp install 主动触发。
         atexit.register(_check_updates_atexit)
         try:
             app()

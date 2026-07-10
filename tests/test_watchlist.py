@@ -1,6 +1,7 @@
 """watchlist 测试 · 代码校验 / 持久化 / CRUD"""
 
 import json
+from concurrent.futures import ThreadPoolExecutor
 from datetime import date
 from unittest.mock import patch
 
@@ -48,6 +49,54 @@ def test_normalize_symbol_invalid_format():
 def test_normalize_symbol_too_short():
     with pytest.raises(ValueError, match="不是 6 位股票代码"):
         watchlist._normalize_symbol("12345")
+
+
+def test_concurrent_adds_do_not_lose_watchlist_rows(temp_kan_dir, monkeypatch):
+    symbols = [f"60{index:04d}" for index in range(20)]
+    monkeypatch.setattr(watchlist_items, "_lookup_name", lambda symbol: symbol)
+
+    with ThreadPoolExecutor(max_workers=8) as executor:
+        results = list(executor.map(watchlist.add, symbols))
+
+    assert all(added for added, _message in results)
+    assert {row.symbol for row in watchlist.list_all()} == set(symbols)
+
+
+def test_stale_public_save_is_rejected_instead_of_overwriting(temp_kan_dir):
+    first = watchlist.load_watchlist()
+    stale = watchlist.load_watchlist()
+    watchlist.add_stock(first, "600519", "贵州茅台")
+    watchlist.save_watchlist(first)
+    watchlist.add_stock(stale, "000858", "五粮液")
+
+    with pytest.raises(watchlist.WatchlistConflictError, match="其他窗口修改"):
+        watchlist.save_watchlist(stale)
+
+    assert [row.symbol for row in watchlist.list_all()] == ["600519"]
+
+
+def test_public_watchlist_can_be_saved_twice_by_same_owner(temp_kan_dir):
+    owned = watchlist.load_watchlist()
+    watchlist.add_stock(owned, "600519", "贵州茅台")
+    watchlist.save_watchlist(owned)
+    watchlist.add_stock(owned, "000858", "五粮液")
+
+    watchlist.save_watchlist(owned)
+
+    assert [row.symbol for row in watchlist.list_all()] == ["600519", "000858"]
+
+
+def test_concurrent_group_creates_preserve_all_groups(temp_kan_dir):
+    with ThreadPoolExecutor(max_workers=4) as executor:
+        list(executor.map(watchlist.create_group, ["银行", "白酒", "新能源", "红利"]))
+
+    assert {name for name, _count, _default in watchlist.list_groups()} == {
+        "自选",
+        "银行",
+        "白酒",
+        "新能源",
+        "红利",
+    }
 
 
 # ── resolve_symbol_or_name · 6 位代码 / 名称 / 多匹配 / 零匹配 / 空输入 ──────────

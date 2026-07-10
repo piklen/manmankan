@@ -1,6 +1,6 @@
-"""atexit hooks · 主命令完成后跑：环境设置提示 + 更新检查。
+"""atexit hook · 主命令完成后检查更新。
 
-这两个 hook 必须满足：
+这个 hook 必须满足：
   1. 不影响主命令 exit code（任何异常都吞掉）
   2. 非 TTY 静默（pipe / CI 场景不弹 prompt）
   3. 失败不重试（避免每次启动都 retry 失败的网络 / shell 检测）
@@ -43,118 +43,6 @@ def _is_interactive_session() -> bool:
     文本灌进 stdout 污染上游捕获流。改成 AND 后只要任一被重定向就跳过。
     """
     return sys.stdout.isatty() and sys.stderr.isatty()
-
-
-def _auto_install_completion() -> None:
-    """首次交互启动提示用户配置 shell completion / MCP · 不静默改环境。
-
-    用户视角："uv tool install manmankan" 后第一次跑任意 kan 命令，结束时给一次
-    本机环境设置提示。用户确认后才写 shell rc / MCP 客户端配置。
-
-    跳过条件（防止 surprising behavior）：
-      - 环境变量 KAN_NO_ENV_SETUP_PROMPT=1 或 KAN_NO_COMPLETION_AUTOINSTALL=1
-      - completion 与 MCP 都已安装 / 拒绝 / 无可检测目标
-      - 非 TTY 环境（pipe / CI / docker · 不要在脚本场景改 shell rc）
-    """
-    # shell completion 子调用绝不能写 shell rc 文件（用户没主动跑 install）
-    if _is_shell_completion_run():
-        return
-
-    if (
-        os.environ.get("KAN_NO_ENV_SETUP_PROMPT") == "1"
-        or os.environ.get("KAN_NO_COMPLETION_AUTOINSTALL") == "1"
-    ):
-        return
-
-    # 非 TTY (pipe / CI) 不自动改 shell rc 文件
-    if not _is_interactive_session():
-        return
-
-    try:
-        from rich.console import Console
-
-        from kan.cli.helpers import _detect_shell_fallback
-        from kan.cli.setup_helpers import (
-            completion_done,
-            install_shell_completion,
-            mark_completion_setup,
-            mark_mcp_setup,
-            mark_setup_skip,
-            mcp_done,
-            mcp_install_succeeded,
-            setup_skip_recent,
-        )
-        from kan.mcp.install import detect_clients, install_clients
-    except Exception as e:
-        debug_log(__name__, "import environment setup helpers", e)
-        return
-
-    if setup_skip_recent():
-        return
-
-    shell = _detect_shell_fallback()
-    completion_needed = shell is not None and not completion_done()
-    detected_clients = detect_clients()
-    mcp_needed = bool(detected_clients) and not mcp_done()
-
-    if not completion_needed and not mcp_needed:
-        return
-
-    try:
-        Console(stderr=True).print(
-            "\n[bold]manmankan 可完成本机环境设置[/bold]\n"
-            f"[dim]completion: {shell or '未检测到'} · "
-            f"MCP clients: {', '.join(detected_clients) if detected_clients else '未检测到'}[/dim]\n"
-            "[dim]选 y=全部安装，c=只装补全，m=只注册 MCP，n=不再提示，skip=稍后[/dim]"
-        )
-        choice = typer.prompt(
-            "现在设置吗? [y/c/m/n/skip]",
-            default="skip",
-            show_default=True,
-        ).strip().lower()
-    except (EOFError, KeyboardInterrupt):
-        return
-    except Exception as e:
-        debug_log(__name__, "environment setup prompt", e)
-        return
-
-    if choice in ("skip", "s", ""):
-        mark_setup_skip()
-        return
-
-    if choice in ("n", "no"):
-        if completion_needed:
-            mark_completion_setup(False)
-        if mcp_needed:
-            mark_mcp_setup(False)
-        return
-
-    install_completion = choice in ("y", "yes", "c", "completion") and completion_needed
-    install_mcp = choice in ("y", "yes", "m", "mcp") and mcp_needed
-    console = Console(stderr=True)
-
-    if install_completion:
-        result = install_shell_completion(shell)
-        if result.status == "failed":
-            console.print(f"[dim]completion 安装失败: {result.detail}[/dim]")
-            mark_completion_setup(False)
-        else:
-            console.print(f"[dim]completion 已安装: {result.target}[/dim]")
-
-    if install_mcp:
-        results = install_clients(detected_clients)
-        statuses = [r.status for r in results]
-        if mcp_install_succeeded(statuses):
-            mark_mcp_setup(True)
-            console.print(f"[dim]MCP 已注册: {', '.join(detected_clients)}[/dim]")
-        else:
-            failed = [r.client for r in results if r.status == "failed"]
-            mark_mcp_setup(False)
-            console.print(
-                "[dim]MCP 部分注册失败: "
-                + ", ".join(failed)
-                + " · 可跑 `kan mcp install --dry-run` 查看[/dim]"
-            )
 
 
 def _check_updates_atexit() -> None:
@@ -230,9 +118,8 @@ def _check_updates_atexit() -> None:
                     f"\n[dim]💡 当前 v{info.current} · 最新 v{info.latest} · "
                     f"跑 [bold]kan update[/bold] 升级 (本提示每周一次)[/dim]"
                 )
-                cfg["last_hint_date"] = date.today().isoformat()
                 with contextlib.suppress(OSError):
-                    config.save(cfg)
+                    config.update(last_hint_date=date.today().isoformat())
             return
 
         # 场景 A: 首次发现新版 (auto_update is None) · 阻塞 prompt
@@ -250,9 +137,8 @@ def _check_updates_atexit() -> None:
             return
 
         if choice in ("y", "yes"):
-            cfg["auto_update"] = True
             with contextlib.suppress(OSError):
-                config.save(cfg)
+                config.update(auto_update=True)
             console.print("[green]✅ 偏好已保存 · 立即升级中...[/green]")
             status, msg = updater.run_upgrade(console=console)
             if status == "success":
@@ -268,9 +154,8 @@ def _check_updates_atexit() -> None:
                 )
                 console.print(f"[dim]{msg}[/dim]")
         elif choice in ("n", "no"):
-            cfg["auto_update"] = False
             with contextlib.suppress(OSError):
-                config.save(cfg)
+                config.update(auto_update=False)
             console.print(
                 "[dim]✅ 偏好已保存 · 不再自动升级 · "
                 "以后跑 [bold]kan update[/bold] 手动升级[/dim]"

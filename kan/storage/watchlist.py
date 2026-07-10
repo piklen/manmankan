@@ -35,11 +35,13 @@ from kan.storage.watchlist_groups import (
 )
 from kan.storage.watchlist_items import (
     add,
+    add_many,
     add_stock,
     clear,
     import_csv,
     list_all,
     remove,
+    remove_many,
 )
 from kan.storage.watchlist_json import _atomic_write_json
 from kan.storage.watchlist_models import (
@@ -52,6 +54,7 @@ from kan.storage.watchlist_models import (
     GroupNotFoundError,
     GroupProtectedError,
     Watchlist,
+    WatchlistConflictError,
     WatchlistCorruptError,
     _normalize_symbol,
     _validate_group_name,
@@ -89,8 +92,10 @@ __all__ = [
     "GroupProtectedError",
     "GroupedWatchlist",
     "Watchlist",
+    "WatchlistConflictError",
     "WatchlistCorruptError",
     "add",
+    "add_many",
     "add_stock",
     "clear",
     "copy_group",
@@ -107,6 +112,7 @@ __all__ = [
     "move_stock",
     "preload_stock_names",
     "remove",
+    "remove_many",
     "rename_group",
     "resolve_symbol_or_name",
     "save_grouped_watchlist",

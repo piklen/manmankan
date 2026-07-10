@@ -17,8 +17,47 @@ env:
   KAN_NO_UPDATE_CHECK: "1"
 
 jobs:
+  macos-pre-publish-smoke:
+    name: macOS clean wheel dependency smoke
+    runs-on: macos-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10  # v6 (pinned 2026-05-27)
+        with:
+          persist-credentials: false
+      - uses: astral-sh/setup-uv@fac544c07dec837d0ccb6301d7b5580bf5edae39  # pinned 2026-05-27
+        with:
+          version: "0.11.21"
+          python-version: '3.12'
+          enable-cache: false
+      - name: Build and install clean wheel
+        run: |
+          uv build --clear
+          uv venv /tmp/manmankan-macos-smoke --python 3.12
+          uv pip install --python /tmp/manmankan-macos-smoke/bin/python dist/*.whl
+      - name: Verify MiniRacer ABI and retail entry
+        run: |
+          /tmp/manmankan-macos-smoke/bin/python - <<'PY'
+          from importlib.metadata import packages_distributions
+
+          owners = {
+              name.lower().replace("_", "-")
+              for name in packages_distributions().get("py_mini_racer", [])
+          }
+          assert not {"mini-racer", "py-mini-racer"} <= owners, owners
+          from py_mini_racer import MiniRacer
+          import akshare
+
+          assert MiniRacer().eval("1 + 1") == 2
+          assert callable(akshare.tool_trade_date_hist_sina)
+          PY
+          /tmp/manmankan-macos-smoke/bin/kan > /tmp/kan-start.txt
+          grep "慢慢看 · 从今天开始" /tmp/kan-start.txt
+          test "$(wc -l < /tmp/kan-start.txt)" -lt 40
+
   build-and-publish:
     name: Build and publish to PyPI
+    needs: macos-pre-publish-smoke
     runs-on: ubuntu-latest
     timeout-minutes: 30
     environment: pypi

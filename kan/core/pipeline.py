@@ -164,9 +164,14 @@ class Freshness:
     """跨 symbols 的数据新鲜度聚合 + 推导状态。
 
     data_cutoff     = max(data_cutoff_date(sym) for sym in symbols) · None 若全 None
+    min_cutoff      = min(有效截止日) · 用于识别整池日期不一致
+    missing_count   = 无有效截止日的候选数
+    current_count   = 已到 expected_cutoff 的候选数
+    history_incomplete_count = 有缓存但历史行数不足 required_rows 的候选数
+    required_rows   = 调用方声明的最小历史行数
     fetched_at      = max(cache_age(sym) for sym in symbols)(ISO datetime string)
     expected_cutoff = latest_trade_date() (helper 调用时的快照)
-    is_stale        = data_cutoff is None or data_cutoff < expected_cutoff
+    is_stale        = 空池 / 任一缺失 / 任一截止日不等于 expected_cutoff
     phase           = market_phase() snapshot
 
     frozen=True · helper 返回不可变快照 · 命令侧只读不改。
@@ -177,9 +182,15 @@ class Freshness:
     expected_cutoff: date
     is_stale: bool
     phase: str
+    min_cutoff: date | None = None
+    missing_count: int = 0
+    current_count: int = 0
+    target_count: int = 0
+    history_incomplete_count: int = 0
+    required_rows: int | None = None
 
 
-def freshness_of(symbols: Iterable[str]) -> Freshness:
+def freshness_of(symbols: Iterable[str], *, min_rows: int | None = None) -> Freshness:
     """聚合 symbols 列表的 max data_cutoff 与 max cache_age · 推导 is_stale / phase。
 
     用法:
@@ -192,25 +203,53 @@ def freshness_of(symbols: Iterable[str]) -> Freshness:
     (与各命令的现状一致:无缓存视为 stale)。
     """
     from kan.core.trading_calendar import latest_trade_date, market_phase
-    from kan.data.fetcher import cache_age, data_cutoff_date
+    from kan.data.fetcher import cache_age, cache_has_min_rows, data_cutoff_date
 
-    data_cutoff: date | None = None
+    symbol_list = list(symbols)
+    cutoffs: list[date] = []
+    cutoff_by_symbol: dict[str, date | None] = {}
     fetched_at: str | None = None
-    for sym in symbols:
+    for sym in symbol_list:
         d = data_cutoff_date(sym)
-        if d is not None and (data_cutoff is None or d > data_cutoff):
-            data_cutoff = d
+        cutoff_by_symbol[sym] = d
+        if d is not None:
+            cutoffs.append(d)
         t = cache_age(sym)
         if t and (fetched_at is None or t > fetched_at):
             fetched_at = t
     expected = latest_trade_date()
-    is_stale = data_cutoff is None or data_cutoff < expected
+    data_cutoff = max(cutoffs, default=None)
+    min_cutoff = min(cutoffs, default=None)
+    missing_count = len(symbol_list) - len(cutoffs)
+    current_count = sum(cutoff == expected for cutoff in cutoffs)
+    required_rows = min_rows if min_rows is not None and min_rows > 0 else None
+    history_incomplete_count = (
+        sum(
+            1
+            for symbol, cutoff in cutoff_by_symbol.items()
+            if cutoff is not None and not cache_has_min_rows(symbol, required_rows)
+        )
+        if required_rows is not None
+        else 0
+    )
+    is_stale = (
+        not symbol_list
+        or missing_count > 0
+        or any(cutoff != expected for cutoff in cutoffs)
+        or history_incomplete_count > 0
+    )
     return Freshness(
         data_cutoff=data_cutoff,
         fetched_at=fetched_at,
         expected_cutoff=expected,
         is_stale=is_stale,
         phase=market_phase(),
+        min_cutoff=min_cutoff,
+        missing_count=missing_count,
+        current_count=current_count,
+        target_count=len(symbol_list),
+        history_incomplete_count=history_incomplete_count,
+        required_rows=required_rows,
     )
 
 
@@ -231,14 +270,15 @@ def render_freshness_warning(freshness: Freshness, console: Any) -> None:
     from kan.infra.formatting import format_date_compact
 
     if freshness.is_stale:
+        warning_cutoff = freshness.min_cutoff or freshness.data_cutoff
         cutoff_str = (
-            format_date_compact(freshness.data_cutoff)
-            if freshness.data_cutoff else "无缓存"
+            format_date_compact(warning_cutoff)
+            if warning_cutoff else "无缓存"
         )
         expected_str = format_date_compact(freshness.expected_cutoff)
         days_behind = (
-            (freshness.expected_cutoff - freshness.data_cutoff).days
-            if freshness.data_cutoff else "?"
+            (freshness.expected_cutoff - warning_cutoff).days
+            if warning_cutoff else "?"
         )
         console.print(
             f"\n  [bold yellow]⚠️ 当前缓存到 {cutoff_str} 收盘 · "
@@ -299,15 +339,15 @@ def run_data_pipeline(
       3. compute(targets, **compute_kwargs):各命令注入自己的批处理函数
          (scan_batch / trend_batch · 都接 `(targets, **kwargs)` · 要求 result 元素
          有 .symbol 属性供 freshness 聚合)
-      4. freshness_of:遍历 results 的 .symbol · 聚合 max(data_cutoff) + max(cache_age)
+      4. freshness_of:遍历全部 targets · 缺缓存的候选也必须计入新鲜度
 
     设计要点:
       - compute 是 Callable 注入而非内部 dispatch · 不需要为 scan/trend 各开一条
         分支 · 也方便后续命令 (如 trend backtest) 复用
       - **compute_kwargs 把 scan/trend 各自的旋钮 (mode / candle / ...) 透传 ·
         本 helper 不关心也不解释
-      - freshness 在原始 results 上算 · 命令侧 exclude_st / --signal / --down
-        等过滤是「展示侧」选择,不应该改「我们刚加载了什么数据」的事实
+      - freshness 在全部 targets 上算 · compute 可能跳过无缓存候选,不能因此把
+        不完整结果误报为整池最新；命令侧过滤同样不影响这个事实
       - auto_fetch=False 是本地 Web/测试等只读缓存路径的显式开关;默认 True 保持 CLI 行为
     """
     from kan.core.auto_fetch import auto_fetch_stale
@@ -331,7 +371,10 @@ def run_data_pipeline(
                 else:
                     auto_fetch_stale(targets, days=fetch_days)
     results = compute(targets, **compute_kwargs)
-    freshness = freshness_of(r.symbol for r in results)
+    freshness = freshness_of(
+        (symbol for symbol, _name in targets),
+        min_rows=fetch_days,
+    )
     return DataCtx(
         targets=targets,
         meta=meta,

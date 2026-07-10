@@ -163,7 +163,7 @@ def scan(
         typer.Argument(help="可选代码列表（逗号/空格分隔）· 例: kan scan 600519,000858"),
     ] = None,
     high: Annotated[bool, typer.Option("--high", help="高点模式（默认低点模式）")] = False,
-    signal: Annotated[bool, typer.Option("--signal", "-S", "-s", help="仅显示有共振信号的股票")] = False,
+    signal: Annotated[bool, typer.Option("--signal", "-S", "-s", help="仅显示多周期共振状态")] = False,
     diff: Annotated[bool, typer.Option("--diff", "-d", help="增量模式：显示与上次扫描的变化")] = False,
     exclude_st: Annotated[bool, typer.Option("--exclude-st", help="排除 ST/*ST 股票")] = False,
     exclude_star: Annotated[bool, typer.Option("--exclude-star", help="排除科创板股票")] = False,
@@ -454,7 +454,7 @@ def scan(
     results = service_result.results
 
     if signal and not results and fmt is export.OutputFormat.terminal:
-        console.print("没有股票触及极值区 · 无共振信号")
+        console.print("没有股票触及极值区 · 无多周期共振状态")
         if can_write_snapshot:
             save_snapshot(all_results)
         return

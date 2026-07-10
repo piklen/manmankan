@@ -76,7 +76,7 @@ function kanScanDesk(initialScan) {
       return value === null ? "—" : Number(value).toFixed(2);
     },
     openStock(code) {
-      window.location.href = `/stock/${code}`;
+      window.location.href = kanSessionUrl(`/stock/${code}`);
     },
     prevHeatmapPage() {
       if (this.heatmapPage > 0) {
@@ -148,7 +148,7 @@ function kanScanDesk(initialScan) {
     async loadIndex() {
       this.indexLoading = true;
       try {
-        const response = await fetch("/api/index");
+        const response = await kanFetch("/api/index");
         this.indexData = response.ok ? await response.json() : { ok: false, periods: [], rows: [] };
       } catch (_error) {
         this.indexData = { ok: false, periods: [], rows: [] };
@@ -165,7 +165,7 @@ function kanScanDesk(initialScan) {
       this.fetchMessage = "准备";
       let listening = false;
       try {
-        const response = await fetch("/api/fetch", {
+        const response = await kanFetch("/api/fetch", {
           method: "POST",
           headers: { "X-Kan-Web": "1" },
         });
@@ -184,16 +184,27 @@ function kanScanDesk(initialScan) {
     },
     listenFetch(job) {
       if (this.eventSource) this.eventSource.close();
-      this.eventSource = new EventSource(`/api/fetch/events?job=${encodeURIComponent(job)}`);
+      this.eventSource = new EventSource(
+        kanSessionUrl(`/api/fetch/events?job=${encodeURIComponent(job)}`),
+      );
       this.eventSource.addEventListener("progress", async (event) => {
         const data = JSON.parse(event.data);
         const total = data.total || 0;
         this.fetchMessage = total ? `${data.stage} ${data.completed}/${total}` : data.stage;
         if (data.status === "done") {
           this.eventSource.close();
-          await this.reloadScan();
+          const reloaded = await this.reloadScan();
           this.fetching = false;
-          this.fetchMessage = "已刷新";
+          this.fetchMessage = reloaded
+            ? (data.stage || "更新完成")
+            : `${data.stage || "更新完成"} · 页面刷新失败，请手动刷新`;
+        }
+        if (data.status === "partial") {
+          this.eventSource.close();
+          const reloaded = await this.reloadScan();
+          this.fetching = false;
+          const message = data.error || data.stage || "部分股票未更新 · 可重试";
+          this.fetchMessage = reloaded ? message : `${message} · 请手动刷新页面`;
         }
         if (data.status === "error") {
           this.eventSource.close();
@@ -208,17 +219,21 @@ function kanScanDesk(initialScan) {
       };
     },
     async reloadScan() {
-      const response = await fetch("/api/scan");
-      if (response.ok) {
+      try {
+        const response = await kanFetch("/api/scan");
+        if (!response.ok) return false;
         this.scan = await response.json();
         this.heatmapPage = 0;
         this.$nextTick(() => this.renderHeatmap());
+        return true;
+      } catch (_error) {
+        return false;
       }
     },
     async addWatchlist() {
       this.watchlistMessage = "添加中";
       try {
-        const response = await fetch("/api/watchlist", {
+        const response = await kanFetch("/api/watchlist", {
           method: "POST",
           headers: {
             "Content-Type": "application/json",
@@ -232,8 +247,8 @@ function kanScanDesk(initialScan) {
           return;
         }
         this.addCodes = "";
-        this.watchlistMessage = (payload.messages || []).join(" · ") || "已添加";
-        await this.reloadScan();
+        this.watchlistMessage = `${(payload.messages || []).join(" · ") || "已添加"} · 正在更新行情`;
+        await this.startFetch();
       } catch (_error) {
         this.watchlistMessage = "添加失败";
       }
@@ -242,7 +257,7 @@ function kanScanDesk(initialScan) {
       if (!window.confirm(`确认移除自选 ${code}？`)) return;
       this.watchlistMessage = "移除中";
       try {
-        const response = await fetch(`/api/watchlist/${encodeURIComponent(code)}`, {
+        const response = await kanFetch(`/api/watchlist/${encodeURIComponent(code)}`, {
           method: "DELETE",
           headers: { "X-Kan-Web": "1" },
         });
@@ -264,6 +279,11 @@ function kanHoldPage(initialHold) {
   return {
     hold: initialHold,
     masked: false,
+    cashInput: initialHold.account.cash === null ? "" : String(initialHold.account.cash),
+    positionForm: { code: "", cost: "", shares: "" },
+    editingCode: null,
+    saving: false,
+    message: "",
     formatMoney(value) {
       if (this.masked && value !== null) return "***";
       return value === null ? "—" : Number(value).toLocaleString("zh-CN", {
@@ -303,6 +323,83 @@ function kanHoldPage(initialHold) {
       if (value >= 80) return "pct-high";
       return "";
     },
+    async saveCash() {
+      await this.mutate("/api/positions/cash", "POST", { cash: this.cashInput });
+    },
+    async submitPosition() {
+      const editing = Boolean(this.editingCode);
+      const url = editing
+        ? `/api/positions/${encodeURIComponent(this.editingCode)}`
+        : "/api/positions";
+      const method = editing ? "PUT" : "POST";
+      const ok = await this.mutate(url, method, {
+        code: this.positionForm.code,
+        cost: this.positionForm.cost,
+        shares: this.positionForm.shares,
+      });
+      if (ok) this.cancelEdit();
+    },
+    startEdit(row) {
+      this.editingCode = row.code;
+      this.positionForm = {
+        code: row.code,
+        cost: String(row.cost),
+        shares: String(row.shares),
+      };
+      document.getElementById("hold-cost")?.focus();
+    },
+    cancelEdit() {
+      this.editingCode = null;
+      this.positionForm = { code: "", cost: "", shares: "" };
+    },
+    async removePosition(row) {
+      if (!window.confirm(`确认删除 ${row.name} ${row.code} 的持仓记录？`)) return;
+      await this.mutate(`/api/positions/${encodeURIComponent(row.code)}`, "DELETE");
+    },
+    async mutate(url, method, body = null) {
+      this.saving = true;
+      this.message = "保存中";
+      try {
+        const options = {
+          method,
+          headers: { "X-Kan-Web": "1" },
+        };
+        if (body !== null) {
+          options.headers["Content-Type"] = "application/json";
+          options.body = JSON.stringify(body);
+        }
+        const response = await kanFetch(url, options);
+        const payload = await response.json();
+        if (!response.ok) {
+          this.message = payload.detail || payload.error || "保存失败";
+          return false;
+        }
+        this.message = payload.message || "已保存";
+        const reloaded = await this.reloadHold();
+        if (!reloaded) {
+          this.message = `${payload.message || "已保存"}，但页面刷新失败 · 请手动刷新确认`;
+        }
+        return true;
+      } catch (_error) {
+        this.message = "保存失败，请稍后重试";
+        return false;
+      } finally {
+        this.saving = false;
+      }
+    },
+    async reloadHold() {
+      try {
+        const response = await kanFetch("/api/hold");
+        if (!response.ok) return false;
+        const payload = await response.json();
+        if (!payload.ok) return false;
+        this.hold = payload;
+        this.cashInput = this.hold.account.cash === null ? "" : String(this.hold.account.cash);
+        return true;
+      } catch (_error) {
+        return false;
+      }
+    },
   };
 }
 
@@ -317,7 +414,7 @@ function kanSettingsPage(initialToken) {
     async saveToken() {
       this.message = "保存中";
       try {
-        const response = await fetch("/api/config/token", {
+        const response = await kanFetch("/api/config/token", {
           method: "POST",
           headers: {
             "Content-Type": "application/json",
@@ -339,7 +436,7 @@ function kanSettingsPage(initialToken) {
     async clearToken() {
       this.message = "清除中";
       try {
-        const response = await fetch("/api/config/token", {
+        const response = await kanFetch("/api/config/token", {
           method: "DELETE",
           headers: { "X-Kan-Web": "1" },
         });
@@ -363,7 +460,7 @@ function kanStockPage(info) {
     period: 30,
     chart: null,
     historyReady: false,
-    historyMessage: "该周期本地快照暂无足够历史 · 可切换周期,或多跑几天 kan scan 积累快照",
+    historyMessage: "该周期暂无足够历史 · 可切换周期，或在不同交易日多次更新数据后再看",
     init() {
       this.loadHistory();
       window.addEventListener("resize", () => {
@@ -378,21 +475,21 @@ function kanStockPage(info) {
       this.historyReady = false;
       this.historyMessage = "读取本地快照";
       try {
-        const response = await fetch(`/api/history/${this.info.code}?period=${this.period}`);
+        const response = await kanFetch(`/api/history/${this.info.code}?period=${this.period}`);
         if (!response.ok) {
-          this.historyMessage = "该周期本地快照暂无足够历史 · 可切换周期,或多跑几天 kan scan 积累快照";
+          this.historyMessage = "该周期暂无足够历史 · 可切换周期，或在不同交易日多次更新数据后再看";
           return;
         }
         const payload = await response.json();
         const series = payload.series.filter((item) => item.position_pct !== null);
         if (series.length === 0) {
-          this.historyMessage = "该周期本地快照暂无足够历史 · 可切换周期,或多跑几天 kan scan 积累快照";
+          this.historyMessage = "该周期暂无足够历史 · 可切换周期，或在不同交易日多次更新数据后再看";
           return;
         }
         this.historyReady = true;
         this.$nextTick(() => this.renderHistory(series));
       } catch (_error) {
-        this.historyMessage = "该周期本地快照暂无足够历史 · 可切换周期,或多跑几天 kan scan 积累快照";
+        this.historyMessage = "该周期暂无足够历史 · 可切换周期，或在不同交易日多次更新数据后再看";
       }
     },
     renderHistory(series) {

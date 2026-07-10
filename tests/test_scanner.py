@@ -9,6 +9,10 @@ import pytest
 
 from kan.core.models import PeriodResult, StockScanResult
 from kan.core.scanner import compute_diff, load_snapshot, save_snapshot, scan_stock
+from kan.core.scanner_snapshot import (
+    load_previous_web_daily_snapshot,
+    save_web_daily_snapshot,
+)
 from kan.storage import paths
 
 
@@ -153,6 +157,7 @@ def temp_snapshot_dir(tmp_path, monkeypatch):
     monkeypatch.setattr(paths, "BASE_DIR", tmp_path)
     monkeypatch.setattr(paths, "DATA_DIR", tmp_path / "data")
     monkeypatch.setattr(paths, "SNAPSHOTS_DIR", tmp_path / "snapshots")
+    monkeypatch.setattr(paths, "WEB_SNAPSHOTS_DIR", tmp_path / "web_snapshots")
     monkeypatch.setattr(paths, "SNAPSHOT_PATH", tmp_path / "last_scan.json")
 
     import kan.core.scanner as scanner_mod
@@ -236,6 +241,47 @@ class TestLoadSnapshot:
         loaded = load_snapshot()
 
         assert loaded == {"600519": {"5": {"pct": 50.0, "at_low": False, "at_high": False}}}
+
+
+def test_web_daily_snapshot_is_separate_and_uses_market_date(temp_snapshot_dir):
+    market_date = date.today() - timedelta(days=1)
+
+    save_web_daily_snapshot([_make_scan_result()], data_cutoff=market_date)
+
+    path = temp_snapshot_dir / "web_snapshots" / f"{market_date.isoformat()}.json"
+    payload = json.loads(path.read_text())
+    assert payload["surface"] == "web"
+    assert payload["data_cutoff"] == market_date.isoformat()
+    assert not (temp_snapshot_dir / "last_scan.json").exists()
+
+
+def test_load_previous_web_snapshot_uses_latest_valid_date(temp_snapshot_dir):
+    older = date.today() - timedelta(days=3)
+    previous = date.today() - timedelta(days=1)
+    save_web_daily_snapshot([_make_scan_result("000858", "五粮液")], data_cutoff=older)
+    save_web_daily_snapshot([_make_scan_result()], data_cutoff=previous)
+    invalid = temp_snapshot_dir / "web_snapshots" / "notadate.json"
+    invalid.write_text("[]")
+
+    loaded = load_previous_web_daily_snapshot(date.today())
+
+    assert loaded is not None
+    snapshot_date, payload = loaded
+    assert snapshot_date == previous
+    assert "600519" in payload
+
+
+def test_load_previous_web_snapshot_skips_latest_corrupt_file(temp_snapshot_dir):
+    older = date.today() - timedelta(days=3)
+    corrupt = date.today() - timedelta(days=1)
+    save_web_daily_snapshot([_make_scan_result()], data_cutoff=older)
+    path = temp_snapshot_dir / "web_snapshots" / f"{corrupt.isoformat()}.json"
+    path.write_text("{broken", encoding="utf-8")
+
+    loaded = load_previous_web_daily_snapshot(date.today())
+
+    assert loaded is not None
+    assert loaded[0] == older
 
 
 def test_compute_diff_reports_enter_and_leave_extreme_zones():

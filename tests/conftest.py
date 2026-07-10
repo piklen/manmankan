@@ -25,6 +25,10 @@ def _akshare_test_double() -> ModuleType:
     for name in (
         "index_component_sw",
         "index_hist_sw",
+        "stock_board_concept_cons_em",
+        "stock_board_concept_hist_em",
+        "stock_board_concept_name_em",
+        "stock_board_concept_name_ths",
         "stock_hot_rank_em",
         "stock_hot_up_em",
         "stock_info_a_code_name",

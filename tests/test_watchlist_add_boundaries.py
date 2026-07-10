@@ -111,6 +111,22 @@ def test_add_without_symbols_exits_2(cli_runner):
     assert "请告诉我要加哪只股票" in result.output
 
 
+def test_add_short_numeric_code_rejected_before_name_lookup(
+    temp_kan_dir,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """明显非法数字代码应即时失败，不加载全市场名称表。"""
+    monkeypatch.setattr(
+        "kan.cli.watchlist_add._load_names_with_optional_spinner",
+        lambda _console: (_ for _ in ()).throw(AssertionError("不应加载名称表")),
+    )
+
+    result = CliRunner().invoke(app, ["add", "123"])
+
+    assert result.exit_code == 2
+    assert "不是 6 位股票代码" in result.output
+
+
 def test_add_dry_run_without_pool_rejected(cli_runner):
     """--dry-run 只适用于行业/题材批量添加。"""
     result = cli_runner.invoke(app, ["add", "--dry-run"])

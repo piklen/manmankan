@@ -8,19 +8,9 @@
 """
 from __future__ import annotations
 
-import sys
-from unittest.mock import MagicMock
-
 import pytest
 
 from kan.core.models import Theme
-
-
-@pytest.fixture(autouse=True)
-def _mock_adata(monkeypatch):
-    monkeypatch.setitem(sys.modules, "adata", MagicMock())
-    monkeypatch.setitem(sys.modules, "adata.stock", MagicMock())
-    monkeypatch.setitem(sys.modules, "adata.stock.market", MagicMock())
 
 
 @pytest.fixture(autouse=True)
@@ -91,7 +81,7 @@ def test_catalog_returns_error_when_api_fails(monkeypatch):
 
 
 def test_catalog_success_strips_ti_suffix(monkeypatch):
-    """ts_code '886108.TI' 应被 strip 成纯数字 '886108' · 跟 adata THS 对齐。"""
+    """ts_code '886108.TI' 应被 strip 成纯数字 '886108'。"""
     from kan.data import tushare_themes
 
     monkeypatch.setattr(
@@ -259,7 +249,7 @@ def test_klines_no_trading_days_returns_error(monkeypatch):
 
 
 def test_leaderboard_dispatches_to_em_when_no_token(monkeypatch):
-    """无 token 时 source='em' · 走原 adata 路径。"""
+    """无 token 时 source='em' · 走 AkShare EM 路径。"""
     from datetime import date
 
     import pandas as pd

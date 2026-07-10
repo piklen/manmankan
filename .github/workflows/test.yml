@@ -11,6 +11,7 @@ on:
       - 'refactor/**'
       - 'test/**'
       - 'codex/**'
+      - 'feature/**'
   pull_request:
     branches: [main]
   workflow_dispatch:
@@ -32,13 +33,24 @@ env:
 
 jobs:
   quality-gates:
-    runs-on: [self-hosted, manmankan-ci, hkg-vps]
+    runs-on: ${{ fromJSON(github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name != github.repository && '["ubuntu-latest"]' || '["self-hosted","manmankan-ci","hkg-vps"]') }}
     timeout-minutes: 20
     steps:
       - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10  # v6 (pinned 2026-05-27)
         with:
           persist-credentials: false
-      - name: Verify preinstalled uv runtime
+      - name: Setup Python on fork runner
+        if: github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name != github.repository
+        uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405  # pinned 2026-06-02
+        with:
+          python-version: '3.12'
+      - name: Setup uv on fork runner
+        if: github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name != github.repository
+        uses: astral-sh/setup-uv@fac544c07dec837d0ccb6301d7b5580bf5edae39  # pinned 2026-05-27
+        with:
+          version: "0.11.21"
+          enable-cache: false
+      - name: Verify uv runtime
         run: |
           uv --version
           uv python find 3.12
@@ -98,7 +110,7 @@ jobs:
 
   # 保留独立 job 名，避免已有 branch protection 仍绑定旧检查名时被误断。
   privacy-scan:
-    runs-on: [self-hosted, manmankan-ci]
+    runs-on: ${{ fromJSON(github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name != github.repository && '["ubuntu-latest"]' || '["self-hosted","manmankan-ci"]') }}
     timeout-minutes: 10
     steps:
       - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10  # v6 (pinned 2026-05-27)
@@ -112,7 +124,7 @@ jobs:
         uses: ./.github/actions/cleanup-runner
 
   test:
-    runs-on: [self-hosted, manmankan-ci, hkg-vps]
+    runs-on: ${{ fromJSON(github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name != github.repository && '["ubuntu-latest"]' || '["self-hosted","manmankan-ci","hkg-vps"]') }}
     timeout-minutes: 35
     strategy:
       fail-fast: false
@@ -122,7 +134,19 @@ jobs:
       - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10  # v6 (pinned 2026-05-27)
         with:
           fetch-depth: 0  # diff-cover 需要 base 分支历史做新代码覆盖率对比
-      - name: Verify preinstalled uv runtime
+          persist-credentials: false
+      - name: Setup Python on fork runner
+        if: github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name != github.repository
+        uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405  # pinned 2026-06-02
+        with:
+          python-version: ${{ matrix.python-version }}
+      - name: Setup uv on fork runner
+        if: github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name != github.repository
+        uses: astral-sh/setup-uv@fac544c07dec837d0ccb6301d7b5580bf5edae39  # pinned 2026-05-27
+        with:
+          version: "0.11.21"
+          enable-cache: false
+      - name: Verify uv runtime
         run: |
           uv --version
           uv python find ${{ matrix.python-version }}
@@ -145,7 +169,7 @@ jobs:
         uses: ./.github/actions/cleanup-runner
 
   package-smoke:
-    runs-on: [self-hosted, manmankan-ci]
+    runs-on: ${{ fromJSON(github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name != github.repository && '["ubuntu-latest"]' || '["self-hosted","manmankan-ci"]') }}
     timeout-minutes: 25
     strategy:
       fail-fast: false
@@ -155,7 +179,18 @@ jobs:
       - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10  # v6 (pinned 2026-05-27)
         with:
           persist-credentials: false
-      - name: Verify preinstalled uv runtime
+      - name: Setup Python on fork runner
+        if: github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name != github.repository
+        uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405  # pinned 2026-06-02
+        with:
+          python-version: ${{ matrix.python-version }}
+      - name: Setup uv on fork runner
+        if: github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name != github.repository
+        uses: astral-sh/setup-uv@fac544c07dec837d0ccb6301d7b5580bf5edae39  # pinned 2026-05-27
+        with:
+          version: "0.11.21"
+          enable-cache: false
+      - name: Verify uv runtime
         run: |
           uv --version
           uv python find ${{ matrix.python-version }}
@@ -220,7 +255,7 @@ jobs:
 
   # CI -m "not tty" 会排除 TTY 真测 · 在 VPS Linux runner 补真实终端覆盖。
   tty-test:
-    runs-on: [self-hosted, manmankan-ci, hkg-vps]
+    runs-on: ${{ fromJSON(github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name != github.repository && '["ubuntu-latest"]' || '["self-hosted","manmankan-ci","hkg-vps"]') }}
     timeout-minutes: 25
     strategy:
       fail-fast: false
@@ -230,7 +265,18 @@ jobs:
       - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10  # v6 (pinned 2026-05-27)
         with:
           persist-credentials: false
-      - name: Verify preinstalled uv runtime
+      - name: Setup Python on fork runner
+        if: github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name != github.repository
+        uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405  # pinned 2026-06-02
+        with:
+          python-version: ${{ matrix.python-version }}
+      - name: Setup uv on fork runner
+        if: github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name != github.repository
+        uses: astral-sh/setup-uv@fac544c07dec837d0ccb6301d7b5580bf5edae39  # pinned 2026-05-27
+        with:
+          version: "0.11.21"
+          enable-cache: false
+      - name: Verify uv runtime
         run: |
           uv --version
           uv python find ${{ matrix.python-version }}

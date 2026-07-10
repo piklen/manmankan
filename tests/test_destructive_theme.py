@@ -1,19 +1,9 @@
 """kan add / remove --theme · 破坏性批量 · _add_by_theme / _remove_by_theme。"""
-import sys
-from unittest.mock import MagicMock
-
 import pytest
 from typer.testing import CliRunner
 
 from kan.cli import app
 from kan.core.models import Theme
-
-
-@pytest.fixture(autouse=True)
-def _mock_adata(monkeypatch):
-    monkeypatch.setitem(sys.modules, "adata", MagicMock())
-    monkeypatch.setitem(sys.modules, "adata.stock", MagicMock())
-    monkeypatch.setitem(sys.modules, "adata.stock.info", MagicMock())
 
 
 @pytest.fixture(autouse=True)

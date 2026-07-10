@@ -2,6 +2,9 @@
 from __future__ import annotations
 
 import stat
+import sys
+from concurrent.futures import ThreadPoolExecutor
+from types import SimpleNamespace
 
 import pytest
 
@@ -45,6 +48,7 @@ def test_add_merge_reduce_remove_and_permissions(isolated_positions) -> None:
     path = positions.POSITIONS_PATH
     assert stat.S_IMODE(path.parent.stat().st_mode) == 0o700
     assert stat.S_IMODE(path.stat().st_mode) == 0o600
+    assert stat.S_IMODE(path.with_suffix(".lock").stat().st_mode) == 0o600
 
 
 def test_add_positions_rejects_existing_without_silent_overwrite(isolated_positions) -> None:
@@ -86,3 +90,86 @@ def test_set_cash_validates_non_negative(isolated_positions) -> None:
     assert positions.set_cash(73000.129).cash == 73000.13
     with pytest.raises(ValueError, match="现金不能为负"):
         positions.set_cash(-1)
+
+
+def test_cost_rounding_cannot_write_an_unreadable_position(isolated_positions) -> None:
+    positions = isolated_positions
+
+    with pytest.raises(ValueError, match=r"至少为 0\.0001"):
+        positions.add_position("600519", cost=0.00001, shares=100)
+
+    assert positions.load_positions().positions == []
+
+
+def test_successful_position_write_can_be_reloaded(isolated_positions) -> None:
+    positions = isolated_positions
+
+    positions.add_position("600519", cost=0.0001, shares=100)
+
+    stored = positions.load_positions().find("600519")
+    assert stored is not None
+    assert stored.cost == 0.0001
+
+
+@pytest.mark.parametrize(
+    ("cost", "shares", "message"),
+    [
+        (float("nan"), 100, "成本至少为"),
+        (-1.0, 100, "成本至少为"),
+        (10_000_001.0, 100, "成本超出"),
+        (10.0, 10_000_000_001, "股数超出"),
+    ],
+)
+def test_merge_rejects_invalid_lot_without_corrupting_existing_position(
+    isolated_positions, cost, shares, message
+) -> None:
+    positions = isolated_positions
+    positions.add_position("600519", cost=100.0, shares=100)
+
+    with pytest.raises(ValueError, match=message):
+        positions.add_position(
+            "600519",
+            cost=cost,
+            shares=shares,
+            merge=True,
+        )
+
+    stored = positions.load_positions().find("600519")
+    assert stored is not None
+    assert stored.cost == 100.0
+    assert stored.shares == 100
+
+
+def test_concurrent_position_writes_do_not_lose_rows(isolated_positions) -> None:
+    positions = isolated_positions
+    symbols = [f"60{index:04d}" for index in range(20)]
+
+    with ThreadPoolExecutor(max_workers=8) as executor:
+        list(executor.map(
+            lambda symbol: positions.add_position(symbol, cost=10.0, shares=100),
+            symbols,
+        ))
+
+    assert {row.symbol for row in positions.load_positions().positions} == set(symbols)
+
+
+def test_windows_positions_lock_locks_and_releases_first_byte(
+    isolated_positions, tmp_path, monkeypatch
+) -> None:
+    positions = isolated_positions
+    calls: list[tuple[int, int]] = []
+    fake_msvcrt = SimpleNamespace(
+        LK_LOCK=1,
+        LK_UNLCK=2,
+        locking=lambda _fd, mode, size: calls.append((mode, size)),
+    )
+    monkeypatch.setitem(sys.modules, "msvcrt", fake_msvcrt)
+
+    with open(tmp_path / "positions.lock", "a+b") as handle:
+        lock = positions._windows_positions_lock(handle)
+        next(lock)
+        assert handle.read(1) == b"\0"
+        with pytest.raises(StopIteration):
+            next(lock)
+
+    assert calls == [(fake_msvcrt.LK_LOCK, 1), (fake_msvcrt.LK_UNLCK, 1)]

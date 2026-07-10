@@ -1,22 +1,10 @@
 """kan scan --theme CLI 真测 · CliRunner runtime · 不 bootstrap 字符串作弊。"""
-import sys
-from unittest.mock import MagicMock
-
 import pandas as pd
 import pytest
 from typer.testing import CliRunner
 
 from kan.cli import app
 from kan.core.models import Theme
-
-
-@pytest.fixture(autouse=True)
-def _mock_adata(monkeypatch):
-    mock_adata = MagicMock()
-    monkeypatch.setitem(sys.modules, "adata", mock_adata)
-    monkeypatch.setitem(sys.modules, "adata.stock", MagicMock())
-    monkeypatch.setitem(sys.modules, "adata.stock.info", MagicMock())
-    return mock_adata
 
 
 @pytest.fixture(autouse=True)

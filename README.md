@@ -10,43 +10,77 @@
 [![PyPI downloads](https://img.shields.io/pypi/dm/manmankan.svg)](https://pypi.org/project/manmankan/)
 [![Tests](https://github.com/piklen/manmankan/actions/workflows/test.yml/badge.svg)](https://github.com/piklen/manmankan/actions/workflows/test.yml)
 [![Local-first](https://img.shields.io/badge/local--first-no_telemetry-green.svg)](docs/compliance.md)
-[![CLI + JSON](https://img.shields.io/badge/output-CLI_%2B_JSON-blue.svg)](docs/find.md)
-[![Agent-Native](https://img.shields.io/badge/agent--native-Skills.md-purple.svg)](skills/manmankan-skill.md)
+[![Local Web](https://img.shields.io/badge/default-local_Web-0f766e.svg)](docs/china-quickstart.md)
 
-![慢慢看 CLI 和 JSON 输出示意](docs/assets/readme-demo.svg)
+![慢慢看今日概览：数据新鲜度、关键位置、自选和指数对照](docs/assets/readme-web-overview.png)
 
-慢慢看是一个纯命令行工具。它把一批 A 股候选整理成"坐标清单"：多周期位置、共振、估值/资金/技术字段、命中规则和缺数据状态。人可以在终端里快速扫一眼，AI 可以直接消费低噪声 JSON 继续做解释、排序、研究清单或交叉验证。
+慢慢看是一个给普通 A 股散户使用的本地观察台。它先回答每天最常见的三个问题：**我的股票今天有什么关键变化、哪些接近长期高低位、当前数据是否可信**。需要深入时，再展开位置、持仓、筛选和历史数据。
 
 ```bash
 uv tool install manmankan
-kan --version
-kan guide
-kan find --codes 600519,000858 --format json --dry-run
-kan find --codes 600519,000858 --format json --fields @core,@valuation,@moneyflow,@technical
-kan scan --codes 600519,000858 --periods 5,20,60,180 --format json
-kan mcp install --dry-run --format json
-kan mcp http --host localhost --port 8765
-kan hold cash 50000
-kan hold add 600519 --cost 1680 --shares 100
-kan hold --format json --mask
+kan web
 ```
 
-`kan find --codes ... --format json --dry-run` 是不取数的结构 smoke；去掉 `--dry-run` 后，`kan find --codes ... --fields ... --format json` 会按显式字段补估值、资金、技术等客观数据，不需要伪造永真 filter。`kan scan --codes ... --format json` 会拉公开日 K 并输出真实位置坐标，首次运行可能需要几十秒建立本地缓存。
+浏览器会打开只监听本机的观察台。每次启动都会生成一条仅本次有效的随机会话链接；如果浏览器没有自动打开，请使用终端刚打印的完整地址。你可以直接在网页里：
 
-如果你也想先把候选池数据说清楚，再交给人或 AI 慢慢研究，可以 star 关注后续版本。
+- 添加自选股，查看 30 / 60 / 180 日关键位置。
+- 录入、修改或删除持仓和现金，查看盈亏与仓位事实。
+- 查看与上一份不同交易日快照相比进入或离开关键位置区的变化。
+- 用中文条件从自选、持仓、行业、题材或代码池中找股票。
+- 明确看到“数据截止日 / 正常应截止日 / 是否需要更新”。
 
-## 三类人从这里开始
+所有自选、持仓、缓存和 token 都保存在本机；不登录 manmankan 服务、不做云同步或遥测。查询行情时会向所选数据源发送股票代码；配置 TuShare 时，token 只发送到你配置的数据源。持仓成本、股数和现金不会发送。
+
+## 普通用户从这里开始
+
+### 1. 打开今日概览
+
+```bash
+kan web
+```
+
+首页默认只展示 30 / 60 / 180 日三个关键周期，并把完整数据表放在概览之后。位置百分位只描述当前价在历史区间中的坐标，不代表见底、见顶或买卖信号。
+
+### 2. 添加自己的股票
+
+在“今日”页直接添加自选；在“我的持仓”页录入券商当前显示的成本、股数和现金。数据只写入本机 XDG 目录，持仓文件权限收紧为 `0600`。
+
+### 3. 每天收盘后看变化
+
+点击“更新数据”后，首页会显示整池数据是否到达正常交易日，并对比上一份不同交易日快照。没有上一份数据时会明确说明，不会伪造变化。
+
+不想打开浏览器时，可以在终端运行：
+
+```bash
+kan daily
+```
+
+## 进阶用户：CLI、JSON 与 AI
+
+Web 和 CLI 共用同一套 service 数据层。开发者、脚本和 AI agent 可以继续使用完整 CLI、JSON、Python API 与 MCP，现有机器契约保持兼容。
+
+```bash
+kan scan --codes 600519,000858 --periods 30,60,180 --format json
+kan find --codes 600519,000858 --format json --fields @core,@valuation,@moneyflow,@technical
+kan mcp install --dry-run --format json
+kan mcp http --host localhost --port 8765
+```
+
+`kan find --codes ... --format json --dry-run` 只返回查询计划；真实行情坐标使用 `kan scan --codes ... --format json`。完整 AI 首用路径见 [`docs/ai-quickstart.md`](docs/ai-quickstart.md)。
+
+## 从哪里继续
 
 | 你是谁 | 先跑 / 先读 |
 |---|---|
-| 中国用户 / 开发者 | [`docs/china-quickstart.md`](docs/china-quickstart.md)：PyPI 镜像、行情源网络、TuShare、代理和 Windows / PowerShell |
+| 普通 A 股用户 | `kan web`：今日概览、自选、持仓、找股票、数据更新 |
+| 中国用户 / 开发者 | [`docs/china-quickstart.md`](docs/china-quickstart.md)：安装、行情源网络、TuShare、代理和 Windows / PowerShell |
 | AI agent / 自动化脚本 | `kan find --codes 600519,000858 --format json --dry-run` + [`docs/ai-quickstart.md`](docs/ai-quickstart.md) + [`skills/manmankan-skill.md`](skills/manmankan-skill.md) |
 | 第一次贡献者 | [`docs/contributor-quickstart.md`](docs/contributor-quickstart.md)：本地跑起来、验证命令、good first issue、合规边界 |
 
 <details>
 <summary><b>English summary</b></summary>
 
-**manmankan** (*"take your time, see clearly"*) is an A-share data translation layer — it turns raw market data into structured, auditable CLI/JSON outputs for both retail investors and AI workflows. Watchlists, industries, themes, hot lists, full-market scans, or external code pools — one command, one clean output.
+**manmankan** (*"take your time, see clearly"*) is a local-first A-share observation tool for ordinary retail investors. Its default Web view brings daily changes, watchlists, holdings, key price-range positions, and data freshness into one place. CLI, JSON, Python API, and MCP remain available as the secondary automation layer.
 
 Data, not decisions: no buy/sell advice, no ratings, no price targets. Python 3.11+ · local-first · A-share (architecture designed for multi-market extension) · [GNU AGPL-3.0](LICENSE).
 </details>
@@ -55,18 +89,17 @@ Data, not decisions: no buy/sell advice, no ratings, no price targets. Python 3.
 
 很多选股流程的问题不在于缺少观点，而在于输入太散：自选股、行业成分、题材池、热榜、全市场截面、外部候选代码各有入口；行情位置、估值裸值、资金、技术指标、缺数据状态又分散在不同地方。
 
-慢慢看把这些输入统一成一个可复核的数据层：
+慢慢看把这些输入统一成一个可复核的数据层，并按用户优先级提供两种出口：
 
-- **给人看**：在终端里快速看到候选池的多周期位置、共振、涨跌、行业 / 题材 / 热榜背景。
-- **给 AI 用**：用低噪声 JSON 把候选、字段、命中条件、缺数据语义交给模型，方便继续做解释、排序、研究清单或交叉验证。
-- **给自动化用**：CLI 和 `kan.api` 都能接外部代码池，适合 cron、notebook、脚本和本地研究流水线。
-- **给持仓看坐标**：用户手动录入成本、股数和现金后，`kan hold` 计算今日 / 累计盈亏、仓位和 30 / 60 / 180 日位置。
+- **第一出口，给普通散户**：Web 先展示今日关键事实、数据新鲜度、自选与持仓，再按需展开明细。
+- **第二出口，给 AI / 开发者**：CLI、JSON、MCP 和 `kan.api` 提供可审计、可组合的数据契约。
 
 如果你要让 AI 参与候选筛选，慢慢看的角色是提供可审计输入：它负责把"坐标"和"条件命中"说清楚，不负责替你下结论。
 
-## 为 AI 设计
+<details>
+<summary><b>AI / 开发者能力</b></summary>
 
-慢慢看从第一天起就把 AI Agent 当作一等用户。与传统的"先做人类终端、再挂 JSON 输出"不同，manmankan 的每个命令都同时考虑人类可读和机器可消费两种输出形态。
+AI / 开发者是第二用户，但机器契约仍是一等工程能力：
 
 | 设计决策 | 说明 |
 |----------|------|
@@ -81,28 +114,26 @@ Data, not decisions: no buy/sell advice, no ratings, no price targets. Python 3.
 
 AI agent 首次接入推荐读 [`docs/ai-quickstart.md`](docs/ai-quickstart.md)。它把“查询计划 smoke”和“真实取数路径”拆开，避免把预演当成已经形成行情证据。
 
+</details>
+
 中国用户 / 开发者如果遇到 PyPI 下载慢、行情源网络、TuShare token、Windows PowerShell 或代理问题，先看 [`docs/china-quickstart.md`](docs/china-quickstart.md)。
 
 ## 快速开始
 
 ```bash
 uv tool install manmankan
-kan add 600519 601318 000858
-kan scan
+kan web
 ```
 
-第一次 `kan scan` 会拉取日 K 线并建立本地缓存，之后按天增量更新。忘了命令直接跑：
+忘了命令直接跑：
 
 ```bash
-kan help
 kan guide
 kan daily
-kan setup --dry-run
-kan scan --help
-kan find --help
+kan help
 ```
 
-常用入口：
+终端常用入口：
 
 ```bash
 kan scan                                      # 扫默认池（自选 ∪ 持仓）
@@ -126,15 +157,7 @@ kan board rank --kind industry --by moneyflow --format json
 kan history 600519 --format json
 ```
 
-`kan scan` 面向终端阅读；`kan find --format json` 和 `kan hold --format json` 面向脚本和 AI 消费。
-
-## 本地看盘台
-
-```bash
-kan web
-```
-
-在浏览器里看同一份本地数据：自选/持仓多维数据表、位置热力图、个股位置标尺与走势、持仓盈亏、条件筛选（附等价 CLI 命令，方便回到终端）。仅监听本机回环地址，不上传数据；TuShare token 可在设置页配置。
+`kan scan` / `kan daily` 面向终端阅读；`kan find --format json`、`kan hold --format json` 和 MCP 面向脚本与 AI 消费。
 
 ## 数据契约
 
@@ -146,7 +169,7 @@ kan web
 - 共振：同一候选在多个周期同时接近低位或高位。
 - 散户事实：一手金额、占已录入现金比例、科创/北交/创业板权限提示、距区间高低点距离、量价方向组合。
 - 候选池：自选、行业、题材、热榜、全市场、外部 `--codes` 或 stdin。
-- 真实持仓：用户 CLI 录入成本 / 股数 / 现金，本地计算市值、仓位、今日和累计盈亏。
+- 真实持仓：用户在 Web 或 CLI 录入成本 / 股数 / 现金，本地计算市值、仓位、今日和累计盈亏。
 - 筛选条件：位置、共振、涨跌、连阳连阴、估值、质量、资金、技术指标、筹码、股东、除权除息事件等。
 - 输出形态：终端表格、Markdown、JSON、紧凑 JSON、字段白名单、Python API。
 
@@ -199,7 +222,7 @@ uv tool install manmankan --index-url https://pypi.org/simple/
 - 不预测涨跌。
 - 不给买卖建议、评级、目标价或仓位建议。
 - 不内置策略 preset、打分模型或"最佳标的"排序。
-- 不下单、不接券商账户、不自动读取外部持仓；真实持仓只来自用户在 CLI 录入的本地 XDG 数据。
+- 不下单、不接券商账户、不自动读取外部持仓；真实持仓只来自用户在 Web 或 CLI 主动录入的本地 XDG 数据。
 - 不提供实时行情推送、分钟级行情、港股、美股、期货或完整财报数据库（多市场是远期路线图，当前仅 A 股）。
 - 不内置 AI / LLM / 托管服务——AI 由用户自己选择和运行。
 
@@ -217,6 +240,7 @@ uv tool install manmankan --index-url https://pypi.org/simple/
 
 - 自选股、缓存、扫描快照存放在 `~/.local/share/kan/`，按 XDG 规范管理。
 - 真实持仓存放在 `~/.local/share/kan/positions.json`，父目录 `0700`，文件 `0600`。
+- `kan web` 每次启动生成随机会话凭证；页面、API 和数据更新事件都要通过本次浏览器会话访问。
 - 持仓输出可加 `--mask` 脱敏金额；本地数据仍可能被 Time Machine / iCloud 等系统备份工具复制。
 - 不需要登录，不上传自选股，不做遥测。
 - CLI 会访问公开行情数据源；更新检查会访问 PyPI，可用 `KAN_NO_UPDATE_CHECK=1` 关闭。

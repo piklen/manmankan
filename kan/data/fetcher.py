@@ -217,13 +217,26 @@ def _read_cutoff_from_parquet(path: Path) -> date | None:
 
 
 def _cache_has_min_rows(path: Path, min_rows: int | None) -> bool:
-    """Return whether the cache has enough K-line rows for an N-day calculation."""
+    """缓存是否已按所需周期完整请求过。
+
+    新股上市历史可能天然少于所需行数；只要缓存由不少于 min_rows 的请求生成，
+    就视为已完整刷新，计算层仍会把不足周期标成 insufficient。
+    """
     if min_rows is None or min_rows <= 0:
         return True
     try:
         import pandas as pd
 
-        return len(pd.read_parquet(path, columns=["date"])) >= min_rows
+        cached_dates = pd.read_parquet(path, columns=["date"])
+        if len(cached_dates) >= min_rows:
+            return True
+        import pyarrow.parquet as pq
+
+        raw_requested = (pq.read_metadata(path).metadata or {}).get(
+            b"kan.requested_days"
+        )
+        requested_days = int(raw_requested.decode("utf-8")) if raw_requested else 0
+        return requested_days >= min_rows
     except Exception as e:
         debug_log(__name__, f"_cache_has_min_rows({path.name}, {min_rows})", e)
         return False
@@ -232,7 +245,7 @@ def _cache_has_min_rows(path: Path, min_rows: int | None) -> bool:
 def _is_cache_fresh(path: Path, *, min_rows: int | None = None) -> bool:
     """缓存是否已包含"应有最近交易日"数据。
 
-    当前判据：K 线最后一行 date ≥ latest_trade_date()。
+    当前判据：K 线最后一行 date == latest_trade_date()。
     旧实现 mtime_date == today 已废 · 凌晨 02:55 拉到昨日数据后会被
     误判为"今日数据齐了"整天不刷新 · scan 显示昨日涨停名单。
     """
@@ -249,7 +262,7 @@ def _is_cache_fresh(path: Path, *, min_rows: int | None = None) -> bool:
     if last_date is None:
         return False
     from kan.core.trading_calendar import latest_trade_date
-    return last_date >= latest_trade_date()
+    return last_date == latest_trade_date()
 
 
 # ── 网络代理隔离 ─────────────────────────────────────────────────────
@@ -336,7 +349,11 @@ def fetch_kline(
     from kan.storage.paths import atomic_write_parquet
 
     df = _normalize_kline(raw, source=source, symbol=symbol)
-    atomic_write_parquet(df, cache)
+    atomic_write_parquet(
+        df,
+        cache,
+        metadata={"kan.requested_days": str(int(days))},
+    )
     return df
 
 
@@ -492,6 +509,11 @@ def fetch_batch(
 
 def is_fresh(symbol: str, *, min_rows: int | None = None) -> bool:
     return _is_cache_fresh(_cache_path(symbol), min_rows=min_rows)
+
+
+def cache_has_min_rows(symbol: str, min_rows: int) -> bool:
+    """缓存是否已有足够行数，或已按指定周期完成过全量请求。"""
+    return _cache_has_min_rows(_cache_path(symbol), min_rows)
 
 
 def has_cache(symbol: str) -> bool:

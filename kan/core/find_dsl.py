@@ -4,7 +4,7 @@
 
 支持 filter:
 - --pos PERIOD:OP:VAL    位置百分位 (例 180:lt:5 = 180 日位置 < 5%)
-- --resonance LEVEL:OP:VAL  共振信号 (例 low:gte:3 = 低点共振 ≥ 3 周期)
+- --resonance LEVEL:OP:VAL  共振状态 (例 low:gte:3 = 低点共振 ≥ 3 周期)
 - --exclude-st           排 ST/*ST
 
 Future (candidates):

@@ -1,12 +1,10 @@
 """kan theme trend CLI 子命令测试 · 历史背景。
 
-模仿 test_theme_cli.py 风格 · mock adata + stub data layer。
+模仿 test_theme_cli.py 风格 · stub data layer。
 """
 from __future__ import annotations
 
 import json
-import sys
-from unittest.mock import MagicMock
 
 import pytest
 from typer.testing import CliRunner
@@ -14,13 +12,6 @@ from typer.testing import CliRunner
 from kan.cli import app
 from kan.core.models import Theme
 from kan.core.scanner import TrendResult
-
-
-@pytest.fixture(autouse=True)
-def _mock_adata(monkeypatch):
-    monkeypatch.setitem(sys.modules, "adata", MagicMock())
-    monkeypatch.setitem(sys.modules, "adata.stock", MagicMock())
-    monkeypatch.setitem(sys.modules, "adata.stock.market", MagicMock())
 
 
 @pytest.fixture(autouse=True)

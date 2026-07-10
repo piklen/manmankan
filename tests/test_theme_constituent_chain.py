@@ -10,11 +10,11 @@ from __future__ import annotations
 
 from unittest.mock import patch
 
-import adata
 import pandas as pd
 import pytest
 
 from kan.core.models import Theme
+from kan.data import concepts
 from kan.data.boards import ThemeDataUnavailableError, get_theme_constituents
 from kan.data.theme_constituents import (
     EmConstituentSource,
@@ -134,26 +134,26 @@ def test_chain_unavailable_skipped(sample_theme):
 
 
 def test_ths_source_returns_pairs(sample_theme):
-    """ThsConstituentSource.fetch 调 adata · 返回 pairs。"""
+    """ThsConstituentSource.fetch 调内部适配器 · 返回 pairs。"""
     mock_df = pd.DataFrame({
         "stock_code": ["600519", "000858"],
         "short_name": ["贵州茅台", "五粮液"],
     })
     src = ThsConstituentSource()
-    with patch.object(adata.stock.info, "concept_constituent_ths", return_value=mock_df):
+    with patch.object(concepts, "fetch_ths_constituents", return_value=mock_df):
         pairs = src.fetch(sample_theme)
     assert pairs == [("600519", "贵州茅台"), ("000858", "五粮液")]
 
 
 def test_ths_source_empty_returns_none(sample_theme):
     src = ThsConstituentSource()
-    with patch.object(adata.stock.info, "concept_constituent_ths", return_value=pd.DataFrame()):
+    with patch.object(concepts, "fetch_ths_constituents", return_value=pd.DataFrame()):
         assert src.fetch(sample_theme) is None
 
 
 def test_ths_source_exception_returns_none(sample_theme):
     src = ThsConstituentSource()
-    with patch.object(adata.stock.info, "concept_constituent_ths",
+    with patch.object(concepts, "fetch_ths_constituents",
                side_effect=RuntimeError("network")):
         assert src.fetch(sample_theme) is None
 
@@ -167,7 +167,7 @@ def test_em_source_returns_pairs_and_records_breaker_ok(sample_theme, isolated_b
         "short_name": ["贵州茅台"],
     })
     src = EmConstituentSource()
-    with patch.object(adata.stock.info, "concept_constituent_east", return_value=mock_df):
+    with patch.object(concepts, "fetch_em_constituents", return_value=mock_df):
         pairs = src.fetch(sample_theme)
     assert pairs == [("600519", "贵州茅台")]
     assert not isolated_breaker.is_down("em_push2_concept")
@@ -175,7 +175,7 @@ def test_em_source_returns_pairs_and_records_breaker_ok(sample_theme, isolated_b
 
 def test_em_source_exception_records_breaker_down(sample_theme, isolated_breaker):
     src = EmConstituentSource()
-    with patch.object(adata.stock.info, "concept_constituent_east",
+    with patch.object(concepts, "fetch_em_constituents",
                side_effect=RuntimeError("push2 banned")):
         assert src.fetch(sample_theme) is None
     assert isolated_breaker.is_down("em_push2_concept")
@@ -237,7 +237,7 @@ def test_boards_uses_chain_ths_path(sample_theme, temp_boards_dir):
         "stock_code": ["600519", "000858"],
         "short_name": ["贵州茅台", "五粮液"],
     })
-    with patch.object(adata.stock.info, "concept_constituent_ths", return_value=mock_df):
+    with patch.object(concepts, "fetch_ths_constituents", return_value=mock_df):
         pairs = get_theme_constituents(sample_theme, force=True)
     assert pairs == [("600519", "贵州茅台"), ("000858", "五粮液")]
     # cache 文件名 cons_THS<code>.json (src_prefix='THS' 因 theme.source='ths')
@@ -250,9 +250,9 @@ def test_boards_falls_back_to_em(sample_theme, temp_boards_dir, isolated_breaker
         "stock_code": ["600519"],
         "short_name": ["贵州茅台"],
     })
-    with patch.object(adata.stock.info, "concept_constituent_ths",
+    with patch.object(concepts, "fetch_ths_constituents",
                side_effect=RuntimeError("ths down")), \
-         patch.object(adata.stock.info, "concept_constituent_east", return_value=mock_em_df):
+         patch.object(concepts, "fetch_em_constituents", return_value=mock_em_df):
         pairs = get_theme_constituents(sample_theme, force=True)
     assert pairs == [("600519", "贵州茅台")]
 
@@ -261,7 +261,7 @@ def test_boards_raises_when_em_breaker_down(sample_theme, temp_boards_dir,
                                               isolated_breaker):
     """THS 失败 + EM 熔断 → 抛 ThemeDataUnavailableError 含 '5min 熔断' 文案。"""
     isolated_breaker.record("em_push2_concept", ok=False)
-    with patch.object(adata.stock.info, "concept_constituent_ths",
+    with patch.object(concepts, "fetch_ths_constituents",
                side_effect=RuntimeError("ths down")), \
          pytest.raises(ThemeDataUnavailableError, match="5min 熔断"):
         get_theme_constituents(sample_theme, force=True)
@@ -270,8 +270,8 @@ def test_boards_raises_when_em_breaker_down(sample_theme, temp_boards_dir,
 def test_boards_raises_when_all_sources_fail(sample_theme, temp_boards_dir,
                                                 isolated_breaker):
     """THS 失败 + EM 也失败 · chain 全 None · 抛 ThemeDataUnavailableError。"""
-    with patch.object(adata.stock.info, "concept_constituent_ths",
+    with patch.object(concepts, "fetch_ths_constituents",
                side_effect=RuntimeError("ths down")), \
-         patch.object(adata.stock.info, "concept_constituent_east",
+         patch.object(concepts, "fetch_em_constituents",
                side_effect=RuntimeError("em down")), pytest.raises(ThemeDataUnavailableError):
         get_theme_constituents(sample_theme, force=True)

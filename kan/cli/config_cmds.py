@@ -159,9 +159,7 @@ def set_cmd(
         )
         raise typer.Exit(code=2)
 
-    cfg = config.load()
-    cfg[internal_key] = cleaned
-    config.save(cfg)
+    config.update(**{internal_key: cleaned})
 
     if internal_key == "tushare_token":
         typer.echo(f"✅ 已保存 tushare_token ({mask_token(cleaned)}) 到 {config.CONFIG_PATH}")
@@ -211,6 +209,5 @@ def unset_cmd(
     if cfg.get(internal_key) is None:
         typer.echo(f"ℹ️  {internal_key} 已是默认值，无需清除")
         return
-    cfg[internal_key] = None
-    config.save(cfg)
+    config.update(**{internal_key: None})
     typer.echo(f"✅ 已清除 {internal_key}（回到默认值）")

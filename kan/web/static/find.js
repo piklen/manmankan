@@ -1,6 +1,6 @@
 function kanFindPage() {
   return {
-    pool: { type: "", value: "" },
+    pool: { type: "watchlist", value: "" },
     filters: [],
     excludeSt: false,
     loading: false,
@@ -53,6 +53,17 @@ function kanFindPage() {
         value: "",
       });
     },
+    applyExample(kind) {
+      const examples = {
+        low180: { type: "pos", period: "180", level: "", op: "lt", value: "10" },
+        high180: { type: "pos", period: "180", level: "", op: "gt", value: "90" },
+        lowResonance: { type: "resonance", period: "", level: "low", op: "", value: "3" },
+      };
+      const example = examples[kind];
+      if (!example) return;
+      this.filters = [{ id: this.nextId++, ...example }];
+      this.message = "示例条件已填入，你可以继续修改";
+    },
     removeFilter(index) {
       this.filters.splice(index, 1);
     },
@@ -71,6 +82,15 @@ function kanFindPage() {
       if (filter.type === "resonance") return "周期";
       return "";
     },
+    filterValueLabel(filter) {
+      const type = {
+        pos: "位置阈值",
+        resonance: "周期数量",
+        pe: "市盈率阈值",
+        moneyflow: "主力资金阈值",
+      }[filter.type];
+      return type || "条件数值";
+    },
     requestPayload() {
       return {
         pool: { type: this.pool.type, value: this.pool.value },
@@ -86,10 +106,10 @@ function kanFindPage() {
     },
     async submit() {
       this.loading = true;
-      this.message = "查询中";
+      this.message = "正在读取本地数据";
       this.result = null;
       try {
-        const response = await fetch("/api/find", {
+        const response = await kanFetch("/api/find", {
           method: "POST",
           headers: {
             "Content-Type": "application/json",
@@ -130,10 +150,7 @@ function kanFindPage() {
     },
     formatTriggers(items) {
       if (!items || items.length === 0) return "—";
-      return items.map((item) => {
-        const suffix = item.value === null || item.value === undefined ? "" : `@${Number(item.value).toFixed(2)}`;
-        return `${item.filter} ${item.param}${suffix}`;
-      }).join(" · ");
+      return items.join(" · ");
     },
     formatMetrics(items) {
       if (!items || items.length === 0) return "—";
@@ -143,7 +160,7 @@ function kanFindPage() {
       }).join(" · ");
     },
     openStock(code) {
-      window.location.href = `/stock/${code}`;
+      window.location.href = kanSessionUrl(`/stock/${code}`);
     },
   };
 }

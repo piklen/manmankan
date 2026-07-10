@@ -5,10 +5,34 @@ import threading
 from datetime import date
 from types import SimpleNamespace
 
+import pytest
 from fastapi.testclient import TestClient
 
 from kan.render.base import DISCLAIMER, HOLD_DISCLAIMER_TEXT
 from kan.web.app import create_app
+from kan.web.security import SESSION_HEADER_NAME, SESSION_QUERY_NAME, _safe_session_equal
+
+_TEST_SESSION_TOKEN = "test-session-token"
+
+
+def test_non_ascii_session_value_is_rejected_without_exception():
+    assert not _safe_session_equal("测" * len(_TEST_SESSION_TOKEN), _TEST_SESSION_TOKEN)
+
+
+def _client() -> TestClient:
+    return TestClient(
+        create_app(session_token=_TEST_SESSION_TOKEN),
+        base_url="http://127.0.0.1",
+        headers={SESSION_HEADER_NAME: _TEST_SESSION_TOKEN},
+    )
+
+
+def _raw_client(*, follow_redirects: bool = True) -> TestClient:
+    return TestClient(
+        create_app(session_token=_TEST_SESSION_TOKEN),
+        base_url="http://127.0.0.1",
+        follow_redirects=follow_redirects,
+    )
 
 
 def _scan_payload() -> dict:
@@ -22,6 +46,22 @@ def _scan_payload() -> dict:
             "shown": 1,
             "data_cutoff": "2026-05-23",
             "stale": False,
+        },
+        "freshness": {
+            "status": "current",
+            "title": "行情已更新至 2026-05-23",
+            "detail": "以下概览均按该交易日收盘数据计算。",
+            "action_label": "重新检查",
+        },
+        "overview": {
+            "scanned_count": 1,
+            "low_180_count": 0,
+            "high_180_count": 0,
+            "change_count": 0,
+            "comparison_date": None,
+            "changes": [],
+            "low_180": [],
+            "high_180": [],
         },
         "rows": [{
             "code": "600519",
@@ -52,7 +92,7 @@ def _scan_payload() -> dict:
 
 def test_index_contains_disclaimer(monkeypatch) -> None:
     monkeypatch.setattr("kan.web.routes_pages.default_scan_payload", _scan_payload)
-    client = TestClient(create_app(), base_url="http://127.0.0.1")
+    client = _client()
 
     response = client.get("/")
 
@@ -61,15 +101,94 @@ def test_index_contains_disclaimer(monkeypatch) -> None:
     assert "数据表" in response.text
     assert "位置热力图" in response.text
     assert "代码 / 名称" in response.text
-    assert "看盘台" in response.text
-    assert "持仓" in response.text
-    assert "设置" in response.text
+    assert "今天先看这三件事" in response.text
+    assert "我的持仓" in response.text
+    assert "数据设置" in response.text
     assert "指数数据读取中" in response.text
+
+
+def test_session_is_required_and_query_opens_authenticated_page() -> None:
+    client = _raw_client(follow_redirects=False)
+
+    unauthorized = client.get("/")
+    assert unauthorized.status_code == 401
+    assert "运行 kan web 的终端" in unauthorized.text
+
+    page = client.get(f"/?{SESSION_QUERY_NAME}={_TEST_SESSION_TOKEN}")
+    assert page.status_code == 200
+    assert "set-cookie" not in page.headers
+    assert f"/?{SESSION_QUERY_NAME}={_TEST_SESSION_TOKEN}" in page.text
+    assert page.headers["x-frame-options"] == "DENY"
+    assert page.headers["content-security-policy"] == "frame-ancestors 'none'"
+    assert page.headers["referrer-policy"] == "no-referrer"
+
+
+def test_api_requires_current_web_session() -> None:
+    response = _raw_client().get("/api/scan")
+
+    assert response.status_code == 401
+    assert response.json()["error"] == "session required"
+
+
+def test_api_accepts_session_header_and_sse_accepts_session_query(monkeypatch) -> None:
+    from kan.web import fetch_jobs
+
+    job = fetch_jobs.FetchJob(id="query-session", status="done")
+    monkeypatch.setattr(fetch_jobs, "_current_job", job)
+
+    api = _raw_client().get(
+        "/api/scan",
+        headers={SESSION_HEADER_NAME: _TEST_SESSION_TOKEN},
+    )
+    events = _raw_client().get(
+        f"/api/fetch/events?job={job.id}&{SESSION_QUERY_NAME}={_TEST_SESSION_TOKEN}"
+    )
+    api_query = _raw_client().get(
+        f"/api/scan?{SESSION_QUERY_NAME}={_TEST_SESSION_TOKEN}"
+    )
+
+    assert api.status_code == 200
+    assert events.status_code == 200
+    assert api_query.status_code == 401
+
+
+def test_other_loopback_port_cannot_reuse_browser_session() -> None:
+    response = _client().get(
+        "/api/scan",
+        headers={"Sec-Fetch-Site": "same-site"},
+    )
+
+    assert response.status_code == 403
+    assert response.json()["error"] == "cross-site request not allowed"
+
+
+def test_public_web_header_without_session_cannot_replay_write() -> None:
+    response = _raw_client().post(
+        "/api/config/token",
+        headers={"X-Kan-Web": "1"},
+        json={"token": "must-not-write"},
+    )
+
+    assert response.status_code == 401
+    assert response.json()["error"] == "session required"
+
+
+def test_mutating_api_rejects_other_loopback_origin() -> None:
+    response = _client().post(
+        "/api/fetch",
+        headers={
+            "X-Kan-Web": "1",
+            "Origin": "http://127.0.0.1:9999",
+        },
+    )
+
+    assert response.status_code == 403
+    assert response.json()["error"] == "origin not allowed"
 
 
 def test_api_scan_is_web_shape_without_ai_schema(monkeypatch) -> None:
     monkeypatch.setattr("kan.web.routes_api.default_scan_payload", _scan_payload)
-    client = TestClient(create_app(), base_url="http://127.0.0.1")
+    client = _client()
 
     response = client.get("/api/scan")
 
@@ -82,7 +201,7 @@ def test_api_scan_is_web_shape_without_ai_schema(monkeypatch) -> None:
 
 def test_get_with_forged_host_is_forbidden(monkeypatch) -> None:
     monkeypatch.setattr("kan.web.routes_api.default_scan_payload", _scan_payload)
-    client = TestClient(create_app(), base_url="http://127.0.0.1")
+    client = _client()
 
     response = client.get("/api/scan", headers={"host": "evil.example"})
 
@@ -91,7 +210,7 @@ def test_get_with_forged_host_is_forbidden(monkeypatch) -> None:
 
 
 def test_mutating_api_requires_web_header() -> None:
-    client = TestClient(create_app(), base_url="http://127.0.0.1")
+    client = _client()
 
     response = client.post("/api/scan")
 
@@ -99,7 +218,7 @@ def test_mutating_api_requires_web_header() -> None:
 
 
 def test_api_fetch_requires_web_header() -> None:
-    client = TestClient(create_app(), base_url="http://127.0.0.1")
+    client = _client()
 
     response = client.post("/api/fetch")
 
@@ -153,7 +272,7 @@ def _hold_summary():
 
 def test_api_hold_returns_web_shape(monkeypatch) -> None:
     monkeypatch.setattr("kan.web.routes_api.build_hold_summary", lambda: _hold_summary())
-    client = TestClient(create_app(), base_url="http://127.0.0.1")
+    client = _client()
 
     response = client.get("/api/hold")
 
@@ -165,9 +284,113 @@ def test_api_hold_returns_web_shape(monkeypatch) -> None:
     assert payload["rows"][0]["p180_pct"] == 80.0
 
 
+def test_positions_api_add_update_delete_and_cash(monkeypatch) -> None:
+    calls = []
+    monkeypatch.setattr(
+        "kan.web.routes_api.positions.add_position",
+        lambda code, *, cost, shares: (
+            calls.append(("add", code, cost, shares))
+            or SimpleNamespace(symbol=code, name="贵州茅台")
+        ),
+    )
+    monkeypatch.setattr(
+        "kan.web.routes_api.positions.update_position",
+        lambda code, *, cost, shares: (
+            calls.append(("update", code, cost, shares))
+            or SimpleNamespace(symbol=code, name="贵州茅台")
+        ),
+    )
+    monkeypatch.setattr(
+        "kan.web.routes_api.positions.remove_position",
+        lambda code: (
+            calls.append(("delete", code))
+            or SimpleNamespace(symbol=code, name="贵州茅台")
+        ),
+    )
+    monkeypatch.setattr(
+        "kan.web.routes_api.positions.set_cash",
+        lambda amount: (
+            calls.append(("cash", amount))
+            or SimpleNamespace(cash=amount)
+        ),
+    )
+    client = _client()
+    headers = {"X-Kan-Web": "1"}
+
+    added = client.post(
+        "/api/positions",
+        headers=headers,
+        json={"code": "600519", "cost": "1680.5", "shares": "100"},
+    )
+    updated = client.put(
+        "/api/positions/600519",
+        headers=headers,
+        json={"cost": 1660, "shares": 120},
+    )
+    deleted = client.delete("/api/positions/600519", headers=headers)
+    cash = client.post("/api/positions/cash", headers=headers, json={"cash": 73000.12})
+
+    assert [response.status_code for response in (added, updated, deleted, cash)] == [200] * 4
+    assert calls == [
+        ("add", "600519", 1680.5, 100),
+        ("update", "600519", 1660.0, 120),
+        ("delete", "600519"),
+        ("cash", 73000.12),
+    ]
+
+
+@pytest.mark.parametrize(
+    ("path", "method", "payload", "message"),
+    [
+        ("/api/positions", "post", {"code": "600519", "cost": 0, "shares": 100}, "持仓成本至少为 0.0001"),
+        ("/api/positions", "post", {"code": "600519", "cost": 0.00001, "shares": 100}, "持仓成本至少为 0.0001"),
+        ("/api/positions", "post", {"code": "600519", "cost": True, "shares": 100}, "持仓成本必须是数字"),
+        ("/api/positions", "post", {"code": "600519", "cost": 10**400, "shares": 100}, "持仓成本必须是数字"),
+        ("/api/positions", "post", {"code": "600519", "cost": 10, "shares": 1.5}, "持股数量必须是正整数"),
+        ("/api/positions", "post", {"code": "600519", "cost": 10, "shares": 10**11}, "持股数量超出可录入范围"),
+        ("/api/positions/cash", "post", {"cash": -1}, "可用现金不能小于 0"),
+    ],
+)
+def test_positions_api_rejects_invalid_numbers(path, method, payload, message) -> None:
+    client = _client()
+    response = getattr(client, method)(path, headers={"X-Kan-Web": "1"}, json=payload)
+
+    assert response.status_code == 400
+    assert message in response.text
+
+
+def test_positions_put_requires_web_header() -> None:
+    client = _client()
+
+    response = client.put(
+        "/api/positions/600519",
+        json={"cost": 10, "shares": 100},
+    )
+
+    assert response.status_code == 403
+
+
+def test_positions_api_explains_corrupt_local_file(monkeypatch) -> None:
+    from kan.storage.positions import PositionsCorruptError
+
+    monkeypatch.setattr(
+        "kan.web.routes_api.positions.set_cash",
+        lambda _amount: (_ for _ in ()).throw(PositionsCorruptError("broken")),
+    )
+
+    response = _client().post(
+        "/api/positions/cash",
+        headers={"X-Kan-Web": "1"},
+        json={"cash": 100},
+    )
+
+    assert response.status_code == 409
+    assert "请先备份 positions.json" in response.text
+
+
 def test_hold_page_contains_hold_disclaimer(monkeypatch) -> None:
     monkeypatch.setattr("kan.web.routes_pages.build_hold_summary", lambda: _hold_summary())
-    client = TestClient(create_app(), base_url="http://127.0.0.1")
+    client = _client()
 
     response = client.get("/hold")
 
@@ -175,7 +398,9 @@ def test_hold_page_contains_hold_disclaimer(monkeypatch) -> None:
     assert DISCLAIMER.strip() in response.text
     assert HOLD_DISCLAIMER_TEXT in response.text
     assert "名称代码" in response.text
-    assert "脱敏" in response.text
+    assert "隐藏金额" in response.text
+    assert "添加一只持仓" in response.text
+    assert "hold-result-list" in response.text
 
 
 def test_hold_page_empty_state(monkeypatch) -> None:
@@ -183,12 +408,44 @@ def test_hold_page_empty_state(monkeypatch) -> None:
 
     monkeypatch.setattr("kan.web.routes_pages.serialize_hold", lambda _summary: empty_hold_payload())
     monkeypatch.setattr("kan.web.routes_pages.build_hold_summary", lambda: object())
-    client = TestClient(create_app(), base_url="http://127.0.0.1")
+    client = _client()
 
     response = client.get("/hold")
 
     assert response.status_code == 200
-    assert "kan hold add 600519 --cost 1680 --shares 100" in response.text
+    assert "还没有持仓记录" in response.text
+    assert "在上方录入第一只持仓" in response.text
+    assert "kan hold add" not in response.text
+
+
+def test_hold_page_error_state_explains_recovery_and_stops_writes(monkeypatch) -> None:
+    monkeypatch.setattr(
+        "kan.web.routes_pages.build_hold_summary",
+        lambda: (_ for _ in ()).throw(RuntimeError("broken")),
+    )
+
+    response = _client().get("/hold")
+
+    assert response.status_code == 200
+    assert "\\u6301\\u4ed3\\u6570\\u636e\\u6682\\u4e0d\\u53ef\\u7528" in response.text
+    assert "当前页面已停止写入" in response.text
+
+
+def test_hold_page_corrupt_file_explains_backup_and_data_directory(monkeypatch) -> None:
+    from kan.storage.positions import PositionsCorruptError
+
+    monkeypatch.setattr(
+        "kan.web.routes_pages.build_hold_summary",
+        lambda: (_ for _ in ()).throw(PositionsCorruptError("broken")),
+    )
+
+    response = _client().get("/hold")
+
+    assert response.status_code == 200
+    assert "\\u6301\\u4ed3\\u6587\\u4ef6\\u65e0\\u6cd5\\u8bfb\\u53d6" in response.text
+    assert "请先备份 positions.json" in response.text
+    assert "本页已停止写入" in response.text
+    assert "打开数据设置" in response.text
 
 
 def test_index_page_unavailable_is_neutral(monkeypatch) -> None:
@@ -196,12 +453,12 @@ def test_index_page_unavailable_is_neutral(monkeypatch) -> None:
         "kan.web.routes_pages.default_scan_payload",
         lambda: (_ for _ in ()).throw(RuntimeError("scan down")),
     )
-    client = TestClient(create_app(), base_url="http://127.0.0.1")
+    client = _client()
 
     response = client.get("/")
 
     assert response.status_code == 200
-    assert "数据暂不可用" in response.text
+    assert "暂时无法读取本地行情" in response.text
     assert "本地缓存暂无可展示数据" in response.text
 
 
@@ -224,7 +481,7 @@ def test_api_index_returns_reference_rows(monkeypatch) -> None:
         )],
     )
     monkeypatch.setattr("kan.web.routes_api.get_index_reference", lambda _request: result)
-    client = TestClient(create_app(), base_url="http://127.0.0.1")
+    client = _client()
 
     response = client.get("/api/index")
 
@@ -240,7 +497,7 @@ def test_api_index_unavailable_is_neutral(monkeypatch) -> None:
         "kan.web.routes_api.get_index_reference",
         lambda _request: (_ for _ in ()).throw(RuntimeError("down")),
     )
-    client = TestClient(create_app(), base_url="http://127.0.0.1")
+    client = _client()
 
     response = client.get("/api/index")
 
@@ -262,7 +519,7 @@ def test_settings_page_shows_masked_token_and_facts(tmp_path, monkeypatch) -> No
             "tushare_endpoint_domain": "api.tushare.pro",
         },
     )
-    client = TestClient(create_app(), base_url="http://127.0.0.1")
+    client = _client()
 
     response = client.get("/settings")
 
@@ -278,7 +535,7 @@ def test_settings_page_unavailable_is_neutral(monkeypatch) -> None:
         "kan.web.routes_api._token_status",
         lambda: (_ for _ in ()).throw(RuntimeError("config down")),
     )
-    client = TestClient(create_app(), base_url="http://127.0.0.1")
+    client = _client()
 
     response = client.get("/settings")
 
@@ -291,7 +548,7 @@ def test_config_token_api_masks_full_token(tmp_path, monkeypatch) -> None:
 
     cfg_path = tmp_path / "config.json"
     monkeypatch.setattr(config, "CONFIG_PATH", cfg_path)
-    client = TestClient(create_app(), base_url="http://127.0.0.1")
+    client = _client()
 
     response = client.post(
         "/api/config/token",
@@ -312,7 +569,7 @@ def test_config_token_api_masks_full_token(tmp_path, monkeypatch) -> None:
 
 
 def test_config_token_mutations_require_web_header() -> None:
-    client = TestClient(create_app(), base_url="http://127.0.0.1")
+    client = _client()
 
     post_response = client.post("/api/config/token", json={"token": "secret-token-abcd"})
     delete_response = client.delete("/api/config/token")
@@ -327,7 +584,7 @@ def test_config_token_delete_clears_value(tmp_path, monkeypatch) -> None:
     cfg_path = tmp_path / "config.json"
     monkeypatch.setattr(config, "CONFIG_PATH", cfg_path)
     config.save({**config.DEFAULT_CONFIG, "tushare_token": "secret-token-abcd"})
-    client = TestClient(create_app(), base_url="http://127.0.0.1")
+    client = _client()
 
     response = client.delete("/api/config/token", headers={"X-Kan-Web": "1"})
 
@@ -350,7 +607,7 @@ def test_api_fetch_starts_single_background_job(monkeypatch) -> None:
 
     monkeypatch.setattr(fetch_jobs, "_current_job", None)
     monkeypatch.setattr(fetch_jobs, "_run_scan_fetch", fake_runner)
-    client = TestClient(create_app(), base_url="http://127.0.0.1")
+    client = _client()
 
     first = client.post("/api/fetch", headers={"X-Kan-Web": "1"})
     second = client.post("/api/fetch", headers={"X-Kan-Web": "1"})
@@ -370,7 +627,7 @@ def test_fetch_events_streams_sse(monkeypatch) -> None:
 
     monkeypatch.setattr(fetch_jobs, "_current_job", None)
     job = fetch_jobs.start_fetch_job(fake_runner)
-    client = TestClient(create_app(), base_url="http://127.0.0.1")
+    client = _client()
 
     response = client.get(f"/api/fetch/events?job={job.id}")
 
@@ -425,7 +682,7 @@ def _info_payload() -> dict:
 def test_stock_page_contains_disclaimer(monkeypatch) -> None:
     monkeypatch.setattr("kan.web.routes_pages.get_stock_info", lambda request: SimpleNamespace())
     monkeypatch.setattr("kan.web.routes_pages.serialize_info", lambda result: _info_payload())
-    client = TestClient(create_app(), base_url="http://127.0.0.1")
+    client = _client()
 
     response = client.get("/stock/600519")
 
@@ -442,7 +699,7 @@ def test_stock_page_unknown_code_is_neutral_404(monkeypatch) -> None:
         raise InfoDataUnavailableError("000000")
 
     monkeypatch.setattr("kan.web.routes_pages.get_stock_info", raise_missing)
-    client = TestClient(create_app(), base_url="http://127.0.0.1")
+    client = _client()
 
     response = client.get("/stock/000000")
 

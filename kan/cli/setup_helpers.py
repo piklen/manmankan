@@ -35,28 +35,22 @@ def mcp_done() -> bool:
 
 
 def mark_completion_setup(value: bool) -> None:
-    cfg = config.load()
-    cfg["completion_setup"] = value
     if value:
         with contextlib.suppress(OSError):
             completion_flag_path().parent.mkdir(parents=True, exist_ok=True)
             completion_flag_path().touch()
     with contextlib.suppress(OSError):
-        config.save(cfg)
+        config.update(completion_setup=value)
 
 
 def mark_mcp_setup(value: bool) -> None:
-    cfg = config.load()
-    cfg["mcp_setup"] = value
     with contextlib.suppress(OSError):
-        config.save(cfg)
+        config.update(mcp_setup=value)
 
 
 def mark_setup_skip() -> None:
-    cfg = config.load()
-    cfg["env_setup_last_skip_date"] = date.today().isoformat()
     with contextlib.suppress(OSError):
-        config.save(cfg)
+        config.update(env_setup_last_skip_date=date.today().isoformat())
 
 
 def setup_skip_recent() -> bool:

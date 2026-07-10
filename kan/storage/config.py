@@ -9,14 +9,18 @@
 
 from __future__ import annotations
 
+import contextlib
 import json
 import os
+import threading
+from collections.abc import Iterator
 from pathlib import Path
 from typing import Any
 
-from kan.storage.paths import BASE_DIR
+from kan.storage.paths import BASE_DIR, atomic_write_json
 
 CONFIG_PATH = BASE_DIR / "config.json"
+_CONFIG_THREAD_LOCK = threading.RLock()
 
 DEFAULT_CONFIG: dict[str, Any] = {
     "auto_update": None,          # null=未设过 · True=自动升级 · False=仅 hint 不升级
@@ -32,18 +36,50 @@ DEFAULT_CONFIG: dict[str, Any] = {
 
 
 def _atomic_write_json(path: Path, data: Any) -> None:
-    """先写 .tmp 再 os.replace · 防半截写入。
+    """唯一临时文件原子写入，写入期间也保持 0600。"""
+    atomic_write_json(path, data, ensure_ascii=False, indent=2)
 
-    背景: 父目录 mode=0o700 + 写完 chmod 0o600 · 保护用户配置。
-    """
-    path.parent.mkdir(mode=0o700, parents=True, exist_ok=True)
-    tmp_path = path.with_suffix(path.suffix + ".tmp")
-    with open(tmp_path, "w", encoding="utf-8") as f:
-        json.dump(data, f, ensure_ascii=False, indent=2)
-        f.flush()
-        os.fsync(f.fileno())
-    os.replace(tmp_path, path)
-    os.chmod(path, 0o600)
+
+@contextlib.contextmanager
+def config_lock() -> Iterator[None]:
+    """串行化配置的 load→修改→save，兼容 POSIX 与 Windows。"""
+    with _CONFIG_THREAD_LOCK:
+        CONFIG_PATH.parent.mkdir(mode=0o700, parents=True, exist_ok=True)
+        with contextlib.suppress(OSError):
+            os.chmod(CONFIG_PATH.parent, 0o700)
+        lock_path = CONFIG_PATH.with_suffix(".lock")
+        with open(lock_path, "a+b") as handle:
+            with contextlib.suppress(OSError):
+                os.chmod(lock_path, 0o600)
+            try:
+                import fcntl
+            except ImportError:
+                yield from _windows_config_lock(handle)
+            else:
+                fcntl.flock(handle, fcntl.LOCK_EX)
+                try:
+                    yield
+                finally:
+                    fcntl.flock(handle, fcntl.LOCK_UN)
+
+
+def _windows_config_lock(handle) -> Iterator[None]:
+    """Windows 锁定 lock 文件首字节；不可用时仍由进程内锁兜底。"""
+    try:
+        import msvcrt
+    except ImportError:
+        yield
+        return
+    if handle.seek(0, os.SEEK_END) == 0:
+        handle.write(b"\0")
+        handle.flush()
+    handle.seek(0)
+    msvcrt.locking(handle.fileno(), msvcrt.LK_LOCK, 1)
+    try:
+        yield
+    finally:
+        handle.seek(0)
+        msvcrt.locking(handle.fileno(), msvcrt.LK_UNLCK, 1)
 
 
 def load() -> dict[str, Any]:
@@ -69,7 +105,20 @@ def load() -> dict[str, Any]:
 
 def save(config: dict[str, Any]) -> None:
     """原子写入 · 自动 mkdir · 防半截写入。"""
-    _atomic_write_json(CONFIG_PATH, config)
+    with config_lock():
+        _atomic_write_json(CONFIG_PATH, config)
+
+
+def update(**changes: Any) -> dict[str, Any]:
+    """在同一锁事务中更新指定字段，避免并发覆盖其他配置。"""
+    unknown = changes.keys() - DEFAULT_CONFIG.keys()
+    if unknown:
+        raise KeyError(f"未知配置项: {', '.join(sorted(unknown))}")
+    with config_lock():
+        current = load()
+        current.update(changes)
+        _atomic_write_json(CONFIG_PATH, current)
+        return current
 
 
 def mask_token(token: str | None) -> str:
