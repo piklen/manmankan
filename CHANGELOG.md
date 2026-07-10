@@ -30,6 +30,7 @@ explicitly approves a larger bump.
 
 ### Fixed
 
+- `kan find --help` 只注册筛选命令所需模块,不再为一个帮助页加载完整 CLI 命令图,降低冷启动等待与 TTY 性能抖动。
 - 自托管 CI 的测试数据目录与 `uv tool` 安装目录按 run / job / Python 版本隔离,特性分支统一由 PR 门禁验证,避免 push / PR 重复任务争抢 runner 后误报 TTY 性能失败。
 - 题材成分股按上游真实页数完整拉取并限制异常页数,THS 会话 Cookie 失效会刷新重试;东财名称未匹配不再误触发全局熔断。
 - Windows 自选文件的冲突令牌统一按原始字节计算,CRLF 不再导致同一文件误报“已被其他窗口修改”。
