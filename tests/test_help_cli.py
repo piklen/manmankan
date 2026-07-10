@@ -138,6 +138,32 @@ def test_console_script_root_help_skips_completion_env(
     assert not _entry._should_print_fast_start(["kan"])
 
 
+def test_find_help_can_register_only_its_command(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """find help 不应为一个帮助页加载完整 CLI 注册图。"""
+    from kan import _entry
+
+    monkeypatch.delenv("_KAN_COMPLETE", raising=False)
+    monkeypatch.delenv("_TYPER_COMPLETE_ARGS", raising=False)
+
+    assert _entry._fast_subcommand_help_command(["kan", "find", "--help"]) == "find"
+    assert _entry._fast_subcommand_help_command(["kan", "find", "-h"]) == "find"
+    assert _entry._fast_subcommand_help_command(["kan", "scan", "--help"]) is None
+    assert _entry._fast_subcommand_help_command([]) is None
+
+
+def test_find_help_fast_registration_skips_completion_env(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """shell completion 仍需完整命令图，不能走单命令帮助路径。"""
+    from kan import _entry
+
+    monkeypatch.setenv("_KAN_COMPLETE", "complete_zsh")
+
+    assert _entry._fast_subcommand_help_command(["kan", "find", "--help"]) is None
+
+
 def test_root_help_uses_real_config_key_spelling() -> None:
     """速记表中的 config key 必须与真实 CLI 参数一致。"""
     runner = CliRunner()

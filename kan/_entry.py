@@ -11,6 +11,10 @@ _BOOT_BANNER_COMMANDS = {
 }
 _FAST_ROOT_HELP_ARGS = {("help",), ("--help",), ("-h",)}
 _FAST_START_HELP_ARGS = {()}
+_FAST_SUBCOMMAND_HELP_ARGS = {
+    ("find", "--help"): "find",
+    ("find", "-h"): "find",
+}
 
 
 def _is_shell_completion_run() -> bool:
@@ -34,6 +38,14 @@ def _should_print_fast_start(argv: list[str] | None = None) -> bool:
         return False
     args = tuple((argv or sys.argv)[1:])
     return args in _FAST_START_HELP_ARGS
+
+
+def _fast_subcommand_help_command(argv: list[str] | None = None) -> str | None:
+    """返回可单独注册帮助页模块的子命令;当前仅 find 命中。"""
+    if _is_shell_completion_run():
+        return None
+    args = tuple((argv if argv is not None else sys.argv)[1:])
+    return _FAST_SUBCOMMAND_HELP_ARGS.get(args)
 
 
 def _maybe_print_boot_banner() -> None:

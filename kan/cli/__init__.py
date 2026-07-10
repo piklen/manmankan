@@ -8,30 +8,34 @@
 """
 
 # ruff: noqa: F401 — 这些 import 的副作用就是注册命令 · ruff 不识别
-from kan._entry import _maybe_print_boot_banner
+from kan._entry import _fast_subcommand_help_command, _maybe_print_boot_banner
 from kan.app import app
-from kan.cli import (
-    ai_cmds,
-    atexit,
-    board_cmds,
-    compare_cmds,
-    config_cmds,
-    daily_cmds,
-    extreme_cmds,
-    fetch_cmds,
-    find_cmds,
-    group_cmds,
-    help,
-    helpers,
-    history_cmds,
-    hold_cmds,
-    info_cmds,
-    meta_cmds,
-    move_export_cmds,
-    scan_cmds,
-    theme_cmds,
-    trend_cmds,
-    watchlist_cmds,
-    web_cmds,
-)
+
+if _fast_subcommand_help_command() == "find":
+    from kan.cli import find_cmds
+else:
+    from kan.cli import (
+        ai_cmds,
+        atexit,
+        board_cmds,
+        compare_cmds,
+        config_cmds,
+        daily_cmds,
+        extreme_cmds,
+        fetch_cmds,
+        find_cmds,
+        group_cmds,
+        help,
+        helpers,
+        history_cmds,
+        hold_cmds,
+        info_cmds,
+        meta_cmds,
+        move_export_cmds,
+        scan_cmds,
+        theme_cmds,
+        trend_cmds,
+        watchlist_cmds,
+        web_cmds,
+    )
 from kan.cli.main import cli_main
