@@ -4,6 +4,19 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>{% block title %}慢慢看 Web{% endblock %}</title>
+  <script>
+    window.KAN_SESSION = {{ session_token(request)|tojson }};
+    window.kanSessionUrl = function(path) {
+      const url = new URL(path, window.location.origin);
+      url.searchParams.set("_kan_session", window.KAN_SESSION);
+      return `${url.pathname}${url.search}${url.hash}`;
+    };
+    window.kanFetch = function(path, options = {}) {
+      const headers = new Headers(options.headers || {});
+      headers.set("X-Kan-Session", window.KAN_SESSION);
+      return fetch(path, {...options, headers});
+    };
+  </script>
   <script src="/static/vendor/echarts.min.js"></script>
   <script src="/static/web.js"></script>
   <script src="/static/vendor/alpine.min.js" defer></script>
@@ -159,11 +172,16 @@
     button {
       padding: 0 12px;
       cursor: pointer;
+      white-space: nowrap;
     }
     button.primary {
       border-color: var(--accent);
       background: var(--accent);
       color: #fff;
+    }
+    button.danger {
+      color: var(--high);
+      border-color: #fecaca;
     }
     button.active {
       border-color: var(--accent);
@@ -174,6 +192,15 @@
     button:disabled {
       cursor: default;
       opacity: .55;
+    }
+    button:focus-visible,
+    a:focus-visible,
+    input:focus-visible,
+    select:focus-visible,
+    textarea:focus-visible,
+    [tabindex="0"]:focus-visible {
+      outline: 3px solid rgba(15, 118, 110, .28);
+      outline-offset: 2px;
     }
     select {
       padding: 0 28px 0 10px;
@@ -228,6 +255,9 @@
     }
     tbody tr:hover {
       background: #f8fafc;
+    }
+    tbody tr.static-row {
+      cursor: default;
     }
     .code {
       color: var(--muted);
@@ -318,6 +348,161 @@
       display: inline-flex;
       gap: 6px;
       justify-content: flex-end;
+    }
+    .freshness-banner {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      padding: 12px 16px;
+      border-bottom: 1px solid var(--line);
+      background: #f0fdfa;
+    }
+    .freshness-banner.freshness-stale,
+    .freshness-banner.freshness-missing {
+      background: #fffbeb;
+    }
+    .daily-summary {
+      border-bottom: 1px solid var(--line);
+    }
+    .overview-grid {
+      display: grid;
+      grid-template-columns: 1.4fr 1fr 1fr;
+      border-bottom: 1px solid var(--line);
+    }
+    .overview-section {
+      min-width: 0;
+      padding: 16px;
+      border-right: 1px solid var(--line);
+    }
+    .overview-section:last-child { border-right: 0; }
+    .overview-section h2 {
+      margin: 0 0 10px;
+      font-size: 15px;
+    }
+    .overview-list {
+      display: grid;
+      gap: 8px;
+      margin: 0;
+      padding: 0;
+      list-style: none;
+      font-size: 13px;
+    }
+    .overview-list li {
+      display: grid;
+      gap: 2px;
+    }
+    .overview-list a {
+      color: var(--accent);
+      text-decoration: none;
+    }
+    .stock-link {
+      color: var(--accent);
+      text-decoration: none;
+    }
+    .stock-link:hover { text-decoration: underline; }
+    .compact-list li {
+      display: block;
+    }
+    .compact-list a {
+      display: flex;
+      justify-content: space-between;
+      gap: 8px;
+    }
+    .empty-inline {
+      margin: 0;
+      color: var(--muted);
+      font-size: 13px;
+      line-height: 1.6;
+    }
+    .watchlist-entry input {
+      flex: 1 1 320px;
+    }
+    .entry-grid {
+      display: grid;
+      grid-template-columns: minmax(260px, .8fr) minmax(420px, 1.6fr);
+      border-bottom: 1px solid var(--line);
+    }
+    .entry-form {
+      display: grid;
+      align-content: start;
+      gap: 10px;
+      padding: 16px;
+      border-right: 1px solid var(--line);
+    }
+    .entry-form:last-child { border-right: 0; }
+    .entry-form > label,
+    .input-grid label {
+      color: var(--muted);
+      font-size: 12px;
+    }
+    .input-grid {
+      display: grid;
+      grid-template-columns: max-content minmax(130px, 1fr);
+      align-items: center;
+      gap: 8px 10px;
+    }
+    .input-grid input {
+      min-width: 0;
+      width: 100%;
+    }
+    .form-message {
+      min-height: 36px;
+      padding: 8px 16px;
+      color: var(--accent);
+      border-bottom: 1px solid var(--line);
+      font-size: 13px;
+    }
+    .example-rules {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      flex-wrap: wrap;
+    }
+    .example-rules button {
+      min-height: 30px;
+      color: var(--accent);
+      background: #f0fdfa;
+    }
+    .find-result-list,
+    .hold-result-list { display: none; }
+    .find-result-card {
+      display: grid;
+      gap: 10px;
+      padding: 14px 16px;
+      border-bottom: 1px solid var(--line);
+      background: var(--panel);
+    }
+    .find-result-heading,
+    .find-result-positions {
+      display: flex;
+      align-items: baseline;
+      justify-content: space-between;
+      gap: 10px;
+      flex-wrap: wrap;
+    }
+    .find-result-positions {
+      justify-content: flex-start;
+      color: var(--muted);
+      font-size: 13px;
+    }
+    .advanced-panel {
+      border-bottom: 1px solid var(--line);
+    }
+    .advanced-panel summary {
+      padding: 12px 16px;
+      color: var(--muted);
+      cursor: pointer;
+      font-size: 13px;
+    }
+    .detail-disclosure > summary {
+      padding: 14px 16px;
+      cursor: pointer;
+      font-weight: 650;
+    }
+    .empty-action {
+      display: grid;
+      gap: 8px;
     }
     .fact-list {
       padding: 6px 16px 16px;
@@ -431,6 +616,28 @@
       .filter-row {
         grid-template-columns: 1fr;
       }
+      .overview-grid,
+      .entry-grid {
+        grid-template-columns: 1fr;
+      }
+      .overview-section,
+      .entry-form {
+        border-right: 0;
+        border-bottom: 1px solid var(--line);
+      }
+      .overview-section:last-child,
+      .entry-form:last-child {
+        border-bottom: 0;
+      }
+      .input-grid {
+        grid-template-columns: 1fr;
+      }
+      .find-results-table { display: none !important; }
+      .hold-results-table { display: none !important; }
+      .find-result-list,
+      .hold-result-list {
+        display: grid;
+      }
     }
   </style>
 </head>
@@ -438,12 +645,12 @@
   <header>
     <div class="topbar">
       <div class="brand-row">
-        <h1>慢慢看 Web</h1>
+        <h1>慢慢看</h1>
         <nav class="nav-links" aria-label="主导航">
-          <a href="/" class="{% if request.url.path == '/' or request.url.path.startswith('/stock') %}active{% endif %}">看盘台</a>
-          <a href="/find" class="{% if request.url.path.startswith('/find') %}active{% endif %}">筛选</a>
-          <a href="/hold" class="{% if request.url.path.startswith('/hold') %}active{% endif %}">持仓</a>
-          <a href="/settings" class="{% if request.url.path.startswith('/settings') %}active{% endif %}">设置</a>
+          <a href="{{ session_url(request, '/') }}" class="{% if request.url.path == '/' or request.url.path.startswith('/stock') %}active{% endif %}">今日</a>
+          <a href="{{ session_url(request, '/find') }}" class="{% if request.url.path.startswith('/find') %}active{% endif %}">找股票</a>
+          <a href="{{ session_url(request, '/hold') }}" class="{% if request.url.path.startswith('/hold') %}active{% endif %}">我的持仓</a>
+          <a href="{{ session_url(request, '/settings') }}" class="{% if request.url.path.startswith('/settings') %}active{% endif %}">数据设置</a>
         </nav>
       </div>
       <div class="meta">本地私有服务 · 127.0.0.1</div>

@@ -3,11 +3,11 @@
 
 跟 KlineSourceChain 同模式 (priority sort + race + fallback · 复用 _run_chain)。
 
-内置 2 源 (两条 adata HTTP 路径):
-- ThsConstituentSource    (priority=10): adata.stock.info.concept_constituent_ths
+内置 2 源:
+- ThsConstituentSource    (priority=10): 同花顺公开页面
                                           · THS 主源 · 稳 · 不参与熔断 (THS 失败往往是
                                           单次网络抖动 · 5min cooldown 太重)
-- EmConstituentSource     (priority=20): adata.stock.info.concept_constituent_east
+- EmConstituentSource     (priority=20): AkShare 东财题材成分接口
                                           · EM datacenter · 走 push2 反爬 · em_push2_concept
                                           5min 熔断保护下游
 
@@ -87,7 +87,7 @@ class ThemeConstituentSourceChain:
 
 
 class ThsConstituentSource:
-    """THS (同花顺) adata 题材成分股 · priority=10 · 主源 · 稳定。
+    """THS (同花顺)题材成分股 · priority=10 · 兼容旧 THS catalog。
 
     不参与熔断 · THS 失败往往是单次网络抖动 · 5min cooldown 对单题材太重。
     """
@@ -96,17 +96,13 @@ class ThsConstituentSource:
     priority = 10
 
     def is_available(self) -> bool:
-        try:
-            import adata  # noqa: F401
-        except ImportError:
-            return False
         return True
 
     def fetch(self, theme: Theme) -> list[tuple[str, str]] | None:
-        import adata
+        from kan.data.concepts import fetch_ths_constituents
 
         try:
-            df = adata.stock.info.concept_constituent_ths(index_code=theme.code)
+            df = fetch_ths_constituents(theme)
         except Exception as e:
             debug_log(__name__, f"THS concept_constituent_ths({theme.code})", e)
             return None
@@ -119,7 +115,7 @@ class ThsConstituentSource:
 
 
 class EmConstituentSource:
-    """EM (东方财富) datacenter adata 题材成分股 · priority=20 · 走 push2 · 反爬触发 5min 熔断。
+    """EM (东方财富)题材成分股 · priority=20 · 走 push2 · 反爬触发 5min 熔断。
 
     name='em_push2_concept' 沿用旧熔断 key · 保持现有 circuit_breaker 统计兼容。
     is_available 看熔断 · 熔断中 chain skip 不调 fetch。
@@ -129,21 +125,19 @@ class EmConstituentSource:
     priority = 20
 
     def is_available(self) -> bool:
-        try:
-            import adata  # noqa: F401
-        except ImportError:
-            return False
         from kan.infra.circuit_breaker import get_breaker
         return not get_breaker().is_down(self.name)
 
     def fetch(self, theme: Theme) -> list[tuple[str, str]] | None:
-        import adata
-
+        from kan.data.concepts import fetch_em_constituents
         from kan.infra.circuit_breaker import get_breaker
 
         breaker = get_breaker()
         try:
-            df = adata.stock.info.concept_constituent_east(concept_code=theme.code)
+            df = fetch_em_constituents(theme)
+        except LookupError as e:
+            debug_log(__name__, f"EM concept_constituent_east({theme.code}) 未匹配", e)
+            return None
         except Exception as e:
             breaker.record(self.name, ok=False)
             debug_log(__name__, f"EM concept_constituent_east({theme.code})", e)

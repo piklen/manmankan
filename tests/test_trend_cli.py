@@ -95,11 +95,21 @@ def _fake_trend_batch(*_args, **_kwargs) -> list[TrendResult]:
 @pytest.fixture
 def runner(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> CliRunner:
     """隔离 watchlist + cache_age + fetcher · 让 trend 走 mock 数据。"""
+    fake_watchlist = type("WL", (), {
+        "stocks": [
+            type("S", (), {"symbol": "600519", "name": "测试跌5"})(),
+            type("S", (), {"symbol": "000001", "name": "测试涨3"})(),
+            type("S", (), {"symbol": "002001", "name": "测试平"})(),
+        ],
+    })()
+    fake_positions = type("Book", (), {"positions": []})()
     # _get_watchlist_pairs 仍是 CLI 装配依赖；_auto_fetch_stale 已归到 shared helper。
     monkeypatch.setattr(
         "kan.cli.trend_cmds._get_watchlist_pairs",
         lambda group=None: [("600519", "测试跌5"), ("000001", "测试涨3"), ("002001", "测试平")],
     )
+    monkeypatch.setattr("kan.storage.watchlist.load_watchlist", lambda group=None: fake_watchlist)
+    monkeypatch.setattr("kan.storage.positions.load_positions", lambda: fake_positions)
     monkeypatch.setattr("kan.core.auto_fetch.auto_fetch_stale", lambda _pairs, **_kw: None)
     monkeypatch.setattr("kan.core.scanner.trend_batch", _fake_trend_batch)
     monkeypatch.setattr("kan.data.fetcher.cache_age", lambda _sym: "2026-05-08 12:00")

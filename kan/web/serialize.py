@@ -7,7 +7,9 @@ from __future__ import annotations
 import math
 from typing import Any
 
+from kan.core.models import StockScanResult
 from kan.core.positions import PositionsSummary
+from kan.service.daily_service import DailyOverview
 from kan.service.history_service import HistoryServiceResult
 from kan.service.index_service import IndexServiceResult
 from kan.service.info_service import InfoServiceResult
@@ -71,10 +73,106 @@ def serialize_scan(result: ScanServiceResult) -> dict[str, Any]:
             "targets": len(result.ctx.targets),
             "shown": len(rows),
             "data_cutoff": _date_text(result.ctx.freshness.data_cutoff),
+            "expected_cutoff": _date_text(result.ctx.freshness.expected_cutoff),
+            "fetched_at": result.ctx.freshness.fetched_at,
             "stale": result.ctx.freshness.is_stale,
         },
+        "freshness": _freshness_payload(result),
         "rows": rows,
         "heatmap": heatmap,
+    }
+
+
+def serialize_daily_overview(result: DailyOverview) -> dict[str, Any]:
+    """散户首页摘要，保留客观事实，不生成交易结论。"""
+    return {
+        "data_cutoff": _date_text(result.data_cutoff),
+        "expected_cutoff": _date_text(result.expected_cutoff),
+        "stale": result.stale,
+        "scanned_count": result.scanned_count,
+        "low_180_count": len(result.low_180),
+        "high_180_count": len(result.high_180),
+        "low_resonance_count": result.low_resonance_count,
+        "high_resonance_count": result.high_resonance_count,
+        "low_180": [_overview_row(row) for row in result.low_180[:6]],
+        "high_180": [_overview_row(row) for row in result.high_180[:6]],
+        "comparison_date": _date_text(result.comparison_date),
+        "changes": [
+            {
+                "code": change.code,
+                "name": change.name,
+                "period": change.period,
+                "description": change.description,
+            }
+            for change in result.changes[:12]
+        ],
+        "change_count": len(result.changes),
+    }
+
+
+def _overview_row(row: StockScanResult) -> dict[str, Any]:
+    p180 = next(
+        (period for period in row.periods if period.period == 180 and not period.insufficient),
+        None,
+    )
+    return {
+        "code": row.symbol,
+        "name": row.name.replace(" ", ""),
+        "price": _round(row.current_price),
+        "position_180": _round(p180.position_pct, 1) if p180 else None,
+        "low_resonance": row.low_resonance,
+        "high_resonance": row.high_resonance,
+        "in_holding": row.in_holding,
+    }
+
+
+def _freshness_payload(result: ScanServiceResult) -> dict[str, Any]:
+    freshness = result.ctx.freshness
+    cutoff = _date_text(freshness.data_cutoff)
+    expected = _date_text(freshness.expected_cutoff)
+    target_count = len(result.ctx.targets)
+    missing_count = getattr(freshness, "missing_count", 0)
+    current_count = getattr(freshness, "current_count", 0)
+    min_cutoff = _date_text(getattr(freshness, "min_cutoff", None))
+    history_incomplete_count = getattr(freshness, "history_incomplete_count", 0)
+    required_rows = getattr(freshness, "required_rows", None)
+    if target_count == 0:
+        return {
+            "status": "missing",
+            "title": "先添加一只自己的股票",
+            "detail": "在下方输入 6 位股票代码；添加后会自动更新本地行情。",
+            "action_label": "先添加自选",
+        }
+    if freshness.data_cutoff is None:
+        return {
+            "status": "missing",
+            "title": "还没有可用行情数据",
+            "detail": "点击更新数据；如果失败，请检查网络后重试。",
+            "action_label": "更新数据",
+        }
+    if freshness.is_stale:
+        expected_text = f"，正常应至少到 {expected}" if expected else ""
+        coverage = ""
+        if missing_count:
+            coverage = f"；{missing_count} 只没有可用缓存"
+        elif current_count < target_count and min_cutoff:
+            coverage = f"；最早一只只到 {min_cutoff}"
+        elif history_incomplete_count and required_rows:
+            coverage = (
+                f"；{history_incomplete_count} 只历史数据不足 {required_rows} 个交易日"
+            )
+        return {
+            "status": "stale",
+            "title": "行情数据需要更新",
+            "detail": f"最新一只到 {cutoff}{expected_text}{coverage}。更新前，位置和变化对比可能不完整。",
+            "action_label": "立即更新",
+        }
+    fetched_text = f" · 本机拉取 {freshness.fetched_at}" if freshness.fetched_at else ""
+    return {
+        "status": "current",
+        "title": f"行情已更新至 {cutoff}",
+        "detail": f"以下概览均按该交易日收盘数据计算{fetched_text}。",
+        "action_label": "重新检查",
     }
 
 

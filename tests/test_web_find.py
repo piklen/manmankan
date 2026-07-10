@@ -18,10 +18,17 @@ from kan.core.models import (
 from kan.render.base import FIND_DISCLAIMER_TEXT
 from kan.service.find_service import FindKlineResult
 from kan.web.app import create_app
+from kan.web.security import SESSION_HEADER_NAME
+
+_TEST_SESSION_TOKEN = "test-session-token"
 
 
 def _client() -> TestClient:
-    return TestClient(create_app(), base_url="http://127.0.0.1")
+    return TestClient(
+        create_app(session_token=_TEST_SESSION_TOKEN),
+        base_url="http://127.0.0.1",
+        headers={SESSION_HEADER_NAME: _TEST_SESSION_TOKEN},
+    )
 
 
 def test_find_page_contains_disclaimer_and_cli_area() -> None:
@@ -29,9 +36,14 @@ def test_find_page_contains_disclaimer_and_cli_area() -> None:
 
     assert response.status_code == 200
     assert FIND_DISCLAIMER_TEXT in response.text
-    assert "等价 CLI 命令" in response.text
-    assert "符合条件的股票" in response.text
-    assert "筛选" in response.text
+    assert "高级用法：复制到终端或交给 AI" in response.text
+    assert "按你的条件找股票" in response.text
+    assert "快速填入示例" in response.text
+    assert 'aria-label="自定义股票代码"' in response.text
+    assert 'aria-label="行业名称"' in response.text
+    assert 'aria-label="题材名称"' in response.text
+    assert 'aria-live="polite" x-text="message"' in response.text
+    assert 'x-show="message"' not in response.text
 
 
 def test_api_find_returns_web_shape(monkeypatch) -> None:
@@ -60,6 +72,11 @@ def test_api_find_returns_web_shape(monkeypatch) -> None:
     assert payload["title"] == "符合条件的股票"
     assert payload["rows"][0]["code"] == "600519"
     assert payload["rows"][0]["metrics"][0]["label"] == "PE TTM"
+    assert payload["rows"][0]["triggered_text"] == [
+        "180 日位置低于 20%，当前 10.0%"
+    ]
+    assert "triggered_filters" not in payload["rows"][0]
+    assert set(payload["periods"]).issubset({30, 60, 180})
     assert payload["stats"]["skipped_no_cache"] == 1
     assert "无本地缓存" in payload["message"]
     assert "--all" not in payload["command"]
@@ -74,7 +91,7 @@ def test_api_find_rejects_empty_conditions() -> None:
     )
 
     assert response.status_code == 400
-    assert "请至少填写一个 filter" in response.text
+    assert "请至少填写一个筛选条件" in response.text
 
 
 def test_api_find_requires_csrf_header() -> None:
@@ -110,9 +127,10 @@ def test_watchlist_post_and_delete(tmp_path, monkeypatch) -> None:
     from kan.storage import paths, watchlist
 
     monkeypatch.setattr(paths, "WATCHLIST_PATH", tmp_path / "watchlist.json")
+    monkeypatch.setattr(paths, "STOCK_NAMES_CACHE", tmp_path / "stock_names.json")
     monkeypatch.setattr(
-        "kan.web.routes_api._lookup_name",
-        lambda code: {"600519": "贵州茅台", "000858": "五粮液"}[code],
+        "kan.web.routes_api.watchlist.load_stock_names_cache",
+        lambda **_kwargs: {"600519": "贵州茅台", "000858": "五粮液"},
     )
     client = _client()
 
@@ -143,11 +161,6 @@ def test_watchlist_post_duplicate_is_atomic(tmp_path, monkeypatch) -> None:
     watchlist.save_grouped_watchlist(GroupedWatchlist(groups={
         DEFAULT_GROUP_NAME: [Stock(symbol="600519", name="贵州茅台", added_at=date(2026, 1, 1))],
     }))
-    monkeypatch.setattr(
-        "kan.web.routes_api._lookup_name",
-        lambda code: {"000858": "五粮液"}[code],
-    )
-
     response = _client().post(
         "/api/watchlist",
         headers={"X-Kan-Web": "1"},
@@ -157,6 +170,27 @@ def test_watchlist_post_duplicate_is_atomic(tmp_path, monkeypatch) -> None:
     assert response.status_code == 400
     assert "代码已在自选列表中" in response.text
     assert [stock.symbol for stock in watchlist.list_all()] == ["600519"]
+
+
+def test_watchlist_post_without_name_cache_adds_immediately(tmp_path, monkeypatch) -> None:
+    from kan.storage import paths, watchlist
+
+    monkeypatch.setattr(paths, "WATCHLIST_PATH", tmp_path / "watchlist.json")
+    monkeypatch.setattr(paths, "STOCK_NAMES_CACHE", tmp_path / "stock_names.json")
+    monkeypatch.setattr(
+        "kan.web.routes_api.watchlist.load_stock_names_cache",
+        lambda **_kwargs: None,
+    )
+
+    response = _client().post(
+        "/api/watchlist",
+        headers={"X-Kan-Web": "1"},
+        json={"codes": "600519"},
+    )
+
+    assert response.status_code == 200
+    assert response.json()["messages"] == ["✅ 已添加 600519（名称加载中）"]
+    assert watchlist.list_all()[0].name == "600519"
 
 
 def test_watchlist_post_repeated_input_is_atomic(tmp_path, monkeypatch) -> None:
@@ -183,7 +217,8 @@ def test_watchlist_post_invalid_code() -> None:
     )
 
     assert response.status_code == 400
-    assert "不是 6 位股票代码" in response.text
+    assert response.json()["detail"] == "请输入 6 位股票代码，例如 600519；多个代码用空格分隔"
+    assert "kan add" not in response.text
 
 
 def test_watchlist_delete_invalid_code() -> None:

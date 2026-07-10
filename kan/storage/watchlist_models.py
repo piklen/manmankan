@@ -12,8 +12,14 @@ MAX_GROUP_NAME_LEN = 32
 
 
 class Watchlist:
-    def __init__(self, stocks: list[Stock] | None = None) -> None:
+    def __init__(
+        self,
+        stocks: list[Stock] | None = None,
+        *,
+        source_token: str | None = None,
+    ) -> None:
         self.stocks: list[Stock] = stocks or []
+        self._source_token = source_token
 
     def find(self, symbol: str) -> Stock | None:
         for s in self.stocks:
@@ -38,6 +44,7 @@ class GroupedWatchlist:
         *,
         groups: dict[str, list[Stock]] | None = None,
         default: str = DEFAULT_GROUP_NAME,
+        source_token: str | None = None,
     ) -> None:
         if groups is None:
             groups = {default: []}
@@ -46,6 +53,7 @@ class GroupedWatchlist:
             groups[default] = []
         self.groups: dict[str, list[Stock]] = groups
         self.default: str = default
+        self._source_token = source_token
 
     @property
     def group_names(self) -> list[str]:
@@ -89,6 +97,10 @@ class WatchlistCorruptError(Exception):
     `kan clear --yes` 损坏场景永远死循环 (clear 永远 load 失败 exit 1)。
     改用 raise 让 cli_watchlist_cmds.clear --yes 能跳过 load 直接重置。
     """
+
+
+class WatchlistConflictError(Exception):
+    """保存对象基于过期版本，拒绝覆盖磁盘上的较新自选数据。"""
 
 
 def _validate_group_name(name: str) -> str:

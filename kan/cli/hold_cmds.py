@@ -277,7 +277,7 @@ def import_cmd(source: Annotated[str, typer.Argument(help="CSV 文件路径；- 
 @hold_app.command("scan")
 def scan_cmd(
     high: Annotated[bool, typer.Option("--high", help="高点模式（默认低点模式）")] = False,
-    signal: Annotated[bool, typer.Option("--signal", "-S", "-s", help="仅显示有共振信号的股票")] = False,
+    signal: Annotated[bool, typer.Option("--signal", "-S", "-s", help="仅显示多周期共振状态")] = False,
     exclude_st: Annotated[bool, typer.Option("--exclude-st", help="排除 ST/*ST 股票")] = False,
     exclude_star: Annotated[bool, typer.Option("--exclude-star", help="排除科创板股票")] = False,
     exclude_bj: Annotated[bool, typer.Option("--exclude-bj", help="排除北交所股票")] = False,

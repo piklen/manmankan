@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import re as _re
 import time
+from datetime import date
 
 import typer
 from rich.console import Console
@@ -13,6 +14,7 @@ from kan.cli.helpers import (
     _print_err,
     confirm_destructive,
 )
+from kan.core.models import Stock
 
 _A_SHARE_CODE_PREFIXES = (
     "000",
@@ -86,9 +88,8 @@ def _add_by_industry(
     from kan.data import boards
     from kan.storage.watchlist import (
         GroupNotFoundError,
-        add_stock,
+        add_many,
         load_watchlist,
-        save_watchlist,
     )
 
     try:
@@ -132,15 +133,16 @@ def _add_by_industry(
         typer.echo("已取消")
         return
 
-    for code, name in new:
-        add_stock(wl, code, name)
-    save_watchlist(wl, group=group)
+    added, actual_old, actual_new = add_many(
+        [Stock(symbol=code, name=name, added_at=date.today()) for code, name in new],
+        group=group,
+    )
     typer.echo(
-        f"✅ 已加 {len(new)} 只{board.name}股 · "
-        f"{state_label} {old_total} → {len(wl.stocks)} 只"
+        f"✅ 已加 {len(added)} 只{board.name}股 · "
+        f"{state_label} {actual_old} → {actual_new} 只"
     )
     if fetch:
-        _fetch_added([code for code, _name in new])
+        _fetch_added([stock.symbol for stock in added])
 
 
 def _add_by_theme(
@@ -154,9 +156,8 @@ def _add_by_theme(
     from kan.data import boards
     from kan.storage.watchlist import (
         GroupNotFoundError,
-        add_stock,
+        add_many,
         load_watchlist,
-        save_watchlist,
     )
 
     try:
@@ -203,15 +204,16 @@ def _add_by_theme(
         typer.echo("已取消")
         return
 
-    for code, name in new:
-        add_stock(wl, code, name)
-    save_watchlist(wl, group=group)
+    added, actual_old, actual_new = add_many(
+        [Stock(symbol=code, name=name, added_at=date.today()) for code, name in new],
+        group=group,
+    )
     typer.echo(
-        f"✅ 已加 {len(new)} 只{themed.name}股 · "
-        f"{state_label} {old_total} → {len(wl.stocks)} 只"
+        f"✅ 已加 {len(added)} 只{themed.name}股 · "
+        f"{state_label} {actual_old} → {actual_new} 只"
     )
     if fetch:
-        _fetch_added([code for code, _name in new])
+        _fetch_added([stock.symbol for stock in added])
 
 
 def run_add(
@@ -249,15 +251,27 @@ def run_add(
         )
         raise typer.Exit(2)
 
+    invalid_numeric = [
+        sym.strip()
+        for sym in symbols
+        if _re.fullmatch(r"(?:sh|sz|SH|SZ)?\d+", sym.strip())
+        and _clean_code_token(sym) is None
+    ]
+    if invalid_numeric:
+        shown = "、".join(invalid_numeric[:3])
+        suffix = " 等" if len(invalid_numeric) > 3 else ""
+        _print_err(f"❌ {shown}{suffix} 不是 6 位股票代码 · 例: kan add 600519")
+        raise typer.Exit(2)
+
     batch = len(symbols) > 1
     console = Console(stderr=True)
 
     from kan.storage.watchlist import (
         GroupNotFoundError,
+        add_many,
         add_stock,
         load_stock_names_cache,
         load_watchlist,
-        save_watchlist,
         search_by_name,
     )
 
@@ -274,6 +288,7 @@ def run_add(
         raise typer.Exit(2) from None
     changed = False
     added_codes: list[str] = []
+    pending_stocks: list[Stock] = []
     success, skip, fail = 0, 0, 0
     unresolved_names = 0
     failures: list[str] = []
@@ -322,6 +337,9 @@ def run_add(
                         fail += 1
                         continue
                 add_stock(wl, cleaned, name)
+                pending_stocks.append(
+                    Stock(symbol=cleaned, name=name, added_at=date.today())
+                )
                 added_codes.append(cleaned)
                 changed = True
                 if not use_batch_spinner:
@@ -344,6 +362,9 @@ def run_add(
                         skip += 1
                     else:
                         add_stock(wl, code, name)
+                        pending_stocks.append(
+                            Stock(symbol=code, name=name, added_at=date.today())
+                        )
                         added_codes.append(code)
                         changed = True
                         if not use_batch_spinner:
@@ -372,7 +393,13 @@ def run_add(
     add_elapsed = time.monotonic() - add_start
 
     if changed:
-        save_watchlist(wl, group=group)
+        added, _actual_old, _actual_new = add_many(pending_stocks, group=group)
+        concurrent_skips = len(pending_stocks) - len(added)
+        if concurrent_skips:
+            success -= concurrent_skips
+            skip += concurrent_skips
+            skips.append(f"并发期间已有 {concurrent_skips} 只被其他窗口加入")
+        added_codes = [stock.symbol for stock in added]
 
     if batch:
         if skips:

@@ -63,13 +63,13 @@ def _render_failure_diagnosis(diagnosis) -> list[str]:
         lines.append("  ① TuShare Pro: 未尝试 (没配 token · 跳过)")
 
     if diagnosis.em_attempted:
-        lines.append("  ② adata EM (兜底):")
+        lines.append("  ② AkShare EM (兜底):")
         lines.append(
             f"     结果:     ❌ {diagnosis.em_failed_count}/{diagnosis.em_total} "
             "题材失败 (datacenter 不稳定 · 已知问题)"
         )
     else:
-        lines.append("  ② adata EM (兜底): 未尝试")
+        lines.append("  ② AkShare EM (兜底): 未尝试")
 
     lines.append("")
     lines.append("可能修复:")

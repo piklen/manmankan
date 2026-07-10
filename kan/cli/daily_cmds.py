@@ -13,10 +13,10 @@ _DAILY_SCHEMA_VERSION = "0.1"
 
 _GUIDE_TOPICS: dict[str, list[tuple[str, str]]] = {
     "start": [
-        ("看默认池", "kan scan"),
+        ("打开本地观察台", "kan web"),
+        ("在终端看一日概览", "kan daily"),
         ("只看自选", "kan scan --only-watchlist"),
         ("只看持仓", "kan hold scan"),
-        ("一日概览", "kan daily"),
     ],
     "holdings": [
         ("录入持仓", "kan hold add 600519 --cost 1680 --shares 100"),
@@ -58,7 +58,7 @@ def guide(
         typer.echo(f"{title}")
         typer.echo(f"  {command}")
     typer.echo()
-    typer.echo("只展示命令入口 · 工具输出客观数据，不替你做交易决定")
+    typer.echo("普通用户优先用 kan web · 工具输出客观数据，不替你做交易决定")
 
 
 def _command_rows() -> list[str]:

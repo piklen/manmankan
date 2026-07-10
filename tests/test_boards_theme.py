@@ -1,7 +1,5 @@
-"""kan/boards.py 的 theme 函数单元测试 · mock adata · 不走真网络。"""
+"""kan/boards.py 的 theme 函数单元测试 · mock 内部适配器 · 不走真网络。"""
 import json
-import sys
-from unittest.mock import MagicMock
 
 import pandas as pd
 import pytest
@@ -9,16 +7,6 @@ import pytest
 from kan.core.models import Theme
 from kan.data import boards
 from kan.data.boards import ThemeDataUnavailableError, ThemeNotFoundError
-
-
-@pytest.fixture(autouse=True)
-def _mock_adata(monkeypatch):
-    """创建 adata mock module · 防止真实网络调用。"""
-    mock_adata = MagicMock()
-    monkeypatch.setitem(sys.modules, "adata", mock_adata)
-    monkeypatch.setitem(sys.modules, "adata.stock", MagicMock())
-    monkeypatch.setitem(sys.modules, "adata.stock.info", MagicMock())
-    return mock_adata
 
 
 @pytest.fixture(autouse=True)
@@ -37,26 +25,26 @@ def _isolate_boards_dir(tmp_path, monkeypatch):
 
 
 def _fake_ths_catalog_df():
-    """模拟 adata.stock.info.all_concept_code_ths() 真返回结构(2026-05-23 spike 实测)。"""
+    """模拟内部题材清单适配器的标准返回。"""
     return pd.DataFrame(
         [
-            {"index_code": "886108", "name": "AI应用", "concept_code": "308767", "source": "同花顺"},
-            {"index_code": "885525", "name": "白酒概念", "concept_code": "308768", "source": "同花顺"},
-            {"index_code": "886109", "name": "同花顺", "concept_code": "309265", "source": "同花顺"},
+            {"code": "308767", "name": "AI应用"},
+            {"code": "308768", "name": "白酒概念"},
+            {"code": "309265", "name": "同花顺"},
         ]
     )
 
 
-def test_load_theme_catalog_first_run_hits_adata(monkeypatch, _isolate_boards_dir):
-    """无 cache · 第一次跑应调 adata · 返回 list[Theme]。"""
+def test_load_theme_catalog_first_run_hits_adapter(monkeypatch, _isolate_boards_dir):
+    """无 cache · 第一次跑应调适配器 · 返回 list[Theme]。"""
     monkeypatch.setattr(
-        "adata.stock.info.all_concept_code_ths",
+        "kan.data.concepts.fetch_theme_catalog",
         lambda: _fake_ths_catalog_df(),
     )
     themes = boards.load_theme_catalog()
     assert len(themes) == 3
     assert all(isinstance(t, Theme) for t in themes)
-    assert themes[0].code == "886108"
+    assert themes[0].code == "308767"
     assert themes[0].name == "AI应用"
     assert themes[0].source == "ths"
 
@@ -64,7 +52,7 @@ def test_load_theme_catalog_first_run_hits_adata(monkeypatch, _isolate_boards_di
 def test_load_theme_catalog_writes_cache(monkeypatch, _isolate_boards_dir):
     """跑完 catalog 应写 catalog_concept_ths.json。"""
     monkeypatch.setattr(
-        "adata.stock.info.all_concept_code_ths",
+        "kan.data.concepts.fetch_theme_catalog",
         lambda: _fake_ths_catalog_df(),
     )
     boards.load_theme_catalog()
@@ -72,18 +60,18 @@ def test_load_theme_catalog_writes_cache(monkeypatch, _isolate_boards_dir):
     assert cache.exists()
     data = json.loads(cache.read_text(encoding="utf-8"))
     assert len(data) == 3
-    assert data[0]["code"] == "886108"
+    assert data[0]["code"] == "308767"
 
 
 def test_load_theme_catalog_uses_cache_within_ttl(monkeypatch, _isolate_boards_dir):
-    """24h 内第二次调不应再打 adata。"""
+    """24h 内第二次调不应再打适配器。"""
     call_count = {"n": 0}
 
-    def counting_adata():
+    def counting_adapter():
         call_count["n"] += 1
         return _fake_ths_catalog_df()
 
-    monkeypatch.setattr("adata.stock.info.all_concept_code_ths", counting_adata)
+    monkeypatch.setattr("kan.data.concepts.fetch_theme_catalog", counting_adapter)
     boards.load_theme_catalog()       # 第一次写 cache
     boards.load_theme_catalog()       # 第二次应读 cache
     assert call_count["n"] == 1
@@ -93,29 +81,30 @@ def test_load_theme_catalog_force_bypasses_cache(monkeypatch, _isolate_boards_di
     """force=True 应强制重拉。"""
     call_count = {"n": 0}
 
-    def counting_adata():
+    def counting_adapter():
         call_count["n"] += 1
         return _fake_ths_catalog_df()
 
-    monkeypatch.setattr("adata.stock.info.all_concept_code_ths", counting_adata)
+    monkeypatch.setattr("kan.data.concepts.fetch_theme_catalog", counting_adapter)
     boards.load_theme_catalog()
     boards.load_theme_catalog(force=True)
     assert call_count["n"] == 2
 
 
-def test_load_theme_catalog_raises_when_adata_fails_and_no_cache(monkeypatch, _isolate_boards_dir):
-    """adata 抛错 + 无 cache → ThemeDataUnavailableError。"""
+def test_load_theme_catalog_raises_when_adapter_fails_and_no_cache(monkeypatch, _isolate_boards_dir):
+    """适配器抛错 + 无 cache → ThemeDataUnavailableError。"""
 
     def raising():
-        raise ConnectionError("adata down")
+        raise ConnectionError("secret upstream detail")
 
-    monkeypatch.setattr("adata.stock.info.all_concept_code_ths", raising)
-    with pytest.raises(ThemeDataUnavailableError):
+    monkeypatch.setattr("kan.data.concepts.fetch_theme_catalog", raising)
+    with pytest.raises(ThemeDataUnavailableError) as exc_info:
         boards.load_theme_catalog()
+    assert "secret upstream detail" not in str(exc_info.value)
 
 
 def test_load_theme_catalog_falls_back_to_stale_cache_on_failure(monkeypatch, _isolate_boards_dir):
-    """adata 挂 + cache 陈旧 → 用陈旧 cache 不抛(warn 但继续)。"""
+    """数据源挂 + cache 陈旧 → 用陈旧 cache 不抛。"""
     # 先建一个陈旧 cache(mtime 改为 25h 前)
     cache = _isolate_boards_dir / "catalog_concept_ths.json"
     cache.write_text(
@@ -128,8 +117,8 @@ def test_load_theme_catalog_falls_back_to_stale_cache_on_failure(monkeypatch, _i
     os.utime(cache, (old, old))
 
     monkeypatch.setattr(
-        "adata.stock.info.all_concept_code_ths",
-        lambda: (_ for _ in ()).throw(ConnectionError("adata down")),
+        "kan.data.concepts.fetch_theme_catalog",
+        lambda: (_ for _ in ()).throw(ConnectionError("source down")),
     )
 
     # 捕获 debug_log 调用
@@ -145,8 +134,7 @@ def test_load_theme_catalog_falls_back_to_stale_cache_on_failure(monkeypatch, _i
     assert themes[0].code == "886108"
     # 应已记录退化警告
     assert len(log_calls) >= 1, f"expected debug_log to be called, got {len(log_calls)} calls"
-    assert any("adata THS catalog" in op for _, op, _ in log_calls), \
-        f"expected debug_log with 'adata THS catalog' in op, got: {log_calls}"
+    assert any("concept catalog" in op for _, op, _ in log_calls)
 
 
 # ── search_theme / normalize_theme_name ──────────────────────────────
@@ -220,7 +208,7 @@ def test_search_theme_rejects_blank_query(_isolate_boards_dir, bad):
 # ── get_theme_constituents · THS 优先 + EM fallback + 熔断 ─────────────
 
 def _ths_cons_df():
-    """模拟 adata.stock.info.concept_constituent_ths(index_code=) 真返回(2026-05-23 spike)。"""
+    """模拟同花顺成分适配器返回。"""
     return pd.DataFrame(
         [
             {"stock_code": "002230", "short_name": "科大讯飞"},
@@ -242,7 +230,7 @@ def _em_cons_df():
 def test_get_theme_constituents_ths_success(monkeypatch, _isolate_boards_dir):
     """THS 成功 → 返回 list[(代码, 名称)] · 写 per-theme cache。"""
     monkeypatch.setattr(
-        "adata.stock.info.concept_constituent_ths",
+        "kan.data.concepts.fetch_ths_constituents",
         lambda index_code: _ths_cons_df(),
     )
     theme = Theme(code="886108", name="AI应用", source="ths")
@@ -260,7 +248,7 @@ def test_get_theme_constituents_uses_cache(monkeypatch, _isolate_boards_dir):
         call_count["n"] += 1
         return _ths_cons_df()
 
-    monkeypatch.setattr("adata.stock.info.concept_constituent_ths", counting)
+    monkeypatch.setattr("kan.data.concepts.fetch_ths_constituents", counting)
     theme = Theme(code="886108", name="AI应用", source="ths")
     boards.get_theme_constituents(theme)
     boards.get_theme_constituents(theme)
@@ -273,9 +261,9 @@ def test_get_theme_constituents_falls_back_to_em(monkeypatch, _isolate_boards_di
     def ths_raise(index_code):
         raise ConnectionError("THS down")
 
-    monkeypatch.setattr("adata.stock.info.concept_constituent_ths", ths_raise)
+    monkeypatch.setattr("kan.data.concepts.fetch_ths_constituents", ths_raise)
     monkeypatch.setattr(
-        "adata.stock.info.concept_constituent_east",
+        "kan.data.concepts.fetch_em_constituents",
         lambda concept_code: _em_cons_df(),
     )
     # 确保熔断器 EM 未 down
@@ -293,7 +281,7 @@ def test_get_theme_constituents_em_circuit_break(monkeypatch, _isolate_boards_di
     def ths_raise(index_code):
         raise ConnectionError("THS down")
 
-    monkeypatch.setattr("adata.stock.info.concept_constituent_ths", ths_raise)
+    monkeypatch.setattr("kan.data.concepts.fetch_ths_constituents", ths_raise)
     # 标记 EM 已 down
     from kan.infra.circuit_breaker import get_breaker
     get_breaker().record("em_push2_concept", ok=False)
@@ -309,8 +297,8 @@ def test_get_theme_constituents_em_fail_marks_down(monkeypatch, _isolate_boards_
     def raise_(index_code=None, concept_code=None):
         raise ConnectionError("both down")
 
-    monkeypatch.setattr("adata.stock.info.concept_constituent_ths", lambda index_code: raise_())
-    monkeypatch.setattr("adata.stock.info.concept_constituent_east", lambda concept_code: raise_())
+    monkeypatch.setattr("kan.data.concepts.fetch_ths_constituents", lambda theme: raise_())
+    monkeypatch.setattr("kan.data.concepts.fetch_em_constituents", lambda theme: raise_())
     from kan.infra.circuit_breaker import get_breaker
     get_breaker().record("em_push2_concept", ok=True)
 
@@ -324,7 +312,7 @@ def test_get_theme_constituents_em_fail_marks_down(monkeypatch, _isolate_boards_
 # ── fetch_theme_kline · EM K 线(THS V8 arm64 不兼容 → 不用 THS K 线) ───
 
 def _em_kline_df():
-    """模拟 adata.stock.market.get_market_concept_east 真返回(2026-05-23 spike · 11 列)。"""
+    """模拟东财题材 K 线适配器返回。"""
     return pd.DataFrame(
         [
             {
@@ -347,8 +335,8 @@ def _em_kline_df():
 def test_fetch_theme_kline_returns_standard_schema(monkeypatch, _isolate_boards_dir):
     """EM K 线 11 列 rename 为标准 7 列(date/open/high/low/close/volume/amount)。"""
     monkeypatch.setattr(
-        "adata.stock.market.get_market_concept_east",
-        lambda index_code, k_type=1: _em_kline_df(),
+        "kan.data.concepts.fetch_em_kline",
+        lambda theme: _em_kline_df(),
     )
     theme = Theme(code="BK1629", name="AI应用", source="em")
     df = boards.fetch_theme_kline(theme)
@@ -359,8 +347,8 @@ def test_fetch_theme_kline_returns_standard_schema(monkeypatch, _isolate_boards_
 def test_fetch_theme_kline_writes_parquet(monkeypatch, _isolate_boards_dir):
     """K 线 cache 为 parquet · 文件名带 EM 前缀。"""
     monkeypatch.setattr(
-        "adata.stock.market.get_market_concept_east",
-        lambda index_code, k_type=1: _em_kline_df(),
+        "kan.data.concepts.fetch_em_kline",
+        lambda theme: _em_kline_df(),
     )
     theme = Theme(code="BK1629", name="AI应用", source="em")
     boards.fetch_theme_kline(theme)
@@ -371,18 +359,31 @@ def test_fetch_theme_kline_writes_parquet(monkeypatch, _isolate_boards_dir):
 def test_fetch_theme_kline_raises_on_empty(monkeypatch, _isolate_boards_dir):
     """EM 返回空 → 抛 ThemeDataUnavailableError(题材指数 K 不可用 · 上层应降级渲染)。"""
     monkeypatch.setattr(
-        "adata.stock.market.get_market_concept_east",
-        lambda index_code, k_type=1: pd.DataFrame(),
+        "kan.data.concepts.fetch_em_kline",
+        lambda theme: pd.DataFrame(),
     )
     theme = Theme(code="BK1629", name="AI应用", source="em")
     with pytest.raises(ThemeDataUnavailableError):
         boards.fetch_theme_kline(theme)
 
 
+def test_fetch_theme_kline_hides_upstream_error(monkeypatch, _isolate_boards_dir):
+    monkeypatch.setattr(
+        "kan.data.concepts.fetch_em_kline",
+        lambda _theme: (_ for _ in ()).throw(ConnectionError("secret endpoint")),
+    )
+    theme = Theme(code="BK1629", name="AI应用", source="em")
+
+    with pytest.raises(ThemeDataUnavailableError) as exc_info:
+        boards.fetch_theme_kline(theme)
+
+    assert "secret endpoint" not in str(exc_info.value)
+
+
 # ── get_themes_of_stock · EM datacenter 反查 ──────────────────────────
 
 def _em_reverse_df():
-    """模拟 adata.stock.info.get_concept_east(stock_code=) 真返回(2026-05-23 spike)。"""
+    """模拟东财个股题材反查适配器返回。"""
     return pd.DataFrame(
         [
             {"stock_code": "002230", "concept_code": "BK1629", "name": "AI应用", "source": "东方财富", "reason": "..."},
@@ -394,7 +395,7 @@ def _em_reverse_df():
 def test_get_themes_of_stock_returns_list_of_theme(monkeypatch, _isolate_boards_dir):
     """002230 反查 → 多个 Theme(source='em')。"""
     monkeypatch.setattr(
-        "adata.stock.info.get_concept_east",
+        "kan.data.concepts.fetch_stock_themes",
         lambda stock_code: _em_reverse_df(),
     )
     themes = boards.get_themes_of_stock("002230")
@@ -411,7 +412,7 @@ def test_get_themes_of_stock_caches(monkeypatch, _isolate_boards_dir):
         call_count["n"] += 1
         return _em_reverse_df()
 
-    monkeypatch.setattr("adata.stock.info.get_concept_east", counting)
+    monkeypatch.setattr("kan.data.concepts.fetch_stock_themes", counting)
     boards.get_themes_of_stock("002230")
     boards.get_themes_of_stock("002230")
     assert call_count["n"] == 1
@@ -420,7 +421,7 @@ def test_get_themes_of_stock_caches(monkeypatch, _isolate_boards_dir):
 def test_get_themes_of_stock_empty_means_no_themes(monkeypatch, _isolate_boards_dir):
     """股票无任何题材归属 → 空列表 · 不抛。"""
     monkeypatch.setattr(
-        "adata.stock.info.get_concept_east",
+        "kan.data.concepts.fetch_stock_themes",
         lambda stock_code: pd.DataFrame(),
     )
     themes = boards.get_themes_of_stock("999999")

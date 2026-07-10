@@ -65,6 +65,20 @@ def test_root_help_returns_chinese_cheatsheet() -> None:
     assert "位置扫描" in result_help_dash.stdout
     assert "连续涨跌" in result_help_dash.stdout
     assert "命令速记" in result_help_dash.stdout
+    assert "普通用户先从这里开始" in result_help_dash.stdout
+    assert "kan web" in result_help_dash.stdout
+
+
+def test_no_args_shows_short_retail_start_instead_of_full_reference() -> None:
+    runner = CliRunner()
+
+    result = runner.invoke(app, [])
+
+    assert result.exit_code == 0
+    assert "慢慢看 · 从今天开始" in result.stdout
+    assert "kan web" in result.stdout
+    assert "数据保存在本机" in result.stdout
+    assert "条件筛选" not in result.stdout
 
 
 def test_console_script_root_help_bypasses_full_cli_import(
@@ -93,6 +107,25 @@ def test_console_script_root_help_bypasses_full_cli_import(
     assert capsys.readouterr().out.strip() == "FAST_HELP"
 
 
+def test_console_script_no_args_uses_fast_retail_start(
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    """真实 console entry 空参数也必须走精简启动页。"""
+    from kan import _entry
+
+    monkeypatch.setattr(sys, "argv", ["kan"])
+    monkeypatch.delenv("_KAN_COMPLETE", raising=False)
+    monkeypatch.delenv("_TYPER_COMPLETE_ARGS", raising=False)
+    monkeypatch.setattr(_entry, "_maybe_print_boot_banner", lambda: None)
+    monkeypatch.setattr(_entry, "_print_fast_start", lambda: print("FAST_START"))
+
+    _entry.main()
+
+    assert capsys.readouterr().out.strip() == "FAST_START"
+    assert not _entry._should_print_fast_help(["kan"])
+
+
 def test_console_script_root_help_skips_completion_env(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -102,6 +135,7 @@ def test_console_script_root_help_skips_completion_env(
     monkeypatch.setenv("_KAN_COMPLETE", "complete_zsh")
 
     assert not _entry._should_print_fast_help(["kan", "--help"])
+    assert not _entry._should_print_fast_start(["kan"])
 
 
 def test_root_help_uses_real_config_key_spelling() -> None:
@@ -170,7 +204,7 @@ def test_root_help_lists_find_registry_flags_and_presets() -> None:
     assert "核心层 · 位置 / 共振 / ST" in output
     assert "估值 / 质量 / 资金" in output
     assert "进阶 · 需理解指标口径" in output
-    assert "新手从 kan scan 和 kan find 开始" in output
+    assert "想用命令行时从 kan scan 开始" in output
 
 
 def test_subcommand_help_unaffected() -> None:

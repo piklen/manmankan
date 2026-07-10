@@ -12,6 +12,7 @@ from kan.storage.watchlist_models import (
 from kan.storage.watchlist_store import (
     _save_grouped_watchlist,
     load_grouped_watchlist,
+    with_watchlist_lock,
 )
 
 
@@ -24,6 +25,7 @@ def list_groups() -> list[tuple[str, int, bool]]:
     ]
 
 
+@with_watchlist_lock
 def create_group(name: str) -> str:
     """创建新组 · 返回规范化后的组名。重名抛 GroupExistsError。"""
     name = _validate_group_name(name)
@@ -35,6 +37,7 @@ def create_group(name: str) -> str:
     return name
 
 
+@with_watchlist_lock
 def rename_group(old: str, new: str) -> str:
     """重命名组 · 同时更新 default 指针 (如指向 old)。返回新组名。"""
     new = _validate_group_name(new)
@@ -55,6 +58,7 @@ def rename_group(old: str, new: str) -> str:
     return new
 
 
+@with_watchlist_lock
 def delete_group(name: str) -> int:
     """删除组 · 不能删 default (先切换 default 再删) · 返回被删股数。"""
     gw = load_grouped_watchlist()
@@ -70,6 +74,7 @@ def delete_group(name: str) -> int:
     return count
 
 
+@with_watchlist_lock
 def set_default_group(name: str) -> str:
     """切换 default 组 · 返回旧 default 组名。"""
     gw = load_grouped_watchlist()
@@ -86,6 +91,7 @@ def get_default_group() -> str:
     return load_grouped_watchlist().default
 
 
+@with_watchlist_lock
 def copy_group(src: str, dst: str) -> int:
     """复制 src 整组到 dst (dst 必须不存在 · 防误覆盖) · 返回复制的股数。"""
     dst = _validate_group_name(dst)
@@ -101,6 +107,7 @@ def copy_group(src: str, dst: str) -> int:
     return len(gw.groups[dst])
 
 
+@with_watchlist_lock
 def move_stock(symbol: str, src: str, dst: str) -> tuple[Stock, bool]:
     """跨组移动单股 · src/dst 都必须存在 (不自动建组 · 防 typo 灾难)。
 

@@ -1,20 +1,20 @@
-"""TuShare Pro 题材数据源 · 背景 · 配 token 时优先于 adata EM 路径。
+"""TuShare Pro 题材数据源 · 背景 · 配 token 时优先于 AkShare EM 路径。
 
 为啥引入 TuShare 路径:
-- adata EM datacenter HTTP 服务端不稳定(2026-05-25 实测 RemoteDisconnected
+- EM datacenter HTTP 服务端不稳定(2026-05-25 实测 RemoteDisconnected
   全部 391 题材失败)· 没 stale cache 兜底时 kan theme trend 直接挂
 - TuShare ths_daily 是 batch 接口 · trade_date=YYYYMMDD 一次 HTTP 拿
   ~1232 个 TuShare 题材当日数据(含 A 股 / 港股 / 美股各 exchange)· 1.79s
-- 历史 K 线按交易日 loop:60 个交易日 = 60 次 HTTP · 仍比 adata 路径
+- 历史 K 线按交易日 loop:60 个交易日 = 60 次 HTTP · 仍比 EM 单题材路径
   (391 题材 × 30 天历史 / 16 worker · 走 datacenter 单题材接口)架构更优
 
 token 优先级:沿用 kan.data.tushare._resolve_config
 - env TUSHARE_TOKEN > config['tushare_token'] > None
 - env TUSHARE_ENDPOINT > config['tushare_endpoint'] > DEFAULT_ENDPOINT
-- token 未配置时 tushare_load_*() 返回 None · caller 退化 adata EM 路径
+- token 未配置时 tushare_load_*() 返回 None · caller 退化 AkShare EM 路径
 
 数据格式 normalize 到 manmankan 标准:
-- ts_code: '886108.TI' → 纯数字 '886108'(跟 adata THS catalog 对齐)
+- ts_code: '886108.TI' → 纯数字 '886108'
 - trade_date: 'YYYYMMDD' → datetime.date(跟 EM kline 对齐)
 - 列对齐 _KLINE_COLUMNS:date / open / high / low / close / volume / amount
 - TuShare ths_daily 不返 volume / amount · 填 NaN(streak 算法不用 volume)
@@ -45,7 +45,7 @@ _DEFAULT_HISTORY_DAYS = 35  # 默认拉 35 个交易日 · calc_trend 循环上�
 
 
 def tushare_token_configured() -> bool:
-    """检查 TuShare token 是否可用 · True=走 TuShare · False=fallback adata EM。"""
+    """检查 TuShare token 是否可用 · True=走 TuShare · False=fallback AkShare EM。"""
     token, _ = _resolve_config()
     return token is not None
 
@@ -66,7 +66,7 @@ def tushare_load_theme_catalog() -> tuple[list[Theme] | None, TushareApiError | 
           - token 未配:  (None, None) · 不算错误 · caller 走 attempted=False 路径
           - server 失败: (None, TushareApiError) · caller 透传给 diagnosis
 
-    caller 拿 None 时应 fallback `boards.load_theme_catalog()`(adata 路径)。
+    caller 拿 None 时应 fallback `boards.load_theme_catalog()`(AkShare EM 路径)。
     """
     token, endpoint = _resolve_config()
     if not token:

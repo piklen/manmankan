@@ -9,7 +9,8 @@ _BOOT_BANNER_COMMANDS = {
     "add", "scan", "fetch", "low", "high", "info", "trend", "find", "theme", "board",
     "index", "daily", "guide",
 }
-_FAST_ROOT_HELP_ARGS = {(), ("help",), ("--help",), ("-h",)}
+_FAST_ROOT_HELP_ARGS = {("help",), ("--help",), ("-h",)}
+_FAST_START_HELP_ARGS = {()}
 
 
 def _is_shell_completion_run() -> bool:
@@ -25,6 +26,14 @@ def _should_print_fast_help(argv: list[str] | None = None) -> bool:
         return False
     args = tuple((argv or sys.argv)[1:])
     return args in _FAST_ROOT_HELP_ARGS
+
+
+def _should_print_fast_start(argv: list[str] | None = None) -> bool:
+    """Return whether an empty invocation should render the retail-first start page."""
+    if _is_shell_completion_run():
+        return False
+    args = tuple((argv or sys.argv)[1:])
+    return args in _FAST_START_HELP_ARGS
 
 
 def _maybe_print_boot_banner() -> None:
@@ -60,8 +69,17 @@ def _print_fast_help() -> None:
     print_root_help()
 
 
+def _print_fast_start() -> None:
+    from kan.help_text import print_start_help
+
+    print_start_help()
+
+
 def main() -> None:
     _maybe_print_boot_banner()
+    if _should_print_fast_start():
+        _print_fast_start()
+        return
     if _should_print_fast_help():
         _print_fast_help()
         return

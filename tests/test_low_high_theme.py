@@ -1,20 +1,10 @@
 """kan low / high --theme CLI 真测。"""
-import sys
-from unittest.mock import MagicMock
-
 import pandas as pd
 import pytest
 from typer.testing import CliRunner
 
 from kan.cli import app
 from kan.core.models import Theme
-
-
-@pytest.fixture(autouse=True)
-def _mock_adata(monkeypatch):
-    monkeypatch.setitem(sys.modules, "adata", MagicMock())
-    monkeypatch.setitem(sys.modules, "adata.stock", MagicMock())
-    monkeypatch.setitem(sys.modules, "adata.stock.info", MagicMock())
 
 
 @pytest.fixture(autouse=True)

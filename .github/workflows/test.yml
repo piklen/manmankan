@@ -2,15 +2,7 @@ name: Test
 
 on:
   push:
-    branches:
-      - main
-      - 'feat/**'
-      - 'fix/**'
-      - 'chore/**'
-      - 'docs/**'
-      - 'refactor/**'
-      - 'test/**'
-      - 'codex/**'
+    branches: [main]
   pull_request:
     branches: [main]
   workflow_dispatch:
@@ -29,18 +21,31 @@ env:
   KAN_NO_UPDATE_CHECK: "1"
   UV_LINK_MODE: "copy"
   UV_LOCK_TIMEOUT: "1200"
+  UV_VERSION: "0.11.21"
 
 jobs:
   quality-gates:
-    runs-on: [self-hosted, manmankan-ci, hkg-vps]
+    runs-on: ${{ fromJSON(github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name != github.repository && '["ubuntu-latest"]' || '["self-hosted","manmankan-ci","hkg-vps"]') }}
     timeout-minutes: 20
     steps:
       - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10  # v6 (pinned 2026-05-27)
         with:
           persist-credentials: false
-      - name: Verify preinstalled uv runtime
+      - name: Setup Python on fork runner
+        if: github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name != github.repository
+        uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405  # pinned 2026-06-02
+        with:
+          python-version: '3.12'
+      - name: Setup uv on fork runner
+        if: github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name != github.repository
+        uses: astral-sh/setup-uv@fac544c07dec837d0ccb6301d7b5580bf5edae39  # pinned 2026-05-27
+        with:
+          version: ${{ env.UV_VERSION }}
+          enable-cache: false
+      - name: Verify uv runtime
         run: |
           uv --version
+          test "$(uv --version | cut -d' ' -f2)" = "$UV_VERSION"
           uv python find 3.12
       - name: Lockfile is current
         run: uv lock --check
@@ -98,7 +103,7 @@ jobs:
 
   # 保留独立 job 名，避免已有 branch protection 仍绑定旧检查名时被误断。
   privacy-scan:
-    runs-on: [self-hosted, manmankan-ci]
+    runs-on: ${{ fromJSON(github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name != github.repository && '["ubuntu-latest"]' || '["self-hosted","manmankan-ci"]') }}
     timeout-minutes: 10
     steps:
       - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10  # v6 (pinned 2026-05-27)
@@ -112,7 +117,7 @@ jobs:
         uses: ./.github/actions/cleanup-runner
 
   test:
-    runs-on: [self-hosted, manmankan-ci, hkg-vps]
+    runs-on: ${{ fromJSON(github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name != github.repository && '["ubuntu-latest"]' || '["self-hosted","manmankan-ci","hkg-vps"]') }}
     timeout-minutes: 35
     strategy:
       fail-fast: false
@@ -122,9 +127,32 @@ jobs:
       - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10  # v6 (pinned 2026-05-27)
         with:
           fetch-depth: 0  # diff-cover 需要 base 分支历史做新代码覆盖率对比
-      - name: Verify preinstalled uv runtime
+          persist-credentials: false
+      - name: Isolate user data on shared runner
+        run: |
+          scope="$RUNNER_TEMP/kan-ci-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}-${GITHUB_JOB}-${{ matrix.python-version }}"
+          mkdir -p "$scope/home" "$scope/data" "$scope/config" "$scope/cache"
+          {
+            echo "HOME=$scope/home"
+            echo "XDG_DATA_HOME=$scope/data"
+            echo "XDG_CONFIG_HOME=$scope/config"
+            echo "XDG_CACHE_HOME=$scope/cache"
+          } >> "$GITHUB_ENV"
+      - name: Setup Python on fork runner
+        if: github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name != github.repository
+        uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405  # pinned 2026-06-02
+        with:
+          python-version: ${{ matrix.python-version }}
+      - name: Setup uv on fork runner
+        if: github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name != github.repository
+        uses: astral-sh/setup-uv@fac544c07dec837d0ccb6301d7b5580bf5edae39  # pinned 2026-05-27
+        with:
+          version: ${{ env.UV_VERSION }}
+          enable-cache: false
+      - name: Verify uv runtime
         run: |
           uv --version
+          test "$(uv --version | cut -d' ' -f2)" = "$UV_VERSION"
           uv python find ${{ matrix.python-version }}
       - name: Install dependencies
         run: uv sync --python ${{ matrix.python-version }} --frozen --all-groups --all-extras
@@ -145,7 +173,7 @@ jobs:
         uses: ./.github/actions/cleanup-runner
 
   package-smoke:
-    runs-on: [self-hosted, manmankan-ci]
+    runs-on: ${{ fromJSON(github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name != github.repository && '["ubuntu-latest"]' || '["self-hosted","manmankan-ci"]') }}
     timeout-minutes: 25
     strategy:
       fail-fast: false
@@ -155,9 +183,21 @@ jobs:
       - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10  # v6 (pinned 2026-05-27)
         with:
           persist-credentials: false
-      - name: Verify preinstalled uv runtime
+      - name: Setup Python on fork runner
+        if: github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name != github.repository
+        uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405  # pinned 2026-06-02
+        with:
+          python-version: ${{ matrix.python-version }}
+      - name: Setup uv on fork runner
+        if: github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name != github.repository
+        uses: astral-sh/setup-uv@fac544c07dec837d0ccb6301d7b5580bf5edae39  # pinned 2026-05-27
+        with:
+          version: ${{ env.UV_VERSION }}
+          enable-cache: false
+      - name: Verify uv runtime
         run: |
           uv --version
+          test "$(uv --version | cut -d' ' -f2)" = "$UV_VERSION"
           uv python find ${{ matrix.python-version }}
       - name: Build package
         run: uv build --clear
@@ -220,7 +260,7 @@ jobs:
 
   # CI -m "not tty" 会排除 TTY 真测 · 在 VPS Linux runner 补真实终端覆盖。
   tty-test:
-    runs-on: [self-hosted, manmankan-ci, hkg-vps]
+    runs-on: ${{ fromJSON(github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name != github.repository && '["ubuntu-latest"]' || '["self-hosted","manmankan-ci","hkg-vps"]') }}
     timeout-minutes: 25
     strategy:
       fail-fast: false
@@ -230,9 +270,34 @@ jobs:
       - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10  # v6 (pinned 2026-05-27)
         with:
           persist-credentials: false
-      - name: Verify preinstalled uv runtime
+      - name: Isolate user data and tool install on shared runner
+        run: |
+          scope="$RUNNER_TEMP/kan-tty-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}-${GITHUB_JOB}-${{ matrix.python-version }}"
+          mkdir -p "$scope/home" "$scope/data" "$scope/config" "$scope/cache" "$scope/tools" "$scope/bin"
+          {
+            echo "HOME=$scope/home"
+            echo "XDG_DATA_HOME=$scope/data"
+            echo "XDG_CONFIG_HOME=$scope/config"
+            echo "XDG_CACHE_HOME=$scope/cache"
+            echo "UV_TOOL_DIR=$scope/tools"
+            echo "UV_TOOL_BIN_DIR=$scope/bin"
+          } >> "$GITHUB_ENV"
+          echo "$scope/bin" >> "$GITHUB_PATH"
+      - name: Setup Python on fork runner
+        if: github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name != github.repository
+        uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405  # pinned 2026-06-02
+        with:
+          python-version: ${{ matrix.python-version }}
+      - name: Setup uv on fork runner
+        if: github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name != github.repository
+        uses: astral-sh/setup-uv@fac544c07dec837d0ccb6301d7b5580bf5edae39  # pinned 2026-05-27
+        with:
+          version: ${{ env.UV_VERSION }}
+          enable-cache: false
+      - name: Verify uv runtime
         run: |
           uv --version
+          test "$(uv --version | cut -d' ' -f2)" = "$UV_VERSION"
           uv python find ${{ matrix.python-version }}
       - name: Install dependencies + manmankan as tool
         run: |

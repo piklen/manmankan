@@ -8,6 +8,10 @@
 """
 
 import json
+import stat
+import sys
+from concurrent.futures import ThreadPoolExecutor
+from types import SimpleNamespace
 
 import pytest
 
@@ -91,6 +95,56 @@ def test_save_creates_parent_directory(tmp_path, monkeypatch):
 
     assert nested.exists()
     assert json.loads(nested.read_text())["auto_update"] is False
+
+
+@pytest.mark.skipif(sys.platform.startswith("win"), reason="Windows chmod 不支持 POSIX mode")
+def test_save_tightens_existing_parent_and_file_permissions(tmp_path, monkeypatch):
+    parent = tmp_path / "legacy-kan"
+    parent.mkdir(mode=0o755)
+    parent.chmod(0o755)
+    target = parent / "config.json"
+    monkeypatch.setattr(config, "CONFIG_PATH", target)
+
+    config.save(dict(config.DEFAULT_CONFIG))
+
+    assert stat.S_IMODE(parent.stat().st_mode) == 0o700
+    assert stat.S_IMODE(target.stat().st_mode) == 0o600
+    assert stat.S_IMODE(target.with_suffix(".lock").stat().st_mode) == 0o600
+    assert not list(parent.glob("*.tmp"))
+    assert not list(parent.glob(".*.tmp"))
+
+
+def test_concurrent_field_updates_do_not_overwrite_each_other(temp_config_path):
+    with ThreadPoolExecutor(max_workers=2) as executor:
+        futures = [
+            executor.submit(config.update, tushare_token="token-1234"),
+            executor.submit(config.update, tushare_endpoint="https://example.test"),
+        ]
+        for future in futures:
+            future.result()
+
+    stored = config.load()
+    assert stored["tushare_token"] == "token-1234"
+    assert stored["tushare_endpoint"] == "https://example.test"
+
+
+def test_windows_config_lock_locks_and_releases_first_byte(tmp_path, monkeypatch):
+    calls: list[tuple[int, int]] = []
+    fake_msvcrt = SimpleNamespace(
+        LK_LOCK=1,
+        LK_UNLCK=2,
+        locking=lambda _fd, mode, size: calls.append((mode, size)),
+    )
+    monkeypatch.setitem(sys.modules, "msvcrt", fake_msvcrt)
+
+    with open(tmp_path / "config.lock", "a+b") as handle:
+        lock = config._windows_config_lock(handle)
+        next(lock)
+        assert handle.read(1) == b"\0"
+        with pytest.raises(StopIteration):
+            next(lock)
+
+    assert calls == [(fake_msvcrt.LK_LOCK, 1), (fake_msvcrt.LK_UNLCK, 1)]
 
 
 def test_save_no_tmp_file_left(temp_config_path):

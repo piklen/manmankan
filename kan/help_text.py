@@ -14,6 +14,12 @@ def root_help_text() -> str:
 
     return f"""[bold]慢慢看 · 命令速记[/bold]
 
+[bold cyan]普通用户先从这里开始[/bold cyan]
+  kan web                   打开本地观察台：今日概览 / 自选 / 持仓 / 找股票
+  kan daily                 在终端查看一日事实概览
+  kan guide                 只看最常用的下一步
+  kan help                  查看这份完整命令表
+
 [bold cyan]自选股管理[/bold cyan]
   kan add 600519 000858       添加自选股（代码）
   cat codes.txt | kan add -   从 stdin 批量添加代码
@@ -42,7 +48,7 @@ def root_help_text() -> str:
   kan hold scan                                 只扫描真实持仓池
 
 [bold cyan]位置扫描[/bold cyan]
-  新手从 kan scan 和 kan find 开始
+  想用命令行时从 kan scan 开始
   kan scan                  默认池全景扫描（自选 ∪ 持仓）
   kan scan --all            全市场位置扫描（首次较慢）
   kan scan --only-watchlist  只扫描自选
@@ -52,7 +58,7 @@ def root_help_text() -> str:
   kan scan --compact        只展示短/中/长关键周期
   kan scan --periods 5,20,60,180  自定义 2-360 周期集合
   kan scan --high           全景扫描（高点模式）
-  kan scan -S               仅显示有共振信号的股票（--signal）
+  kan scan -S               仅显示多周期共振状态（--signal）
   kan scan --diff           显示与上次扫描的变化
 
 [bold cyan]低点/高点筛选[/bold cyan]
@@ -185,3 +191,23 @@ def print_root_help() -> None:
     from rich.console import Console
 
     Console().print(root_help_text())
+
+
+def start_help_text() -> str:
+    """无参数启动时只展示普通散户的最短路径。"""
+    return """[bold]慢慢看 · 从今天开始[/bold]
+
+  kan web       打开本地观察台（推荐）
+  kan daily     在终端看一日事实概览
+  kan guide     按目的查看下一步
+  kan help      查看完整命令表
+
+[dim]数据保存在本机 · 不登录 manmankan 服务 · 不云同步 / 遥测[/dim]
+"""
+
+
+def print_start_help() -> None:
+    """渲染普通用户最短入口。"""
+    from rich.console import Console
+
+    Console().print(start_help_text())

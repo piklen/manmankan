@@ -14,7 +14,7 @@ def _remove_by_industry(industry: str, yes: bool, group: str | None = None) -> N
     from kan.storage.watchlist import (
         GroupNotFoundError,
         load_watchlist,
-        save_watchlist,
+        remove_many,
     )
 
     try:
@@ -53,11 +53,10 @@ def _remove_by_industry(industry: str, yes: bool, group: str | None = None) -> N
         typer.echo("已取消")
         return
 
-    wl.stocks = [s for s in wl.stocks if s.symbol not in cons_codes]
-    save_watchlist(wl, group=group)
+    removed, actual_old, actual_new = remove_many(cons_codes, group=group)
     typer.echo(
-        f"✅ 已从{target_label}删除 {len(to_remove)} 只{board.name}股 · "
-        f"{state_label} {old_total} → {len(wl.stocks)} 只"
+        f"✅ 已从{target_label}删除 {len(removed)} 只{board.name}股 · "
+        f"{state_label} {actual_old} → {actual_new} 只"
     )
 
 
@@ -67,7 +66,7 @@ def _remove_by_theme(theme_query: str, yes: bool, group: str | None = None) -> N
     from kan.storage.watchlist import (
         GroupNotFoundError,
         load_watchlist,
-        save_watchlist,
+        remove_many,
     )
 
     try:
@@ -106,11 +105,10 @@ def _remove_by_theme(theme_query: str, yes: bool, group: str | None = None) -> N
         typer.echo("已取消")
         return
 
-    wl.stocks = [s for s in wl.stocks if s.symbol not in cons_codes]
-    save_watchlist(wl, group=group)
+    removed, actual_old, actual_new = remove_many(cons_codes, group=group)
     typer.echo(
-        f"✅ 已从{target_label}删除 {len(to_remove)} 只{themed.name}股 · "
-        f"{state_label} {old_total} → {len(wl.stocks)} 只"
+        f"✅ 已从{target_label}删除 {len(removed)} 只{themed.name}股 · "
+        f"{state_label} {actual_old} → {actual_new} 只"
     )
 
 

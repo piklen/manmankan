@@ -1,26 +1,102 @@
 {% extends "base.html" %}
 
-{% block title %}慢慢看 Web · 看盘台{% endblock %}
+{% block title %}今日概览 · 慢慢看{% endblock %}
 
 {% block content %}
 <section class="band" x-data="kanScanDesk(window.KAN_SCAN)" x-init="init()" x-cloak>
   <div class="band-title">
-    <span>{{ scan.source_name }}</span>
+    <div>
+      <strong>今天先看这三件事</strong>
+      <div class="meta">先看关键变化和极端位置，需要时再展开全部数据。</div>
+    </div>
     <div class="status-line">
-      <span class="meta">
-        {{ scan.stats.shown }}/{{ scan.stats.targets }} 只
-        {% if scan.stats.data_cutoff %} · 数据截止 {{ scan.stats.data_cutoff }}{% endif %}
-      </span>
-      {% if scan.stats.stale %}<span class="notice">数据可能滞后</span>{% endif %}
-      <input type="text" x-model="addCodes" placeholder="添加自选代码">
-      <button type="button" @click="addWatchlist()" :disabled="!addCodes.trim()">添加自选</button>
-      <span class="meta" x-show="watchlistMessage" x-text="watchlistMessage"></span>
-      <button class="primary" type="button" @click="startFetch()" :disabled="fetching">
-        <span x-text="fetching ? '补数据中' : '补数据'"></span>
-      </button>
-      <span class="meta" x-show="fetchMessage" x-text="fetchMessage"></span>
+      <template x-if="scan.stats.targets === 0">
+        <button class="primary" type="button" @click="document.getElementById('watchlist-codes')?.focus()">先添加自选</button>
+      </template>
+      <template x-if="scan.stats.targets > 0">
+        <button class="primary" type="button" @click="startFetch()" :disabled="fetching">
+          <span x-text="fetching ? '更新中' : scan.freshness.action_label"></span>
+        </button>
+      </template>
     </div>
   </div>
+
+  <div class="freshness-banner" :class="`freshness-${scan.freshness.status}`" role="status">
+    <div>
+      <strong x-text="scan.freshness.title">{{ scan.freshness.title }}</strong>
+      <div class="meta" x-text="scan.freshness.detail">{{ scan.freshness.detail }}</div>
+    </div>
+    <span class="meta" aria-live="polite" x-text="fetchMessage"></span>
+  </div>
+
+  <div class="summary-grid daily-summary" aria-label="今日概览">
+    <div class="summary-cell">
+      <div class="field-label">180日接近低位</div>
+      <div class="field-value"><span x-text="scan.overview.low_180_count">{{ scan.overview.low_180_count }}</span> 只</div>
+      <div class="meta">位置不高于 10%</div>
+    </div>
+    <div class="summary-cell">
+      <div class="field-label">180日接近高位</div>
+      <div class="field-value"><span x-text="scan.overview.high_180_count">{{ scan.overview.high_180_count }}</span> 只</div>
+      <div class="meta">位置不低于 90%</div>
+    </div>
+    <div class="summary-cell">
+      <div class="field-label">关键位置变化</div>
+      <div class="field-value"><span x-text="scan.overview.change_count">{{ scan.overview.change_count }}</span> 条</div>
+      <div class="meta" x-text="scan.overview.comparison_date ? `对比 ${scan.overview.comparison_date}` : '暂无上一份数据'"></div>
+    </div>
+    <div class="summary-cell">
+      <div class="field-label">本次已扫描</div>
+      <div class="field-value"><span x-text="scan.overview.scanned_count">{{ scan.overview.scanned_count }}</span> 只</div>
+      <div class="meta">自选与持仓合并去重</div>
+    </div>
+  </div>
+
+  <div class="overview-grid">
+    <section class="overview-section" aria-labelledby="changes-title">
+      <h2 id="changes-title">和上一份数据相比</h2>
+      <template x-if="!scan.overview.comparison_date">
+        <p class="empty-inline">积累两份不同交易日的数据后，这里会显示进入或离开关键位置区的变化。</p>
+      </template>
+      <template x-if="scan.overview.comparison_date && scan.overview.changes.length === 0">
+        <p class="empty-inline">没有股票进入或离开关键位置区。</p>
+      </template>
+      <ul class="overview-list" x-show="scan.overview.changes.length > 0">
+        <template x-for="change in scan.overview.changes" :key="`${change.code}-${change.period}-${change.description}`">
+          <li>
+            <a :href="kanSessionUrl(`/stock/${change.code}`)"><strong x-text="change.name"></strong> <span class="code" x-text="change.code"></span></a>
+            <span x-text="change.description"></span>
+          </li>
+        </template>
+      </ul>
+    </section>
+    <section class="overview-section" aria-labelledby="low-title">
+      <h2 id="low-title">180日接近低位</h2>
+      <p class="empty-inline" x-show="scan.overview.low_180.length === 0">当前没有股票处于该区间。</p>
+      <ul class="overview-list compact-list">
+        <template x-for="row in scan.overview.low_180" :key="row.code">
+          <li><a :href="kanSessionUrl(`/stock/${row.code}`)"><strong x-text="row.name"></strong> <span x-text="formatPct(row.position_180)"></span></a></li>
+        </template>
+      </ul>
+    </section>
+    <section class="overview-section" aria-labelledby="high-title">
+      <h2 id="high-title">180日接近高位</h2>
+      <p class="empty-inline" x-show="scan.overview.high_180.length === 0">当前没有股票处于该区间。</p>
+      <ul class="overview-list compact-list">
+        <template x-for="row in scan.overview.high_180" :key="row.code">
+          <li><a :href="kanSessionUrl(`/stock/${row.code}`)"><strong x-text="row.name"></strong> <span x-text="formatPct(row.position_180)"></span></a></li>
+        </template>
+      </ul>
+    </section>
+  </div>
+
+  <div class="form-row watchlist-entry">
+    <label for="watchlist-codes"><strong>添加自选</strong></label>
+    <input id="watchlist-codes" type="text" inputmode="numeric" x-model="addCodes" placeholder="输入 6 位代码，多个代码用空格分隔">
+    <button type="button" @click="addWatchlist()" :disabled="!addCodes.trim()">添加</button>
+    <span class="meta" role="status" aria-live="polite" x-show="watchlistMessage" x-text="watchlistMessage"></span>
+  </div>
+
   <div class="index-strip">
     <template x-if="indexLoading">
       <span>指数数据读取中</span>
@@ -44,11 +120,15 @@
   </div>
 
   <div class="toolbar">
-    <div class="tabs" role="tablist" aria-label="视图">
-      <button type="button" :class="{active: activeTab === 'table'}" @click="setTab('table')">
+    <div>
+      <strong>全部位置数据</strong>
+      <span class="meta">默认展示 30/60/180 日三个关键周期</span>
+    </div>
+    <div class="tabs" role="tablist" aria-label="数据视图">
+      <button id="scan-tab-table" type="button" role="tab" aria-controls="scan-panel-table" :aria-selected="activeTab === 'table'" :class="{active: activeTab === 'table'}" @click="setTab('table')">
         数据表
       </button>
-      <button type="button" :class="{active: activeTab === 'heatmap'}" @click="setTab('heatmap')">
+      <button id="scan-tab-heatmap" type="button" role="tab" aria-controls="scan-panel-heatmap" :aria-selected="activeTab === 'heatmap'" :class="{active: activeTab === 'heatmap'}" @click="setTab('heatmap')">
         位置热力图
       </button>
     </div>
@@ -75,7 +155,7 @@
     <div class="empty">本地缓存暂无可展示数据</div>
   </template>
 
-  <div x-show="scan.rows.length > 0 && activeTab === 'table'" class="table-wrap">
+  <div id="scan-panel-table" role="tabpanel" aria-labelledby="scan-tab-table" x-show="scan.rows.length > 0 && activeTab === 'table'" class="table-wrap">
     <table>
       <thead>
         <tr>
@@ -91,13 +171,12 @@
       </thead>
       <tbody>
         <template x-for="(row, index) in sortedRows" :key="row.code">
-          <tr tabindex="0" @click="openStock(row.code)" @keydown.enter="openStock(row.code)">
+          <tr>
             <td x-text="index + 1"></td>
             <td>
-              <span x-text="row.code"></span>
-              <span class="code" x-text="row.name"></span>
-              <span class="tag" x-show="row.in_watchlist">⭐ 自选</span>
-              <span class="tag" x-show="row.in_holding">💰 持仓</span>
+              <a class="stock-link" :href="kanSessionUrl(`/stock/${row.code}`)"><span x-text="row.code"></span> <span class="code" x-text="row.name"></span></a>
+              <span class="tag" x-show="row.in_watchlist">自选</span>
+              <span class="tag" x-show="row.in_holding">持仓</span>
             </td>
             <td x-text="formatPrice(row.price)"></td>
             {% for p in scan.periods %}
@@ -117,8 +196,8 @@
     </table>
   </div>
 
-  <div x-show="scan.rows.length > 0 && activeTab === 'heatmap'" x-effect="activeTab === 'heatmap' && renderHeatmap()">
-    <div id="scan-heatmap" class="chart tall" aria-label="位置热力图"></div>
+  <div id="scan-panel-heatmap" role="tabpanel" aria-labelledby="scan-tab-heatmap" x-show="scan.rows.length > 0 && activeTab === 'heatmap'" x-effect="activeTab === 'heatmap' && renderHeatmap()">
+    <div id="scan-heatmap" class="chart tall" role="img" aria-label="股票在 30、60、180 日价格区间中的位置热力图"></div>
     <div class="toolbar">
       <span class="meta">0=N日最低 · 100=N日最高</span>
       <div class="controls">

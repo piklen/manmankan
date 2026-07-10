@@ -7,9 +7,6 @@
 """
 from __future__ import annotations
 
-import sys
-from unittest.mock import MagicMock
-
 import pandas as pd
 import pytest
 
@@ -17,13 +14,6 @@ from kan.core.models import Theme
 from kan.core.scanner import TrendResult
 from kan.data import theme_leaderboard
 from kan.data.boards import ThemeDataUnavailableError
-
-
-@pytest.fixture(autouse=True)
-def _mock_adata(monkeypatch):
-    monkeypatch.setitem(sys.modules, "adata", MagicMock())
-    monkeypatch.setitem(sys.modules, "adata.stock", MagicMock())
-    monkeypatch.setitem(sys.modules, "adata.stock.market", MagicMock())
 
 
 @pytest.fixture(autouse=True)
@@ -214,7 +204,7 @@ def test_load_leaderboard_all_success(monkeypatch):
     )
 
     results, errors, source, _diag = theme_leaderboard.load_theme_leaderboard(progress_console=None)
-    assert source == "em"  # 没配 TuShare token · 走 adata EM 路径
+    assert source == "em"  # 没配 TuShare token · 走 AkShare EM 路径
 
     assert len(results) == 3
     assert errors == []
@@ -237,7 +227,7 @@ def test_load_leaderboard_partial_failure(monkeypatch):
     monkeypatch.setattr(theme_leaderboard, "fetch_theme_kline", _fake_fetch)
 
     results, errors, source, _diag = theme_leaderboard.load_theme_leaderboard(progress_console=None)
-    assert source == "em"  # 没配 TuShare token · 走 adata EM 路径
+    assert source == "em"  # 没配 TuShare token · 走 AkShare EM 路径
 
     # 5 题材中 3 个 code 末位 0/2/4 · 2 个 1/3 挂
     assert len(results) == 3
@@ -260,7 +250,7 @@ def test_load_leaderboard_empty_kline_records_error(monkeypatch):
     )
 
     results, errors, source, _diag = theme_leaderboard.load_theme_leaderboard(progress_console=None)
-    assert source == "em"  # 没配 TuShare token · 走 adata EM 路径
+    assert source == "em"  # 没配 TuShare token · 走 AkShare EM 路径
 
     assert results == []
     assert len(errors) == 1

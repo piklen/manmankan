@@ -1,19 +1,9 @@
 """kan theme list / search 子命令树测试。"""
-import sys
-from unittest.mock import MagicMock
-
 import pytest
 from typer.testing import CliRunner
 
 from kan.cli import app
 from kan.core.models import Theme
-
-
-@pytest.fixture(autouse=True)
-def _mock_adata(monkeypatch):
-    monkeypatch.setitem(sys.modules, "adata", MagicMock())
-    monkeypatch.setitem(sys.modules, "adata.stock", MagicMock())
-    monkeypatch.setitem(sys.modules, "adata.stock.info", MagicMock())
 
 
 @pytest.fixture(autouse=True)

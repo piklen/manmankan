@@ -113,11 +113,9 @@ def check_for_updates(force: bool = False) -> UpdateInfo:
     if latest is None:
         return UpdateInfo(current, None, False, False)
 
-    cfg["last_check_date"] = today
-    cfg["latest_seen_version"] = latest
     # cache 写失败不影响检查结果
     with contextlib.suppress(OSError):
-        config.save(cfg)
+        config.update(last_check_date=today, latest_seen_version=latest)
 
     return UpdateInfo(
         current=current,

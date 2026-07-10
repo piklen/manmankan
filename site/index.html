@@ -16,9 +16,9 @@
   </script>
 
   <!-- Primary SEO -->
-  <title>慢慢看 · manmankan · A 股本地数据筛选器 · 告诉你坐标，不替你决策</title>
-  <meta name="description" content="慢慢看 (manmankan) 是人和 AI 共用的 A 股本地数据筛选器 · 告诉你坐标，不替你决策 · 多周期位置百分位 + 共振 + 用户主导筛选 + JSON/MCP 输出 · 本地存储 · 不登录 · 不上传自选 · 不遥测 · AGPL-3.0 开源 · 支持 mac/Linux/Windows。" />
-  <meta name="keywords" content="慢慢看,manmankan,A股,自选股,股票筛选,筛选 DSL,位置百分位,共振信号,命令行工具,CLI,股票工具,AI workflow,open source,AGPL-3.0,本地运行,Python,散户,长线投资,K线,板块,题材扫描,东方财富热榜" />
+  <title>慢慢看 · 普通散户的本地 A 股观察台</title>
+  <meta name="description" content="慢慢看 (manmankan) 是普通 A 股散户的本地观察台：今日变化、自选、持仓、关键周期位置和中文条件筛选。数据保存在本机，不登录 manmankan 服务、不云同步、不遥测；同时为 AI 和开发者提供 JSON/MCP。" />
+  <meta name="keywords" content="慢慢看,manmankan,A股,自选股,股票筛选,筛选 DSL,位置百分位,共振状态,命令行工具,CLI,股票工具,AI workflow,open source,AGPL-3.0,本地运行,Python,散户,长线投资,K线,板块,题材扫描,东方财富热榜" />
   <meta name="author" content="piklen" />
   <meta name="robots" content="index,follow,max-image-preview:large" />
   <meta name="googlebot" content="index,follow" />
@@ -37,23 +37,23 @@
   <!-- Open Graph (FB / WeChat / Telegram / Discord) -->
   <meta property="og:type" content="website" />
   <meta property="og:site_name" content="慢慢看 · manmankan" />
-  <meta property="og:title" content="慢慢看 · manmankan · 告诉你坐标，不替你决策" />
-  <meta property="og:description" content="人和 AI 共用的 A 股本地数据筛选器。多周期位置 + 共振 + 用户主导筛选 + JSON/MCP 输出。纯命令行 · 完全本地 · 0 telemetry · AGPL-3.0 开源。" />
+  <meta property="og:title" content="慢慢看 · 普通散户的本地 A 股观察台" />
+  <meta property="og:description" content="先看今天发生了什么，再展开数据。今日变化、自选、持仓和关键周期位置全部保存在本机。" />
   <meta property="og:url" content="https://piklen.github.io/manmankan/" />
   <meta property="og:image" content="https://piklen.github.io/manmankan/og.png" />
   <meta property="og:image:type" content="image/png" />
   <meta property="og:image:width" content="1280" />
   <meta property="og:image:height" content="640" />
-  <meta property="og:image:alt" content="慢慢看 · A 股本地数据筛选器 · 告诉你坐标，不替你决策" />
+  <meta property="og:image:alt" content="慢慢看 · 普通 A 股散户的本地观察台" />
   <meta property="og:locale" content="zh_CN" />
   <meta property="og:locale:alternate" content="en_US" />
 
   <!-- Twitter / X Card -->
   <meta name="twitter:card" content="summary_large_image" />
-  <meta name="twitter:title" content="慢慢看 · manmankan" />
-  <meta name="twitter:description" content="A 股本地数据筛选器 · 告诉你坐标，不替你决策 · 本地存储 · 不上传自选 · AGPL-3.0" />
+  <meta name="twitter:title" content="慢慢看 · 普通散户的本地 A 股观察台" />
+  <meta name="twitter:description" content="普通 A 股散户的本地观察台 · 今日变化、自选、持仓和关键周期位置都在本机" />
   <meta name="twitter:image" content="https://piklen.github.io/manmankan/og.png" />
-  <meta name="twitter:image:alt" content="慢慢看 · A 股本地数据筛选器 · 告诉你坐标，不替你决策" />
+  <meta name="twitter:image:alt" content="慢慢看 · 普通 A 股散户的本地观察台" />
 
   <!-- JSON-LD · Schema.org SoftwareApplication (Google rich result) -->
   <script type="application/ld+json">
@@ -62,7 +62,7 @@
     "@type": "SoftwareApplication",
     "name": "manmankan",
     "alternateName": "慢慢看",
-    "description": "A 股本地数据筛选器 · 告诉你坐标，不替你决策 · 多周期位置百分位 + 共振信号 + 用户主导筛选 + JSON/MCP 输出 · 本地存储",
+    "description": "普通 A 股散户的本地观察台 · 今日变化、自选、持仓、多周期位置和中文条件筛选 · 本地存储",
     "applicationCategory": "FinanceApplication",
     "applicationSubCategory": "InvestmentTool",
     "operatingSystem": "macOS, Linux, Windows",
@@ -141,11 +141,9 @@
       transition: background-color 0.3s ease, color 0.3s ease;
     }
 
-    /* ===== Hero background · 微妙径向渐变 ===== */
+    /* ===== Hero background ===== */
     .hero-bg {
-      background:
-        radial-gradient(ellipse 80% 50% at 50% -20%, var(--accent-soft), transparent),
-        radial-gradient(ellipse 60% 40% at 100% 0%, rgba(96, 165, 250, 0.08), transparent);
+      background: var(--bg);
     }
 
     /* ===== Terminal mock · 始终保持暗色 (CLI brand) ===== */
@@ -173,14 +171,6 @@
     .pct-lo { color: #34d399; font-weight: 700; }
     .pct-hi { color: #fb923c; font-weight: 700; }
     .resonance { color: #fbbf24; font-weight: 800; }
-
-    /* ===== Gradient brand text ===== */
-    .gradient-text {
-      background: linear-gradient(120deg, #34d399 0%, #60a5fa 50%, #a78bfa 100%);
-      -webkit-background-clip: text;
-      background-clip: text;
-      color: transparent;
-    }
 
     /* ===== Card · 通用 ===== */
     .card {
@@ -353,7 +343,7 @@
         </a>
       </div>
       <div class="flex items-center gap-1 sm:gap-4 text-sm">
-        <a href="#ai" class="hidden sm:inline px-2 py-1" style="color: var(--text-soft);">AI</a>
+        <a href="#retail" class="hidden sm:inline px-2 py-1" style="color: var(--text-soft);">怎么用</a>
         <a href="#install" class="hidden sm:inline px-2 py-1" style="color: var(--text-soft);">安装</a>
         <a href="#faq" class="hidden sm:inline px-2 py-1" style="color: var(--text-soft);">FAQ</a>
         <a href="https://pypi.org/project/manmankan/" class="px-2 py-1" style="color: var(--text-soft);">PyPI</a>
@@ -367,52 +357,33 @@
 
   <!-- ============ Hero ============ -->
   <section id="top" class="hero-bg relative">
-    <div class="max-w-5xl mx-auto px-6 pt-20 pb-20 sm:pt-32 sm:pb-28 text-center">
+    <div class="max-w-5xl mx-auto px-6 pt-14 pb-12 sm:pt-24 sm:pb-16 text-center">
       <div class="inline-flex items-center gap-2 px-3 py-1.5 mb-8 text-xs rounded-full" style="background: var(--bg-card); border: 1px solid var(--border); color: var(--text-soft);">
         <span class="w-1.5 h-1.5 rounded-full" style="background: var(--accent);"></span>
         <span>Alpha · AGPL-3.0 · 本地存储</span>
       </div>
 
-      <h1 class="text-5xl sm:text-7xl lg:text-8xl font-extrabold tracking-tight mb-7 leading-[1.05]">
-        告诉你<span class="gradient-text">坐标</span>
-        <br />
-        <span style="color: var(--text-muted);" class="text-4xl sm:text-6xl lg:text-7xl font-bold">不替你决策</span>
-      </h1>
+      <h1 class="text-5xl sm:text-7xl lg:text-8xl font-extrabold tracking-tight mb-7 leading-[1.05]" style="color: var(--text);">慢慢看</h1>
 
       <p class="text-lg sm:text-xl mb-12 leading-relaxed max-w-3xl mx-auto" style="color: var(--text-soft);">
-        <b style="color: var(--text);">慢慢看</b> 是人和 AI 共用的 A 股本地数据筛选器 ——
-        把自选、行业、题材、热榜、全市场和外部代码池整理成
-        <b style="color: var(--text);">多周期位置</b>、<span class="resonance font-mono px-1.5">×N</span> 共振、用户主导筛选、低噪声 JSON 和本地 MCP。
-        工具只给可复核的数据坐标，后续判断由你负责。
+        <b style="color: var(--text);">慢慢看</b> 是普通 A 股散户的本地观察台。
+        它先整理自选和持仓的<b style="color: var(--text);">今日关键变化</b>、30 / 60 / 180 日位置与数据截止日，
+        需要时再展开完整数据。不给买卖答案，但让每一步判断都有数据可查。
       </p>
 
-      <!-- Click-to-copy install command -->
-      <div class="max-w-md mx-auto mb-8">
-        <button type="button" class="copy-card" data-copy="uv tool install manmankan" onclick="copyCmd(this)">
-          <span class="copy-hint">点击复制 ↗</span>
-          <span style="color: var(--accent);" class="font-bold">$</span>
-          <span style="color: var(--text);" class="flex-1 text-sm sm:text-base font-medium" data-copy-label>uv tool install manmankan</span>
-          <span class="feedback text-sm">✓ 已复制</span>
-        </button>
-      </div>
-
       <div class="flex flex-wrap justify-center gap-3">
-        <a href="https://github.com/piklen/manmankan" class="btn btn-primary">
-          <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor"><path d="M12 .297c-6.63 0-12 5.373-12 12 0 5.303 3.438 9.8 8.205 11.385.6.113.82-.258.82-.577 0-.285-.01-1.04-.015-2.04-3.338.724-4.042-1.61-4.042-1.61C4.422 18.07 3.633 17.7 3.633 17.7c-1.087-.744.084-.729.084-.729 1.205.084 1.838 1.236 1.838 1.236 1.07 1.835 2.809 1.305 3.495.998.108-.776.417-1.305.76-1.605-2.665-.3-5.466-1.332-5.466-5.93 0-1.31.465-2.38 1.235-3.22-.135-.303-.54-1.523.105-3.176 0 0 1.005-.322 3.3 1.23.96-.267 1.98-.399 3-.405 1.02.006 2.04.138 3 .405 2.28-1.552 3.285-1.23 3.285-1.23.645 1.653.24 2.873.12 3.176.765.84 1.23 1.91 1.23 3.22 0 4.61-2.805 5.625-5.475 5.92.42.36.81 1.096.81 2.22 0 1.606-.015 2.896-.015 3.286 0 .315.21.69.825.57C20.565 22.092 24 17.592 24 12.297c0-6.627-5.373-12-12-12"/></svg>
-          GitHub · Star
+        <a href="#retail" class="btn btn-primary">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 5v14"/><path d="m19 12-7 7-7-7"/></svg>
+          看看实际界面
         </a>
-        <a href="https://pypi.org/project/manmankan/" class="btn btn-secondary">
+        <a href="#install" class="btn btn-secondary">
           <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/><polyline points="3.27 6.96 12 12.01 20.73 6.96"/><line x1="12" y1="22.08" x2="12" y2="12"/></svg>
-          PyPI 安装详情
-        </a>
-        <a href="#ai" class="btn btn-secondary">
-          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2v4"/><path d="M12 18v4"/><path d="m4.93 4.93 2.83 2.83"/><path d="m16.24 16.24 2.83 2.83"/><path d="M2 12h4"/><path d="M18 12h4"/><path d="m4.93 19.07 2.83-2.83"/><path d="m16.24 7.76 2.83-2.83"/><circle cx="12" cy="12" r="3"/></svg>
-          AI 快速接入
+          安装并打开
         </a>
       </div>
 
       <!-- scroll hint -->
-      <div class="mt-20 scroll-hint" style="color: var(--text-muted);">
+      <div class="mt-12 scroll-hint" style="color: var(--text-muted);">
         <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="mx-auto">
           <polyline points="6 9 12 15 18 9"/>
         </svg>
@@ -420,11 +391,51 @@
     </div>
   </section>
 
-  <!-- ============ AI quickstart ============ -->
-  <section id="ai" class="max-w-6xl mx-auto px-6 py-20">
+  <!-- ============ 普通散户主路径 ============ -->
+  <section id="retail" class="max-w-6xl mx-auto px-6 py-12 sm:py-20">
     <div class="text-center mb-12">
-      <h2 class="text-3xl sm:text-4xl font-bold mb-3">AI agent 两分钟接入</h2>
+      <h2 class="text-3xl sm:text-4xl font-bold mb-3">打开就先看今天</h2>
       <p class="max-w-3xl mx-auto leading-relaxed" style="color: var(--text-soft);">
+        不必记命令，也不用先理解十个周期。慢慢看先把数据是否最新、关键位置和上一份数据以来的变化整理好，
+        你再决定要不要点开明细继续核对。
+      </p>
+    </div>
+
+    <img
+      src="web-daily-overview.png"
+      alt="慢慢看今日概览：数据新鲜度、关键位置变化、自选和持仓"
+      width="1280"
+      height="800"
+      loading="eager"
+      style="display:block;width:100%;height:auto;border:1px solid var(--border);border-radius:8px;box-shadow:var(--term-shadow);"
+    />
+
+    <div class="grid md:grid-cols-3 gap-5 mt-10">
+      <div>
+        <h3 class="text-lg font-bold mb-3">1 · 添加自己的股票</h3>
+        <p class="text-sm leading-relaxed" style="color: var(--text-soft);">在网页里添加自选，录入或修改持仓与现金；不再要求回到终端输入命令。</p>
+      </div>
+      <div>
+        <h3 class="text-lg font-bold mb-3">2 · 确认数据日期</h3>
+        <p class="text-sm leading-relaxed" style="color: var(--text-soft);">明确显示当前截止日、正常应截止日和更新状态，避免用过期行情做判断。</p>
+      </div>
+      <div>
+        <h3 class="text-lg font-bold mb-3">3 · 再展开证据</h3>
+        <p class="text-sm leading-relaxed" style="color: var(--text-soft);">首页只看 30 / 60 / 180 日关键周期；个股页、完整数据和中文条件筛选按需展开。</p>
+      </div>
+    </div>
+  </section>
+
+  <hr class="divider-grad max-w-6xl mx-auto" />
+
+  <!-- ============ AI quickstart ============ -->
+  <details id="ai" class="max-w-6xl mx-auto px-6 py-8">
+    <summary class="text-center text-lg font-semibold" style="color:var(--text-soft);">AI / 开发者入口（第二入口）</summary>
+    <div class="pt-12">
+    <div class="text-center mb-12">
+      <h2 class="text-3xl sm:text-4xl font-bold mb-3">AI 与开发者入口</h2>
+      <p class="max-w-3xl mx-auto leading-relaxed" style="color: var(--text-soft);">
+        普通用户优先使用本地观察台；下面是需要自动化、JSON 或 MCP 时的第二入口。
         先用 schema 自发现拿到机器可读契约，再用结构 smoke 确认 JSON 输出，随后跑真实行情坐标；
         需要工具调用时，用 MCP dry-run 预览本机客户端配置。
         首跑从 <code class="ci">kan find --codes ... --format json</code> 开始，避免把代码池解析误判成行情取数问题。
@@ -439,7 +450,7 @@
           <span style="color: var(--accent);">$</span> <span data-copy-label>kan schema --format json --section find --compact</span>
         </div>
         <p class="px-5 mb-5 text-xs leading-relaxed" style="color: var(--text-soft);">一次拿到 find DSL、字段白名单、缺数据语义和低上下文机器契约。</p>
-        <span class="feedback" style="bottom: 16px; right: 22px; top: auto;">✓ 已复制</span>
+        <span class="feedback" aria-hidden="true" style="bottom: 16px; right: 22px; top: auto;">✓ 已复制</span>
       </button>
 
       <button type="button" class="copy-card flex-col items-stretch !p-0 overflow-hidden" data-copy="kan find --codes 600519,000858 --format json" onclick="copyCmd(this)">
@@ -449,7 +460,7 @@
           <span style="color: var(--accent);">$</span> <span data-copy-label>kan find --codes 600519,000858 --format json</span>
         </div>
         <p class="px-5 mb-5 text-xs leading-relaxed" style="color: var(--text-soft);">验证安装、退出码、JSON envelope 和免责声明；结果只代表显式代码池事实。</p>
-        <span class="feedback" style="bottom: 16px; right: 22px; top: auto;">✓ 已复制</span>
+        <span class="feedback" aria-hidden="true" style="bottom: 16px; right: 22px; top: auto;">✓ 已复制</span>
       </button>
 
       <button type="button" class="copy-card flex-col items-stretch !p-0 overflow-hidden" data-copy="kan scan --codes 600519,000858 --periods 5,20,60,180 --format json" onclick="copyCmd(this)">
@@ -459,7 +470,7 @@
           <span style="color: var(--accent);">$</span> <span data-copy-label>kan scan --codes 600519,000858 --periods 5,20,60,180 --format json</span>
         </div>
         <p class="px-5 mb-5 text-xs leading-relaxed" style="color: var(--text-soft);">输出多周期位置、区间涨跌、共振和数据截止日；首次缓存可能需要几十秒。</p>
-        <span class="feedback" style="bottom: 16px; right: 22px; top: auto;">✓ 已复制</span>
+        <span class="feedback" aria-hidden="true" style="bottom: 16px; right: 22px; top: auto;">✓ 已复制</span>
       </button>
 
       <button type="button" class="copy-card flex-col items-stretch !p-0 overflow-hidden" data-copy="kan mcp install --dry-run --format json" onclick="copyCmd(this)">
@@ -469,7 +480,7 @@
           <span style="color: var(--accent);">$</span> <span data-copy-label>kan mcp install --dry-run --format json</span>
         </div>
         <p class="px-5 mb-5 text-xs leading-relaxed" style="color: var(--text-soft);">机器可读预览会写入哪些用户级客户端配置；确认后再指定 client 或去掉 dry-run。</p>
-        <span class="feedback" style="bottom: 16px; right: 22px; top: auto;">✓ 已复制</span>
+        <span class="feedback" aria-hidden="true" style="bottom: 16px; right: 22px; top: auto;">✓ 已复制</span>
       </button>
     </div>
 
@@ -485,12 +496,15 @@
       ·
       <a href="https://github.com/piklen/manmankan/blob/main/docs/find.md" style="color: var(--accent);" class="hover:underline">JSON contract</a>
     </p>
-  </section>
+    </div>
+  </details>
 
   <hr class="divider-grad max-w-6xl mx-auto" />
 
   <!-- ============ Terminal mock ============ -->
-  <section class="max-w-5xl mx-auto px-6 pb-20">
+  <details class="max-w-5xl mx-auto px-6 py-8">
+    <summary class="text-center text-lg font-semibold" style="color:var(--text-soft);">终端 / CLI 示例（进阶）</summary>
+    <div class="pt-10">
     <div class="text-center mb-8">
       <h2 class="text-2xl sm:text-3xl font-bold mb-3">一屏看完全部自选</h2>
       <p style="color: var(--text-soft);">真实终端输出 · 数据为占位示意</p>
@@ -522,7 +536,8 @@
     <p class="text-center text-xs mt-5 font-mono" style="color: var(--text-muted);">
       ↑ 三大指数仅用于占位示意 · 不构成任何形式的推荐
     </p>
-  </section>
+    </div>
+  </details>
 
   <hr class="divider-grad max-w-6xl mx-auto" />
 
@@ -541,7 +556,7 @@
         <h3 class="text-lg font-bold mb-4">做什么</h3>
         <ul class="text-sm space-y-2.5 leading-relaxed" style="color: var(--text-soft);">
           <li>· 多周期位置百分位扫描</li>
-          <li>· 多周期共振信号（同触低 / 触高）</li>
+          <li>· 多周期共振状态（同时接近低位 / 高位）</li>
           <li>· 单股详情 · 多股对比</li>
           <li>· 行业 / 题材 / 热榜 4 类对象切换</li>
           <li>· 涨跌停 / ST 标记 · 5 档量能识别</li>
@@ -586,8 +601,8 @@
   <!-- ============ 安装 ============ -->
   <section id="install" class="max-w-6xl mx-auto px-6 py-20">
     <div class="text-center mb-12">
-      <h2 class="text-3xl sm:text-4xl font-bold mb-3">30 秒装好</h2>
-      <p style="color: var(--text-soft);">Python 3.11+ · 任意命令点击即复制 · 装机平均 1-2 分钟</p>
+      <h2 class="text-3xl sm:text-4xl font-bold mb-3">约 1-2 分钟装好</h2>
+      <p style="color: var(--text-soft);">Python 3.11+ · 安装命令点击即复制</p>
     </div>
 
     <!-- 推荐 · uv 安装 -->
@@ -601,7 +616,7 @@
         <div class="px-5 py-4 text-xs sm:text-sm font-mono break-all leading-relaxed" style="color: var(--text);">
           <span style="color: var(--accent);">$</span> <span data-copy-label>curl -LsSf https://astral.sh/uv/install.sh | sh && uv tool install manmankan</span>
         </div>
-        <span class="feedback" style="bottom: 16px; right: 22px; top: auto;">✓ 已复制</span>
+        <span class="feedback" aria-hidden="true" style="bottom: 16px; right: 22px; top: auto;">✓ 已复制</span>
       </button>
 
       <button type="button" class="copy-card flex-col items-stretch !p-0 overflow-hidden" data-copy='irm https://astral.sh/uv/install.ps1 | iex; uv tool install manmankan' onclick="copyCmd(this)" style="cursor: pointer;">
@@ -613,12 +628,17 @@
         <div class="px-5 py-4 text-xs sm:text-sm font-mono break-all leading-relaxed" style="color: var(--text);">
           <span style="color: var(--accent);">&gt;</span> <span data-copy-label>irm https://astral.sh/uv/install.ps1 | iex; uv tool install manmankan</span>
         </div>
-        <span class="feedback" style="bottom: 16px; right: 22px; top: auto;">✓ 已复制</span>
+        <span class="feedback" aria-hidden="true" style="bottom: 16px; right: 22px; top: auto;">✓ 已复制</span>
       </button>
     </div>
 
-    <!-- Windows JSON 首跑验证 -->
-    <div class="max-w-4xl mx-auto mb-6">
+    <!-- Windows JSON 首跑验证 · AI / 开发者第二入口 -->
+    <details class="max-w-4xl mx-auto mb-6 card p-5">
+      <summary class="font-medium flex items-center justify-between gap-3">
+        <span>AI / 开发者：Windows JSON 首跑验证</span>
+        <span class="chevron" aria-hidden="true">⌄</span>
+      </summary>
+      <div class="mt-4">
       <button type="button" class="copy-card flex-col items-stretch !p-0 overflow-hidden" data-copy="$env:KAN_NO_UPDATE_CHECK = &quot;1&quot;&#10;$env:PYTHONUTF8 = &quot;1&quot;&#10;$env:NO_COLOR = &quot;1&quot;&#10;kan find --codes 600519,000858 --format json" onclick="copyCmd(this)" style="cursor: pointer;">
         <span class="copy-hint">点击复制 ↗</span>
         <div class="px-4 py-2.5 text-xs font-mono flex flex-wrap items-center gap-2 border-b" style="background: var(--bg-soft); border-color: var(--border); color: var(--text-muted);">
@@ -632,9 +652,10 @@ kan find --codes 600519,000858 --format json</span></div>
         <div class="px-5 pb-4 text-xs sm:text-sm text-left leading-relaxed" style="color: var(--text-soft);">
           不拉行情；只验证安装、入口、JSON envelope、免责声明和 Windows UTF-8 输出，适合新用户或 AI agent 做安装 smoke。
         </div>
-        <span class="feedback" style="bottom: 16px; right: 22px; top: auto;">✓ 已复制</span>
+        <span class="feedback" aria-hidden="true" style="bottom: 16px; right: 22px; top: auto;">✓ 已复制</span>
       </button>
-    </div>
+      </div>
+    </details>
 
     <!-- 老手 3 行 -->
     <div class="max-w-4xl mx-auto">
@@ -643,23 +664,23 @@ kan find --codes 600519,000858 --format json</span></div>
         <button type="button" class="copy-card !py-3" data-copy="uv tool install manmankan" onclick="copyCmd(this)">
           <span style="color: var(--accent);" class="font-bold">$</span>
           <span class="text-sm" data-copy-label>uv tool install manmankan</span>
-          <span class="feedback text-xs">✓</span>
+          <span class="feedback text-xs" aria-hidden="true">✓</span>
         </button>
         <button type="button" class="copy-card !py-3" data-copy="pipx install manmankan" onclick="copyCmd(this)">
           <span style="color: var(--accent);" class="font-bold">$</span>
           <span class="text-sm" data-copy-label>pipx install manmankan</span>
-          <span class="feedback text-xs">✓</span>
+          <span class="feedback text-xs" aria-hidden="true">✓</span>
         </button>
         <button type="button" class="copy-card !py-3" data-copy="python -m pip install manmankan" onclick="copyCmd(this)">
           <span style="color: var(--accent);" class="font-bold">$</span>
           <span class="text-sm" data-copy-label>python -m pip install manmankan</span>
-          <span class="feedback text-xs">✓</span>
+          <span class="feedback text-xs" aria-hidden="true">✓</span>
         </button>
       </div>
     </div>
 
     <div class="max-w-4xl mx-auto mt-6 p-4 rounded-lg text-sm leading-relaxed" style="background: var(--bg-card); border: 1px solid var(--border); color: var(--text-soft);">
-      Windows 首次复制 JSON 时，直接用上方「Windows · PowerShell JSON 首跑验证」卡片。
+      AI / 开发者在 Windows 首次验证 JSON 时，展开上方「Windows JSON 首跑验证」。
       这条结构 smoke 不请求行情数据；完整样本见
       <a href="https://github.com/piklen/manmankan/blob/main/docs/china-quickstart.md#2-windows--powershell-首跑样本" style="color: var(--accent);" class="hover:underline">Windows / PowerShell 首跑说明</a>。
     </div>
@@ -677,7 +698,7 @@ kan find --codes 600519,000858 --format json</span></div>
   <section class="max-w-4xl mx-auto px-6 py-20">
     <div class="text-center mb-12">
       <h2 class="text-3xl sm:text-4xl font-bold mb-3">装好之后</h2>
-      <p style="color: var(--text-soft);">打开新终端窗口 · 3 行命令开始</p>
+      <p style="color: var(--text-soft);">打开新终端窗口，只运行一条命令</p>
     </div>
 
     <div class="term">
@@ -687,15 +708,11 @@ kan find --codes 600519,000858 --format json</span></div>
         <span class="w-3 h-3 rounded-full" style="background: #34d399; opacity: 0.7;"></span>
         <span class="ml-3 text-xs font-mono" style="color: #71717a;">~ — 第一次上手</span>
       </div>
-<pre><span style="color: #34d399;">$</span> kan add 600519 601318 000858        <span style="color: #71717a;"># 加 3 只 · 纯代码批量</span>
-<span style="color: #34d399;">$</span> kan scan                            <span style="color: #71717a;"># 一屏看完位置 + 共振</span>
-<span style="color: #34d399;">$</span> kan info 600519                     <span style="color: #71717a;"># 单股详情</span>
-<span style="color: #34d399;">$</span> kan compare 茅台 五粮液             <span style="color: #71717a;"># 多股对比</span>
+<pre><span style="color: #34d399;">$</span> kan web                             <span style="color: #71717a;"># 打开今日概览</span>
 
-<span style="color: #71717a;"># 进阶</span>
-<span style="color: #34d399;">$</span> kan theme search AI                 <span style="color: #71717a;"># 找题材</span>
-<span style="color: #34d399;">$</span> kan scan --theme=AI应用             <span style="color: #71717a;"># 看 AI 板块谁在低位</span>
-<span style="color: #34d399;">$</span> kan scan --hot rank                 <span style="color: #71717a;"># 看东财人气榜</span></pre>
+<span style="color: #71717a;"># 偏好终端时</span>
+<span style="color: #34d399;">$</span> kan daily                           <span style="color: #71717a;"># 一日事实概览</span>
+<span style="color: #34d399;">$</span> kan help                            <span style="color: #71717a;"># 完整命令表</span></pre>
     </div>
   </section>
 
@@ -728,7 +745,7 @@ kan find --codes 600519,000858 --format json</span></div>
           <svg class="chevron" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="color: var(--text-muted);"><polyline points="6 9 12 15 18 9"/></svg>
         </summary>
         <p class="mt-4 leading-relaxed" style="color: var(--text-soft);">
-          <b style="color: var(--text);">不会</b>。慢慢看是纯命令行工具，自选股和缓存都在本机。
+          <b style="color: var(--text);">不会</b>。慢慢看在本机运行，日常入口是本地 Web，CLI 是进阶入口；自选、持仓和缓存都在本机。
           没有账号 · 没有登录 · 没有 telemetry · 没有推送 · 没有广告。
           自选股数据存在你机器的 <code class="ci">~/.local/share/kan/</code>（XDG 规范）。
           <br /><br />
@@ -775,15 +792,15 @@ kan find --codes 600519,000858 --format json</span></div>
       </summary>
       <div class="mt-5 leading-relaxed space-y-3" style="color: var(--text-soft);">
         <p>
-          <b style="color: var(--text);">manmankan</b> (慢慢看) is a pure command-line tool for China A-share investors who track their own watchlists.
-          It shows where each stock currently sits within its 3 / 5 / 7 / 10 / 15 / 30 / 60 / 90 / 120 / 180-day price range — a "position percentile" — and flags stocks that simultaneously touch lows (or highs) across multiple timeframes as resonance signals (<code class="ci">×N</code>).
+          <b style="color: var(--text);">manmankan</b> (慢慢看) is a local-first Web observation tool for ordinary China A-share investors.
+          It brings daily changes, watchlists, holdings, 30 / 60 / 180-day price-range positions, and data freshness into one browser view; full period details remain available on demand.
         </p>
         <p>
           It stops at auditable data: <b style="color: var(--text);">no buy/sell advice, no ratings, no price targets, and no strategy conclusions.</b>
-          Local storage, CLI/JSON/MCP outputs, no login, no account, no telemetry. Data is delayed end-of-day K-line from the AKShare/baostock ecosystem, with optional TuShare Pro sources when configured.
+          Local storage, no login, no account, no telemetry. CLI, JSON, Python API, and MCP remain available as the secondary automation layer. Data is delayed end-of-day K-line from the AKShare/baostock ecosystem, with optional TuShare Pro sources when configured.
         </p>
         <p class="font-mono text-sm">
-          <span style="color: var(--accent);">$</span> uv tool install manmankan
+          <span style="color: var(--accent);">$</span> uv tool install manmankan &amp;&amp; kan web
         </p>
         <p class="text-sm">
           Python 3.11+ · GNU AGPL-3.0 · A-share only (no HK / US / futures) ·
@@ -803,7 +820,7 @@ kan find --codes 600519,000858 --format json</span></div>
             <span style="color: var(--accent);" class="font-mono">$</span>
             <span>慢慢看 · manmankan</span>
           </div>
-          <p class="text-xs leading-relaxed">A 股本地数据筛选器 · 告诉你坐标，不替你决策</p>
+          <p class="text-xs leading-relaxed">普通 A 股散户的本地观察台 · 先看清，再决定</p>
         </div>
         <div>
           <div class="font-semibold mb-3" style="color: var(--text-soft);">项目</div>

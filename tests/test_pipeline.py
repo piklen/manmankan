@@ -230,6 +230,9 @@ def _patch_fetcher(monkeypatch, cutoffs: dict, ages: dict):
     monkeypatch.setattr(
         "kan.data.fetcher.cache_age", lambda sym: ages.get(sym),
     )
+    monkeypatch.setattr(
+        "kan.data.fetcher.cache_has_min_rows", lambda _sym, _rows: True,
+    )
 
 
 def test_freshness_of_empty_symbols(monkeypatch):
@@ -294,7 +297,7 @@ def test_freshness_of_multi_symbol_takes_max(monkeypatch):
 
 
 def test_freshness_of_skips_none_cutoff(monkeypatch):
-    """某 symbol 无 cutoff → 跳过 · 不影响其他 symbol。"""
+    """某 symbol 无 cutoff → 保留最新日期，但整池必须标记 stale。"""
     _patch_calendar(monkeypatch, expected_date=date(2026, 5, 23))
     _patch_fetcher(
         monkeypatch,
@@ -307,6 +310,63 @@ def test_freshness_of_skips_none_cutoff(monkeypatch):
     f = pipeline.freshness_of(["600519", "NEW01"])
     assert f.data_cutoff == date(2026, 5, 22)
     assert f.fetched_at == "2026-05-22T16:00:00"
+    assert f.missing_count == 1
+    assert f.is_stale is True
+
+
+def test_freshness_of_mixed_cutoffs_is_stale_even_when_max_is_current(monkeypatch):
+    _patch_calendar(monkeypatch, expected_date=date(2026, 5, 23))
+    _patch_fetcher(
+        monkeypatch,
+        cutoffs={"600519": date(2026, 5, 23), "000858": date(2026, 5, 22)},
+        ages={},
+    )
+
+    freshness = pipeline.freshness_of(["600519", "000858"])
+
+    assert freshness.data_cutoff == date(2026, 5, 23)
+    assert freshness.min_cutoff == date(2026, 5, 22)
+    assert freshness.current_count == 1
+    assert freshness.target_count == 2
+    assert freshness.is_stale is True
+
+
+def test_freshness_of_requires_enough_history_for_requested_period(monkeypatch):
+    _patch_calendar(monkeypatch, expected_date=date(2026, 5, 23))
+    _patch_fetcher(
+        monkeypatch,
+        cutoffs={"600519": date(2026, 5, 23), "000858": date(2026, 5, 23)},
+        ages={},
+    )
+    monkeypatch.setattr(
+        "kan.data.fetcher.cache_has_min_rows",
+        lambda symbol, rows: symbol == "600519" and rows == 180,
+    )
+
+    freshness = pipeline.freshness_of(["600519", "000858"], min_rows=180)
+
+    assert freshness.current_count == 2
+    assert freshness.history_incomplete_count == 1
+    assert freshness.required_rows == 180
+    assert freshness.is_stale is True
+
+
+def test_freshness_history_count_preserves_duplicate_symbols(monkeypatch):
+    _patch_calendar(monkeypatch, expected_date=date(2026, 5, 23))
+    _patch_fetcher(
+        monkeypatch,
+        cutoffs={"600519": date(2026, 5, 23)},
+        ages={},
+    )
+    monkeypatch.setattr(
+        "kan.data.fetcher.cache_has_min_rows",
+        lambda _symbol, _rows: False,
+    )
+
+    freshness = pipeline.freshness_of(["600519", "600519"], min_rows=180)
+
+    assert freshness.target_count == 2
+    assert freshness.history_incomplete_count == 2
 
 
 def test_freshness_of_skips_falsy_cache_age(monkeypatch):
@@ -404,6 +464,24 @@ def test_render_freshness_warning_stale_no_cutoff_shows_placeholder():
     assert "? 天" in msg
 
 
+def test_render_freshness_warning_uses_oldest_cutoff_for_mixed_pool():
+    console = Mock()
+    f = Freshness(
+        data_cutoff=date(2026, 5, 23),
+        min_cutoff=date(2026, 5, 20),
+        fetched_at=None,
+        expected_cutoff=date(2026, 5, 23),
+        is_stale=True,
+        phase="post",
+    )
+
+    pipeline.render_freshness_warning(f, console)
+
+    msg = console.print.call_args.args[0]
+    assert "05-20" in msg
+    assert "3 天" in msg
+
+
 def test_render_freshness_warning_intraday_prints_intraday_warning():
     """is_stale=False + phase=intraday → 「当前盘中」警告。"""
     console = Mock()
@@ -486,7 +564,7 @@ def test_run_data_pipeline_happy_path(monkeypatch):
     targets = [("600519", "贵州茅台"), ("000858", "五粮液")]
     fetched_targets = _patch_pipeline_deps(
         monkeypatch,
-        cutoffs={"600519": date(2026, 5, 22), "000858": date(2026, 5, 23)},
+        cutoffs={"600519": date(2026, 5, 23), "000858": date(2026, 5, 23)},
         ages={"600519": "2026-05-22T16:00:00", "000858": "2026-05-23T16:00:00"},
     )
     stock_set = _FakeStockSet(pairs=targets, meta=None)
@@ -506,6 +584,26 @@ def test_run_data_pipeline_happy_path(monkeypatch):
     assert ctx.freshness.phase == "post"
     assert fetched_targets == [targets]
     assert compute_calls == [(targets, {})]
+
+
+def test_run_data_pipeline_counts_targets_missing_from_compute_results(monkeypatch):
+    targets = [("600519", "贵州茅台"), ("000858", "五粮液")]
+    _patch_pipeline_deps(
+        monkeypatch,
+        cutoffs={"600519": date(2026, 5, 23), "000858": None},
+        ages={"600519": "2026-05-23T16:00:00"},
+    )
+    stock_set = _FakeStockSet(pairs=targets)
+
+    ctx = pipeline.run_data_pipeline(
+        stock_set,
+        compute=lambda _targets, **_kwargs: [_FakeResult("600519")],
+        auto_fetch=False,
+    )
+
+    assert ctx.freshness.target_count == 2
+    assert ctx.freshness.missing_count == 1
+    assert ctx.freshness.is_stale is True
 
 
 def test_run_data_pipeline_passes_meta_through(monkeypatch):

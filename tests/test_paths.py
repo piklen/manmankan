@@ -4,7 +4,9 @@
 历史背景冷启动延迟修复）。本测试守护：mtime 三个边界条件 + 文件缺失。
 """
 
+import json
 import os
+from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timedelta
 
 import pandas as pd
@@ -71,8 +73,44 @@ def test_atomic_write_parquet_overwrites_existing(tmp_path):
     assert pd.read_parquet(target)["a"].iloc[0] == 99
 
 
+def test_atomic_write_parquet_preserves_private_schema_metadata(tmp_path):
+    import pyarrow.parquet as pq
+
+    target = tmp_path / "test.parquet"
+    paths.atomic_write_parquet(
+        pd.DataFrame({"a": [1]}),
+        target,
+        metadata={"kan.requested_days": "180"},
+    )
+
+    assert pd.read_parquet(target).columns.tolist() == ["a"]
+    assert pq.read_metadata(target).metadata[b"kan.requested_days"] == b"180"
+
+
+def test_atomic_write_parquet_concurrent_metadata_writes_are_self_consistent(tmp_path):
+    import pyarrow.parquet as pq
+
+    target = tmp_path / "test.parquet"
+
+    def write(value: int) -> None:
+        paths.atomic_write_parquet(
+            pd.DataFrame({"value": [value]}),
+            target,
+            metadata={"kan.requested_days": str(value)},
+        )
+
+    with ThreadPoolExecutor(max_workers=12) as executor:
+        list(executor.map(write, range(60)))
+
+    stored = int(pd.read_parquet(target)["value"].iloc[0])
+    requested = int(pq.read_metadata(target).metadata[b"kan.requested_days"])
+    assert requested == stored
+    assert not list(tmp_path.glob("*.tmp"))
+    assert not list(tmp_path.glob(".*.tmp"))
+
+
 def test_atomic_write_parquet_interrupt_keeps_old(tmp_path, monkeypatch):
-    """mock os.replace 抛异常 · 旧文件保留 · tmp 残留可接受 (下次写覆盖)."""
+    """mock os.replace 抛异常 · 旧文件保留且唯一 tmp 被清理。"""
     target = tmp_path / "test.parquet"
     pd.DataFrame({"a": [1]}).to_parquet(target)
     original = pd.read_parquet(target)["a"].iloc[0]
@@ -86,15 +124,44 @@ def test_atomic_write_parquet_interrupt_keeps_old(tmp_path, monkeypatch):
         paths.atomic_write_parquet(pd.DataFrame({"a": [99]}), target)
 
     assert pd.read_parquet(target)["a"].iloc[0] == original
+    assert not list(tmp_path.glob("*.tmp"))
+    assert not list(tmp_path.glob(".*.tmp"))
+
+
+def test_atomic_write_json_cleans_unique_temp_on_serialization_error(tmp_path):
+    target = tmp_path / "snapshot.json"
+
+    with pytest.raises(TypeError):
+        paths.atomic_write_json(target, object())
+
+    assert not list(tmp_path.glob("*.tmp"))
+    assert not list(tmp_path.glob(".*.tmp"))
+
+
+def test_atomic_write_json_handles_concurrent_writers(tmp_path):
+    target = tmp_path / "snapshot.json"
+
+    with ThreadPoolExecutor(max_workers=8) as executor:
+        list(executor.map(
+            lambda value: paths.atomic_write_json(target, {"value": value}),
+            range(30),
+        ))
+
+    assert json.loads(target.read_text())["value"] in range(30)
+    assert not list(tmp_path.glob("*.tmp"))
+    assert not list(tmp_path.glob(".*.tmp"))
 
 
 def test_boards_dir_under_base(monkeypatch, tmp_path):
-    monkeypatch.setenv("XDG_DATA_HOME", str(tmp_path))
     import importlib
 
     from kan.storage import paths
-    importlib.reload(paths)
-    assert tmp_path / "kan" / "boards" == paths.BOARDS_DIR
-    paths.ensure_dirs()
-    assert paths.BOARDS_DIR.is_dir()
-    importlib.reload(paths)  # 复位 · 防污染其它测试
+
+    with monkeypatch.context() as scoped:
+        scoped.setenv("XDG_DATA_HOME", str(tmp_path))
+        importlib.reload(paths)
+        assert tmp_path / "kan" / "boards" == paths.BOARDS_DIR
+        paths.ensure_dirs()
+        assert paths.BOARDS_DIR.is_dir()
+
+    importlib.reload(paths)  # 环境恢复后再复位模块常量，防污染后续测试

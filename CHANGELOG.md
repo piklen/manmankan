@@ -9,26 +9,47 @@ explicitly approves a larger bump.
 
 ## [Unreleased]
 
+## [0.0.6.9.8] - 2026-07-10
+
 ### Added
 
 - 新增 `kan web` 本地看盘台:数据表 / 位置热力图双视图、个股位置标尺与走势、持仓页、筛选页(带等价 CLI 命令)、token 设置页;仅监听本机回环,补数据走后台任务加进度流。
 - 首页新增大盘指数多周期位置对照(上证/深证/创业板/沪深300),数据不可用时中性降级。
-
 - 指数日线在 TuShare 无 token 或接口未覆盖时 fallback 到 akshare 新浪源,指数位置对照对零 token 用户可用。
+- 今日页新增数据截止日 / 正常应截止日、180 日高低位、自选关键变化和上一份不同交易日快照对比;默认聚焦 30 / 60 / 180 日,完整周期在个股页按需展开。
+- 数据更新区分空股票池、已是最新、部分失败和全部失败;Web 每日快照与 CLI diff/history 隔离,不会覆盖命令行基线。
+- 持仓与现金支持在 Web 内新增、修改和删除,普通用户不必返回终端完成日常管理。
 
 ### Changed
 
 - 看盘台补数据进度从两档粗粒度改为逐股推送(SSE 显示当前刷新的股票与完成计数)。
 - 持仓名称为代码占位时自动用本地股票名称缓存解析,CLI 与看盘台同时生效。
+- 产品入口调整为普通 A 股散户优先:`kan`、`kan guide`、安装脚本、README 和官网都先引导 `kan web`;CLI / JSON / MCP 保持兼容并作为 AI / 开发者第二入口。
+- 找股票页改用中文条件和可直接尝试的示例,高级 DSL 与等价 CLI 折叠展示。
+- 普通命令结束后不再弹出 shell completion / MCP 注册询问;这些开发者设置只在用户主动运行 `kan setup`、`kan completion` 或 `kan mcp install` 时出现。
 
 ### Fixed
 
+- 自托管 CI 的测试数据目录与 `uv tool` 安装目录按 run / job / Python 版本隔离,特性分支统一由 PR 门禁验证,避免 push / PR 重复任务争抢 runner 后误报 TTY 性能失败。
+- 题材成分股按上游真实页数完整拉取并限制异常页数,THS 会话 Cookie 失效会刷新重试;东财名称未匹配不再误触发全局熔断。
+- Windows 自选文件的冲突令牌统一按原始字节计算,CRLF 不再导致同一文件误报“已被其他窗口修改”。
+- Web 更新不存在的持仓返回 404,非法代码仍返回 400;题材/行业上游异常详情只写 debug 日志,不再直接展示给用户。
+- 移除会与 AkShare 新版 `mini-racer` 覆盖同名包的 `adata` 依赖,题材数据改走内置 AkShare / 公开 HTTP 适配器;全新 macOS / Windows 安装不再因 ABI 混装导致交易日历失效。
+- `kan` 空参数改为精简的普通用户启动页;`kan --help` / `kan help` 才展示完整命令表。
+- `kan add 123` 等非 6 位纯数字输入立即提示格式错误,不再先加载全市场名称表。
+- Web 新鲜度同时校验截止日与 180 日历史覆盖,短历史缓存会补拉;新股完成 180 日范围请求后不会永久误报陈旧。
+- 持仓追加写入重新执行完整字段校验,拒绝 NaN、负数和越界数值;损坏持仓文件时隐藏写入表单并提示先备份。
+- Parquet 改用同目录唯一临时文件写入数据和请求周期 metadata 后单次原子替换,并发写不再共用固定 `.tmp`。
+- 非 ASCII 或超长 Web 会话值会被直接拒绝,不再让单个畸形回环请求触发 500。
 - `kan scan --all` 不再覆写默认池的 diff 快照。
 - 交易日历依赖的 py_mini_racer 在 dylib 加载失败机器上不再向终端输出裸 traceback。
 - 自适应并发测试不再依赖真实线程调度时序,消除 CI 偶发失败。
 - 看盘台序列化对 NaN/Inf 统一归一为 None(与 AI 导出口径对齐),避免个别股票非法浮点在 JSON 渲染阶段触发 500(该阶段在路由 return 之后,路由内 try/except 兜不住)。
 - 补数据进度流(SSE)改为 async 生成器,不再占用请求线程池 worker;多标签页或客户端中途断开不会拖垮其他页面。
-- 自选写入(看盘台与 CLI 的 add/remove/clear)加 fcntl 跨进程文件锁,消除并发写「读—改—写」丢更新;无 fcntl 平台降级为无锁、退回既有行为。
+- 自选和配置写入补齐进程内锁及 POSIX / Windows 文件锁,并统一使用唯一 `0600` 临时文件;多标签页或 Web / CLI 并发不再丢更新、共用临时文件或留下宽权限 token 文件。
+- `kan web` 每次启动生成随机会话链接,页面 / API / SSE 分别校验会话参数或请求头,不会把可重放 Cookie 共享给其他回环端口;同时禁止第三方页面 iframe 嵌入。
+- Web 添加自选的非法代码提示改为页面内可执行的 6 位代码说明,不再引导普通用户跳回 CLI。
+- Web 首次添加精确代码只读取已有名称缓存;缓存为空时先立即入池并提示名称加载中,不再同步等待全市场名称表。
 - 看盘台个股历史周期越界改由 service 校验返回 400 并带范围提示,与 CLI 报错一致(此前被 Query 层通用 422 掩盖)。
 
 ## [0.0.6.9.7] - 2026-07-02
@@ -332,7 +353,8 @@ explicitly approves a larger bump.
 - **Shell 补全** · zsh / bash / fish / powershell
 - **合规与隐私** · 强制风险提示 + 关键词黑名单（无买卖建议 / 无目标价 / 无评级）· 数据全本地
 
-[Unreleased]: https://github.com/piklen/manmankan/compare/v0.0.6.9.7...HEAD
+[Unreleased]: https://github.com/piklen/manmankan/compare/v0.0.6.9.8...HEAD
+[0.0.6.9.8]: https://github.com/piklen/manmankan/compare/v0.0.6.9.7...v0.0.6.9.8
 [0.0.6.9.7]: https://github.com/piklen/manmankan/compare/v0.0.6.9.6...v0.0.6.9.7
 [0.0.6.9.6]: https://github.com/piklen/manmankan/compare/v0.0.6.9.5...v0.0.6.9.6
 [0.0.6.9.5]: https://github.com/piklen/manmankan/compare/v0.0.6.9.4...v0.0.6.9.5

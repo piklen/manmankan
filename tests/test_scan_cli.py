@@ -277,11 +277,16 @@ def scan_runner(monkeypatch):
     monkeypatch.setattr("kan.core.scanner.save_snapshot", lambda _results: None)
     monkeypatch.setattr("kan.data.fetcher.data_cutoff_date", lambda _sym: date(2026, 5, 14))
     monkeypatch.setattr("kan.data.fetcher.cache_age", lambda _sym: "2026-05-14 12:00")
+    monkeypatch.setattr("kan.data.fetcher.cache_has_min_rows", lambda _sym, _rows: True)
     monkeypatch.setattr(
         "kan.core.trading_calendar.latest_trade_date", lambda: date(2026, 5, 14)
     )
     monkeypatch.setattr("kan.core.trading_calendar.market_phase", lambda: "post")
     monkeypatch.setattr("kan.core.scanner.get_limit_threshold", lambda *a, **k: 10.0)
+    monkeypatch.setattr(
+        "kan.service.scan_service._enrich_scan_rows_best_effort",
+        lambda results, **_kwargs: list(results),
+    )
     return CliRunner()
 
 

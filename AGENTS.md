@@ -4,17 +4,18 @@
 
 This file applies to the whole `manmankan` repository.
 
-`manmankan` is a local-first China A-share data translation CLI. It turns watchlists,
-industries, themes, hot lists, holdings, full-market pools, or explicit code lists into
-auditable terminal and JSON outputs for humans, scripts, and external AI agents.
+`manmankan` is a local-first China A-share observation tool. Ordinary retail investors
+are the only primary users: the local Web experience owns first-run, daily review,
+watchlists, holdings, screening, and data recovery. AI agents and developers are secondary
+users served through stable CLI, JSON, Python API, and MCP contracts.
 
 The tool stops at data facts. It must not produce buy/sell actions, ratings, price
 targets, stock picks, strategy conclusions, or hosted advisory workflows.
 
 ## Start Here
 
-- For using the CLI as an AI agent, read `skills/manmankan-skill.md`.
-- For a short first-run path, read `docs/ai-quickstart.md`.
+- For ordinary-user first-run and daily workflows, read `README.md` and `docs/china-quickstart.md`.
+- For using the CLI as an AI agent, read `skills/manmankan-skill.md` and `docs/ai-quickstart.md`.
 - For JSON contracts, read `docs/find.md`.
 - For compliance language, read `docs/compliance.md`.
 - For architecture direction, read `docs/architecture.md`.
@@ -65,11 +66,13 @@ KAN_NO_UPDATE_CHECK=1 uv run kan mcp install --dry-run
 
 - Prefer existing CLI/service/data/render/storage boundaries before adding abstractions.
 - `kan/cli/` owns argument parsing and user-facing command orchestration.
-- `kan/service/` owns reusable business logic for CLI, MCP, and future local service layers.
+- `kan/service/` owns reusable business logic shared by Web, CLI, MCP, and Python API.
 - `kan/data/` owns provider adapters and fallback chains.
 - `kan/storage/` owns XDG local files and export payloads.
 - `kan/render/` owns terminal rendering only.
 - MCP tools should wrap CLI/service behavior; do not create a second business contract there.
+- Do not let an AI/developer feature displace the ordinary-user Web path or introduce
+  different calculations for the same fact.
 
 ## Change Discipline
 

@@ -1,4 +1,4 @@
-# manmankan 一键安装脚本 · Windows PowerShell
+﻿# manmankan 一键安装脚本 · Windows PowerShell
 #
 # 推荐安装：
 #   uv tool install manmankan
@@ -26,7 +26,7 @@ function Step ([string]$title) { Say ""; Write-Host "━━━ $title ━━━"
 # ── Banner ───────────────────────────────────────────────────────
 Say ""
 Say "🐙 慢慢看 (manmankan) 一键安装脚本"
-Say "   A 股自选股位置工具 · 本地存储 · 开源 · AGPL-3.0"
+Say "   普通 A 股散户的本地观察台 · 本地存储 · 开源 · AGPL-3.0"
 Say ""
 Say "📋 即将做这 4 件事："
 Say "   1. 检查你的系统 (Windows + PowerShell 版本)"
@@ -180,10 +180,11 @@ if ($needsReshell) {
     Say ""
 }
 
-Say "📖 下一步 · 复制粘贴这两行试试:"
+Say "📖 下一步 · 打开本地观察台:"
 Say ""
-Say "   kan add 600519 601318 000858   # 加你的自选股"
-Say "   kan scan                        # 看一屏位置 + 共振"
+Say "   kan web                         # 在网页里添加自选和持仓"
+Say ""
+Say "   想留在终端可运行: kan daily"
 Say ""
 Say "📚 看完整命令:  kan --help"
 Say "📖 README:    https://github.com/piklen/manmankan"

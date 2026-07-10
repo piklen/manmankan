@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 from pathlib import Path
+from urllib.parse import urlencode
 
 from fastapi import APIRouter, Request
 from fastapi.responses import HTMLResponse
@@ -14,7 +15,9 @@ from kan.service.info_service import (
     InfoRequest,
     get_stock_info,
 )
+from kan.storage import positions
 from kan.web.routes_api import default_scan_payload, settings_facts
+from kan.web.security import SESSION_QUERY_NAME
 from kan.web.serialize import empty_hold_payload, serialize_hold, serialize_info
 
 router = APIRouter()
@@ -23,6 +26,13 @@ templates = Jinja2Templates(directory=str(TEMPLATE_DIR))
 templates.env.globals["disclaimer"] = DISCLAIMER.strip()
 templates.env.globals["find_disclaimer"] = FIND_DISCLAIMER_TEXT
 templates.env.globals["hold_disclaimer"] = HOLD_DISCLAIMER_TEXT
+templates.env.globals["session_url"] = lambda request, path: (
+    f"{path}{'&' if '?' in path else '?'}"
+    f"{urlencode({SESSION_QUERY_NAME: request.app.state.kan_session_token})}"
+)
+templates.env.globals["session_token"] = (
+    lambda request: request.app.state.kan_session_token
+)
 
 
 @router.get("/", response_class=HTMLResponse)
@@ -43,6 +53,27 @@ def index(request: Request):
                 "shown": 0,
                 "data_cutoff": None,
                 "stale": False,
+            },
+            "freshness": {
+                "status": "missing",
+                "title": "暂时无法读取本地行情",
+                "detail": "先在下方添加自选；如果已经添加，请刷新页面或到数据设置查看本地目录。",
+                "action_label": "先添加自选",
+            },
+            "overview": {
+                "data_cutoff": None,
+                "expected_cutoff": None,
+                "stale": False,
+                "scanned_count": 0,
+                "low_180_count": 0,
+                "high_180_count": 0,
+                "low_resonance_count": 0,
+                "high_resonance_count": 0,
+                "low_180": [],
+                "high_180": [],
+                "comparison_date": None,
+                "changes": [],
+                "change_count": 0,
             },
             "rows": [],
             "heatmap": [],
@@ -87,11 +118,16 @@ def stock(request: Request, code: str):
 def hold(request: Request):
     try:
         payload = serialize_hold(build_hold_summary())
+    except positions.PositionsCorruptError as e:
+        from kan.infra.log import debug_log
+
+        debug_log(__name__, "web hold file unavailable", e)
+        payload = empty_hold_payload(error="持仓文件无法读取")
     except Exception as e:
         from kan.infra.log import debug_log
 
         debug_log(__name__, "web hold page unavailable", e)
-        payload = empty_hold_payload(error="持仓数据不可用")
+        payload = empty_hold_payload(error="持仓数据暂不可用")
     return templates.TemplateResponse(
         request,
         "hold.html",

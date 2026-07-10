@@ -18,7 +18,6 @@ from kan.service.find_service import (
     run_find_kline,
 )
 from kan.storage import watchlist
-from kan.storage.export_find import _triggered_filters_public
 
 POOL_TYPES = {"watchlist", "holdings", "codes", "industry", "theme"}
 FILTER_TYPES = {"pos", "resonance", "pe", "moneyflow"}
@@ -33,7 +32,7 @@ def run_web_find(payload: dict[str, Any]) -> dict[str, Any]:
     filters = _parse_filters(payload.get("filters"))
     exclude_st = bool(payload.get("exclude_st"))
     if _filters_empty(filters) and not exclude_st:
-        raise HTTPException(status_code=400, detail="请至少填写一个 filter")
+        raise HTTPException(status_code=400, detail="请至少填写一个筛选条件")
 
     try:
         conditions = ConditionSet.from_flags(
@@ -104,16 +103,16 @@ def _parse_filters(raw: Any) -> dict[str, list[str]]:
     if raw is None:
         raw = []
     if not isinstance(raw, list):
-        raise HTTPException(status_code=400, detail="filters 必须是列表")
+        raise HTTPException(status_code=400, detail="筛选条件格式错误")
     if len(raw) > MAX_FILTERS:
-        raise HTTPException(status_code=400, detail=f"最多同时填写 {MAX_FILTERS} 条 filter")
+        raise HTTPException(status_code=400, detail=f"最多同时填写 {MAX_FILTERS} 条筛选条件")
     out: dict[str, list[str]] = {"pos": [], "resonance": [], "pe": [], "moneyflow": []}
     for item in raw:
         if not isinstance(item, dict):
-            raise HTTPException(status_code=400, detail="filter 格式错误")
+            raise HTTPException(status_code=400, detail="筛选条件格式错误")
         kind = str(item.get("type") or "").strip()
         if kind not in FILTER_TYPES:
-            raise HTTPException(status_code=400, detail="filter 类型不支持")
+            raise HTTPException(status_code=400, detail="暂不支持这个筛选条件")
         out[kind].append(_filter_param(kind, item))
     return out
 
@@ -144,18 +143,18 @@ def _require(ok: bool, message: str) -> None:
 
 def _serialize_find_result(result: FindKlineResult, *, command: str) -> dict[str, Any]:
     rows = []
-    periods = sorted({p.period for m in result.matches_limited for p in m.result.periods})
+    periods = _display_periods(result)
     for match in result.matches_limited:
         row = match.result
         rows.append({
             "code": row.symbol,
             "name": row.name.replace(" ", ""),
             "price": _round(row.current_price),
-            "triggered_filters": _triggered_filters_public(match),
+            "triggered_text": _web_triggered_text(match),
             "metrics": _metrics(row, result.compact_dimensions),
             "positions": {
                 str(p.period): None if p.insufficient else _round(p.position_pct, 1)
-                for p in row.periods
+                for p in row.periods if p.period in periods
             },
         })
     skipped_no_cache = max(0, len(result.ctx.targets) - len(result.ctx.results))
@@ -182,6 +181,52 @@ def _serialize_find_result(result: FindKlineResult, *, command: str) -> dict[str
         "message": _gap_message(skipped_no_cache),
         "disclaimer": FIND_DISCLAIMER_TEXT,
     }
+
+
+def _display_periods(result: FindKlineResult) -> list[int]:
+    available = {period.period for match in result.matches_limited for period in match.result.periods}
+    requested = {30, 60, 180}
+    for match in result.matches_limited:
+        for triggered in match.triggered:
+            if triggered.filter_type != "pos":
+                continue
+            period = triggered.param.partition(":")[0]
+            if period.isdigit():
+                requested.add(int(period))
+    return sorted(available & requested)
+
+
+def _web_triggered_text(match) -> list[str]:
+    labels: list[str] = []
+    for triggered in match.triggered:
+        parts = triggered.param.split(":")
+        actual = triggered.value
+        if triggered.filter_type == "pos" and len(parts) == 3:
+            period, op, threshold = parts
+            labels.append(
+                f"{period} 日位置{_op_text(op)} {threshold}%，当前 {actual:.1f}%"
+            )
+        elif triggered.filter_type == "resonance" and len(parts) == 3:
+            level, _op, threshold = parts
+            direction = "低位" if level == "low" else "高位"
+            labels.append(
+                f"至少 {threshold} 个周期接近{direction}，当前 {actual:.0f} 个"
+            )
+        elif triggered.filter_type == "pe" and len(parts) == 2:
+            op, threshold = parts
+            labels.append(f"市盈率{_op_text(op)} {threshold}，当前 {actual:.2f}")
+        elif triggered.filter_type == "moneyflow" and len(parts) == 2:
+            op, threshold = parts
+            labels.append(
+                f"主力资金净额{_op_text(op)} {threshold} 万元，当前 {actual:.2f} 万元"
+            )
+        else:
+            labels.append("已满足当前条件")
+    return labels
+
+
+def _op_text(op: str) -> str:
+    return "低于" if op == "lt" else "高于"
 
 
 def _metrics(row: Any, dimensions: set[str]) -> list[dict[str, Any]]:

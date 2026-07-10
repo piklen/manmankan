@@ -1,7 +1,7 @@
 {% extends "base.html" %}
 
 {% block title %}
-  {% if info %}{{ info.name }} {{ info.code }} · 慢慢看 Web{% else %}未找到 · 慢慢看 Web{% endif %}
+  {% if info %}{{ info.name }} {{ info.code }} · 慢慢看{% else %}未找到 · 慢慢看{% endif %}
 {% endblock %}
 
 {% block content %}
@@ -9,7 +9,7 @@
 <section class="band">
   <div class="band-title">
     <span>本地缓存没有该代码数据</span>
-    <a class="meta" href="/">返回看盘台</a>
+    <a class="meta" href="{{ session_url(request, '/') }}">返回看盘台</a>
   </div>
   <div class="empty">代码：{{ code }}</div>
 </section>
@@ -18,7 +18,7 @@
   <section class="band">
     <div class="band-title">
       <div>
-        <span>{{ info.name }} {{ info.code }}</span>
+        <strong>{{ info.name }} {{ info.code }}</strong>
         <span class="code">现价 {{ "%.2f"|format(info.price) if info.price is not none else "—" }}</span>
         {% if info.change_pct is not none %}
           <span class="{% if info.change_pct >= 0 %}change-up{% else %}change-down{% endif %}">
@@ -28,16 +28,40 @@
           <span class="meta">—</span>
         {% endif %}
       </div>
-      <a class="meta" href="/">返回看盘台</a>
+      <a class="meta" href="{{ session_url(request, '/') }}">返回看盘台</a>
     </div>
   </section>
 
   <section class="band">
     <div class="band-title">
-      <span>位置标尺</span>
-      <span class="meta">0=N日最低 · 100=N日最高</span>
+      <div>
+        <strong>先看三个关键周期</strong>
+        <div class="meta">0 接近区间最低，100 接近区间最高；位置只描述价格坐标，不代表买卖信号。</div>
+      </div>
+      <span class="{% if info.stale %}notice{% else %}meta{% endif %}">
+        数据截止 {{ info.data_cutoff or info.scan_date or "—" }}{% if info.stale %} · 需要更新{% endif %}
+      </span>
     </div>
-    <div class="range-list">
+    <div class="summary-grid">
+      {% for period in info.periods %}
+        {% if period.period in (30, 60, 180) %}
+        <div class="summary-cell">
+          <div class="field-label">{{ period.period }}日位置</div>
+          <div class="field-value">{{ "%.1f%%"|format(period.position_pct) if period.position_pct is not none else "—" }}</div>
+          <div class="meta">
+            低点 {{ "%.2f"|format(period.n_low) if period.n_low is not none else "—" }} ·
+            高点 {{ "%.2f"|format(period.n_high) if period.n_high is not none else "—" }}
+          </div>
+        </div>
+        {% endif %}
+      {% endfor %}
+    </div>
+  </section>
+
+  <section class="band">
+    <details class="detail-disclosure">
+      <summary>查看全部周期位置标尺</summary>
+      <div class="range-list">
       {% for period in info.periods %}
         <div class="range-row">
           <strong>{{ period.period }}日</strong>
@@ -58,7 +82,8 @@
           {% endif %}
         </div>
       {% endfor %}
-    </div>
+      </div>
+    </details>
   </section>
 
   <section class="band">
@@ -70,7 +95,7 @@
         <button type="button" :class="{active: period === 180}" @click="setPeriod(180)">180日</button>
       </div>
     </div>
-    <div id="history-chart" class="chart" x-show="historyReady"></div>
+    <div id="history-chart" class="chart" role="img" :aria-label="`${info.name} ${period} 日价格位置走势`" x-show="historyReady"></div>
     <div class="empty" x-show="!historyReady" x-text="historyMessage"></div>
   </section>
 
@@ -110,7 +135,7 @@
       </div>
       <div class="field">
         <div class="field-label">数据说明</div>
-        <div class="field-value"><span class="pill">数据不可用</span></div>
+        <div class="field-value"><span class="pill">缺失项未参与判断</span></div>
       </div>
     </div>
   </section>

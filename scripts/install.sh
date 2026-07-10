@@ -32,7 +32,7 @@ step() { say ""; say "${BLUE}━━━ $1 ━━━${NC}"; }
 # ── Banner ───────────────────────────────────────────────────────
 say ""
 say "🐙 慢慢看 (manmankan) 一键安装脚本"
-say "   A 股自选股位置工具 · 本地存储 · 开源 · AGPL-3.0"
+say "   普通 A 股散户的本地观察台 · 本地存储 · 开源 · AGPL-3.0"
 say ""
 say "📋 即将做这 4 件事："
 say "   1. 检查你的系统 (mac / Linux)"
@@ -172,10 +172,11 @@ if [ "$NEEDS_RESHELL" -eq 1 ]; then
     say ""
 fi
 
-say "📖 下一步 · 复制粘贴这两行试试:"
+say "📖 下一步 · 打开本地观察台:"
 say ""
-say "   kan add 600519 601318 000858   ${DIM}# 加你的自选股${NC}"
-say "   kan scan                        ${DIM}# 看一屏位置 + 共振${NC}"
+say "   kan web                         ${DIM}# 在网页里添加自选和持仓${NC}"
+say ""
+say "   ${DIM}想留在终端可运行: kan daily${NC}"
 say ""
 say "📚 看完整命令:  kan --help"
 say "📖 README:    https://github.com/piklen/manmankan"

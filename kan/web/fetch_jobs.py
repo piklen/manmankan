@@ -12,9 +12,22 @@ from typing import Literal
 
 from kan.core.stock_set import from_flags
 
-FetchStatus = Literal["running", "done", "error"]
+FetchStatus = Literal["running", "done", "partial", "error"]
 ProgressCallback = Callable[[str, int, int], None]
-FetchRunner = Callable[[ProgressCallback], None]
+WEB_REQUIRED_KLINE_ROWS = 180
+
+
+@dataclass(frozen=True)
+class FetchOutcome:
+    status: Literal["done", "partial", "error"]
+    stage: str
+    completed: int
+    total: int
+    failed: int = 0
+    error: str | None = None
+
+
+FetchRunner = Callable[[ProgressCallback], FetchOutcome | None]
 
 
 @dataclass
@@ -24,6 +37,7 @@ class FetchJob:
     stage: str = "准备"
     completed: int = 0
     total: int = 0
+    failed: int = 0
     error: str | None = None
     events: list[dict[str, object]] = field(default_factory=list)
     condition: threading.Condition = field(default_factory=threading.Condition)
@@ -35,6 +49,7 @@ class FetchJob:
             "stage": self.stage,
             "completed": self.completed,
             "total": self.total,
+            "failed": self.failed,
             "error": self.error,
         }
 
@@ -104,34 +119,45 @@ async def iter_sse(job: FetchJob) -> AsyncIterator[str]:
 
 def _run_job(job: FetchJob, runner: FetchRunner) -> None:
     try:
-        runner(lambda stage, completed, total: _record(
+        outcome = runner(lambda stage, completed, total: _record(
             job,
             stage=stage,
             completed=completed,
             total=total,
         ))
-        _record(
-            job,
-            stage="完成",
-            completed=job.total,
-            total=job.total,
-            status="done",
-        )
+        if outcome is None:
+            _record(
+                job,
+                stage="更新完成",
+                completed=job.total,
+                total=job.total,
+                status="done",
+            )
+        else:
+            _record(
+                job,
+                stage=outcome.stage,
+                completed=outcome.completed,
+                total=outcome.total,
+                status=outcome.status,
+                failed=outcome.failed,
+                error=outcome.error,
+            )
     except Exception as e:
         from kan.infra.log import debug_log
 
         debug_log(__name__, "web fetch failed", e)
         _record(
             job,
-            stage="数据不可用",
+            stage="更新失败",
             completed=job.completed,
             total=job.total,
             status="error",
-            error="数据不可用",
+            error="更新失败 · 请检查网络或稍后重试",
         )
 
 
-def _run_scan_fetch(progress: ProgressCallback) -> None:
+def _run_scan_fetch(progress: ProgressCallback) -> FetchOutcome:
     """检查本地池新鲜度并逐股拉取,把每只完成情况转成 SSE 进度事件。
 
     不走 run_scan:补数据只需要 resolve + fetch,跑整条 scan 管线是纯浪费,
@@ -142,11 +168,27 @@ def _run_scan_fetch(progress: ProgressCallback) -> None:
 
     progress("读取本地池", 0, 0)
     targets, _meta = resolve_stock_set(from_flags())
-    stale = [(symbol, name) for symbol, name in targets if not is_fresh(symbol)]
+    if not targets:
+        return FetchOutcome(
+            status="error",
+            stage="等待添加股票",
+            completed=0,
+            total=0,
+            error="还没有自选或持仓 · 请先添加一只股票",
+        )
+    stale = [
+        (symbol, name)
+        for symbol, name in targets
+        if not is_fresh(symbol, min_rows=WEB_REQUIRED_KLINE_ROWS)
+    ]
     total = len(stale)
     if not stale:
-        progress("本地数据已是最新", 0, 0)
-        return
+        return FetchOutcome(
+            status="done",
+            stage="本地数据已是最新",
+            completed=len(targets),
+            total=len(targets),
+        )
 
     name_map = dict(stale)
     done = 0
@@ -157,13 +199,40 @@ def _run_scan_fetch(progress: ProgressCallback) -> None:
         progress(f"刷新 {name_map.get(symbol, symbol)}", done, total)
 
     progress("刷新本地数据", 0, total)
-    _results, errors = fetch_batch(
+    results, errors = fetch_batch(
         [symbol for symbol, _name in stale],
+        days=WEB_REQUIRED_KLINE_ROWS,
         force=True,
         on_progress=_on_done,
     )
-    if errors:
-        progress(f"刷新完成 · {len(errors)} 只未更新", done, total)
+    failed = len(errors)
+    succeeded = len(results)
+    if failed and succeeded:
+        message = f"已更新 {succeeded} 只，{failed} 只未更新 · 可重试"
+        return FetchOutcome(
+            status="partial",
+            stage=message,
+            completed=done,
+            total=total,
+            failed=failed,
+            error=message,
+        )
+    if failed:
+        message = f"全部 {failed} 只更新失败 · 请检查网络或稍后重试"
+        return FetchOutcome(
+            status="error",
+            stage="更新失败",
+            completed=done,
+            total=total,
+            failed=failed,
+            error=message,
+        )
+    return FetchOutcome(
+        status="done",
+        stage=f"已更新 {succeeded} 只",
+        completed=done,
+        total=total,
+    )
 
 
 def _record(
@@ -173,6 +242,7 @@ def _record(
     completed: int,
     total: int,
     status: FetchStatus | None = None,
+    failed: int | None = None,
     error: str | None = None,
 ) -> None:
     with job.condition:
@@ -181,6 +251,8 @@ def _record(
         job.stage = stage
         job.completed = completed
         job.total = total
+        if failed is not None:
+            job.failed = failed
         job.error = error
         event = job.snapshot()
         event["ts"] = datetime.now(UTC).isoformat()

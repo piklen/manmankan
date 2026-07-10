@@ -313,6 +313,8 @@ def test_v2_storage_keeps_0o600_permissions(temp_kan_dir):
     watchlist.create_group("持仓")
     mode = stat.S_IMODE(watchlist.WATCHLIST_PATH.stat().st_mode)
     assert mode == 0o600, f"v2 watchlist.json 权限应为 0o600 · 实际 0o{mode:o}"
+    lock_mode = stat.S_IMODE(watchlist.WATCHLIST_PATH.with_suffix(".lock").stat().st_mode)
+    assert lock_mode == 0o600
 
 
 # ───────────────────── 老 API 向后兼容 ─────────────────────

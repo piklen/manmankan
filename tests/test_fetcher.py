@@ -101,9 +101,39 @@ def test_is_fresh_today_cache(temp_data_dir, force_eastmoney_path, fake_akshare_
     trading_calendar.clear_memo()
 
     with patch("akshare.stock_zh_a_hist", return_value=fake_akshare_df):
-        fetcher.fetch_kline("600519", force=True)
+        fetcher.fetch_kline("600519", days=30, force=True)
     assert fetcher.is_fresh("600519")
     assert not fetcher.is_fresh("600519", min_rows=360)
+
+
+def test_short_new_listing_cache_is_current_after_full_period_request(
+    temp_data_dir, force_eastmoney_path, fake_akshare_df, monkeypatch
+):
+    monkeypatch.setattr(
+        trading_calendar,
+        "latest_trade_date",
+        lambda *a, **kw: date(2026, 4, 30),
+    )
+    with patch("akshare.stock_zh_a_hist", return_value=fake_akshare_df):
+        frame = fetcher.fetch_kline("600519", days=180, force=True)
+
+    assert len(frame) == 3
+    assert "_requested_days" not in frame.columns
+    assert fetcher.is_fresh("600519", min_rows=180)
+
+
+def test_is_fresh_rejects_future_cutoff_so_fetch_can_repair_cache(
+    temp_data_dir, monkeypatch
+):
+    cache = temp_data_dir / "600519.parquet"
+    pd.DataFrame({"date": [date(2026, 5, 24)]}).to_parquet(cache)
+    monkeypatch.setattr(
+        trading_calendar,
+        "latest_trade_date",
+        lambda *a, **kw: date(2026, 5, 23),
+    )
+
+    assert fetcher.is_fresh("600519") is False
 
 
 def test_is_fresh_yesterday_cache(temp_data_dir):

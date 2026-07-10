@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import socket
 import sys
+from dataclasses import replace
 from datetime import date
 from types import ModuleType, SimpleNamespace
 
@@ -34,10 +35,17 @@ from kan.service.info_service import (
 from kan.service.scan_service import ScanServiceResult
 from kan.storage.positions import Position, PositionsBook
 from kan.web.app import create_app
+from kan.web.security import SESSION_HEADER_NAME
+
+_TEST_SESSION_TOKEN = "test-session-token"
 
 
 def _client() -> TestClient:
-    return TestClient(create_app(), base_url="http://127.0.0.1")
+    return TestClient(
+        create_app(session_token=_TEST_SESSION_TOKEN),
+        base_url="http://127.0.0.1",
+        headers={SESSION_HEADER_NAME: _TEST_SESSION_TOKEN},
+    )
 
 
 def _kline(rows: int = 220) -> pd.DataFrame:
@@ -284,6 +292,26 @@ def test_serialize_scan_info_history_hold_and_index_branches() -> None:
     assert scan_payload["rows"][1]["p60_pct"] is None
     assert scan_payload["heatmap"][1]["at_low"] is False
 
+    history_short_payload = serialize_scan(ScanServiceResult(
+        ctx=DataCtx(
+            targets=[("600519", "贵州茅台")],
+            meta=None,
+            results=[full],
+            freshness=replace(
+                _freshness(),
+                is_stale=True,
+                history_incomplete_count=1,
+                required_rows=180,
+            ),
+            source_name="自选",
+        ),
+        mode="low",
+        all_results=[full],
+        results=[full],
+    ))
+    assert history_short_payload["freshness"]["status"] == "stale"
+    assert "历史数据不足 180 个交易日" in history_short_payload["freshness"]["detail"]
+
     info = InfoServiceResult(
         symbol="600519",
         name="贵州 茅台",
@@ -377,9 +405,19 @@ def test_routes_api_error_and_neutral_paths(monkeypatch, tmp_path) -> None:
         )),
     )
     assert _client().get("/api/scan").status_code == 400
-    monkeypatch.setattr("kan.web.routes_api.run_scan", lambda _request: object())
+    fake_result = SimpleNamespace(
+        ctx=SimpleNamespace(freshness=SimpleNamespace(data_cutoff=None, is_stale=False)),
+        all_results=[],
+    )
+    monkeypatch.setattr("kan.web.routes_api.run_scan", lambda _request: fake_result)
     monkeypatch.setattr("kan.web.routes_api.serialize_scan", lambda _result: {"ok": True, "rows": []})
-    assert _client().get("/api/scan").json() == {"ok": True, "rows": []}
+    monkeypatch.setattr("kan.web.routes_api.build_daily_overview", lambda *_args, **_kwargs: object())
+    monkeypatch.setattr("kan.web.routes_api.serialize_daily_overview", lambda _result: {"change_count": 0})
+    assert _client().get("/api/scan").json() == {
+        "ok": True,
+        "rows": [],
+        "overview": {"change_count": 0},
+    }
 
     monkeypatch.setattr("kan.web.routes_api.get_stock_info", lambda _request: (_ for _ in ()).throw(ValueError("bad code")))
     bad_info = _client().get("/api/info/bad")
@@ -513,9 +551,9 @@ def test_find_adapter_pool_filter_and_command_branches(monkeypatch) -> None:
         assert detail in str(exc_info.value.detail)
 
     for filters, detail in [
-        ("bad", "filters 必须是列表"),
-        ([object()], "filter 格式错误"),
-        ([{"type": "bad"}], "filter 类型不支持"),
+        ("bad", "筛选条件格式错误"),
+        ([object()], "筛选条件格式错误"),
+        ([{"type": "bad"}], "暂不支持这个筛选条件"),
         ([{"type": "pos", "period": "180", "op": "eq", "value": "20"}], "--pos 需要"),
         ([{"type": "resonance", "level": "mid", "value": "2"}], "--resonance 需要"),
         ([{"type": "pe", "op": "", "value": "20"}], "--pe 需要"),
@@ -592,6 +630,14 @@ def test_security_host_origin_edges() -> None:
     assert origin_allowed("http://") is False
     assert origin_allowed("http://[::1") is False
     assert origin_allowed("https://127.0.0.1:8876") is True
+    assert origin_allowed(
+        "http://127.0.0.1:8876",
+        expected_host="127.0.0.1:8876",
+    ) is True
+    assert origin_allowed(
+        "http://127.0.0.1:9999",
+        expected_host="127.0.0.1:8876",
+    ) is False
     assert mutating_request_error(SimpleNamespace(headers={"x-kan-web": "1", "host": "evil.example"})) == "host not allowed"
     assert mutating_request_error(SimpleNamespace(headers={"x-kan-web": "1", "host": "localhost", "origin": "ftp://localhost"})) == "origin not allowed"
 
@@ -606,12 +652,15 @@ def test_server_port_open_browser_and_cli_error(monkeypatch) -> None:
             server._ensure_port_available(port)
 
     calls = {}
+    monkeypatch.setattr(server.secrets, "token_urlsafe", lambda _size: "session-token")
     monkeypatch.setattr(server.webbrowser, "open", lambda url: calls.setdefault("browser", url))
     monkeypatch.setitem(sys.modules, "uvicorn", SimpleNamespace(run=lambda app_obj, **kwargs: calls.setdefault("uvicorn", kwargs)))
 
     server.run_server(port=port, open_browser=True)
 
-    assert calls["browser"] == f"http://{server.WEB_HOST}:{port}/"
+    assert calls["browser"] == (
+        f"http://{server.WEB_HOST}:{port}/?_kan_session=session-token"
+    )
     assert calls["uvicorn"]["host"] == server.WEB_HOST
     assert calls["uvicorn"]["port"] == port
 
@@ -661,36 +710,63 @@ def test_fetch_jobs_edges(monkeypatch) -> None:
     error_job = fetch_jobs.FetchJob(id="err")
     fetch_jobs._run_job(error_job, lambda _progress: (_ for _ in ()).throw(RuntimeError("boom")))
     assert error_job.status == "error"
-    assert error_job.error == "数据不可用"
+    assert error_job.error == "更新失败 · 请检查网络或稍后重试"
 
     targets = [("600519", "贵州茅台"), ("000858", "五粮液")]
     monkeypatch.setattr(
         "kan.core.pipeline.resolve_stock_set", lambda _stock_set: (targets, None)
     )
-    monkeypatch.setattr("kan.data.fetcher.is_fresh", lambda _symbol: False)
+    checked_rows = []
 
-    def fake_fetch_batch(symbols, *, force, on_progress):
+    def fake_is_fresh(_symbol, *, min_rows):
+        checked_rows.append(min_rows)
+        return False
+
+    monkeypatch.setattr("kan.data.fetcher.is_fresh", fake_is_fresh)
+
+    fetched_days = []
+
+    def fake_fetch_batch(symbols, *, days, force, on_progress):
+        fetched_days.append(days)
         for symbol in symbols:
             on_progress(symbol, symbol != "000858", None)
-        return {}, {"000858": "boom"}
+        return {"600519": object()}, {"000858": "boom"}
 
     monkeypatch.setattr("kan.data.fetcher.fetch_batch", fake_fetch_batch)
     events = []
-    fetch_jobs._run_scan_fetch(lambda stage, completed, total: events.append((stage, completed, total)))
+    outcome = fetch_jobs._run_scan_fetch(
+        lambda stage, completed, total: events.append((stage, completed, total))
+    )
     assert events == [
         ("读取本地池", 0, 0),
         ("刷新本地数据", 0, 2),
         ("刷新 贵州茅台", 1, 2),
         ("刷新 五粮液", 2, 2),
-        ("刷新完成 · 1 只未更新", 2, 2),
     ]
+    assert outcome.status == "partial"
+    assert outcome.failed == 1
+    assert "1 只未更新" in (outcome.error or "")
+    assert checked_rows == [180, 180]
+    assert fetched_days == [180]
 
-    monkeypatch.setattr("kan.data.fetcher.is_fresh", lambda _symbol: True)
+    monkeypatch.setattr(
+        "kan.data.fetcher.is_fresh",
+        lambda _symbol, *, min_rows: min_rows == 180,
+    )
     fresh_events = []
-    fetch_jobs._run_scan_fetch(
+    fresh_outcome = fetch_jobs._run_scan_fetch(
         lambda stage, completed, total: fresh_events.append((stage, completed, total))
     )
-    assert fresh_events == [("读取本地池", 0, 0), ("本地数据已是最新", 0, 0)]
+    assert fresh_events == [("读取本地池", 0, 0)]
+    assert fresh_outcome.status == "done"
+    assert fresh_outcome.stage == "本地数据已是最新"
+
+    monkeypatch.setattr(
+        "kan.core.pipeline.resolve_stock_set", lambda _stock_set: ([], None)
+    )
+    empty_outcome = fetch_jobs._run_scan_fetch(lambda *_args: None)
+    assert empty_outcome.status == "error"
+    assert "请先添加一只股票" in (empty_outcome.error or "")
 
 
 def test_finalizer_guard_fallback_and_no_del(monkeypatch) -> None:
@@ -867,7 +943,10 @@ def test_cli_hold_info_pipeline_scan_find_and_history_small_branches(monkeypatch
     fetch_calls = []
     stock_set = CodeListSet([("600519", "贵州茅台")])
     monkeypatch.setattr("kan.core.auto_fetch.auto_fetch_stale", lambda targets: fetch_calls.append(targets))
-    monkeypatch.setattr("kan.core.pipeline.freshness_of", lambda _symbols: _freshness())
+    monkeypatch.setattr(
+        "kan.core.pipeline.freshness_of",
+        lambda _symbols, **_kwargs: _freshness(),
+    )
     ctx = pipeline.run_data_pipeline(
         stock_set,
         compute=lambda targets: [SimpleNamespace(symbol=targets[0][0])],
@@ -964,7 +1043,7 @@ def test_hold_page_unavailable_is_neutral(monkeypatch) -> None:
 
     assert response.status_code == 200
     assert '"ok": false' in response.text
-    assert "\\u6301\\u4ed3\\u6570\\u636e\\u4e0d\\u53ef\\u7528" in response.text
+    assert "\\u6301\\u4ed3\\u6570\\u636e\\u6682\\u4e0d\\u53ef\\u7528" in response.text
 
 
 def test_history_period_out_of_range_maps_to_400() -> None:
@@ -992,13 +1071,6 @@ def test_watchlist_lock_is_mutually_exclusive() -> None:
     import time
 
     from kan.storage.watchlist_store import watchlist_lock
-
-    try:
-        import fcntl  # noqa: F401
-    except ImportError:
-        import pytest
-
-        pytest.skip("平台无 fcntl · 锁降级为无锁")
 
     order: list[str] = []
     started = threading.Event()

@@ -30,6 +30,55 @@ def add_stock(wl: Watchlist, symbol: str, name: str) -> bool:
 
 
 @with_watchlist_lock
+def add_many(
+    stocks: list[Stock],
+    group: str | None = None,
+) -> tuple[list[Stock], int, int]:
+    """在一个锁事务中批量去重添加，返回(实际新增, 原数量, 新数量)。"""
+    gw = load_grouped_watchlist()
+    target = group or gw.default
+    if target not in gw.groups:
+        raise GroupNotFoundError(
+            f"组「{target}」不存在 · 跑 `kan group create {target}` 新建"
+        )
+    old_total = len(gw.groups[target])
+    existing = {stock.symbol for stock in gw.groups[target]}
+    added: list[Stock] = []
+    for stock in stocks:
+        if stock.symbol in existing:
+            continue
+        copied = stock.model_copy()
+        gw.groups[target].append(copied)
+        added.append(copied)
+        existing.add(stock.symbol)
+    if added:
+        _save_grouped_watchlist(gw)
+    return added, old_total, len(gw.groups[target])
+
+
+@with_watchlist_lock
+def remove_many(
+    symbols: set[str],
+    group: str | None = None,
+) -> tuple[list[Stock], int, int]:
+    """在一个锁事务中批量移除，返回(实际移除, 原数量, 新数量)。"""
+    gw = load_grouped_watchlist()
+    target = group or gw.default
+    if target not in gw.groups:
+        raise GroupNotFoundError(
+            f"组「{target}」不存在 · 跑 `kan group list` 查看"
+        )
+    old_total = len(gw.groups[target])
+    removed = [stock for stock in gw.groups[target] if stock.symbol in symbols]
+    if removed:
+        gw.groups[target] = [
+            stock for stock in gw.groups[target] if stock.symbol not in symbols
+        ]
+        _save_grouped_watchlist(gw)
+    return removed, old_total, len(gw.groups[target])
+
+
+@with_watchlist_lock
 def add(symbol: str, group: str | None = None) -> tuple[bool, str]:
     """添加股票到指定组 (不传走 default 组)。返回 (是否新增, 消息)。"""
     symbol = _normalize_symbol(symbol)
