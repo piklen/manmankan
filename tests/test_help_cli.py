@@ -150,6 +150,7 @@ def test_find_help_can_register_only_its_command(
     assert _entry._fast_subcommand_help_command(["kan", "find", "--help"]) == "find"
     assert _entry._fast_subcommand_help_command(["kan", "find", "-h"]) == "find"
     assert _entry._fast_subcommand_help_command(["kan", "scan", "--help"]) is None
+    assert _entry._fast_subcommand_help_command([]) is None
 
 
 def test_find_help_fast_registration_skips_completion_env(

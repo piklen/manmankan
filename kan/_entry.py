@@ -41,10 +41,10 @@ def _should_print_fast_start(argv: list[str] | None = None) -> bool:
 
 
 def _fast_subcommand_help_command(argv: list[str] | None = None) -> str | None:
-    """Return the one command that can be registered alone for its help page."""
+    """返回可单独注册帮助页模块的子命令;当前仅 find 命中。"""
     if _is_shell_completion_run():
         return None
-    args = tuple((argv or sys.argv)[1:])
+    args = tuple((argv if argv is not None else sys.argv)[1:])
     return _FAST_SUBCOMMAND_HELP_ARGS.get(args)
 
 
