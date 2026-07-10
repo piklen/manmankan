@@ -40,7 +40,7 @@ jobs:
         if: github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name != github.repository
         uses: astral-sh/setup-uv@fac544c07dec837d0ccb6301d7b5580bf5edae39  # pinned 2026-05-27
         with:
-          version: "0.11.21"
+          version: ${{ env.UV_VERSION }}
           enable-cache: false
       - name: Verify uv runtime
         run: |
@@ -147,7 +147,7 @@ jobs:
         if: github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name != github.repository
         uses: astral-sh/setup-uv@fac544c07dec837d0ccb6301d7b5580bf5edae39  # pinned 2026-05-27
         with:
-          version: "0.11.21"
+          version: ${{ env.UV_VERSION }}
           enable-cache: false
       - name: Verify uv runtime
         run: |
@@ -192,7 +192,7 @@ jobs:
         if: github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name != github.repository
         uses: astral-sh/setup-uv@fac544c07dec837d0ccb6301d7b5580bf5edae39  # pinned 2026-05-27
         with:
-          version: "0.11.21"
+          version: ${{ env.UV_VERSION }}
           enable-cache: false
       - name: Verify uv runtime
         run: |
@@ -292,7 +292,7 @@ jobs:
         if: github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name != github.repository
         uses: astral-sh/setup-uv@fac544c07dec837d0ccb6301d7b5580bf5edae39  # pinned 2026-05-27
         with:
-          version: "0.11.21"
+          version: ${{ env.UV_VERSION }}
           enable-cache: false
       - name: Verify uv runtime
         run: |
