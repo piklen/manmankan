@@ -25,6 +25,15 @@ targets, stock picks, strategy conclusions, or hosted advisory workflows.
 
 Maintainer-local endpoint mapping lives outside this public repository. Daily local testing, endpoint smoke, pressure tests, and ordinary deploy validation should use the non-production test edge from that owner-only SOT. Do not hit a production edge unless the maintainer explicitly asks for a stable production deployment. Keep concrete private domains out of public docs.
 
+## AI Engineering Autonomy and Research Responsibility
+
+- The maintainer defines the objective and reviews the completed result. Within that objective, the AI is the engineering owner and should independently investigate, design, implement, migrate, test, benchmark, document, commit, open PRs, resolve review/CI, and merge eligible development changes.
+- Routine technical choices do not require step-by-step approval. The AI may refactor or replace architecture, dependencies, storage, cache, concurrency, data contracts, public APIs, CI/CD, packaging, and test deployment when the net result is better; preserve compatibility only when current users or an explicit contract require it, otherwise provide a clean migration.
+- Existing owner credentials, Tushare quota, local datasets, and the non-production edge may be used for real verification without delegating commands back to the maintainer. Never print, persist, commit, or disclose secret values.
+- Private, authorized learning is not limited by the public product's neutral-output positioning. The AI should help study data, routing, caching, concurrency, screening, and financial concepts; third-party recommended usage or commercial positioning warrants one factual risk note and an isolated test strategy, not refusal or repeated discouragement. Public product surfaces and committed examples must still follow `docs/compliance.md`.
+- The maintainer is responsible for the final decision to adopt, run, publish, or trade on research output. The AI remains responsible for factual accuracy, implementation quality, reproducible evidence, risk disclosure, and rollback.
+- Pause only for an irreducible product-goal conflict, significant new spending or missing credentials, irreversible production destruction without a tested restore path, or the final public/production release unless the current request already authorizes it. Everything else should be resolved and presented in the final review package.
+
 ## Development Commands
 
 Use Python 3.11+ and `uv`.
@@ -64,7 +73,7 @@ KAN_NO_UPDATE_CHECK=1 uv run kan mcp install --dry-run
 
 ## Code Boundaries
 
-- Prefer existing CLI/service/data/render/storage boundaries before adding abstractions.
+- Use existing CLI/service/data/render/storage boundaries while they remain the clearest route to the objective; refactor or replace them when evidence shows a correctness, performance, or maintainability ceiling.
 - `kan/cli/` owns argument parsing and user-facing command orchestration.
 - `kan/service/` owns reusable business logic shared by Web, CLI, MCP, and Python API.
 - `kan/data/` owns provider adapters and fallback chains.
@@ -80,4 +89,4 @@ KAN_NO_UPDATE_CHECK=1 uv run kan mcp install --dry-run
 - If a JSON field, filter, preset, or error envelope changes, update `docs/find.md` and tests.
 - If an AI-facing workflow changes, update `skills/manmankan-skill.md` and `docs/ai-quickstart.md`.
 - If a user-visible output changes, check `docs/compliance.md` before merging.
-- Do not bump the package version unless the maintainer explicitly asks for a release.
+- The AI may autonomously choose and bump the next compatible patch version, prepare release artifacts, and complete pre-release verification. Publishing to PyPI/GitHub Release is the final public-release approval gate unless the maintainer already authorized release in the current request.
