@@ -86,14 +86,21 @@ def auto_fetch_stale(
         nonlocal current_workers
         current_workers = state.concurrency
 
-    fetch_kwargs = {"days": days} if days is not None else {}
-    results, errors = fetch_batch(
-        [symbol for symbol, _name in stale],
-        **fetch_kwargs,
-        force=True,
-        on_progress=_on_done,
-        on_progress_state=_on_progress_state,
-    )
+    if days is not None:
+        results, errors = fetch_batch(
+            [symbol for symbol, _name in stale],
+            days=days,
+            force=True,
+            on_progress=_on_done,
+            on_progress_state=_on_progress_state,
+        )
+    else:
+        results, errors = fetch_batch(
+            [symbol for symbol, _name in stale],
+            force=True,
+            on_progress=_on_done,
+            on_progress_state=_on_progress_state,
+        )
     if errors and lifecycle is not None:
         samples = [
             {
