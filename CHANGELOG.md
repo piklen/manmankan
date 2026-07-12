@@ -9,6 +9,12 @@ explicitly approves a larger bump.
 
 ## [Unreleased]
 
+## [0.0.6.9.10] - 2026-07-13
+
+### Fixed
+
+- `kan fetch --force --all` / `kan compare` 拉取进度数字丢失：调度器心跳事件覆盖进度事件导致渲染时检测不到 PROGRESS kind，修复后进度后缀和股票代码正确显示。
+
 ## [0.0.6.9.9] - 2026-07-13
 
 ### Added
@@ -378,7 +384,8 @@ explicitly approves a larger bump.
 - **Shell 补全** · zsh / bash / fish / powershell
 - **合规与隐私** · 强制风险提示 + 关键词黑名单（无买卖建议 / 无目标价 / 无评级）· 数据全本地
 
-[Unreleased]: https://github.com/piklen/manmankan/compare/v0.0.6.9.9...HEAD
+[Unreleased]: https://github.com/piklen/manmankan/compare/v0.0.6.9.10...HEAD
+[0.0.6.9.10]: https://github.com/piklen/manmankan/compare/v0.0.6.9.9...v0.0.6.9.10
 [0.0.6.9.9]: https://github.com/piklen/manmankan/compare/v0.0.6.9.8...v0.0.6.9.9
 [0.0.6.9.8]: https://github.com/piklen/manmankan/compare/v0.0.6.9.7...v0.0.6.9.8
 [0.0.6.9.7]: https://github.com/piklen/manmankan/compare/v0.0.6.9.6...v0.0.6.9.7
