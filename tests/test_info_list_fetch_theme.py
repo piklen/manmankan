@@ -88,31 +88,58 @@ def test_list_theme_industry_mutually_exclusive(_isolate_all):
 
 
 def test_fetch_theme_pulls_constituents(monkeypatch, _isolate_all):
-    """fetch --theme=AI应用 调 2 个成分股 fetcher。"""
+    """fetch --theme=AI应用 把两个成分股一次性交给批量 fetcher。"""
     _stub(monkeypatch)
-    call_count = {"n": 0}
+    calls: list[tuple[list[str], bool]] = []
 
-    def counting(symbol, **kw):
-        call_count["n"] += 1
-        return pd.DataFrame({"close": [1.0]})
+    def fetch_batch(symbols, force=False):
+        calls.append((list(symbols), force))
+        return ({symbol: pd.DataFrame({"close": [1.0]}) for symbol in symbols}, {})
 
-    monkeypatch.setattr("kan.data.fetcher.fetch_kline", counting)
-    # 强制每只股都走 fetch · 不让 is_fresh 短路
+    monkeypatch.setattr("kan.data.fetcher.fetch_batch", fetch_batch)
     monkeypatch.setattr("kan.data.fetcher.is_fresh", lambda symbol: False)
     runner = CliRunner()
     result = runner.invoke(app, ["fetch", "--theme=AI应用"])
     assert result.exit_code == 0, result.output
-    assert call_count["n"] >= 2
+    assert calls == [(["002230", "300033"], False)]
+
+
+def test_fetch_theme_empty_watchlist_intersection_does_not_fall_back(
+    monkeypatch, _isolate_all
+):
+    """题材与自选无交集时保持空池，不误拉整份自选。"""
+    from types import SimpleNamespace
+
+    _stub(monkeypatch)
+    monkeypatch.setattr(
+        "kan.storage.watchlist.load_watchlist",
+        lambda group=None: SimpleNamespace(
+            stocks=[SimpleNamespace(symbol="600000", name="浦发银行")]
+        ),
+    )
+    calls: list[list[str]] = []
+    monkeypatch.setattr(
+        "kan.data.fetcher.fetch_batch",
+        lambda symbols, force=False: (calls.append(list(symbols)) or {}, {}),
+    )
+
+    result = CliRunner().invoke(app, ["fetch", "--theme=AI应用", "--only-watchlist"])
+
+    assert result.exit_code == 0, result.output
+    assert calls == [[]]
+    assert "0 只无需更新" in result.output
 
 
 def test_fetch_returns_nonzero_when_any_symbol_fails(monkeypatch, _isolate_all):
     """fetch 任一股票拉取失败时必须 exit 非 0 · 防脚本误判成功。"""
     monkeypatch.setattr("kan.data.fetcher.is_fresh", lambda symbol: False)
-
-    def fail_fetch(symbol, force=False):
-        raise ValueError(f"无效股票代码或无数据: {symbol}")
-
-    monkeypatch.setattr("kan.data.fetcher.fetch_kline", fail_fetch)
+    monkeypatch.setattr(
+        "kan.data.fetcher.fetch_batch",
+        lambda symbols, force=False: (
+            {},
+            {symbol: f"无效股票代码或无数据: {symbol}" for symbol in symbols},
+        ),
+    )
     runner = CliRunner()
     result = runner.invoke(app, ["fetch", "999999"])
     assert result.exit_code == 1

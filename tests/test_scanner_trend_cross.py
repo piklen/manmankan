@@ -14,6 +14,7 @@ import pandas as pd
 import pytest
 
 from kan.core.scanner_trend import trend_batch_cross_section
+from kan.infra.lifecycle import CollectingReporter, LifecycleKind, OperationState
 
 
 def _bar(symbol: str, d: date, open_: float, close: float) -> dict:
@@ -131,3 +132,22 @@ def test_cross_section_extra_symbol_in_panel_skipped() -> None:
     ])
     out = trend_batch_cross_section([("600519", "茅台")], panel=panel)
     assert [r.symbol for r in out] == ["600519"]
+
+
+def test_cross_section_reports_throttled_group_progress() -> None:
+    watchlist = [(f"{index:06d}", f"股票{index}") for index in range(250)]
+    panel = _panel([
+        _bar(symbol, date(2026, 6, 29), 100.0, 101.0)
+        for symbol, _name in watchlist
+    ])
+    reporter = CollectingReporter()
+
+    out = trend_batch_cross_section(watchlist, panel=panel, reporter=reporter)
+
+    progress = [
+        event for event in reporter.events if event.kind is LifecycleKind.PROGRESS
+    ]
+    assert len(out) == 250
+    assert 1 < len(progress) <= 100
+    assert (progress[-1].completed, progress[-1].total) == (250, 250)
+    assert reporter.events[-1].state is OperationState.SUCCEEDED

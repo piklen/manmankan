@@ -13,6 +13,7 @@ from __future__ import annotations
 from io import StringIO
 
 import pytest
+import typer
 from rich.console import Console
 from rich.table import Table
 
@@ -413,7 +414,7 @@ def test_scan_terminal_narrow_skips_external_context(scan_runner, monkeypatch):
         phase="post",
     )
 
-    def fake_run_scan(request):
+    def fake_run_scan(request, *, lifecycle=None):
         captured["include_external_context"] = request.include_external_context
         return ScanServiceResult(
             ctx=DataCtx(
@@ -474,7 +475,7 @@ def test_scan_compact_skips_external_context(scan_runner, monkeypatch):
         phase="post",
     )
 
-    def fake_run_scan(request):
+    def fake_run_scan(request, *, lifecycle=None):
         captured["include_external_context"] = request.include_external_context
         return ScanServiceResult(
             ctx=DataCtx(
@@ -533,7 +534,7 @@ def test_scan_json_keeps_external_context(scan_runner, monkeypatch):
         phase="post",
     )
 
-    def fake_run_scan(request):
+    def fake_run_scan(request, *, lifecycle=None):
         captured["include_external_context"] = request.include_external_context
         return ScanServiceResult(
             ctx=DataCtx(
@@ -605,7 +606,8 @@ def test_scan_default_uses_holdings_when_watchlist_empty(monkeypatch):
     captured = {}
 
     def fake_run_data_pipeline(
-        stock_set, *, compute, mode, periods, fetch_days, show_progress, exit_on_resolve_error,
+        stock_set, *, compute, mode, periods, fetch_days, show_progress,
+        exit_on_resolve_error, lifecycle=None,
     ):
         pairs = stock_set.pairs()
         captured["pairs"] = pairs
@@ -670,7 +672,7 @@ def test_scan_only_holdings_does_not_write_shared_snapshot(monkeypatch):
     )
     saved = []
 
-    def fake_run_scan(request):
+    def fake_run_scan(request, *, lifecycle=None):
         return ScanServiceResult(
             ctx=DataCtx(
                 targets=[("600519", "贵州茅台")],
@@ -829,18 +831,49 @@ def test_scan_command_with_diff_flag(scan_runner):
     assert result.exit_code == 0
 
 
-def test_scan_format_json(scan_runner):
-    """`kan scan --format json` · 输出合法 JSON · 含结构化结果"""
+def test_scan_format_json(scan_runner, monkeypatch):
+    """JSON 纯净，且唯一 lifecycle 在最终输出前已终止。"""
     import json as _json
 
     from kan.app import app
+    from kan.infra.lifecycle import CollectingReporter, OperationState
+
+    reporter = CollectingReporter()
+    monkeypatch.setattr("kan.infra.progress.operation_reporter", lambda: reporter)
+    original_echo = typer.echo
+
+    def echo_after_close(message, **kwargs):
+        assert reporter.events[-1].state is OperationState.SUCCEEDED
+        original_echo(message, **kwargs)
+
+    monkeypatch.setattr("kan.cli.scan_cmds.typer.echo", echo_after_close)
     result = scan_runner.invoke(app, ["scan", "--format", "json"])
     assert result.exit_code == 0, f"output: {result.output[:500]}"
-    out = result.output
-    data = _json.loads(out[out.index("{"):])
+    data = _json.loads(result.output)
     assert data["command"] == "scan"
     assert "disclaimer" in data
     assert data["results"][0]["symbol"] == "600519"
+    assert len({event.operation_id for event in reporter.events}) == 1
+    assert reporter.events[-1].state is OperationState.SUCCEEDED
+
+
+def test_scan_snapshot_failure_prevents_success_payload(scan_runner, monkeypatch):
+    """快照提交失败时不得先输出看似成功的 JSON。"""
+    from kan.app import app
+    from kan.infra.lifecycle import CollectingReporter, OperationState
+
+    reporter = CollectingReporter()
+    monkeypatch.setattr("kan.infra.progress.operation_reporter", lambda: reporter)
+
+    def fail_snapshot(_results):
+        raise OSError("snapshot unavailable")
+
+    monkeypatch.setattr("kan.core.scanner.save_snapshot", fail_snapshot)
+    result = scan_runner.invoke(app, ["scan", "--format", "json"])
+
+    assert result.exit_code == 1
+    assert result.output == ""
+    assert reporter.events[-1].state is OperationState.FAILED
 
 
 def test_scan_json_invalid_codes_error_envelope(scan_runner):

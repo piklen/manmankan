@@ -8,7 +8,10 @@
 """
 
 import logging
+import threading
+from dataclasses import dataclass, field
 from datetime import date, datetime, timedelta
+from types import SimpleNamespace
 from unittest.mock import MagicMock, patch
 
 import pandas as pd
@@ -16,6 +19,12 @@ import pytest
 
 from kan.core import trading_calendar
 from kan.data import fetcher, sources, tushare
+from kan.data.provider_contracts import (
+    FetchFailure,
+    FetchFailureKind,
+    ProviderCapabilities,
+    ProviderFetchResult,
+)
 from kan.storage import paths
 
 
@@ -23,6 +32,44 @@ from kan.storage import paths
 def temp_data_dir(tmp_path, monkeypatch):
     monkeypatch.setattr(fetcher, "DATA_DIR", tmp_path)
     return tmp_path
+
+
+def _no_data() -> ProviderFetchResult[pd.DataFrame]:
+    return ProviderFetchResult.failed(FetchFailure(FetchFailureKind.EMPTY, "no data"))
+
+
+@dataclass
+class _DetailedSource:
+    name: str
+    handler: object
+    priority: int = 10
+    capabilities: ProviderCapabilities = field(
+        default_factory=lambda: ProviderCapabilities(
+            max_concurrency=8,
+            initial_concurrency=8,
+            max_attempts=1,
+        )
+    )
+
+    def is_available(self) -> bool:
+        return True
+
+    def fetch(self, symbol: str, start: str) -> pd.DataFrame | None:
+        return self.fetch_detailed(symbol, start).data
+
+    def fetch_detailed(
+        self, symbol: str, start: str, *, record_breaker: bool = False,
+    ) -> ProviderFetchResult[pd.DataFrame]:
+        del record_breaker
+        return self.handler(symbol, start)  # type: ignore[operator, no-any-return]
+
+
+def _install_chain(monkeypatch, sources_list: list[_DetailedSource]) -> None:
+    monkeypatch.setattr(
+        fetcher,
+        "default_kline_chain",
+        lambda: SimpleNamespace(sources=sources_list),
+    )
 
 
 @pytest.fixture
@@ -37,9 +84,10 @@ def force_eastmoney_path(monkeypatch):
     eastmoney 凭 patched akshare.stock_zh_a_hist 返 fake_akshare_df 中标。
     tushare/baostock 都 mock None 防止用户本地 token / baostock 装好时短路。
     """
-    monkeypatch.setattr(tushare, "_fetch_tushare", lambda *a, **kw: None)
-    monkeypatch.setattr(sources, "_fetch_baostock", lambda *a, **kw: None)
-    monkeypatch.setattr(sources, "_fetch_sina", lambda *a, **kw: None)
+    monkeypatch.setattr(tushare, "_fetch_tushare_detailed", lambda *a, **kw: _no_data())
+    monkeypatch.setattr(sources, "_fetch_baostock_detailed", lambda *a, **kw: _no_data())
+    monkeypatch.setattr(sources, "_fetch_sina_detailed", lambda *a, **kw: _no_data())
+    monkeypatch.setattr(sources, "_fetch_tencent_detailed", lambda *a, **kw: _no_data())
 
 
 @pytest.fixture
@@ -178,6 +226,184 @@ def test_fetch_batch_continues_on_error(temp_data_dir, force_eastmoney_path, fak
     assert "600519" in results
     assert "000858" in results
     assert "FAIL" in errors
+
+
+def test_fetch_batch_fresh_cache_does_not_construct_scheduler(
+    temp_data_dir, raw_kline_df, monkeypatch,
+):
+    cache = temp_data_dir / "600519.parquet"
+    cached = fetcher._normalize_kline(raw_kline_df, source="cache", symbol="600519")
+    cached.to_parquet(cache)
+    monkeypatch.setattr(
+        trading_calendar,
+        "latest_trade_date",
+        lambda *a, **kw: cached["date"].iloc[-1],
+    )
+
+    class UnexpectedScheduler:
+        def __init__(self, *args, **kwargs):
+            raise AssertionError("fresh cache must not construct scheduler")
+
+    monkeypatch.setattr(fetcher, "KlineScheduler", UnexpectedScheduler)
+    results, errors = fetcher.fetch_batch(["600519"], days=1)
+
+    assert errors == {}
+    assert list(results) == ["600519"]
+
+
+def test_fetch_kline_scheduler_success_stamps_source_and_metadata(
+    temp_data_dir, raw_kline_df, monkeypatch,
+):
+    import pyarrow.parquet as pq
+
+    _install_chain(
+        monkeypatch,
+        [_DetailedSource("detailed", lambda symbol, start: ProviderFetchResult.succeeded(raw_kline_df))],
+    )
+
+    frame = fetcher.fetch_kline("600519", days=180, force=True)
+
+    cache = temp_data_dir / "600519.parquet"
+    metadata = pq.read_metadata(cache).metadata or {}
+    assert (frame["_source"] == "detailed").all()
+    assert metadata[b"kan.requested_days"] == b"180"
+
+
+def test_fetch_kline_all_sources_failed_preserves_error_message(temp_data_dir, monkeypatch):
+    _install_chain(monkeypatch, [_DetailedSource("failed", lambda symbol, start: _no_data())])
+
+    with pytest.raises(ValueError, match=r"^无效股票代码或无数据: 600519$"):
+        fetcher.fetch_kline("600519", force=True)
+
+
+def test_fetch_batch_mixed_results_continue_and_callbacks_run_once_in_caller_thread(
+    temp_data_dir, raw_kline_df, monkeypatch,
+):
+    import kan.storage.paths as storage_paths
+
+    cached = fetcher._normalize_kline(raw_kline_df, source="cache", symbol="600519")
+    cached.to_parquet(temp_data_dir / "600519.parquet")
+    monkeypatch.setattr(
+        trading_calendar,
+        "latest_trade_date",
+        lambda *a, **kw: cached["date"].iloc[-1],
+    )
+
+    def handler(symbol: str, start: str) -> ProviderFetchResult[pd.DataFrame]:
+        del start
+        if symbol == "000002":
+            return _no_data()
+        return ProviderFetchResult.succeeded(raw_kline_df.copy())
+
+    _install_chain(monkeypatch, [_DetailedSource("mixed", handler)])
+    original_normalize = fetcher._normalize_kline
+    original_write = storage_paths.atomic_write_parquet
+
+    def normalize(frame, source="unknown", symbol=None):
+        if symbol == "000003":
+            raise ValueError("normalize failed")
+        return original_normalize(frame, source=source, symbol=symbol)
+
+    def write(frame, path, **kwargs):
+        if path.name == "000004.parquet":
+            raise OSError("write failed")
+        return original_write(frame, path, **kwargs)
+
+    monkeypatch.setattr(fetcher, "_normalize_kline", normalize)
+    monkeypatch.setattr(storage_paths, "atomic_write_parquet", write)
+    caller_thread = threading.get_ident()
+    callbacks: list[tuple[str, bool, int, bool]] = []
+
+    def on_progress(symbol: str, ok: bool, error: str | None) -> None:
+        del error
+        callbacks.append(
+            (symbol, ok, threading.get_ident(), (temp_data_dir / f"{symbol}.parquet").exists())
+        )
+
+    symbols = ["600519", "000001", "000002", "000003", "000004"]
+    results, errors = fetcher.fetch_batch(symbols, days=1, on_progress=on_progress)
+
+    assert set(results) == {"600519", "000001"}
+    assert set(errors) == {"000002", "000003", "000004"}
+    assert [item[0] for item in callbacks].count("600519") == 1
+    assert len(callbacks) == len(symbols)
+    assert all(item[2] == caller_thread for item in callbacks)
+    assert all(item[3] for item in callbacks if item[1])
+
+
+def test_fetcher_uses_dynamic_source_snapshot_and_keeps_first_duplicate_name(
+    temp_data_dir, raw_kline_df, monkeypatch,
+):
+    snapshots = [
+        SimpleNamespace(
+            sources=[
+                _DetailedSource("same", lambda symbol, start: ProviderFetchResult.succeeded(raw_kline_df.copy())),
+                _DetailedSource("same", lambda symbol, start: (_ for _ in ()).throw(AssertionError())),
+            ]
+        ),
+        SimpleNamespace(
+            sources=[
+                _DetailedSource("second", lambda symbol, start: ProviderFetchResult.succeeded(raw_kline_df.copy()))
+            ]
+        ),
+    ]
+    monkeypatch.setattr(fetcher, "default_kline_chain", lambda: snapshots.pop(0))
+
+    first = fetcher.fetch_kline("600519", force=True)
+    second = fetcher.fetch_kline("600519", force=True)
+
+    assert (first["_source"] == "same").all()
+    assert (second["_source"] == "second").all()
+
+
+def test_fetch_batch_keyboard_interrupt_is_reraised_and_scheduler_closed(
+    temp_data_dir, monkeypatch,
+):
+    closed = False
+
+    class InterruptingScheduler:
+        def __init__(self, *args, **kwargs):
+            pass
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, exc_type, exc, traceback):
+            nonlocal closed
+            del exc_type, exc, traceback
+            closed = True
+
+        def fetch_many(self, symbols, start):
+            del symbols, start
+            raise KeyboardInterrupt
+
+    monkeypatch.setattr(fetcher, "KlineScheduler", InterruptingScheduler)
+    monkeypatch.setattr(fetcher, "default_kline_chain", lambda: SimpleNamespace(sources=[]))
+
+    with pytest.raises(KeyboardInterrupt):
+        fetcher.fetch_batch(["600519"], force=True)
+    assert closed
+
+
+def test_fetch_batch_duplicate_symbol_emits_two_callbacks(temp_data_dir, raw_kline_df, monkeypatch):
+    _install_chain(
+        monkeypatch,
+        [_DetailedSource("duplicate", lambda symbol, start: ProviderFetchResult.succeeded(raw_kline_df.copy()))],
+    )
+    callbacks: list[str] = []
+    states: list[fetcher.FetchProgress] = []
+
+    results, errors = fetcher.fetch_batch(
+        ["600519", "600519"],
+        force=True,
+        on_progress=lambda symbol, ok, error: callbacks.append(symbol),
+        on_progress_state=states.append,
+    )
+
+    assert errors == {}
+    assert list(results) == ["600519"]
+    assert callbacks == ["600519", "600519"]
+    assert [state.symbol for state in states] == ["600519", "600519"]
 
 
 # --- get_cached 补缺失列 ---
@@ -343,7 +569,8 @@ def test_fetch_baostock_returns_dataframe(temp_data_dir):
         ["2026-05-08", "101", "102", "100", "101.5", "11000", "1100000"],
     ])
 
-    with patch("baostock.login"), \
+    login = type("LoginResult", (), {"error_code": "0"})()
+    with patch("baostock.login", return_value=login), \
          patch("baostock.query_history_k_data_plus", return_value=mock_rs):
         sources._bs_logged_in = False
         df = sources._fetch_baostock("600519", "20260501")
@@ -358,7 +585,8 @@ def test_fetch_baostock_returns_none_on_error(temp_data_dir):
     mock_rs.error_code = "1"
     mock_rs.error_msg = "error"
 
-    with patch("baostock.login"), \
+    login = type("LoginResult", (), {"error_code": "0"})()
+    with patch("baostock.login", return_value=login), \
          patch("baostock.query_history_k_data_plus", return_value=mock_rs):
         sources._bs_logged_in = False
         df = sources._fetch_baostock("999999", "20260501")
@@ -374,10 +602,14 @@ def test_circuit_skips_breaker_down_source(temp_data_dir, raw_kline_df, isolated
 
     背景: BaostockKlineSource.is_available() 看熔断器 · down 时返 False · chain skip。
     """
-    monkeypatch.setattr(tushare, "_fetch_tushare", lambda *a, **kw: None)
+    monkeypatch.setattr(tushare, "_fetch_tushare_detailed", lambda *a, **kw: _no_data())
     isolated_breaker.record("baostock", ok=False)
-    monkeypatch.setattr(sources, "_fetch_eastmoney", lambda *a, **kw: None)
-    monkeypatch.setattr(sources, "_fetch_sina", lambda *a, **kw: raw_kline_df)
+    monkeypatch.setattr(sources, "_fetch_eastmoney_detailed", lambda *a, **kw: _no_data())
+    monkeypatch.setattr(
+        sources,
+        "_fetch_sina_detailed",
+        lambda *a, **kw: ProviderFetchResult.succeeded(raw_kline_df),
+    )
 
     df = fetcher.fetch_kline("600519", force=True)
     assert (df["_source"] == "sina").all()
@@ -417,10 +649,10 @@ def raw_kline_df():
 
 
 @pytest.mark.parametrize("source,mock_target", [
-    ("baostock", "_fetch_baostock"),
-    ("sina", "_fetch_sina"),
-    ("eastmoney", "_fetch_eastmoney"),
-    ("tencent", "_fetch_tencent"),
+    ("baostock", "_fetch_baostock_detailed"),
+    ("sina", "_fetch_sina_detailed"),
+    ("eastmoney", "_fetch_eastmoney_detailed"),
+    ("tencent", "_fetch_tencent_detailed"),
 ])
 def test_fetch_kline_stamps_source(temp_data_dir, raw_kline_df, source, mock_target, monkeypatch):
     """各源 fallback 标记正确 source · 其它源全 mock None 让目标源生效.
@@ -433,13 +665,17 @@ def test_fetch_kline_stamps_source(temp_data_dir, raw_kline_df, source, mock_tar
     另一个 mock raw_df 让结果确定 (不受 race 顺序影响)。
     """
     # 全 mock None · 再单独 mock 目标源为 raw_df (顺序覆盖)
-    monkeypatch.setattr(tushare, "_fetch_tushare", lambda *a, **kw: None)
-    monkeypatch.setattr(sources, "_fetch_baostock", lambda *a, **kw: None)
-    monkeypatch.setattr(sources, "_fetch_sina", lambda *a, **kw: None)
-    monkeypatch.setattr(sources, "_fetch_eastmoney", lambda *a, **kw: None)
-    monkeypatch.setattr(sources, "_fetch_tencent", lambda *a, **kw: None)
+    monkeypatch.setattr(tushare, "_fetch_tushare_detailed", lambda *a, **kw: _no_data())
+    monkeypatch.setattr(sources, "_fetch_baostock_detailed", lambda *a, **kw: _no_data())
+    monkeypatch.setattr(sources, "_fetch_sina_detailed", lambda *a, **kw: _no_data())
+    monkeypatch.setattr(sources, "_fetch_eastmoney_detailed", lambda *a, **kw: _no_data())
+    monkeypatch.setattr(sources, "_fetch_tencent_detailed", lambda *a, **kw: _no_data())
 
-    monkeypatch.setattr(sources, mock_target, lambda *a, **kw: raw_kline_df)
+    monkeypatch.setattr(
+        sources,
+        mock_target,
+        lambda *a, **kw: ProviderFetchResult.succeeded(raw_kline_df),
+    )
 
     df = fetcher.fetch_kline("600519", force=True)
     assert (df["_source"] == source).all()
@@ -491,10 +727,10 @@ class TestTushareProDispatch:
         called = {"tushare": False}
         def spy_tushare(*a, **kw):
             called["tushare"] = True
-            return None
-        monkeypatch.setattr(tushare, "_fetch_tushare", spy_tushare)
-        monkeypatch.setattr(sources, "_fetch_baostock", lambda *a, **kw: None)
-        monkeypatch.setattr(sources, "_fetch_sina", lambda *a, **kw: None)
+            return _no_data()
+        monkeypatch.setattr(tushare, "_fetch_tushare_detailed", spy_tushare)
+        monkeypatch.setattr(sources, "_fetch_baostock_detailed", lambda *a, **kw: _no_data())
+        monkeypatch.setattr(sources, "_fetch_sina_detailed", lambda *a, **kw: _no_data())
         with patch("akshare.stock_zh_a_hist", return_value=fake_akshare_df):
             df = fetcher.fetch_kline("600519", force=True)
         # 背景: 未配 token 时 chain skip TushareKlineSource · _fetch_tushare 不被调
@@ -519,10 +755,14 @@ class TestTushareProDispatch:
         baostock_called = {"hit": False}
         def fake_baostock(*a, **kw):
             baostock_called["hit"] = True
-            return None
+            return _no_data()
 
-        monkeypatch.setattr(tushare, "_fetch_tushare", lambda *a, **kw: sample.copy())
-        monkeypatch.setattr(sources, "_fetch_baostock", fake_baostock)
+        monkeypatch.setattr(
+            tushare,
+            "_fetch_tushare_detailed",
+            lambda *a, **kw: ProviderFetchResult.succeeded(sample.copy()),
+        )
+        monkeypatch.setattr(sources, "_fetch_baostock_detailed", fake_baostock)
 
         df = fetcher.fetch_kline("600519", force=True)
         assert not baostock_called["hit"]

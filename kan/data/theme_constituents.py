@@ -17,6 +17,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Protocol, runtime_checkable
 
+from kan.data.provider_contracts import ProviderCapabilities
 from kan.data.source_chain import _run_chain
 from kan.infra.log import debug_log
 
@@ -94,6 +95,12 @@ class ThsConstituentSource:
 
     name = "ths_constituent"
     priority = 10
+    capabilities = ProviderCapabilities(
+        max_concurrency=8,
+        initial_concurrency=4,
+        max_attempts=1,
+        timeout_seconds=10.0,
+    )
 
     def is_available(self) -> bool:
         return True
@@ -123,6 +130,12 @@ class EmConstituentSource:
 
     name = "em_push2_concept"
     priority = 20
+    capabilities = ProviderCapabilities(
+        max_concurrency=6,
+        initial_concurrency=2,
+        max_attempts=1,
+        timeout_seconds=15.0,
+    )
 
     def is_available(self) -> bool:
         from kan.infra.circuit_breaker import get_breaker

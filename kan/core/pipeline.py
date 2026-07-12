@@ -15,8 +15,6 @@ helpers:
 """
 from __future__ import annotations
 
-import contextlib
-import io
 from collections.abc import Callable
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any, NoReturn
@@ -36,6 +34,7 @@ if TYPE_CHECKING:
 
     from kan.core.models import BoardMeta, HotMeta, ThemeMeta
     from kan.core.stock_set import StockSet
+    from kan.infra.lifecycle import OperationLifecycle
 
 
 # ── 目标源错误统一处理 (StockSet 路径) ─────────────────────────────────
@@ -325,6 +324,7 @@ def run_data_pipeline(
     exit_on_resolve_error: bool = True,
     fetch_days: int | None = None,
     auto_fetch: bool = True,
+    lifecycle: OperationLifecycle | None = None,
     **compute_kwargs: Any,
 ) -> DataCtx:
     """resolve → auto_fetch → compute → freshness 的统一编排 (StockSet 单签名)。
@@ -352,25 +352,32 @@ def run_data_pipeline(
     """
     from kan.core.auto_fetch import auto_fetch_stale
 
+    del show_progress  # 兼容旧 Python API；展示策略由 CLI reporter 决定。
+    if lifecycle is not None:
+        lifecycle.phase("解析股票池")
     try:
         targets, meta = resolve_stock_set(stock_set)
     except StockSetResolveError as e:
         if not exit_on_resolve_error:
             raise
         raise_stock_set_resolve_exit(e)
+    if lifecycle is not None:
+        lifecycle.progress(len(targets), len(targets), "股票池已解析")
     if auto_fetch:
-        if show_progress:
-            if fetch_days is None:
-                auto_fetch_stale(targets)
-            else:
-                auto_fetch_stale(targets, days=fetch_days)
+        if fetch_days is None and lifecycle is None:
+            auto_fetch_stale(targets)
+        elif fetch_days is None:
+            auto_fetch_stale(targets, lifecycle=lifecycle)
+        elif lifecycle is None:
+            auto_fetch_stale(targets, days=fetch_days)
         else:
-            with contextlib.redirect_stderr(io.StringIO()):
-                if fetch_days is None:
-                    auto_fetch_stale(targets)
-                else:
-                    auto_fetch_stale(targets, days=fetch_days)
+            auto_fetch_stale(targets, days=fetch_days, lifecycle=lifecycle)
+    if lifecycle is not None:
+        lifecycle.phase("计算扫描结果", target_count=len(targets))
     results = compute(targets, **compute_kwargs)
+    if lifecycle is not None:
+        lifecycle.progress(len(results), len(targets), "扫描计算完成")
+        lifecycle.phase("汇总数据新鲜度", target_count=len(targets))
     freshness = freshness_of(
         (symbol for symbol, _name in targets),
         min_rows=fetch_days,

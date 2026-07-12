@@ -52,11 +52,18 @@ def test_daily_json_uses_fact_summary(monkeypatch) -> None:
         is_stale=False,
         phase="post",
     )
+    from kan.infra.lifecycle import CollectingReporter
+
     fake_result = SimpleNamespace(
         results=rows,
         ctx=SimpleNamespace(freshness=freshness),
     )
-    monkeypatch.setattr("kan.service.scan_service.run_scan", lambda request: fake_result)
+    reporter = CollectingReporter()
+    monkeypatch.setattr("kan.infra.progress.operation_reporter", lambda: reporter)
+    monkeypatch.setattr(
+        "kan.service.scan_service.run_scan",
+        lambda request, **_kwargs: fake_result,
+    )
     monkeypatch.setattr(
         "kan.storage.watchlist.load_watchlist",
         lambda: SimpleNamespace(stocks=[object(), object()]),
@@ -76,3 +83,5 @@ def test_daily_json_uses_fact_summary(monkeypatch) -> None:
     assert payload["facts"]["period_180_low_lte_10_count"] == 1
     assert payload["facts"]["period_180_high_gte_90_count"] == 1
     assert payload["facts"]["permission_note_count"] == 1
+    assert len({event.operation_id for event in reporter.events}) == 1
+    assert reporter.events[-1].state.value == "succeeded"

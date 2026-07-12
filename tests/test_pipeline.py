@@ -22,6 +22,7 @@ from kan.data.boards import (
     ThemeNotFoundError,
 )
 from kan.data.hot import HotListUnavailableError
+from kan.infra.lifecycle import CollectingReporter, LifecycleKind, operation
 
 # ─────────────── fake StockSet ───────────────
 
@@ -752,3 +753,33 @@ def test_run_data_pipeline_passes_fetch_days_to_auto_fetch(monkeypatch):
     )
 
     assert fetched_calls == [(targets, {"days": 360})]
+
+
+def test_run_data_pipeline_forwards_one_lifecycle_through_all_stages(monkeypatch):
+    targets = [("600519", "贵州茅台")]
+    fetched_calls = []
+    monkeypatch.setattr(
+        "kan.core.auto_fetch.auto_fetch_stale",
+        lambda pairs, **kwargs: fetched_calls.append((pairs, kwargs)),
+    )
+    _patch_calendar(monkeypatch, expected_date=date(2026, 5, 23))
+    _patch_fetcher(
+        monkeypatch,
+        cutoffs={"600519": date(2026, 5, 23)},
+        ages={"600519": "2026-05-23T16:00:00"},
+    )
+    reporter = CollectingReporter()
+
+    with operation("扫描", reporter=reporter) as lifecycle:
+        pipeline.run_data_pipeline(
+            _FakeStockSet(pairs=targets),
+            compute=lambda rows, **_kwargs: [_FakeResult(rows[0][0])],
+            lifecycle=lifecycle,
+        )
+
+    assert fetched_calls == [(targets, {"lifecycle": lifecycle})]
+    messages = [event.message for event in reporter.events]
+    assert "解析股票池" in messages
+    assert "计算扫描结果" in messages
+    assert "汇总数据新鲜度" in messages
+    assert any(event.kind is LifecycleKind.PROGRESS for event in reporter.events)

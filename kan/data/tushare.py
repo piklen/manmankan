@@ -10,14 +10,23 @@ from __future__ import annotations
 
 import os
 import re
+import threading
 import time
 from dataclasses import dataclass
+from datetime import UTC, datetime
+from email.utils import parsedate_to_datetime
 from typing import TYPE_CHECKING
 
 import requests
 from requests.adapters import HTTPAdapter
 from urllib3.util.retry import Retry
 
+from kan.data.provider_contracts import (
+    FetchFailure,
+    FetchFailureKind,
+    ProviderCapabilities,
+    ProviderFetchResult,
+)
 from kan.infra.log import debug_log, redact_text
 
 if TYPE_CHECKING:
@@ -49,11 +58,12 @@ class TushareApiError:
     - 新版本 return (data, error) tuple · caller 可选择性透传给用户
     """
 
-    code: int
+    code: int | str
     msg: str
     api_name: str
     retryable: bool = False
     retry_after: int | None = None
+    failure_kind: FetchFailureKind = FetchFailureKind.PERMANENT
 
 
 _DATA_HUB_RETRYABLE_CODES = {40203, 50002, 50003, 50004}
@@ -67,8 +77,8 @@ _DATA_HUB_RETRYABLE_HEADER = "X-Data-Hub-Error-Retryable"
 _DATA_HUB_RETRY_AFTER_HEADER = "X-Data-Hub-Retry-After"
 
 
-def _make_session() -> requests.Session:
-    """带连接池 + 1 次自动重试的 Session。
+def _make_session(*, retries: int = 1) -> requests.Session:
+    """创建当前线程专用的连接池 Session。
 
     架构考量:
     - 付费 token 用户主动配置 TuShare Pro 当主路径 · 期望 production 级
@@ -79,7 +89,7 @@ def _make_session() -> requests.Session:
     """
     s = requests.Session()
     retry = Retry(
-        total=1,  # 1 次重试(总 2 次请求)· 重试太多反而拖体感
+        total=retries,
         status_forcelist=[502, 503, 504],
         allowed_methods=["POST"],
         backoff_factor=0.5,
@@ -90,15 +100,25 @@ def _make_session() -> requests.Session:
     return s
 
 
-_session: requests.Session | None = None
+_session_local = threading.local()
 
 
 def _get_session() -> requests.Session:
-    """lazy session · 避免顶层 import 时建 connection pool。"""
-    global _session
-    if _session is None:
-        _session = _make_session()
-    return _session
+    """每线程 lazy Session，避免并发共享 requests.Session 可变状态。"""
+    session = getattr(_session_local, "retrying", None)
+    if session is None:
+        session = _make_session()
+        _session_local.retrying = session
+    return session
+
+
+def _get_single_attempt_session() -> requests.Session:
+    """详细 provider 路径专用 Session；adapter 层绝不自动重试。"""
+    session = getattr(_session_local, "single_attempt", None)
+    if session is None:
+        session = _make_session(retries=0)
+        _session_local.single_attempt = session
+    return session
 
 
 def _allow_insecure_endpoint() -> bool:
@@ -190,6 +210,8 @@ def _post_tushare_api(
     api_name: str,
     params: dict,
     fields: str,
+    *,
+    allow_transport_retries: bool = True,
 ) -> tuple[dict | None, TushareApiError | None]:
     """POST JSON 到 TuShare Pro API · 返回 (data, error) tuple。
 
@@ -212,13 +234,38 @@ def _post_tushare_api(
         "params": params,
         "fields": fields,
     }
+    session = _get_session() if allow_transport_retries else _get_single_attempt_session()
     try:
-        resp = _get_session().post(endpoint, json=payload, timeout=_TIMEOUT_SECONDS)
-    except Exception as e:
-        # 传真 Exception · log.py 的 redact_text 会兜底处理 path / token 模式
-        debug_log(__name__, "tushare POST 失败", e)
+        resp = session.post(endpoint, json=payload, timeout=_TIMEOUT_SECONDS)
+    except requests.Timeout as exc:
+        debug_log(__name__, "tushare POST timeout", exc)
         return None, TushareApiError(
-            code=-1, msg=f"网络/连接错误: {type(e).__name__}", api_name=api_name,
+            code=-1,
+            msg=f"网络/连接错误: {type(exc).__name__}",
+            api_name=api_name,
+            retryable=True,
+            failure_kind=FetchFailureKind.TIMEOUT,
+        )
+    except Exception as exc:
+        # 只记录异常类型，token 永不进入日志或结构化错误。
+        debug_log(__name__, "tushare POST 失败", exc)
+        return None, TushareApiError(
+            code=-1,
+            msg=f"网络/连接错误: {type(exc).__name__}",
+            api_name=api_name,
+            retryable=True,
+            failure_kind=FetchFailureKind.TRANSPORT,
+        )
+    headers = getattr(resp, "headers", {}) or {}
+    if resp.status_code == 429:
+        retry_after = _parse_retry_after(headers.get("Retry-After"))
+        return None, TushareApiError(
+            code=429,
+            msg="HTTP 429 (rate limited)",
+            api_name=api_name,
+            retryable=True,
+            retry_after=retry_after,
+            failure_kind=FetchFailureKind.RATE_LIMIT,
         )
     if resp.status_code != 200:
         debug_log(
@@ -227,25 +274,50 @@ def _post_tushare_api(
             RuntimeError(f"endpoint={endpoint}"),
         )
         return None, TushareApiError(
-            code=-2, msg=f"HTTP {resp.status_code} (非 2xx)", api_name=api_name,
+            code=-2,
+            msg=f"HTTP {resp.status_code} (非 2xx)",
+            api_name=api_name,
+            retryable=resp.status_code >= 500,
+            failure_kind=FetchFailureKind.TRANSPORT,
         )
     try:
         body = resp.json()
     except ValueError:
         return None, TushareApiError(
-            code=-3, msg="response 非 JSON (代理转发错? endpoint URL 错?)", api_name=api_name,
+            code=-3,
+            msg="response 非 JSON (代理转发错? endpoint URL 错?)",
+            api_name=api_name,
+            failure_kind=FetchFailureKind.INVALID_SCHEMA,
+        )
+    if not isinstance(body, dict):
+        return None, TushareApiError(
+            code=-3,
+            msg="response JSON 顶层不是 object",
+            api_name=api_name,
+            failure_kind=FetchFailureKind.INVALID_SCHEMA,
         )
     biz_code = body.get("code", -1)
-    if biz_code != 0:
+    try:
+        numeric_code = int(biz_code)
+    except (TypeError, ValueError):
+        numeric_code = -1
+    if numeric_code != 0:
         raw_msg = str(body.get("msg") or "(server msg 为空)")
         # redact 防 server msg 偶尔含 token 字符串("您的 token xxx 失效" 模式)
         sanitized_msg = redact_text(raw_msg)
-        headers = getattr(resp, "headers", {}) or {}
         retryable = (
             str(headers.get(_DATA_HUB_RETRYABLE_HEADER, "")).lower() in {"1", "true", "yes"}
-            or int(biz_code) in _DATA_HUB_RETRYABLE_CODES
+            or numeric_code in _DATA_HUB_RETRYABLE_CODES
         )
         retry_after = _parse_retry_after(headers.get(_DATA_HUB_RETRY_AFTER_HEADER))
+        if retry_after is None:
+            retry_after = _parse_retry_after(headers.get("Retry-After"))
+        if numeric_code == 40203:
+            failure_kind = FetchFailureKind.RATE_LIMIT
+        elif retryable:
+            failure_kind = FetchFailureKind.TRANSPORT
+        else:
+            failure_kind = FetchFailureKind.PERMANENT
         debug_log(
             __name__,
             f"tushare api code={biz_code} msg={sanitized_msg}",
@@ -257,17 +329,54 @@ def _post_tushare_api(
             api_name=api_name,
             retryable=retryable,
             retry_after=retry_after,
+            failure_kind=failure_kind,
         )
-    return body.get("data"), None
+    data = body.get("data")
+    if not isinstance(data, dict):
+        return None, TushareApiError(
+            code=-3,
+            msg="response data 不是 object",
+            api_name=api_name,
+            failure_kind=FetchFailureKind.INVALID_SCHEMA,
+        )
+    return data, None
 
 
 def _parse_retry_after(raw: object) -> int | None:
-    """解析 data-hub Retry-After header · 非法值忽略。"""
-    try:
-        value = int(str(raw).strip())
-    except (TypeError, ValueError):
+    """解析标准 Retry-After（秒数或 HTTP-date）及 data-hub 同值 header。"""
+    text = str(raw).strip() if raw is not None else ""
+    if not text:
         return None
+    try:
+        value = int(text)
+    except ValueError:
+        try:
+            retry_at = parsedate_to_datetime(text)
+        except (TypeError, ValueError, OverflowError):
+            return None
+        if retry_at.tzinfo is None:
+            retry_at = retry_at.replace(tzinfo=UTC)
+        value = int((retry_at - datetime.now(UTC)).total_seconds())
     return value if value > 0 else None
+
+
+def _api_error_to_failure(err: TushareApiError | None) -> FetchFailure:
+    """把 TuShare/data-hub 错误转换为统一 provider failure。"""
+    if err is None:
+        return FetchFailure(
+            FetchFailureKind.TRANSPORT,
+            message="tushare returned neither data nor error",
+            retryable=True,
+            affects_circuit=True,
+        )
+    return FetchFailure(
+        err.failure_kind,
+        message=err.msg,
+        code=err.code,
+        retryable=err.retryable,
+        retry_after=float(err.retry_after) if err.retry_after is not None else None,
+        affects_circuit=_should_trip_tushare_circuit(err),
+    )
 
 
 def _should_trip_tushare_circuit(err: TushareApiError | None) -> bool:
@@ -277,9 +386,13 @@ def _should_trip_tushare_circuit(err: TushareApiError | None) -> bool:
     上游和 endpoint 仍可能健康；让它们触发 5 分钟整源熔断会把后续
     股票全部误降级到 baostock。
     """
-    if err is None:
+    if err is None or err.failure_kind == FetchFailureKind.RATE_LIMIT:
         return False
-    return not err.retryable
+    try:
+        code = int(err.code)
+    except (TypeError, ValueError):
+        code = -1
+    return code not in _DATA_HUB_RETRYABLE_CODES
 
 
 def _retryable_sleep_seconds(err: TushareApiError, attempt: int) -> float | None:
@@ -338,6 +451,90 @@ def _to_qfq_kline_df(data: dict | None) -> pd.DataFrame | None:
     if "trade_date" not in df.columns:
         return None
     return df.rename(columns=_QFQ_FIELD_MAP)
+
+
+def _fetch_tushare_detailed(
+    symbol: str,
+    start: str,
+    *,
+    record_breaker: bool = True,
+) -> ProviderFetchResult[pd.DataFrame]:
+    """TuShare 单次详细拉取；不 sleep，也不在 HTTP adapter 内重试。"""
+    from kan.infra import circuit_breaker
+
+    token, endpoint = _resolve_config()
+    if not token:
+        return ProviderFetchResult.failed(
+            FetchFailure(FetchFailureKind.UNAVAILABLE, message="tushare token is not configured"),
+        )
+
+    cb = circuit_breaker.get_breaker()
+    if cb.is_down("tushare"):
+        return ProviderFetchResult.failed(
+            FetchFailure(FetchFailureKind.CIRCUIT_OPEN, message="tushare circuit is open"),
+        )
+    try:
+        ts_code = _normalize_symbol_to_ts(symbol)
+    except ValueError as exc:
+        return ProviderFetchResult.failed(
+            FetchFailure(FetchFailureKind.INVALID, message=str(exc)),
+        )
+
+    try:
+        data, err = _post_tushare_api(
+            endpoint=endpoint,
+            token=token,
+            api_name="stk_factor_pro",
+            params={"ts_code": ts_code, "start_date": start},
+            fields=_QFQ_KLINE_FIELDS,
+            allow_transport_retries=False,
+        )
+    except requests.Timeout as exc:
+        debug_log(__name__, "fetch tushare timeout", exc)
+        failure = FetchFailure(
+            FetchFailureKind.TIMEOUT,
+            message=type(exc).__name__,
+            retryable=True,
+            affects_circuit=True,
+        )
+        if record_breaker:
+            cb.record("tushare", ok=False)
+        return ProviderFetchResult.failed(failure, breaker_recorded=record_breaker)
+    except Exception as exc:
+        debug_log(__name__, "fetch tushare 失败", exc)
+        failure = FetchFailure(
+            FetchFailureKind.TRANSPORT,
+            message=type(exc).__name__,
+            retryable=True,
+            affects_circuit=True,
+        )
+        if record_breaker:
+            cb.record("tushare", ok=False)
+        return ProviderFetchResult.failed(failure, breaker_recorded=record_breaker)
+
+    if data is None:
+        failure = _api_error_to_failure(err)
+        breaker_recorded = record_breaker and failure.affects_circuit
+        if breaker_recorded:
+            cb.record("tushare", ok=False)
+        return ProviderFetchResult.failed(failure, breaker_recorded=breaker_recorded)
+
+    items = data.get("items") or []
+    if not items:
+        return ProviderFetchResult.failed(
+            FetchFailure(FetchFailureKind.EMPTY, message="tushare returned no data"),
+        )
+    df = _to_qfq_kline_df(data)
+    if df is None or df.empty:
+        return ProviderFetchResult.failed(
+            FetchFailure(
+                FetchFailureKind.INVALID_SCHEMA,
+                message="tushare response is missing required qfq fields",
+            ),
+        )
+    if record_breaker:
+        cb.record("tushare", ok=True)
+    return ProviderFetchResult.succeeded(df, breaker_recorded=record_breaker)
 
 
 def _fetch_tushare(symbol: str, start: str) -> pd.DataFrame | None:
@@ -477,6 +674,16 @@ class TushareKlineSource:
 
     name = "tushare"
     priority = 10
+    capabilities = ProviderCapabilities(
+        max_concurrency=12,
+        initial_concurrency=4,
+        max_attempts=3,
+        timeout_seconds=_TIMEOUT_SECONDS,
+        backoff_base_seconds=0.5,
+        backoff_cap_seconds=5.0,
+        rate_limit_cooldown_seconds=2.0,
+        supports_retry_after=True,
+    )
 
     def is_available(self) -> bool:
         token, _ = _resolve_config()
@@ -487,6 +694,11 @@ class TushareKlineSource:
 
     def fetch(self, symbol: str, start: str) -> pd.DataFrame | None:
         return _fetch_tushare(symbol, start)
+
+    def fetch_detailed(
+        self, symbol: str, start: str, *, record_breaker: bool = True,
+    ) -> ProviderFetchResult[pd.DataFrame]:
+        return _fetch_tushare_detailed(symbol, start, record_breaker=record_breaker)
 
 
 def _strip_ts_suffix(ts_code: str) -> str:

@@ -8,6 +8,7 @@ import pandas as pd
 
 from kan.core.models import Theme
 from kan.data import board_leaderboard
+from kan.infra.lifecycle import CollectingReporter, LifecycleKind, operation
 
 
 def _theme_df(days: int = 5) -> pd.DataFrame:
@@ -21,6 +22,45 @@ def _theme_df(days: int = 5) -> pd.DataFrame:
         "volume": [float("nan")] * days,
         "amount": [float("nan")] * days,
     })
+
+
+def test_theme_moneyflow_uses_constituent_batch(monkeypatch):
+    themes = [
+        Theme(code="886001", name="题材一", source="ths"),
+        Theme(code="886002", name="题材二", source="ths"),
+    ]
+    monkeypatch.setattr(
+        "kan.data.moneyflow.fetch_moneyflow",
+        lambda: pd.DataFrame([
+            {"symbol": "600519", "net_amount": 100.0},
+            {"symbol": "000858", "net_amount": -30.0},
+        ]),
+    )
+    monkeypatch.setattr(
+        "kan.data.boards.get_theme_constituents",
+        lambda *_args, **_kwargs: (_ for _ in ()).throw(
+            AssertionError("unexpected serial constituent fetch")
+        ),
+    )
+    monkeypatch.setattr(
+        "kan.data.boards.get_theme_constituents_batch",
+        lambda requested, **_kwargs: {
+            requested[0].code: [("600519", "贵州茅台")],
+            requested[1].code: [("600519", "贵州茅台"), ("000858", "五粮液")],
+        },
+    )
+    reporter = CollectingReporter()
+
+    with operation("题材资金", reporter=reporter) as lifecycle:
+        result = board_leaderboard.theme_moneyflow_map(themes, lifecycle=lifecycle)
+
+    assert result == {"886001": 100.0, "886002": 70.0}
+    progress = [
+        event for event in reporter.events
+        if event.kind is LifecycleKind.PROGRESS and event.message == "聚合题材资金"
+    ]
+    assert progress[-1].completed == 2
+    assert progress[-1].total == 2
 
 
 def test_theme_pos_uses_tushare_batch_klines(monkeypatch):

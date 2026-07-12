@@ -11,10 +11,14 @@ from __future__ import annotations
 
 import concurrent.futures
 import os
+from collections.abc import Sequence
 from dataclasses import dataclass
-from typing import Literal
+from typing import TYPE_CHECKING, Literal
 
 from kan.core.models import Board, StockScanResult, Theme
+
+if TYPE_CHECKING:
+    from kan.infra.lifecycle import OperationLifecycle
 
 BoardKind = Literal["industry", "theme"]
 BoardMetric = Literal["moneyflow", "gain", "pos"]
@@ -107,11 +111,19 @@ def _industry_moneyflow_map() -> dict[str, float]:
     return out
 
 
-def theme_moneyflow_map(themes: list[Theme], *, force: bool = False) -> dict[str, float]:
+def theme_moneyflow_map(
+    themes: list[Theme],
+    *,
+    force: bool = False,
+    max_workers: int | None = None,
+    lifecycle: OperationLifecycle | None = None,
+) -> dict[str, float]:
     """题材代码 → 成分股主力净额合计(万元)。"""
     from kan.data import boards
     from kan.data.moneyflow import fetch_moneyflow
 
+    if lifecycle is not None:
+        lifecycle.phase("拉取全市场资金截面")
     mf = fetch_moneyflow()
     if mf is None or mf.empty:
         return {}
@@ -119,12 +131,17 @@ def theme_moneyflow_map(themes: list[Theme], *, force: bool = False) -> dict[str
         str(r.get("symbol", "")).strip(): r.get("net_amount")
         for _, r in mf.iterrows()
     }
+    constituents = boards.get_theme_constituents_batch(
+        themes,
+        force=force,
+        max_workers=max_workers,
+        lifecycle=lifecycle,
+    )
+    if lifecycle is not None:
+        lifecycle.phase("聚合题材资金", total=len(themes))
     out: dict[str, float] = {}
-    for theme in themes:
-        try:
-            pairs = boards.get_theme_constituents(theme, force=force)
-        except Exception:
-            continue
+    for index, theme in enumerate(themes, start=1):
+        pairs = constituents.get(theme.code, [])
         total = 0.0
         hit = False
         for code, _name in pairs:
@@ -138,6 +155,13 @@ def theme_moneyflow_map(themes: list[Theme], *, force: bool = False) -> dict[str
                 continue
         if hit:
             out[theme.code] = total
+        if lifecycle is not None:
+            lifecycle.progress(
+                index,
+                len(themes),
+                "聚合题材资金",
+                available=len(out),
+            )
     return out
 
 
@@ -150,6 +174,7 @@ def load_board_leaderboard(
     limit: int | None = None,
     force: bool = False,
     parallel: int | None = None,
+    lifecycle: OperationLifecycle | None = None,
 ) -> tuple[list[BoardRankRow], list[tuple[str, Exception]]]:
     """加载板块榜 · 返回 (rows, errors)。
 
@@ -160,6 +185,7 @@ def load_board_leaderboard(
 
     errors: list[tuple[str, Exception]] = []
     scan_by_code: dict[str, StockScanResult] = {}
+    catalog: Sequence[Board | Theme]
     if kind == "industry":
         catalog = [b for b in boards.load_industry_catalog(force=force) if b.level == level]
         mf_map = _industry_moneyflow_map()
@@ -183,7 +209,20 @@ def load_board_leaderboard(
                     scan_by_code = _scan_theme_klines(ts_catalog, ts_klines, period)
         if not catalog:
             catalog = boards.load_theme_catalog(force=force)
-        mf_map = theme_moneyflow_map(catalog, force=force) if metric == "moneyflow" else {}
+        themes = [item for item in catalog if isinstance(item, Theme)]
+        if metric == "moneyflow":
+            mf_map = (
+                theme_moneyflow_map(themes, force=force)
+                if parallel is None and lifecycle is None
+                else theme_moneyflow_map(
+                    themes,
+                    force=force,
+                    max_workers=parallel,
+                    lifecycle=lifecycle,
+                )
+            )
+        else:
+            mf_map = {}
 
     def build_row(item: Board | Theme) -> tuple[BoardRankRow | None, tuple[str, Exception] | None]:
         scan = scan_by_code.get(item.code)

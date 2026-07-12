@@ -22,6 +22,7 @@ from datetime import date, datetime, timedelta
 from pathlib import Path
 from typing import TYPE_CHECKING
 
+from kan.data.scheduler import KlineFetchResult, KlineScheduler
 from kan.data.source_chain import default_kline_chain
 from kan.infra.log import debug_log
 from kan.infra.numeric import to_numeric_checked
@@ -31,6 +32,8 @@ if TYPE_CHECKING:
     from collections.abc import Callable
 
     import pandas as pd
+
+    from kan.data.protocols import KlineSource
 
 # ── K 线标准 schema ──────────────────────────────────────────────────
 # 所有数据源的出口必须经过 _normalize_kline() 归一化到此格式。
@@ -311,6 +314,35 @@ def _ensure_no_proxy() -> None:
 
 # ── 公开 API ─────────────────────────────────────────────────────────
 
+
+def _kline_source_snapshot() -> list[KlineSource]:
+    """每次 operation 取一次当前 chain snapshot，并兼容旧注册留下的重名源。"""
+    unique: dict[str, KlineSource] = {}
+    for source in default_kline_chain().sources:
+        unique.setdefault(source.name, source)
+    return list(unique.values())
+
+
+def _finalize_kline_result(
+    result: KlineFetchResult,
+    *,
+    days: int,
+) -> pd.DataFrame:
+    """把 scheduler raw result 归一化并原子落盘，保留旧失败文案。"""
+    if not result.succeeded or result.data is None or result.source is None:
+        raise ValueError(f"无效股票代码或无数据: {result.symbol}")
+    cache = _cache_path(result.symbol)
+    df = _normalize_kline(result.data, source=result.source, symbol=result.symbol)
+    from kan.storage.paths import atomic_write_parquet
+
+    atomic_write_parquet(
+        df,
+        cache,
+        metadata={"kan.requested_days": str(int(days))},
+    )
+    return df
+
+
 def fetch_kline(
     symbol: str,
     days: int = DEFAULT_KLINE_DAYS,
@@ -341,20 +373,12 @@ def fetch_kline(
     _ensure_no_proxy()
     start = (datetime.now() - timedelta(days=int(days * 1.8))).strftime("%Y%m%d")
 
-    result = default_kline_chain().fetch(symbol, start)
-    if result is None:
-        raise ValueError(f"无效股票代码或无数据: {symbol}")
-    raw, source = result
-
-    from kan.storage.paths import atomic_write_parquet
-
-    df = _normalize_kline(raw, source=source, symbol=symbol)
-    atomic_write_parquet(
-        df,
-        cache,
-        metadata={"kan.requested_days": str(int(days))},
-    )
-    return df
+    with KlineScheduler(
+        _kline_source_snapshot(),
+        supervisor_workers=2,
+    ) as scheduler:
+        result = scheduler.fetch(symbol, start)
+    return _finalize_kline_result(result, days=days)
 
 
 def resolve_max_workers() -> int:
@@ -421,7 +445,10 @@ def fetch_batch(
     max_workers=None → resolve_max_workers() 启发式 (cpu_count*2 cap 12).
     未显式设置上限时,控制器可在健康窗口内继续升到 20；遇到限流/超时/失败回落。
     """
-    from concurrent.futures import FIRST_COMPLETED, ThreadPoolExecutor, wait
+    import time
+    from collections import defaultdict
+
+    import pandas as pd
 
     if not symbols:
         return {}, {}
@@ -429,80 +456,92 @@ def fetch_batch(
     initial_workers, worker_cap = resolve_batch_worker_bounds(max_workers)
     worker_cap = min(worker_cap, len(symbols))
     initial_workers = min(initial_workers, worker_cap)
-    controller = _AdaptiveConcurrency(initial=initial_workers, maximum=worker_cap)
-
     results: dict[str, pd.DataFrame] = {}
     errors: dict[str, str] = {}
-
-    def _safe_one(symbol: str) -> tuple[str, pd.DataFrame | None, str | None, float]:
-        import time
-
-        started = time.monotonic()
-        for attempt in range(2):
-            try:
-                df = fetch_kline(symbol, days=days, force=force)
-                return symbol, df, None, time.monotonic() - started
-            except Exception as e:
-                # fetch_batch retry path · 加 debug log
-                debug_log(__name__, f"fetch_batch retry {attempt}", e)
-                if attempt == 0:
-                    time.sleep(1)
-                    continue
-                return symbol, None, str(e), time.monotonic() - started
-        return symbol, None, "unknown error", time.monotonic() - started
-
-    pending = iter(symbols)
-    exhausted = False
-    future_symbols = {}
     completed = 0
+    network_symbols: list[str] = []
+    network_started: dict[str, deque[float]] = defaultdict(deque)
+    scheduler_ref: list[KlineScheduler] = []
 
-    with ThreadPoolExecutor(max_workers=worker_cap) as executor:
-        def _submit_available() -> None:
-            nonlocal exhausted
-            while not exhausted and len(future_symbols) < controller.limit:
-                try:
-                    symbol = next(pending)
-                except StopIteration:
-                    exhausted = True
-                    return
-                future_symbols[executor.submit(_safe_one, symbol)] = symbol
-
-        _submit_available()
+    def _safe_callback(callback: Callable | None, *args: object) -> None:
+        if callback is None:
+            return
         try:
-            while future_symbols:
-                done, _ = wait(future_symbols, return_when=FIRST_COMPLETED)
-                for future in done:
-                    future_symbols.pop(future)
-                    symbol, df, err, elapsed = future.result()
-                    completed += 1
-                    ok = err is None and df is not None
-                    controller.record(ok=ok, error=err, elapsed_seconds=elapsed)
-                    state = FetchProgress(
-                        symbol=symbol,
-                        ok=ok,
-                        error=err,
-                        elapsed_seconds=elapsed,
-                        concurrency=controller.limit,
-                        max_concurrency=worker_cap,
-                        inflight=len(future_symbols),
-                        completed=completed,
-                        total=len(symbols),
-                    )
-                    if on_progress_state:
-                        on_progress_state(state)
-                    if err is None and df is not None:
-                        results[symbol] = df
-                        if on_progress:
-                            on_progress(symbol, True, None)
-                    else:
-                        errors[symbol] = err or "unknown error"
-                        if on_progress:
-                            on_progress(symbol, False, err)
-                _submit_available()
-        except KeyboardInterrupt:
-            for f in future_symbols:
-                f.cancel()
-            raise
+            callback(*args)
+        except Exception as exc:
+            debug_log(__name__, "fetch_batch progress callback", exc)
+
+    def _finish(
+        symbol: str,
+        *,
+        frame: pd.DataFrame | None,
+        error: str | None,
+        started_at: float,
+    ) -> None:
+        nonlocal completed
+        completed += 1
+        ok = frame is not None and error is None
+        if ok:
+            results[symbol] = frame
+            errors.pop(symbol, None)
+        else:
+            errors[symbol] = error or "unknown error"
+            results.pop(symbol, None)
+        scheduler = scheduler_ref[0] if scheduler_ref else None
+        state = FetchProgress(
+            symbol=symbol,
+            ok=ok,
+            error=error,
+            elapsed_seconds=max(0.0, time.monotonic() - started_at),
+            concurrency=scheduler.concurrency if scheduler else initial_workers,
+            max_concurrency=worker_cap,
+            inflight=scheduler.active_calls if scheduler else 0,
+            completed=completed,
+            total=len(symbols),
+        )
+        _safe_callback(on_progress_state, state)
+        _safe_callback(on_progress, symbol, ok, error)
+
+    for symbol in symbols:
+        started_at = time.monotonic()
+        try:
+            _validate_symbol(symbol)
+            cache = _cache_path(symbol)
+            if not force and _is_cache_fresh(cache, min_rows=days):
+                frame = pd.read_parquet(cache)
+                _finish(symbol, frame=frame, error=None, started_at=started_at)
+                continue
+        except Exception as exc:
+            _finish(symbol, frame=None, error=str(exc), started_at=started_at)
+            continue
+        network_symbols.append(symbol)
+        network_started[symbol].append(started_at)
+
+    if not network_symbols:
+        return results, errors
+
+    _ensure_data_dir()
+    _ensure_no_proxy()
+    start = (datetime.now() - timedelta(days=int(days * 1.8))).strftime("%Y%m%d")
+
+    def _on_result(result: KlineFetchResult) -> None:
+        started_at = network_started[result.symbol].popleft()
+        try:
+            frame = _finalize_kline_result(result, days=days)
+        except Exception as exc:
+            _finish(result.symbol, frame=None, error=str(exc), started_at=started_at)
+            return
+        _finish(result.symbol, frame=frame, error=None, started_at=started_at)
+
+    with KlineScheduler(
+        _kline_source_snapshot(),
+        supervisor_workers=worker_cap,
+        worker_cap=worker_cap,
+        initial_concurrency=initial_workers,
+        on_result=_on_result,
+    ) as scheduler:
+        scheduler_ref.append(scheduler)
+        scheduler.fetch_many(network_symbols, start)
 
     return results, errors
 

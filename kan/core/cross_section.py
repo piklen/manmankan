@@ -38,6 +38,7 @@ if TYPE_CHECKING:
         ValuationMetrics,
     )
     from kan.core.stock_set import StockSet
+    from kan.infra.lifecycle import OperationLifecycle
 
 
 @dataclass(frozen=True)
@@ -160,6 +161,7 @@ def run_cross_section(
     kline_periods: list[int] | None = None,
     included_dimensions: set[str] | None = None,
     need_valuation_context: bool = True,
+    lifecycle: OperationLifecycle | None = None,
 ) -> CrossSectionCtx:
     """全市场截面编排 · 不走 run_data_pipeline (K 线管线) · 截面一次拉全市场。
 
@@ -193,13 +195,21 @@ def run_cross_section(
         else set(included_dimensions)
     )
 
+    if lifecycle is not None:
+        lifecycle.phase("解析全市场股票池")
     pairs = stock_set.pairs()
     pool_size = len(pairs)
+    if lifecycle is not None:
+        lifecycle.progress(pool_size, pool_size, "全市场股票池已解析")
     if not pairs:
         return CrossSectionCtx(rows=[], pool_size=0, data_cutoff=None, stale=True)
 
     codes = [c for c, _ in pairs]
+    if lifecycle is not None:
+        lifecycle.wait("等待全市场基础指标", target_count=len(codes))
     cross = fetch_metrics(trade_date=trade_date, symbols=codes)
+    if lifecycle is not None:
+        lifecycle.phase("全市场基础指标就绪", rows=0 if cross is None else len(cross))
     cross_empty = cross is None or cross.empty
     if cross_empty and not need_kline:
         # 无 token / 无截面 → 全空 (caller 报错引导配 token)
@@ -211,10 +221,14 @@ def run_cross_section(
         from kan.core.valuation_context import compute_cross_section_contexts
         from kan.data.industry_map import fetch_sw_l1_map
 
+        if lifecycle is not None:
+            lifecycle.wait("等待行业映射与估值上下文")
         l1_map = fetch_sw_l1_map()
         contexts = compute_cross_section_contexts(
             cross, l1_map, lookback_days=_DEFAULT_LOOKBACK_DAYS,
         )
+        if lifecycle is not None:
+            lifecycle.phase("行业估值上下文就绪", row_count=len(contexts))
     else:
         contexts = {}
     fallback_date = _resolve_fallback_date(trade_date, latest_trade_date)
@@ -228,6 +242,8 @@ def run_cross_section(
     if "moneyflow" in dims:
         from kan.data.moneyflow import fetch_moneyflow
 
+        if lifecycle is not None:
+            lifecycle.wait("等待全市场资金截面")
         mf = fetch_moneyflow(trade_date=trade_date, symbols=codes)
         mf_by_symbol = (
             {str(r.get("symbol", "")).strip(): r for _, r in mf.iterrows()}
@@ -240,6 +256,8 @@ def run_cross_section(
     if "technical" in dims:
         from kan.data.technical import fetch_technical
 
+        if lifecycle is not None:
+            lifecycle.wait("等待全市场技术截面")
         tech = fetch_technical(trade_date=trade_date, symbols=codes)
         tech_by_symbol = (
             {str(r.get("symbol", "")).strip(): r for _, r in tech.iterrows()}
@@ -252,6 +270,8 @@ def run_cross_section(
     if "sentiment" in dims:
         from kan.data.sentiment import fetch_sentiment
 
+        if lifecycle is not None:
+            lifecycle.wait("等待全市场情绪截面")
         senti = fetch_sentiment(trade_date=trade_date, symbols=codes)
         senti_by_symbol = (
             {str(r.get("symbol", "")).strip(): r for _, r in senti.iterrows()}
@@ -264,6 +284,8 @@ def run_cross_section(
     if "chip" in dims:
         from kan.data.chip import fetch_chip
 
+        if lifecycle is not None:
+            lifecycle.wait("等待全市场筹码截面")
         chip = fetch_chip(trade_date=trade_date, symbols=codes)
         chip_by_symbol = (
             {str(r.get("symbol", "")).strip(): r for _, r in chip.iterrows()}
@@ -278,7 +300,12 @@ def run_cross_section(
     if need_kline:
         from kan.data.kline_snapshot import fetch_kline_snapshot
 
-        snap = fetch_kline_snapshot(trade_date=trade_date, symbols=codes, periods=scan_periods)
+        snap = fetch_kline_snapshot(
+            trade_date=trade_date,
+            symbols=codes,
+            periods=scan_periods,
+            lifecycle=lifecycle,
+        )
         scan_by_symbol = (
             {
                 str(r.get("symbol", "")).strip(): r
@@ -298,7 +325,10 @@ def run_cross_section(
         )
 
     rows: list[CrossSectionRow] = []
-    for code, name in pairs:
+    report_every = max(1, (pool_size + 99) // 100)
+    if lifecycle is not None:
+        lifecycle.phase("组装全市场截面结果", total=pool_size)
+    for completed, (code, name) in enumerate(pairs, start=1):
         row = by_symbol.get(code)
         valuation = _row_to_valuation(row, fallback_date) if row is not None else None
         mf_row = mf_by_symbol.get(code)
@@ -325,7 +355,13 @@ def run_cross_section(
             chip=chip_metrics,
             scan=scan,
         ))
+        if lifecycle is not None and (
+            completed % report_every == 0 or completed == pool_size
+        ):
+            lifecycle.progress(completed, pool_size, "组装全市场截面结果")
 
+    if lifecycle is not None:
+        lifecycle.phase("汇总全市场截面新鲜度")
     cutoffs = []
     data_cutoff = None if cross_empty else _cross_data_cutoff(cross)
     if data_cutoff is not None:

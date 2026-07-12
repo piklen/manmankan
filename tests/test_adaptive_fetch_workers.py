@@ -3,11 +3,19 @@ from __future__ import annotations
 
 import threading
 import time
+from dataclasses import dataclass, field
 from datetime import date
+from types import SimpleNamespace
 
 import pandas as pd
 
 from kan.data import fetcher
+from kan.data.provider_contracts import (
+    FetchFailure,
+    FetchFailureKind,
+    ProviderCapabilities,
+    ProviderFetchResult,
+)
 
 
 def _kline_df() -> pd.DataFrame:
@@ -18,6 +26,40 @@ def _kline_df() -> pd.DataFrame:
         "low": [9.8],
         "close": [10.2],
     })
+
+
+@dataclass
+class FakeDetailedSource:
+    name: str
+    handler: object
+    priority: int = 10
+    capabilities: ProviderCapabilities = field(
+        default_factory=lambda: ProviderCapabilities(
+            max_concurrency=20,
+            initial_concurrency=20,
+            max_attempts=1,
+        )
+    )
+
+    def is_available(self) -> bool:
+        return True
+
+    def fetch(self, symbol: str, start: str) -> pd.DataFrame | None:
+        return self.fetch_detailed(symbol, start).data
+
+    def fetch_detailed(
+        self, symbol: str, start: str, *, record_breaker: bool = False,
+    ) -> ProviderFetchResult[pd.DataFrame]:
+        del record_breaker
+        return self.handler(symbol, start)  # type: ignore[operator, no-any-return]
+
+
+def _install_sources(monkeypatch, *sources: FakeDetailedSource) -> None:
+    monkeypatch.setattr(
+        fetcher,
+        "default_kline_chain",
+        lambda: SimpleNamespace(sources=list(sources)),
+    )
 
 
 def test_adaptive_controller_increases_after_healthy_windows():
@@ -34,14 +76,19 @@ def test_adaptive_controller_increases_after_healthy_windows():
     assert controller.limit <= 20
 
 
-def test_fetch_batch_reports_full_progress_stream(monkeypatch):
+def test_fetch_batch_reports_full_progress_stream(monkeypatch, tmp_path):
     """fetch_batch 应完成全部任务并输出逐个进度状态(时序无关断言)。"""
     monkeypatch.delenv("KAN_WORKERS", raising=False)
+    monkeypatch.setattr(fetcher, "DATA_DIR", tmp_path)
     monkeypatch.setattr(fetcher, "resolve_max_workers", lambda: 2)
 
     df = _kline_df()
-    monkeypatch.setattr(
-        fetcher, "fetch_kline", lambda symbol, *, days, force: df
+    _install_sources(
+        monkeypatch,
+        FakeDetailedSource(
+            "fake",
+            lambda symbol, start: ProviderFetchResult.succeeded(df.copy()),
+        ),
     )
 
     states: list[fetcher.FetchProgress] = []
@@ -58,18 +105,31 @@ def test_fetch_batch_reports_full_progress_stream(monkeypatch):
     assert all(state.max_concurrency == fetcher.DEFAULT_ADAPTIVE_MAX_WORKERS for state in states)
 
 
-def test_fetch_batch_adaptive_workers_back_off_on_rate_limit(monkeypatch):
+def test_fetch_batch_adaptive_workers_back_off_on_rate_limit(monkeypatch, tmp_path):
     """限流/背压类错误应快速降并发,避免继续按高并发冲上游。"""
     monkeypatch.delenv("KAN_WORKERS", raising=False)
+    monkeypatch.setattr(fetcher, "DATA_DIR", tmp_path)
     monkeypatch.setattr(fetcher, "resolve_max_workers", lambda: 8)
-    monkeypatch.setattr(time, "sleep", lambda _seconds: None)
-
-    def fake_fetch_kline(symbol: str, *, days: int, force: bool) -> pd.DataFrame:
-        del symbol, days, force
-        raise RuntimeError("40203 frequency limit")
+    limited = FetchFailure(
+        FetchFailureKind.RATE_LIMIT,
+        "40203 frequency limit",
+        retryable=False,
+    )
+    _install_sources(
+        monkeypatch,
+        FakeDetailedSource(
+            "limited",
+            lambda symbol, start: ProviderFetchResult.failed(limited),
+            capabilities=ProviderCapabilities(
+                max_concurrency=8,
+                initial_concurrency=8,
+                max_attempts=1,
+                rate_limit_cooldown_seconds=0,
+            ),
+        ),
+    )
 
     states: list[fetcher.FetchProgress] = []
-    monkeypatch.setattr(fetcher, "fetch_kline", fake_fetch_kline)
 
     results, errors = fetcher.fetch_batch(
         [f"{i:06d}" for i in range(16)],
@@ -83,29 +143,39 @@ def test_fetch_batch_adaptive_workers_back_off_on_rate_limit(monkeypatch):
     assert min(state.concurrency for state in states) < 8
 
 
-def test_fetch_batch_explicit_max_workers_is_hard_cap(monkeypatch):
+def test_fetch_batch_explicit_max_workers_is_hard_cap(monkeypatch, tmp_path):
     """调用方显式传 max_workers 时,自适应逻辑不能越过这个硬上限。"""
     monkeypatch.delenv("KAN_WORKERS", raising=False)
+    monkeypatch.setattr(fetcher, "DATA_DIR", tmp_path)
 
     active = 0
     max_seen = 0
     lock = threading.Lock()
 
-    def fake_fetch_kline(symbol: str, *, days: int, force: bool) -> pd.DataFrame:
-        del symbol, days, force
+    def fake_fetch(symbol: str, start: str) -> ProviderFetchResult[pd.DataFrame]:
+        del symbol, start
         nonlocal active, max_seen
         with lock:
             active += 1
             max_seen = max(max_seen, active)
         try:
             time.sleep(0.01)
-            return _kline_df()
+            return ProviderFetchResult.succeeded(_kline_df())
         finally:
             with lock:
                 active -= 1
 
+    capabilities = ProviderCapabilities(
+        max_concurrency=10,
+        initial_concurrency=10,
+        max_attempts=1,
+    )
+    _install_sources(
+        monkeypatch,
+        FakeDetailedSource("first", fake_fetch, priority=10, capabilities=capabilities),
+        FakeDetailedSource("second", fake_fetch, priority=10, capabilities=capabilities),
+    )
     states: list[fetcher.FetchProgress] = []
-    monkeypatch.setattr(fetcher, "fetch_kline", fake_fetch_kline)
 
     results, errors = fetcher.fetch_batch(
         [f"{i:06d}" for i in range(30)],

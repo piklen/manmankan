@@ -1,6 +1,8 @@
 """连续涨跌计算。"""
 from __future__ import annotations
 
+from collections.abc import Iterator
+from contextlib import contextmanager
 from typing import TYPE_CHECKING
 
 from kan.infra.log import debug_log
@@ -8,9 +10,28 @@ from kan.infra.log import debug_log
 if TYPE_CHECKING:
     import pandas as pd
 
+    from kan.infra.lifecycle import LifecycleReporter, OperationLifecycle
+
 
 # streak 算法 cap · 与 calc_trend 的 min(len(df), 31) 对齐
 TREND_STREAK_CAP = 30
+
+
+@contextmanager
+def _lifecycle_scope(
+    lifecycle: OperationLifecycle | None,
+    reporter: LifecycleReporter | None,
+) -> Iterator[OperationLifecycle | None]:
+    if lifecycle is not None:
+        yield lifecycle
+        return
+    if reporter is None:
+        yield None
+        return
+    from kan.infra.lifecycle import operation
+
+    with operation("计算全市场连续涨跌", reporter=reporter) as owned:
+        yield owned
 
 
 class TrendResult:
@@ -110,6 +131,8 @@ def trend_batch_cross_section(
     *,
     candle: bool = False,
     panel: pd.DataFrame | None = None,
+    lifecycle: OperationLifecycle | None = None,
+    reporter: LifecycleReporter | None = None,
 ) -> list[TrendResult]:
     """截面版 trend_batch · 用全市场 daily panel 算 streak · trend --all 专用。
 
@@ -120,27 +143,46 @@ def trend_batch_cross_section(
     - 输出只保留 watchlist 目标池内股票,避免上游日截面混入目标池外代码
     - 连续天数上限沿用 calc_trend 的 30 天 cap,保持与逐股路径同契约
     """
-    if panel is None or panel.empty:
-        return []
+    with _lifecycle_scope(lifecycle, reporter) as active:
+        if panel is None or panel.empty:
+            return []
 
-    name_map = dict(watchlist)
-    results: list[TrendResult] = []
+        name_map = dict(watchlist)
+        target_panel = panel[panel["symbol"].astype(str).isin(name_map)]
+        groups = list(target_panel.groupby("symbol", sort=False))
+        total = len(groups)
+        report_every = max(1, (total + 99) // 100)
+        results: list[TrendResult] = []
+        if active is not None:
+            active.phase("整理连续涨跌计算分组", group_count=total)
 
-    # panel 按 symbol 分组 · 每组按 date 升序 · 喂 calc_trend
-    for symbol, group in panel.groupby("symbol", sort=False):
-        symbol_str = str(symbol)
-        if symbol_str not in name_map:
-            continue
-        if group.empty:
-            continue
-        group = group.sort_values("date").reset_index(drop=True)
-        name = name_map[symbol_str]
-        try:
-            result = calc_trend(group, symbol_str, name, candle=candle)
-        except Exception as e:
-            debug_log(__name__, f"cross-section calc_trend failed · symbol={symbol}", e)
-            continue
-        results.append(result)
+        for completed, (symbol, group) in enumerate(groups, start=1):
+            symbol_str = str(symbol)
+            succeeded = False
+            if not group.empty:
+                ordered = group.sort_values("date").reset_index(drop=True)
+                try:
+                    result = calc_trend(
+                        ordered,
+                        symbol_str,
+                        name_map[symbol_str],
+                        candle=candle,
+                    )
+                except Exception as exc:
+                    debug_log(__name__, f"cross-section calc_trend failed · symbol={symbol}", exc)
+                else:
+                    results.append(result)
+                    succeeded = True
+            if active is not None and (completed % report_every == 0 or completed == total):
+                active.progress(
+                    completed,
+                    total,
+                    "计算连续涨跌",
+                    symbol=symbol_str,
+                    succeeded=succeeded,
+                )
 
-    results.sort(key=lambda r: (-abs(r.streak), -abs(r.streak_pct)))
-    return results
+        if active is not None:
+            active.phase("排序连续涨跌结果", result_count=len(results))
+        results.sort(key=lambda r: (-abs(r.streak), -abs(r.streak_pct)))
+        return results

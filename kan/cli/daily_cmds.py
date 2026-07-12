@@ -98,84 +98,89 @@ def daily(
     """默认池一日事实概览。"""
     from rich.console import Console
 
-    from kan.cli.helpers import _with_heavy_imports_spinner, format_date_compact
+    from kan.cli.helpers import format_date_compact
     from kan.core.pipeline import render_freshness_warning
     from kan.core.stock_set import from_flags
+    from kan.infra.lifecycle import operation
+    from kan.infra.progress import operation_reporter
     from kan.render.base import DISCLAIMER
     from kan.service.scan_service import ScanRequest, run_scan
     from kan.storage.positions import load_positions
     from kan.storage.watchlist import load_watchlist
 
     console = Console()
-    status_console = Console(stderr=True)
-    with _with_heavy_imports_spinner(status_console, "⏳ 加载数据模块..."):
-        result = run_scan(ScanRequest(
-            stock_set=from_flags(),
-            mode="low",
-            periods=[30, 60, 180],
-            show_progress=fmt is export.OutputFormat.terminal,
-        ))
-
-    watchlist_count = len(load_watchlist().stocks)
-    book = load_positions()
-    holding_count = len(book.positions)
-    rows = result.results
-    low_180 = _count_period(rows, period=180, low=10)
-    high_180 = _count_period(rows, period=180, high=90)
-    permission_rows = [r for r in rows if r.permission_note]
-    payload = {
-        "ok": True,
-        "schema_version": _DAILY_SCHEMA_VERSION,
-        "command": "daily",
-        "data_cutoff": (
-            result.ctx.freshness.data_cutoff.isoformat()
-            if result.ctx.freshness.data_cutoff else None
-        ),
-        "fetched_at": result.ctx.freshness.fetched_at,
-        "stale": result.ctx.freshness.is_stale,
-        "pool": {
-            "watchlist_count": watchlist_count,
-            "holding_count": holding_count,
-            "scanned_count": len(rows),
-            "cash_configured": book.cash > 0,
-        },
-        "facts": {
-            "period_180_low_lte_10_count": len(low_180),
-            "period_180_low_lte_10": _names(low_180),
-            "period_180_high_gte_90_count": len(high_180),
-            "period_180_high_gte_90": _names(high_180),
-            "permission_note_count": len(permission_rows),
-            "permission_notes": [
-                {
-                    "code": r.symbol,
-                    "name": r.name.replace(" ", ""),
-                    "note": r.permission_note,
-                }
-                for r in permission_rows[:12]
-            ],
-        },
-        "next_commands": _command_rows(),
-        "disclaimer": DISCLAIMER.strip(),
-    }
+    reporter = operation_reporter()
+    with operation("生成一日事实概览", reporter=reporter) as lifecycle:
+        result = run_scan(
+            ScanRequest(
+                stock_set=from_flags(),
+                mode="low",
+                periods=[30, 60, 180],
+                show_progress=fmt is export.OutputFormat.terminal,
+            ),
+            lifecycle=lifecycle,
+        )
+        lifecycle.phase("汇总一日事实")
+        watchlist_count = len(load_watchlist().stocks)
+        book = load_positions()
+        holding_count = len(book.positions)
+        rows = result.results
+        low_180 = _count_period(rows, period=180, low=10)
+        high_180 = _count_period(rows, period=180, high=90)
+        permission_rows = [r for r in rows if r.permission_note]
+        lifecycle.phase("构造一日事实输出", format=fmt.value)
+        payload = {
+            "ok": True,
+            "schema_version": _DAILY_SCHEMA_VERSION,
+            "command": "daily",
+            "data_cutoff": (
+                result.ctx.freshness.data_cutoff.isoformat()
+                if result.ctx.freshness.data_cutoff else None
+            ),
+            "fetched_at": result.ctx.freshness.fetched_at,
+            "stale": result.ctx.freshness.is_stale,
+            "pool": {
+                "watchlist_count": watchlist_count,
+                "holding_count": holding_count,
+                "scanned_count": len(rows),
+                "cash_configured": book.cash > 0,
+            },
+            "facts": {
+                "period_180_low_lte_10_count": len(low_180),
+                "period_180_low_lte_10": _names(low_180),
+                "period_180_high_gte_90_count": len(high_180),
+                "period_180_high_gte_90": _names(high_180),
+                "permission_note_count": len(permission_rows),
+                "permission_notes": [
+                    {
+                        "code": r.symbol,
+                        "name": r.name.replace(" ", ""),
+                        "note": r.permission_note,
+                    }
+                    for r in permission_rows[:12]
+                ],
+            },
+            "next_commands": _command_rows(),
+            "disclaimer": DISCLAIMER.strip(),
+        }
+        markdown = None
+        if fmt is export.OutputFormat.md:
+            markdown = "\n".join([
+                "# 慢慢看 · 一日事实概览", "",
+                f"- 默认池: 自选 {watchlist_count} 只 / 持仓 {holding_count} 只 / 已扫描 {len(rows)} 只",
+                f"- 现金: {'已配置' if book.cash > 0 else '未配置'}",
+                f"- 180 日位置 <=10%: {len(low_180)} 只",
+                f"- 180 日位置 >=90%: {len(high_180)} 只",
+                f"- 特殊权限提示: {len(permission_rows)} 只", "",
+                "## 可复制命令", *[f"- `{cmd}`" for cmd in _command_rows()], "",
+                "> " + DISCLAIMER.strip(),
+            ])
     if fmt is export.OutputFormat.json:
         typer.echo(export.to_json(payload))
         return
     if fmt is export.OutputFormat.md:
-        lines = [
-            "# 慢慢看 · 一日事实概览",
-            "",
-            f"- 默认池: 自选 {watchlist_count} 只 / 持仓 {holding_count} 只 / 已扫描 {len(rows)} 只",
-            f"- 现金: {'已配置' if book.cash > 0 else '未配置'}",
-            f"- 180 日位置 <=10%: {len(low_180)} 只",
-            f"- 180 日位置 >=90%: {len(high_180)} 只",
-            f"- 特殊权限提示: {len(permission_rows)} 只",
-            "",
-            "## 可复制命令",
-            *[f"- `{cmd}`" for cmd in _command_rows()],
-            "",
-            "> " + DISCLAIMER.strip(),
-        ]
-        typer.echo("\n".join(lines))
+        assert markdown is not None
+        typer.echo(markdown)
         return
 
     console.print("\n[bold]慢慢看 · 一日事实概览[/bold]")

@@ -263,144 +263,176 @@ def trend_cmd(
 
     from rich.console import Console
 
-    from kan.cli.helpers import _with_heavy_imports_spinner
+    from kan.infra.lifecycle import operation
+    from kan.infra.progress import operation_reporter
 
-    status_console = Console(stderr=True)
-    with _with_heavy_imports_spinner(status_console, "⏳ 加载数据模块..."):
-        from kan.data.theme_leaderboard import (
-            load_theme_leaderboard,
-            sort_leaderboard,
-        )
-        from kan.render import terminal as render_terminal
-        from kan.render.theme import render_theme_trend_disclaimer
+    reporter = operation_reporter()
 
-    # 非 terminal(md/json)走静默,不显示 progress 防污染 pipe
-    progress_console = status_console if fmt is export.OutputFormat.terminal else None
+    def _render() -> None:
+        pass
 
     try:
-        all_results, errors, source, diagnosis = load_theme_leaderboard(
-            candle=candle,
-            force=force,
-            progress_console=progress_console,
-        )
-    except boards.ThemeDataUnavailableError as e:
-        _print_err(f"❌ 题材榜不可用: {e}")
-        raise typer.Exit(1) from None
+        with operation("题材趋势榜", reporter=reporter) as lifecycle:
+            lifecycle.phase("加载数据模块")
+            from kan.data.theme_leaderboard import (
+                load_theme_leaderboard,
+                sort_leaderboard,
+            )
+            from kan.render import terminal as render_terminal
+            from kan.render.theme import render_theme_trend_disclaimer
 
-    if not all_results:
-        for line in _render_failure_diagnosis(diagnosis):
-            _print_err(line)
-        raise typer.Exit(1)
+            try:
+                all_results, errors, source, diagnosis = load_theme_leaderboard(
+                    candle=candle,
+                    force=force,
+                    lifecycle=lifecycle,
+                )
+            except boards.ThemeDataUnavailableError as e:
+                _print_err(f"❌ 题材榜不可用: {e}")
+                raise typer.Exit(1) from None
 
-    moneyflow_map = None
-    if sort is ThemeTrendSort.moneyflow:
-        from kan.core.models import Theme
-        from kan.data.board_leaderboard import theme_moneyflow_map
+            if not all_results:
+                for line in _render_failure_diagnosis(diagnosis):
+                    _print_err(line)
+                raise typer.Exit(1)
 
-        with status_console.status("[yellow]⏳ 聚合题材资金...[/yellow]", spinner="dots"):
-            moneyflow_map = theme_moneyflow_map(
-                [Theme(code=r.symbol, name=r.name, source="ths") for r in all_results],
-                force=force,
+            moneyflow_map = None
+            if sort is ThemeTrendSort.moneyflow:
+                from kan.core.models import Theme
+                from kan.data.board_leaderboard import theme_moneyflow_map
+
+                lifecycle.phase("聚合题材资金")
+                moneyflow_map = theme_moneyflow_map(
+                    [Theme(code=r.symbol, name=r.name, source="ths") for r in all_results],
+                    force=force,
+                    lifecycle=lifecycle,
+                )
+
+            lifecycle.phase("排序与过滤")
+            sorted_results = sort_leaderboard(
+                all_results,
+                up_filter=up,
+                down_filter=down,
+                min_streak=min_streak,
+                sort_by=sort.value,
+                moneyflow=moneyflow_map,
             )
 
-    sorted_results = sort_leaderboard(
-        all_results,
-        up_filter=up,
-        down_filter=down,
-        min_streak=min_streak,
-        sort_by=sort.value,
-        moneyflow=moneyflow_map,
-    )
+            if not sorted_results:
+                def _render_empty() -> None:
+                    if up is not None:
+                        _print_err(f"没有连续涨 ≥{up} 天的题材")
+                    elif down is not None:
+                        _print_err(f"没有连续跌 ≥{down} 天的题材")
+                    else:
+                        _print_err("没有符合条件的题材")
+                _render = _render_empty
+            else:
+                lifecycle.phase("准备输出")
+                shown_results = sorted_results if all_ else sorted_results[:limit]
+                total_themes = len(all_results) + len(errors)
 
-    if not sorted_results:
-        if up is not None:
-            _print_err(f"没有连续涨 ≥{up} 天的题材")
-        elif down is not None:
-            _print_err(f"没有连续跌 ≥{down} 天的题材")
-        else:
-            _print_err("没有符合条件的题材")
-        raise typer.Exit(0)
+                filter_label = ""
+                if up is not None:
+                    filter_label = f" · 连涨≥{up}天"
+                elif down is not None:
+                    filter_label = f" · 连跌≥{down}天"
+                if min_streak is not None:
+                    filter_label += f" · 连续≥{min_streak}天"
+                if sort is not ThemeTrendSort.streak:
+                    sort_label = "最新单日涨幅" if sort is ThemeTrendSort.latest else "主力净额"
+                    filter_label += f" · 按{sort_label}排序"
 
-    shown_results = sorted_results if all_ else sorted_results[:limit]
-    total_themes = len(all_results) + len(errors)
+                if fmt is export.OutputFormat.json:
+                    payload = export.theme_leaderboard_payload(
+                        shown_results,
+                        candle=candle,
+                        total_themes=total_themes,
+                        errors_count=len(errors),
+                        data_cutoff=None,
+                        fetched_at=None,
+                    )
+                    json_str = export.to_json(payload)
+                    def _render_json() -> None:
+                        typer.echo(json_str)
+                    _render = _render_json
+                elif fmt is export.OutputFormat.md:
+                    title = render_terminal.theme_leaderboard_title(
+                        total_themes=total_themes,
+                        shown=len(shown_results),
+                        candle=candle,
+                        filter_label=filter_label,
+                        data_cutoff=None,
+                        fetched_at=None,
+                        errors_count=len(errors),
+                    )
+                    md_str = export.theme_leaderboard_markdown(
+                        shown_results, title=title, latest=latest,
+                    )
+                    def _render_md() -> None:
+                        typer.echo(md_str)
+                    _render = _render_md
+                else:
+                    # terminal 渲染 —— 在 lifecycle 内构造，context 外输出
+                    console = Console()
+                    from kan.render.base import max_trend_dates
+                    actual_latest: int | None = None
+                    if latest and shown_results:
+                        actual_latest = min(latest, max_trend_dates(console.width))
 
-    filter_label = ""
-    if up is not None:
-        filter_label = f" · 连涨≥{up}天"
-    elif down is not None:
-        filter_label = f" · 连跌≥{down}天"
-    if min_streak is not None:
-        filter_label += f" · 连续≥{min_streak}天"
-    if sort is not ThemeTrendSort.streak:
-        sort_label = "最新单日涨幅" if sort is ThemeTrendSort.latest else "主力净额"
-        filter_label += f" · 按{sort_label}排序"
+                    table = render_terminal.theme_leaderboard_table(
+                        shown_results,
+                        total_themes=total_themes,
+                        latest=actual_latest,
+                        candle=candle,
+                        filter_label=filter_label,
+                        errors_count=len(errors),
+                    )
 
-    if fmt is export.OutputFormat.json:
-        payload = export.theme_leaderboard_payload(
-            shown_results,
-            candle=candle,
-            total_themes=total_themes,
-            errors_count=len(errors),
-            data_cutoff=None,
-            fetched_at=None,
-        )
-        typer.echo(export.to_json(payload))
-        return
+                    errors_names = ""
+                    if errors and len(errors) <= 10:
+                        errors_names = ", ".join(t.name for t, _ in errors[:10])
 
-    if fmt is export.OutputFormat.md:
-        title = render_terminal.theme_leaderboard_title(
-            total_themes=total_themes,
-            shown=len(shown_results),
-            candle=candle,
-            filter_label=filter_label,
-            data_cutoff=None,
-            fetched_at=None,
-            errors_count=len(errors),
-        )
-        typer.echo(export.theme_leaderboard_markdown(
-            shown_results, title=title, latest=latest,
-        ))
-        return
+                    def _render_terminal() -> None:
+                        console.print(table)
 
-    # terminal 渲染
-    console = Console()
-    from kan.render.base import max_trend_dates
-    actual_latest: int | None = None
-    if latest and shown_results:
-        actual_latest = min(latest, max_trend_dates(console.width))
+                        if latest and actual_latest is not None and actual_latest < latest:
+                            console.print(
+                                f"\n  [dim]窄屏模式 · 显示近 {actual_latest}/{latest} 天"
+                                " · 加宽终端可见全部[/dim]"
+                            )
 
-    table = render_terminal.theme_leaderboard_table(
-        shown_results,
-        total_themes=total_themes,
-        latest=actual_latest,
-        candle=candle,
-        filter_label=filter_label,
-        errors_count=len(errors),
-    )
-    console.print(table)
+                        if not all_ and len(sorted_results) > limit:
+                            console.print(
+                                f"\n  [dim]💡 显示前 {limit}/{len(sorted_results)}"
+                                " · 看全部:kan theme trend --all[/dim]"
+                            )
 
-    if latest and actual_latest is not None and actual_latest < latest:
-        console.print(
-            f"\n  [dim]窄屏模式 · 显示近 {actual_latest}/{latest} 天"
-            " · 加宽终端可见全部[/dim]"
-        )
+                        if errors and len(errors) <= 10:
+                            console.print(
+                                f"\n  [dim]ℹ️  {len(errors)} 题材数据不可用:{errors_names}[/dim]"
+                            )
+                        elif errors:
+                            console.print(
+                                f"\n  [dim]ℹ️  {len(errors)} 题材数据不可用 · 可 --force 重试[/dim]"
+                            )
 
-    if not all_ and len(sorted_results) > limit:
-        console.print(
-            f"\n  [dim]💡 显示前 {limit}/{len(sorted_results)} · 看全部:kan theme trend --all[/dim]"
-        )
+                        if candle:
+                            console.print(
+                                "[dim]  阳线阴线口径:收盘 > 开盘 = ▲"
+                                " · 收盘 < 开盘 = ▼ · 平盘不断连续[/dim]"
+                            )
+                        else:
+                            console.print(
+                                "[dim]  收盘价口径:今日收盘 > 昨日收盘 = ▲"
+                                " · 今日收盘 < 昨日收盘 = ▼ · 平盘不断连续[/dim]"
+                            )
 
-    if errors and len(errors) <= 10:
-        names = ", ".join(t.name for t, _ in errors[:10])
-        console.print(f"\n  [dim]ℹ️  {len(errors)} 题材数据不可用:{names}[/dim]")
-    elif errors:
-        console.print(
-            f"\n  [dim]ℹ️  {len(errors)} 题材数据不可用 · 可 --force 重试[/dim]"
-        )
+                        render_theme_trend_disclaimer(source=source)
 
-    if candle:
-        console.print("[dim]  阳线阴线口径:收盘 > 开盘 = ▲ · 收盘 < 开盘 = ▼ · 平盘不断连续[/dim]")
-    else:
-        console.print("[dim]  收盘价口径:今日收盘 > 昨日收盘 = ▲ · 今日收盘 < 昨日收盘 = ▼ · 平盘不断连续[/dim]")
+                    _render = _render_terminal
 
-    render_theme_trend_disclaimer(source=source)
+    except typer.Exit:
+        raise
+
+    _render()

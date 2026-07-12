@@ -7,6 +7,9 @@
 """
 from __future__ import annotations
 
+import threading
+import time
+
 import pandas as pd
 import pytest
 
@@ -14,6 +17,7 @@ from kan.core.models import Theme
 from kan.core.scanner import TrendResult
 from kan.data import theme_leaderboard
 from kan.data.boards import ThemeDataUnavailableError
+from kan.infra.lifecycle import CollectingReporter, LifecycleKind, operation
 
 
 @pytest.fixture(autouse=True)
@@ -210,6 +214,48 @@ def test_load_leaderboard_all_success(monkeypatch):
     assert errors == []
     # 所有 streak 都 > 0(连涨)
     assert all(r.streak > 0 for r in results)
+
+
+def test_load_leaderboard_respects_provider_hard_cap_and_lifecycle(monkeypatch):
+    themes = [
+        Theme(code=f"886{index:03d}", name=f"题材{index}", source="ths")
+        for index in range(8)
+    ]
+    monkeypatch.setattr(theme_leaderboard, "load_theme_catalog", lambda force=False: themes)
+    lock = threading.Lock()
+    active = 0
+    peak = 0
+
+    def fetch(_theme, force=False):
+        nonlocal active, peak
+        with lock:
+            active += 1
+            peak = max(peak, active)
+        time.sleep(0.02)
+        with lock:
+            active -= 1
+        return _make_kline_df()
+
+    monkeypatch.setattr(theme_leaderboard, "fetch_theme_kline", fetch)
+    reporter = CollectingReporter()
+
+    with operation("题材榜", reporter=reporter) as lifecycle:
+        results, errors, source, _diag = theme_leaderboard.load_theme_leaderboard(
+            parallel=3,
+            lifecycle=lifecycle,
+        )
+
+    assert source == "em"
+    assert len(results) == 8
+    assert errors == []
+    assert 1 < peak <= 3
+    progress = [
+        event for event in reporter.events
+        if event.kind is LifecycleKind.PROGRESS
+        and event.message == "拉取并计算题材趋势"
+    ]
+    assert progress[-1].completed == 8
+    assert progress[-1].total == 8
 
 
 def test_load_leaderboard_partial_failure(monkeypatch):

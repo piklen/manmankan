@@ -90,28 +90,11 @@ class TestD1RuntimeBehavior:
 
     @staticmethod
     def _run_auto_fetch_stale(pairs, max_workers=8, errors=None):
-        """Helper: 跑 _auto_fetch_stale + mock 所有依赖 + 返回 (console_prints, status_updates).
-
-        mock 策略:
-        - Console / Progress 整体替换 MagicMock · 不渲染但记录调用
-        - is_fresh return False → 所有 pairs 都进 stale list
-        - fetch_batch 返回空 results · errors 可由调用方注入
-        - resolve_max_workers / latest_trade_date 也 mock 防真实 fetch
-        """
-        from unittest.mock import MagicMock, patch
+        """运行自动补数据并返回中性的 lifecycle 事件。"""
+        from unittest.mock import patch
 
         from kan.cli.helpers import _auto_fetch_stale
-
-        fake_console = MagicMock()
-        fake_status = MagicMock()
-        fake_status.__enter__ = MagicMock(return_value=fake_status)
-        fake_status.__exit__ = MagicMock(return_value=None)
-        fake_console.status = MagicMock(return_value=fake_status)
-
-        fake_progress = MagicMock()
-        fake_progress.__enter__ = MagicMock(return_value=fake_progress)
-        fake_progress.__exit__ = MagicMock(return_value=None)
-        fake_progress.add_task = MagicMock(return_value=0)
+        from kan.infra.lifecycle import CollectingReporter, operation
 
         error_map = errors or {}
 
@@ -123,89 +106,59 @@ class TestD1RuntimeBehavior:
             results = {sym: object() for sym in symbols if sym not in error_map}
             return results, error_map
 
-        with patch("rich.console.Console", return_value=fake_console), \
-             patch("rich.progress.Progress", return_value=fake_progress), \
-             patch("kan.data.fetcher.is_fresh", return_value=False), \
+        reporter = CollectingReporter()
+        with patch("kan.data.fetcher.is_fresh", return_value=False), \
+             patch("kan.data.fetcher.fetch_batch", side_effect=fake_fetch_batch), \
              patch(
-                 "kan.data.fetcher.fetch_batch",
-                 side_effect=fake_fetch_batch,
+                 "kan.data.fetcher.resolve_batch_worker_bounds",
+                 return_value=(max_workers, max_workers),
              ), \
-             patch("kan.data.fetcher.resolve_max_workers", return_value=max_workers), \
-             patch("kan.core.trading_calendar.latest_trade_date", return_value=None):
-            _auto_fetch_stale(pairs)
+             patch("kan.core.trading_calendar.latest_trade_date", return_value=None), \
+             operation("test-auto-fetch", reporter=reporter) as lifecycle:
+            _auto_fetch_stale(pairs, lifecycle=lifecycle)
+        return reporter.events
 
-        # 提取所有 console.print 调用文本
-        prints = []
-        for call_obj in fake_console.print.call_args_list:
-            args = call_obj.args
-            if args:
-                prints.append(str(args[0]))
-
-        # 提取所有 status.update 调用文本
-        status_updates = []
-        for call_obj in fake_status.update.call_args_list:
-            args = call_obj.args
-            if args:
-                status_updates.append(str(args[0]))
-
-        # 提取所有 progress.update description
-        progress_descs = []
-        for call_obj in fake_progress.update.call_args_list:
-            desc = call_obj.kwargs.get("description", "")
-            if desc:
-                progress_descs.append(str(desc))
-
-        return {
-            "console_prints": prints,
-            "status_updates": status_updates,
-            "progress_descs": progress_descs,
-            "all_text": "\n".join(prints + status_updates + progress_descs),
-        }
-
-    def test_no_legacy_migration_text_in_runtime_output(self):
-        """旧一次性迁移文案不应出现在 _auto_fetch_stale 的任何 user-facing 输出中."""
+    def test_no_legacy_migration_text_in_lifecycle(self):
+        """旧一次性迁移文案不应进入 lifecycle。"""
         pairs = [(f"60000{i:04d}", f"股{i}") for i in range(35)]
-        result = self._run_auto_fetch_stale(pairs)
-        assert "首次刷新会全量补数据" not in result["all_text"], (
-            f"旧迁移文案不应出现在用户面输出 · 实际全部输出: {result['all_text'][:500]}"
-        )
+        events = self._run_auto_fetch_stale(pairs)
+        assert all("首次刷新会全量补数据" not in (event.message or "") for event in events)
 
-    def test_status_spinner_shows_stale_count(self):
-        """status spinner 在 ticking 阶段应显示 'N 只 stale' 信息密度 ·
+    def test_cache_progress_shows_stale_count(self):
+        """缓存检查进度携带聚合 stale 数。"""
+        from kan.infra.lifecycle import LifecycleKind
 
-        让用户理解"为什么这么多只在拉"(cache 全失效场景).
-        """
-        # 30 只 (> n_total // 20 = 1 · 触发 ticking update)
         pairs = [(f"60000{i:04d}", f"股{i}") for i in range(30)]
-        result = self._run_auto_fetch_stale(pairs)
-        all_status = "\n".join(result["status_updates"])
-        assert "只 stale" in all_status, (
-            f"status spinner 应在 ticking 阶段显示 '只 stale' · 实际 status updates: "
-            f"{result['status_updates']}"
-        )
+        events = self._run_auto_fetch_stale(pairs)
+        progress = [
+            event for event in events
+            if event.kind is LifecycleKind.PROGRESS and event.message == "检查缓存"
+        ]
+        assert progress[-1].details["stale_count"] == 30
 
-    def test_concurrency_message_shows_dynamic_workers_not_hardcoded_5(self):
-        """30+ stale 股票时 concurrency 提示应显示 resolve_max_workers 动态值 · 不硬编码 '并发 5'."""
+    def test_wait_event_shows_dynamic_workers(self):
+        """30+ stale 股票时等待事件携带动态并发。"""
+        from kan.infra.lifecycle import LifecycleKind
+
         pairs = [(f"60000{i:04d}", f"股{i}") for i in range(35)]
-        # max_workers=8 模拟 4 核 mac 的启发式结果
-        result = self._run_auto_fetch_stale(pairs, max_workers=8)
-        all_prints = "\n".join(result["console_prints"])
-        assert "并发 8" in all_prints, (
-            f"应显示动态 '并发 8' · 实际 console prints: {result['console_prints']}"
-        )
-        assert "并发 5" not in all_prints, "不应硬编码 '并发 5'"
+        events = self._run_auto_fetch_stale(pairs, max_workers=8)
+        wait = next(event for event in events if event.kind is LifecycleKind.WAIT)
+        assert wait.details["initial_workers"] == 8
+        assert wait.details["max_workers"] == 8
 
-    def test_medium_batch_error_summary_is_limited_and_user_friendly(self):
-        """6 只 stale 且全部失败时,提示中等批次进度、汇总和最多 5 条失败详情。"""
+    def test_medium_batch_errors_emit_one_aggregated_degraded_event(self):
+        """多只失败只发一个聚合 degraded，并限制样本为 5 条。"""
+        from kan.infra.lifecycle import LifecycleKind
+
         pairs = [(f"60000{i:04d}", f"测试股{i}") for i in range(6)]
         errors = {sym: "Max retries exceeded while fetching" for sym, _ in pairs}
-        result = self._run_auto_fetch_stale(pairs, errors=errors)
+        events = self._run_auto_fetch_stale(pairs, errors=errors)
 
-        all_prints = "\n".join(result["console_prints"])
-        all_progress = "\n".join(result["progress_descs"])
-        assert "更新 6 只股票数据" in all_prints
-        assert "成功 0" in all_prints
-        assert "失败 6" in all_prints
-        assert "...及 1 只失败" in all_prints
-        assert "网络异常 · 请检查连接或稍后重试" in all_prints
-        assert "失败 6" in all_progress
+        degraded = [event for event in events if event.kind is LifecycleKind.DEGRADED]
+        assert len(degraded) == 1
+        assert degraded[0].details["success_count"] == 0
+        assert degraded[0].details["failure_count"] == 6
+        samples = degraded[0].details["samples"]
+        assert isinstance(samples, list)
+        assert len(samples) == 5
+        assert all("网络异常" in str(sample["error"]) for sample in samples)

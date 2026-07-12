@@ -22,7 +22,15 @@ priority 约定:
 """
 from __future__ import annotations
 
+from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Protocol, runtime_checkable
+
+from kan.data.provider_contracts import (
+    FetchFailure,
+    FetchFailureKind,
+    ProviderCapabilities,
+    ProviderFetchResult,
+)
 
 if TYPE_CHECKING:
     import pandas as pd
@@ -88,6 +96,97 @@ class KlineSource(Protocol):
         - 不抛 ValueError 等业务异常 · 只用 None 表达失败
         """
         ...
+
+
+@runtime_checkable
+class DetailedKlineSource(KlineSource, Protocol):
+    """可返回结构化失败原因的 K 线源扩展契约。"""
+
+    capabilities: ProviderCapabilities
+
+    def fetch_detailed(
+        self,
+        symbol: str,
+        start: str,
+        *,
+        record_breaker: bool = True,
+    ) -> ProviderFetchResult[pd.DataFrame]:
+        """执行一次拉取，不在 provider 内 sleep/retry。
+
+        ``record_breaker=False`` 把熔断记账职责明确交给调用方；返回值的
+        ``breaker_recorded`` 可防调度器对同一次结果重复记账。
+        """
+        ...
+
+
+@dataclass(slots=True)
+class LegacyKlineSourceAdapter:
+    """把仅实现旧 ``fetch`` 的第三方源适配到详细结果契约。"""
+
+    source: KlineSource
+    capabilities: ProviderCapabilities = field(default_factory=ProviderCapabilities)
+    name: str = field(init=False)
+    priority: int = field(init=False)
+
+    def __post_init__(self) -> None:
+        self.name = self.source.name
+        self.priority = self.source.priority
+
+    def is_available(self) -> bool:
+        return self.source.is_available()
+
+    def fetch(self, symbol: str, start: str) -> pd.DataFrame | None:
+        return self.source.fetch(symbol, start)
+
+    def fetch_detailed(
+        self,
+        symbol: str,
+        start: str,
+        *,
+        record_breaker: bool = True,
+    ) -> ProviderFetchResult[pd.DataFrame]:
+        # 旧 source 自己拥有熔断记账；适配层不能安全关闭或重复执行它。
+        del record_breaker
+        if not self.source.is_available():
+            return ProviderFetchResult.failed(
+                FetchFailure(
+                    FetchFailureKind.UNAVAILABLE,
+                    message=f"{self.name} is unavailable",
+                ),
+            )
+        try:
+            data = self.source.fetch(symbol, start)
+        except TimeoutError as exc:
+            return ProviderFetchResult.failed(
+                FetchFailure(
+                    FetchFailureKind.TIMEOUT,
+                    message=type(exc).__name__,
+                    retryable=True,
+                    affects_circuit=True,
+                ),
+            )
+        except Exception as exc:
+            return ProviderFetchResult.failed(
+                FetchFailure(
+                    FetchFailureKind.TRANSPORT,
+                    message=type(exc).__name__,
+                    retryable=True,
+                    affects_circuit=True,
+                ),
+            )
+        if data is None or data.empty:
+            return ProviderFetchResult.failed(
+                FetchFailure(FetchFailureKind.EMPTY, message=f"{self.name} returned no data"),
+            )
+        return ProviderFetchResult.succeeded(data)
+
+
+def as_detailed_kline_source(source: KlineSource) -> DetailedKlineSource:
+    """保留原生详细源，否则用兼容适配器补齐。"""
+
+    if isinstance(source, DetailedKlineSource):
+        return source
+    return LegacyKlineSourceAdapter(source)
 
 
 @runtime_checkable

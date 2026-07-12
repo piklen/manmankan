@@ -8,6 +8,8 @@ import pandas as pd
 import pytest
 
 from kan.data import fundamentals
+from kan.data.provider_contracts import ProviderFetchResult
+from kan.infra.lifecycle import CollectingReporter, LifecycleKind, operation
 
 
 @pytest.fixture
@@ -66,3 +68,28 @@ class TestFetchFundamentals:
             "kan.data.fundamentals._fetch_tushare_fundamentals", lambda s: _raw(),
         )
         assert fundamentals.fetch_fundamentals(["bad"]) == {}  # 非 6 位 → 跳
+
+    def test_reports_batch_progress_in_existing_lifecycle(self, _isolate, monkeypatch):
+        monkeypatch.setattr(
+            fundamentals,
+            "_fetch_tushare_fundamentals_detailed",
+            lambda _symbol: ProviderFetchResult.succeeded(_raw()),
+        )
+        reporter = CollectingReporter()
+
+        with operation("find", reporter=reporter) as lifecycle:
+            out = fundamentals.fetch_fundamentals(
+                ["600519", "000858"],
+                max_workers=2,
+                lifecycle=lifecycle,
+            )
+
+        assert set(out) == {"600519", "000858"}
+        progress = [
+            event for event in reporter.events
+            if event.kind is LifecycleKind.PROGRESS
+            and event.message == "拉取候选股财务指标"
+        ]
+        assert progress[-1].completed == 2
+        assert progress[-1].total == 2
+        assert len({event.operation_id for event in reporter.events}) == 1

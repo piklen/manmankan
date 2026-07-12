@@ -22,6 +22,48 @@ def test_lower_layers_do_not_import_cli_helpers() -> None:
     assert offenders == []
 
 
+def test_lifecycle_stays_render_neutral() -> None:
+    """lifecycle 事件基础不得依赖 Rich 或 Typer。"""
+    root = Path(__file__).resolve().parents[1]
+    path = root / "kan" / "infra" / "lifecycle.py"
+    tree = ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
+    forbidden = {"rich", "typer"}
+    offenders: list[str] = []
+    for node in ast.walk(tree):
+        if isinstance(node, ast.ImportFrom) and node.module:
+            if node.module.split(".", 1)[0] in forbidden:
+                offenders.append(f"{path.relative_to(root)}:{node.lineno}")
+        elif isinstance(node, ast.Import):
+            for alias in node.names:
+                if alias.name.split(".", 1)[0] in forbidden:
+                    offenders.append(f"{path.relative_to(root)}:{node.lineno}")
+    assert offenders == []
+
+
+def test_lower_layers_do_not_gain_rich_dependencies() -> None:
+    """core/service 保持无 Rich，data 仅保留既有 updater 边界。"""
+    root = Path(__file__).resolve().parents[1]
+    allowed = {
+        Path("kan/data/theme_leaderboard.py"),
+        Path("kan/data/updater.py"),
+    }
+    offenders: list[str] = []
+    for package in ("core", "service", "data"):
+        for path in (root / "kan" / package).rglob("*.py"):
+            tree = ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
+            for node in ast.walk(tree):
+                modules: list[str] = []
+                if isinstance(node, ast.ImportFrom) and node.module:
+                    modules.append(node.module)
+                elif isinstance(node, ast.Import):
+                    modules.extend(alias.name for alias in node.names)
+                if any(module == "rich" or module.startswith("rich.") for module in modules):
+                    relative = path.relative_to(root)
+                    if relative not in allowed:
+                        offenders.append(f"{relative}:{node.lineno}")
+    assert offenders == []
+
+
 def test_web_does_not_import_typer() -> None:
     """web 层不应依赖 CLI 参数框架。"""
     root = Path(__file__).resolve().parents[1]
