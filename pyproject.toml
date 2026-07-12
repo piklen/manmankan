@@ -1,6 +1,6 @@
 [project]
 name = "manmankan"
-version = "0.0.6.9.8"
+version = "0.0.6.9.9"
 description = "普通 A 股散户的本地观察台 · 今日变化、自选、持仓与位置一处看清"
 requires-python = ">=3.11"
 license = { file = "LICENSE" }
