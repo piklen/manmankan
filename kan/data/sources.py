@@ -23,6 +23,14 @@ import threading
 from datetime import datetime, timedelta
 from typing import TYPE_CHECKING
 
+import requests
+
+from kan.data.provider_contracts import (
+    FetchFailure,
+    FetchFailureKind,
+    ProviderCapabilities,
+    ProviderFetchResult,
+)
 from kan.infra import circuit_breaker
 from kan.infra.log import debug_log
 
@@ -48,29 +56,106 @@ def _market_prefix(symbol: str, sep: str = "") -> str:
     return f"{prefix}{sep}{symbol}"
 
 
+def _record_success(source: str, record_breaker: bool) -> bool:
+    if record_breaker:
+        circuit_breaker.get_breaker().record(source, ok=True)
+    return record_breaker
+
+
+def _failure_result(
+    source: str,
+    kind: FetchFailureKind,
+    *,
+    message: str,
+    record_breaker: bool,
+    retryable: bool = False,
+    affects_circuit: bool = False,
+) -> ProviderFetchResult[pd.DataFrame]:
+    breaker_recorded = record_breaker and affects_circuit
+    if breaker_recorded:
+        circuit_breaker.get_breaker().record(source, ok=False)
+    return ProviderFetchResult.failed(
+        FetchFailure(
+            kind,
+            message=message,
+            retryable=retryable,
+            affects_circuit=affects_circuit,
+        ),
+        breaker_recorded=breaker_recorded,
+    )
+
+
 # ── 数据源 1: 东方财富（最快 · 单次 HTTP） ───────────────────────────
 
-def _fetch_eastmoney(symbol: str, start: str) -> pd.DataFrame | None:
-    cb = circuit_breaker.get_breaker()
-    if cb.is_down("eastmoney"):
-        return None
+def _fetch_eastmoney_detailed(
+    symbol: str,
+    start: str,
+    *,
+    record_breaker: bool = True,
+) -> ProviderFetchResult[pd.DataFrame]:
+    source = "eastmoney"
+    if circuit_breaker.get_breaker().is_down(source):
+        return _failure_result(
+            source,
+            FetchFailureKind.CIRCUIT_OPEN,
+            message="eastmoney circuit is open",
+            record_breaker=False,
+        )
     try:
         import akshare as ak
-
+    except ImportError as exc:
+        return _failure_result(
+            source,
+            FetchFailureKind.UNAVAILABLE,
+            message=type(exc).__name__,
+            record_breaker=False,
+        )
+    try:
         raw = ak.stock_zh_a_hist(
             symbol=symbol, period="daily", adjust="qfq",
             start_date=start, timeout=5,
         )
-        cb.record("eastmoney", ok=True)
-        if raw is None or raw.empty or "日期" not in raw.columns:
-            return None
-        return raw.rename(columns=_EM_COLUMN_MAP)
-    except Exception as e:
-        # broad catch 是 legitimate (akshare 第三方不保 exception type) ·
-        # 但加 debug log · 用户开 KAN_DEBUG=1 可见诊断 · 排查 fallback 触发原因
-        debug_log(__name__, "fetch eastmoney", e)
-        cb.record("eastmoney", ok=False)
-        return None
+    except requests.Timeout as exc:
+        debug_log(__name__, "fetch eastmoney", exc)
+        return _failure_result(
+            source,
+            FetchFailureKind.TIMEOUT,
+            message=type(exc).__name__,
+            record_breaker=record_breaker,
+            retryable=True,
+            affects_circuit=True,
+        )
+    except Exception as exc:
+        # akshare 不保证异常类型，剩余异常统一归为传输失败。
+        debug_log(__name__, "fetch eastmoney", exc)
+        return _failure_result(
+            source,
+            FetchFailureKind.TRANSPORT,
+            message=type(exc).__name__,
+            record_breaker=record_breaker,
+            retryable=True,
+            affects_circuit=True,
+        )
+    breaker_recorded = _record_success(source, record_breaker)
+    if raw is None or raw.empty:
+        return ProviderFetchResult.failed(
+            FetchFailure(FetchFailureKind.EMPTY, message="eastmoney returned no data"),
+        )
+    if "日期" not in raw.columns:
+        return ProviderFetchResult.failed(
+            FetchFailure(
+                FetchFailureKind.INVALID_SCHEMA,
+                message="eastmoney response is missing 日期",
+            ),
+        )
+    return ProviderFetchResult.succeeded(
+        raw.rename(columns=_EM_COLUMN_MAP),
+        breaker_recorded=breaker_recorded,
+    )
+
+
+def _fetch_eastmoney(symbol: str, start: str) -> pd.DataFrame | None:
+    return _fetch_eastmoney_detailed(symbol, start).data
 
 
 # ── 数据源 2: baostock（独立服务器 · 最稳 · 线程安全锁） ─────────────
@@ -91,25 +176,43 @@ def _ensure_bs_login() -> None:
     _stdout = sys.stdout
     sys.stdout = io.StringIO()
     try:
-        bs.login()
+        result = bs.login()
     finally:
         sys.stdout = _stdout
+    if result is None:
+        raise RuntimeError("baostock login failed: empty result")
+    error_code = str(getattr(result, "error_code", ""))
+    if error_code != "0":
+        raise RuntimeError(f"baostock login failed: error_code={error_code or 'missing'}")
     _bs_logged_in = True
 
 
-def _fetch_baostock(symbol: str, start: str) -> pd.DataFrame | None:
+def _fetch_baostock_detailed(
+    symbol: str,
+    start: str,
+    *,
+    record_breaker: bool = True,
+) -> ProviderFetchResult[pd.DataFrame]:
+    source = "baostock"
     try:
         import baostock as bs
         import pandas as pd
-    except ImportError:
-        return None
-
-    cb = circuit_breaker.get_breaker()
-    if cb.is_down("baostock"):
-        return None
+    except ImportError as exc:
+        return _failure_result(
+            source,
+            FetchFailureKind.UNAVAILABLE,
+            message=type(exc).__name__,
+            record_breaker=False,
+        )
+    if circuit_breaker.get_breaker().is_down(source):
+        return _failure_result(
+            source,
+            FetchFailureKind.CIRCUIT_OPEN,
+            message="baostock circuit is open",
+            record_breaker=False,
+        )
 
     start_fmt = f"{start[:4]}-{start[4:6]}-{start[6:8]}"
-
     with _bs_lock:
         try:
             _ensure_bs_login()
@@ -120,50 +223,85 @@ def _fetch_baostock(symbol: str, start: str) -> pd.DataFrame | None:
                 frequency="d",
                 adjustflag="2",
             )
-            if rs.error_code != "0":
-                cb.record("baostock", ok=True)
-                return None
+            if str(rs.error_code) != "0":
+                _record_success(source, record_breaker)
+                return ProviderFetchResult.failed(
+                    FetchFailure(
+                        FetchFailureKind.EMPTY,
+                        message=f"baostock error_code={rs.error_code}",
+                    ),
+                )
             rows = []
             while rs.next():
                 rows.append(rs.get_row_data())
-        except Exception as e:
-            # baostock 第三方 · broad catch + debug log
-            debug_log(__name__, "fetch baostock", e)
-            cb.record("baostock", ok=False)
-            return None
+        except TimeoutError as exc:
+            debug_log(__name__, "fetch baostock", exc)
+            return _failure_result(
+                source,
+                FetchFailureKind.TIMEOUT,
+                message=type(exc).__name__,
+                record_breaker=record_breaker,
+                retryable=True,
+                affects_circuit=True,
+            )
+        except Exception as exc:
+            debug_log(__name__, "fetch baostock", exc)
+            return _failure_result(
+                source,
+                FetchFailureKind.TRANSPORT,
+                message=type(exc).__name__,
+                record_breaker=record_breaker,
+                retryable=True,
+                affects_circuit=True,
+            )
 
-    cb.record("baostock", ok=True)
+    breaker_recorded = _record_success(source, record_breaker)
     if not rows:
-        return None
-
-    return pd.DataFrame(
-        rows, columns=["date", "open", "high", "low", "close", "volume", "amount"],
+        return ProviderFetchResult.failed(
+            FetchFailure(FetchFailureKind.EMPTY, message="baostock returned no data"),
+        )
+    return ProviderFetchResult.succeeded(
+        pd.DataFrame(
+            rows,
+            columns=["date", "open", "high", "low", "close", "volume", "amount"],
+        ),
+        breaker_recorded=breaker_recorded,
     )
+
+
+def _fetch_baostock(symbol: str, start: str) -> pd.DataFrame | None:
+    return _fetch_baostock_detailed(symbol, start).data
 
 
 # ── 数据源 3: 新浪财经（akshare stock_zh_a_daily · 免登录 · 数值精度高） ──
 
-def _fetch_sina(symbol: str, start: str) -> pd.DataFrame | None:
-    """新浪财经历史日 K · akshare 官方 fallback。
-
-    返回 schema: date/open/high/low/close/volume/amount/outstanding_share/turnover
-    其中 volume 单位「股」、amount 单位「元」，跟 baostock 完全对齐（实测）。
-    免登录；东财 push2his 被 ban 时最稳的路径之一。
-    """
-    import io
-    import sys
-
-    import akshare as ak
-
-    cb = circuit_breaker.get_breaker()
-    if cb.is_down("sina"):
-        return None
+def _fetch_sina_detailed(
+    symbol: str,
+    start: str,
+    *,
+    record_breaker: bool = True,
+) -> ProviderFetchResult[pd.DataFrame]:
+    """新浪财经历史日 K · 单次调用详细结果。"""
+    source = "sina"
+    if circuit_breaker.get_breaker().is_down(source):
+        return _failure_result(
+            source,
+            FetchFailureKind.CIRCUIT_OPEN,
+            message="sina circuit is open",
+            record_breaker=False,
+        )
+    try:
+        import akshare as ak
+    except ImportError as exc:
+        return _failure_result(
+            source,
+            FetchFailureKind.UNAVAILABLE,
+            message=type(exc).__name__,
+            record_breaker=False,
+        )
 
     prefix = "sh" if symbol.startswith(("6", "9")) else "sz"
     end = (datetime.now() + timedelta(days=1)).strftime("%Y%m%d")
-
-    _real_stderr = sys.stderr
-    sys.stderr = io.StringIO()
     try:
         raw = ak.stock_zh_a_daily(
             symbol=f"{prefix}{symbol}",
@@ -171,44 +309,67 @@ def _fetch_sina(symbol: str, start: str) -> pd.DataFrame | None:
             end_date=end,
             adjust="qfq",
         )
-    except Exception as e:
-        # 新浪 akshare · broad catch + debug log
-        debug_log(__name__, "fetch sina", e)
-        cb.record("sina", ok=False)
-        return None
-    finally:
-        sys.stderr = _real_stderr
+    except requests.Timeout as exc:
+        debug_log(__name__, "fetch sina", exc)
+        return _failure_result(
+            source,
+            FetchFailureKind.TIMEOUT,
+            message=type(exc).__name__,
+            record_breaker=record_breaker,
+            retryable=True,
+            affects_circuit=True,
+        )
+    except Exception as exc:
+        debug_log(__name__, "fetch sina", exc)
+        return _failure_result(
+            source,
+            FetchFailureKind.TRANSPORT,
+            message=type(exc).__name__,
+            record_breaker=record_breaker,
+            retryable=True,
+            affects_circuit=True,
+        )
 
-    cb.record("sina", ok=True)
+    breaker_recorded = _record_success(source, record_breaker)
     if raw is None or raw.empty:
-        return None
-    return raw
+        return ProviderFetchResult.failed(
+            FetchFailure(FetchFailureKind.EMPTY, message="sina returned no data"),
+        )
+    return ProviderFetchResult.succeeded(raw, breaker_recorded=breaker_recorded)
+
+
+def _fetch_sina(symbol: str, start: str) -> pd.DataFrame | None:
+    """保留旧 DataFrame | None 契约和 monkeypatch 路径。"""
+    return _fetch_sina_detailed(symbol, start).data
 
 
 # ── 数据源 4: 腾讯证券（备用 · 按年分片 · 价格可信 · 量额不可信） ────
 
-def _fetch_tencent(symbol: str, start: str) -> pd.DataFrame | None:
-    """腾讯 K 线 fallback。
+def _fetch_tencent_detailed(
+    symbol: str,
+    start: str,
+    *,
+    record_breaker: bool = True,
+) -> ProviderFetchResult[pd.DataFrame]:
+    """腾讯 K 线 fallback · 只保留语义可信的价格列。"""
+    source = "tencent"
+    if circuit_breaker.get_breaker().is_down(source):
+        return _failure_result(
+            source,
+            FetchFailureKind.CIRCUIT_OPEN,
+            message="tencent circuit is open",
+            record_breaker=False,
+        )
+    try:
+        import akshare as ak
+    except ImportError as exc:
+        return _failure_result(
+            source,
+            FetchFailureKind.UNAVAILABLE,
+            message=type(exc).__name__,
+            record_breaker=False,
+        )
 
-    akshare.stock_zh_a_hist_tx 返回 6 列：date/open/close/high/low/amount。
-    其中 "amount" 字段语义在不同板块不一致（实测 2026-05-08）：
-      - 主板/创业板：amount 实际是「成交手数」(volume / 100)
-      - 科创板（688/689）：amount 实际是「成交股数」(等于 volume)
-    既然语义不可移植，我们**保守只取价格列**（date/open/high/low/close），
-    丢弃 amount，让 _normalize_kline 把 volume/amount 都填 NaN。
-    下游看到 NaN 会跳过相关计算（成交量异动相关），比错值安全。
-    """
-    import io
-    import sys
-
-    import akshare as ak
-
-    cb = circuit_breaker.get_breaker()
-    if cb.is_down("tencent"):
-        return None
-
-    _real_stderr = sys.stderr
-    sys.stderr = io.StringIO()
     try:
         raw = ak.stock_zh_a_hist_tx(
             symbol=_market_prefix(symbol),
@@ -216,21 +377,39 @@ def _fetch_tencent(symbol: str, start: str) -> pd.DataFrame | None:
             adjust="qfq",
             timeout=15,
         )
-    except Exception as e:
-        # 腾讯 akshare · broad catch + debug log
-        debug_log(__name__, "fetch tencent", e)
-        cb.record("tencent", ok=False)
-        return None
-    finally:
-        sys.stderr = _real_stderr
+    except requests.Timeout as exc:
+        debug_log(__name__, "fetch tencent", exc)
+        return _failure_result(
+            source,
+            FetchFailureKind.TIMEOUT,
+            message=type(exc).__name__,
+            record_breaker=record_breaker,
+            retryable=True,
+            affects_circuit=True,
+        )
+    except Exception as exc:
+        debug_log(__name__, "fetch tencent", exc)
+        return _failure_result(
+            source,
+            FetchFailureKind.TRANSPORT,
+            message=type(exc).__name__,
+            record_breaker=record_breaker,
+            retryable=True,
+            affects_circuit=True,
+        )
 
-    cb.record("tencent", ok=True)
+    breaker_recorded = _record_success(source, record_breaker)
     if raw is None or raw.empty:
-        return None
-
+        return ProviderFetchResult.failed(
+            FetchFailure(FetchFailureKind.EMPTY, message="tencent returned no data"),
+        )
     if "amount" in raw.columns:
         raw = raw.drop(columns=["amount"])
-    return raw
+    return ProviderFetchResult.succeeded(raw, breaker_recorded=breaker_recorded)
+
+
+def _fetch_tencent(symbol: str, start: str) -> pd.DataFrame | None:
+    return _fetch_tencent_detailed(symbol, start).data
 
 
 # ── akshare 双源并发（东财 + 新浪 · race · baostock 挂掉后第二档） ──────
@@ -291,6 +470,13 @@ class BaostockKlineSource:
 
     name = "baostock"
     priority = 20
+    capabilities = ProviderCapabilities(
+        max_concurrency=1,
+        initial_concurrency=1,
+        max_attempts=2,
+        timeout_seconds=30,
+        serializes_requests=True,
+    )
 
     def is_available(self) -> bool:
         try:
@@ -303,12 +489,23 @@ class BaostockKlineSource:
     def fetch(self, symbol: str, start: str) -> pd.DataFrame | None:
         return _fetch_baostock(symbol, start)
 
+    def fetch_detailed(
+        self, symbol: str, start: str, *, record_breaker: bool = True,
+    ) -> ProviderFetchResult[pd.DataFrame]:
+        return _fetch_baostock_detailed(symbol, start, record_breaker=record_breaker)
+
 
 class EastmoneyKlineSource:
     """东方财富 (akshare.stock_zh_a_hist) K 线源 · priority=30 · 与 sina race。"""
 
     name = "eastmoney"
     priority = 30
+    capabilities = ProviderCapabilities(
+        max_concurrency=4,
+        initial_concurrency=2,
+        max_attempts=2,
+        timeout_seconds=5,
+    )
 
     def is_available(self) -> bool:
         try:
@@ -321,6 +518,11 @@ class EastmoneyKlineSource:
     def fetch(self, symbol: str, start: str) -> pd.DataFrame | None:
         return _fetch_eastmoney(symbol, start)
 
+    def fetch_detailed(
+        self, symbol: str, start: str, *, record_breaker: bool = True,
+    ) -> ProviderFetchResult[pd.DataFrame]:
+        return _fetch_eastmoney_detailed(symbol, start, record_breaker=record_breaker)
+
 
 class SinaKlineSource:
     """新浪 (akshare.stock_zh_a_daily) K 线源 · priority=30 · 与 eastmoney race。
@@ -330,6 +532,12 @@ class SinaKlineSource:
 
     name = "sina"
     priority = 30
+    capabilities = ProviderCapabilities(
+        max_concurrency=4,
+        initial_concurrency=2,
+        max_attempts=2,
+        timeout_seconds=15,
+    )
 
     def is_available(self) -> bool:
         try:
@@ -342,12 +550,23 @@ class SinaKlineSource:
     def fetch(self, symbol: str, start: str) -> pd.DataFrame | None:
         return _fetch_sina(symbol, start)
 
+    def fetch_detailed(
+        self, symbol: str, start: str, *, record_breaker: bool = True,
+    ) -> ProviderFetchResult[pd.DataFrame]:
+        return _fetch_sina_detailed(symbol, start, record_breaker=record_breaker)
+
 
 class TencentKlineSource:
     """腾讯 (akshare.stock_zh_a_hist_tx) K 线源 · priority=40 · 兜底 · volume 不可信已 drop。"""
 
     name = "tencent"
     priority = 40
+    capabilities = ProviderCapabilities(
+        max_concurrency=2,
+        initial_concurrency=1,
+        max_attempts=2,
+        timeout_seconds=15,
+    )
 
     def is_available(self) -> bool:
         try:
@@ -359,3 +578,8 @@ class TencentKlineSource:
 
     def fetch(self, symbol: str, start: str) -> pd.DataFrame | None:
         return _fetch_tencent(symbol, start)
+
+    def fetch_detailed(
+        self, symbol: str, start: str, *, record_breaker: bool = True,
+    ) -> ProviderFetchResult[pd.DataFrame]:
+        return _fetch_tencent_detailed(symbol, start, record_breaker=record_breaker)

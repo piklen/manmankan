@@ -41,19 +41,10 @@ HELP_TTFB_SLO_MS = 1500.0 if _is_github_linux() else (600.0 if _is_github_macos(
 # 这里把"按回车后有可见反馈"和"spinner 帧最终开始转动"分开守门：
 # - ttfb 仍用 SLO_MS 抓真正沉默；
 # - spinner 帧只做硬上限，避免 self-hosted runner 负载抖动把 main 打红。
-SPINNER_FRAME_HARD_CAP_MS = 2500.0 if _is_github_linux() else (1400.0 if _is_github_macos() else 1200.0)
-SPINNER_BYTES = (
-    b"\xe2\xa0\x8b",
-    b"\xe2\xa0\x99",
-    b"\xe2\xa0\xb9",
-    b"\xe2\xa0\xb8",
-    b"\xe2\xa0\xbc",
-    b"\xe2\xa0\xb4",
-    b"\xe2\xa0\xa6",
-    b"\xe2\xa0\xa7",
-    b"\xe2\xa0\x87",
-    b"\xe2\xa0\x8f",
-)
+LIFECYCLE_DISPLAY_HARD_CAP_MS = 2500.0 if _is_github_linux() else (1400.0 if _is_github_macos() else 1200.0)
+# 新生命周期系统 Rich Live.start() 写 \x1b[?25l 隐藏光标，是可靠的第一帧信号。
+# 旧版 Rich SpinnerColumn（⠋ ⠙ ⠹ …）已随 _with_heavy_imports_spinner 移除，不再检测。
+LIFECYCLE_BYTES = (b"\x1b[?25l",)
 
 
 def _seed_watchlist(xdg_home: Path) -> None:
@@ -78,7 +69,7 @@ def _measure_cli(
     xdg_home: Path,
     *,
     timeout_s: float = 5.0,
-    stop_on_spinner: bool = True,
+    stop_on_lifecycle: bool = True,
 ) -> dict[str, float | int | str | None]:
     if shutil.which("kan") is None:
         pytest.skip("kan is not in PATH. Run: uv tool install --reinstall .")
@@ -97,7 +88,7 @@ def _measure_cli(
 
     start = time.monotonic()
     first_byte_t: float | None = None
-    spinner_t: float | None = None
+    lifecycle_t: float | None = None
     chunks = 0
     killed = False
 
@@ -115,9 +106,9 @@ def _measure_cli(
                 chunks += 1
                 if first_byte_t is None:
                     first_byte_t = now
-                if spinner_t is None and any(frame in data for frame in SPINNER_BYTES):
-                    spinner_t = now
-                    if stop_on_spinner:
+                if lifecycle_t is None and any(frame in data for frame in LIFECYCLE_BYTES):
+                    lifecycle_t = now
+                    if stop_on_lifecycle:
                         os.kill(pid, signal.SIGKILL)
                         killed = True
                         break
@@ -143,7 +134,7 @@ def _measure_cli(
     return {
         "cmd": "kan " + " ".join(args),
         "ttfb_ms": first_byte_t * 1000 if first_byte_t is not None else None,
-        "spinner_first_frame_ms": spinner_t * 1000 if spinner_t is not None else None,
+        "lifecycle_first_frame_ms": lifecycle_t * 1000 if lifecycle_t is not None else None,
         "total_chunks": chunks,
     }
 
@@ -153,26 +144,26 @@ def _measure_best_of_three(
     xdg_home: Path,
     *,
     timeout_s: float = 5.0,
-    stop_on_spinner: bool = True,
+    stop_on_lifecycle: bool = True,
 ) -> dict[str, float | int | str | None]:
     results = [
         _measure_cli(
             args,
             xdg_home,
             timeout_s=timeout_s,
-            stop_on_spinner=stop_on_spinner,
+            stop_on_lifecycle=stop_on_lifecycle,
         )
         for _ in range(3)
     ]
     ttfbs = [r["ttfb_ms"] for r in results if r["ttfb_ms"] is not None]
-    spinners = [
-        r["spinner_first_frame_ms"]
+    lifecycles = [
+        r["lifecycle_first_frame_ms"]
         for r in results
-        if r["spinner_first_frame_ms"] is not None
+        if r["lifecycle_first_frame_ms"] is not None
     ]
     best = dict(results[0])
     best["ttfb_ms"] = min(ttfbs) if ttfbs else None
-    best["spinner_first_frame_ms"] = min(spinners) if spinners else None
+    best["lifecycle_first_frame_ms"] = min(lifecycles) if lifecycles else None
     best["attempts_json"] = json.dumps(results, ensure_ascii=False)
     return best
 
@@ -182,7 +173,7 @@ def test_help_ttfb_stays_fast(tmp_path: Path) -> None:
         ["--help"],
         tmp_path / "help",
         timeout_s=2.0,
-        stop_on_spinner=False,
+        stop_on_lifecycle=False,
     )
     assert result["ttfb_ms"] is not None, result
     assert result["ttfb_ms"] <= HELP_TTFB_SLO_MS, result
@@ -193,7 +184,7 @@ def test_find_help_ttfb_stays_fast(tmp_path: Path) -> None:
         ["find", "--help"],
         tmp_path / "find-help",
         timeout_s=2.0,
-        stop_on_spinner=False,
+        stop_on_lifecycle=False,
     )
     assert result["ttfb_ms"] is not None, result
     assert result["ttfb_ms"] <= HELP_TTFB_SLO_MS, result
@@ -204,7 +195,7 @@ def test_add_code_fast_path_ttfb_stays_fast(tmp_path: Path) -> None:
         ["add", "600519"],
         tmp_path / "add-fast-path",
         timeout_s=2.0,
-        stop_on_spinner=False,
+        stop_on_lifecycle=False,
     )
     assert result["ttfb_ms"] is not None, result
     assert result["ttfb_ms"] <= SLO_MS, result
@@ -215,17 +206,15 @@ def test_add_code_fast_path_ttfb_stays_fast(tmp_path: Path) -> None:
     [
         (["scan"], True),
         (["fetch", "600519", "--force"], False),
-        (["low", "60"], True),
-        (["high", "60"], True),
         (["info", "600519"], True),
-        (["trend"], True),
     ],
 )
-def test_heavy_commands_show_spinner_within_slo(
+def test_heavy_commands_show_lifecycle_within_slo(
     tmp_path: Path,
     args: list[str],
     needs_watchlist: bool,
 ) -> None:
+    """重命令（有网络 I/O）必须在新生命周期的 show_after 延迟后显示 Live。"""
     xdg_home = tmp_path / ("-".join(args).replace("/", "_"))
     if needs_watchlist:
         _seed_watchlist(xdg_home)
@@ -233,5 +222,28 @@ def test_heavy_commands_show_spinner_within_slo(
     result = _measure_best_of_three(args, xdg_home)
     assert result["ttfb_ms"] is not None, result
     assert result["ttfb_ms"] <= SLO_MS, result
-    assert result["spinner_first_frame_ms"] is not None, result
-    assert result["spinner_first_frame_ms"] <= SPINNER_FRAME_HARD_CAP_MS, result
+    assert result["lifecycle_first_frame_ms"] is not None, result
+    assert result["lifecycle_first_frame_ms"] <= LIFECYCLE_DISPLAY_HARD_CAP_MS, result
+
+
+@pytest.mark.parametrize(
+    "args,needs_watchlist",
+    [
+        (["low", "60"], True),
+        (["high", "60"], True),
+        (["trend"], True),
+    ],
+)
+def test_fast_commands_ttfb_within_slo(
+    tmp_path: Path,
+    args: list[str],
+    needs_watchlist: bool,
+) -> None:
+    """轻命令在 150ms show_after 内完成时不强制显示生命周期（零感停顿设计）。"""
+    xdg_home = tmp_path / ("-".join(args).replace("/", "_"))
+    if needs_watchlist:
+        _seed_watchlist(xdg_home)
+
+    result = _measure_best_of_three(args, xdg_home)
+    assert result["ttfb_ms"] is not None, result
+    assert result["ttfb_ms"] <= SLO_MS, result

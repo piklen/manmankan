@@ -11,6 +11,7 @@ import pandas as pd
 from kan.core.models import Board, BoardMeta, PeriodResult, StockScanResult
 from kan.core.pipeline import DataCtx, Freshness
 from kan.core.stock_set import CodeListSet
+from kan.infra.lifecycle import CollectingReporter, LifecycleKind, operation
 from kan.service.scan_service import ScanRequest, run_scan
 
 
@@ -279,6 +280,49 @@ def test_run_scan_enrichment_timeout_falls_back_to_local_retail_facts(monkeypatc
     assert [r.symbol for r in result.all_results] == ["600519"]
     assert result.all_results[0].lot_cost == 10000.0
     assert [r.symbol for r in result.results] == ["600519"]
+
+
+def test_run_scan_enrichment_timeout_reports_degraded_lifecycle(monkeypatch) -> None:
+    raw_results = [_scan_result("600519", "Alpha")]
+    stock_set = CodeListSet([("600519", "Alpha")])
+    release = threading.Event()
+
+    def fake_run_data_pipeline(stock_set_arg, **kwargs):
+        assert kwargs["lifecycle"] is lifecycle
+        return DataCtx(
+            targets=stock_set_arg.pairs(),
+            meta=None,
+            results=raw_results,
+            freshness=_freshness(),
+            source_name=stock_set_arg.name,
+        )
+
+    def slow_enrich_scan_rows(results, *, data_cutoff):
+        release.wait(timeout=2.0)
+        return list(results)
+
+    reporter = CollectingReporter()
+    monkeypatch.setattr("kan.core.pipeline.run_data_pipeline", fake_run_data_pipeline)
+    monkeypatch.setattr("kan.core.enrich.enrich_scan_rows", slow_enrich_scan_rows)
+
+    try:
+        with operation("扫描", reporter=reporter) as lifecycle:
+            run_scan(
+                ScanRequest(stock_set=stock_set, enrich_timeout_seconds=0.01),
+                lifecycle=lifecycle,
+            )
+    finally:
+        release.set()
+
+    assert any(
+        event.kind is LifecycleKind.WAIT and event.message == "等待外部扫描上下文"
+        for event in reporter.events
+    )
+    assert any(
+        event.kind is LifecycleKind.DEGRADED
+        and event.message == "外部扫描上下文超时，继续使用基础结果"
+        for event in reporter.events
+    )
 
 
 def test_run_scan_enrichment_error_falls_back_to_local_retail_facts(monkeypatch) -> None:

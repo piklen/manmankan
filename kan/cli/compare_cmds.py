@@ -6,7 +6,7 @@ from typing import Annotated
 import typer
 
 from kan.app import app
-from kan.cli.helpers import _print_err, _safe_error_msg, _with_heavy_imports_spinner
+from kan.cli.helpers import _print_err
 from kan.storage import export
 
 MAX_COMPARE_SYMBOLS = 30
@@ -41,15 +41,13 @@ def compare(
 
     from rich.console import Console
 
-    status_console = Console(stderr=True)
-    with _with_heavy_imports_spinner(status_console, "⏳ 加载数据模块..."):
-        from kan.core.scanner import MAX_PERIOD, MIN_PERIOD, scan_stock
-        from kan.data.fetcher import fetch_kline, get_cached, is_fresh
-        from kan.render import terminal
-        from kan.render.base import DISCLAIMER
-        from kan.storage.watchlist import resolve_symbol_or_name
-
-    console = Console()
+    from kan.core.scanner import MAX_PERIOD, MIN_PERIOD, scan_stock
+    from kan.data.fetcher import fetch_batch, get_cached, is_fresh
+    from kan.infra.lifecycle import operation
+    from kan.infra.progress import operation_reporter
+    from kan.render import terminal
+    from kan.render.base import DISCLAIMER
+    from kan.storage.watchlist import resolve_symbol_or_name
 
     try:
         period_list = [int(p.strip()) for p in periods.split(",") if p.strip()]
@@ -64,59 +62,99 @@ def compare(
         raise typer.Exit(2)
     period_list = sorted(dict.fromkeys(period_list))
 
-    results = []
-    seen: set[str] = set()
-    for raw in symbols:
-        try:
-            sym, name = resolve_symbol_or_name(raw)
-        except ValueError as e:
-            _print_err(f"❌ {raw}：{e}")
-            raise typer.Exit(1) from e
-        if sym in seen:
-            continue  # 静默去重 · `compare 茅台 600519 茅台` 这种用户重复输入
-        seen.add(sym)
-        if not is_fresh(sym):
-            try:
-                with status_console.status(
-                    f"[yellow]⏳ 拉取数据... {name.replace(' ', '')} ({sym})[/yellow]",
-                    spinner="dots",
-                ):
-                    fetch_kline(sym, force=True)
-            except Exception as e:
-                _print_err(f"❌ {sym} 拉取失败：{_safe_error_msg(e)}")
-                raise typer.Exit(1) from e
-        df = get_cached(sym)
-        if df is None:
-            _print_err(f"❌ {sym} 无数据")
-            raise typer.Exit(1)
-        results.append(scan_stock(df, sym, name, periods=period_list))
+    reporter = operation_reporter()
 
-    if fmt is export.OutputFormat.json:
-        typer.echo(export.to_json(export.compare_payload(results, periods=period_list)))
-        return
-    if fmt is export.OutputFormat.md:
-        typer.echo(export.compare_markdown(results, periods=period_list))
-        return
+    def _render() -> None:
+        pass
 
-    pages = [
-        results[i:i + COMPARE_PAGE_SIZE]
-        for i in range(0, len(results), COMPARE_PAGE_SIZE)
-    ]
-    for idx, page in enumerate(pages, start=1):
-        if len(pages) > 1:
-            console.print(f"\n[bold]kan compare · 第 {idx}/{len(pages)} 页[/bold]")
-        table = terminal.compare_table(page, periods=period_list)
-        console.print(table)
+    try:
+        with operation("横向对比", reporter=reporter) as lifecycle:
+            lifecycle.phase("解析股票")
+            # 第一遍：解析名称、去重、收集 stale 标的
+            resolved: list[tuple[str, str]] = []  # (sym, name)
+            stale: list[str] = []
+            seen: set[str] = set()
+            for raw in symbols:
+                try:
+                    sym, name = resolve_symbol_or_name(raw)
+                except ValueError as e:
+                    _print_err(f"❌ {raw}：{e}")
+                    raise typer.Exit(1) from e
+                if sym in seen:
+                    continue
+                seen.add(sym)
+                resolved.append((sym, name))
+                if not is_fresh(sym):
+                    stale.append(sym)
 
-    # 窄屏 + 多列时给提示 · 80 列下 ≥5 只表头会折断或裁掉
-    # 经验阈值:每只股大约要 12-14 列(名称 + 代码 + 现价 + N 周期位置)
-    estimated_width_per_col = 14
-    overhead = 12  # "指标" 列宽 + 表格边框
-    widest_page = max((len(p) for p in pages), default=0)
-    needed = overhead + widest_page * estimated_width_per_col
-    if console.width < needed:
-        console.print(
-            f"\n[dim]💡 窄屏模式 · 终端 {console.width} 列 / 建议 ≥ {needed} 列容 {widest_page} 只"
-            f" · 太窄时名称/代码会被裁 · 降低每次输入数量 / 加宽终端 / 用 --format md 看完整表[/dim]"
-        )
-    console.print(DISCLAIMER, style="dim")
+            # 第二遍：一次 batch 拉取所有 stale 标的
+            if stale:
+                lifecycle.phase("批量拉取数据", total=len(stale))
+                _, fetch_errors = fetch_batch(stale, force=True)
+
+                failed = {sym for sym in stale if sym in fetch_errors}
+                if failed:
+                    for sym in failed:
+                        _print_err(f"❌ {sym} 拉取失败：{fetch_errors[sym]}")
+                    raise typer.Exit(1)
+
+            # 第三遍：读缓存 + 扫描
+            lifecycle.phase("计算位置", total=len(resolved))
+            results = []
+            for idx, (sym, name) in enumerate(resolved, start=1):
+                df = get_cached(sym)
+                if df is None:
+                    _print_err(f"❌ {sym} 无数据")
+                    raise typer.Exit(1)
+                results.append(scan_stock(df, sym, name, periods=period_list))
+                lifecycle.progress(idx, len(resolved), "计算位置")
+
+            lifecycle.phase("准备输出")
+
+            if fmt is export.OutputFormat.json:
+                json_str = export.to_json(
+                    export.compare_payload(results, periods=period_list)
+                )
+                def _render_json() -> None:
+                    typer.echo(json_str)
+                _render = _render_json
+            elif fmt is export.OutputFormat.md:
+                md_str = export.compare_markdown(results, periods=period_list)
+                def _render_md() -> None:
+                    typer.echo(md_str)
+                _render = _render_md
+            else:
+                console = Console()
+                pages = [
+                    results[i:i + COMPARE_PAGE_SIZE]
+                    for i in range(0, len(results), COMPARE_PAGE_SIZE)
+                ]
+
+                def _render_terminal() -> None:
+                    for idx, page in enumerate(pages, start=1):
+                        if len(pages) > 1:
+                            console.print(
+                                f"\n[bold]kan compare · 第 {idx}/{len(pages)} 页[/bold]"
+                            )
+                        table = terminal.compare_table(page, periods=period_list)
+                        console.print(table)
+
+                    estimated_width_per_col = 14
+                    overhead = 12
+                    widest_page = max((len(p) for p in pages), default=0)
+                    needed = overhead + widest_page * estimated_width_per_col
+                    if console.width < needed:
+                        console.print(
+                            f"\n[dim]💡 窄屏模式 · 终端 {console.width} 列"
+                            f" / 建议 ≥ {needed} 列容 {widest_page} 只"
+                            " · 太窄时名称/代码会被裁"
+                            " · 降低每次输入数量 / 加宽终端 / 用 --format md 看完整表[/dim]"
+                        )
+                    console.print(DISCLAIMER, style="dim")
+
+                _render = _render_terminal
+
+    except typer.Exit:
+        raise
+
+    _render()

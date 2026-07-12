@@ -36,9 +36,14 @@ from kan.service.find_service_sort import SORT_FIELD_GETTERS, _sorted_offset_lim
 
 if TYPE_CHECKING:
     from kan.core.stock_set import StockSet
+    from kan.infra.lifecycle import OperationLifecycle
 
 
-def run_find_cross_section(request: FindCrossSectionRequest) -> FindCrossSectionResult:
+def run_find_cross_section(
+    request: FindCrossSectionRequest,
+    *,
+    lifecycle: OperationLifecycle | None = None,
+) -> FindCrossSectionResult:
     """Run `kan find --all` cross-section use case."""
     conditions = request.conditions
     output = request.output
@@ -100,6 +105,7 @@ def run_find_cross_section(request: FindCrossSectionRequest) -> FindCrossSection
         kline_periods=kline_snapshot_periods(conditions),
         included_dimensions=included_dimensions,
         need_valuation_context=_cross_section_needs_valuation_context(output),
+        lifecycle=lifecycle,
     )
     if not cs.rows:
         raise FindServiceError(
@@ -114,16 +120,26 @@ def run_find_cross_section(request: FindCrossSectionRequest) -> FindCrossSection
     if conditions.needs_relative_strength():
         from kan.core.enrich import attach_relative_strength_cross_section
 
+        if lifecycle is not None:
+            lifecycle.wait("等待全市场相对强度", row_count=len(rows))
         rows = attach_relative_strength_cross_section(
             rows,
             index_periods=conditions.rs_index_periods(),
             board_periods=conditions.rs_board_periods(),
             index_code=request.rs_index_code,
         )
+        if lifecycle is not None:
+            lifecycle.phase("全市场相对强度就绪", row_count=len(rows))
+    if lifecycle is not None:
+        lifecycle.phase("应用全市场筛选条件", row_count=len(rows))
     matched = apply_cross_section_conditions(rows, conditions)
+    if lifecycle is not None:
+        lifecycle.phase("排序并分页全市场结果", matched_count=len(matched))
     limited = _sorted_offset_limit(
         matched, lambda it: it[0], request.sort, request.offset, request.limit
     )
+    if lifecycle is not None:
+        lifecycle.phase("构造全市场筛选结果", result_count=len(limited))
     return FindCrossSectionResult(
         ctx=cs,
         matched=matched,
@@ -137,6 +153,8 @@ def run_find_cross_section(request: FindCrossSectionRequest) -> FindCrossSection
 
 def run_find_kline(
     request: FindKlineRequest,
+    *,
+    lifecycle: OperationLifecycle | None = None,
 ) -> FindKlineResult | FindCodePoolResult:
     """Run non-`--all` find use case."""
     from kan.core.enrich import attach_relative_strength, enrich_results
@@ -177,22 +195,35 @@ def run_find_kline(
     scan_periods = kline_scan_periods(request.conditions)
     ma_bias_periods = kline_ma_bias_periods(request.conditions)
     fetch_days = max(scan_periods) if scan_periods else None
-    pipeline_kwargs = {}
-    if not request.allow_auto_fetch:
-        pipeline_kwargs["auto_fetch"] = False
 
     try:
-        ctx = run_data_pipeline(
-            stock_set,
-            compute=scan_batch,
-            mode="low",
-            periods=scan_periods,
-            ma_bias_periods=ma_bias_periods,
-            fetch_days=fetch_days,
-            show_progress=not output.is_export,
-            exit_on_resolve_error=False,
-            **pipeline_kwargs,
-        )
+        if request.allow_auto_fetch and lifecycle is None:
+            ctx = run_data_pipeline(
+                stock_set, compute=scan_batch, mode="low", periods=scan_periods,
+                ma_bias_periods=ma_bias_periods, fetch_days=fetch_days,
+                show_progress=not output.is_export, exit_on_resolve_error=False,
+            )
+        elif request.allow_auto_fetch:
+            ctx = run_data_pipeline(
+                stock_set, compute=scan_batch, mode="low", periods=scan_periods,
+                ma_bias_periods=ma_bias_periods, fetch_days=fetch_days,
+                show_progress=not output.is_export, exit_on_resolve_error=False,
+                lifecycle=lifecycle,
+            )
+        elif lifecycle is None:
+            ctx = run_data_pipeline(
+                stock_set, compute=scan_batch, mode="low", periods=scan_periods,
+                ma_bias_periods=ma_bias_periods, fetch_days=fetch_days,
+                show_progress=not output.is_export, exit_on_resolve_error=False,
+                auto_fetch=False,
+            )
+        else:
+            ctx = run_data_pipeline(
+                stock_set, compute=scan_batch, mode="low", periods=scan_periods,
+                ma_bias_periods=ma_bias_periods, fetch_days=fetch_days,
+                show_progress=not output.is_export, exit_on_resolve_error=False,
+                auto_fetch=False, lifecycle=lifecycle,
+            )
     except StockSetResolveError as e:
         raise _find_error_from_stock_set(e) from e
     if not ctx.targets and request.only_watchlist:
@@ -233,6 +264,8 @@ def run_find_kline(
         or bool(output.field_dimensions)
     )
     if need_enrich:
+        if lifecycle is not None:
+            lifecycle.wait("等待候选股截面补充", result_count=len(ctx.results))
         pool_results = enrich_results(
             ctx.results,
             need_fundamentals=request.conditions.needs_fundamentals()
@@ -251,9 +284,14 @@ def run_find_kline(
             or ("chip" in output.field_dimensions),
             need_shareholder=request.conditions.needs_shareholder()
             or ("shareholder" in output.field_dimensions),
+            lifecycle=lifecycle,
         )
+        if lifecycle is not None:
+            lifecycle.phase("候选股截面补充完成", result_count=len(pool_results))
     else:
         pool_results = ctx.results
+    if lifecycle is not None:
+        lifecycle.phase("补充持仓事实", result_count=len(pool_results))
     try:
         from kan.storage.positions import load_positions
 
@@ -264,12 +302,18 @@ def run_find_kline(
 
     pool_results = [apply_retail_facts(r, cash=cash) for r in pool_results]
     if request.conditions.needs_relative_strength():
+        if lifecycle is not None:
+            lifecycle.wait("等待候选股相对强度", result_count=len(pool_results))
         pool_results = attach_relative_strength(
             pool_results,
             index_periods=request.conditions.rs_index_periods(),
             board_periods=request.conditions.rs_board_periods(),
             index_code=request.rs_index_code,
         )
+        if lifecycle is not None:
+            lifecycle.phase("候选股相对强度就绪", result_count=len(pool_results))
+    if lifecycle is not None:
+        lifecycle.phase("应用候选池约束", result_count=len(pool_results))
     if request.exclude_star or request.exclude_bj:
         from kan.core.retail_facts import market_board
 
@@ -282,7 +326,11 @@ def run_find_kline(
     if gap is not None:
         code, message, hint = gap
         raise FindServiceError(code=code, message=message, hint=hint)
+    if lifecycle is not None:
+        lifecycle.phase("应用候选股筛选条件", result_count=len(pool_results))
     matches = apply_conditions(pool_results, request.conditions)
+    if lifecycle is not None:
+        lifecycle.phase("排序并分页候选股结果", matched_count=len(matches))
     matches_limited = _sorted_offset_limit(
         matches, lambda m: m.result, request.sort, request.offset, effective_limit
     )

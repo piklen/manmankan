@@ -11,6 +11,7 @@ import pandas as pd
 import pytest
 
 from kan.core import cross_section
+from kan.infra.lifecycle import CollectingReporter, LifecycleKind, operation
 
 
 class _FakeSet:
@@ -90,6 +91,32 @@ def test_builds_rows_with_valuation(monkeypatch):
     # 数据层存原始 pe (裸值过滤在 export 层 · 同 enrich 决策)
     assert row.valuation.pe_ttm == 20.0
     assert ctx.data_cutoff == datetime.date(2026, 5, 29)
+
+
+def test_cross_section_reports_one_continuous_lifecycle(monkeypatch):
+    df = _cross_df([{
+        "symbol": "600519", "trade_date": datetime.date(2026, 5, 29),
+        "close": 1326.0, "pe_ttm": 20.0,
+    }])
+    monkeypatch.setattr("kan.data.metrics.fetch_metrics", lambda **_kw: df.copy())
+    reporter = CollectingReporter()
+
+    with operation("全市场筛选", reporter=reporter) as lifecycle:
+        ctx = cross_section.run_cross_section(
+            _FakeSet([("600519", "贵州茅台")]),
+            included_dimensions={"valuation"},
+            need_valuation_context=False,
+            lifecycle=lifecycle,
+        )
+
+    assert len(ctx.rows) == 1
+    assert any(event.message == "等待全市场基础指标" for event in reporter.events)
+    progress = [event for event in reporter.events if event.kind is LifecycleKind.PROGRESS]
+    assert any(
+        event.message == "组装全市场截面结果"
+        and (event.completed, event.total) == (1, 1)
+        for event in progress
+    )
 
 
 def test_history_pct_rank_skipped(monkeypatch):

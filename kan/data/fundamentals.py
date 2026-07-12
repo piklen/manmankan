@@ -11,15 +11,24 @@ from __future__ import annotations
 
 import re
 import time
+from functools import partial
 from pathlib import Path
 from typing import TYPE_CHECKING
 
+from kan.data.provider_contracts import (
+    FetchFailure,
+    FetchFailureKind,
+    ProviderCapabilities,
+    ProviderFetchResult,
+)
 from kan.infra.log import debug_log
 from kan.infra.numeric import to_numeric_checked
 from kan.storage.paths import DATA_DIR, atomic_write_parquet, ensure_dirs
 
 if TYPE_CHECKING:
     import pandas as pd
+
+    from kan.infra.lifecycle import OperationLifecycle
 
 _FUNDAMENTALS_COLUMNS = ["end_date", "roe", "netprofit_yoy", "or_yoy"]
 _FUNDAMENTALS_NUMERIC = ["roe", "netprofit_yoy", "or_yoy"]
@@ -29,6 +38,16 @@ _FUNDAMENTALS_TTL = 90 * 24 * 3600
 
 _TUSHARE_FUNDAMENTALS_FIELDS = "end_date,roe,netprofit_yoy,or_yoy"
 """fina_indicator 拉取字段 · 净资产收益率 ROE + 净利同比 + 营收同比增速 (%)."""
+
+_TUSHARE_FINA_CAPABILITIES = ProviderCapabilities(
+    max_concurrency=12,
+    initial_concurrency=4,
+    max_attempts=3,
+    timeout_seconds=30.0,
+    backoff_base_seconds=0.5,
+    backoff_cap_seconds=5.0,
+    supports_retry_after=True,
+)
 
 
 def _cache_path(symbol: str) -> Path:
@@ -65,44 +84,97 @@ def _load_cache(path: Path) -> pd.DataFrame | None:
         return None
 
 
-def _fetch_tushare_fundamentals(symbol: str) -> pd.DataFrame | None:
-    """TuShare fina_indicator 单股财务指标 adapter · 独立熔断 key `tushare_fina`."""
-    from kan.data.tushare import _normalize_symbol_to_ts, _post_tushare_api, _resolve_config
+def _fetch_tushare_fundamentals_detailed(
+    symbol: str,
+) -> ProviderFetchResult[pd.DataFrame]:
+    """TuShare fina_indicator 单次调用；重试由 provider scheduler 统一负责。"""
+    from kan.data.tushare import (
+        _api_error_to_failure,
+        _normalize_symbol_to_ts,
+        _post_tushare_api,
+        _resolve_config,
+    )
     from kan.infra import circuit_breaker
 
     token, endpoint = _resolve_config()
     if not token:
-        return None
+        return ProviderFetchResult.failed(FetchFailure(
+            FetchFailureKind.UNAVAILABLE,
+            message="tushare token is not configured",
+        ))
     cb = circuit_breaker.get_breaker()
     if cb.is_down("tushare_fina"):
-        return None
+        return ProviderFetchResult.failed(FetchFailure(
+            FetchFailureKind.CIRCUIT_OPEN,
+            message="tushare_fina circuit is open",
+        ))
     try:
         ts_code = _normalize_symbol_to_ts(symbol)
-    except ValueError:
-        return None
-    try:
-        data, _err = _post_tushare_api(
-            endpoint=endpoint,
-            token=token,
-            api_name="fina_indicator",
-            params={"ts_code": ts_code},
-            fields=_TUSHARE_FUNDAMENTALS_FIELDS,
+    except ValueError as exc:
+        return ProviderFetchResult.failed(FetchFailure(
+            FetchFailureKind.INVALID,
+            message=str(exc),
+        ))
+    data, err = _post_tushare_api(
+        endpoint=endpoint,
+        token=token,
+        api_name="fina_indicator",
+        params={"ts_code": ts_code},
+        fields=_TUSHARE_FUNDAMENTALS_FIELDS,
+        allow_transport_retries=False,
+    )
+    if data is None:
+        failure = _api_error_to_failure(err)
+        if failure.affects_circuit:
+            cb.record("tushare_fina", ok=False)
+        return ProviderFetchResult.failed(
+            failure,
+            breaker_recorded=failure.affects_circuit,
         )
-        if data is None:
-            cb.record("tushare_fina", ok=False)
-            return None
-        fields = data.get("fields") or []
-        items = data.get("items") or []
-        if not items:
-            cb.record("tushare_fina", ok=False)
-            return None
-        cb.record("tushare_fina", ok=True)
-        import pandas as pd
-        return pd.DataFrame(items, columns=fields)
-    except Exception as e:
-        debug_log(__name__, "fetch tushare fundamentals 失败", e)
-        cb.record("tushare_fina", ok=False)
+    fields = data.get("fields") or []
+    items = data.get("items") or []
+    if not items:
+        return ProviderFetchResult.failed(FetchFailure(
+            FetchFailureKind.EMPTY,
+            message="fina_indicator returned no data",
+        ))
+    cb.record("tushare_fina", ok=True)
+    import pandas as pd
+    return ProviderFetchResult.succeeded(
+        pd.DataFrame(items, columns=fields),
+        breaker_recorded=True,
+    )
+
+
+def _fetch_tushare_fundamentals(symbol: str) -> pd.DataFrame | None:
+    """兼容旧单股 adapter。"""
+    return _fetch_tushare_fundamentals_detailed(symbol).data
+
+
+_ORIGINAL_FETCH_TUSHARE_FUNDAMENTALS = _fetch_tushare_fundamentals
+
+
+def _fetch_fundamentals_job(symbol: str) -> ProviderFetchResult[pd.DataFrame]:
+    """生产走结构化 adapter；测试/兼容 monkeypatch 仍可替换旧 seam。"""
+    if _fetch_tushare_fundamentals is _ORIGINAL_FETCH_TUSHARE_FUNDAMENTALS:
+        return _fetch_tushare_fundamentals_detailed(symbol)
+    data = _fetch_tushare_fundamentals(symbol)
+    if data is None or data.empty:
+        return ProviderFetchResult.failed(FetchFailure(
+            FetchFailureKind.EMPTY,
+            message="fina_indicator returned no data",
+        ))
+    return ProviderFetchResult.succeeded(data)
+
+
+def _fresh_cache(symbol: str, *, force: bool) -> pd.DataFrame | None:
+    """读取仍在 TTL 内的缓存；未命中返回 None。"""
+    if force:
         return None
+    cache = _cache_path(symbol)
+    if not cache.exists() or (time.time() - cache.stat().st_mtime) >= _FUNDAMENTALS_TTL:
+        return None
+    return _load_cache(cache)
 
 
 def _fetch_one(symbol: str, force: bool = False) -> pd.DataFrame:
@@ -111,14 +183,9 @@ def _fetch_one(symbol: str, force: bool = False) -> pd.DataFrame:
         return _empty_df()
     ensure_dirs()
     cache = _cache_path(symbol)
-    if (
-        not force
-        and cache.exists()
-        and (time.time() - cache.stat().st_mtime) < _FUNDAMENTALS_TTL
-    ):
-        loaded = _load_cache(cache)
-        if loaded is not None:
-            return loaded
+    loaded = _fresh_cache(symbol, force=force)
+    if loaded is not None:
+        return loaded
 
     raw = _fetch_tushare_fundamentals(symbol)
     if raw is None or raw.empty:
@@ -139,7 +206,11 @@ def _latest_row(df: pd.DataFrame) -> pd.Series | None:
 
 
 def fetch_fundamentals(
-    symbols: list[str], force: bool = False,
+    symbols: list[str],
+    force: bool = False,
+    *,
+    max_workers: int | None = None,
+    lifecycle: OperationLifecycle | None = None,
 ) -> dict[str, pd.Series]:
     """逐股拉财务指标 · 返回 {symbol: 最新一期 Series} (估值/质量/资金维度 · ROE/增速)。
 
@@ -154,11 +225,90 @@ def fetch_fundamentals(
         {symbol: pd.Series (end_date / roe / netprofit_yoy / or_yoy)} · 仅含有数据的股。
         空 symbols → 空 dict (不触网)。
     """
+    from kan.data.provider_batch import ProviderJob, run_provider_jobs
+
+    unique = list(dict.fromkeys(str(symbol) for symbol in symbols))
+    valid = [symbol for symbol in unique if _SYMBOL_PATTERN.match(symbol)]
+    if not valid:
+        return {}
+    ensure_dirs()
+
     out: dict[str, pd.Series] = {}
-    for symbol in symbols:
-        row = _latest_row(_fetch_one(symbol, force=force))
+    pending: list[str] = []
+    for symbol in valid:
+        cached = _fresh_cache(symbol, force=force)
+        row = _latest_row(cached) if cached is not None else None
         if row is not None:
-            out[str(symbol)] = row
+            out[symbol] = row
+        else:
+            pending.append(symbol)
+    if not pending:
+        return out
+
+    if lifecycle is not None:
+        lifecycle.phase("拉取候选股财务指标", total=len(pending))
+
+    failures = 0
+
+    def on_result(result, completed: int, total: int) -> None:
+        nonlocal failures
+        if result.result.failure is not None:
+            failures += 1
+        if lifecycle is not None:
+            lifecycle.progress(
+                completed,
+                total,
+                "拉取候选股财务指标",
+                provider=result.provider,
+                failure_count=failures,
+            )
+
+    def on_wait(provider: str, failure: FetchFailure, attempt: int) -> None:
+        if lifecycle is not None:
+            lifecycle.wait(
+                "财务指标 provider 退避重试",
+                provider=provider,
+                reason=failure.kind.value,
+                attempt=attempt,
+                retry_after=failure.retry_after or 0.0,
+            )
+
+    def report_heartbeat(active: int, queued: int) -> None:
+        if lifecycle is not None:
+            lifecycle.heartbeat(active_calls=active, queued=queued)
+
+    jobs = [
+        ProviderJob(
+            key=symbol,
+            provider="tushare_fina",
+            call=partial(_fetch_fundamentals_job, symbol),
+            capabilities=_TUSHARE_FINA_CAPABILITIES,
+        )
+        for symbol in pending
+    ]
+    results = run_provider_jobs(
+        jobs,
+        max_workers=max_workers,
+        on_result=on_result,
+        on_wait=on_wait,
+        heartbeat=report_heartbeat if lifecycle is not None else None,
+    )
+    for symbol, job_result in results.items():
+        raw = job_result.result.data
+        if raw is None or raw.empty:
+            continue
+        df = _normalize(raw)
+        row = _latest_row(df)
+        if row is None:
+            continue
+        atomic_write_parquet(df, _cache_path(symbol))
+        out[symbol] = row
+    if failures and lifecycle is not None:
+        lifecycle.degraded(
+            "部分候选股财务指标不可用",
+            failure_count=failures,
+            total=len(pending),
+        )
     return out
 
 

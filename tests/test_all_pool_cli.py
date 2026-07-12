@@ -6,11 +6,13 @@ from datetime import date
 
 import pandas as pd
 import pytest
+import typer
 from typer.testing import CliRunner
 
 from kan.cli import app
 from kan.core.models import PeriodResult, StockScanResult
 from kan.core.scanner import TrendResult
+from kan.infra.lifecycle import CollectingReporter, OperationState
 
 ALL_PAIRS = [("600519", "贵州茅台"), ("000858", "五粮液")]
 
@@ -133,7 +135,7 @@ def test_trend_all_uses_all_stocks_pool(
 
     monkeypatch.setattr("kan.data.kline_snapshot.fetch_recent_daily_bars", fake_recent_daily_bars)
 
-    def fake_trend_cross(input_pairs, *, candle=False, panel=None):
+    def fake_trend_cross(input_pairs, *, candle=False, panel=None, **_kw):
         captured["pairs"] = list(input_pairs)
         return [
             TrendResult(
@@ -175,7 +177,7 @@ def test_trend_all_progress_does_not_pollute_structured_stdout(
 
     monkeypatch.setattr("kan.data.kline_snapshot.fetch_recent_daily_bars", fake_recent_daily_bars)
 
-    def fake_trend_cross(input_pairs, *, candle=False, panel=None):
+    def fake_trend_cross(input_pairs, *, candle=False, panel=None, **_kw):
         return [
             TrendResult(
                 symbol=symbol,
@@ -204,6 +206,48 @@ def test_trend_all_progress_does_not_pollute_structured_stdout(
         assert len(data["results"]) == len(ALL_PAIRS)
     else:
         assert "慢慢看 · A股全市场连续涨跌" in result.stdout
+
+
+def test_trend_all_uses_one_operation_through_output_construction(
+    all_pool_runner: CliRunner,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    reporter = CollectingReporter()
+    monkeypatch.setattr("kan.infra.progress.operation_reporter", lambda **_kw: reporter)
+    original_echo = typer.echo
+
+    def echo_after_close(message, **kwargs):
+        assert reporter.events[-1].state is OperationState.SUCCEEDED
+        original_echo(message, **kwargs)
+
+    monkeypatch.setattr("kan.cli.trend_cmds.typer.echo", echo_after_close)
+
+    def fake_recent_daily_bars(days, **kw):
+        kw["on_progress"](days, days, date(2026, 6, 26), len(ALL_PAIRS))
+        return pd.DataFrame(columns=["symbol", "date", "open", "close"])
+
+    monkeypatch.setattr("kan.data.kline_snapshot.fetch_recent_daily_bars", fake_recent_daily_bars)
+    monkeypatch.setattr(
+        "kan.core.scanner_trend.trend_batch_cross_section",
+        lambda input_pairs, **_kw: [
+            TrendResult(symbol, name, 100.0, 2, 1.5, [("2026-06-26", 0.8)])
+            for symbol, name in input_pairs
+        ],
+    )
+
+    result = all_pool_runner.invoke(app, ["trend", "--all", "--format", "json"])
+
+    assert result.exit_code == 0, result.output
+    assert [event.state for event in reporter.events if event.state is not None] == [
+        OperationState.STARTED,
+        OperationState.SUCCEEDED,
+    ]
+    messages = [event.message for event in reporter.events]
+    assert "解析全市场股票池" in messages
+    assert "计算日线截面新鲜度" in messages
+    assert "过滤连续涨跌结果" in messages
+    assert "构造趋势输出" in messages
+    assert json.loads(result.stdout)["command"] == "trend"
 
 
 def test_trend_plain_all_arg_points_to_flag(all_pool_runner: CliRunner) -> None:
@@ -297,18 +341,22 @@ def test_fetch_all_pulls_all_stocks(
     all_pool_runner: CliRunner,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    fetched: list[str] = []
+    fetched: list[list[str]] = []
 
     monkeypatch.setattr("kan.data.fetcher.is_fresh", lambda _symbol: False)
     monkeypatch.setattr(
-        "kan.data.fetcher.fetch_kline",
-        lambda symbol, force=False: fetched.append(symbol) or pd.DataFrame({"close": [1.0]}),
+        "kan.data.fetcher.fetch_batch",
+        lambda symbols, force=False: (
+            fetched.append(list(symbols))
+            or {symbol: pd.DataFrame({"close": [1.0]}) for symbol in symbols},
+            {},
+        ),
     )
 
     result = all_pool_runner.invoke(app, ["fetch", "--all"])
 
     assert result.exit_code == 0, result.output
-    assert fetched == ["600519", "000858"]
+    assert fetched == [["600519", "000858"]]
 
 
 @pytest.mark.parametrize(

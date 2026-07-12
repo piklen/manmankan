@@ -23,6 +23,12 @@ _THS_MAX_PAGES = 50
 _P = ParamSpec("_P")
 _R = TypeVar("_R")
 
+# py_mini_racer (V8) 不支持多线程并发初始化/执行。
+# 多 worker 同时调 akshare EM 函数时会触发 Check failed: !pool->IsInitialized() segfault。
+# 本锁保护所有可能触发 V8 初始化和执行的路径（_ths_headers / EM API / THS API）。
+# 注意：此锁只保护 mini_racer 调用的临界区，不保护纯 HTTP 请求。
+_MINI_RACER_LOCK = threading.Lock()
+
 
 def _quiet_call(
     func: Callable[_P, _R], /, *args: _P.args, **kwargs: _P.kwargs,
@@ -32,11 +38,23 @@ def _quiet_call(
         return func(*args, **kwargs)
 
 
+def _quiet_call_em(
+    func: Callable[_P, _R], /, *args: _P.args, **kwargs: _P.kwargs,
+) -> _R:
+    """跟 _quiet_call 一样屏蔽 tqdm，但额外持全局 mini_racer 锁。
+
+    akshare EM/THS 函数内部使用 py_mini_racer (V8) 做 JS 解密或 cookie 生成，
+    V8 不支持多线程并发，因此所有 EM/THS 路径必须在 _MINI_RACER_LOCK 下串行化。
+    """
+    with _MINI_RACER_LOCK, redirect_stdout(io.StringIO()), redirect_stderr(io.StringIO()):
+        return func(*args, **kwargs)
+
+
 def fetch_theme_catalog() -> pd.DataFrame | None:
     """读取同花顺题材清单，标准化为 code/name 两列。"""
     import akshare as ak
 
-    raw = _quiet_call(ak.stock_board_concept_name_ths)
+    raw = _quiet_call_em(ak.stock_board_concept_name_ths)
     if raw is None or raw.empty:
         return raw
     return raw[["code", "name"]]
@@ -46,7 +64,7 @@ def _fetch_em_theme_catalog() -> pd.DataFrame | None:
     """读取东财题材清单，供 THS 名称映射到 BK 代码。"""
     import akshare as ak
 
-    raw = _quiet_call(ak.stock_board_concept_name_em)
+    raw = _quiet_call_em(ak.stock_board_concept_name_em)
     if raw is None or raw.empty:
         return raw
     return raw.rename(columns={"板块代码": "code", "板块名称": "name"})[["code", "name"]]
@@ -84,7 +102,7 @@ def _ths_headers() -> dict[str, str]:
     from akshare.stock_feature.stock_board_concept_ths import _get_file_content_ths
     from py_mini_racer import MiniRacer
 
-    with MiniRacer() as racer:
+    with _MINI_RACER_LOCK, MiniRacer() as racer:
         racer.eval(_get_file_content_ths("ths.js"))
         value = str(racer.call("v"))
     return {
@@ -152,7 +170,7 @@ def fetch_em_constituents(theme: Theme) -> pd.DataFrame | None:
     """读取东财题材成分，标准化为 stock_code/short_name。"""
     import akshare as ak
 
-    raw = _quiet_call(ak.stock_board_concept_cons_em, symbol=_resolve_em_code(theme))
+    raw = _quiet_call_em(ak.stock_board_concept_cons_em, symbol=_resolve_em_code(theme))
     if raw is None or raw.empty:
         return raw
     return raw.rename(columns={"代码": "stock_code", "名称": "short_name"})[
@@ -164,7 +182,7 @@ def fetch_em_kline(theme: Theme) -> pd.DataFrame | None:
     """读取东财题材日 K，标准化为 manmankan 行情列。"""
     import akshare as ak
 
-    raw = _quiet_call(
+    raw = _quiet_call_em(
         ak.stock_board_concept_hist_em,
         symbol=_resolve_em_code(theme),
         period="daily",

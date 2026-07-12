@@ -27,6 +27,7 @@ if TYPE_CHECKING:
         StockScanResult,
         TechnicalMetrics,
     )
+    from kan.infra.lifecycle import OperationLifecycle
 
 
 def enrich_results(
@@ -39,6 +40,7 @@ def enrich_results(
     need_sentiment: bool = False,
     need_chip: bool = False,
     need_shareholder: bool = False,
+    lifecycle: OperationLifecycle | None = None,
 ) -> list[EnrichedResult]:
     """给 scan 结果按需挂多维指标 · 返回 EnrichedResult 列表 (原序)。
 
@@ -78,7 +80,12 @@ def enrich_results(
     if need_fundamentals:
         from kan.data.fundamentals import fetch_fundamentals
 
-        for sym, row in fetch_fundamentals(symbols).items():
+        fetched = (
+            fetch_fundamentals(symbols)
+            if lifecycle is None
+            else fetch_fundamentals(symbols, lifecycle=lifecycle)
+        )
+        for sym, row in fetched.items():
             fund_by_symbol[sym] = _row_to_fundamentals(row)
 
     mf_by_symbol: dict[str, MoneyflowMetrics] = {}
@@ -113,7 +120,12 @@ def enrich_results(
     if need_shareholder:
         from kan.data.shareholder import fetch_shareholder
 
-        for sym, row in fetch_shareholder(symbols).items():
+        fetched = (
+            fetch_shareholder(symbols)
+            if lifecycle is None
+            else fetch_shareholder(symbols, lifecycle=lifecycle)
+        )
+        for sym, row in fetched.items():
             sh_by_symbol[sym] = _row_to_shareholder(row)
 
     return [

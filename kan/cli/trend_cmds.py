@@ -3,7 +3,10 @@
 单独一个文件因为命令逻辑独立（不跟 scan/low/high 共享代码 · 用单独的 trend_batch
 算法 + 自己的日期列头逻辑），且日后可能加入更多 trend 衍生命令（如 trend backtest 等）。
 """
-from typing import Annotated
+from __future__ import annotations
+
+from collections.abc import Callable
+from typing import TYPE_CHECKING, Annotated
 
 import typer
 
@@ -12,10 +15,114 @@ from kan.cli.helpers import (
     _get_watchlist_pairs,
     _load_watchlist_pairs,
     _print_err,
-    _with_heavy_imports_spinner,
 )
 from kan.data.hot import HotList
 from kan.storage import export
+
+if TYPE_CHECKING:
+    from kan.core.pipeline import DataCtx
+    from kan.infra.lifecycle import OperationLifecycle
+
+
+def _finish_trend(
+    ctx: DataCtx,
+    *,
+    all_stocks: bool,
+    down: int | None,
+    up: int | None,
+    candle: bool,
+    fmt: export.OutputFormat,
+    latest: int | None,
+    lifecycle: OperationLifecycle | None = None,
+) -> Callable[[], None]:
+    """完成过滤与输出构造，返回 lifecycle 关闭后执行的渲染函数。"""
+    from rich.console import Console
+
+    from kan.core.models import HotMeta, ThemeMeta
+    from kan.core.pipeline import render_freshness_warning
+    from kan.render import terminal
+    from kan.render.base import DISCLAIMER, max_trend_dates
+
+    console = Console()
+    results = ctx.results
+    board_meta = ctx.meta
+    if not ctx.targets and all_stocks:
+        _print_err("❌ 全市场股票池为空\n   例: kan config set tushare-token <YOUR_TOKEN>；或稍后重试")
+        raise typer.Exit(1)
+    if not results:
+        _print_err("无缓存数据 · 请先 `kan fetch` 拉取数据")
+        raise typer.Exit(1)
+
+    if lifecycle is not None:
+        lifecycle.phase("过滤连续涨跌结果", result_count=len(results))
+    filter_label = ""
+    if down is not None:
+        results = [result for result in results if result.streak <= -down]
+        filter_label = f" · 连跌≥{down}天"
+    elif up is not None:
+        results = [result for result in results if result.streak >= up]
+        filter_label = f" · 连涨≥{up}天"
+
+    if not results and fmt is export.OutputFormat.terminal and (down is not None or up is not None):
+        threshold = down if down is not None else up
+        direction = "跌" if down is not None else "涨"
+        message = f"没有连续{direction} ≥{threshold} 天的股票"
+        return lambda: console.print(message)
+
+    if lifecycle is not None:
+        lifecycle.phase("构造趋势输出", result_count=len(results), format=fmt.value)
+    title = terminal.trend_title(ctx, candle=candle, filter_label=filter_label)
+    data_cutoff = ctx.freshness.data_cutoff
+    fetched_at = ctx.freshness.fetched_at
+    is_stale = ctx.freshness.is_stale
+
+    if fmt is export.OutputFormat.json:
+        payload = export.to_json(export.trend_payload(
+            results,
+            candle=candle,
+            data_cutoff=data_cutoff,
+            fetched_at=fetched_at,
+            stale=is_stale,
+        ))
+        return lambda: typer.echo(payload)
+    if fmt is export.OutputFormat.md:
+        markdown = export.trend_markdown(results, title=title, latest=latest)
+        return lambda: typer.echo(markdown)
+
+    actual_latest = min(latest, max_trend_dates(console.width)) if latest and results else None
+    table = terminal.trend_table(
+        ctx,
+        results,
+        latest=actual_latest,
+        candle=candle,
+        filter_label=filter_label,
+    )
+    def render_terminal() -> None:
+        console.print(table)
+        if latest and actual_latest is not None and actual_latest < latest:
+            console.print(
+                f"\n  [dim]窄屏模式 · 显示近 {actual_latest}/{latest} 天"
+                " · 加宽终端可见全部[/dim]"
+            )
+        render_freshness_warning(ctx.freshness, console)
+        console.print()
+        if candle:
+            console.print("[dim]  阳线阴线口径：收盘 > 开盘 = ▲ · 收盘 < 开盘 = ▼ · 平盘不断连续[/dim]")
+        else:
+            console.print("[dim]  收盘价口径：今日收盘 > 昨日收盘 = ▲ · 今日收盘 < 昨日收盘 = ▼ · 平盘不断连续[/dim]")
+        if isinstance(board_meta, HotMeta):
+            console.print(
+                "[dim]  榜 = 东方财富热榜实时名次 · 非慢慢看观点 · 热榜为实时榜单\n"
+                "  💡 涨停 / 大幅上涨个股天然在区间高位 · [100%] 是数学结果 不是 「过热信号」[/dim]"
+            )
+        if isinstance(board_meta, ThemeMeta):
+            from kan.render.theme import render_theme_disclaimer
+
+            render_theme_disclaimer()
+        else:
+            console.print(DISCLAIMER, style="dim")
+
+    return render_terminal
 
 
 @app.command()
@@ -82,18 +189,11 @@ def trend(
             _print_err(f"❌ 不识别的参数: {first}")
         raise typer.Exit(2)
 
-    from rich.console import Console
-
-    from kan.infra.progress import cli_status, determinate_progress, feedback_console
+    from kan.infra.progress import feedback_console, operation_reporter
 
     status_console = feedback_console()
-    with _with_heavy_imports_spinner(status_console, "⏳ 加载数据模块..."):
-        from kan.core.pipeline import render_freshness_warning
-        from kan.core.scanner import trend_batch
-        from kan.render import terminal
-        from kan.render.base import DISCLAIMER, max_trend_dates
+    from kan.core.scanner import trend_batch
 
-    console = Console()
     pool_count = sum(1 for x in (industry, hot, theme) if x is not None) + int(all_stocks)
     if pool_count > 1:
         _print_err("❌ --industry / --hot / --theme / --all 互斥 · 同时只能用一个")
@@ -132,14 +232,7 @@ def trend(
             raise typer.Exit(1)
 
     # OOP 路径
-    from kan.core.models import ThemeMeta
-    from kan.core.pipeline import (
-        DataCtx,
-        freshness_of,
-        render_freshness_warning,
-        resolve_stock_set_or_exit,
-        run_data_pipeline,
-    )
+    from kan.core.pipeline import DataCtx, resolve_stock_set_or_exit, run_data_pipeline
     from kan.core.stock_set import from_flags
     stock_set = from_flags(
         industry=industry, hot=hot, theme=theme,
@@ -150,143 +243,82 @@ def trend(
     )
 
     if all_stocks:
-        # 截面 fast-path:拉近 31 天全市场 daily panel · 31 次 HTTP · 避开逐股 auto_fetch 4137 次 HTTP
-        # 与 cross_section.py 同款思路 · trend --all 不走 run_data_pipeline(K 线管线逐股 = 灾难)
         from kan.core.scanner_trend import TREND_STREAK_CAP, trend_batch_cross_section
+        from kan.data.kline_snapshot import daily_panel_freshness, fetch_recent_daily_bars
+        from kan.infra.lifecycle import operation
 
-        with cli_status("⏳ 加载全市场股票池...", console=status_console):
+        reporter = operation_reporter(console=status_console)
+        with operation("全市场连续涨跌", reporter=reporter) as lifecycle:
+            lifecycle.phase("解析全市场股票池")
             targets, board_meta = resolve_stock_set_or_exit(stock_set)
-        if not targets:
-            _print_err(
-                "❌ 全市场股票池为空\n"
-                "   例: kan config set tushare-token <YOUR_TOKEN>；或稍后重试"
-            )
-            raise typer.Exit(1)
+            if not targets:
+                _print_err(
+                    "❌ 全市场股票池为空\n"
+                    "   例: kan config set tushare-token <YOUR_TOKEN>；或稍后重试"
+                )
+                raise typer.Exit(1)
 
-        # streak 算 30 天 → 需 31 个交易日(含起点前置日算第一日 change)
-        from kan.data.kline_snapshot import fetch_recent_daily_bars
+            symbols = [symbol for symbol, _name in targets]
+            days = TREND_STREAK_CAP + 1
+            lifecycle.phase("获取全市场日线截面", target_count=len(symbols), days=days)
 
-        symbols = [symbol for symbol, _name in targets]
-        days = TREND_STREAK_CAP + 1
-        with determinate_progress(console=status_console, transient=True) as progress:
-            task_id = progress.add_task(
-                f"⏳ 拉取全市场日线截面 · 0/{days} 日 · {len(symbols)} 只",
-                total=days,
-            )
-
-            def _on_daily_loaded(
+            def _legacy_daily_progress(
                 done: int,
                 total: int,
-                trade_day,
+                trade_day: object,
                 row_count: int,
             ) -> None:
-                progress.update(
-                    task_id,
-                    completed=done,
-                    description=(
-                        "⏳ 拉取全市场日线截面"
-                        f" · {done}/{total} 日 · {trade_day:%m-%d}"
-                        f" · {row_count} 行"
-                    ),
-                )
+                del done, total, trade_day, row_count
 
             panel = fetch_recent_daily_bars(
                 days,
                 symbols=symbols,
-                on_progress=_on_daily_loaded,
+                lifecycle=lifecycle,
+                on_progress=_legacy_daily_progress,
             )
-        with cli_status(f"⏳ 计算连续涨跌 · {len(symbols)} 只...", console=status_console):
-            results = trend_batch_cross_section(targets, candle=candle, panel=panel)
-        freshness = freshness_of(r.symbol for r in results)
-        ctx = DataCtx(
-            targets=targets,
-            meta=board_meta,
-            results=results,
-            freshness=freshness,
-            source_name=getattr(stock_set, "name", ""),
-        )
-    else:
-        # 非 --all:走逐股 K 线管线(自选股/行业/热榜/题材 · 通常 < 数百只 · 逐股 fetch 可接受)
-        ctx = run_data_pipeline(stock_set, compute=trend_batch, candle=candle)
-
-    results = ctx.results
-    board_meta = ctx.meta
-    data_cutoff = ctx.freshness.data_cutoff
-    fetched_at = ctx.freshness.fetched_at
-    is_stale = ctx.freshness.is_stale  # JSON/MD payload 仍引用
-    freshness = ctx.freshness  # 给 render_freshness_warning 用
-
-    if not ctx.targets and all_stocks:
-        _print_err(
-            "❌ 全市场股票池为空\n"
-            "   例: kan config set tushare-token <YOUR_TOKEN>；或稍后重试"
-        )
-        raise typer.Exit(1)
-    if not results:
-        _print_err("无缓存数据 · 请先 `kan fetch` 拉取数据")
-        raise typer.Exit(1)
-
-    # 筛选连续涨/跌
-    filter_label = ""
-    if down is not None:
-        results = [r for r in results if r.streak <= -down]
-        filter_label = f" · 连跌≥{down}天"
-        if not results and fmt is export.OutputFormat.terminal:
-            console.print(f"没有连续跌 ≥{down} 天的股票")
-            return
-    elif up is not None:
-        results = [r for r in results if r.streak >= up]
-        filter_label = f" · 连涨≥{up}天"
-        if not results and fmt is export.OutputFormat.terminal:
-            console.print(f"没有连续涨 ≥{up} 天的股票")
-            return
-
-    title = terminal.trend_title(
-        ctx, candle=candle, filter_label=filter_label,
-    )
-
-    if fmt is not export.OutputFormat.terminal:
-        if fmt is export.OutputFormat.json:
-            typer.echo(export.to_json(export.trend_payload(
-                results, candle=candle, data_cutoff=data_cutoff,
-                fetched_at=fetched_at, stale=is_stale,
-            )))
-        else:
-            typer.echo(export.trend_markdown(results, title=title, latest=latest))
+            lifecycle.phase("计算全市场连续涨跌", target_count=len(symbols))
+            results = trend_batch_cross_section(
+                targets,
+                candle=candle,
+                panel=panel,
+                lifecycle=lifecycle,
+            )
+            lifecycle.phase("计算日线截面新鲜度")
+            freshness = daily_panel_freshness(
+                panel,
+                symbols=symbols,
+                required_rows=days,
+            )
+            ctx = DataCtx(
+                targets=targets,
+                meta=board_meta,
+                results=results,
+                freshness=freshness,
+                source_name=getattr(stock_set, "name", ""),
+            )
+            render_output = _finish_trend(
+                ctx,
+                all_stocks=True,
+                down=down,
+                up=up,
+                candle=candle,
+                fmt=fmt,
+                latest=latest,
+                lifecycle=lifecycle,
+            )
+        render_output()
         return
 
-    from kan.core.models import HotMeta
-    is_hot = isinstance(board_meta, HotMeta)
+    # 非 --all:走逐股 K 线管线(自选股/行业/热榜/题材 · 通常 < 数百只 · 逐股 fetch 可接受)
+    ctx = run_data_pipeline(stock_set, compute=trend_batch, candle=candle)
 
-    actual_latest: int | None = None
-    if latest and results:
-        actual_latest = min(latest, max_trend_dates(console.width))
-
-    table = terminal.trend_table(
-        ctx, results,
-        latest=actual_latest, candle=candle, filter_label=filter_label,
+    render_output = _finish_trend(
+        ctx,
+        all_stocks=False,
+        down=down,
+        up=up,
+        candle=candle,
+        fmt=fmt,
+        latest=latest,
     )
-    console.print(table)
-
-    if latest and actual_latest is not None and actual_latest < latest:
-        console.print(
-            f"\n  [dim]窄屏模式 · 显示近 {actual_latest}/{latest} 天"
-            " · 加宽终端可见全部[/dim]"
-        )
-
-    render_freshness_warning(freshness, console)
-
-    console.print()
-    if candle:
-        console.print("[dim]  阳线阴线口径：收盘 > 开盘 = ▲ · 收盘 < 开盘 = ▼ · 平盘不断连续[/dim]")
-    else:
-        console.print("[dim]  收盘价口径：今日收盘 > 昨日收盘 = ▲ · 今日收盘 < 昨日收盘 = ▼ · 平盘不断连续[/dim]")
-    if is_hot:
-        console.print(
-            "[dim]  榜 = 东方财富热榜实时名次 · 非慢慢看观点 · 热榜为实时榜单\n  💡 涨停 / 大幅上涨个股天然在区间高位 · [100%] 是数学结果 不是 「过热信号」[/dim]"
-        )
-    if isinstance(board_meta, ThemeMeta):
-        from kan.render.theme import render_theme_disclaimer
-        render_theme_disclaimer()
-    else:
-        console.print(DISCLAIMER, style="dim")
+    render_output()

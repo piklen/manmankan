@@ -262,15 +262,19 @@ def test_list_industry_filters_watchlist(monkeypatch):
 
 def test_fetch_industry_runs(industry_runner, monkeypatch):
     from kan.app import app
-    fetched: list[str] = []
+    fetched: list[list[str]] = []
     monkeypatch.setattr(
-        "kan.data.fetcher.fetch_kline",
-        lambda sym, force=False: fetched.append(sym) or __import__("pandas").DataFrame(),
+        "kan.data.fetcher.fetch_batch",
+        lambda symbols, force=False: (
+            fetched.append(list(symbols))
+            or {symbol: pd.DataFrame() for symbol in symbols},
+            {},
+        ),
     )
     monkeypatch.setattr("kan.data.fetcher.is_fresh", lambda sym: False)
     result = industry_runner.invoke(app, ["fetch", "--industry=食品饮料"])
     assert result.exit_code == 0, result.output
-    assert "600519" in fetched and "000998" in fetched   # 两只成分股都拉了
+    assert fetched == [["600519", "000998"]]
 
 
 def test_scan_industry_empty_watchlist_ok(industry_runner, monkeypatch):

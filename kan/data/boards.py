@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import json
 import time
+from functools import partial
 from typing import TYPE_CHECKING
 
 from kan.core.models import Board
@@ -18,6 +19,8 @@ if TYPE_CHECKING:
     import pandas as pd
 
     from kan.core.models import Theme
+    from kan.data.theme_constituents import ThemeConstituentSource
+    from kan.infra.lifecycle import OperationLifecycle
 
 _CATALOG_TTL = 24 * 3600  # 24h
 _CONS_TTL = 24 * 3600
@@ -125,15 +128,17 @@ def get_industry_constituents(
     """行业成分股 (代码, 名称) 列表 · JSON cache 24h TTL。
 
     akshare: index_component_sw(symbol=board.code) → 证券代码 / 证券名称。
+    失败时如有旧缓存（即使过期）也会降级使用，避免因临时网络/代理问题阻塞查询。
     """
     ensure_dirs()
     cache = BOARDS_DIR / f"cons_{board.code}.json"
+
+    def _load_cache(pairs_list: list) -> list[tuple[str, str]]:
+        return [(str(c), str(n)) for c, n in pairs_list]
+
     if not force and _cache_fresh(cache, _CONS_TTL):
         try:
-            return [
-                (str(c), str(n))
-                for c, n in json.loads(cache.read_text(encoding="utf-8"))
-            ]
+            return _load_cache(json.loads(cache.read_text(encoding="utf-8")))
         except Exception as e:
             debug_log(__name__, f"industry constituents cache {cache.name} 损坏 · 重新拉", e)
     import akshare as ak
@@ -142,6 +147,14 @@ def get_industry_constituents(
         df = ak.index_component_sw(symbol=board.code)
     except Exception as e:
         debug_log(__name__, f"申万成分股拉取失败 {board.code}", e)
+        # 降级：用旧缓存（即使过期）兜底，避免临时网络/代理问题阻塞
+        if cache.exists():
+            try:
+                stale = _load_cache(json.loads(cache.read_text(encoding="utf-8")))
+                debug_log(__name__, f"申万成分股降级 {board.code} · 使用过期缓存({len(stale)}只)", e)
+                return stale
+            except Exception:
+                pass
         raise BoardDataUnavailableError(f"申万成分股暂不可用: {board.code}") from e
     if df is None or df.empty:
         raise BoardDataUnavailableError(f"申万成分股为空: {board.code}")
@@ -318,6 +331,29 @@ def search_theme(query: str) -> Theme:
     raise ThemeNotFoundError(query)
 
 
+def _theme_constituent_cache(theme: Theme):
+    """返回与单题材旧路径一致的成分股 cache 文件。"""
+    src_prefix = "THS" if theme.source == "ths" else "EM"
+    return BOARDS_DIR / f"cons_{src_prefix}{theme.code}.json"
+
+
+def _read_theme_constituent_cache(theme: Theme, *, force: bool) -> list[tuple[str, str]] | None:
+    """读取仍在 TTL 内的题材成分股 cache；损坏时回源。"""
+    if force:
+        return None
+    cache = _theme_constituent_cache(theme)
+    if not _cache_fresh(cache, _THEME_CONS_TTL):
+        return None
+    try:
+        return [
+            (str(code), str(name))
+            for code, name in json.loads(cache.read_text(encoding="utf-8"))
+        ]
+    except Exception as exc:
+        debug_log(__name__, f"theme constituents cache {cache.name} 损坏 · 重新拉", exc)
+        return None
+
+
 def get_theme_constituents(theme, force: bool = False) -> list[tuple[str, str]]:
     """题材成分股 (代码, 名称) 列表 · 走 ThemeConstituentSourceChain。
 
@@ -331,20 +367,12 @@ def get_theme_constituents(theme, force: bool = False) -> list[tuple[str, str]]:
     用户可通过 kan.api.register_theme_constituent_source 加自定义源。
     """
     from kan.data.theme_constituents import default_theme_constituent_chain
-    from kan.infra.log import debug_log
 
     ensure_dirs()
-    src_prefix = "THS" if theme.source == "ths" else "EM"
-    cache = BOARDS_DIR / f"cons_{src_prefix}{theme.code}.json"
-
-    if not force and _cache_fresh(cache, _THEME_CONS_TTL):
-        try:
-            return [
-                (str(c), str(n))
-                for c, n in json.loads(cache.read_text(encoding="utf-8"))
-            ]
-        except Exception as e:
-            debug_log(__name__, f"theme constituents cache {cache.name} 损坏 · 重新拉", e)
+    cache = _theme_constituent_cache(theme)
+    cached = _read_theme_constituent_cache(theme, force=force)
+    if cached is not None:
+        return cached
 
     result = default_theme_constituent_chain().fetch(theme)
     if result is None:
@@ -361,6 +389,180 @@ def get_theme_constituents(theme, force: bool = False) -> list[tuple[str, str]]:
     pairs, _source_name = result
     atomic_write_json(cache, pairs, ensure_ascii=False)
     return pairs
+
+
+def _theme_source_capabilities(source: ThemeConstituentSource):
+    """读取 source 自声明能力；自定义源缺省使用保守并发。"""
+    from kan.data.provider_contracts import ProviderCapabilities
+
+    declared = getattr(source, "capabilities", None)
+    if isinstance(declared, ProviderCapabilities):
+        return declared
+    return ProviderCapabilities(max_concurrency=4, initial_concurrency=2, max_attempts=1)
+
+
+def _fetch_theme_constituent_source(source: ThemeConstituentSource, theme: Theme):
+    """把旧 source 的 None 契约适配为通用 provider result。"""
+    from kan.data.provider_contracts import (
+        FetchFailure,
+        FetchFailureKind,
+        ProviderFetchResult,
+    )
+
+    pairs = source.fetch(theme)
+    if pairs is None:
+        return ProviderFetchResult.failed(FetchFailure(
+            FetchFailureKind.EMPTY,
+            message=f"{source.name} returned no constituents",
+        ))
+    return ProviderFetchResult.succeeded(pairs)
+
+
+def _theme_source_groups(
+    sources: list[ThemeConstituentSource],
+) -> list[list[ThemeConstituentSource]]:
+    """按 priority 分组，保留同档 race、跨档 fallback 语义。"""
+    groups: list[list[ThemeConstituentSource]] = []
+    for source in sources:
+        if not groups or groups[-1][0].priority != source.priority:
+            groups.append([source])
+        else:
+            groups[-1].append(source)
+    return groups
+
+
+def get_theme_constituents_batch(
+    themes: list[Theme],
+    *,
+    force: bool = False,
+    max_workers: int | None = None,
+    lifecycle: OperationLifecycle | None = None,
+) -> dict[str, list[tuple[str, str]]]:
+    """批量拉题材成分股：cache → provider priority groups → fallback。"""
+    from kan.data.provider_batch import ProviderJob, run_provider_jobs
+    from kan.data.provider_contracts import FetchFailure
+    from kan.data.theme_constituents import default_theme_constituent_chain
+
+    ensure_dirs()
+    unique = list({theme.code: theme for theme in themes}.values())
+    out: dict[str, list[tuple[str, str]]] = {}
+    unresolved: dict[str, Theme] = {}
+    for theme in unique:
+        cached = _read_theme_constituent_cache(theme, force=force)
+        if cached is None:
+            unresolved[theme.code] = theme
+        else:
+            out[theme.code] = cached
+    if not unresolved:
+        return out
+
+    if lifecycle is not None:
+        lifecycle.phase(
+            "拉取题材成分股",
+            total=len(unique),
+            cached=len(out),
+            pending=len(unresolved),
+        )
+
+    groups = _theme_source_groups(default_theme_constituent_chain().sources)
+    for group_index, group in enumerate(groups):
+        available: list[ThemeConstituentSource] = []
+        for source in group:
+            try:
+                if source.is_available():
+                    available.append(source)
+            except Exception as exc:
+                debug_log(__name__, f"is_available {source.name}", exc)
+        if not available:
+            continue
+
+        pending = list(unresolved.values())
+        if not pending:
+            break
+        provider_names = ",".join(source.name for source in available)
+        if lifecycle is not None:
+            lifecycle.phase(
+                "尝试题材成分股 provider",
+                providers=provider_names,
+                pending=len(pending),
+            )
+
+        metadata: dict[str, tuple[Theme, str]] = {}
+        jobs = []
+        for source_index, source in enumerate(available):
+            capabilities = _theme_source_capabilities(source)
+            for theme in pending:
+                key = f"{group_index}:{source_index}:{theme.code}"
+                metadata[key] = (theme, source.name)
+                jobs.append(ProviderJob(
+                    key=key,
+                    provider=source.name,
+                    call=partial(_fetch_theme_constituent_source, source, theme),
+                    capabilities=capabilities,
+                ))
+
+        failures = 0
+
+        def on_result(result, completed: int, total: int) -> None:
+            nonlocal failures
+            if result.result.failure is not None:
+                failures += 1
+            if lifecycle is not None:
+                lifecycle.progress(
+                    completed,
+                    total,
+                    "拉取题材成分股",
+                    provider=result.provider,
+                    resolved=len(out),
+                    failure_count=failures,
+                )
+
+        def on_wait(provider: str, failure: FetchFailure, attempt: int) -> None:
+            if lifecycle is not None:
+                lifecycle.wait(
+                    "题材成分股 provider 退避重试",
+                    provider=provider,
+                    reason=failure.kind.value,
+                    attempt=attempt,
+                    retry_after=failure.retry_after or 0.0,
+                )
+
+        def report_heartbeat(active: int, queued: int) -> None:
+            if lifecycle is not None:
+                lifecycle.heartbeat(active_calls=active, queued=queued)
+
+        results = run_provider_jobs(
+            jobs,
+            max_workers=max_workers,
+            on_result=on_result,
+            on_wait=on_wait,
+            heartbeat=report_heartbeat if lifecycle is not None else None,
+        )
+        for key, job_result in results.items():
+            pairs = job_result.result.data
+            if pairs is None:
+                continue
+            theme, _provider = metadata[key]
+            if theme.code not in unresolved:
+                continue
+            atomic_write_json(_theme_constituent_cache(theme), pairs, ensure_ascii=False)
+            out[theme.code] = pairs
+            unresolved.pop(theme.code, None)
+
+        if unresolved and lifecycle is not None:
+            lifecycle.wait(
+                "切换题材成分股备用 provider",
+                attempted=provider_names,
+                unresolved=len(unresolved),
+            )
+
+    if unresolved and lifecycle is not None:
+        lifecycle.degraded(
+            "部分题材成分股不可用",
+            failure_count=len(unresolved),
+            total=len(unique),
+        )
+    return out
 
 
 # ── 题材指数 K 线 ──────────────────────────────────────────────────────────

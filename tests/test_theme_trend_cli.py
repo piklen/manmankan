@@ -133,7 +133,7 @@ def test_trend_sort_moneyflow_json(monkeypatch):
     _stub_leaderboard(monkeypatch)
     monkeypatch.setattr(
         "kan.data.board_leaderboard.theme_moneyflow_map",
-        lambda themes, force=False: {"886112": 300.0, "886108": 100.0},
+        lambda themes, force=False, **__: {"886112": 300.0, "886108": 100.0},
     )
     result = CliRunner().invoke(
         app, ["theme", "trend", "--sort", "moneyflow", "--format", "json", "--limit", "1"]

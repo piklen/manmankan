@@ -26,9 +26,9 @@
 """
 from __future__ import annotations
 
-import concurrent.futures
 import os
 from dataclasses import dataclass
+from functools import partial
 from typing import TYPE_CHECKING
 
 from kan.core.scanner import TrendResult, calc_trend
@@ -37,11 +37,19 @@ from kan.data.boards import (
     fetch_theme_kline,
     load_theme_catalog,
 )
+from kan.data.provider_contracts import (
+    FetchFailure,
+    FetchFailureKind,
+    ProviderCapabilities,
+    ProviderFetchResult,
+)
 
 if TYPE_CHECKING:
+    import pandas as pd
     from rich.console import Console
 
     from kan.core.models import Theme
+    from kan.infra.lifecycle import OperationLifecycle
 
 
 @dataclass
@@ -70,7 +78,7 @@ class LeaderboardDiagnosis:
     tushare_failed_at: str | None = None
     tushare_endpoint: str | None = None
     tushare_token_masked: str | None = None
-    tushare_error_code: int | None = None
+    tushare_error_code: int | str | None = None
     tushare_error_msg: str | None = None
     em_attempted: bool = False
     em_total: int = 0
@@ -91,12 +99,58 @@ def _resolve_parallel(parallel: int | None) -> int:
     return max(1, min(32, parallel))
 
 
+_EM_THEME_KLINE_CAPABILITIES = ProviderCapabilities(
+    max_concurrency=16,
+    initial_concurrency=4,
+    max_attempts=2,
+    timeout_seconds=30.0,
+    backoff_base_seconds=0.5,
+    backoff_cap_seconds=2.0,
+)
+
+
+def _fetch_theme_kline_job(
+    theme: Theme,
+    force: bool,
+) -> ProviderFetchResult[pd.DataFrame]:
+    """把旧题材 K 线异常契约转换为 provider-aware result。"""
+    try:
+        frame = fetch_theme_kline(theme, force=force)
+    except ThemeDataUnavailableError as exc:
+        message = str(exc)
+        if "为空" in message:
+            return ProviderFetchResult.failed(FetchFailure(
+                FetchFailureKind.EMPTY,
+                message=message,
+            ))
+        return ProviderFetchResult.failed(FetchFailure(
+            FetchFailureKind.TRANSPORT,
+            message=message,
+            retryable=True,
+            affects_circuit=True,
+        ))
+    except Exception as exc:
+        return ProviderFetchResult.failed(FetchFailure(
+            FetchFailureKind.TRANSPORT,
+            message=type(exc).__name__,
+            retryable=True,
+            affects_circuit=True,
+        ))
+    if frame is None or frame.empty:
+        return ProviderFetchResult.failed(FetchFailure(
+            FetchFailureKind.EMPTY,
+            message="K 线为空",
+        ))
+    return ProviderFetchResult.succeeded(frame)
+
+
 def load_theme_leaderboard(
     *,
     candle: bool = False,
     force: bool = False,
     parallel: int | None = None,
     progress_console: Console | None = None,
+    lifecycle: OperationLifecycle | None = None,
 ) -> tuple[
     list[TrendResult],
     list[tuple[Theme, Exception]],
@@ -147,8 +201,10 @@ def load_theme_leaderboard(
         ts_catalog, catalog_err = tushare_load_theme_catalog()
         if ts_catalog:
             ts_results, ts_errors, klines_err = _load_via_tushare(
-                ts_catalog, candle=candle, progress_console=progress_console,
+                ts_catalog, candle=candle,
+                progress_console=progress_console if lifecycle is None else None,
                 tushare_load_klines=tushare_load_theme_klines,
+                lifecycle=lifecycle,
             )
             if ts_results:
                 return ts_results, ts_errors, "tushare", diagnosis
@@ -171,11 +227,17 @@ def load_theme_leaderboard(
     diagnosis.em_attempted = True
     diagnosis.em_total = len(catalog)
 
+    from kan.data.provider_batch import ProviderJob, run_provider_jobs
+
     workers = _resolve_parallel(parallel)
     results: list[TrendResult] = []
     errors: list[tuple[Theme, Exception]] = []
+    themes_by_code = {theme.code: theme for theme in catalog}
 
-    if progress_console is not None:
+    if lifecycle is not None:
+        lifecycle.phase("拉取题材指数 K 线", total=len(catalog), provider="em_concept_hist")
+
+    if progress_console is not None and lifecycle is None:
         from rich.progress import (
             BarColumn,
             MofNCompleteColumn,
@@ -200,31 +262,76 @@ def load_theme_leaderboard(
         progress = None
         task_id = None
 
+    def on_result(job_result, completed: int, total: int) -> None:
+        theme = themes_by_code[job_result.key]
+        frame = job_result.result.data
+        failure = job_result.result.failure
+        if frame is None:
+            message = failure.message if failure is not None else "K 线为空"
+            errors.append((theme, ThemeDataUnavailableError(message)))
+        else:
+            try:
+                results.append(calc_trend(
+                    frame,
+                    theme.code,
+                    theme.name,
+                    candle=candle,
+                ))
+            except Exception as exc:
+                errors.append((theme, exc))
+        if progress is not None and task_id is not None:
+            progress.update(task_id, advance=1, errs=len(errors))
+        if lifecycle is not None:
+            lifecycle.progress(
+                completed,
+                total,
+                "拉取并计算题材趋势",
+                provider=job_result.provider,
+                failure_count=len(errors),
+            )
+
+    def on_wait(provider: str, failure: FetchFailure, attempt: int) -> None:
+        if lifecycle is not None:
+            lifecycle.wait(
+                "题材指数 provider 退避重试",
+                provider=provider,
+                reason=failure.kind.value,
+                attempt=attempt,
+                retry_after=failure.retry_after or 0.0,
+            )
+
+    def report_heartbeat(active: int, queued: int) -> None:
+        if lifecycle is not None:
+            lifecycle.heartbeat(active_calls=active, queued=queued)
+
+    jobs = [
+        ProviderJob(
+            key=theme.code,
+            provider="em_concept_hist",
+            call=partial(_fetch_theme_kline_job, theme, force),
+            capabilities=_EM_THEME_KLINE_CAPABILITIES,
+        )
+        for theme in catalog
+    ]
     try:
-        with concurrent.futures.ThreadPoolExecutor(max_workers=workers) as executor:
-            futures = {
-                executor.submit(fetch_theme_kline, theme, force): theme
-                for theme in catalog
-            }
-            for fut in concurrent.futures.as_completed(futures):
-                theme = futures[fut]
-                try:
-                    df = fut.result()
-                    if df is None or df.empty:
-                        errors.append((theme, ThemeDataUnavailableError("K 线为空")))
-                    else:
-                        results.append(calc_trend(df, theme.code, theme.name, candle=candle))
-                except Exception as e:
-                    # 单题材失败必须降级 · 不阻塞整榜(391 题材任何一个挂都不应让全榜失败)
-                    errors.append((theme, e))
-                finally:
-                    if progress is not None and task_id is not None:
-                        progress.update(task_id, advance=1, errs=len(errors))
+        run_provider_jobs(
+            jobs,
+            max_workers=workers,
+            on_result=on_result,
+            on_wait=on_wait,
+            heartbeat=report_heartbeat if lifecycle is not None else None,
+        )
     finally:
         if progress is not None:
             progress.stop()
 
     diagnosis.em_failed_count = len(errors)
+    if errors and lifecycle is not None:
+        lifecycle.degraded(
+            "部分题材指数 K 线不可用",
+            failure_count=len(errors),
+            total=len(catalog),
+        )
     return results, errors, "em", diagnosis
 
 
@@ -282,6 +389,7 @@ def _load_via_tushare(
     candle: bool,
     progress_console: Console | None,
     tushare_load_klines,
+    lifecycle: OperationLifecycle | None = None,
 ):
     """TuShare 路径编排 · 1 次 batch 拿所有题材 35 天 K 线 + 逐题材 calc_trend。
 
@@ -292,8 +400,12 @@ def _load_via_tushare(
 
     progress_console 在 TuShare 路径下表现为单 task bar(N 个交易日 HTTP loop) ·
     比 EM 路径(391 题材并行)语义不同 · 但同样能让用户看到进度。
+    lifecycle 传入时优先走 lifecycle 反馈，不再创建独立的 Rich Progress。
     """
-    if progress_console is not None:
+    if lifecycle is not None:
+        lifecycle.phase("TuShare 批量拉取题材 K 线", total=len(catalog))
+        progress = None
+    elif progress_console is not None:
         from rich.progress import Progress, SpinnerColumn, TextColumn
 
         progress = Progress(

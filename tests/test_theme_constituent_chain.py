@@ -8,6 +8,8 @@
 """
 from __future__ import annotations
 
+import threading
+import time
 from unittest.mock import patch
 
 import pandas as pd
@@ -15,7 +17,12 @@ import pytest
 
 from kan.core.models import Theme
 from kan.data import concepts
-from kan.data.boards import ThemeDataUnavailableError, get_theme_constituents
+from kan.data.boards import (
+    ThemeDataUnavailableError,
+    get_theme_constituents,
+    get_theme_constituents_batch,
+)
+from kan.data.provider_contracts import ProviderCapabilities
 from kan.data.theme_constituents import (
     EmConstituentSource,
     ThemeConstituentSourceChain,
@@ -25,6 +32,7 @@ from kan.data.theme_constituents import (
     register_theme_constituent_source,
     reset_default_theme_constituent_chain,
 )
+from kan.infra.lifecycle import CollectingReporter, LifecycleKind, operation
 
 # ── 测试用 fake source ────────────────────────────────────────────────
 
@@ -230,6 +238,91 @@ def test_register_user_source(sample_theme):
     register_theme_constituent_source(_U())
     chain = default_theme_constituent_chain()
     assert chain.sources[0].name == "u_cons"
+
+
+def test_batch_constituents_runs_concurrently_with_hard_cap(temp_boards_dir):
+    """批量题材 fan-out 真并发，但不突破 operation hard cap。"""
+    lock = threading.Lock()
+    active = 0
+    peak = 0
+
+    class _BatchSource:
+        name = "batch_cons"
+        priority = 5
+        capabilities = ProviderCapabilities(max_concurrency=8, initial_concurrency=8)
+
+        def is_available(self) -> bool:
+            return True
+
+        def fetch(self, theme: Theme) -> list[tuple[str, str]]:
+            nonlocal active, peak
+            with lock:
+                active += 1
+                peak = max(peak, active)
+            time.sleep(0.02)
+            with lock:
+                active -= 1
+            return [("600519", theme.name)]
+
+    register_theme_constituent_source(_BatchSource())
+    themes = [Theme(code=f"886{index:03d}", name=f"题材{index}", source="ths") for index in range(8)]
+    reporter = CollectingReporter()
+
+    with operation("题材资金", reporter=reporter) as lifecycle:
+        result = get_theme_constituents_batch(
+            themes,
+            force=True,
+            max_workers=3,
+            lifecycle=lifecycle,
+        )
+
+    assert len(result) == 8
+    assert 1 < peak <= 3
+    progress = [event for event in reporter.events if event.kind is LifecycleKind.PROGRESS]
+    assert progress[-1].completed == 8
+    assert progress[-1].total == 8
+
+
+def test_batch_constituents_fallback_only_fetches_unresolved(temp_boards_dir):
+    """高优先级成功项不再请求备用 provider。"""
+    calls = {"top": [], "backup": []}
+
+    class _Top:
+        name = "top_cons"
+        priority = 5
+
+        def is_available(self) -> bool:
+            return True
+
+        def fetch(self, theme: Theme) -> list[tuple[str, str]] | None:
+            calls["top"].append(theme.code)
+            if theme.code == "886001":
+                return [("600519", "贵州茅台")]
+            return None
+
+    class _Backup:
+        name = "backup_cons"
+        priority = 6
+
+        def is_available(self) -> bool:
+            return True
+
+        def fetch(self, theme: Theme) -> list[tuple[str, str]]:
+            calls["backup"].append(theme.code)
+            return [("000858", "五粮液")]
+
+    register_theme_constituent_source(_Top())
+    register_theme_constituent_source(_Backup())
+    themes = [
+        Theme(code="886001", name="题材一", source="ths"),
+        Theme(code="886002", name="题材二", source="ths"),
+    ]
+
+    result = get_theme_constituents_batch(themes, force=True, max_workers=2)
+
+    assert set(result) == {"886001", "886002"}
+    assert set(calls["top"]) == {"886001", "886002"}
+    assert calls["backup"] == ["886002"]
 
 
 # ── boards.get_theme_constituents 集成 (chain + cache + error 文案) ────

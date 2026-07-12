@@ -166,15 +166,19 @@ def test_trend_hot_runs(hot_runner, monkeypatch):
 
 def test_fetch_hot_runs(hot_runner, monkeypatch):
     from kan.app import app
-    fetched: list[str] = []
+    fetched: list[list[str]] = []
     monkeypatch.setattr(
-        "kan.data.fetcher.fetch_kline",
-        lambda sym, force=False: fetched.append(sym) or pd.DataFrame(),
+        "kan.data.fetcher.fetch_batch",
+        lambda symbols, force=False: (
+            fetched.append(list(symbols))
+            or {symbol: pd.DataFrame() for symbol in symbols},
+            {},
+        ),
     )
     monkeypatch.setattr("kan.data.fetcher.is_fresh", lambda sym: False)
     result = hot_runner.invoke(app, ["fetch", "--hot", "rank"])
     assert result.exit_code == 0, result.output
-    assert "000725" in fetched and "600519" in fetched
+    assert fetched == [["000725", "600519"]]
 
 
 def test_trend_hot_latest_uneven_daily_changes(hot_runner, monkeypatch):

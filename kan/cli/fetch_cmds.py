@@ -1,14 +1,13 @@
 """fetch · 拉取股票历史 K 线数据 (含 --industry / --hot / --theme 批量预拉)。"""
 from __future__ import annotations
 
-from contextlib import nullcontext
 from time import perf_counter
 from typing import Annotated
 
 import typer
 
 from kan.app import app
-from kan.cli.helpers import _safe_error_msg, _with_heavy_imports_spinner
+from kan.cli.helpers import _safe_error_msg
 from kan.data.hot import HotList
 
 
@@ -46,13 +45,13 @@ def fetch(
     ] = False,
 ) -> None:
     """拉取股票历史 K 线数据 (--group 切换分组)"""
-    from kan.infra.progress import cli_status, determinate_progress, feedback_console
+    from kan.infra.progress import feedback_console, operation_reporter
 
     status_console = feedback_console()
-    with _with_heavy_imports_spinner(status_console, "⏳ 加载数据模块..."):
-        from kan.data.fetcher import fetch_kline, is_fresh
+    from kan.data.fetcher import fetch_batch, is_fresh
 
     pool_count = sum(1 for x in (industry, hot, theme) if x is not None) + int(all_stocks)
+    has_explicit_pool = pool_count > 0
     if pool_count > 1:
         typer.echo("--industry / --hot / --theme / --all 互斥 · 同时只能用一个", err=True)
         raise typer.Exit(2)
@@ -87,8 +86,8 @@ def fetch(
             watchlist_group=group,
             all_stocks=all_stocks,
         )
-        symbols = stock_set.codes()
-        resolve_stock_set_or_exit(stock_set)  # 触发 .pairs() lazy fetch + 转 typer.Exit · 上一行 .codes() 已触发了 fetch · 这里走 cache 不再 IO
+        pairs, _meta = resolve_stock_set_or_exit(stock_set)
+        symbols = [code for code, _name in pairs]
         if not symbols and all_stocks:
             typer.echo(
                 "全市场股票池为空 · 例: kan config set tushare-token <YOUR_TOKEN>；或稍后重试",
@@ -96,7 +95,7 @@ def fetch(
             )
             raise typer.Exit(1)
 
-    if not symbols:
+    if not symbols and not has_explicit_pool:
         from kan.storage.watchlist import GroupNotFoundError, load_watchlist
         try:
             wl = load_watchlist(group)
@@ -113,83 +112,95 @@ def fetch(
             raise typer.Exit(1)
         symbols = [s.symbol for s in wl.stocks]
 
+    symbols = list(dict.fromkeys(symbols or []))
     started = perf_counter()
-    success = 0
-    fresh = 0
-    updated = 0
-    failed = 0
-    errors: list[tuple[str, str]] = []
-    show_batch_progress = len(symbols) > 1 and not verbose
-    progress_cm = (
-        determinate_progress(console=status_console)
-        if show_batch_progress else nullcontext(None)
-    )
-    with progress_cm as progress:
-        task_id = None
-        if progress is not None:
-            task_id = progress.add_task(
-                f"⏳ 检查/拉取 K 线 · 0/{len(symbols)} 只",
-                total=len(symbols),
-            )
-        for idx, sym in enumerate(symbols, start=1):
-            if progress is not None and task_id is not None:
-                progress.update(
-                    task_id,
-                    description=f"⏳ 检查/拉取 K 线 · {idx}/{len(symbols)} 只 · {sym}",
-                )
-            if not force and is_fresh(sym):
-                if verbose:
-                    typer.echo(f"  {sym} 已是最新（今日已拉取）")
-                fresh += 1
-                success += 1
-                if progress is not None and task_id is not None:
-                    progress.update(
-                        task_id,
-                        advance=1,
-                        description=f"⏳ 检查/拉取 K 线 · ✅ 已最新 {sym}",
+
+    from kan.infra.lifecycle import operation
+
+    reporter = operation_reporter(console=status_console)
+    exit_code: int | None = None
+    output_lines: list[tuple[str, bool]] = []
+    with operation("拉取 K 线", reporter=reporter) as lifecycle:
+        lifecycle.phase("检查本地缓存", total=len(symbols))
+        fresh_symbols: list[str] = []
+        if force:
+            pending = list(symbols)
+        else:
+            fresh_symbols = [symbol for symbol in symbols if is_fresh(symbol)]
+            fresh_set = set(fresh_symbols)
+            pending = [symbol for symbol in symbols if symbol not in fresh_set]
+
+        lifecycle.phase("批量拉取 K 线", pending=len(pending), fresh=len(fresh_symbols))
+        results, batch_errors = fetch_batch(pending, force=force)
+
+        error_by_symbol = {
+            symbol: _safe_error_msg(ValueError(message))
+            for symbol, message in batch_errors.items()
+        }
+        for symbol in pending:
+            if symbol not in results and symbol not in error_by_symbol:
+                error_by_symbol[symbol] = "批量拉取未返回结果"
+
+        fresh_set = set(fresh_symbols)
+        errors = [
+            (symbol, error_by_symbol[symbol])
+            for symbol in pending
+            if symbol in error_by_symbol
+        ]
+        updated_symbols = [
+            symbol
+            for symbol in pending
+            if symbol in results and symbol not in error_by_symbol
+        ]
+        fresh = len(fresh_symbols)
+        updated = len(updated_symbols)
+        failed = len(errors)
+        success = fresh + updated
+
+        if verbose:
+            for symbol in symbols:
+                if symbol in fresh_set:
+                    output_lines.append((f"  {symbol} 已是最新（今日已拉取）", False))
+                elif symbol in error_by_symbol:
+                    output_lines.append(
+                        (f"  ❌ {symbol} 拉取失败：{error_by_symbol[symbol]}", True)
                     )
-                continue
-            try:
-                if progress is None:
-                    with cli_status(f"⏳ 拉取数据... {sym}", console=status_console):
-                        df = fetch_kline(sym, force=force)
                 else:
-                    df = fetch_kline(sym, force=force)
-                if verbose:
-                    typer.echo(f"  ✅ {sym} 拉取成功（{len(df)} 条 K 线）")
-                updated += 1
-                success += 1
-                if progress is not None and task_id is not None:
-                    progress.update(
-                        task_id,
-                        advance=1,
-                        description=f"⏳ 检查/拉取 K 线 · ✅ 更新 {sym}",
-                    )
-            except Exception as e:
-                msg = _safe_error_msg(e)
-                if verbose:
-                    typer.echo(f"  ❌ {sym} 拉取失败：{msg}", err=True)
-                errors.append((sym, msg))
-                failed += 1
-                if progress is not None and task_id is not None:
-                    progress.update(
-                        task_id,
-                        advance=1,
-                        description=f"⏳ 检查/拉取 K 线 · ❌ 失败 {sym}",
+                    output_lines.append(
+                        (f"  ✅ {symbol} 拉取成功（{len(results[symbol])} 条 K 线）", False)
                     )
 
-    elapsed = perf_counter() - started
-    if failed:
-        typer.echo(
-            f"❌ 拉取失败 {failed} 只 · 成功 {success} 只 · 耗时 {elapsed:.1f}s",
-            err=True,
+        lifecycle.progress(
+            len(symbols),
+            len(symbols),
+            "K 线拉取完成",
+            fresh=fresh,
+            updated=updated,
+            failed=failed,
         )
-        if not verbose:
-            for sym, msg in errors[:3]:
-                typer.echo(f"  {sym}: {msg}", err=True)
-        raise typer.Exit(1)
-    if updated == 0:
-        typer.echo(f"✅ 已最新 · {fresh} 只无需更新 · 耗时 {elapsed:.1f}s")
-    else:
-        suffix = f" · 已最新 {fresh} 只" if fresh else ""
-        typer.echo(f"🔄 更新 {updated} 只{suffix} · 耗时 {elapsed:.1f}s")
+        elapsed = perf_counter() - started
+        if failed:
+            lifecycle.fail("部分股票拉取失败", failed=failed, success=success)
+            output_lines.append(
+                (f"❌ 拉取失败 {failed} 只 · 成功 {success} 只 · 耗时 {elapsed:.1f}s", True)
+            )
+            if not verbose:
+                output_lines.extend(
+                    (f"  {symbol}: {message}", True)
+                    for symbol, message in errors[:3]
+                )
+            exit_code = 1
+        elif updated == 0:
+            output_lines.append(
+                (f"✅ 已最新 · {fresh} 只无需更新 · 耗时 {elapsed:.1f}s", False)
+            )
+        else:
+            suffix = f" · 已最新 {fresh} 只" if fresh else ""
+            output_lines.append(
+                (f"🔄 更新 {updated} 只{suffix} · 耗时 {elapsed:.1f}s", False)
+            )
+
+    for line, is_error in output_lines:
+        typer.echo(line, err=is_error)
+    if exit_code is not None:
+        raise typer.Exit(exit_code)

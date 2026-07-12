@@ -8,11 +8,14 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from datetime import date
-from typing import Any, Literal, cast
+from typing import TYPE_CHECKING, Any, Literal, cast
 
 from kan.core.models import BoardMeta, HotMeta, StockScanResult, ThemeMeta
 from kan.core.pipeline import DataCtx
 from kan.core.stock_set import StockSet
+
+if TYPE_CHECKING:
+    from kan.infra.lifecycle import OperationLifecycle
 
 ScanMode = Literal["low", "high"]
 SCAN_ENRICH_TIMEOUT_SECONDS = 8.0
@@ -54,7 +57,11 @@ class ScanServiceResult:
         return self.ctx.meta
 
 
-def run_scan(request: ScanRequest) -> ScanServiceResult:
+def run_scan(
+    request: ScanRequest,
+    *,
+    lifecycle: OperationLifecycle | None = None,
+) -> ScanServiceResult:
     """Run the scan data pipeline and return a render-neutral result."""
     from kan.core.pipeline import run_data_pipeline
     from kan.core.scanner import scan_batch
@@ -64,6 +71,8 @@ def run_scan(request: ScanRequest) -> ScanServiceResult:
     if not request.allow_auto_fetch:
         # 只读缓存路径（本地 Web 等）显式关闭补数据;默认不传参,兼容既有测试假管线签名
         pipeline_kwargs["auto_fetch"] = False
+    if lifecycle is not None:
+        pipeline_kwargs["lifecycle"] = lifecycle
     ctx = run_data_pipeline(
         request.stock_set,
         compute=scan_batch,
@@ -74,17 +83,24 @@ def run_scan(request: ScanRequest) -> ScanServiceResult:
         exit_on_resolve_error=False,
         **pipeline_kwargs,
     )
+    if lifecycle is not None:
+        lifecycle.phase("计算板块指数位置")
     board_index_result = _scan_board_index(ctx.meta, periods=request.periods)
+    if lifecycle is not None:
+        lifecycle.phase("补充扫描上下文", result_count=len(ctx.results))
     all_results = (
         _enrich_scan_rows_best_effort(
             ctx.results,
             data_cutoff=ctx.freshness.data_cutoff,
             timeout_seconds=request.enrich_timeout_seconds,
+            lifecycle=lifecycle,
         )
         if request.include_external_context
         else _apply_retail_facts_best_effort(ctx.results)
     )
     _apply_membership_markers(all_results, request.stock_set)
+    if lifecycle is not None:
+        lifecycle.phase("过滤扫描结果", result_count=len(all_results))
     results = _filter_scan_results(
         all_results,
         mode=request.mode,
@@ -107,6 +123,7 @@ def _enrich_scan_rows_best_effort(
     *,
     data_cutoff: date | None,
     timeout_seconds: float | None,
+    lifecycle: OperationLifecycle | None = None,
 ) -> list[StockScanResult]:
     """Best-effort optional scan enrichment.
 
@@ -140,6 +157,12 @@ def _enrich_scan_rows_best_effort(
         daemon=True,
     ).start()
 
+    if lifecycle is not None:
+        lifecycle.wait(
+            "等待外部扫描上下文",
+            timeout_seconds=timeout_seconds,
+            result_count=len(results),
+        )
     try:
         kind, payload = out.get(timeout=timeout_seconds)
     except queue.Empty:
@@ -150,6 +173,12 @@ def _enrich_scan_rows_best_effort(
             "scan enrich timeout",
             TimeoutError(f">{timeout_seconds:.1f}s"),
         )
+        if lifecycle is not None:
+            lifecycle.degraded(
+                "外部扫描上下文超时，继续使用基础结果",
+                timeout_seconds=timeout_seconds,
+                result_count=len(results),
+            )
         return _apply_retail_facts_best_effort(results)
 
     if kind == "ok":
@@ -159,6 +188,12 @@ def _enrich_scan_rows_best_effort(
 
     err = payload if isinstance(payload, BaseException) else RuntimeError(str(payload))
     debug_log(__name__, "scan enrich failed", err)
+    if lifecycle is not None:
+        lifecycle.degraded(
+            "外部扫描上下文失败，继续使用基础结果",
+            error_type=type(err).__name__,
+            result_count=len(results),
+        )
     return _apply_retail_facts_best_effort(results)
 
 

@@ -11,7 +11,6 @@ from kan.cli.helpers import (
     _get_watchlist_pairs,
     _load_watchlist_pairs,
     _print_err,
-    _with_heavy_imports_spinner,
 )
 from kan.data.hot import HotList
 from kan.storage import export
@@ -28,12 +27,10 @@ def _filter_extreme_cmd(
     """low/high 共享实现 (--group 切换自选分组)"""
     from rich.console import Console
 
-    status_console = Console(stderr=True)
-    with _with_heavy_imports_spinner(status_console, "⏳ 加载数据模块..."):
-        from kan.core.scanner import filter_extreme, scan_stock
-        from kan.data.fetcher import cache_age, data_cutoff_date
-        from kan.render import terminal
-        from kan.render.base import DISCLAIMER
+    from kan.core.scanner import filter_extreme, scan_stock
+    from kan.data.fetcher import cache_age, data_cutoff_date
+    from kan.render import terminal
+    from kan.render.base import DISCLAIMER
 
     console = Console()
     for p in periods:

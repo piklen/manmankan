@@ -22,7 +22,6 @@ import kan.cli.find_options as opt
 from kan.app import app
 from kan.cli.find_io import _exit_find_error, _resolve_code_pairs_or_exit_json
 from kan.cli.find_runner import _run_all_stocks_path, _run_kline_path
-from kan.cli.helpers import _with_heavy_imports_spinner
 from kan.core.find_registry import (
     dimensions_from_fields,
     parse_find_fields,
@@ -156,10 +155,8 @@ def find(
     """
     from rich.console import Console
 
-    status_console = Console(stderr=True)
-    with _with_heavy_imports_spinner(status_console, "⏳ 加载数据模块..."):
-        from kan.core.find_dsl import ConditionSet, FilterParseError
-        from kan.render.base import FIND_DISCLAIMER_TEXT
+    from kan.core.find_dsl import ConditionSet, FilterParseError
+    from kan.render.base import FIND_DISCLAIMER_TEXT
 
     console = Console()
     find_disclaimer = f"[bold dim]{FIND_DISCLAIMER_TEXT}[/bold dim]"

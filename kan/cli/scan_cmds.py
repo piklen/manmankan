@@ -5,7 +5,8 @@ fetch_cmds / extreme_cmds / info_cmds / compare_cmds。
 """
 from __future__ import annotations
 
-from typing import Annotated
+from collections.abc import Callable
+from typing import Annotated, Any, Literal
 
 import typer
 
@@ -15,7 +16,6 @@ from kan.cli.helpers import (
     _load_watchlist_pairs,
     _parse_codes,
     _print_err,
-    _with_heavy_imports_spinner,
     format_date_compact,
 )
 from kan.data.hot import HotList
@@ -156,6 +156,161 @@ def _compact_display_periods(periods: list[int]) -> list[int]:
     return sorted({periods[0], periods[len(periods) // 2], periods[-1]})
 
 
+def _prepare_scan_render(
+    service_result: Any,
+    *,
+    lifecycle: Any,
+    console: Any,
+    fmt: export.OutputFormat,
+    mode: Literal["low", "high"],
+    high: bool,
+    signal: bool,
+    diff: bool,
+    all_stocks: bool,
+    only_holdings: bool,
+    only_watchlist: bool,
+    source_mode: bool,
+    code_pairs: list[tuple[str, str]] | None,
+    period_list: list[int],
+    display_periods: list[int],
+    show_context_columns: bool,
+    include_external_context: bool,
+) -> Callable[[], None]:
+    """在 lifecycle 内准备 scan 输出/快照，返回关闭 Live 后执行的渲染闭包。"""
+    from kan.core.models import HotMeta, ThemeMeta
+    from kan.core.pipeline import render_freshness_warning
+    from kan.core.scanner import compute_diff, load_snapshot, save_snapshot
+    from kan.render import terminal
+    from kan.render.base import DISCLAIMER
+
+    ctx = service_result.ctx
+    board_meta = service_result.meta
+    can_write_snapshot = (
+        board_meta is None
+        and code_pairs is None
+        and not all_stocks
+        and not only_holdings
+    )
+    lifecycle.phase("检查扫描结果", target_count=len(ctx.targets))
+    if not ctx.targets:
+        if all_stocks:
+            _exit_scan_error(
+                fmt, code="empty_all_stocks", message="全市场股票池为空",
+                hint="例: kan config set tushare-token <YOUR_TOKEN>；或稍后重试",
+            )
+        if only_holdings:
+            _exit_scan_error(
+                fmt, code="empty_holdings", message="真实持仓为空",
+                hint="例: kan hold add 600519 --cost 1680 --shares 100",
+            )
+        if only_watchlist and not source_mode:
+            _exit_scan_error(
+                fmt, code="empty_watchlist", message="自选股为空",
+                hint="例: kan add 600519 000858",
+            )
+    if not ctx.results:
+        _exit_scan_error(
+            fmt, code="data_unavailable", message="无缓存数据",
+            hint="例: kan fetch；或 kan scan 自动拉取默认池 K 线",
+        )
+
+    all_results = service_result.all_results
+    results = service_result.results
+    previous = load_snapshot() if diff and can_write_snapshot else None
+    changes = compute_diff(all_results, previous) if previous else []
+    lifecycle.phase("构造扫描输出", format=fmt.value, result_count=len(results))
+
+    if signal and not results and fmt is export.OutputFormat.terminal:
+        if can_write_snapshot:
+            lifecycle.phase("写入扫描快照", result_count=len(all_results))
+            save_snapshot(all_results)
+        return lambda: console.print("没有股票触及极值区 · 无多周期共振状态")
+
+    title = terminal.scan_title(ctx, high_mode=high, signal_only=signal)
+    if fmt is export.OutputFormat.json:
+        rendered = export.to_json(export.scan_payload(
+            results,
+            mode=mode,
+            data_cutoff=ctx.freshness.data_cutoff,
+            fetched_at=ctx.freshness.fetched_at,
+            stale=ctx.freshness.is_stale,
+        ))
+
+        def render() -> None:
+            typer.echo(rendered)
+    elif fmt is export.OutputFormat.md:
+        rendered = export.scan_markdown(
+            results,
+            periods=period_list,
+            mode=mode,
+            title=title,
+            show_context=True,
+        )
+
+        def render() -> None:
+            typer.echo(rendered)
+    else:
+        table = terminal.scan_table(
+            ctx,
+            results,
+            display_periods=display_periods,
+            high_mode=high,
+            signal_only=signal,
+            board_index_result=service_result.board_index_result,
+            show_context=show_context_columns,
+            show_retail_facts=include_external_context,
+        )
+        is_compact = len(display_periods) < len(period_list)
+        is_hot = isinstance(board_meta, HotMeta)
+
+        def render_terminal() -> None:
+            console.print("[dim]💡 慢慢看是观察工具 · 不预测涨跌 · 详见底部免责[/dim]")
+            console.print(table)
+            if is_compact:
+                shown = "/".join(str(period) for period in display_periods)
+                console.print(
+                    f"\n  [dim]周期显示: {len(display_periods)}/{len(period_list)}"
+                    f"（{shown}日）· 加 --wide 可见全部 · --periods 可自定义[/dim]"
+                )
+            render_freshness_warning(ctx.freshness, console)
+            _render_cutoff_summary(all_results, console)
+            if can_write_snapshot and diff and previous:
+                if changes:
+                    console.print()
+                    console.print("[bold]与上次扫描的变化：[/bold]")
+                    for symbol, name, _, description in changes:
+                        console.print(f"  {name.replace(' ', '')} {symbol} · {description}")
+                elif not ctx.freshness.is_stale:
+                    console.print("\n  [dim]与上次扫描无变化（同日数据，次日再对比可见变化）[/dim]")
+                else:
+                    console.print("\n  与上次扫描无变化")
+            elif diff and not previous:
+                console.print("\n  [dim]首次扫描，无历史对比（下次 --diff 将显示变化）[/dim]")
+            console.print()
+            if high:
+                console.print("[dim]  \\[x%] = 触及高点(≥95%) · 100%=区间最高 · 越高=越接近 N 日最高价[/dim]")
+            else:
+                console.print("[dim]  \\[x%] = 触及极值 · \\[0%] 触低(≤5%) · \\[100%] 触高(≥95%) · 越低越接近 N 日最低[/dim]")
+            if is_hot:
+                console.print(
+                    "[dim]  榜 = 东方财富热榜实时名次 · 非慢慢看观点 · 热榜为实时榜单\n"
+                    "  💡 涨停 / 大幅上涨个股天然在区间高位 · [100%] 是数学结果 不是 「过热信号」[/dim]"
+                )
+            if isinstance(board_meta, ThemeMeta):
+                from kan.render.theme import render_theme_disclaimer
+
+                render_theme_disclaimer()
+            else:
+                console.print(DISCLAIMER, style="dim")
+
+        render = render_terminal
+
+    if can_write_snapshot:
+        lifecycle.phase("写入扫描快照", result_count=len(all_results))
+        save_snapshot(all_results)
+    return render
+
+
 @app.command()
 def scan(
     symbols: Annotated[
@@ -220,17 +375,8 @@ def scan(
     """扫描自选股多周期位置（全景模式 · --group 切换分组）"""
     from rich.console import Console
 
-    status_console = Console(stderr=True)
-    with _with_heavy_imports_spinner(status_console, "⏳ 加载数据模块..."):
-        from kan.core.pipeline import render_freshness_warning
-        from kan.core.scanner import (
-            PERIODS,
-            compute_diff,
-            load_snapshot,
-            save_snapshot,
-        )
-        from kan.render import terminal
-        from kan.render.base import DISCLAIMER, responsive_periods
+    from kan.core.scanner import PERIODS
+    from kan.render.base import responsive_periods
 
     console = Console()
     period_list = _parse_scan_periods(periods, fmt) or list(PERIODS)
@@ -352,11 +498,10 @@ def scan(
             exit_code=2,
         )
     # OOP 路径:CLI 构造 StockSet 再喂 pipeline · meta/highlight/filter 全部由 Set 承担
-    from kan.core.models import HotMeta, ThemeMeta
     from kan.core.pipeline import StockSetResolveError, raise_stock_set_resolve_exit
     from kan.core.stock_set import CodeListSet, from_flags
     from kan.service.scan_service import ScanRequest, run_scan
-    mode = "high" if high else "low"
+    mode: Literal["low", "high"] = "high" if high else "low"
     stock_set = (
         CodeListSet(code_pairs)
         if code_pairs is not None else
@@ -384,159 +529,45 @@ def scan(
     include_external_context = (
         fmt is not export.OutputFormat.terminal or show_context_columns
     )
+    from kan.infra.lifecycle import operation
+    from kan.infra.progress import operation_reporter
+
+    reporter = operation_reporter()
     try:
-        service_result = run_scan(ScanRequest(
-            stock_set=stock_set,
-            mode=mode,
-            periods=period_list,
-            signal_only=signal,
-            exclude_st=exclude_st,
-            exclude_star=exclude_star,
-            exclude_bj=exclude_bj,
-            show_progress=fmt is export.OutputFormat.terminal,
-            include_external_context=include_external_context,
-        ))
+        with operation("扫描股票池", reporter=reporter) as lifecycle:
+            service_result = run_scan(
+                ScanRequest(
+                    stock_set=stock_set,
+                    mode=mode,
+                    periods=period_list,
+                    signal_only=signal,
+                    exclude_st=exclude_st,
+                    exclude_star=exclude_star,
+                    exclude_bj=exclude_bj,
+                    show_progress=fmt is export.OutputFormat.terminal,
+                    include_external_context=include_external_context,
+                ),
+                lifecycle=lifecycle,
+            )
+            render = _prepare_scan_render(
+                service_result,
+                lifecycle=lifecycle,
+                console=console,
+                fmt=fmt,
+                mode=mode,
+                high=high,
+                signal=signal,
+                diff=diff,
+                all_stocks=all_stocks,
+                only_holdings=only_holdings,
+                only_watchlist=only_watchlist,
+                source_mode=source_mode,
+                code_pairs=code_pairs,
+                period_list=period_list,
+                display_periods=display_periods,
+                show_context_columns=show_context_columns,
+                include_external_context=include_external_context,
+            )
     except StockSetResolveError as e:
         raise_stock_set_resolve_exit(e)
-    ctx = service_result.ctx
-    board_meta = service_result.meta
-    data_cutoff = ctx.freshness.data_cutoff
-    fetched_at = ctx.freshness.fetched_at
-    is_stale = ctx.freshness.is_stale  # JSON/MD payload + --diff 分支仍引用
-    freshness = ctx.freshness  # 给 render_freshness_warning 用
-
-    is_code_mode = code_pairs is not None
-    can_write_snapshot = (
-        board_meta is None
-        and not is_code_mode
-        and not all_stocks
-        and not only_holdings
-    )
-    prev_snapshot = load_snapshot() if (diff and can_write_snapshot) else None
-
-    board_index_result = service_result.board_index_result
-
-    if not ctx.targets:
-        if all_stocks:
-            _exit_scan_error(
-                fmt,
-                code="empty_all_stocks",
-                message="全市场股票池为空",
-                hint="例: kan config set tushare-token <YOUR_TOKEN>；或稍后重试",
-                exit_code=1,
-            )
-        if only_holdings:
-            _exit_scan_error(
-                fmt,
-                code="empty_holdings",
-                message="真实持仓为空",
-                hint="例: kan hold add 600519 --cost 1680 --shares 100",
-                exit_code=1,
-            )
-        if only_watchlist and not source_mode:
-            _exit_scan_error(
-                fmt,
-                code="empty_watchlist",
-                message="自选股为空",
-                hint="例: kan add 600519 000858",
-                exit_code=1,
-            )
-    if not ctx.results:
-        _exit_scan_error(
-            fmt,
-            code="data_unavailable",
-            message="无缓存数据",
-            hint="例: kan fetch；或 kan scan 自动拉取默认池 K 线",
-            exit_code=1,
-        )
-
-    all_results = service_result.all_results
-    results = service_result.results
-
-    if signal and not results and fmt is export.OutputFormat.terminal:
-        console.print("没有股票触及极值区 · 无多周期共振状态")
-        if can_write_snapshot:
-            save_snapshot(all_results)
-        return
-
-    title = terminal.scan_title(ctx, high_mode=high, signal_only=signal)
-
-    if fmt is export.OutputFormat.json:
-        typer.echo(export.to_json(export.scan_payload(
-            results, mode=mode, data_cutoff=data_cutoff,
-            fetched_at=fetched_at, stale=is_stale,
-        )))
-        if can_write_snapshot:
-            save_snapshot(all_results)
-        return
-    if fmt is export.OutputFormat.md:
-        typer.echo(export.scan_markdown(
-            results, periods=period_list, mode=mode, title=title,
-            show_context=True,
-        ))
-        if can_write_snapshot:
-            save_snapshot(all_results)
-        return
-
-    is_compact = len(display_periods) < len(period_list)
-
-    is_hot = isinstance(board_meta, HotMeta)
-    table = terminal.scan_table(
-        ctx, results,
-        display_periods=display_periods,
-        high_mode=high,
-        signal_only=signal,
-        board_index_result=board_index_result,
-        show_context=show_context_columns,
-        show_retail_facts=include_external_context,
-    )
-    # 头部 1 行 disclaimer 呼应(自选 100+ 只表格 · 防底部 disclaimer 滚屏顶掉)
-    console.print("[dim]💡 慢慢看是观察工具 · 不预测涨跌 · 详见底部免责[/dim]")
-    console.print(table)
-
-    if is_compact:
-        shown = "/".join(str(p) for p in display_periods)
-        n = len(display_periods)
-        console.print(
-            f"\n  [dim]周期显示: {n}/{len(period_list)}"
-            f"（{shown}日）· 加 --wide 可见全部 · --periods 可自定义[/dim]"
-        )
-
-    render_freshness_warning(freshness, console)
-    _render_cutoff_summary(all_results, console)
-
-    # 增量对比 · 仅自选模式 (board_meta is None) · industry/hot 模式不做 diff/snapshot
-    if can_write_snapshot and diff and prev_snapshot:
-        changes = compute_diff(all_results, prev_snapshot)
-        if changes:
-            console.print()
-            console.print("[bold]与上次扫描的变化：[/bold]")
-            for sym, name, _, desc in changes:
-                name_short = name.replace(" ", "")
-                console.print(f"  {name_short} {sym} · {desc}")
-        else:
-            if not is_stale:
-                console.print("\n  [dim]与上次扫描无变化（同日数据，次日再对比可见变化）[/dim]")
-            else:
-                console.print("\n  与上次扫描无变化")
-    elif diff and not prev_snapshot:
-        console.print("\n  [dim]首次扫描，无历史对比（下次 --diff 将显示变化）[/dim]")
-
-    # 保存快照供下次 diff 用 · 仅自选模式
-    if can_write_snapshot:
-        save_snapshot(all_results)
-
-    console.print()
-    if high:
-        console.print("[dim]  \\[x%] = 触及高点(≥95%) · 100%=区间最高 · 越高=越接近 N 日最高价[/dim]")
-    else:
-        console.print("[dim]  \\[x%] = 触及极值 · \\[0%] 触低(≤5%) · \\[100%] 触高(≥95%) · 越低越接近 N 日最低[/dim]")
-    if is_hot:
-        console.print(
-            "[dim]  榜 = 东方财富热榜实时名次 · 非慢慢看观点 · 热榜为实时榜单\n  💡 涨停 / 大幅上涨个股天然在区间高位 · [100%] 是数学结果 不是 「过热信号」[/dim]"
-        )
-    if isinstance(board_meta, ThemeMeta):
-        from kan.render.theme import render_theme_disclaimer
-        render_theme_disclaimer()
-    else:
-        console.print(DISCLAIMER, style="dim")
+    render()

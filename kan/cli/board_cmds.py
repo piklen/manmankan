@@ -128,71 +128,101 @@ def rank_cmd(
     ] = export.OutputFormat.terminal,
 ) -> None:
     """板块级资金 / 涨幅 / 位置榜 · 只展示客观裸值。"""
-    from kan.cli.helpers import _print_err, _with_heavy_imports_spinner
+    from kan.cli.helpers import _print_err
     from kan.data.board_leaderboard import load_board_leaderboard
+    from kan.infra.lifecycle import operation
+    from kan.infra.progress import operation_reporter
 
-    status_console = Console(stderr=True)
-    with _with_heavy_imports_spinner(status_console, "⏳ 加载板块数据..."):
-        rows, errors = load_board_leaderboard(
-            kind=kind.value,
-            metric=by.value,
-            period=period,
-            level=level,
-            limit=limit,
-            force=force,
-        )
+    reporter = operation_reporter()
 
-    if not rows:
-        if fmt is export.OutputFormat.json:
-            typer.echo(export.to_json(export.error_payload(
-                "board_rank",
-                code="data_unavailable",
-                message="板块榜无数据",
-                hint="检查网络 / token / 上游数据源后重试 · 例: kan board rank --kind industry --by moneyflow --format json",
-            )))
-        else:
-            _print_err("❌ 板块榜无数据 · 检查网络 / token / 上游数据源后重试")
-        raise typer.Exit(1)
+    def _render() -> None:
+        pass
 
-    kind_label = "申万行业" if kind is BoardKind.industry else "题材概念"
-    metric_label = {
-        BoardMetric.moneyflow: "主力净额",
-        BoardMetric.gain: f"{period}日涨幅",
-        BoardMetric.pos: f"{period}日位置",
-    }[by]
-    title = f"慢慢看 · {kind_label}板块榜 · 按{metric_label}排序"
+    try:
+        with operation("板块榜单", reporter=reporter) as lifecycle:
+            lifecycle.phase("加载板块数据")
+            rows, errors = load_board_leaderboard(
+                kind=kind.value,
+                metric=by.value,
+                period=period,
+                level=level,
+                limit=None,  # lifecycle 模式下全量拉取，后面再截断
+                force=force,
+                lifecycle=lifecycle,
+            )
 
-    if fmt is export.OutputFormat.json:
-        payload = export.success_envelope(
-            "board_rank",
-            disclaimer=DISCLAIMER.strip(),
-            stats={
-                "shown": len(rows),
-                "errors_count": len(errors),
-                "period": period,
-            },
-            data_availability={
-                "basis": "board_rank",
-                "pool_size": len(rows),
-            },
-        )
-        payload.update({
-            "kind": kind.value,
-            "sort": by.value,
-            "period": period,
-            "level": level if kind is BoardKind.industry else None,
-            "shown": len(rows),
-            "errors_count": len(errors),
-            "results": _rows_payload(rows),
-        })
-        typer.echo(export.to_json(payload))
-        return
-    if fmt is export.OutputFormat.md:
-        typer.echo(_markdown(rows, title=title))
-        return
+            if not rows:
+                if fmt is export.OutputFormat.json:
+                    typer.echo(export.to_json(export.error_payload(
+                        "board_rank",
+                        code="data_unavailable",
+                        message="板块榜无数据",
+                        hint="检查网络 / token / 上游数据源后重试 · 例: kan board rank --kind industry --by moneyflow --format json",
+                    )))
+                else:
+                    _print_err("❌ 板块榜无数据 · 检查网络 / token / 上游数据源后重试")
+                raise typer.Exit(1)
 
-    console = Console()
-    console.print(_table(rows, title=title))
-    if errors:
-        console.print(f"\n[dim]ℹ️  {len(errors)} 个板块数据不完整 · 可 --force 重试[/dim]")
-    console.print(DISCLAIMER, style="dim")
+            lifecycle.phase("准备输出")
+            # CLI limit 裁剪
+            shown = rows[:limit]
+
+            kind_label = "申万行业" if kind is BoardKind.industry else "题材概念"
+            metric_label = {
+                BoardMetric.moneyflow: "主力净额",
+                BoardMetric.gain: f"{period}日涨幅",
+                BoardMetric.pos: f"{period}日位置",
+            }[by]
+            title = f"慢慢看 · {kind_label}板块榜 · 按{metric_label}排序"
+
+            if fmt is export.OutputFormat.json:
+                payload = export.success_envelope(
+                    "board_rank",
+                    disclaimer=DISCLAIMER.strip(),
+                    stats={
+                        "shown": len(shown),
+                        "errors_count": len(errors),
+                        "period": period,
+                    },
+                    data_availability={
+                        "basis": "board_rank",
+                        "pool_size": len(rows),
+                    },
+                )
+                payload.update({
+                    "kind": kind.value,
+                    "sort": by.value,
+                    "period": period,
+                    "level": level if kind is BoardKind.industry else None,
+                    "shown": len(shown),
+                    "errors_count": len(errors),
+                    "results": _rows_payload(shown),
+                })
+                json_str = export.to_json(payload)
+                def _render_json() -> None:
+                    typer.echo(json_str)
+                _render = _render_json
+            elif fmt is export.OutputFormat.md:
+                md_str = _markdown(shown, title=title)
+                def _render_md() -> None:
+                    typer.echo(md_str)
+                _render = _render_md
+            else:
+                console = Console()
+                table = _table(shown, title=title)
+
+                def _render_terminal() -> None:
+                    console.print(table)
+                    if errors:
+                        console.print(
+                            f"\n[dim]ℹ️  {len(errors)} 个板块数据不完整"
+                            " · 可 --force 重试[/dim]"
+                        )
+                    console.print(DISCLAIMER, style="dim")
+
+                _render = _render_terminal
+
+    except typer.Exit:
+        raise
+
+    _render()

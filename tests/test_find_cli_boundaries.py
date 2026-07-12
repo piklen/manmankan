@@ -8,6 +8,7 @@ import pytest
 import typer
 
 from kan.cli import find_io, find_runner
+from kan.infra.lifecycle import CollectingReporter, OperationState
 from kan.service.find_service import (
     FindCodePoolResult,
     FindKlineResult,
@@ -186,10 +187,13 @@ def test_render_terminal_lists_triggered_filters(monkeypatch) -> None:
 
 def test_run_all_stocks_json_output(monkeypatch, capsys) -> None:
     captured_request = None
+    captured_lifecycle = None
+    reporter = CollectingReporter()
 
-    def fake_run(request):
-        nonlocal captured_request
+    def fake_run(request, *, lifecycle=None):
+        nonlocal captured_lifecycle, captured_request
         captured_request = request
+        captured_lifecycle = lifecycle
         row = SimpleNamespace(code="600519")
         ctx = SimpleNamespace(pool_size=1, data_cutoff="2026-06-09", stale=False, rows=[row])
         return SimpleNamespace(
@@ -203,6 +207,7 @@ def test_run_all_stocks_json_output(monkeypatch, capsys) -> None:
         )
 
     monkeypatch.setattr(find_runner, "run_find_cross_section", fake_run)
+    monkeypatch.setattr("kan.infra.progress.operation_reporter", lambda: reporter)
     monkeypatch.setattr(find_runner.export, "cross_section_payload", lambda *a, **kw: {"ok": True, **kw})
     monkeypatch.setattr(
         find_runner.export,
@@ -230,6 +235,9 @@ def test_run_all_stocks_json_output(monkeypatch, capsys) -> None:
     assert payload["ok"] is True
     assert payload["match_mode"] == "all"
     assert payload["compact"] is True
+    assert captured_lifecycle is not None
+    assert reporter.events[-1].state is OperationState.SUCCEEDED
+    assert reporter.events[-2].message == "构造全市场筛选输出"
 
 
 def test_run_all_stocks_markdown_and_service_error(monkeypatch, capsys) -> None:
@@ -243,7 +251,7 @@ def test_run_all_stocks_markdown_and_service_error(monkeypatch, capsys) -> None:
         included_dimensions=set(),
         compact_dimensions=set(),
     )
-    monkeypatch.setattr(find_runner, "run_find_cross_section", lambda request: result)
+    monkeypatch.setattr(find_runner, "run_find_cross_section", lambda request, **_kwargs: result)
     monkeypatch.setattr(find_runner.export, "cross_section_markdown", lambda rows, **kw: f"MD:{kw['title']}")
 
     find_runner._run_all_stocks_path(
@@ -265,7 +273,9 @@ def test_run_all_stocks_markdown_and_service_error(monkeypatch, capsys) -> None:
     monkeypatch.setattr(
         find_runner,
         "run_find_cross_section",
-        lambda request: (_ for _ in ()).throw(FindServiceError(code="x", message="坏")),
+        lambda request, **_kwargs: (_ for _ in ()).throw(
+            FindServiceError(code="x", message="坏")
+        ),
     )
     with pytest.raises(typer.Exit):
         find_runner._run_all_stocks_path(
@@ -291,7 +301,7 @@ def test_run_kline_code_pool_outputs(monkeypatch, capsys) -> None:
         pools=["codes:1"],
         query_time="now",
     )
-    monkeypatch.setattr(find_runner, "run_find_kline", lambda request: result)
+    monkeypatch.setattr(find_runner, "run_find_kline", lambda request, **_kwargs: result)
     monkeypatch.setattr(find_runner.export, "code_pool_payload", lambda *a, **kw: {"pool": kw["pools"]})
     monkeypatch.setattr(find_runner.export, "to_json", json.dumps)
 
@@ -310,7 +320,7 @@ def test_run_kline_code_pool_invalid_fields(monkeypatch) -> None:
         pools=["codes:1"],
         query_time="now",
     )
-    monkeypatch.setattr(find_runner, "run_find_kline", lambda request: result)
+    monkeypatch.setattr(find_runner, "run_find_kline", lambda request, **_kwargs: result)
     monkeypatch.setattr(
         find_runner.export,
         "code_pool_payload",
@@ -325,6 +335,8 @@ def test_run_kline_code_pool_invalid_fields(monkeypatch) -> None:
 
 def test_run_kline_export_and_terminal_paths(monkeypatch, capsys) -> None:
     result_row = SimpleNamespace(symbol="600519", name="贵州茅台")
+    reporter = CollectingReporter()
+    captured_lifecycles = []
     match = SimpleNamespace(result=result_row, triggered=[])
     result = FindKlineResult(
         stock_set=SimpleNamespace(name="自选池"),
@@ -339,13 +351,21 @@ def test_run_kline_export_and_terminal_paths(monkeypatch, capsys) -> None:
         included_dimensions=set(),
         compact_dimensions=set(),
     )
-    monkeypatch.setattr(find_runner, "run_find_kline", lambda request: result)
+    def fake_run(request, *, lifecycle=None):
+        captured_lifecycles.append(lifecycle)
+        return result
+
+    monkeypatch.setattr(find_runner, "run_find_kline", fake_run)
+    monkeypatch.setattr("kan.infra.progress.operation_reporter", lambda: reporter)
     monkeypatch.setattr(find_runner.export, "find_payload", lambda *a, **kw: {"matched": kw["matched_total"]})
     monkeypatch.setattr(find_runner.export, "find_markdown", lambda entries, **kw: f"MD:{kw['matched_total']}")
     monkeypatch.setattr(find_runner.export, "to_json", json.dumps)
 
     find_runner._run_kline_path(**_runner_kwargs(fmt=export.OutputFormat.json, is_export=True))
     assert json.loads(capsys.readouterr().out)["matched"] == 1
+    assert captured_lifecycles[0] is not None
+    assert reporter.events[-1].state is OperationState.SUCCEEDED
+    assert reporter.events[-2].message == "构造候选股筛选输出"
 
     find_runner._run_kline_path(**_runner_kwargs(fmt=export.OutputFormat.md, is_export=True))
     assert "MD:1" in capsys.readouterr().out
@@ -362,7 +382,9 @@ def test_run_kline_service_error(monkeypatch) -> None:
     monkeypatch.setattr(
         find_runner,
         "run_find_kline",
-        lambda request: (_ for _ in ()).throw(FindServiceError(code="x", message="坏")),
+        lambda request, **_kwargs: (_ for _ in ()).throw(
+            FindServiceError(code="x", message="坏")
+        ),
     )
 
     with pytest.raises(typer.Exit):
