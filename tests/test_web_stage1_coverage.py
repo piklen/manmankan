@@ -1014,9 +1014,10 @@ def test_cli_hold_info_pipeline_scan_find_and_history_small_branches(monkeypatch
 
 def test_info_cli_fetch_and_unavailable_errors(monkeypatch) -> None:
     def raise_fetch(request):
-        assert request.fetch_status is not None
-        with request.fetch_status("600519", "贵州 茅台"):
-            pass
+        """
+        此前 test 断言 CLI 必须传 fetch_status callback，但 lifecycle 统一后
+        CLI 用 operation 的 phase 展示拉取进度，不再需要嵌套 status spinner。
+        """
         raise InfoFetchError("600519", "贵州茅台", RuntimeError("down"))
 
     monkeypatch.setattr("kan.service.info_service.get_stock_info", raise_fetch)

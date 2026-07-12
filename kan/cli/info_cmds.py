@@ -9,7 +9,6 @@ from kan.app import app
 from kan.cli.helpers import (
     _print_err,
     _safe_error_msg,
-    _with_heavy_imports_spinner,
     format_date_compact,
     format_fetched_at_compact,
 )
@@ -20,16 +19,13 @@ def _info_industry(industry: str, fmt: export.OutputFormat) -> None:
     """kan info --industry · 簡版板块档案。"""
     from rich.console import Console
 
-    status_console = Console(stderr=True)
-    with _with_heavy_imports_spinner(status_console, "⏳ 加载数据模块..."):
-        from kan.core.pipeline import resolve_stock_set_or_exit
-        from kan.core.scanner import scan_stock
-        from kan.core.stock_set import from_flags
-        from kan.render import terminal
-        from kan.render.base import DISCLAIMER
+    from kan.core.pipeline import resolve_stock_set_or_exit
+    from kan.core.scanner import scan_stock
+    from kan.core.stock_set import from_flags
+    from kan.render import terminal
+    from kan.render.base import DISCLAIMER
 
     console = Console()
-    # OOP 路径
     _targets, meta = resolve_stock_set_or_exit(from_flags(industry=industry))
 
     assert meta is not None
@@ -66,16 +62,13 @@ def _info_theme(theme_query: str, fmt: export.OutputFormat) -> None:
     """kan info --theme · 题材档案 · 类似 _info_industry。"""
     from rich.console import Console
 
-    status_console = Console(stderr=True)
-    with _with_heavy_imports_spinner(status_console, "⏳ 加载数据模块..."):
-        from kan.core.pipeline import resolve_stock_set_or_exit
-        from kan.core.scanner import scan_stock
-        from kan.core.stock_set import from_flags
-        from kan.render import terminal
-        from kan.render.theme import render_theme_disclaimer
+    from kan.core.pipeline import resolve_stock_set_or_exit
+    from kan.core.scanner import scan_stock
+    from kan.core.stock_set import from_flags
+    from kan.render import terminal
+    from kan.render.theme import render_theme_disclaimer
 
     console = Console()
-    # OOP 路径
     _targets, meta = resolve_stock_set_or_exit(from_flags(theme=theme_query))
 
     assert meta is not None
@@ -164,179 +157,217 @@ def info(
 
     from rich.console import Console
 
-    status_console = Console(stderr=True)
-    with _with_heavy_imports_spinner(status_console, "⏳ 加载数据模块..."):
-        from kan.render import terminal
-        from kan.render.base import DISCLAIMER
-        from kan.service.info_service import (
-            InfoDataUnavailableError,
-            InfoFetchError,
-            InfoRequest,
-            get_stock_info,
-        )
+    from kan.infra.lifecycle import operation
+    from kan.infra.progress import operation_reporter
+    from kan.render import terminal
+    from kan.render.base import DISCLAIMER
+    from kan.service.info_service import (
+        InfoDataUnavailableError,
+        InfoFetchError,
+        InfoRequest,
+        get_stock_info,
+    )
 
     console = Console()
+    reporter = operation_reporter()
 
-    def _fetch_status(sym: str, stock_name: str):
-        return status_console.status(
-            f"[yellow]⏳ 拉取数据... {stock_name.replace(' ', '')} ({sym})[/yellow]",
-            spinner="dots",
-        )
+    def _render() -> None:
+        pass
 
     try:
-        info_result = get_stock_info(InfoRequest(
-            symbol_or_name=symbol,
-            include_valuation_context=fmt is export.OutputFormat.json,
-            fetch_status=_fetch_status,
-        ))
-    except ValueError as e:
-        _print_err(f"❌ {e}")
-        raise typer.Exit(1) from e
-    except InfoFetchError as e:
-        from rich.console import Console as _ErrConsole
+        with operation("股票详情", reporter=reporter) as lifecycle:
+            lifecycle.phase("拉取数据")
+            try:
+                info_result = get_stock_info(InfoRequest(
+                    symbol_or_name=symbol,
+                    include_valuation_context=fmt is export.OutputFormat.json,
+                    fetch_status=None,
+                ))
+            except ValueError as e:
+                _print_err(f"❌ {e}")
+                raise typer.Exit(1) from e
+            except InfoFetchError as e:
+                Console(stderr=True).print(
+                    f"❌ 拉取失败：{_safe_error_msg(e.cause)}"
+                )
+                raise typer.Exit(1) from e
+            except InfoDataUnavailableError as e:
+                _print_err("无数据")
+                raise typer.Exit(1) from e
 
-        _ErrConsole(stderr=True).print(f"❌ 拉取失败：{_safe_error_msg(e.cause)}")
-        raise typer.Exit(1) from e
-    except InfoDataUnavailableError as e:
-        _print_err("无数据")
-        raise typer.Exit(1) from e
+            lifecycle.phase("准备输出")
+            symbol = info_result.symbol
+            name = info_result.name
+            result = info_result.result
+            trend_result = info_result.trend
+            volume_state = info_result.volume
+            moneyflow = info_result.moneyflow
+            sentiment = info_result.sentiment
+            valuation = info_result.valuation
+            board_context = info_result.board_context
+            name_short = name.replace(" ", "")
 
-    symbol = info_result.symbol
-    name = info_result.name
-    result = info_result.result
-    trend_result = info_result.trend
-    volume_state = info_result.volume
-    moneyflow = info_result.moneyflow
-    sentiment = info_result.sentiment
-    valuation = info_result.valuation
-    board_context = info_result.board_context
-    name_short = name.replace(" ", "")
+            cutoff = info_result.data_cutoff
+            fetched_at = info_result.fetched_at or ""
+            title = f"慢慢看 · {name_short} {symbol}"
+            if cutoff:
+                title += f" · 数据截止 {format_date_compact(cutoff)} 收盘"
+            if fetched_at:
+                title += f" · {format_fetched_at_compact(fetched_at)} 拉取"
 
-    # 背景: 数据截止 / 拉取时间分离展示
-    cutoff = info_result.data_cutoff
-    fetched_at = info_result.fetched_at or ""
-    title = f"慢慢看 · {name_short} {symbol}"
-    if cutoff:
-        title += f" · 数据截止 {format_date_compact(cutoff)} 收盘"
-    if fetched_at:
-        title += f" · {format_fetched_at_compact(fetched_at)} 拉取"
+            if fmt is not export.OutputFormat.terminal:
+                if fmt is export.OutputFormat.json:
+                    json_str = export.to_json(export.info_payload(
+                        result, trend_result, volume=volume_state,
+                        data_cutoff=cutoff, fetched_at=info_result.fetched_at,
+                        stale=info_result.stale, valuation=valuation,
+                        valuation_context=info_result.valuation_context,
+                        moneyflow=moneyflow, sentiment=sentiment,
+                        board_context=board_context,
+                    ))
+                    def _render_json() -> None:
+                        typer.echo(json_str)
+                    _render = _render_json
+                else:
+                    md_str = export.info_markdown(
+                        result, trend_result, volume=volume_state, title=title,
+                        moneyflow=moneyflow, sentiment=sentiment,
+                        board_context=board_context,
+                    )
+                    def _render_md() -> None:
+                        typer.echo(md_str)
+                    _render = _render_md
+            else:
+                # terminal 渲染 —— 在 lifecycle 内准备，context 外输出
+                tag = ""
+                if result.is_st:
+                    tag = " [bold red]ST[/bold red]"
+                if result.limit_up:
+                    tag += " [bold red]涨停[/bold red]"
+                elif result.limit_down:
+                    tag += " [bold green]跌停[/bold green]"
 
-    if fmt is not export.OutputFormat.terminal:
-        if fmt is export.OutputFormat.json:
-            # AI JSON 层:enrich 截面市场指标 · 全市场截面层:估值位置对照 (历史分位+行业中位)
-            # 无 token → 均 None · 优雅降级 (info 仍出位置/涨跌/量能)
-            typer.echo(export.to_json(export.info_payload(
-                result, trend_result, volume=volume_state, data_cutoff=cutoff,
-                fetched_at=info_result.fetched_at, stale=info_result.stale,
-                valuation=valuation, valuation_context=info_result.valuation_context,
-                moneyflow=moneyflow, sentiment=sentiment, board_context=board_context,
-            )))
-        else:
-            typer.echo(export.info_markdown(
-                result, trend_result, volume=volume_state, title=title,
-                moneyflow=moneyflow, sentiment=sentiment, board_context=board_context,
-            ))
-        return
+                if trend_result.streak > 0:
+                    cum_str = f"[red]▲{abs(trend_result.streak_pct):.2f}%[/red]"
+                elif trend_result.streak < 0:
+                    cum_str = f"[green]▼{abs(trend_result.streak_pct):.2f}%[/green]"
+                else:
+                    cum_str = f"{abs(trend_result.streak_pct):.2f}%"
 
-    # 基本信息
-    tag = ""
-    if result.is_st:
-        tag = " [bold red]ST[/bold red]"
-    if result.limit_up:
-        tag += " [bold red]涨停[/bold red]"
-    elif result.limit_down:
-        tag += " [bold green]跌停[/bold green]"
+                lot = f"{result.lot_cost:,.0f}" if result.lot_cost is not None else "-"
+                cash_pct = (
+                    f"{result.cash_usage_pct:.1f}%"
+                    if result.cash_usage_pct is not None else "-"
+                )
+                perm = result.permission_note or result.market_board or "-"
 
-    console.print(f"\n[bold]{title}[/bold]{tag}")
-    # 背景: 累计涨跌加 ▲/▼ 符号 + 红涨绿跌颜色 · 与 trend 命令详情列对齐
-    # 修复 早期用户报告："跌1天 · 累计 0.85%" 让人困惑（正数+负方向语义冲突）
-    if trend_result.streak > 0:
-        cum_str = f"[red]▲{abs(trend_result.streak_pct):.2f}%[/red]"
-    elif trend_result.streak < 0:
-        cum_str = f"[green]▼{abs(trend_result.streak_pct):.2f}%[/green]"
-    else:
-        cum_str = f"{abs(trend_result.streak_pct):.2f}%"
-    console.print(f"  现价 {result.current_price:.2f} · {trend_result.direction} · 累计 {cum_str}")
-    lot = f"{result.lot_cost:,.0f}" if result.lot_cost is not None else "-"
-    cash_pct = (
-        f"{result.cash_usage_pct:.1f}%"
-        if result.cash_usage_pct is not None else "-"
-    )
-    perm = result.permission_note or result.market_board or "-"
-    console.print(f"  1手 {lot} 元 · 占现金 {cash_pct} · 权限 {perm}")
-    console.print()
+                table = terminal.info_table(result, is_industry=False)
+                board_table = (
+                    terminal.board_position_table(board_context)
+                    if board_context is not None else None
+                )
 
-    # 全周期位置表
-    table = terminal.info_table(result, is_industry=False)
-    console.print(table)
-    if board_context is not None:
-        console.print()
-        console.print(
-            f"  板块对比 · 申万一级 {board_context.industry} · "
-            f"本地样本 {board_context.cached_sample}/{board_context.constituent_count}"
-        )
-        console.print(terminal.board_position_table(board_context))
-    console.print(f"\n  低点共振 ×{result.low_resonance} · 高点共振 ×{result.high_resonance}")
-    if volume_state is not None:
-        suffix = f" · {volume_state.state}" if volume_state.state else ""
-        console.print(
-            f"  成交量 · 今日是近 {volume_state.window} 日均量的 "
-            f"{volume_state.ratio} 倍 · {volume_state.label}{suffix}"
-        )
-    if moneyflow is not None and (
-        moneyflow.net_amount is not None
-        or moneyflow.buy_elg_amount is not None
-        or moneyflow.buy_lg_amount is not None
-        or moneyflow.net_amount_5d is not None
-    ):
-        def _fmt(value: float | None, digits: int = 0) -> str:
-            return "-" if value is None else f"{value:.{digits}f}"
+                from kan.core.trading_calendar import (
+                    PHASE_INTRADAY,
+                    latest_trade_date,
+                    market_phase,
+                )
+                expected_cutoff = latest_trade_date()
+                is_stale = cutoff is None or cutoff < expected_cutoff
+                phase = market_phase()
 
-        console.print(
-            "  资金流 · "
-            f"今日主力 {_fmt(moneyflow.net_amount)} 万元 · "
-            f"超大单 {_fmt(moneyflow.buy_elg_amount)} 万元 · "
-            f"大单 {_fmt(moneyflow.buy_lg_amount)} 万元 · "
-            f"连续净流入 {moneyflow.inflow_days if moneyflow.inflow_days is not None else '-'} 天 · "
-            f"5日合计 {_fmt(moneyflow.net_amount_5d)} 万元"
-        )
-    if sentiment is not None and (
-        sentiment.first_time is not None
-        or sentiment.last_time is not None
-        or sentiment.open_times is not None
-        or sentiment.fd_amount is not None
-    ):
-        def _fmt_detail(value: float | None, digits: int = 0) -> str:
-            return "-" if value is None else f"{value:.{digits}f}"
+                def _render_terminal() -> None:
+                    console.print(f"\n[bold]{title}[/bold]{tag}")
+                    console.print(
+                        f"  现价 {result.current_price:.2f} · "
+                        f"{trend_result.direction} · 累计 {cum_str}"
+                    )
+                    console.print(
+                        f"  1手 {lot} 元 · 占现金 {cash_pct} · 权限 {perm}"
+                    )
+                    console.print()
 
-        console.print(
-            "  涨跌停详情 · "
-            f"首次封板 {sentiment.first_time or '-'} · "
-            f"最后封板 {sentiment.last_time or '-'} · "
-            f"开板次数 {_fmt_detail(sentiment.open_times)} · "
-            f"封单金额 {_fmt_detail(sentiment.fd_amount)}"
-        )
+                    console.print(table)
+                    if board_context is not None:
+                        console.print()
+                        console.print(
+                            f"  板块对比 · 申万一级 {board_context.industry} · "
+                            f"本地样本 {board_context.cached_sample}/"
+                            f"{board_context.constituent_count}"
+                        )
+                        console.print(board_table)
+                    console.print(
+                        f"\n  低点共振 ×{result.low_resonance} · "
+                        f"高点共振 ×{result.high_resonance}"
+                    )
+                    if volume_state is not None:
+                        suffix = (
+                            f" · {volume_state.state}"
+                            if volume_state.state else ""
+                        )
+                        console.print(
+                            f"  成交量 · 今日是近 {volume_state.window} 日均量的 "
+                            f"{volume_state.ratio} 倍 · "
+                            f"{volume_state.label}{suffix}"
+                        )
+                    if moneyflow is not None and (
+                        moneyflow.net_amount is not None
+                        or moneyflow.buy_elg_amount is not None
+                        or moneyflow.buy_lg_amount is not None
+                        or moneyflow.net_amount_5d is not None
+                    ):
+                        def _fmt_mf(value: float | None, digits: int = 0) -> str:
+                            return "-" if value is None else f"{value:.{digits}f}"
+                        console.print(
+                            "  资金流 · "
+                            f"今日主力 {_fmt_mf(moneyflow.net_amount)} 万元 · "
+                            f"超大单 {_fmt_mf(moneyflow.buy_elg_amount)} 万元 · "
+                            f"大单 {_fmt_mf(moneyflow.buy_lg_amount)} 万元 · "
+                            f"连续净流入 "
+                            f"{moneyflow.inflow_days if moneyflow.inflow_days is not None else '-'} 天 · "
+                            f"5日合计 {_fmt_mf(moneyflow.net_amount_5d)} 万元"
+                        )
+                    if sentiment is not None and (
+                        sentiment.first_time is not None
+                        or sentiment.last_time is not None
+                        or sentiment.open_times is not None
+                        or sentiment.fd_amount is not None
+                    ):
+                        def _fmt_sdetail(value: float | None, digits: int = 0) -> str:
+                            return "-" if value is None else f"{value:.{digits}f}"
+                        console.print(
+                            "  涨跌停详情 · "
+                            f"首次封板 {sentiment.first_time or '-'} · "
+                            f"最后封板 {sentiment.last_time or '-'} · "
+                            f"开板次数 {_fmt_sdetail(sentiment.open_times)} · "
+                            f"封单金额 {_fmt_sdetail(sentiment.fd_amount)}"
+                        )
+                    if is_stale:
+                        cutoff_str = (
+                            format_date_compact(cutoff) if cutoff else "无缓存"
+                        )
+                        expected_str = format_date_compact(expected_cutoff)
+                        days_behind = (
+                            (expected_cutoff - cutoff).days if cutoff else "?"
+                        )
+                        console.print(
+                            f"\n  [bold yellow]⚠️ 当前缓存到 {cutoff_str} 收盘 · "
+                            f"最近交易日是 {expected_str} · "
+                            f"数据滞后 {days_behind} 天\n"
+                            "   运行 `kan fetch --force` 拉取最新数据[/bold yellow]"
+                        )
+                    elif phase == PHASE_INTRADAY:
+                        console.print(
+                            "\n  [bold yellow]⚠️ 当前盘中 · 涨跌停标签反映当前时刻"
+                            " · 非收盘 final\n"
+                            "   (盘中价格仍在变动 · 涨停/跌停状态可能与收盘不同)\n"
+                            "   建议盘后 15:30 后看 final 数据[/bold yellow]"
+                        )
+                    console.print(DISCLAIMER, style="dim")
 
-    # kan info 加 stale/intraday 警告 · 与 scan/trend 一致
-    # 单只详情诱导决策性比 scan 更强 · 缺警告是 dead-end 风险
-    from kan.core.trading_calendar import PHASE_INTRADAY, latest_trade_date, market_phase
-    expected_cutoff = latest_trade_date()
-    is_stale = cutoff is None or cutoff < expected_cutoff
-    phase = market_phase()
-    if is_stale:
-        cutoff_str = format_date_compact(cutoff) if cutoff else "无缓存"
-        expected_str = format_date_compact(expected_cutoff)
-        days_behind = (expected_cutoff - cutoff).days if cutoff else "?"
-        console.print(
-            f"\n  [bold yellow]⚠️ 当前缓存到 {cutoff_str} 收盘 · "
-            f"最近交易日是 {expected_str} · 数据滞后 {days_behind} 天\n"
-            "   运行 `kan fetch --force` 拉取最新数据[/bold yellow]"
-        )
-    elif phase == PHASE_INTRADAY:
-        console.print(
-            "\n  [bold yellow]⚠️ 当前盘中 · 涨跌停标签反映当前时刻 · 非收盘 final\n"
-            "   (盘中价格仍在变动 · 涨停/跌停状态可能与收盘不同)\n"
-            "   建议盘后 15:30 后看 final 数据[/bold yellow]"
-        )
+                _render = _render_terminal
 
-    console.print(DISCLAIMER, style="dim")
+    except typer.Exit:
+        raise
+
+    _render()
