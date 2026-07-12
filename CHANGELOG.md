@@ -9,6 +9,30 @@ explicitly approves a larger bump.
 
 ## [Unreleased]
 
+## [0.0.6.9.9] - 2026-07-13
+
+### Added
+
+- 新增统一操作生命周期反馈层：所有需网络 I/O 的 CLI 命令从启动到输出完毕显示连续、准确、可诊断的阶段状态（处理中/等待/降级/较慢/疑似停滞），替换旧版 `_with_heavy_imports_spinner` 机制；短命令不强制闪动画。
+- 新增 provider-aware 动态调度器 (`kan/data/scheduler.py`)：每个数据源 lane（Baostock/TuShare/data-hub/EM）独立 AIMD 并发窗口，自动识别 40203/429 限流并退避，Baostock 固定单并发避免全局锁排队数百个无用 worker。
+- 新增 provider 能力契约 (`kan/data/protocols.py` / `provider_contracts.py`)：结构化区分 success/empty/invalid/限流/timeout/transport/circuit-open 结果，fallback 成功不再掩盖上一 provider 的背压事实。
+- 新增 DoH DNS 解析器 (`kan/infra/doh_dns.py`)：绕过 Clash fake-ip DNS 劫持，确保 akshare 访问同花顺/申万研究等金融数据站点时拿到真实 IP。
+
+### Changed
+
+- `kan fetch --all` 统一走 `fetch_batch`/调度器，不再在命令层逐股调用 `fetch_kline`。
+- `kan trend --all` 生命周期覆盖完整阶段：交易日历→逐日截面获取→concat→sort→symbol filter→趋势计算→freshness→输出构造，不再在 100% 进度冻结。
+- `kan board rank --kind theme` / `kan theme trend` 优先走 data-hub TuShare batch K 线，150/200 题材匹配，不再依赖单题材逐次 EM API。
+- 所有裸 `ThreadPoolExecutor` 获取点（relative_strength/info/compare/index/scan enrichment 等）迁移至 `run_provider_jobs` 统一调度。
+- 题材数据源线程安全加固：`py_mini_racer` (V8) 加全局锁，THS/EM 成分股拉取串行化，防止并发初始化导致 segfault。
+
+### Fixed
+
+- 修复 `kan board rank --kind theme` 因 `mini_racer` 多线程并发初始化 V8 导致的 segfault (exit 133)。
+- 修复 `kan theme trend` 因 `ths_index` type=N(883xxx) 与 `ths_daily` 返回 code(700xxx) 编码错位导致 0 条 K 线匹配的超时 (exit 124)。
+- 修复 `kan find --industry` 因 Clash fake-ip DNS 劫持导致申万研究 API 无法访问，返回 `BoardDataUnavailableError` 的问题。
+- 修复题材选股 `kan find --industry` 成分股缓存过期后无 stale fallback 直接抛异常的问题。
+
 ## [0.0.6.9.8] - 2026-07-10
 
 ### Added
@@ -354,7 +378,8 @@ explicitly approves a larger bump.
 - **Shell 补全** · zsh / bash / fish / powershell
 - **合规与隐私** · 强制风险提示 + 关键词黑名单（无买卖建议 / 无目标价 / 无评级）· 数据全本地
 
-[Unreleased]: https://github.com/piklen/manmankan/compare/v0.0.6.9.8...HEAD
+[Unreleased]: https://github.com/piklen/manmankan/compare/v0.0.6.9.9...HEAD
+[0.0.6.9.9]: https://github.com/piklen/manmankan/compare/v0.0.6.9.8...v0.0.6.9.9
 [0.0.6.9.8]: https://github.com/piklen/manmankan/compare/v0.0.6.9.7...v0.0.6.9.8
 [0.0.6.9.7]: https://github.com/piklen/manmankan/compare/v0.0.6.9.6...v0.0.6.9.7
 [0.0.6.9.6]: https://github.com/piklen/manmankan/compare/v0.0.6.9.5...v0.0.6.9.6
