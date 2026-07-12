@@ -168,6 +168,7 @@ class RichOperationReporter:
         self._last_event: LifecycleEvent | None = None
         self._semantic_state: LifecycleKind | None = None
         self._closed = False
+        self._last_info_event: LifecycleEvent | None = None
         self._renderable = _DynamicRenderable(lambda: self._render(self._clock()))
 
     def report(self, event: LifecycleEvent) -> None:
@@ -176,6 +177,8 @@ class RichOperationReporter:
             if self._closed:
                 return
             self._last_event = event
+            if event.kind not in {LifecycleKind.HEARTBEAT}:
+                self._last_info_event = event
             if event.kind in {LifecycleKind.PHASE, LifecycleKind.PROGRESS}:
                 self._last_meaningful_at = event.occurred_at
             if event.kind in {LifecycleKind.WAIT, LifecycleKind.DEGRADED}:
@@ -258,15 +261,20 @@ class RichOperationReporter:
         from rich.text import Text
 
         event = self._last_event
+        info = self._last_info_event
         elapsed = max(0.0, now - self._started_at)
         state, style = self._state(now)
-        raw_message = event.message if event is not None and event.message else self._operation_name
+        raw_message = (
+            info.message if info is not None and info.message
+            else event.message if event is not None and event.message
+            else self._operation_name
+        )
         message = redact_text(raw_message)
         text = Text()
         text.append(f"{state} ", style=style)
         text.append(message)
-        if event is not None and event.kind is LifecycleKind.PROGRESS:
-            text.append(self._progress_suffix(event), style="dim")
+        if info is not None and info.kind is LifecycleKind.PROGRESS:
+            text.append(self._progress_suffix(info), style="dim")
         text.append(f" · {elapsed:.1f}s", style="dim")
         return text
 

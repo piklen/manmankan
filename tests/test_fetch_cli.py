@@ -20,7 +20,7 @@ def test_fetch_stably_deduplicates_and_partitions_fresh_symbols(monkeypatch):
         freshness_checks.append(symbol)
         return symbol == "000858"
 
-    def fetch_batch(symbols: list[str], force: bool = False):
+    def fetch_batch(symbols: list[str], force: bool = False, **kwargs):
         batch_calls.append((list(symbols), force))
         return ({symbol: _frame() for symbol in symbols}, {})
 
@@ -44,7 +44,7 @@ def test_fetch_force_skips_freshness_and_batches_every_unique_symbol(monkeypatch
     def unexpected_freshness_check(symbol: str) -> bool:
         raise AssertionError(f"--force 不应检查 freshness: {symbol}")
 
-    def fetch_batch(symbols: list[str], force: bool = False):
+    def fetch_batch(symbols: list[str], force: bool = False, **kwargs):
         batch_calls.append((list(symbols), force))
         return ({symbol: _frame() for symbol in symbols}, {})
 
@@ -70,7 +70,7 @@ def test_fetch_partial_failure_is_failed_lifecycle_with_stable_safe_preview(monk
     monkeypatch.setattr("kan.data.fetcher.is_fresh", lambda _symbol: False)
     monkeypatch.setattr(
         "kan.data.fetcher.fetch_batch",
-        lambda symbols, force=False: (
+        lambda symbols, force=False, **kw: (
             {"000003": _frame(2)},
             {
                 "000005": "第五个错误",
@@ -105,7 +105,7 @@ def test_fetch_writes_final_output_after_lifecycle_closes(monkeypatch):
     monkeypatch.setattr("kan.data.fetcher.is_fresh", lambda _symbol: False)
     monkeypatch.setattr(
         "kan.data.fetcher.fetch_batch",
-        lambda symbols, force=False: ({symbol: _frame() for symbol in symbols}, {}),
+        lambda symbols, force=False, **kw: ({symbol: _frame() for symbol in symbols}, {}),
     )
     def record_echo(message: str, **_kwargs: object) -> None:
         assert reporter.events[-1].state is OperationState.SUCCEEDED
@@ -127,7 +127,7 @@ def test_fetch_verbose_keeps_input_order_for_mixed_results(monkeypatch):
     )
     monkeypatch.setattr(
         "kan.data.fetcher.fetch_batch",
-        lambda symbols, force=False: (
+        lambda symbols, force=False, **kw: (
             {"000003": _frame(3)},
             {"000001": "第一只失败"},
         ),

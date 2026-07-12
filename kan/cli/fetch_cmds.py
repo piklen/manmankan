@@ -131,7 +131,7 @@ def fetch(
             pending = [symbol for symbol in symbols if symbol not in fresh_set]
 
         lifecycle.phase("批量拉取 K 线", pending=len(pending), fresh=len(fresh_symbols))
-        results, batch_errors = fetch_batch(pending, force=force)
+        results, batch_errors = fetch_batch(pending, force=force, lifecycle=lifecycle)
 
         error_by_symbol = {
             symbol: _safe_error_msg(ValueError(message))
