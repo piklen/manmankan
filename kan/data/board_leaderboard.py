@@ -9,13 +9,19 @@
 """
 from __future__ import annotations
 
-import concurrent.futures
 import os
 from collections.abc import Sequence
 from dataclasses import dataclass
+from functools import partial
 from typing import TYPE_CHECKING, Literal
 
 from kan.core.models import Board, StockScanResult, Theme
+from kan.data.provider_contracts import (
+    FetchFailure,
+    FetchFailureKind,
+    ProviderCapabilities,
+    ProviderFetchResult,
+)
 
 if TYPE_CHECKING:
     from kan.infra.lifecycle import OperationLifecycle
@@ -86,6 +92,41 @@ def _resolve_parallel(parallel: int | None) -> int:
         else:
             parallel = _DEFAULT_PARALLEL
     return max(1, min(32, parallel))
+
+
+_BOARD_INDEX_CAPABILITIES = ProviderCapabilities(
+    max_concurrency=16,
+    initial_concurrency=4,
+    max_attempts=2,
+    timeout_seconds=30.0,
+    backoff_base_seconds=0.5,
+    backoff_cap_seconds=2.0,
+)
+
+
+def _scan_index_job(
+    item: Board | Theme,
+    kind: BoardKind,
+    period: int,
+    *,
+    force: bool,
+) -> ProviderFetchResult[StockScanResult]:
+    """把 _safe_scan_index 的 I/O 封装为 provider-aware job。"""
+    try:
+        result = _safe_scan_index(item, kind, period, force=force)
+    except Exception as exc:
+        return ProviderFetchResult.failed(FetchFailure(
+            FetchFailureKind.TRANSPORT,
+            message=type(exc).__name__,
+            retryable=True,
+            affects_circuit=True,
+        ))
+    if result is None:
+        return ProviderFetchResult.failed(FetchFailure(
+            FetchFailureKind.EMPTY,
+            message="K 线为空或扫描失败",
+        ))
+    return ProviderFetchResult.succeeded(result)
 
 
 def _industry_moneyflow_map() -> dict[str, float]:
@@ -180,8 +221,10 @@ def load_board_leaderboard(
 
     `metric` 只决定排序口径,行里尽量带齐 moneyflow/gain/pos 三类裸值。
     题材指数 K 线数量较多,默认受控并发扫描,避免 `--limit` 小但全量串行拖慢。
+    lifecycle 传入时走 provider-aware 调度 + 统一进度反馈。
     """
     from kan.data import boards
+    from kan.data.provider_batch import ProviderJob, run_provider_jobs
 
     errors: list[tuple[str, Exception]] = []
     scan_by_code: dict[str, StockScanResult] = {}
@@ -199,7 +242,6 @@ def load_board_leaderboard(
 
             ts_catalog, _catalog_err = tushare_load_theme_catalog()
             if ts_catalog:
-                # 区间涨幅需要 period+1 根；位置需要 period 根。下限 35 天复用 theme trend 缓存。
                 ts_klines, _klines_err = tushare_load_theme_klines(
                     ts_catalog,
                     n_trading_days=max(period + 1, 35),
@@ -256,14 +298,49 @@ def load_board_leaderboard(
             None,
         )
 
+    # 分离已缓存(从 TuShare batch 拿到)和待扫描的标的
+    needs_scan = [
+        item for item in catalog
+        if scan_by_code.get(item.code) is None
+        and not (kind == "theme" and getattr(item, "source", "") == "tushare")
+    ]
+
+    workers = _resolve_parallel(parallel)
+    if needs_scan and workers > 1:
+        if lifecycle is not None:
+            lifecycle.phase("扫描板块指数 K 线", total=len(needs_scan))
+
+        def on_scan_result(job_result, completed: int, total: int) -> None:
+            scan = job_result.result.data
+            if scan is not None:
+                scan_by_code[job_result.key] = scan
+            if lifecycle is not None:
+                lifecycle.progress(
+                    completed, total, "扫描板块指数",
+                    provider=job_result.provider,
+                )
+
+        jobs = [
+            ProviderJob(
+                key=item.code,
+                provider="board_index",
+                call=partial(_scan_index_job, item, kind, period, force=force),
+                capabilities=_BOARD_INDEX_CAPABILITIES,
+            )
+            for item in needs_scan
+        ]
+        run_provider_jobs(jobs, max_workers=workers, on_result=on_scan_result)
+    elif needs_scan:
+        # 单 worker 或 catalog ≤ 1 → 串行扫描
+        for item in needs_scan:
+            scan = _safe_scan_index(item, kind, period, force=force)
+            if scan is not None:
+                scan_by_code[item.code] = scan
+
+    # 所有标的 build_row（已扫描的结果从 scan_by_code 读取）
     rows: list[BoardRankRow] = []
-    workers = min(_resolve_parallel(parallel), max(1, len(catalog)))
-    if workers <= 1 or len(catalog) <= 1:
-        built = [build_row(item) for item in catalog]
-    else:
-        with concurrent.futures.ThreadPoolExecutor(max_workers=workers) as ex:
-            built = list(ex.map(build_row, catalog))
-    for row, error in built:
+    for item in catalog:
+        row, error = build_row(item)
         if row is not None:
             rows.append(row)
         if error is not None:
