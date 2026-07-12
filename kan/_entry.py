@@ -87,6 +87,17 @@ def _print_fast_start() -> None:
     print_start_help()
 
 
+def _install_doh_dns() -> None:
+    """绕过 Clash fake-ip DNS 劫持 · 对 help/complete 等瞬时命令跳过。"""
+    if _is_shell_completion_run():
+        return
+    try:
+        from kan.infra.doh_dns import install as install_doh
+        install_doh()
+    except Exception:
+        pass  # DoH 不可用不阻塞启动
+
+
 def main() -> None:
     _maybe_print_boot_banner()
     if _should_print_fast_start():
@@ -95,6 +106,7 @@ def main() -> None:
     if _should_print_fast_help():
         _print_fast_help()
         return
+    _install_doh_dns()
     try:
         from kan.cli import cli_main
     except (ImportError, ModuleNotFoundError) as e:
