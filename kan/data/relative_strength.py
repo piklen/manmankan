@@ -11,9 +11,16 @@
 """
 from __future__ import annotations
 
+from functools import partial
 from typing import TYPE_CHECKING
 
 from kan.data.index import index_name, normalize_index_code
+from kan.data.provider_contracts import (
+    FetchFailure,
+    FetchFailureKind,
+    ProviderCapabilities,
+    ProviderFetchResult,
+)
 from kan.infra.log import debug_log
 
 if TYPE_CHECKING:
@@ -23,6 +30,15 @@ if TYPE_CHECKING:
 
 DEFAULT_RS_INDEX = "000300.SH"
 """默认大盘对照指数 · 沪深300 (标准 market beta 基准 · 可 --rs-index-code 改)。"""
+
+_RS_INDUSTRY_CAPABILITIES = ProviderCapabilities(
+    max_concurrency=16,
+    initial_concurrency=4,
+    max_attempts=1,
+    timeout_seconds=30.0,
+    backoff_base_seconds=0.5,
+    backoff_cap_seconds=2.0,
+)
 
 
 def _gains_from_kline(
@@ -47,6 +63,34 @@ def _gains_from_kline(
             continue
         out[pr.period] = pr.gain_pct
     return out
+
+
+def _rs_industry_job(
+    board: Board,
+    periods: set[int],
+    *,
+    force: bool,
+) -> ProviderFetchResult[dict[int, float]]:
+    """把 _one 的行业 K 线拉取封装为 provider-aware job。"""
+    from kan.data import boards
+
+    try:
+        df = boards.fetch_industry_kline(board, force=force)
+    except Exception as e:
+        debug_log(__name__, f"rs industry kline {board.name} 失败", e)
+        return ProviderFetchResult.failed(FetchFailure(
+            FetchFailureKind.TRANSPORT,
+            message=type(e).__name__,
+            retryable=True,
+            affects_circuit=True,
+        ))
+    gains = _gains_from_kline(df, board.code, board.name, periods)
+    if not gains:
+        return ProviderFetchResult.failed(FetchFailure(
+            FetchFailureKind.EMPTY,
+            message="K 线不足或扫描无 gain",
+        ))
+    return ProviderFetchResult.succeeded(gains)
 
 
 def index_gains(
@@ -84,29 +128,38 @@ def industry_gains(
     """
     if not periods:
         return {}
-    import concurrent.futures
 
     from kan.data import boards
+    from kan.data.provider_batch import ProviderJob, run_provider_jobs
 
     catalog = [b for b in boards.load_industry_catalog(force=force) if b.level == 1]
     if not catalog:
         return {}
 
-    def _one(board: Board) -> tuple[str, dict[int, float]]:
-        try:
-            df = boards.fetch_industry_kline(board, force=force)
-        except Exception as e:
-            debug_log(__name__, f"rs industry kline {board.name} 失败", e)
-            return board.name, {}
-        return board.name, _gains_from_kline(df, board.code, board.name, periods)
-
     workers = max(1, min(parallel, len(catalog)))
     if workers <= 1:
-        built = [_one(b) for b in catalog]
-    else:
-        with concurrent.futures.ThreadPoolExecutor(max_workers=workers) as ex:
-            built = list(ex.map(_one, catalog))
-    return {name: gains for name, gains in built if gains}
+        out: dict[str, dict[int, float]] = {}
+        for b in catalog:
+            result = _rs_industry_job(b, periods, force=force)
+            if result.data is not None:
+                out[b.name] = result.data
+        return out
+
+    jobs = [
+        ProviderJob(
+            key=board.name,
+            provider="rs_industry",
+            call=partial(_rs_industry_job, board, periods, force=force),
+            capabilities=_RS_INDUSTRY_CAPABILITIES,
+        )
+        for board in catalog
+    ]
+    results = run_provider_jobs(jobs, max_workers=workers)
+    return {
+        key: job_result.result.data
+        for key, job_result in results.items()
+        if job_result.result.data is not None
+    }
 
 
 __all__ = ["DEFAULT_RS_INDEX", "index_gains", "industry_gains"]
