@@ -96,10 +96,11 @@ class ThsConstituentSource:
     name = "ths_constituent"
     priority = 10
     capabilities = ProviderCapabilities(
-        max_concurrency=8,
-        initial_concurrency=4,
+        max_concurrency=1,
+        initial_concurrency=1,
         max_attempts=1,
         timeout_seconds=10.0,
+        serializes_requests=True,
     )
 
     def is_available(self) -> bool:
@@ -131,10 +132,11 @@ class EmConstituentSource:
     name = "em_push2_concept"
     priority = 20
     capabilities = ProviderCapabilities(
-        max_concurrency=6,
-        initial_concurrency=2,
+        max_concurrency=1,
+        initial_concurrency=1,
         max_attempts=1,
         timeout_seconds=15.0,
+        serializes_requests=True,
     )
 
     def is_available(self) -> bool:

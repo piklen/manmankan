@@ -73,7 +73,7 @@ def tushare_load_theme_catalog() -> tuple[list[Theme] | None, TushareApiError | 
         return None, None  # 未配 token = 默认状态 · 不算 error
 
     ensure_dirs()
-    cache = BOARDS_DIR / "catalog_tushare_ths.json"
+    cache = BOARDS_DIR / "catalog_tushare_ths_I.json"
     if _cache_fresh(cache, _THEME_CATALOG_TTL):
         try:
             data = json.loads(cache.read_text(encoding="utf-8"))
@@ -84,7 +84,7 @@ def tushare_load_theme_catalog() -> tuple[list[Theme] | None, TushareApiError | 
     data, err = _post_tushare_api(
         endpoint, token,
         api_name="ths_index",
-        params={"type": "N", "exchange": "A"},
+        params={"type": "I", "exchange": "A"},
         fields="ts_code,name,count,exchange",
     )
     if data is None:

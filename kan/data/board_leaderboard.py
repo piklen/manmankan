@@ -103,6 +103,18 @@ _BOARD_INDEX_CAPABILITIES = ProviderCapabilities(
     backoff_cap_seconds=2.0,
 )
 
+# 题材 EM 指数扫描必须串行：底层 akshare → py_mini_racer (V8) 非线程安全，
+# 多 worker 同时初始化 V8 isolate pool 会触发 Check failed: !pool->IsInitialized() segfault。
+_BOARD_INDEX_THEME_CAPABILITIES = ProviderCapabilities(
+    max_concurrency=1,
+    initial_concurrency=1,
+    max_attempts=2,
+    timeout_seconds=30.0,
+    backoff_base_seconds=0.5,
+    backoff_cap_seconds=2.0,
+    serializes_requests=True,
+)
+
 
 def _scan_index_job(
     item: Board | Theme,
@@ -159,7 +171,12 @@ def theme_moneyflow_map(
     max_workers: int | None = None,
     lifecycle: OperationLifecycle | None = None,
 ) -> dict[str, float]:
-    """题材代码 → 成分股主力净额合计(万元)。"""
+    """题材代码 → 成分股主力净额合计(万元)。
+
+    注：此函数走 akshare THS/EM 接口拉成分股，网络依赖性高。
+    caller（load_board_leaderboard）在走 data-hub/TuShare batch 时已跳过此调用，
+    只在 EM catalog 回退路径才触发。
+    """
     from kan.data import boards
     from kan.data.moneyflow import fetch_moneyflow
 
@@ -233,26 +250,34 @@ def load_board_leaderboard(
         catalog = [b for b in boards.load_industry_catalog(force=force) if b.level == level]
         mf_map = _industry_moneyflow_map()
     else:
-        catalog = []
-        if metric in ("gain", "pos"):
-            from kan.data.tushare_themes import (
-                tushare_load_theme_catalog,
-                tushare_load_theme_klines,
-            )
+        # 题材路径：优先走 data-hub/TuShare 批量接口（避开 akshare EM 的 DNS/代理问题 +
+        # mini_racer 线程不安全），EM 只在 TuShare 未配或失败时做 fallback。
+        from kan.data.tushare_themes import (
+            tushare_load_theme_catalog,
+            tushare_load_theme_klines,
+        )
 
-            ts_catalog, _catalog_err = tushare_load_theme_catalog()
-            if ts_catalog:
-                ts_klines, _klines_err = tushare_load_theme_klines(
-                    ts_catalog,
-                    n_trading_days=max(period + 1, 35),
-                )
-                if ts_klines:
-                    catalog = ts_catalog
-                    scan_by_code = _scan_theme_klines(ts_catalog, ts_klines, period)
+        catalog = []
+        using_tushare = False
+        ts_catalog, _catalog_err = tushare_load_theme_catalog()
+        if ts_catalog:
+            ts_klines, _klines_err = tushare_load_theme_klines(
+                ts_catalog,
+                n_trading_days=max(period + 1, 35),
+            )
+            if ts_klines:
+                catalog = ts_catalog
+                scan_by_code = _scan_theme_klines(ts_catalog, ts_klines, period)
+                using_tushare = True
         if not catalog:
             catalog = boards.load_theme_catalog(force=force)
         themes = [item for item in catalog if isinstance(item, Theme)]
-        if metric == "moneyflow":
+        # 资金聚合依赖 akshare THS/EM 成分股接口，但 data-hub/TuShare 题材用不同
+        # 编码体系（如 886108），akshare 侧拿不到对应成分股。走 TuShare batch 时
+        # 跳过资金聚合，不阻塞 position/gain 展示（K 线已通过 data-hub 拿到）。
+        if metric == "moneyflow" and using_tushare:
+            mf_map = {}
+        elif metric == "moneyflow":
             mf_map = (
                 theme_moneyflow_map(themes, force=force)
                 if parallel is None and lifecycle is None
@@ -306,6 +331,8 @@ def load_board_leaderboard(
     ]
 
     workers = _resolve_parallel(parallel)
+    # 题材 EM 扫描必须串行（mini_racer/V8 非线程安全），行业可并发
+    board_caps = _BOARD_INDEX_THEME_CAPABILITIES if kind == "theme" else _BOARD_INDEX_CAPABILITIES
     if needs_scan and workers > 1:
         if lifecycle is not None:
             lifecycle.phase("扫描板块指数 K 线", total=len(needs_scan))
@@ -325,7 +352,7 @@ def load_board_leaderboard(
                 key=item.code,
                 provider="board_index",
                 call=partial(_scan_index_job, item, kind, period, force=force),
-                capabilities=_BOARD_INDEX_CAPABILITIES,
+                capabilities=board_caps,
             )
             for item in needs_scan
         ]

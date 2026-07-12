@@ -128,15 +128,17 @@ def get_industry_constituents(
     """行业成分股 (代码, 名称) 列表 · JSON cache 24h TTL。
 
     akshare: index_component_sw(symbol=board.code) → 证券代码 / 证券名称。
+    失败时如有旧缓存（即使过期）也会降级使用，避免因临时网络/代理问题阻塞查询。
     """
     ensure_dirs()
     cache = BOARDS_DIR / f"cons_{board.code}.json"
+
+    def _load_cache(pairs_list: list) -> list[tuple[str, str]]:
+        return [(str(c), str(n)) for c, n in pairs_list]
+
     if not force and _cache_fresh(cache, _CONS_TTL):
         try:
-            return [
-                (str(c), str(n))
-                for c, n in json.loads(cache.read_text(encoding="utf-8"))
-            ]
+            return _load_cache(json.loads(cache.read_text(encoding="utf-8")))
         except Exception as e:
             debug_log(__name__, f"industry constituents cache {cache.name} 损坏 · 重新拉", e)
     import akshare as ak
@@ -145,6 +147,14 @@ def get_industry_constituents(
         df = ak.index_component_sw(symbol=board.code)
     except Exception as e:
         debug_log(__name__, f"申万成分股拉取失败 {board.code}", e)
+        # 降级：用旧缓存（即使过期）兜底，避免临时网络/代理问题阻塞
+        if cache.exists():
+            try:
+                stale = _load_cache(json.loads(cache.read_text(encoding="utf-8")))
+                debug_log(__name__, f"申万成分股降级 {board.code} · 使用过期缓存({len(stale)}只)", e)
+                return stale
+            except Exception:
+                pass
         raise BoardDataUnavailableError(f"申万成分股暂不可用: {board.code}") from e
     if df is None or df.empty:
         raise BoardDataUnavailableError(f"申万成分股为空: {board.code}")
