@@ -346,7 +346,7 @@ def test_fetch_all_pulls_all_stocks(
     monkeypatch.setattr("kan.data.fetcher.is_fresh", lambda _symbol: False)
     monkeypatch.setattr(
         "kan.data.fetcher.fetch_batch",
-        lambda symbols, force=False: (
+        lambda symbols, force=False, **kw: (
             fetched.append(list(symbols))
             or {symbol: pd.DataFrame({"close": [1.0]}) for symbol in symbols},
             {},

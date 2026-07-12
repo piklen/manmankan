@@ -169,7 +169,7 @@ def test_fetch_hot_runs(hot_runner, monkeypatch):
     fetched: list[list[str]] = []
     monkeypatch.setattr(
         "kan.data.fetcher.fetch_batch",
-        lambda symbols, force=False: (
+        lambda symbols, force=False, **kw: (
             fetched.append(list(symbols))
             or {symbol: pd.DataFrame() for symbol in symbols},
             {},

@@ -1054,3 +1054,60 @@ def test_compare_custom_periods_are_forwarded(monkeypatch):
     )
     assert result.exit_code == 0, result.output
     assert captured == [[20], [20]]
+
+
+def test_compare_stale_symbol_triggers_fetch_batch_with_lifecycle(monkeypatch):
+    """stale 标的触发 fetch_batch 并传入 lifecycle · 覆盖 patch coverage。"""
+    from datetime import date
+
+    import pandas as pd
+    from typer.testing import CliRunner
+
+    from kan.app import app
+    from kan.cli import compare_cmds  # noqa: F401
+    from kan.core.models import PeriodResult, StockScanResult
+
+    names = {
+        "600519": ("600519", "贵州茅台"),
+        "000858": ("000858", "五粮液"),
+    }
+    fetch_batch_calls: list[dict] = []
+
+    monkeypatch.setattr("kan.storage.watchlist.resolve_symbol_or_name", lambda raw: names[raw])
+    monkeypatch.setattr("kan.data.fetcher.is_fresh", lambda symbol: False)
+    monkeypatch.setattr("kan.data.fetcher.get_cached",
+        lambda symbol: pd.DataFrame({"close": [100.0], "date": [date(2026, 5, 14)]}),
+    )
+
+    def fake_fetch_batch(symbols, force=False, **kwargs):
+        fetch_batch_calls.append({"symbols": list(symbols), "force": force, "lifecycle": kwargs.get("lifecycle")})
+        return ({symbol: pd.DataFrame({"close": [1.0]}) for symbol in symbols}, {})
+
+    monkeypatch.setattr("kan.data.fetcher.fetch_batch", fake_fetch_batch)
+
+    def fake_scan_stock(df, symbol, name, periods=None):
+        return StockScanResult(
+            symbol=symbol,
+            name=name,
+            current_price=100.0,
+            scan_date=date(2026, 5, 14),
+            periods=[
+                PeriodResult(
+                    period=20, n_low=90.0, n_high=110.0,
+                    position_pct=50.0, at_low=False, at_high=False,
+                )
+            ],
+            low_resonance=0, high_resonance=0,
+        )
+
+    monkeypatch.setattr("kan.core.scanner.scan_stock", fake_scan_stock)
+
+    result = CliRunner().invoke(
+        app,
+        ["compare", "600519", "000858", "--format", "json"],
+    )
+    assert result.exit_code == 0, result.output
+    assert len(fetch_batch_calls) == 1
+    assert fetch_batch_calls[0]["force"] is True
+    assert fetch_batch_calls[0]["lifecycle"] is not None
+    assert set(fetch_batch_calls[0]["symbols"]) == {"600519", "000858"}

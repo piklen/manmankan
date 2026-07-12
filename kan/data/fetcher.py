@@ -34,6 +34,7 @@ if TYPE_CHECKING:
     import pandas as pd
 
     from kan.data.protocols import KlineSource
+    from kan.infra.lifecycle import OperationLifecycle
 
 # ── K 线标准 schema ──────────────────────────────────────────────────
 # 所有数据源的出口必须经过 _normalize_kline() 归一化到此格式。
@@ -439,6 +440,7 @@ def fetch_batch(
     max_workers: int | None = None,
     on_progress: Callable | None = None,
     on_progress_state: Callable[[FetchProgress], None] | None = None,
+    lifecycle: OperationLifecycle | None = None,
 ) -> tuple[dict[str, pd.DataFrame], dict[str, str]]:
     """批量拉取 · 自适应提交窗口 + 可选 progress callback.
 
@@ -539,6 +541,7 @@ def fetch_batch(
         worker_cap=worker_cap,
         initial_concurrency=initial_workers,
         on_result=_on_result,
+        lifecycle=lifecycle,
     ) as scheduler:
         scheduler_ref.append(scheduler)
         scheduler.fetch_many(network_symbols, start)

@@ -92,7 +92,7 @@ def test_fetch_theme_pulls_constituents(monkeypatch, _isolate_all):
     _stub(monkeypatch)
     calls: list[tuple[list[str], bool]] = []
 
-    def fetch_batch(symbols, force=False):
+    def fetch_batch(symbols, force=False, **kwargs):
         calls.append((list(symbols), force))
         return ({symbol: pd.DataFrame({"close": [1.0]}) for symbol in symbols}, {})
 
@@ -120,7 +120,7 @@ def test_fetch_theme_empty_watchlist_intersection_does_not_fall_back(
     calls: list[list[str]] = []
     monkeypatch.setattr(
         "kan.data.fetcher.fetch_batch",
-        lambda symbols, force=False: (calls.append(list(symbols)) or {}, {}),
+        lambda symbols, force=False, **kw: (calls.append(list(symbols)) or {}, {}),
     )
 
     result = CliRunner().invoke(app, ["fetch", "--theme=AI应用", "--only-watchlist"])
@@ -135,7 +135,7 @@ def test_fetch_returns_nonzero_when_any_symbol_fails(monkeypatch, _isolate_all):
     monkeypatch.setattr("kan.data.fetcher.is_fresh", lambda symbol: False)
     monkeypatch.setattr(
         "kan.data.fetcher.fetch_batch",
-        lambda symbols, force=False: (
+        lambda symbols, force=False, **kw: (
             {},
             {symbol: f"无效股票代码或无数据: {symbol}" for symbol in symbols},
         ),

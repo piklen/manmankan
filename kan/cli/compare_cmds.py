@@ -90,7 +90,7 @@ def compare(
             # 第二遍：一次 batch 拉取所有 stale 标的
             if stale:
                 lifecycle.phase("批量拉取数据", total=len(stale))
-                _, fetch_errors = fetch_batch(stale, force=True)
+                _, fetch_errors = fetch_batch(stale, force=True, lifecycle=lifecycle)
 
                 failed = {sym for sym in stale if sym in fetch_errors}
                 if failed:
