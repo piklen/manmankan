@@ -11,7 +11,7 @@ _BOOT_BANNER_COMMANDS = {
 }
 _FAST_ROOT_HELP_ARGS = {("help",), ("--help",), ("-h",)}
 _FAST_START_HELP_ARGS = {()}
-_FAST_SUBCOMMAND_HELP_ARGS = {
+_FAST_SUBCOMMAND_HELP_ARGS: dict[tuple[str, ...], str] = {
     ("find", "--help"): "find",
     ("find", "-h"): "find",
 }

@@ -110,14 +110,14 @@ def _cached_resolve(domain: str) -> str | None:
     with _cache_lock:
         cached = _cache.get(domain)
         if cached is not None:
-            ip, expiry = cached
+            cached_ip, expiry = cached
             if now < expiry:
-                return ip
-    ip = _resolve_via_doh(domain)
-    if ip is not None:
+                return cached_ip
+    resolved_ip = _resolve_via_doh(domain)
+    if resolved_ip is not None:
         with _cache_lock:
-            _cache[domain] = (ip, now + _CACHE_TTL)
-    return ip
+            _cache[domain] = (resolved_ip, now + _CACHE_TTL)
+    return resolved_ip
 
 
 # ── socket monkeypatch ─────────────────────────────────────────────────
