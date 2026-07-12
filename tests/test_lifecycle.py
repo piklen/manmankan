@@ -102,3 +102,36 @@ def test_exception_finishes_as_failed_and_keyboard_interrupt_as_cancelled() -> N
     with pytest.raises(KeyboardInterrupt), operation("取消操作", reporter=reporter):
         raise KeyboardInterrupt
     assert reporter.events[-1].state is OperationState.CANCELLED
+
+
+def test_cannot_enter_operation_twice() -> None:
+    """重复 __enter__ 两次抛 RuntimeError。"""
+    from kan.infra.lifecycle import OperationLifecycle
+
+    lifecycle = OperationLifecycle("双入测试")
+    lifecycle.__enter__()
+    try:
+        with pytest.raises(RuntimeError, match="cannot be entered twice"):
+            lifecycle.__enter__()
+    finally:
+        lifecycle.__exit__(None, None, None)
+
+
+def test_emit_before_start_raises() -> None:
+    """未 __enter__ 就直接 emit 抛 RuntimeError。"""
+    from kan.infra.lifecycle import OperationLifecycle
+
+    lifecycle = OperationLifecycle("未启动")
+    with pytest.raises(RuntimeError, match="has not started"):
+        lifecycle.phase("不该到这儿")
+
+
+def test_emit_after_close_raises() -> None:
+    """__exit__ 后再 emit 抛 RuntimeError。"""
+    from kan.infra.lifecycle import OperationLifecycle
+
+    lifecycle = OperationLifecycle("已关闭")
+    with lifecycle:
+        pass
+    with pytest.raises(RuntimeError, match="already finished"):
+        lifecycle.heartbeat("已关闭不该 emit")

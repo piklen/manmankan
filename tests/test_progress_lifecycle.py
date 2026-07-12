@@ -291,3 +291,140 @@ def test_renderer_marks_keyboard_interrupt_as_cancelled() -> None:
         raise KeyboardInterrupt
 
     assert "已取消" in _plain(lives[0].renderables[-1])
+
+
+def test_daemon_timer_is_daemon_and_runs_callback() -> None:
+    """_daemon_timer 创建 daemon=True 的 Timer · 覆盖行 129-131。"""
+    from threading import Event
+
+    from kan.infra.progress import _daemon_timer
+
+    fired = Event()
+    timer = _daemon_timer(0.01, fired.set)
+    assert timer.daemon is True
+    timer.start()
+    assert fired.wait(0.5) is True
+    timer.cancel()
+
+
+def test_close_while_live_active_stops_and_cleans_up() -> None:
+    """close() 在 Live 活跃时主动停止 · 覆盖行 210-215。"""
+    clock = _Clock()
+    lives: list[_FakeLive] = []
+
+    def live_factory(renderable: object, **kwargs: Any) -> _FakeLive:
+        live = _FakeLive(renderable, **kwargs)
+        lives.append(live)
+        return live
+
+    reporter = RichOperationReporter(
+        console=Console(file=_Stream(tty=True), force_terminal=True),
+        clock=clock,
+        show_after=0.0,
+        live_factory=live_factory,
+    )
+    with operation("活动操作", reporter=reporter, clock=clock) as op:
+        clock.now = 0.1
+        op.phase("工作中")
+        assert len(lives) >= 1
+        reporter.close()
+
+    assert lives[0].stopped is True
+    # close() 后重复调用无副作用
+    reporter.close()
+
+
+def test_refresh_when_closed_is_noop() -> None:
+    """已关闭的 reporter 上 refresh() 无操作 · 覆盖行 205-206。"""
+    clock = _Clock()
+    lives: list[_FakeLive] = []
+
+    def live_factory(renderable: object, **kwargs: Any) -> _FakeLive:
+        live = _FakeLive(renderable, **kwargs)
+        lives.append(live)
+        return live
+
+    reporter = RichOperationReporter(
+        console=Console(file=_Stream(tty=True), force_terminal=True),
+        clock=clock,
+        show_after=0.0,
+        live_factory=live_factory,
+    )
+    # 关闭前先开一个 operation 让 reporter 有事件记录
+    with operation("预热", reporter=reporter, clock=clock) as op:
+        clock.now = 0.1
+        op.phase("阶段")
+
+    # 操作已结束，refresh 应该是 no-op
+    reporter.refresh()
+
+
+def test_progress_suffix_edge_cases() -> None:
+    """_progress_suffix 处理 total=None / completed=None / total=0 · 覆盖行 296-302。"""
+    from kan.infra.lifecycle import LifecycleEvent, LifecycleKind
+    from kan.infra.progress import RichOperationReporter
+
+    # total=None, completed=5
+    ev = LifecycleEvent(
+        sequence=1,
+        kind=LifecycleKind.PROGRESS,
+        operation_id="t",
+        operation_name="t",
+        occurred_at=0.0,
+        elapsed=0.0,
+        completed=5,
+        total=None,
+    )
+    suffix = RichOperationReporter._progress_suffix(ev)
+    assert "5" in suffix
+
+    # total=10, completed=None
+    ev2 = LifecycleEvent(
+        sequence=2,
+        kind=LifecycleKind.PROGRESS,
+        operation_id="t",
+        operation_name="t",
+        occurred_at=0.0,
+        elapsed=0.0,
+        completed=None,
+        total=10,
+    )
+    suffix2 = RichOperationReporter._progress_suffix(ev2)
+    assert "/10" in suffix2
+
+    # total=0 — 除零安全
+    ev3 = LifecycleEvent(
+        sequence=3,
+        kind=LifecycleKind.PROGRESS,
+        operation_id="t",
+        operation_name="t",
+        occurred_at=0.0,
+        elapsed=0.0,
+        completed=0,
+        total=0,
+    )
+    suffix3 = RichOperationReporter._progress_suffix(ev3)
+    assert "0/0" in suffix3
+
+
+def test_degraded_state_shows_in_render() -> None:
+    """degraded 事件后渲染显示 '降级' · 覆盖行 284-285。"""
+    clock = _Clock()
+    lives: list[_FakeLive] = []
+
+    def live_factory(renderable: object, **kwargs: Any) -> _FakeLive:
+        live = _FakeLive(renderable, **kwargs)
+        lives.append(live)
+        return live
+
+    reporter = RichOperationReporter(
+        console=Console(file=_Stream(tty=True), force_terminal=True),
+        clock=clock,
+        show_after=0.0,
+        live_factory=live_factory,
+    )
+    with operation("降级操作", reporter=reporter, clock=clock) as op:
+        clock.now = 0.1
+        op.degraded("主源不可用")
+
+    assert "降级" in _plain(lives[0].renderables[-1])
