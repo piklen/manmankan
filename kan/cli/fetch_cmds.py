@@ -7,7 +7,7 @@ from typing import Annotated
 import typer
 
 from kan.app import app
-from kan.cli.helpers import _safe_error_msg, _with_heavy_imports_spinner
+from kan.cli.helpers import _safe_error_msg
 from kan.data.hot import HotList
 
 
@@ -48,8 +48,7 @@ def fetch(
     from kan.infra.progress import feedback_console, operation_reporter
 
     status_console = feedback_console()
-    with _with_heavy_imports_spinner(status_console, "⏳ 加载数据模块..."):
-        from kan.data.fetcher import fetch_batch, is_fresh
+    from kan.data.fetcher import fetch_batch, is_fresh
 
     pool_count = sum(1 for x in (industry, hot, theme) if x is not None) + int(all_stocks)
     has_explicit_pool = pool_count > 0

@@ -15,7 +15,6 @@ from kan.cli.helpers import (
     _get_watchlist_pairs,
     _load_watchlist_pairs,
     _print_err,
-    _with_heavy_imports_spinner,
 )
 from kan.data.hot import HotList
 from kan.storage import export
@@ -193,8 +192,7 @@ def trend(
     from kan.infra.progress import feedback_console, operation_reporter
 
     status_console = feedback_console()
-    with _with_heavy_imports_spinner(status_console, "⏳ 加载数据模块..."):
-        from kan.core.scanner import trend_batch
+    from kan.core.scanner import trend_batch
 
     pool_count = sum(1 for x in (industry, hot, theme) if x is not None) + int(all_stocks)
     if pool_count > 1:
