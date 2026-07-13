@@ -28,17 +28,17 @@ jobs:
     runs-on: ${{ fromJSON(github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name != github.repository && '["ubuntu-latest"]' || '["self-hosted","manmankan-ci","hkg-vps"]') }}
     timeout-minutes: 20
     steps:
-      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10  # v6 (pinned 2026-05-27)
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0  # v6 (pinned 2026-05-27)
         with:
           persist-credentials: false
       - name: Setup Python on fork runner
         if: github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name != github.repository
-        uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405  # pinned 2026-06-02
+        uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1  # pinned 2026-06-02
         with:
           python-version: '3.12'
       - name: Setup uv on fork runner
         if: github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name != github.repository
-        uses: astral-sh/setup-uv@fac544c07dec837d0ccb6301d7b5580bf5edae39  # pinned 2026-05-27
+        uses: astral-sh/setup-uv@11f9893b081a58869d3b5fccaea48c9e9e46f990  # pinned 2026-05-27
         with:
           version: ${{ env.UV_VERSION }}
           enable-cache: false
@@ -106,7 +106,7 @@ jobs:
     runs-on: ${{ fromJSON(github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name != github.repository && '["ubuntu-latest"]' || '["self-hosted","manmankan-ci"]') }}
     timeout-minutes: 10
     steps:
-      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10  # v6 (pinned 2026-05-27)
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0  # v6 (pinned 2026-05-27)
         with:
           persist-credentials: false
       - name: Privacy / public archive scan
@@ -124,7 +124,7 @@ jobs:
       matrix:
         python-version: ['3.11', '3.12']
     steps:
-      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10  # v6 (pinned 2026-05-27)
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0  # v6 (pinned 2026-05-27)
         with:
           fetch-depth: 0  # diff-cover 需要 base 分支历史做新代码覆盖率对比
           persist-credentials: false
@@ -140,12 +140,12 @@ jobs:
           } >> "$GITHUB_ENV"
       - name: Setup Python on fork runner
         if: github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name != github.repository
-        uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405  # pinned 2026-06-02
+        uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1  # pinned 2026-06-02
         with:
           python-version: ${{ matrix.python-version }}
       - name: Setup uv on fork runner
         if: github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name != github.repository
-        uses: astral-sh/setup-uv@fac544c07dec837d0ccb6301d7b5580bf5edae39  # pinned 2026-05-27
+        uses: astral-sh/setup-uv@11f9893b081a58869d3b5fccaea48c9e9e46f990  # pinned 2026-05-27
         with:
           version: ${{ env.UV_VERSION }}
           enable-cache: false
@@ -180,17 +180,17 @@ jobs:
       matrix:
         python-version: ['3.11', '3.12']
     steps:
-      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10  # v6 (pinned 2026-05-27)
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0  # v6 (pinned 2026-05-27)
         with:
           persist-credentials: false
       - name: Setup Python on fork runner
         if: github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name != github.repository
-        uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405  # pinned 2026-06-02
+        uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1  # pinned 2026-06-02
         with:
           python-version: ${{ matrix.python-version }}
       - name: Setup uv on fork runner
         if: github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name != github.repository
-        uses: astral-sh/setup-uv@fac544c07dec837d0ccb6301d7b5580bf5edae39  # pinned 2026-05-27
+        uses: astral-sh/setup-uv@11f9893b081a58869d3b5fccaea48c9e9e46f990  # pinned 2026-05-27
         with:
           version: ${{ env.UV_VERSION }}
           enable-cache: false
@@ -267,7 +267,7 @@ jobs:
       matrix:
         python-version: ['3.11', '3.12']
     steps:
-      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10  # v6 (pinned 2026-05-27)
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0  # v6 (pinned 2026-05-27)
         with:
           persist-credentials: false
       - name: Isolate user data and tool install on shared runner
@@ -285,12 +285,12 @@ jobs:
           echo "$scope/bin" >> "$GITHUB_PATH"
       - name: Setup Python on fork runner
         if: github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name != github.repository
-        uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405  # pinned 2026-06-02
+        uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1  # pinned 2026-06-02
         with:
           python-version: ${{ matrix.python-version }}
       - name: Setup uv on fork runner
         if: github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name != github.repository
-        uses: astral-sh/setup-uv@fac544c07dec837d0ccb6301d7b5580bf5edae39  # pinned 2026-05-27
+        uses: astral-sh/setup-uv@11f9893b081a58869d3b5fccaea48c9e9e46f990  # pinned 2026-05-27
         with:
           version: ${{ env.UV_VERSION }}
           enable-cache: false

@@ -22,10 +22,10 @@ jobs:
     runs-on: macos-latest
     timeout-minutes: 20
     steps:
-      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10  # v6 (pinned 2026-05-27)
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0  # v6 (pinned 2026-05-27)
         with:
           persist-credentials: false
-      - uses: astral-sh/setup-uv@fac544c07dec837d0ccb6301d7b5580bf5edae39  # pinned 2026-05-27
+      - uses: astral-sh/setup-uv@11f9893b081a58869d3b5fccaea48c9e9e46f990  # pinned 2026-05-27
         with:
           version: "0.11.21"
           python-version: '3.12'
@@ -65,10 +65,10 @@ jobs:
       id-token: write  # trusted publisher OIDC
       contents: read
     steps:
-      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10  # v6 (pinned 2026-05-27)
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0  # v6 (pinned 2026-05-27)
         with:
           fetch-depth: 0
-      - uses: astral-sh/setup-uv@fac544c07dec837d0ccb6301d7b5580bf5edae39  # pinned 2026-05-27
+      - uses: astral-sh/setup-uv@11f9893b081a58869d3b5fccaea48c9e9e46f990  # pinned 2026-05-27
         with:
           version: "0.11.21"
           python-version: '3.12'
@@ -208,10 +208,10 @@ jobs:
       - name: Wait for PyPI CDN propagation
         run: sleep 60  # PyPI index 同步需要 30-60s
       - name: Setup Python
-        uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405  # pinned 2026-06-02
+        uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1  # pinned 2026-06-02
         with:
           python-version: ${{ matrix.python }}
-      - uses: astral-sh/setup-uv@fac544c07dec837d0ccb6301d7b5580bf5edae39  # pinned 2026-05-27
+      - uses: astral-sh/setup-uv@11f9893b081a58869d3b5fccaea48c9e9e46f990  # pinned 2026-05-27
         with:
           version: "0.11.21"
           enable-cache: false
