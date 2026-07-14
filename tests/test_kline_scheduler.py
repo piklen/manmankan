@@ -595,15 +595,15 @@ def test_keyboard_interrupt_stops_scheduler_without_process_exit() -> None:
 
 
 def test_5500_jobs_do_not_create_per_job_threads() -> None:
-    before = {thread.ident for thread in threading.enumerate()}
-    scheduler = KlineScheduler([], supervisor_workers=3)
+    with KlineScheduler([], supervisor_workers=3) as scheduler:
+        supervisors = tuple(scheduler._supervisors)
+        results = scheduler.fetch_many((f"{index:06d}" for index in range(5500)), "20260101")
 
-    results = scheduler.fetch_many((f"{index:06d}" for index in range(5500)), "20260101")
-    after = [thread for thread in threading.enumerate() if thread.ident not in before]
-
-    assert len(results) == 5500
-    assert all(not result.succeeded for result in results.values())
-    assert len([thread for thread in after if thread.name.startswith("kan-supervisor-")]) == 3
+        assert len(results) == 5500
+        assert all(not result.succeeded for result in results.values())
+        assert len(supervisors) == 3
+        assert all(thread.is_alive() for thread in supervisors)
+        assert not hasattr(scheduler, "_jobs_threads")
 
 
 def test_close_is_idempotent_and_repeated_schedulers_do_not_leak_threads() -> None:

@@ -191,10 +191,19 @@ def test_live_uses_stderr_console_without_redirecting_stdout() -> None:
     clock = _Clock()
     stderr = _Stream(tty=True)
     stdout = io.StringIO()
+    console = Console(file=stderr, force_terminal=True)
+    lives: list[_FakeLive] = []
+
+    def live_factory(renderable: object, **kwargs: Any) -> _FakeLive:
+        live = _FakeLive(renderable, **kwargs)
+        lives.append(live)
+        return live
+
     reporter = RichOperationReporter(
-        console=Console(file=stderr, force_terminal=True),
+        console=console,
         clock=clock,
         show_after=0.0,
+        live_factory=live_factory,
     )
 
     with redirect_stdout(stdout), operation(
@@ -204,7 +213,15 @@ def test_live_uses_stderr_console_without_redirecting_stdout() -> None:
         op.phase("处理数据")
 
     assert stdout.getvalue() == ""
-    assert "输出隔离" in stderr.getvalue() or "处理数据" in stderr.getvalue()
+    assert len(lives) == 1
+    assert lives[0].kwargs["console"] is console
+    assert lives[0].kwargs["redirect_stdout"] is False
+    assert lives[0].kwargs["redirect_stderr"] is False
+    assert lives[0].started is True
+    assert lives[0].stopped is True
+    assert "输出隔离" in _plain(lives[0].renderables[-1]) or "处理数据" in _plain(
+        lives[0].renderables[-1]
+    )
 
 
 def test_renderer_exposes_wait_slow_and_stalled_states() -> None:

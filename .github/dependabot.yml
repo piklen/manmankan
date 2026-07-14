@@ -13,10 +13,14 @@ updates:
           - "mypy"
           - "pytest*"
           - "ruff"
-      python-runtime-patch:
+        update-types:
+          - "minor"
+          - "patch"
+      python-runtime-non-major:
         patterns:
           - "*"
         update-types:
+          - "minor"
           - "patch"
     ignore:
       - dependency-name: "pandas"
@@ -43,9 +47,12 @@ updates:
       day: "monday"
     open-pull-requests-limit: 3
     groups:
-      github-actions:
+      github-actions-non-major:
         patterns:
           - "*"
+        update-types:
+          - "minor"
+          - "patch"
     labels:
       - "dependencies"
       - "ci"

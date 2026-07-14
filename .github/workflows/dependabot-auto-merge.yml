@@ -16,6 +16,11 @@ jobs:
       github.event.workflow_run.event == 'pull_request' &&
       github.event.workflow_run.conclusion == 'success'
     steps:
+      - name: Checkout trusted policy
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0  # v7 (pinned 2026-07-14)
+        with:
+          ref: main
+          persist-credentials: false
       - name: Merge safe Dependabot updates
         env:
           GH_TOKEN: ${{ github.token }}
@@ -37,9 +42,6 @@ jobs:
           number="$(jq -r '.number' <<<"${pr_json}")"
           title="$(jq -r '.title' <<<"${pr_json}")"
           body="$(jq -r '.body // ""' <<<"${pr_json}")"
-          commit_message="$(gh api "repos/${REPO}/commits/${HEAD_SHA}" --jq '.commit.message')"
-          metadata="${body}"$'\n'"${commit_message}"
-
           echo "PR #${number}: ${title}"
 
           if ! checks_json="$(gh pr checks "${number}" --repo "${REPO}" --json name,state,bucket,workflow)"; then
@@ -57,43 +59,7 @@ jobs:
           fi
 
           allow="$(
-            TITLE="${title}" BODY="${metadata}" python - <<'PY'
-          import os
-          import re
-
-          title = os.environ["TITLE"]
-          body = os.environ["BODY"]
-
-          def title_is_semver_patch_or_minor() -> bool:
-              match = re.search(
-                  r"\bfrom v?(\d+)\.(\d+)\.(\d+) to v?(\d+)\.(\d+)\.(\d+)\b",
-                  title,
-              )
-              if not match:
-                  return False
-              old = tuple(int(part) for part in match.group(1, 2, 3))
-              new = tuple(int(part) for part in match.group(4, 5, 6))
-              return old[0] == new[0] and new > old
-
-          has_patch = "update-type: version-update:semver-patch" in body
-          has_minor = "update-type: version-update:semver-minor" in body
-          has_major = "update-type: version-update:semver-major" in body
-
-          allow_ci = title.startswith("chore(ci)(deps):") and title_is_semver_patch_or_minor()
-          allow_python_dev = (
-              "dependency-type: direct:development" in body
-              and not has_major
-              and (has_patch or has_minor)
-          )
-          allow_python_prod = (
-              "dependency-type: direct:production" in body
-              and not has_major
-              and not has_minor
-              and has_patch
-          )
-
-          print("true" if allow_ci or allow_python_dev or allow_python_prod else "false")
-          PY
+            TITLE="${title}" BODY="${body}" python scripts/dependabot_policy.py
           )"
 
           if [ "${allow}" != "true" ]; then
