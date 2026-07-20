@@ -85,6 +85,7 @@ def fetch(
             only_watchlist=only_watchlist,
             watchlist_group=group,
             all_stocks=all_stocks,
+            all_stocks_force=force,
         )
         pairs, _meta = resolve_stock_set_or_exit(stock_set)
         symbols = [code for code, _name in pairs]

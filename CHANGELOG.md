@@ -9,6 +9,18 @@ explicitly approves a larger bump.
 
 ## [Unreleased]
 
+### Changed
+
+- `--all` 股票池恢复字面全市场语义，保留主板、创业板、科创板、北交所和 ST；需要排除板块时继续使用命令已有的显式过滤项。
+- `kan trend --all` 新增 `--force/-f`，可强制重拉每日全市场截面缓存；每个网络请求等待期间持续显示确定进度，不再停留在“开始每日截面”。
+- TuShare 适配器只发送官方接口参数：`stock_basic(list_status=L)` 与 `stk_factor_pro(trade_date=...)`，不注入或消费兼容端点自定义的分页规则。
+
+### Fixed
+
+- 全市场股票列表和近期单日 K 线截面在落盘前执行完整性校验；明显不足的响应会返回 `tushare_data_contract_error` 并停止处理，不再缓存或把第一页冒充全市场。
+- `kan fetch --force --all` 现在会同时强制刷新全市场股票列表，避免强刷 K 线时仍沿用旧的部分股票池缓存。
+- `kan trend --all` 的新鲜度以最新截面日判断，不再把 31 日历史窗口的第一天误报为全市场截止日；新股、停牌等历史不足单独提示，不再误报为市场数据整体滞后。
+
 ## [0.0.6.9.10] - 2026-07-13
 
 ### Fixed

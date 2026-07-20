@@ -7,6 +7,7 @@ import pytest
 
 from kan.core.find_dsl import ConditionSet
 from kan.core.pipeline import StockSetResolveError
+from kan.data.tushare import TushareDataContractError
 from kan.service.find_service import (
     FindCrossSectionRequest,
     FindKlineRequest,
@@ -197,6 +198,25 @@ def test_cross_section_rejects_roe_before_fetch(monkeypatch) -> None:
 
     assert exc_info.value.code == "unsupported_all_filter"
     assert exc_info.value.exit_code == 2
+
+
+def test_cross_section_wraps_tushare_contract_failure(monkeypatch) -> None:
+    monkeypatch.setattr(
+        "kan.core.cross_section.run_cross_section",
+        lambda *_args, **_kwargs: (_ for _ in ()).throw(
+            TushareDataContractError("stock_basic", "仅返回 500 只")
+        ),
+    )
+
+    with pytest.raises(FindServiceError) as exc_info:
+        run_find_cross_section(FindCrossSectionRequest(
+            conditions=ConditionSet.from_flags(pe=["lt:20"]),
+            output=FindOutputProfile(mode="json"),
+        ))
+
+    assert exc_info.value.code == "tushare_data_contract_error"
+    assert "stock_basic" in exc_info.value.message
+    assert "官方请求语义" in str(exc_info.value.hint)
 
 
 def _enriched_with_rs(*, rs_index=None, rs_board=None):

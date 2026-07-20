@@ -10,6 +10,7 @@ from typing import TYPE_CHECKING
 
 from kan.core.find_registry import DIMENSIONS_UNSUPPORTED_IN_ALL, fields_need_kline
 from kan.core.pipeline import StockSetResolveError, run_data_pipeline
+from kan.data.tushare import TushareDataContractError
 from kan.service.find_service_data_gap import _any_rs, _find_data_gap
 from kan.service.find_service_metadata import (
     _condition_dimensions,
@@ -95,18 +96,29 @@ def run_find_cross_section(
     from kan.core.stock_set import AllStocksSet
 
     included_dimensions = _cross_section_dimensions(conditions, output=output)
-    cs = run_cross_section(
-        AllStocksSet(),
-        need_kline=(
-            conditions.has_kline_filters()
-            or (output.compact and output.compact_context)
-            or fields_need_kline(output.field_paths)
-        ),
-        kline_periods=kline_snapshot_periods(conditions),
-        included_dimensions=included_dimensions,
-        need_valuation_context=_cross_section_needs_valuation_context(output),
-        lifecycle=lifecycle,
-    )
+    try:
+        cs = run_cross_section(
+            AllStocksSet(),
+            need_kline=(
+                conditions.has_kline_filters()
+                or (output.compact and output.compact_context)
+                or fields_need_kline(output.field_paths)
+            ),
+            kline_periods=kline_snapshot_periods(conditions),
+            included_dimensions=included_dimensions,
+            need_valuation_context=_cross_section_needs_valuation_context(output),
+            lifecycle=lifecycle,
+        )
+    except TushareDataContractError as e:
+        raise FindServiceError(
+            code="tushare_data_contract_error",
+            message=f"全市场数据不完整：{e}",
+            hint=(
+                "manmankan 已按 Tushare 官方请求语义停止处理且未缓存该响应；"
+                "请检查当前配置的数据源是否完整兼容对应 Tushare 接口"
+            ),
+            exit_code=1,
+        ) from e
     if not cs.rows:
         raise FindServiceError(
             code="data_unavailable",

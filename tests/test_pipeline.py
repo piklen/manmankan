@@ -22,6 +22,7 @@ from kan.data.boards import (
     ThemeNotFoundError,
 )
 from kan.data.hot import HotListUnavailableError
+from kan.data.tushare import TushareDataContractError
 from kan.infra.lifecycle import CollectingReporter, LifecycleKind, operation
 
 # ─────────────── fake StockSet ───────────────
@@ -107,6 +108,25 @@ def test_resolve_stock_set_source_error_is_domain_error_without_printing(monkeyp
     assert exc_info.value.code == "theme_not_found"
     assert exc_info.value.exit_code == 2
     assert "我的题材" in exc_info.value.message
+
+
+def test_resolve_stock_set_surfaces_tushare_contract_failure(monkeypatch):
+    err_calls: list[str] = []
+    monkeypatch.setattr("kan.core.pipeline._print_err", err_calls.append)
+    stock_set = _FakeStockSet(
+        pairs_error=TushareDataContractError(
+            "stock_basic", "list_status=L 仅返回 500 只，低于完整 A 股市场校验下界 3000",
+        ),
+    )
+
+    with pytest.raises(typer.Exit) as exc_info:
+        pipeline.resolve_stock_set_or_exit(stock_set)
+
+    assert exc_info.value.exit_code == 1
+    assert len(err_calls) == 1
+    assert "stock_basic" in err_calls[0]
+    assert "500" in err_calls[0]
+    assert "未写入错误缓存" in err_calls[0]
 
 
 @pytest.mark.parametrize(("exc_cls", "expected_code", "msg_part"), [
@@ -523,6 +543,47 @@ def test_render_freshness_warning_stale_supersedes_intraday():
     msg = console.print.call_args.args[0]
     assert "当前缓存到" in msg  # stale 分支
     assert "盘中" not in msg  # 没走 intraday 分支
+
+
+def test_render_freshness_warning_separates_short_history_from_date_lag():
+    console = Mock()
+    expected = date(2026, 7, 20)
+    freshness = Freshness(
+        data_cutoff=expected,
+        min_cutoff=expected,
+        fetched_at="2026-07-21 01:12",
+        expected_cutoff=expected,
+        is_stale=True,
+        phase="post",
+        current_count=5528,
+        target_count=5528,
+        history_incomplete_count=3,
+        required_rows=31,
+    )
+
+    pipeline.render_freshness_warning(freshness, console)
+
+    msg = console.print.call_args.args[0]
+    assert "最新数据已到 07-20" in msg
+    assert "3 只股票可用历史不足 31 个交易日" in msg
+    assert "数据滞后" not in msg
+
+
+def test_render_freshness_warning_accepts_command_specific_refresh_hint():
+    console = Mock()
+    freshness = _make_freshness(
+        data_cutoff=date(2026, 7, 17),
+        expected_cutoff=date(2026, 7, 20),
+        is_stale=True,
+    )
+
+    pipeline.render_freshness_warning(
+        freshness,
+        console,
+        refresh_hint="kan trend --all --force",
+    )
+
+    assert "kan trend --all --force" in console.print.call_args.args[0]
 
 
 # ═══ run_data_pipeline (StockSet 单签名) ═══════════════════════════════

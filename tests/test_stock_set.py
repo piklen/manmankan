@@ -460,6 +460,19 @@ def test_all_stocks_set_lazy_load(monkeypatch):
     assert calls["n"] == 1, "重复调用走 cache · 不再 fetch"
 
 
+def test_all_stocks_set_can_force_universe_refresh(monkeypatch):
+    captured = {}
+
+    def fake_fetch(*, force=False):
+        captured["force"] = force
+        return [("600519", "贵州茅台")]
+
+    monkeypatch.setattr("kan.data.universe.fetch_all_stocks", fake_fetch)
+
+    assert AllStocksSet(force_refresh=True).codes() == ["600519"]
+    assert captured["force"] is True
+
+
 def test_all_stocks_set_meta_none():
     """AllStocksSet 无 meta (同 WatchlistSet · 全市场无 highlight/index_kline)。"""
     assert AllStocksSet(_pairs=[]).meta() is None
@@ -473,6 +486,12 @@ def test_all_stocks_set_len():
 def test_from_flags_all_stocks():
     s = from_flags(all_stocks=True)
     assert isinstance(s, AllStocksSet)
+
+
+def test_from_flags_all_stocks_force():
+    s = from_flags(all_stocks=True, all_stocks_force=True)
+    assert isinstance(s, AllStocksSet)
+    assert s.force_refresh is True
 
 
 def test_from_flags_only_holdings():

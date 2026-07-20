@@ -315,6 +315,54 @@ class TestFetchTushare:
         """未配 token → 直接 None，不发请求"""
         assert tushare._fetch_tushare("600519", "20260101") is None
 
+    def test_daily_bars_uses_official_trade_date_request(self, temp_env, monkeypatch):
+        config.save({**config.DEFAULT_CONFIG, "tushare_token": "tk"})
+        captured = {}
+
+        def fake_post(**kwargs):
+            captured["params"] = kwargs["params"]
+            return ({
+                "fields": [
+                    "ts_code", "trade_date", "open_qfq", "high_qfq",
+                    "low_qfq", "close_qfq", "vol", "amount",
+                ],
+                "items": [[
+                    "600519.SH", "20260720", 100.0, 102.0, 99.0, 101.0,
+                    1000.0, 10000.0,
+                ]],
+            }, None)
+
+        monkeypatch.setattr(tushare, "_post_tushare_api", fake_post)
+
+        df = tushare._fetch_tushare_daily_bars("20260720")
+
+        assert df is not None and len(df) == 1
+        assert captured["params"] == {"trade_date": "20260720"}
+
+    def test_daily_bars_does_not_auto_page_from_has_more(
+        self, temp_env, monkeypatch,
+    ):
+        config.save({**config.DEFAULT_CONFIG, "tushare_token": "tk"})
+        monkeypatch.setattr(
+            tushare,
+            "_post_tushare_api",
+            lambda **_kw: ({
+                "fields": [
+                    "ts_code", "trade_date", "open_qfq", "high_qfq",
+                    "low_qfq", "close_qfq", "vol", "amount",
+                ],
+                "items": [[
+                    "600519.SH", "20260720", 100.0, 102.0, 99.0, 101.0,
+                    1000.0, 10000.0,
+                ]],
+                "has_more": True,
+            }, None),
+        )
+
+        df = tushare._fetch_tushare_daily_bars("20260720")
+
+        assert df is not None and list(df["symbol"]) == ["600519"]
+
     def test_with_token_returns_dataframe(self, temp_env, monkeypatch):
         config.save({**config.DEFAULT_CONFIG, "tushare_token": "tk"})
 

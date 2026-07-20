@@ -29,7 +29,7 @@
 | `kan scan --only-holdings` | 只扫描真实持仓池 | 单独查看持仓位置 |
 | `kan scan --group <组名>` | 扫描指定分组 | 分组巡检 |
 | `kan scan --codes <代码列表>` | 扫描外部代码 | 临时查看一批候选 |
-| `kan scan --all` | 扫描 A 股全市场池 | 首次较慢；适合全市场位置坐标巡检 |
+| `kan scan --all` | 扫描完整 A 股市场池（含北交所 / ST） | 首次较慢；适合全市场位置坐标巡检 |
 | `kan scan --periods 5,20,60,180 --wide` | 自定义 2-360 周期并全量展示 | 避免窄屏只看到部分周期 |
 | `kan scan --compact` | 终端只展示短/中/长关键周期 | 控制终端 token 和横向宽度 |
 | `kan scan --industry <行业>` | 扫描申万行业成分股 | 行业维度扫描 |
@@ -96,7 +96,7 @@
 |------|------|------------|
 | `kan fetch` | 更新当前自选数据 | 每日首次使用前跑一次；默认摘要输出 |
 | `kan fetch 600519 000858` | 更新指定股票 | 新加入自选股后 |
-| `kan fetch --all` | 预拉全市场 K 线缓存 | 耗时较久；给 `scan/trend/low/high --all` 预热 |
+| `kan fetch --all` | 预拉完整 A 股市场 K 线缓存 | 耗时较久；给 `scan/trend/low/high --all` 预热；明显不完整的上游响应会停止且不缓存 |
 | `kan fetch --verbose` | 逐只输出拉取状态 | 排障时使用 |
 
 ---
