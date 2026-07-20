@@ -36,7 +36,7 @@ def test_fetch_kline_snapshot_builds_position_gain_and_up_days(monkeypatch, tmp_
     days = [date(2026, 5, 25) + timedelta(days=i) for i in range(6)]
     monkeypatch.setattr(kline_snapshot, "_recent_trade_dates", lambda _end, _count: days)
 
-    def fake_daily(td, *, symbols=None, force=False):
+    def fake_daily(td, *, symbols=None, force=False, minimum_rows=None):
         d = date.fromisoformat(f"{td[:4]}-{td[4:6]}-{td[6:]}")
         idx = days.index(d)
         return _daily(d, 100.0 + idx * 2)
@@ -121,7 +121,7 @@ def test_fetch_recent_daily_bars_merges_recent_dates_and_filters_symbols(monkeyp
     days = [date(2026, 5, 27) + timedelta(days=i) for i in range(3)]
     monkeypatch.setattr(kline_snapshot, "_recent_trade_dates", lambda _end, _count: days)
 
-    def fake_daily(td, *, symbols=None, force=False):
+    def fake_daily(td, *, symbols=None, force=False, minimum_rows=None):
         d = date.fromisoformat(f"{td[:4]}-{td[4:6]}-{td[6:]}")
         return pd.DataFrame([
             {
@@ -161,7 +161,7 @@ def test_fetch_recent_daily_bars_reports_progress(monkeypatch, tmp_path):
     days = [date(2026, 5, 28), date(2026, 5, 29)]
     monkeypatch.setattr(kline_snapshot, "_recent_trade_dates", lambda _end, _count: days)
 
-    def fake_daily(td, *, symbols=None, force=False):
+    def fake_daily(td, *, symbols=None, force=False, minimum_rows=None):
         d = date.fromisoformat(f"{td[:4]}-{td[4:6]}-{td[6:]}")
         return _daily(d, 100.0)
 
@@ -206,9 +206,9 @@ def test_fetch_recent_daily_bars_reports_real_stage_events(monkeypatch, tmp_path
         None,
         "解析交易日历",
         "交易日历就绪",
-        "开始每日截面",
+        "获取每日截面",
         "每日截面完成",
-        "开始每日截面",
+        "获取每日截面",
         "每日截面完成",
         "合并每日截面",
         "每日截面合并完成",
@@ -221,6 +221,9 @@ def test_fetch_recent_daily_bars_reports_real_stage_events(monkeypatch, tmp_path
     final_daily = reporter.events[6]
     assert final_daily.kind is LifecycleKind.PROGRESS
     assert (final_daily.completed, final_daily.total) == (2, 2)
+    waiting_daily = reporter.events[5]
+    assert waiting_daily.kind is LifecycleKind.PROGRESS
+    assert (waiting_daily.completed, waiting_daily.total) == (1, 2)
     assert reporter.events[7].kind is LifecycleKind.PHASE
     assert reporter.events[-1].state is OperationState.SUCCEEDED
 
@@ -243,6 +246,34 @@ def test_fetch_recent_daily_bars_empty_day_fails_operation(monkeypatch):
     assert all(event.message != "每日截面完成" for event in reporter.events)
 
 
+def test_fetch_daily_bars_rejects_incomplete_cross_section_before_cache(
+    monkeypatch, tmp_path,
+):
+    trade_day = date(2026, 7, 20)
+    monkeypatch.setattr(kline_snapshot, "DATA_DIR", tmp_path)
+    monkeypatch.setattr(kline_snapshot, "ensure_dirs", lambda: None)
+    monkeypatch.setattr(kline_snapshot, "_MIN_COMPLETE_DAILY_BARS", 2)
+    monkeypatch.setattr(
+        "kan.data.tushare._fetch_tushare_daily_bars",
+        lambda _td: _daily(trade_day, 100.0),
+    )
+
+    with pytest.raises(
+        kline_snapshot.TushareDataContractError,
+        match=r"仅返回 1 只.*校验下界 2",
+    ):
+        kline_snapshot.fetch_daily_bars("20260720", force=True)
+
+    assert not kline_snapshot._daily_cache_path("20260720").exists()
+
+
+def test_daily_completeness_floor_scales_with_known_universe(monkeypatch):
+    monkeypatch.setattr(kline_snapshot, "_MIN_COMPLETE_DAILY_BARS", 3)
+    monkeypatch.setattr(kline_snapshot, "_MIN_DAILY_UNIVERSE_COVERAGE", 0.9)
+
+    assert kline_snapshot._minimum_daily_rows([f"{code:06d}" for code in range(10)]) == 9
+
+
 def test_daily_panel_freshness_uses_cross_section_cache_only(monkeypatch, tmp_path):
     monkeypatch.setattr(kline_snapshot, "DATA_DIR", tmp_path)
     monkeypatch.setattr("kan.core.trading_calendar.market_phase", lambda: "post")
@@ -258,7 +289,7 @@ def test_daily_panel_freshness_uses_cross_section_cache_only(monkeypatch, tmp_pa
     panel = pd.concat([_daily(day, 100.0 + idx) for idx, day in enumerate(days)])
     timestamps = [1_780_000_000.0, 1_780_000_120.0]
     for day, timestamp in zip(days, timestamps, strict=True):
-        path = tmp_path / f"daily_bars_{day:%Y%m%d}.parquet"
+        path = kline_snapshot._daily_cache_path(day.strftime("%Y%m%d"))
         panel[panel["date"] == day].to_parquet(path)
         os.utime(path, (timestamp, timestamp))
 
@@ -276,4 +307,56 @@ def test_daily_panel_freshness_uses_cross_section_cache_only(monkeypatch, tmp_pa
     assert freshness.current_count == 1
     assert freshness.missing_count == 0
     assert freshness.history_incomplete_count == 0
+    assert freshness.is_stale is False
+
+
+def test_daily_panel_freshness_uses_panel_cutoff_not_history_window_start(
+    monkeypatch, tmp_path,
+):
+    """历史窗口第一天不能被误当成整个股票池的最旧截止日。"""
+    monkeypatch.setattr(kline_snapshot, "DATA_DIR", tmp_path)
+    monkeypatch.setattr("kan.core.trading_calendar.market_phase", lambda: "post")
+    days = [date(2026, 6, 5), date(2026, 7, 20)]
+    panel = pd.concat([_daily(day, 100.0 + idx) for idx, day in enumerate(days)])
+    for day in days:
+        kline_snapshot._daily_cache_path(day.strftime("%Y%m%d")).touch()
+
+    freshness = kline_snapshot.daily_panel_freshness(
+        panel,
+        symbols=["600519"],
+        expected_cutoff=days[-1],
+        required_rows=2,
+    )
+
+    assert freshness.data_cutoff == days[-1]
+    assert freshness.min_cutoff == days[-1]
+    assert freshness.current_count == 1
+    assert freshness.is_stale is False
+
+
+def test_daily_panel_freshness_does_not_treat_suspension_as_market_lag(
+    monkeypatch, tmp_path,
+):
+    monkeypatch.setattr(kline_snapshot, "DATA_DIR", tmp_path)
+    monkeypatch.setattr("kan.core.trading_calendar.market_phase", lambda: "post")
+    old_day = date(2026, 7, 17)
+    latest_day = date(2026, 7, 20)
+    active = _daily(old_day, 100.0)
+    active = pd.concat([active, _daily(latest_day, 101.0)])
+    suspended = _daily(old_day, 20.0).assign(symbol="000001")
+    panel = pd.concat([active, suspended], ignore_index=True)
+    for day in (old_day, latest_day):
+        kline_snapshot._daily_cache_path(day.strftime("%Y%m%d")).touch()
+
+    freshness = kline_snapshot.daily_panel_freshness(
+        panel,
+        symbols=["600519", "000001"],
+        expected_cutoff=latest_day,
+        required_rows=2,
+    )
+
+    assert freshness.data_cutoff == latest_day
+    assert freshness.min_cutoff == latest_day
+    assert freshness.current_count == 1
+    assert freshness.history_incomplete_count == 1
     assert freshness.is_stale is False

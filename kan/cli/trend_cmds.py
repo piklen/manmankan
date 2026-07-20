@@ -104,7 +104,11 @@ def _finish_trend(
                 f"\n  [dim]窄屏模式 · 显示近 {actual_latest}/{latest} 天"
                 " · 加宽终端可见全部[/dim]"
             )
-        render_freshness_warning(ctx.freshness, console)
+        render_freshness_warning(
+            ctx.freshness,
+            console,
+            refresh_hint=("kan trend --all --force" if all_stocks else "kan fetch --force"),
+        )
         console.print()
         if candle:
             console.print("[dim]  阳线阴线口径：收盘 > 开盘 = ▲ · 收盘 < 开盘 = ▼ · 平盘不断连续[/dim]")
@@ -154,6 +158,10 @@ def trend(
     all_stocks: Annotated[
         bool,
         typer.Option("--all", help="扫描 A 股全市场连续涨跌（约 5500 只；首次会补每日截面缓存）"),
+    ] = False,
+    force: Annotated[
+        bool,
+        typer.Option("--force", "-f", help="强制重拉每日截面缓存（仅与 --all 配合）"),
     ] = False,
     only_watchlist: Annotated[
         bool,
@@ -211,6 +219,9 @@ def trend(
             "   例: kan trend --all；或 kan trend --group <组名>"
         )
         raise typer.Exit(2)
+    if force and not all_stocks:
+        _print_err("❌ --force 目前仅用于 `kan trend --all --force`")
+        raise typer.Exit(2)
     watchlist_pairs = (
         [] if all_stocks else (
             _load_watchlist_pairs(group) if source_mode else _get_watchlist_pairs(group)
@@ -240,11 +251,13 @@ def trend(
         only_watchlist=only_watchlist,
         watchlist_group=group,
         all_stocks=all_stocks,
+        all_stocks_force=force,
     )
 
     if all_stocks:
         from kan.core.scanner_trend import TREND_STREAK_CAP, trend_batch_cross_section
         from kan.data.kline_snapshot import daily_panel_freshness, fetch_recent_daily_bars
+        from kan.data.tushare import TushareDataContractError
         from kan.infra.lifecycle import operation
 
         reporter = operation_reporter(console=status_console)
@@ -270,12 +283,25 @@ def trend(
             ) -> None:
                 del done, total, trade_day, row_count
 
-            panel = fetch_recent_daily_bars(
-                days,
-                symbols=symbols,
-                lifecycle=lifecycle,
-                on_progress=_legacy_daily_progress,
-            )
+            try:
+                panel = fetch_recent_daily_bars(
+                    days,
+                    symbols=symbols,
+                    force=force,
+                    lifecycle=lifecycle,
+                    on_progress=_legacy_daily_progress,
+                )
+            except TushareDataContractError as e:
+                lifecycle.fail(
+                    "全市场数据契约校验失败",
+                    api_name=e.api_name,
+                )
+                _print_err(
+                    f"❌ 全市场数据不完整：{e}\n"
+                    "   manmankan 已按 Tushare 官方请求语义停止处理，且未写入错误缓存\n"
+                    "   请检查当前配置的数据源是否完整兼容对应 Tushare 接口"
+                )
+                raise typer.Exit(1) from None
             lifecycle.phase("计算全市场连续涨跌", target_count=len(symbols))
             results = trend_batch_cross_section(
                 targets,

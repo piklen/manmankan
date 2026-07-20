@@ -99,6 +99,7 @@ default = true
 | `uv tool install` 慢 | Python 包下载慢 | 指定 PyPI 镜像 |
 | `kan find --codes ... --dry-run` 可用，但 `kan scan ...` 慢或失败 | 行情数据源网络 / 限流 / 本地代理 | 稍后重试，或检查代理 |
 | `kan find --all --pe ...` 报缺数据 | 需要 TuShare token 或积分权限 | 配置 TuShare token |
+| `--all` 报 `tushare_data_contract_error` | 配置的 TuShare endpoint 返回了明显不完整的全市场响应 | 切回官方 endpoint，或检查兼容 endpoint 的 TuShare 契约实现 |
 | `kan` 每次退出前卡在版本检查 | PyPI update check 慢 | 设置 `KAN_NO_UPDATE_CHECK=1` |
 
 默认情况下，`manmankan` 会尽量让公开行情源直连，避免系统代理把行情请求带偏。如果你的网络必须走代理才能访问数据源，可显式保留代理：

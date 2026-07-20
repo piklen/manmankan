@@ -26,6 +26,7 @@ from kan.data.boards import (
     ThemeNotFoundError,
 )
 from kan.data.hot import HotListUnavailableError
+from kan.data.tushare import TushareDataContractError
 from kan.infra.log import debug_log
 
 if TYPE_CHECKING:
@@ -143,6 +144,18 @@ def resolve_stock_set(
             exit_code=1,
             cause=e,
         ) from e
+    except TushareDataContractError as e:
+        debug_log(__name__, "tushare contract validation failed", e)
+        raise StockSetResolveError(
+            code="tushare_data_contract_error",
+            message=(
+                f"❌ 全市场数据不完整：{e}\n"
+                "   manmankan 已按 Tushare 官方请求语义停止处理，且未写入错误缓存\n"
+                "   请检查当前配置的数据源是否完整兼容对应 Tushare 接口"
+            ),
+            exit_code=1,
+            cause=e,
+        ) from e
 
 
 def resolve_stock_set_or_exit(
@@ -255,7 +268,12 @@ def freshness_of(symbols: Iterable[str], *, min_rows: int | None = None) -> Fres
 # ── 新鲜度警告渲染 ───────────────────────────────────────────────────
 
 
-def render_freshness_warning(freshness: Freshness, console: Any) -> None:
+def render_freshness_warning(
+    freshness: Freshness,
+    console: Any,
+    *,
+    refresh_hint: str = "kan fetch --force",
+) -> None:
     """在终端打 stale / 盘中 互斥警告。
 
     优先级互斥:if is_stale → 缓存滞后警告 · elif 盘中 → 实时状态警告 · else 静默。
@@ -268,8 +286,15 @@ def render_freshness_warning(freshness: Freshness, console: Any) -> None:
     from kan.core.trading_calendar import PHASE_INTRADAY
     from kan.infra.formatting import format_date_compact
 
-    if freshness.is_stale:
-        warning_cutoff = freshness.min_cutoff or freshness.data_cutoff
+    oldest_cutoff = freshness.min_cutoff or freshness.data_cutoff
+    latest_incomplete = (
+        freshness.data_cutoff is None
+        or freshness.missing_count > 0
+        or (oldest_cutoff is not None and oldest_cutoff != freshness.expected_cutoff)
+    )
+
+    if freshness.is_stale and latest_incomplete:
+        warning_cutoff = oldest_cutoff
         cutoff_str = (
             format_date_compact(warning_cutoff)
             if warning_cutoff else "无缓存"
@@ -282,7 +307,15 @@ def render_freshness_warning(freshness: Freshness, console: Any) -> None:
         console.print(
             f"\n  [bold yellow]⚠️ 当前缓存到 {cutoff_str} 收盘 · "
             f"最近交易日是 {expected_str} · 数据滞后 {days_behind} 天\n"
-            "   运行 `kan fetch --force` 拉取最新数据[/bold yellow]"
+            f"   运行 `{refresh_hint}` 拉取最新数据[/bold yellow]"
+        )
+    elif freshness.history_incomplete_count > 0:
+        console.print(
+            f"\n  [bold yellow]⚠️ 最新数据已到 "
+            f"{format_date_compact(freshness.expected_cutoff)} 收盘 · "
+            f"{freshness.history_incomplete_count} 只股票可用历史不足 "
+            f"{freshness.required_rows or '?'} 个交易日\n"
+            "   新股会自然缺少历史；连续天数按现有数据计算[/bold yellow]"
         )
     elif freshness.phase == PHASE_INTRADAY:
         console.print(

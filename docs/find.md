@@ -237,9 +237,13 @@ kan find --industry 半导体 --pos 20:lt:30 --sort pos_20:asc --limit 30 --form
 | `--theme` | 题材成分股;题材分类来自上游口径 |
 | `--hot rank\|surge` | 东方财富热榜 |
 | `--codes` | 外部传入代码池,不写入自选 |
-| `--all` | 在 `kan find` 中为全市场截面池；同名 selector 也可用于 `scan` / `trend` / `low` / `high` / `fetch` 的全市场 K 线池；逐股高成本维度不支持 |
+| `--all` | 在 `kan find` 中为完整上市 A 股截面池（含北交所 / ST）；同名 selector 也可用于 `scan` / `trend` / `low` / `high` / `fetch` 的全市场 K 线池；逐股高成本维度不支持 |
 
 ## 错误语义
+
+全市场接口若返回的股票数量明显不足，manmankan 会返回
+`tushare_data_contract_error`，停止处理且不写入该响应。这个错误表示当前配置的
+TuShare endpoint 没有完整实现官方接口语义，不等同于“没有股票符合筛选条件”。
 
 `--format json` 下业务错误返回机器可读 envelope:
 
@@ -264,6 +268,7 @@ kan find --industry 半导体 --pos 20:lt:30 --sort pos_20:asc --limit 30 --form
 | code | 含义 |
 |---|---|
 | `data_unavailable` | 该 filter 依赖的数据源在当前候选池不可用 |
+| `tushare_data_contract_error` | 当前配置的 TuShare endpoint 返回明显不完整或语义不一致的全市场响应；该响应不会写入缓存 |
 | `empty_intersection` | `--only-watchlist` 后候选池为空 |
 | `invalid_fields` | `--fields` 字段未知、为空、与 `--compact` 冲突,或当前模式不支持该维度 |
 | `invalid_compact_context` | `--no-compact-context` 未与 `--format json --compact` 一起使用 |

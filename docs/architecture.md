@@ -157,6 +157,7 @@ manmankan
 - **入口适配层**(`kan/web/`、`kan/cli/`、`kan/mcp/`)只做交互、参数校验和序列化,不复制业务计算
 - **服务层**（`kan/service/`）承载所有出口复用的业务事实,核心逻辑不与 FastAPI、typer 或 MCP 耦合
 - **数据层**（`kan/data/`）使用责任链模式——依次尝试多个 DataProvider，第一个成功即返回
+- **TuShare 兼容边界**:公开适配器只实现官方 TuShare 的请求与响应语义；用户配置的替代 endpoint 必须可替换地兼容该契约。仓库不加入某个中转服务专属的默认行数、分页或扩展字段逻辑；全市场响应会在缓存前做中立完整性校验，偏差作为数据契约错误暴露
 - **缓存层**（`kan/infra/`）基于 XDG 规范，增量更新策略
 - **快照隔离**:CLI diff/history 与 Web 每日概览使用独立命名空间;Web 只在全部候选到达正常交易日时按行情截止日写入版本化快照
 - **本地 Web 安全边界**:只监听回环地址;每次启动签发随机会话,页面导航保留会话参数、API 使用会话请求头、SSE 使用会话参数;写请求继续叠加 Host / Origin / 自定义头检查
@@ -197,4 +198,4 @@ manmankan
 
 ---
 
-*最后更新：2026-07-10 · 与 `README.md` / `roadmap.md` / `compliance.md` 互为补充*
+*最后更新：2026-07-21 · 与 `README.md` / `roadmap.md` / `compliance.md` 互为补充*

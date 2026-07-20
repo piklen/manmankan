@@ -12,6 +12,7 @@ from typer.testing import CliRunner
 from kan.cli import app
 from kan.core.models import PeriodResult, StockScanResult
 from kan.core.scanner import TrendResult
+from kan.data.tushare import TushareDataContractError
 from kan.infra.lifecycle import CollectingReporter, OperationState
 
 ALL_PAIRS = [("600519", "贵州茅台"), ("000858", "五粮液")]
@@ -286,6 +287,28 @@ def test_trend_all_empty_pool_has_specific_error(
 
     assert result.exit_code == 1
     assert "全市场股票池为空" in result.output
+
+
+def test_trend_all_surfaces_daily_contract_failure(
+    all_pool_runner: CliRunner,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(
+        "kan.data.kline_snapshot.fetch_recent_daily_bars",
+        lambda *_args, **_kwargs: (_ for _ in ()).throw(
+            TushareDataContractError(
+                "stk_factor_pro",
+                "trade_date=20260626 仅返回 200 只，低于全市场截面校验下界 3000",
+            )
+        ),
+    )
+
+    result = all_pool_runner.invoke(app, ["trend", "--all"])
+
+    assert result.exit_code == 1
+    assert "stk_factor_pro" in result.output
+    assert "仅返回 200 只" in " ".join(result.output.split())
+    assert "未写入错误缓存" in result.output
 
 
 def test_low_all_uses_all_stocks_pool(

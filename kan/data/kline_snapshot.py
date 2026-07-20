@@ -19,10 +19,12 @@ from collections.abc import Callable, Iterator
 from contextlib import contextmanager
 from datetime import date, datetime, timedelta
 from hashlib import sha1
+from math import ceil
 from pathlib import Path
 from typing import TYPE_CHECKING
 
 from kan.core.scanner import PERIODS, scan_stock
+from kan.data.tushare import TushareDataContractError
 from kan.infra.log import debug_log
 from kan.infra.numeric import to_numeric_checked
 from kan.storage.paths import DATA_DIR, atomic_write_parquet, ensure_dirs
@@ -37,6 +39,12 @@ _SYMBOL_PATTERN = re.compile(r"^\d{6}$")
 _TRADE_DATE_PATTERN = re.compile(r"^\d{8}$")
 _DAILY_TTL = 6 * 3600
 _SNAPSHOT_TTL = 6 * 3600
+_CACHE_SCHEMA_VERSION = 2
+"""v2 在落盘前校验全市场截面完整性；隔离旧版可能截断的缓存。"""
+_MIN_COMPLETE_DAILY_BARS = 3000
+"""近期待扫描 A 股单日截面的保守完整性下界。"""
+_MIN_DAILY_UNIVERSE_COVERAGE = 0.9
+"""已知全市场池存在时，单日截面至少覆盖其中 90%，为停牌 / 新股保留余量。"""
 
 DAILY_BAR_COLUMNS = ["symbol", "date", "open", "high", "low", "close", "volume", "amount"]
 
@@ -69,13 +77,18 @@ def _cache_fresh(path: Path, trade_date: str, ttl: float) -> bool:
 
 
 def _daily_cache_path(trade_date: str) -> Path:
-    return DATA_DIR / f"daily_bars_{_validate_trade_date(trade_date)}.parquet"
+    return DATA_DIR / (
+        f"daily_bars_v{_CACHE_SCHEMA_VERSION}_{_validate_trade_date(trade_date)}.parquet"
+    )
 
 
 def _snapshot_cache_path(trade_date: str, periods: list[int]) -> Path:
     raw = "-".join(map(str, sorted(set(periods))))
     key = raw if len(raw) <= 80 else sha1(raw.encode("ascii")).hexdigest()[:16]
-    return DATA_DIR / f"kline_snapshot_{_validate_trade_date(trade_date)}_{key}.parquet"
+    return DATA_DIR / (
+        f"kline_snapshot_v{_CACHE_SCHEMA_VERSION}_"
+        f"{_validate_trade_date(trade_date)}_{key}.parquet"
+    )
 
 
 @contextmanager
@@ -137,6 +150,41 @@ def _filter_symbols(df: pd.DataFrame, symbols: list[str] | None) -> pd.DataFrame
     return df[df["symbol"].isin(wanted)].reset_index(drop=True)
 
 
+def _minimum_daily_rows(symbols: list[str] | None) -> int:
+    universe_size = len(set(map(str, symbols or [])))
+    return max(
+        _MIN_COMPLETE_DAILY_BARS,
+        ceil(universe_size * _MIN_DAILY_UNIVERSE_COVERAGE),
+    )
+
+
+def _validate_daily_cross_section(
+    df: pd.DataFrame,
+    trade_date: str,
+    *,
+    minimum_rows: int | None = None,
+) -> None:
+    """在缓存边界验证近期全市场截面，拒绝把部分响应持久化。"""
+    row_count = df["symbol"].nunique() if "symbol" in df.columns else 0
+    required_rows = max(_MIN_COMPLETE_DAILY_BARS, minimum_rows or 0)
+    if row_count < required_rows:
+        raise TushareDataContractError(
+            "stk_factor_pro",
+            f"trade_date={trade_date} 仅返回 {row_count} 只，"
+            f"低于全市场截面校验下界 {required_rows}",
+        )
+    returned_dates = {
+        value.strftime("%Y%m%d")
+        for value in df["date"].dropna()
+        if isinstance(value, date)
+    }
+    if returned_dates != {trade_date}:
+        raise TushareDataContractError(
+            "stk_factor_pro",
+            f"请求 trade_date={trade_date}，归一化响应日期为 {sorted(returned_dates)!r}",
+        )
+
+
 def daily_panel_freshness(
     panel: pd.DataFrame,
     *,
@@ -150,28 +198,34 @@ def daily_panel_freshness(
 
     expected = expected_cutoff or latest_trade_date()
     symbol_list = list(dict.fromkeys(str(symbol) for symbol in symbols))
-    cached_dates: list[date] = []
+    symbol_cutoffs: dict[str, date] = {}
     cache_mtimes: list[float] = []
 
     if not panel.empty and "date" in panel.columns:
-        panel_dates = {value for value in panel["date"].dropna() if isinstance(value, date)}
+        relevant = panel.copy()
+        if "symbol" in relevant.columns:
+            relevant["symbol"] = relevant["symbol"].astype(str)
+            relevant = relevant[relevant["symbol"].isin(symbol_list)]
+            for symbol, group in relevant.groupby("symbol", sort=False):
+                dates = [value for value in group["date"].dropna() if isinstance(value, date)]
+                if dates:
+                    symbol_cutoffs[str(symbol)] = max(dates)
+        panel_dates = {
+            value for value in relevant["date"].dropna() if isinstance(value, date)
+        }
         for panel_date in panel_dates:
             cache = _daily_cache_path(panel_date.strftime("%Y%m%d"))
             if cache.exists():
-                cached_dates.append(panel_date)
                 cache_mtimes.append(cache.stat().st_mtime)
 
-    data_cutoff = max(cached_dates, default=None)
+    cutoffs = list(symbol_cutoffs.values())
+    data_cutoff = max(cutoffs, default=None)
     fetched_at = None
     if cache_mtimes:
         fetched_at = datetime.fromtimestamp(max(cache_mtimes)).strftime("%Y-%m-%d %H:%M")
 
-    cutoff_symbols: set[str] = set()
-    if data_cutoff is not None and not panel.empty:
-        cutoff_rows = panel[panel["date"] == data_cutoff]
-        cutoff_symbols = set(cutoff_rows["symbol"].astype(str))
-    current_count = sum(symbol in cutoff_symbols for symbol in symbol_list)
-    missing_count = len(symbol_list) - current_count
+    current_count = sum(symbol_cutoffs.get(symbol) == expected for symbol in symbol_list)
+    missing_count = sum(symbol not in symbol_cutoffs for symbol in symbol_list)
 
     minimum = required_rows if required_rows is not None and required_rows > 0 else None
     incomplete_count = 0
@@ -183,9 +237,11 @@ def daily_panel_freshness(
         data_cutoff=data_cutoff,
         fetched_at=fetched_at,
         expected_cutoff=expected,
-        is_stale=data_cutoff != expected or missing_count > 0 or incomplete_count > 0,
+        # 单日截面本身已通过完整响应契约落盘；停牌、未交易和新股没有当日 K 线
+        # 不等于数据源滞后。历史不足单独通过 history_incomplete_count 呈现。
+        is_stale=data_cutoff != expected or missing_count > 0,
         phase=market_phase(),
-        min_cutoff=min(cached_dates, default=None),
+        min_cutoff=data_cutoff,
         missing_count=missing_count,
         current_count=current_count,
         target_count=len(symbol_list),
@@ -199,6 +255,7 @@ def fetch_daily_bars(
     *,
     symbols: list[str] | None = None,
     force: bool = False,
+    minimum_rows: int | None = None,
 ) -> pd.DataFrame:
     """按交易日拉全市场 daily OHLC 截面 · parquet 缓存后按 symbols 过滤。"""
     from kan.data.tushare import _fetch_tushare_daily_bars
@@ -209,12 +266,22 @@ def fetch_daily_bars(
     if not force and _cache_fresh(cache, td, _DAILY_TTL):
         cached = _load_cache(cache)
         if cached is not None:
-            return _filter_symbols(cached, symbols)
+            try:
+                _validate_daily_cross_section(
+                    cached,
+                    td,
+                    minimum_rows=minimum_rows,
+                )
+            except TushareDataContractError as exc:
+                debug_log(__name__, f"忽略不完整截面缓存: {cache.name}", exc)
+            else:
+                return _filter_symbols(cached, symbols)
 
     raw = _fetch_tushare_daily_bars(td)
     if raw is None or raw.empty:
         return _empty_daily_df()
     df = _normalize_daily_bars(raw)
+    _validate_daily_cross_section(df, td, minimum_rows=minimum_rows)
     atomic_write_parquet(df, cache)
     return _filter_symbols(df, symbols)
 
@@ -278,11 +345,23 @@ def fetch_recent_daily_bars(
 
         frames: list[pd.DataFrame] = []
         total = len(dates)
+        minimum_rows = _minimum_daily_rows(symbols)
         for idx, trade_day in enumerate(dates, start=1):
             if active is not None:
-                active.phase("开始每日截面", trade_date=trade_day.isoformat())
+                # 请求期间保持可见的确定进度；phase 会覆盖刚完成的 n/total，导致用户
+                # 在最慢的网络等待阶段只能看到一句“开始每日截面”。
+                active.progress(
+                    idx - 1,
+                    total,
+                    "获取每日截面",
+                    trade_date=trade_day.isoformat(),
+                )
             try:
-                daily = fetch_daily_bars(trade_day.strftime("%Y%m%d"), force=force)
+                daily = fetch_daily_bars(
+                    trade_day.strftime("%Y%m%d"),
+                    force=force,
+                    minimum_rows=minimum_rows,
+                )
                 if daily.empty:
                     raise RuntimeError(f"交易日 {trade_day:%Y-%m-%d} 的日线截面为空")
             except Exception as exc:
@@ -451,10 +530,15 @@ def _fetch_kline_snapshot_impl(
     dates = _recent_trade_dates(end, max_period + 1)
     frames: list[pd.DataFrame] = []
     total = len(dates)
+    minimum_rows = _minimum_daily_rows(symbols)
     if lifecycle is not None:
         lifecycle.phase("获取 K 线每日截面", total_days=total)
     for completed, d in enumerate(dates, start=1):
-        daily = fetch_daily_bars(d.strftime("%Y%m%d"), force=force)
+        daily = fetch_daily_bars(
+            d.strftime("%Y%m%d"),
+            force=force,
+            minimum_rows=minimum_rows,
+        )
         if not daily.empty:
             frames.append(daily)
         if lifecycle is not None:

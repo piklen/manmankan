@@ -119,16 +119,21 @@ class WatchlistHoldingsSet:
 
 @dataclass
 class AllStocksSet:
-    """A 股全市场集合 · tushare stock_basic 全部上市股 (排北交所 · 含 ST)。"""
+    """A 股全市场集合 · tushare stock_basic 全部上市股（含北交所 / ST）。"""
 
     name: str = "A股全市场"
     _pairs: list[tuple[str, str]] | None = None
+    force_refresh: bool = False
 
     def _resolve(self) -> list[tuple[str, str]]:
         if self._pairs is None:
             from kan.data.universe import fetch_all_stocks
 
-            self._pairs = fetch_all_stocks()
+            self._pairs = (
+                fetch_all_stocks(force=True)
+                if self.force_refresh
+                else fetch_all_stocks()
+            )
         return self._pairs
 
     def codes(self) -> list[str]:

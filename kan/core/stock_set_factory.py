@@ -25,6 +25,7 @@ def from_flags(
     only_watchlist: bool = False,
     watchlist_group: str | None = None,
     all_stocks: bool = False,
+    all_stocks_force: bool = False,
     only_holdings: bool = False,
 ) -> StockSet:
     """从 CLI flags 构造对应 StockSet (一类 factory)。
@@ -48,7 +49,7 @@ def from_flags(
                 "all_stocks 与 industry / hot / theme / only_watchlist / "
                 "only_holdings / group 互斥 · 同时只能指定一个池"
             )
-        return AllStocksSet()
+        return AllStocksSet(force_refresh=all_stocks_force)
     if only_holdings:
         if watchlist_group is not None or any(x is not None for x in (industry, hot, theme)):
             raise ValueError(

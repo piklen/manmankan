@@ -598,6 +598,15 @@ _DAILY_BARS_FIELDS = "ts_code,trade_date,open_qfq,high_qfq,low_qfq,close_qfq,vol
 """stk_factor_pro 按交易日拉全市场前复权日 K 字段 · 供 --all K 线类 filter 的批量预计算缓存。"""
 
 
+class TushareDataContractError(RuntimeError):
+    """配置的数据源返回了不符合 Tushare 接口语义的数据。"""
+
+    def __init__(self, api_name: str, detail: str) -> None:
+        self.api_name = api_name
+        self.detail = detail
+        super().__init__(f"{api_name} 数据契约校验失败：{detail}")
+
+
 def _to_daily_bars_df(data: dict | None) -> pd.DataFrame | None:
     """TuShare stk_factor_pro(trade_date=...) data 块 → 标准日 K 截面 DataFrame。"""
     import pandas as pd
@@ -637,6 +646,8 @@ def _fetch_tushare_daily_bars(trade_date: str) -> pd.DataFrame | None:
             endpoint=endpoint,
             token=token,
             api_name="stk_factor_pro",
+            # 与 Tushare 官方 Python SDK 保持同一语义：按 trade_date 取单日截面，
+            # 不根据响应 has_more 自动追加请求；完整性由调用方按 A 股领域约束校验。
             params={"trade_date": trade_date},
             fields=_DAILY_BARS_FIELDS,
         )
@@ -647,8 +658,17 @@ def _fetch_tushare_daily_bars(trade_date: str) -> pd.DataFrame | None:
         if df is None or df.empty:
             cb.record("tushare_daily_bars", ok=False)
             return None
+        returned_dates = set(df["date"].astype(str).str.strip())
+        if returned_dates != {trade_date}:
+            raise TushareDataContractError(
+                "stk_factor_pro",
+                f"请求 trade_date={trade_date}，响应日期为 {sorted(returned_dates)!r}",
+            )
         cb.record("tushare_daily_bars", ok=True)
         return df
+    except TushareDataContractError:
+        # 契约偏差不是瞬时网络故障，不能被 fallback / 熔断吞掉。
+        raise
     except Exception as e:
         debug_log(__name__, "fetch tushare daily bars 失败", e)
         cb.record("tushare_daily_bars", ok=False)
