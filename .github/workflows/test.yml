@@ -28,7 +28,7 @@ jobs:
     runs-on: ${{ fromJSON(github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name != github.repository && '["ubuntu-latest"]' || '["self-hosted","manmankan-ci","hkg-vps"]') }}
     timeout-minutes: 20
     steps:
-      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0  # v6 (pinned 2026-05-27)
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v6 (pinned 2026-05-27)
         with:
           persist-credentials: false
       - name: Setup Python on fork runner
@@ -106,7 +106,7 @@ jobs:
     runs-on: ${{ fromJSON(github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name != github.repository && '["ubuntu-latest"]' || '["self-hosted","manmankan-ci"]') }}
     timeout-minutes: 10
     steps:
-      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0  # v6 (pinned 2026-05-27)
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v6 (pinned 2026-05-27)
         with:
           persist-credentials: false
       - name: Privacy / public archive scan
@@ -124,7 +124,7 @@ jobs:
       matrix:
         python-version: ['3.11', '3.12']
     steps:
-      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0  # v6 (pinned 2026-05-27)
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v6 (pinned 2026-05-27)
         with:
           fetch-depth: 0  # diff-cover 需要 base 分支历史做新代码覆盖率对比
           persist-credentials: false
@@ -180,7 +180,7 @@ jobs:
       matrix:
         python-version: ['3.11', '3.12']
     steps:
-      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0  # v6 (pinned 2026-05-27)
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v6 (pinned 2026-05-27)
         with:
           persist-credentials: false
       - name: Setup Python on fork runner
@@ -267,7 +267,7 @@ jobs:
       matrix:
         python-version: ['3.11', '3.12']
     steps:
-      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0  # v6 (pinned 2026-05-27)
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v6 (pinned 2026-05-27)
         with:
           persist-credentials: false
       - name: Isolate user data and tool install on shared runner
