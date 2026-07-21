@@ -483,7 +483,7 @@ def test_index_page_unavailable_is_neutral(monkeypatch) -> None:
 
     assert response.status_code == 200
     assert "暂时无法读取本地行情" in response.text
-    assert "本地缓存暂无可展示数据" in response.text
+    assert "还没有数据" in response.text
 
 
 def test_api_index_returns_reference_rows(monkeypatch) -> None:

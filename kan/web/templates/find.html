@@ -125,7 +125,7 @@
       </thead>
       <tbody>
         <template x-for="row in (result ? result.rows : [])" :key="row.code">
-          <tr>
+          <tr @click="window.location.href = kanSessionUrl(`/stock/${row.code}`)" style="cursor:pointer;">
             <td x-text="row.code"></td>
             <td><a class="stock-link" :href="kanSessionUrl(`/stock/${row.code}`)" x-text="row.name"></a></td>
             <td x-text="formatPrice(row.price)"></td>

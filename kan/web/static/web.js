@@ -1,3 +1,85 @@
+// 主题切换
+function kanToggleTheme() {
+  const html = document.documentElement;
+  const isDark = html.getAttribute("data-theme") === "dark";
+  if (isDark) {
+    html.removeAttribute("data-theme");
+    localStorage.setItem("kan-theme", "light");
+  } else {
+    html.setAttribute("data-theme", "dark");
+    localStorage.setItem("kan-theme", "dark");
+  }
+}
+
+// 全局键盘快捷键
+document.addEventListener("keydown", function(e) {
+  // 输入框内不触发
+  if (e.target.tagName === "INPUT" || e.target.tagName === "TEXTAREA" || e.target.tagName === "SELECT") return;
+  const path = window.location.pathname;
+  if (e.key === "d" || e.key === "D") {
+    // D = 切换深色模式
+    kanToggleTheme();
+  } else if (e.key === "1") {
+    window.location.href = kanSessionUrl("/");
+  } else if (e.key === "2") {
+    window.location.href = kanSessionUrl("/find");
+  } else if (e.key === "3") {
+    window.location.href = kanSessionUrl("/hold");
+  } else if (e.key === "4") {
+    window.location.href = kanSessionUrl("/settings");
+  } else if (e.key === "r" || e.key === "R") {
+    // R = 刷新数据（仅首页）
+    if (path === "/") {
+      const btn = document.querySelector("[x-data] button.primary");
+      if (btn && !btn.disabled) btn.click();
+    }
+  } else if (e.key === "/") {
+    // / = 聚焦添加自选输入框
+    e.preventDefault();
+    const input = document.getElementById("watchlist-codes");
+    if (input) input.focus();
+  }
+});
+
+// 最近浏览记录（localStorage，最多 8 只）
+var kanRecent = {
+  KEY: "kan-recent-stocks",
+  get: function() {
+    try { return JSON.parse(localStorage.getItem(this.KEY) || "[]"); } catch(_) { return []; }
+  },
+  add: function(code, name) {
+    var list = this.get().filter(function(item) { return item.code !== code; });
+    list.unshift({ code: code, name: name || code, time: Date.now() });
+    if (list.length > 8) list = list.slice(0, 8);
+    localStorage.setItem(this.KEY, JSON.stringify(list));
+  },
+};
+
+// 轻量 toast 通知
+function kanToast(message, type) {
+  var container = document.getElementById("kan-toast-container");
+  if (!container) {
+    container = document.createElement("div");
+    container.id = "kan-toast-container";
+    container.style.cssText = "position:fixed;top:16px;right:16px;z-index:9999;display:grid;gap:8px;pointer-events:none;";
+    document.body.appendChild(container);
+  }
+  var toast = document.createElement("div");
+  var bg = type === "error" ? "var(--high)" : "var(--accent)";
+  toast.style.cssText = "padding:10px 16px;border-radius:8px;background:" + bg + ";color:#fff;font-size:14px;box-shadow:0 4px 12px rgba(0,0,0,.15);opacity:0;transform:translateX(20px);transition:all .3s ease;max-width:320px;";
+  toast.textContent = message;
+  container.appendChild(toast);
+  requestAnimationFrame(function() {
+    toast.style.opacity = "1";
+    toast.style.transform = "translateX(0)";
+  });
+  setTimeout(function() {
+    toast.style.opacity = "0";
+    toast.style.transform = "translateX(20px)";
+    setTimeout(function() { toast.remove(); }, 300);
+  }, 3000);
+}
+
 function kanScanDesk(initialScan) {
   return {
     scan: initialScan,
@@ -16,7 +98,9 @@ function kanScanDesk(initialScan) {
     eventSource: null,
     addCodes: "",
     watchlistMessage: "",
+    recentStocks: [],
     init() {
+      this.recentStocks = kanRecent.get();
       this.loadIndex();
       window.addEventListener("resize", () => {
         if (this.chart) this.chart.resize();
@@ -91,9 +175,14 @@ function kanScanDesk(initialScan) {
       }
     },
     renderHeatmap() {
-      if (this.activeTab !== "heatmap" || !window.echarts) return;
+      if (this.activeTab !== "heatmap") return;
       const el = document.getElementById("scan-heatmap");
       if (!el) return;
+      kanLoadEcharts().then(() => {
+        this._doRenderHeatmap(el);
+      });
+    },
+    _doRenderHeatmap(el) {
       if (this.heatmapPage >= this.heatmapPageCount) this.heatmapPage = this.heatmapPageCount - 1;
       const start = this.heatmapPage * this.heatmapPageSize;
       const rows = this.sortedRows.slice(start, start + this.heatmapPageSize);
@@ -198,6 +287,7 @@ function kanScanDesk(initialScan) {
           this.fetchMessage = reloaded
             ? (data.stage || "更新完成")
             : `${data.stage || "更新完成"} · 页面刷新失败，请手动刷新`;
+          kanToast(reloaded ? "数据更新完成" : "更新完成，请手动刷新页面");
         }
         if (data.status === "partial") {
           this.eventSource.close();
@@ -205,11 +295,13 @@ function kanScanDesk(initialScan) {
           this.fetching = false;
           const message = data.error || data.stage || "部分股票未更新 · 可重试";
           this.fetchMessage = reloaded ? message : `${message} · 请手动刷新页面`;
+          kanToast(message, "error");
         }
         if (data.status === "error") {
           this.eventSource.close();
           this.fetching = false;
           this.fetchMessage = data.error || "数据不可用";
+          kanToast(data.error || "数据更新失败", "error");
         }
       });
       this.eventSource.onerror = () => {
@@ -244,13 +336,16 @@ function kanScanDesk(initialScan) {
         const payload = await response.json();
         if (!response.ok) {
           this.watchlistMessage = payload.detail || "添加失败";
+          kanToast(payload.detail || "添加失败", "error");
           return;
         }
         this.addCodes = "";
         this.watchlistMessage = `${(payload.messages || []).join(" · ") || "已添加"} · 正在更新行情`;
+        kanToast((payload.messages || []).join(" · ") || "已添加自选");
         await this.startFetch();
       } catch (_error) {
         this.watchlistMessage = "添加失败";
+        kanToast("添加失败", "error");
       }
     },
     async removeWatchlist(code) {
@@ -264,12 +359,15 @@ function kanScanDesk(initialScan) {
         const payload = await response.json();
         if (!response.ok) {
           this.watchlistMessage = payload.detail || "移除失败";
+          kanToast(payload.detail || "移除失败", "error");
           return;
         }
         this.watchlistMessage = payload.message || "已移除";
+        kanToast(payload.message || `已移除 ${code}`);
         await this.reloadScan();
       } catch (_error) {
         this.watchlistMessage = "移除失败";
+        kanToast("移除失败", "error");
       }
     },
   };
@@ -284,6 +382,33 @@ function kanHoldPage(initialHold) {
     editingCode: null,
     saving: false,
     message: "",
+    pieChart: null,
+    renderPie() {
+      const el = document.getElementById("hold-pie");
+      if (!el || this.hold.rows.length < 2) return;
+      kanLoadEcharts().then(() => {
+        if (!this.pieChart) this.pieChart = echarts.init(el);
+        const data = this.hold.rows.map((row) => ({
+          name: `${row.name} ${row.code}`,
+          value: row.market_value || 0,
+        }));
+        if (this.hold.account.cash > 0) {
+          data.push({ name: "现金", value: this.hold.account.cash });
+        }
+        this.pieChart.setOption({
+          tooltip: { trigger: "item", formatter: "{b}: {c} ({d}%)" },
+          series: [{
+            type: "pie",
+            radius: ["40%", "70%"],
+            avoidLabelOverlap: true,
+            itemStyle: { borderRadius: 6, borderColor: "var(--panel)", borderWidth: 2 },
+            label: { show: true, fontSize: 12 },
+            data,
+          }],
+        });
+        this.pieChart.resize();
+      });
+    },
     formatMoney(value) {
       if (this.masked && value !== null) return "***";
       return value === null ? "—" : Number(value).toLocaleString("zh-CN", {
@@ -462,6 +587,8 @@ function kanStockPage(info) {
     historyReady: false,
     historyMessage: "该周期暂无足够历史 · 可切换周期，或在不同交易日多次更新数据后再看",
     init() {
+      // 记录最近浏览
+      kanRecent.add(info.code, info.name);
       this.loadHistory();
       window.addEventListener("resize", () => {
         if (this.chart) this.chart.resize();
@@ -494,21 +621,23 @@ function kanStockPage(info) {
     },
     renderHistory(series) {
       const el = document.getElementById("history-chart");
-      if (!el || !window.echarts) return;
-      if (!this.chart) this.chart = echarts.init(el);
-      this.chart.setOption({
-        grid: { left: 48, right: 24, top: 24, bottom: 40 },
-        tooltip: { trigger: "axis" },
-        xAxis: { type: "category", data: series.map((item) => item.date) },
-        yAxis: { type: "value", min: 0, max: 100, axisLabel: { formatter: "{value}%" } },
-        series: [{
-          type: "line",
-          smooth: false,
-          showSymbol: false,
-          data: series.map((item) => item.position_pct),
-        }],
+      if (!el) return;
+      kanLoadEcharts().then(() => {
+        if (!this.chart) this.chart = echarts.init(el);
+        this.chart.setOption({
+          grid: { left: 48, right: 24, top: 24, bottom: 40 },
+          tooltip: { trigger: "axis" },
+          xAxis: { type: "category", data: series.map((item) => item.date) },
+          yAxis: { type: "value", min: 0, max: 100, axisLabel: { formatter: "{value}%" } },
+          series: [{
+            type: "line",
+            smooth: false,
+            showSymbol: false,
+            data: series.map((item) => item.position_pct),
+          }],
+        });
+        this.chart.resize();
       });
-      this.chart.resize();
     },
   };
 }
