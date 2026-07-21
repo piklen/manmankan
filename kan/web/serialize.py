@@ -39,7 +39,16 @@ def serialize_scan(result: ScanServiceResult) -> dict[str, Any]:
     })
     rows: list[dict[str, Any]] = []
     heatmap: list[dict[str, Any]] = []
+    limit_up_count = 0
+    limit_down_count = 0
+    up_streak_count = 0
     for row in result.results:
+        if row.limit_up:
+            limit_up_count += 1
+        if row.limit_down:
+            limit_down_count += 1
+        if row.up_days >= 3:
+            up_streak_count += 1
         item: dict[str, Any] = {
             "code": row.symbol,
             "name": row.name.replace(" ", ""),
@@ -76,6 +85,11 @@ def serialize_scan(result: ScanServiceResult) -> dict[str, Any]:
             "expected_cutoff": _date_text(result.ctx.freshness.expected_cutoff),
             "fetched_at": result.ctx.freshness.fetched_at,
             "stale": result.ctx.freshness.is_stale,
+        },
+        "pool_summary": {
+            "limit_up": limit_up_count,
+            "limit_down": limit_down_count,
+            "up_streak_3": up_streak_count,
         },
         "freshness": _freshness_payload(result),
         "rows": rows,
