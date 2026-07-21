@@ -165,5 +165,25 @@ function kanFindPage() {
     openStock(code) {
       window.location.href = kanSessionUrl(`/stock/${code}`);
     },
+    async addToWatchlist(code) {
+      const row = this.result.rows.find((r) => r.code === code);
+      if (!row || row._added) return;
+      try {
+        const response = await kanFetch("/api/watchlist", {
+          method: "POST",
+          headers: { "Content-Type": "application/json", "X-Kan-Web": "1" },
+          body: JSON.stringify({ codes: code }),
+        });
+        if (response.ok) {
+          row._added = true;
+          kanToast(`${row.name} 已加入自选`);
+        } else {
+          const payload = await response.json();
+          kanToast(payload.detail || "添加失败", "error");
+        }
+      } catch (_error) {
+        kanToast("添加失败", "error");
+      }
+    },
   };
 }
