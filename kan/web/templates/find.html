@@ -109,6 +109,11 @@
     <div class="empty">没有符合条件的股票</div>
   </template>
 
+  <div x-show="result && result.rows.length > 0" class="toolbar">
+    <span class="meta" x-text="`共 ${result ? result.rows.length : 0} 只符合条件`"></span>
+    <button type="button" @click="addAllToWatchlist()" x-text="batchMsg"></button>
+  </div>
+
   <div x-show="result && result.rows.length > 0" class="table-wrap find-results-table">
     <table>
       <thead>

@@ -8,6 +8,7 @@ function kanFindPage() {
     copyMessage: "",
     result: null,
     nextId: 1,
+    batchMsg: "全部加入自选",
     get resultPeriods() {
       return this.result ? this.result.periods : [];
     },
@@ -183,6 +184,30 @@ function kanFindPage() {
         }
       } catch (_error) {
         kanToast("添加失败", "error");
+      }
+    },
+    async addAllToWatchlist() {
+      if (!this.result || this.result.rows.length === 0) return;
+      const codes = this.result.rows.map((r) => r.code).join(",");
+      this.batchMsg = "添加中";
+      try {
+        const response = await kanFetch("/api/watchlist", {
+          method: "POST",
+          headers: { "Content-Type": "application/json", "X-Kan-Web": "1" },
+          body: JSON.stringify({ codes }),
+        });
+        if (response.ok) {
+          this.result.rows.forEach((r) => { r._added = true; });
+          this.batchMsg = "已全部加入 ✓";
+          kanToast(`${this.result.rows.length} 只股票已加入自选`);
+        } else {
+          const payload = await response.json();
+          this.batchMsg = "全部加入自选";
+          kanToast(payload.detail || "批量添加失败", "error");
+        }
+      } catch (_error) {
+        this.batchMsg = "全部加入自选";
+        kanToast("批量添加失败", "error");
       }
     },
   };
