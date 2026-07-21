@@ -977,6 +977,7 @@
         {% if phase %}
         <span class="phase-badge phase-{{ 'intraday' if phase == '盘中' else 'closed' }}">{{ phase }}</span>
         {% endif %}
+        <button type="button" class="theme-toggle" onclick="kanShowShortcuts()" aria-label="键盘快捷键帮助" title="键盘快捷键（?）">?</button>
         <button type="button" class="theme-toggle" onclick="kanToggleTheme()" aria-label="切换深色/浅色模式" title="切换深色/浅色模式">
           <span class="theme-icon-light">🌙</span>
           <span class="theme-icon-dark">☀️</span>
