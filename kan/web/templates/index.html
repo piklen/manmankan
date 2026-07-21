@@ -26,7 +26,10 @@
       <strong x-text="scan.freshness.title">{{ scan.freshness.title }}</strong>
       <div class="meta" x-text="scan.freshness.detail">{{ scan.freshness.detail }}</div>
     </div>
-    <span class="meta" aria-live="polite" x-text="fetchMessage"></span>
+    <div class="status-line">
+      <span class="meta" x-show="scan.stats.fetched_at" x-text="`更新于 ${scan.stats.fetched_at}`"></span>
+      <span class="meta" aria-live="polite" x-text="fetchMessage"></span>
+    </div>
   </div>
 
   <div class="summary-grid daily-summary" aria-label="今日概览">
