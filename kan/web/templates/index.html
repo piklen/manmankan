@@ -216,7 +216,12 @@
             </td>
             <td x-text="formatPrice(row.price)"></td>
             {% for p in scan.periods %}
-              <td :class="periodClass(row, {{ p }})" x-text="formatPct(periodPct(row, {{ p }}))"></td>
+              <td :class="periodClass(row, {{ p }})">
+                <span x-text="formatPct(periodPct(row, {{ p }}))"></span>
+                <span class="cell-bar" x-show="periodPct(row, {{ p }}) !== null">
+                  <span class="cell-bar-fill" :class="periodPct(row, {{ p }}) <= 20 ? 'bar-low' : periodPct(row, {{ p }}) >= 80 ? 'bar-high' : 'bar-mid'" :style="`width:${periodPct(row, {{ p }})}%`"></span>
+                </span>
+              </td>
             {% endfor %}
             <td x-text="'×' + resonance(row)"></td>
             <td>
