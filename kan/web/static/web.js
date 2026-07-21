@@ -38,8 +38,36 @@ document.addEventListener("keydown", function(e) {
     e.preventDefault();
     const input = document.getElementById("watchlist-codes");
     if (input) input.focus();
+  } else if (e.key === "?") {
+    // ? = 显示快捷键帮助
+    kanShowShortcuts();
+  } else if (e.key === "Escape") {
+    var overlay = document.getElementById("kan-shortcuts-overlay");
+    if (overlay) overlay.remove();
   }
 });
+
+function kanShowShortcuts() {
+  var existing = document.getElementById("kan-shortcuts-overlay");
+  if (existing) { existing.remove(); return; }
+  var overlay = document.createElement("div");
+  overlay.id = "kan-shortcuts-overlay";
+  overlay.style.cssText = "position:fixed;inset:0;z-index:9999;display:flex;align-items:center;justify-content:center;background:rgba(0,0,0,.5);backdrop-filter:blur(2px);";
+  overlay.innerHTML = '<div style="background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:24px 28px;max-width:360px;width:90%;box-shadow:var(--shadow-lg);">' +
+    '<strong style="font-size:16px;">键盘快捷键</strong>' +
+    '<table style="width:100%;margin-top:14px;border-collapse:collapse;font-size:14px;">' +
+    '<tr><td style="padding:6px 0;color:var(--muted);">1 / 2 / 3 / 4</td><td>切换页面</td></tr>' +
+    '<tr><td style="padding:6px 0;color:var(--muted);">D</td><td>切换深色模式</td></tr>' +
+    '<tr><td style="padding:6px 0;color:var(--muted);">R</td><td>更新数据（首页）</td></tr>' +
+    '<tr><td style="padding:6px 0;color:var(--muted);">/</td><td>聚焦添加自选</td></tr>' +
+    '<tr><td style="padding:6px 0;color:var(--muted);">?</td><td>显示/关闭本帮助</td></tr>' +
+    '<tr><td style="padding:6px 0;color:var(--muted);">Esc</td><td>关闭本帮助</td></tr>' +
+    '</table>' +
+    '<div style="margin-top:14px;text-align:center;"><button onclick="this.closest(\'#kan-shortcuts-overlay\').remove()" style="min-height:32px;padding:0 16px;border:1px solid var(--line);border-radius:6px;background:var(--panel);cursor:pointer;">关闭</button></div>' +
+    '</div>';
+  overlay.addEventListener("click", function(ev) { if (ev.target === overlay) overlay.remove(); });
+  document.body.appendChild(overlay);
+}
 
 // 最近浏览记录（localStorage，最多 8 只）
 var kanRecent = {
