@@ -46,9 +46,14 @@
       <div class="meta" x-text="scan.overview.comparison_date ? `对比 ${scan.overview.comparison_date}` : '暂无上一份数据'"></div>
     </div>
     <div class="summary-cell">
-      <div class="field-label">本次已扫描</div>
-      <div class="field-value"><span x-text="scan.overview.scanned_count">{{ scan.overview.scanned_count }}</span> 只</div>
-      <div class="meta">自选与持仓合并去重</div>
+      <div class="field-label">池内概况</div>
+      <div class="field-value">
+        <span class="change-up" x-show="scan.pool_summary && scan.pool_summary.limit_up > 0" x-text="`涨停${scan.pool_summary.limit_up}`"></span>
+        <span class="change-down" x-show="scan.pool_summary && scan.pool_summary.limit_down > 0" x-text="` 跌停${scan.pool_summary.limit_down}`"></span>
+        <span x-show="scan.pool_summary && scan.pool_summary.limit_up === 0 && scan.pool_summary.limit_down === 0">无涨跌停</span>
+      </div>
+      <div class="meta" x-show="scan.pool_summary && scan.pool_summary.up_streak_3 > 0" x-text="`连阳≥3天 ${scan.pool_summary.up_streak_3} 只`"></div>
+      <div class="meta" x-show="!scan.pool_summary || scan.pool_summary.up_streak_3 === 0">自选与持仓合并去重</div>
     </div>
   </div>
 
