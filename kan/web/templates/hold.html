@@ -50,7 +50,15 @@
     <div class="summary-cell">
       <div class="field-label">总仓位</div>
       <div class="field-value" x-text="formatPct(hold.account.total_position_pct)"></div>
+      <div class="mini-track" x-show="hold.account.total_position_pct !== null">
+        <span class="mini-dot" :style="`--pct: ${hold.account.total_position_pct || 0}%;`"></span>
+      </div>
     </div>
+  </div>
+
+  <div x-show="hold.ok && hold.rows.length > 1" class="chart-section">
+    <div class="toolbar"><strong>仓位分布</strong></div>
+    <div id="hold-pie" class="chart" style="height:260px;" role="img" aria-label="持仓仓位分布饼图" x-effect="hold.rows.length > 1 && renderPie()"></div>
   </div>
 
   <div x-show="hold.ok" class="entry-grid">

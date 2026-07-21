@@ -120,12 +120,15 @@ function kanFindPage() {
         const payload = await response.json();
         if (!response.ok) {
           this.message = typeof payload.detail === "string" ? payload.detail : "查询失败";
+          kanToast(this.message, "error");
           return;
         }
         this.result = payload;
         this.message = `符合条件 ${payload.stats.matched} 只`;
+        kanToast(`找到 ${payload.stats.matched} 只符合条件的股票`);
       } catch (_error) {
         this.message = "查询失败";
+        kanToast("查询失败", "error");
       } finally {
         this.loading = false;
       }

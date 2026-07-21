@@ -97,6 +97,13 @@
     <span class="meta" role="status" aria-live="polite" x-show="watchlistMessage" x-text="watchlistMessage"></span>
   </div>
 
+  <div class="form-row recent-stocks" x-show="recentStocks.length > 0">
+    <span class="meta"><strong>最近浏览</strong></span>
+    <template x-for="item in recentStocks" :key="item.code">
+      <a class="pill recent-pill" :href="kanSessionUrl(`/stock/${item.code}`)" x-text="`${item.name} ${item.code}`"></a>
+    </template>
+  </div>
+
   <div class="index-strip">
     <template x-if="indexLoading">
       <span>指数数据读取中</span>
@@ -147,12 +154,19 @@
           <option value="p{{ p }}">{{ p }}日位置</option>
         {% endfor %}
       </select>
-      <button type="button" @click="toggleSortDir()" x-text="sortDir === 'desc' ? '降序' : '升序'"></button>
+      <button type="button" @click="toggleSortDir()" :title="sortDir === 'desc' ? '当前降序，点击切换' : '当前升序，点击切换'">
+        <span x-text="sortDir === 'desc' ? '↓ 降序' : '↑ 升序'"></span>
+      </button>
     </div>
   </div>
 
   <template x-if="scan.rows.length === 0">
-    <div class="empty">本地缓存暂无可展示数据</div>
+    <div class="empty empty-guide">
+      <div class="empty-icon">📊</div>
+      <strong>还没有数据</strong>
+      <p>在上方输入框添加你关注的股票代码（如 600519），然后点击「更新数据」开始观察。</p>
+      <p class="meta">提示：按 / 键可快速聚焦输入框</p>
+    </div>
   </template>
 
   <div id="scan-panel-table" role="tabpanel" aria-labelledby="scan-tab-table" x-show="scan.rows.length > 0 && activeTab === 'table'" class="table-wrap">
@@ -171,7 +185,7 @@
       </thead>
       <tbody>
         <template x-for="(row, index) in sortedRows" :key="row.code">
-          <tr>
+          <tr @click="openStock(row.code)">
             <td x-text="index + 1"></td>
             <td>
               <a class="stock-link" :href="kanSessionUrl(`/stock/${row.code}`)"><span x-text="row.code"></span> <span class="code" x-text="row.name"></span></a>

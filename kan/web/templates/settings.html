@@ -1,6 +1,6 @@
 {% extends "base.html" %}
 
-{% block title %}慢慢看 Web · 设置{% endblock %}
+{% block title %}数据设置 · 慢慢看{% endblock %}
 
 {% block content %}
 <section class="band" x-data="kanSettingsPage(window.KAN_TOKEN)" x-cloak>
@@ -12,7 +12,7 @@
     <input type="password" x-model="tokenInput" autocomplete="off" placeholder="输入 token">
     <button class="primary" type="button" @click="saveToken()">保存</button>
     <button type="button" @click="clearToken()" :disabled="!token.configured">清除</button>
-    <span class="meta" x-text="message"></span>
+    <span class="meta" role="status" x-text="message"></span>
   </div>
   <div class="toolbar">
     <span class="meta">
@@ -24,7 +24,7 @@
 <section class="band">
   <div class="band-title">
     <span>本地数据</span>
-    <span class="meta">只读事实</span>
+    <span class="meta">只读事实 · 数据只保存在本机</span>
   </div>
   <div class="fact-list">
     <div class="fact-row">
@@ -37,7 +37,31 @@
     </div>
     <div class="fact-row">
       <span class="meta">TuShare endpoint</span>
-      <span>{{ facts.tushare_endpoint_domain or "—" }}</span>
+      <span>{{ facts.tushare_endpoint_domain or "默认（未配置）" }}</span>
+    </div>
+  </div>
+</section>
+
+<section class="band">
+  <div class="band-title">
+    <span>使用提示</span>
+  </div>
+  <div class="fact-list">
+    <div class="fact-row">
+      <span class="meta">每日更新</span>
+      <span>收盘后（15:30 之后）在首页点击「更新数据」即可</span>
+    </div>
+    <div class="fact-row">
+      <span class="meta">快捷键</span>
+      <span>1-4 切换页面 · D 深色模式 · R 更新数据 · / 添加自选</span>
+    </div>
+    <div class="fact-row">
+      <span class="meta">数据安全</span>
+      <span>所有数据只存在本机，不上传、不遥测、不登录</span>
+    </div>
+    <div class="fact-row">
+      <span class="meta">终端等价</span>
+      <span>kan web 的所有功能也可以在终端用 kan scan / kan hold / kan find 完成</span>
     </div>
   </div>
 </section>

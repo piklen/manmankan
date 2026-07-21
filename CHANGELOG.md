@@ -12,7 +12,7 @@ explicitly approves a larger bump.
 ### Changed
 
 - `--all` 股票池恢复字面全市场语义，保留主板、创业板、科创板、北交所和 ST；需要排除板块时继续使用命令已有的显式过滤项。
-- `kan trend --all` 新增 `--force/-f`，可强制重拉每日全市场截面缓存；每个网络请求等待期间持续显示确定进度，不再停留在“开始每日截面”。
+- `kan trend --all` 新增 `--force/-f`，可强制重拉每日全市场截面缓存；每个网络请求等待期间持续显示确定进度，不再停留在"开始每日截面"。
 - TuShare 适配器只发送官方接口参数：`stock_basic(list_status=L)` 与 `stk_factor_pro(trade_date=...)`，不注入或消费兼容端点自定义的分页规则。
 
 ### Fixed
@@ -20,6 +20,32 @@ explicitly approves a larger bump.
 - 全市场股票列表和近期单日 K 线截面在落盘前执行完整性校验；明显不足的响应会返回 `tushare_data_contract_error` 并停止处理，不再缓存或把第一页冒充全市场。
 - `kan fetch --force --all` 现在会同时强制刷新全市场股票列表，避免强刷 K 线时仍沿用旧的部分股票池缓存。
 - `kan trend --all` 的新鲜度以最新截面日判断，不再把 31 日历史窗口的第一天误报为全市场截止日；新股、停牌等历史不足单独提示，不再误报为市场数据整体滞后。
+
+## [0.0.6.9.11] - 2026-07-22
+
+### Added
+
+- `kan web` 新增暗色模式：跟随系统 `prefers-color-scheme` 自动切换，也可手动点击 header 🌙/☀️ 按钮或按 D 键切换，偏好持久化到 localStorage。
+- `kan web` 新增全局键盘快捷键：1-4 切换页面、D 深色模式、R 更新数据、/ 聚焦添加自选输入框。
+- `kan web` 新增市场相位指示器：header 实时显示盘前/盘中/已收盘/休市状态。
+- `kan web` 新增操作 toast 通知：添加/移除自选、更新数据、筛选完成等操作即时视觉反馈。
+- `kan web` 新增最近浏览记录：首页展示最近查看的 8 只股票快捷标签（localStorage）。
+- `kan web` 新增持仓仓位分布环形饼图（多只持仓时自动展示，含现金占比）。
+- `kan web` 个股详情页新增迷你位置标尺（渐变轨道 + 动画圆点），关键周期位置值颜色编码。
+- `kan web` 新增回到顶部悬浮按钮（滚动超过 400px 显示）。
+- `kan web` 设置页新增使用提示区（每日更新、快捷键、数据安全、终端等价）。
+
+### Changed
+
+- `kan web` 首屏性能优化：ECharts 改为按需懒加载（仅在热力图/个股走势/仓位饼图可见时加载），减少首屏 JS 体积约 1MB。
+- `kan web` 视觉全面升级：卡片阴影层次、按钮 hover/active 微交互、fade-in 入场动画、表格斑马纹、数字等宽对齐、概览列表 hover 位移。
+- `kan web` 数据过期时 freshness banner 脉冲提醒动画。
+- `kan web` 表格行点击直接跳转个股详情页（首页和找股票页）。
+- `kan web` 空数据状态改为带图标的引导卡片，明确告诉新用户下一步操作。
+- `kan web` 移动端响应式增强：概览卡片纵向堆叠、工具栏自适应折行、添加自选输入框全宽。
+- `kan web` header 改为 sticky 定位，滚动时导航栏固定。
+- `kan web` 排序按钮增加方向箭头指示（↓ 降序 / ↑ 升序）。
+- `kan web` 中文字体栈优化（PingFang SC / Microsoft YaHei）+ 抗锯齿渲染。
 
 ## [0.0.6.9.10] - 2026-07-13
 
@@ -396,7 +422,8 @@ explicitly approves a larger bump.
 - **Shell 补全** · zsh / bash / fish / powershell
 - **合规与隐私** · 强制风险提示 + 关键词黑名单（无买卖建议 / 无目标价 / 无评级）· 数据全本地
 
-[Unreleased]: https://github.com/piklen/manmankan/compare/v0.0.6.9.10...HEAD
+[Unreleased]: https://github.com/piklen/manmankan/compare/v0.0.6.9.11...HEAD
+[0.0.6.9.11]: https://github.com/piklen/manmankan/compare/v0.0.6.9.10...v0.0.6.9.11
 [0.0.6.9.10]: https://github.com/piklen/manmankan/compare/v0.0.6.9.9...v0.0.6.9.10
 [0.0.6.9.9]: https://github.com/piklen/manmankan/compare/v0.0.6.9.8...v0.0.6.9.9
 [0.0.6.9.8]: https://github.com/piklen/manmankan/compare/v0.0.6.9.7...v0.0.6.9.8

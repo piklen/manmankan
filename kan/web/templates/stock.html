@@ -45,12 +45,19 @@
     <div class="summary-grid">
       {% for period in info.periods %}
         {% if period.period in (30, 60, 180) %}
-        <div class="summary-cell">
+        <div class="summary-cell position-gauge">
           <div class="field-label">{{ period.period }}日位置</div>
-          <div class="field-value">{{ "%.1f%%"|format(period.position_pct) if period.position_pct is not none else "—" }}</div>
+          <div class="field-value {% if period.position_pct is not none and period.position_pct <= 20 %}pct-low{% elif period.position_pct is not none and period.position_pct >= 80 %}pct-high{% endif %}">
+            {{ "%.1f%%"|format(period.position_pct) if period.position_pct is not none else "—" }}
+          </div>
+          {% if period.position_pct is not none %}
+          <div class="mini-track">
+            <span class="mini-dot" style="--pct: {{ period.position_pct }}%;"></span>
+          </div>
+          {% endif %}
           <div class="meta">
-            低点 {{ "%.2f"|format(period.n_low) if period.n_low is not none else "—" }} ·
-            高点 {{ "%.2f"|format(period.n_high) if period.n_high is not none else "—" }}
+            低 {{ "%.2f"|format(period.n_low) if period.n_low is not none else "—" }} ·
+            高 {{ "%.2f"|format(period.n_high) if period.n_high is not none else "—" }}
           </div>
         </div>
         {% endif %}

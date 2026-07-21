@@ -35,6 +35,32 @@ templates.env.globals["session_token"] = (
 )
 
 
+def _market_phase_label() -> str:
+    """返回当前市场相位的中文标签。"""
+    try:
+        from kan.core.trading_calendar import (
+            PHASE_CLOSED_DAY,
+            PHASE_INTRADAY,
+            PHASE_POST,
+            PHASE_PRE,
+            market_phase,
+        )
+
+        phase = market_phase()
+        labels = {
+            PHASE_PRE: "盘前",
+            PHASE_INTRADAY: "盘中",
+            PHASE_POST: "已收盘",
+            PHASE_CLOSED_DAY: "休市",
+        }
+        return labels.get(phase, "")
+    except Exception:
+        return ""
+
+
+templates.env.globals["market_phase_label"] = _market_phase_label
+
+
 @router.get("/", response_class=HTMLResponse)
 def index(request: Request):
     try:
