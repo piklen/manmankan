@@ -586,6 +586,7 @@ function kanStockPage(info) {
     chart: null,
     historyReady: false,
     historyMessage: "该周期暂无足够历史 · 可切换周期，或在不同交易日多次更新数据后再看",
+    watchlistMsg: "加入自选",
     init() {
       // 记录最近浏览
       kanRecent.add(info.code, info.name);
@@ -593,6 +594,27 @@ function kanStockPage(info) {
       window.addEventListener("resize", () => {
         if (this.chart) this.chart.resize();
       });
+    },
+    async addToWatchlist() {
+      this.watchlistMsg = "添加中";
+      try {
+        const response = await kanFetch("/api/watchlist", {
+          method: "POST",
+          headers: { "Content-Type": "application/json", "X-Kan-Web": "1" },
+          body: JSON.stringify({ codes: this.info.code }),
+        });
+        const payload = await response.json();
+        if (!response.ok) {
+          this.watchlistMsg = payload.detail || "添加失败";
+          kanToast(payload.detail || "添加失败", "error");
+          return;
+        }
+        this.watchlistMsg = "已在自选 ✓";
+        kanToast(`${this.info.name} 已加入自选`);
+      } catch (_error) {
+        this.watchlistMsg = "添加失败";
+        kanToast("添加失败", "error");
+      }
     },
     setPeriod(period) {
       this.period = period;
