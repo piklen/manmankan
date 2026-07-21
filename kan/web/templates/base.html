@@ -798,6 +798,23 @@
     .dist-low { background: var(--low); }
     .dist-mid { background: var(--line); }
     .dist-high { background: var(--high); }
+    .cell-bar {
+      display: block;
+      height: 3px;
+      margin-top: 3px;
+      border-radius: 2px;
+      background: var(--line);
+      overflow: hidden;
+    }
+    .cell-bar-fill {
+      display: block;
+      height: 100%;
+      border-radius: 2px;
+      transition: width .3s ease;
+    }
+    .bar-low { background: var(--low); }
+    .bar-mid { background: var(--muted); opacity: .4; }
+    .bar-high { background: var(--high); }
     .shortcut-hint {
       margin-top: 8px;
       color: var(--muted);
