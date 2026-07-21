@@ -595,6 +595,38 @@ function kanHoldPage(initialHold) {
         return false;
       }
     },
+    exportHoldCsv() {
+      const rows = this.hold.rows;
+      if (!rows || rows.length === 0) { kanToast("没有可导出的持仓数据", "error"); return; }
+      const header = ["代码", "名称", "成本", "股数", "现价", "今日盈亏", "今日盈亏%", "累计盈亏", "累计盈亏%", "仓位%", "30日位置%", "60日位置%", "180日位置%"];
+      const lines = [header.join(",")];
+      for (const row of rows) {
+        const cols = [
+          row.code,
+          `"${row.name}"`,
+          row.cost,
+          row.shares,
+          row.price !== null ? row.price : "",
+          row.daily_pnl !== null ? row.daily_pnl : "",
+          row.daily_pnl_pct !== null ? row.daily_pnl_pct : "",
+          row.total_pnl !== null ? row.total_pnl : "",
+          row.total_pnl_pct !== null ? row.total_pnl_pct : "",
+          row.weight_pct !== null ? row.weight_pct : "",
+          row.p30_pct !== null ? row.p30_pct : "",
+          row.p60_pct !== null ? row.p60_pct : "",
+          row.p180_pct !== null ? row.p180_pct : "",
+        ];
+        lines.push(cols.join(","));
+      }
+      const blob = new Blob(["\uFEFF" + lines.join("\n")], { type: "text/csv;charset=utf-8;" });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `慢慢看_持仓_${new Date().toISOString().slice(0, 10)}.csv`;
+      a.click();
+      URL.revokeObjectURL(url);
+      kanToast(`已导出 ${rows.length} 只持仓数据`);
+    },
   };
 }
 

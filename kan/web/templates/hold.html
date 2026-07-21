@@ -176,6 +176,11 @@
       <span class="meta" x-text="note"></span>
     </template>
   </div>
+
+  <div class="toolbar" x-show="hold.ok && hold.rows.length > 0">
+    <span class="meta" x-text="`共 ${hold.rows.length} 只持仓`"></span>
+    <button type="button" @click="exportHoldCsv()">导出 CSV</button>
+  </div>
 </section>
 {% endblock %}
 
