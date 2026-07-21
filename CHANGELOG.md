@@ -21,6 +21,14 @@ explicitly approves a larger bump.
 - `kan fetch --force --all` 现在会同时强制刷新全市场股票列表，避免强刷 K 线时仍沿用旧的部分股票池缓存。
 - `kan trend --all` 的新鲜度以最新截面日判断，不再把 31 日历史窗口的第一天误报为全市场截止日；新股、停牌等历史不足单独提示，不再误报为市场数据整体滞后。
 
+## [0.0.6.9.13] - 2026-07-22
+
+### Added
+
+- `kan web` 找股票结果新增「+ 自选」快捷按钮：筛选结果卡片上一键加入自选，找到即加入一步到位。
+- `kan web` 找股票新增「全部加入自选」批量操作：筛选出一批符合条件的股票后可一键全部加入。
+- `kan web` 首页新增「导出 CSV」按钮：一键导出当前排序后的位置扫描数据，BOM 头确保 Excel 正确识别中文。
+
 ## [0.0.6.9.12] - 2026-07-22
 
 ### Added
@@ -432,7 +440,8 @@ explicitly approves a larger bump.
 - **Shell 补全** · zsh / bash / fish / powershell
 - **合规与隐私** · 强制风险提示 + 关键词黑名单（无买卖建议 / 无目标价 / 无评级）· 数据全本地
 
-[Unreleased]: https://github.com/piklen/manmankan/compare/v0.0.6.9.12...HEAD
+[Unreleased]: https://github.com/piklen/manmankan/compare/v0.0.6.9.13...HEAD
+[0.0.6.9.13]: https://github.com/piklen/manmankan/compare/v0.0.6.9.12...v0.0.6.9.13
 [0.0.6.9.12]: https://github.com/piklen/manmankan/compare/v0.0.6.9.11...v0.0.6.9.12
 [0.0.6.9.11]: https://github.com/piklen/manmankan/compare/v0.0.6.9.10...v0.0.6.9.11
 [0.0.6.9.10]: https://github.com/piklen/manmankan/compare/v0.0.6.9.9...v0.0.6.9.10
