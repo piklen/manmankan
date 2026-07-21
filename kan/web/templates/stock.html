@@ -28,7 +28,10 @@
           <span class="meta">—</span>
         {% endif %}
       </div>
-      <a class="meta" href="{{ session_url(request, '/') }}">返回看盘台</a>
+      <div class="controls">
+        <button type="button" @click="addToWatchlist()" x-text="watchlistMsg" :disabled="watchlistMsg === '添加中'"></button>
+        <a class="meta" href="{{ session_url(request, '/') }}">返回看盘台</a>
+      </div>
     </div>
   </section>
 
