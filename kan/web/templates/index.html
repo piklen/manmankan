@@ -110,6 +110,20 @@
   </div>
 
   <div class="index-strip">
+    <template x-if="positionDistribution">
+      <div class="dist-bar-wrap">
+        <span class="meta">180日位置分布</span>
+        <div class="dist-bar">
+          <span class="dist-seg dist-low" :style="`width:${positionDistribution.low/positionDistribution.total*100}%`" :title="`低位 ${positionDistribution.low} 只`"></span>
+          <span class="dist-seg dist-mid" :style="`width:${positionDistribution.mid/positionDistribution.total*100}%`" :title="`中位 ${positionDistribution.mid} 只`"></span>
+          <span class="dist-seg dist-high" :style="`width:${positionDistribution.high/positionDistribution.total*100}%`" :title="`高位 ${positionDistribution.high} 只`"></span>
+        </div>
+        <span class="meta" x-text="`低${positionDistribution.low} 中${positionDistribution.mid} 高${positionDistribution.high}`"></span>
+      </div>
+    </template>
+  </div>
+
+  <div class="index-strip">
     <template x-if="indexLoading">
       <span>指数数据读取中</span>
     </template>

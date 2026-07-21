@@ -777,6 +777,27 @@
     .recent-stocks {
       gap: 8px;
     }
+    .dist-bar-wrap {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      width: 100%;
+    }
+    .dist-bar {
+      flex: 1;
+      height: 8px;
+      border-radius: 999px;
+      overflow: hidden;
+      display: flex;
+      background: var(--line);
+    }
+    .dist-seg {
+      height: 100%;
+      transition: width .4s ease;
+    }
+    .dist-low { background: var(--low); }
+    .dist-mid { background: var(--line); }
+    .dist-high { background: var(--high); }
     .shortcut-hint {
       margin-top: 8px;
       color: var(--muted);

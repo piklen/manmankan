@@ -106,6 +106,22 @@ function kanScanDesk(initialScan) {
         if (this.chart) this.chart.resize();
       });
     },
+    get positionDistribution() {
+      // 按 180 日位置分布统计：低位(0-20) / 中位(20-80) / 高位(80-100)
+      const rows = this.scan.rows;
+      if (!rows || rows.length === 0) return null;
+      let low = 0, mid = 0, high = 0, na = 0;
+      for (const row of rows) {
+        const pct = row.p180_pct;
+        if (pct === null || pct === undefined) { na++; continue; }
+        if (pct <= 20) low++;
+        else if (pct >= 80) high++;
+        else mid++;
+      }
+      const total = rows.length - na;
+      if (total === 0) return null;
+      return { low, mid, high, total };
+    },
     get sortedRows() {
       const rows = this.scan.rows.filter((row) => !this.resonanceOnly || this.resonance(row) > 0);
       const direction = this.sortDir === "desc" ? -1 : 1;
