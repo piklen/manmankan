@@ -145,7 +145,10 @@
       <article class="find-result-card">
         <div class="find-result-heading">
           <a class="stock-link" :href="kanSessionUrl(`/stock/${row.code}`)"><strong x-text="row.name"></strong> <span class="code" x-text="row.code"></span></a>
-          <strong x-text="formatPrice(row.price)"></strong>
+          <div class="controls">
+            <button type="button" @click="addToWatchlist(row.code)" x-text="row._added ? '已加入 ✓' : '+ 自选'"></button>
+            <strong x-text="formatPrice(row.price)"></strong>
+          </div>
         </div>
         <div class="meta" x-text="formatTriggers(row.triggered_text)"></div>
         <div class="find-result-positions">
