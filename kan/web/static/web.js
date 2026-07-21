@@ -386,6 +386,32 @@ function kanScanDesk(initialScan) {
         kanToast("移除失败", "error");
       }
     },
+    exportCsv() {
+      const rows = this.sortedRows;
+      if (rows.length === 0) { kanToast("没有可导出的数据", "error"); return; }
+      const periods = this.scan.periods;
+      const header = ["代码", "名称", "现价", ...periods.map((p) => `${p}日位置%`), "低点共振", "高点共振"];
+      const lines = [header.join(",")];
+      for (const row of rows) {
+        const cols = [
+          row.code,
+          `"${row.name}"`,
+          row.price !== null ? row.price : "",
+          ...periods.map((p) => { const v = row[`p${p}_pct`]; return v !== null && v !== undefined ? v : ""; }),
+          row.low_resonance,
+          row.high_resonance,
+        ];
+        lines.push(cols.join(","));
+      }
+      const blob = new Blob(["\uFEFF" + lines.join("\n")], { type: "text/csv;charset=utf-8;" });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `慢慢看_位置扫描_${new Date().toISOString().slice(0, 10)}.csv`;
+      a.click();
+      URL.revokeObjectURL(url);
+      kanToast(`已导出 ${rows.length} 只股票数据`);
+    },
   };
 }
 

@@ -162,6 +162,7 @@
       </button>
     </div>
     <div class="controls">
+      <button type="button" @click="exportCsv()" title="导出当前数据为 CSV 文件">导出 CSV</button>
       <select x-model="mode" aria-label="共振模式">
         <option value="low">低点</option>
         <option value="high">高点</option>
