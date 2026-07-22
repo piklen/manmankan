@@ -171,12 +171,14 @@ def _sort_scan_results(results: list, sort_key: str, mode: str) -> list:
         try:
             period = int(key[3:])
         except ValueError:
+            _print_err(f"⚠️ --sort {sort_key} 无效周期 · 可用: resonance / pos30 / pos60 / pos180 / price / change")
             return results
         return sorted(results, key=lambda r: _period_pct(r, period))
     if key == "price":
         return sorted(results, key=lambda r: r.current_price, reverse=True)
     if key == "change":
         return sorted(results, key=lambda r: getattr(r, "up_days", 0), reverse=True)
+    _print_err(f"⚠️ --sort {sort_key} 未知 · 可用: resonance / pos30 / pos60 / pos180 / price / change")
     return results
 
 
@@ -306,7 +308,6 @@ def _prepare_scan_render(
             board_index_result=service_result.board_index_result,
             show_context=show_context_columns,
             show_retail_facts=include_external_context,
-            show_bar=console.width >= 100 and len(display_periods) <= 5,
         )
         is_compact = len(display_periods) < len(period_list)
         is_hot = isinstance(board_meta, HotMeta)
