@@ -161,6 +161,14 @@ def find(
     console = Console()
     find_disclaimer = f"[bold dim]{FIND_DISCLAIMER_TEXT}[/bold dim]"
     is_export = fmt is not export.OutputFormat.terminal
+    if fmt is export.OutputFormat.csv:
+        _exit_find_error(
+            fmt,
+            code="invalid_format",
+            message="kan find 不支持 --format csv · 请用 --format json 或 --format md",
+            hint="例: kan find --pos 180:lt:5 --format json；或 kan scan --format csv 导出扫描结果",
+            exit_code=2,
+        )
     if (explain or dry_run or agent_summary or snapshot or since) and fmt is not export.OutputFormat.json:
         _exit_find_error(
             fmt,
