@@ -62,6 +62,12 @@
             低 {{ "%.2f"|format(period.n_low) if period.n_low is not none else "—" }} ·
             高 {{ "%.2f"|format(period.n_high) if period.n_high is not none else "—" }}
           </div>
+          {% if period.distance_to_low_pct is not none or period.gain_pct is not none %}
+          <div class="meta">
+            {% if period.distance_to_low_pct is not none %}距低 {{ "%.1f%%"|format(period.distance_to_low_pct) }}{% endif %}
+            {% if period.distance_to_high_pct is not none %} · 距高 {{ "%.1f%%"|format(period.distance_to_high_pct) }}{% endif %}
+          </div>
+          {% endif %}
         </div>
         {% endif %}
       {% endfor %}
@@ -103,6 +109,7 @@
         <button type="button" :class="{active: period === 30}" @click="setPeriod(30)">30日</button>
         <button type="button" :class="{active: period === 60}" @click="setPeriod(60)">60日</button>
         <button type="button" :class="{active: period === 180}" @click="setPeriod(180)">180日</button>
+        <button type="button" @click="exportHistoryCsv()" title="导出位置历史为 CSV">导出</button>
       </div>
     </div>
     <div id="history-chart" class="chart" role="img" :aria-label="`${info.name} ${period} 日价格位置走势`" x-show="historyReady"></div>
@@ -138,6 +145,14 @@
       <div class="field">
         <div class="field-label">换手率</div>
         <div class="field-value">{{ "%.2f%%"|format(info.valuation.turnover_rate) if info.valuation.turnover_rate is not none else "—" }}</div>
+      </div>
+      <div class="field">
+        <div class="field-label">股息率 TTM</div>
+        <div class="field-value">{{ "%.2f%%"|format(info.valuation.dv_ttm) if info.valuation.dv_ttm is not none else "—" }}</div>
+      </div>
+      <div class="field">
+        <div class="field-label">量比</div>
+        <div class="field-value">{{ "%.2f"|format(info.valuation.volume_ratio) if info.valuation.volume_ratio is not none else "—" }}</div>
       </div>
       <div class="field">
         <div class="field-label">估值日期</div>
