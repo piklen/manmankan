@@ -147,6 +147,14 @@
         <div class="field-value">{{ "%.2f%%"|format(info.valuation.turnover_rate) if info.valuation.turnover_rate is not none else "—" }}</div>
       </div>
       <div class="field">
+        <div class="field-label">股息率 TTM</div>
+        <div class="field-value">{{ "%.2f%%"|format(info.valuation.dv_ttm) if info.valuation.dv_ttm is not none else "—" }}</div>
+      </div>
+      <div class="field">
+        <div class="field-label">量比</div>
+        <div class="field-value">{{ "%.2f"|format(info.valuation.volume_ratio) if info.valuation.volume_ratio is not none else "—" }}</div>
+      </div>
+      <div class="field">
         <div class="field-label">估值日期</div>
         <div class="field-value">{{ info.valuation.trade_date or "—" }}</div>
       </div>
