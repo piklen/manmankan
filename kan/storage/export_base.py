@@ -28,11 +28,12 @@ def _board_reference_kind(meta: BoardMeta | HotMeta | ThemeMeta | None) -> str:
 
 
 class OutputFormat(StrEnum):
-    """--format 选项 · terminal 默认(现有行为) · md/json 为导出。"""
+    """--format 选项 · terminal 默认(现有行为) · md/json/csv 为导出。"""
 
     terminal = "terminal"
     md = "md"
     json = "json"
+    csv = "csv"
 
 
 def _stdout_needs_ascii_json() -> bool:

@@ -59,7 +59,7 @@ def _maybe_print_boot_banner() -> None:
         return
     if "--help" in sys.argv[2:] or "-h" in sys.argv[2:]:
         return
-    sys.stderr.write("⏳ 启动中...\r")
+    sys.stderr.write("⏳ 慢慢看启动中...\r")
     sys.stderr.flush()
 
 

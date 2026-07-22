@@ -156,6 +156,45 @@ def _compact_display_periods(periods: list[int]) -> list[int]:
     return sorted({periods[0], periods[len(periods) // 2], periods[-1]})
 
 
+def _sort_scan_results(results: list, sort_key: str, mode: str) -> list:
+    """按指定键排序 scan 结果。"""
+    key = sort_key.strip().lower()
+
+    def _period_pct(r, period: int) -> float:
+        pr = next((p for p in r.periods if p.period == period and not p.insufficient), None)
+        return pr.position_pct if pr else 999.0
+
+    if key == "resonance":
+        attr = "high_resonance" if mode == "high" else "low_resonance"
+        return sorted(results, key=lambda r: getattr(r, attr, 0), reverse=True)
+    if key.startswith("pos"):
+        try:
+            period = int(key[3:])
+        except ValueError:
+            return results
+        return sorted(results, key=lambda r: _period_pct(r, period))
+    if key == "price":
+        return sorted(results, key=lambda r: r.current_price, reverse=True)
+    if key == "change":
+        return sorted(results, key=lambda r: getattr(r, "up_days", 0), reverse=True)
+    return results
+
+
+def _scan_csv(results: list, periods: list[int], mode: str) -> str:
+    """将 scan 结果序列化为 CSV 文本（BOM 头兼容 Excel）。"""
+    header = ["代码", "名称", "现价"] + [f"{p}日位置%" for p in periods] + ["低点共振", "高点共振"]
+    lines = [",".join(header)]
+    for r in results:
+        cols = [r.symbol, f'"{r.name.replace(" ", "")}"', f"{r.current_price:.2f}"]
+        for p in periods:
+            pr = next((x for x in r.periods if x.period == p), None)
+            cols.append(f"{pr.position_pct:.1f}" if pr and not pr.insufficient else "")
+        cols.append(str(r.low_resonance))
+        cols.append(str(r.high_resonance))
+        lines.append(",".join(cols))
+    return "\ufeff" + "\n".join(lines)
+
+
 def _prepare_scan_render(
     service_result: Any,
     *,
@@ -175,6 +214,7 @@ def _prepare_scan_render(
     display_periods: list[int],
     show_context_columns: bool,
     include_external_context: bool,
+    sort_key: str | None = None,
 ) -> Callable[[], None]:
     """在 lifecycle 内准备 scan 输出/快照，返回关闭 Live 后执行的渲染闭包。"""
     from kan.core.models import HotMeta, ThemeMeta
@@ -216,6 +256,8 @@ def _prepare_scan_render(
 
     all_results = service_result.all_results
     results = service_result.results
+    if sort_key:
+        results = _sort_scan_results(results, sort_key, mode)
     previous = load_snapshot() if diff and can_write_snapshot else None
     changes = compute_diff(all_results, previous) if previous else []
     lifecycle.phase("构造扫描输出", format=fmt.value, result_count=len(results))
@@ -235,6 +277,11 @@ def _prepare_scan_render(
             fetched_at=ctx.freshness.fetched_at,
             stale=ctx.freshness.is_stale,
         ))
+
+        def render() -> None:
+            typer.echo(rendered)
+    elif fmt is export.OutputFormat.csv:
+        rendered = _scan_csv(results, period_list, mode)
 
         def render() -> None:
             typer.echo(rendered)
@@ -259,12 +306,16 @@ def _prepare_scan_render(
             board_index_result=service_result.board_index_result,
             show_context=show_context_columns,
             show_retail_facts=include_external_context,
+            show_bar=console.width >= 100 and len(display_periods) <= 5,
         )
         is_compact = len(display_periods) < len(period_list)
         is_hot = isinstance(board_meta, HotMeta)
 
         def render_terminal() -> None:
+            from kan.render.terminal_scan import pool_summary_line
+
             console.print("[dim]💡 慢慢看是观察工具 · 不预测涨跌 · 详见底部免责[/dim]")
+            console.print(pool_summary_line(results), highlight=True)
             console.print(table)
             if is_compact:
                 shown = "/".join(str(period) for period in display_periods)
@@ -369,8 +420,12 @@ def scan(
     ] = False,
     fmt: Annotated[
         export.OutputFormat,
-        typer.Option("--format", help="输出格式：terminal（默认）/ md / json"),
+        typer.Option("--format", help="输出格式：terminal（默认）/ md / json / csv"),
     ] = export.OutputFormat.terminal,
+    sort: Annotated[
+        str | None,
+        typer.Option("--sort", help="排序：resonance / pos30 / pos60 / pos180 / price / change（默认自选顺序）"),
+    ] = None,
 ) -> None:
     """扫描自选股多周期位置（全景模式 · --group 切换分组）"""
     from rich.console import Console
@@ -567,6 +622,7 @@ def scan(
                 display_periods=display_periods,
                 show_context_columns=show_context_columns,
                 include_external_context=include_external_context,
+                sort_key=sort,
             )
     except StockSetResolveError as e:
         raise_stock_set_resolve_exit(e)
