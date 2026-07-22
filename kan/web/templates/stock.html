@@ -62,6 +62,12 @@
             低 {{ "%.2f"|format(period.n_low) if period.n_low is not none else "—" }} ·
             高 {{ "%.2f"|format(period.n_high) if period.n_high is not none else "—" }}
           </div>
+          {% if period.distance_to_low_pct is not none or period.gain_pct is not none %}
+          <div class="meta">
+            {% if period.distance_to_low_pct is not none %}距低 {{ "%.1f%%"|format(period.distance_to_low_pct) }}{% endif %}
+            {% if period.distance_to_high_pct is not none %} · 距高 {{ "%.1f%%"|format(period.distance_to_high_pct) }}{% endif %}
+          </div>
+          {% endif %}
         </div>
         {% endif %}
       {% endfor %}
