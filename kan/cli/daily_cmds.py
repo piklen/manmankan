@@ -186,16 +186,36 @@ def daily(
     console.print("\n[bold]慢慢看 · 一日事实概览[/bold]")
     cutoff = result.ctx.freshness.data_cutoff
     cutoff_text = format_date_compact(cutoff) if cutoff else "无缓存"
-    console.print(f"  数据截止 {cutoff_text} · 默认池已扫描 {len(rows)} 只")
+    console.print(f"  数据截止 [cyan]{cutoff_text}[/cyan] · 默认池已扫描 [bold]{len(rows)}[/bold] 只")
     console.print(
         f"  自选 {watchlist_count} 只 · 持仓 {holding_count} 只 · "
-        f"现金 {'已配置' if book.cash > 0 else '未配置'}"
+        f"现金 {'[green]已配置[/green]' if book.cash > 0 else '[dim]未配置[/dim]'}"
     )
-    console.print(f"  180日位置 <=10% · {len(low_180)} 只: {', '.join(_names(low_180)) or '-'}")
-    console.print(f"  180日位置 >=90% · {len(high_180)} 只: {', '.join(_names(high_180)) or '-'}")
-    console.print(f"  特殊权限提示 · {len(permission_rows)} 只: {', '.join(_names(permission_rows)) or '-'}")
+    # 池概况：涨跌停/连阳
+    limit_up = sum(1 for r in rows if r.limit_up)
+    limit_down = sum(1 for r in rows if r.limit_down)
+    up_streak = sum(1 for r in rows if getattr(r, "up_days", 0) >= 3)
+    summary_parts: list[str] = []
+    if limit_up:
+        summary_parts.append(f"[red]涨停 {limit_up}[/red]")
+    if limit_down:
+        summary_parts.append(f"[green]跌停 {limit_down}[/green]")
+    if up_streak:
+        summary_parts.append(f"连阳≥3天 {up_streak} 只")
+    if summary_parts:
+        console.print(f"  {' · '.join(summary_parts)}")
+    console.print(
+        f"  180日位置 [green]<=10%[/green] · [bold]{len(low_180)}[/bold] 只: "
+        f"{', '.join(_names(low_180)) or '-'}"
+    )
+    console.print(
+        f"  180日位置 [red]>=90%[/red] · [bold]{len(high_180)}[/bold] 只: "
+        f"{', '.join(_names(high_180)) or '-'}"
+    )
+    if permission_rows:
+        console.print(f"  特殊权限提示 · {len(permission_rows)} 只: {', '.join(_names(permission_rows))}")
     render_freshness_warning(result.ctx.freshness, console)
     console.print("\n[bold]可复制命令[/bold]")
     for command in _command_rows():
-        console.print(f"  {command}")
+        console.print(f"  [cyan]{command}[/cyan]")
     console.print(DISCLAIMER, style="dim")

@@ -64,28 +64,41 @@ def max_trend_dates(console_width: int) -> int:
     return max(1, (console_width - base) // per_date)
 
 
-def format_pct(pr, *, high_mode: bool = False) -> Text:
+def format_pct(pr, *, high_mode: bool = False, show_bar: bool = False) -> Text:
     """格式化位置百分比单元格 · [x%] 带颜色方括号表示触及极值。
 
     high_mode=True (kan scan --high) → 只对 at_high 加 [%] 高亮信号 ·
     at_low 走普通色, 防止深度回调股(全 0%)被误标 "触高信号"。
+
+    show_bar=True → 在百分比后追加 Unicode 迷你位置条（▁▂▃▄▅▆▇█）。
     """
     if pr.insufficient:
         return Text("-", style="dim")
+    pct = pr.position_pct
+    bar = _mini_bar(pct) if show_bar else ""
     if high_mode:
         if pr.at_high:
-            return Text(f"[{pr.position_pct:.0f}%]", style="bold yellow")
-        if pr.position_pct <= 20:
-            return Text(f"{pr.position_pct:.0f}%", style="green")
-        if pr.position_pct >= 80:
-            return Text(f"{pr.position_pct:.0f}%", style="red")
-        return Text(f"{pr.position_pct:.0f}%")
+            return Text(f"[{pct:.0f}%]{bar}", style="bold yellow")
+        if pct <= 20:
+            return Text(f"{pct:.0f}%{bar}", style="green")
+        if pct >= 80:
+            return Text(f"{pct:.0f}%{bar}", style="red")
+        return Text(f"{pct:.0f}%{bar}")
     if pr.at_low:
-        return Text(f"[{pr.position_pct:.0f}%]", style="bold green")
+        return Text(f"[{pct:.0f}%]{bar}", style="bold green")
     if pr.at_high:
-        return Text(f"[{pr.position_pct:.0f}%]", style="bold red")
-    if pr.position_pct <= 20:
-        return Text(f"{pr.position_pct:.0f}%", style="green")
-    if pr.position_pct >= 80:
-        return Text(f"{pr.position_pct:.0f}%", style="red")
-    return Text(f"{pr.position_pct:.0f}%")
+        return Text(f"[{pct:.0f}%]{bar}", style="bold red")
+    if pct <= 20:
+        return Text(f"{pct:.0f}%{bar}", style="green")
+    if pct >= 80:
+        return Text(f"{pct:.0f}%{bar}", style="red")
+    return Text(f"{pct:.0f}%{bar}")
+
+
+_BAR_CHARS = "▁▂▃▄▅▆▇█"
+
+
+def _mini_bar(pct: float) -> str:
+    """将 0-100 百分比映射为单个 Unicode block 字符。"""
+    idx = min(int(pct / 100 * len(_BAR_CHARS)), len(_BAR_CHARS) - 1)
+    return _BAR_CHARS[idx]

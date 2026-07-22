@@ -15,6 +15,37 @@ if TYPE_CHECKING:
     from kan.core.pipeline import DataCtx
 
 
+# ── pool summary ─────────────────────────────────────────────────────
+
+
+def pool_summary_line(results: list[StockScanResult], *, period: int = 180) -> str:
+    """构造池概况摘要行：涨跌停/连阳/位置分布。"""
+    limit_up = sum(1 for r in results if r.limit_up)
+    limit_down = sum(1 for r in results if r.limit_down)
+    up_streak = sum(1 for r in results if getattr(r, "up_days", 0) >= 3)
+    low_count = 0
+    high_count = 0
+    for r in results:
+        pr = next((p for p in r.periods if p.period == period and not p.insufficient), None)
+        if pr is None:
+            continue
+        if pr.position_pct <= 20:
+            low_count += 1
+        elif pr.position_pct >= 80:
+            high_count += 1
+    parts: list[str] = []
+    if limit_up:
+        parts.append(f"[red]涨停{limit_up}[/red]")
+    if limit_down:
+        parts.append(f"[green]跌停{limit_down}[/green]")
+    if up_streak:
+        parts.append(f"连阳≥3: {up_streak}只")
+    parts.append(f"[green]低位≤20%: {low_count}[/green]")
+    parts.append(f"[red]高位≥80%: {high_count}[/red]")
+    parts.append(f"共{len(results)}只")
+    return "  ".join(parts)
+
+
 # ── scan ──────────────────────────────────────────────────────────────
 
 
@@ -70,6 +101,7 @@ def scan_table(
     board_index_result: StockScanResult | None = None,
     show_context: bool = False,
     show_retail_facts: bool = True,
+    show_bar: bool = False,
 ) -> Table:
     """kan scan 10-周期全景表 · 支持板块指数 row + 热榜名次 + 自选 ⭐ 高亮。
 
@@ -194,7 +226,7 @@ def scan_table(
             if pr is None:
                 row.append(Text("-", style="dim"))
             else:
-                row.append(format_pct(pr, high_mode=high_mode))
+                row.append(format_pct(pr, high_mode=high_mode, show_bar=show_bar))
 
         resonance = r.high_resonance if high_mode else r.low_resonance
         if resonance >= 3:

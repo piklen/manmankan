@@ -260,7 +260,7 @@ def serialize_info(result: InfoServiceResult) -> dict[str, Any]:
         "volume_price_state": result.result.volume_price_state,
         "valuation": valuation,
         "periods": periods,
-        "board_context": _serialize_board_context(result.board_context) if result.board_context else None,
+        "board_context": _serialize_board_context(result.board_context) if getattr(result, "board_context", None) else None,
     }
 
 
