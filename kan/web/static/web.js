@@ -150,6 +150,21 @@ function kanScanDesk(initialScan) {
       if (total === 0) return null;
       return { low, mid, high, total };
     },
+    get positionChangeSummary() {
+      const rows = this.scan.rows;
+      if (!rows || rows.length === 0) return null;
+      let up = 0, down = 0, flat = 0, hasData = false;
+      for (const row of rows) {
+        const change = row.p180_change;
+        if (change === null || change === undefined) continue;
+        hasData = true;
+        if (change > 0) up++;
+        else if (change < 0) down++;
+        else flat++;
+      }
+      if (!hasData) return null;
+      return { up, down, flat };
+    },
     get sortedRows() {
       const rows = this.scan.rows.filter((row) => !this.resonanceOnly || this.resonance(row) > 0);
       const direction = this.sortDir === "desc" ? -1 : 1;

@@ -122,6 +122,12 @@
           <span class="dist-seg dist-high" :style="`width:${positionDistribution.high/positionDistribution.total*100}%`" :title="`高位 ${positionDistribution.high} 只`"></span>
         </div>
         <span class="meta" x-text="`低${positionDistribution.low} 中${positionDistribution.mid} 高${positionDistribution.high}`"></span>
+        <template x-if="positionChangeSummary">
+          <span class="meta pos-change-summary">
+            <span class="change-up" x-text="`↑${positionChangeSummary.up}`"></span>
+            <span class="change-down" x-text="` ↓${positionChangeSummary.down}`"></span>
+          </span>
+        </template>
       </div>
     </template>
   </div>
