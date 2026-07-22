@@ -260,6 +260,26 @@ def serialize_info(result: InfoServiceResult) -> dict[str, Any]:
         "volume_price_state": result.result.volume_price_state,
         "valuation": valuation,
         "periods": periods,
+        "board_context": _serialize_board_context(result.board_context) if result.board_context else None,
+    }
+
+
+def _serialize_board_context(ctx: Any) -> dict[str, Any]:
+    """行业位置对照数据。"""
+    return {
+        "industry": ctx.industry,
+        "constituent_count": ctx.constituent_count,
+        "cached_sample": ctx.cached_sample,
+        "periods": [
+            {
+                "period": p.period,
+                "stock_pct": _round(p.stock_pct, 1),
+                "board_avg_pct": _round(p.board_avg_pct, 1),
+                "rank": p.rank,
+                "rank_total": p.rank_total,
+            }
+            for p in ctx.periods
+        ],
     }
 
 

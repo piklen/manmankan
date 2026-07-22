@@ -116,6 +116,31 @@
     <div class="empty" x-show="!historyReady" x-text="historyMessage"></div>
   </section>
 
+  {% if info.board_context %}
+  <section class="band">
+    <div class="band-title">
+      <span>行业位置对照</span>
+      <span class="meta">{{ info.board_context.industry }} · 样本 {{ info.board_context.cached_sample }}/{{ info.board_context.constituent_count }} 只</span>
+    </div>
+    <div class="summary-grid">
+      {% for bp in info.board_context.periods %}
+        {% if bp.period in (30, 60, 180) %}
+        <div class="summary-cell">
+          <div class="field-label">{{ bp.period }}日</div>
+          <div class="field-value">
+            {{ "%.1f%%"|format(bp.stock_pct) if bp.stock_pct is not none else "—" }}
+            {% if bp.rank and bp.rank_total %}
+              <span class="meta">排 {{ bp.rank }}/{{ bp.rank_total }}</span>
+            {% endif %}
+          </div>
+          <div class="meta">行业均值 {{ "%.1f%%"|format(bp.board_avg_pct) if bp.board_avg_pct is not none else "—" }}</div>
+        </div>
+        {% endif %}
+      {% endfor %}
+    </div>
+  </section>
+  {% endif %}
+
   <section class="band">
     <div class="band-title">
       <span>基础字段</span>
