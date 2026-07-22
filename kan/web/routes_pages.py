@@ -124,7 +124,7 @@ def stock(request: Request, code: str):
             allow_fetch=False,
             include_external_context=False,
             include_valuation_context=False,
-            include_board_context=False,
+            include_board_context=True,
         ))
     except (ValueError, InfoDataUnavailableError):
         return templates.TemplateResponse(
