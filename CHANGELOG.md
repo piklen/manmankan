@@ -21,6 +21,18 @@ explicitly approves a larger bump.
 - `kan fetch --force --all` 现在会同时强制刷新全市场股票列表，避免强刷 K 线时仍沿用旧的部分股票池缓存。
 - `kan trend --all` 的新鲜度以最新截面日判断，不再把 31 日历史窗口的第一天误报为全市场截止日；新股、停牌等历史不足单独提示，不再误报为市场数据整体滞后。
 
+## [0.0.6.9.14] - 2026-07-22
+
+### Added
+
+- `kan web` 首页 180 日位置新增变化指示（↑/↓对比上一份快照），散户一眼看到位置变化方向。
+- `kan web` 首页位置分布条旁新增变化概况（↑N ↓N），整体位置变化方向一目了然。
+- `kan web` 个股详情页关键周期卡片新增「距低/距高」百分比距离。
+- `kan web` 个股详情页基础字段新增股息率 TTM 和量比。
+- `kan web` 个股详情页新增「导出位置历史 CSV」按钮。
+- `kan web` 新增键盘快捷键帮助浮层（按 ? 或点击 header 的 ? 按钮）。
+- `kan web` 持仓页新增「导出 CSV」按钮。
+
 ## [0.0.6.9.13] - 2026-07-22
 
 ### Added
@@ -440,7 +452,8 @@ explicitly approves a larger bump.
 - **Shell 补全** · zsh / bash / fish / powershell
 - **合规与隐私** · 强制风险提示 + 关键词黑名单（无买卖建议 / 无目标价 / 无评级）· 数据全本地
 
-[Unreleased]: https://github.com/piklen/manmankan/compare/v0.0.6.9.13...HEAD
+[Unreleased]: https://github.com/piklen/manmankan/compare/v0.0.6.9.14...HEAD
+[0.0.6.9.14]: https://github.com/piklen/manmankan/compare/v0.0.6.9.13...v0.0.6.9.14
 [0.0.6.9.13]: https://github.com/piklen/manmankan/compare/v0.0.6.9.12...v0.0.6.9.13
 [0.0.6.9.12]: https://github.com/piklen/manmankan/compare/v0.0.6.9.11...v0.0.6.9.12
 [0.0.6.9.11]: https://github.com/piklen/manmankan/compare/v0.0.6.9.10...v0.0.6.9.11
