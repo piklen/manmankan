@@ -74,7 +74,8 @@ def default_scan_payload() -> dict:
     if previous_snapshot:
         for row in payload.get("rows", []):
             prev = previous_snapshot.get(row["code"], {})
-            prev_180 = prev.get("180")
+            prev_period = prev.get("180")
+            prev_180 = prev_period.get("pct") if isinstance(prev_period, dict) else None
             cur_180 = row.get("p180_pct")
             if prev_180 is not None and cur_180 is not None:
                 row["p180_change"] = round(cur_180 - prev_180, 1)

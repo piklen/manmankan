@@ -65,6 +65,7 @@ from kan.storage.export_hold import (
     _hold_cell,
     _hold_position_dict,
     _maybe_mask,
+    hold_csv,
     hold_markdown,
     hold_payload,
 )
@@ -154,6 +155,7 @@ __all__ = [
     "find_payload",
     "history_markdown",
     "history_payload",
+    "hold_csv",
     "hold_markdown",
     "hold_payload",
     "info_markdown",

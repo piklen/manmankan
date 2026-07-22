@@ -35,6 +35,8 @@ def trend_payload(
 ) -> dict:
     """kan trend --format json 的结构化 payload。"""
     return {
+        "ok": True,
+        "schema_version": 1,
         "command": "trend",
         "mode": "candle" if candle else "close",
         "disclaimer": _disclaimer_text(),
@@ -149,6 +151,8 @@ def trend_markdown(
 def compare_payload(results: list[StockScanResult], *, periods: list[int]) -> dict:
     """kan compare --format json 的结构化 payload。"""
     return {
+        "ok": True,
+        "schema_version": 1,
         "command": "compare",
         "periods": periods,
         "disclaimer": _disclaimer_text(),

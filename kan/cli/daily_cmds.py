@@ -100,10 +100,12 @@ def daily(
 
     from kan.cli.helpers import format_date_compact
     from kan.core.pipeline import render_freshness_warning
+    from kan.core.scanner_snapshot import load_previous_web_daily_snapshot
     from kan.core.stock_set import from_flags
     from kan.infra.lifecycle import operation
     from kan.infra.progress import operation_reporter
     from kan.render.base import DISCLAIMER
+    from kan.service.daily_service import build_daily_overview
     from kan.service.scan_service import ScanRequest, run_scan
     from kan.storage.positions import load_positions
     from kan.storage.watchlist import load_watchlist
@@ -128,6 +130,27 @@ def daily(
         low_180 = _count_period(rows, period=180, low=10)
         high_180 = _count_period(rows, period=180, high=90)
         permission_rows = [r for r in rows if r.permission_note]
+        # 池内 180 日中位位置
+        p180_values = sorted(
+            p.position_pct
+            for r in rows
+            for p in r.periods
+            if p.period == 180 and not p.insufficient
+        )
+        median_180 = p180_values[len(p180_values) // 2] if p180_values else None
+        # 加载上一份快照用于对比变化
+        freshness = result.ctx.freshness
+        comparison = (
+            load_previous_web_daily_snapshot(freshness.data_cutoff)
+            if freshness.data_cutoff and not freshness.is_stale else None
+        )
+        comparison_date = comparison[0] if comparison else None
+        previous_snapshot = comparison[1] if comparison else None
+        overview = build_daily_overview(
+            result,
+            previous_snapshot=previous_snapshot,
+            comparison_date=comparison_date,
+        )
         lifecycle.phase("构造一日事实输出", format=fmt.value)
         payload = {
             "ok": True,
@@ -144,6 +167,7 @@ def daily(
                 "holding_count": holding_count,
                 "scanned_count": len(rows),
                 "cash_configured": book.cash > 0,
+                "median_position_180": round(median_180, 1) if median_180 is not None else None,
             },
             "facts": {
                 "period_180_low_lte_10_count": len(low_180),
@@ -160,21 +184,42 @@ def daily(
                     for r in permission_rows[:12]
                 ],
             },
+            "comparison": {
+                "date": comparison_date.isoformat() if comparison_date else None,
+                "changes": [
+                    {
+                        "code": c.code,
+                        "name": c.name,
+                        "period": c.period,
+                        "description": c.description,
+                    }
+                    for c in overview.changes
+                ],
+            },
             "next_commands": _command_rows(),
             "disclaimer": DISCLAIMER.strip(),
         }
         markdown = None
         if fmt is export.OutputFormat.md:
-            markdown = "\n".join([
+            md_lines = [
                 "# 慢慢看 · 一日事实概览", "",
                 f"- 默认池: 自选 {watchlist_count} 只 / 持仓 {holding_count} 只 / 已扫描 {len(rows)} 只",
                 f"- 现金: {'已配置' if book.cash > 0 else '未配置'}",
+            ]
+            if median_180 is not None:
+                md_lines.append(f"- 池内 180 日中位位置: {median_180:.0f}%")
+            md_lines.extend([
                 f"- 180 日位置 <=10%: {len(low_180)} 只",
                 f"- 180 日位置 >=90%: {len(high_180)} 只",
-                f"- 特殊权限提示: {len(permission_rows)} 只", "",
+                f"- 特殊权限提示: {len(permission_rows)} 只",
+            ])
+            if overview.changes and comparison_date:
+                md_lines.append(f"- 与 {comparison_date.isoformat()} 相比: {len(overview.changes)} 条位置变化")
+            md_lines.extend(["",
                 "## 可复制命令", *[f"- `{cmd}`" for cmd in _command_rows()], "",
                 "> " + DISCLAIMER.strip(),
             ])
+            markdown = "\n".join(md_lines)
     if fmt is export.OutputFormat.json:
         typer.echo(export.to_json(payload))
         return
@@ -204,6 +249,8 @@ def daily(
         summary_parts.append(f"连阳≥3天 {up_streak} 只")
     if summary_parts:
         console.print(f"  {' · '.join(summary_parts)}")
+    if median_180 is not None:
+        console.print(f"  池内 180日中位位置 [bold]{median_180:.0f}%[/bold]（{len(p180_values)} 只有效）")
     console.print(
         f"  180日位置 [green]<=10%[/green] · [bold]{len(low_180)}[/bold] 只: "
         f"{', '.join(_names(low_180)) or '-'}"
@@ -214,6 +261,15 @@ def daily(
     )
     if permission_rows:
         console.print(f"  特殊权限提示 · {len(permission_rows)} 只: {', '.join(_names(permission_rows))}")
+    # 与上一份数据的变化
+    if overview.changes and comparison_date:
+        console.print(f"  [bold]与 {format_date_compact(comparison_date)} 相比[/bold] · {len(overview.changes)} 条变化:")
+        for change in overview.changes[:6]:
+            console.print(f"    {change.name} {change.code} · {change.description}")
+        if len(overview.changes) > 6:
+            console.print(f"    [dim]… 及其他 {len(overview.changes) - 6} 条[/dim]")
+    elif comparison_date:
+        console.print(f"  与 {format_date_compact(comparison_date)} 相比 · 无关键位置变化")
     render_freshness_warning(result.ctx.freshness, console)
     console.print("\n[bold]可复制命令[/bold]")
     for command in _command_rows():
