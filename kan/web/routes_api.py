@@ -70,6 +70,16 @@ def default_scan_payload() -> dict:
     )
     payload = serialize_scan(result)
     payload["overview"] = serialize_daily_overview(overview)
+    # 为每行添加 180 日位置变化（对比上一份快照）
+    if previous_snapshot:
+        for row in payload.get("rows", []):
+            prev = previous_snapshot.get(row["code"], {})
+            prev_180 = prev.get("180")
+            cur_180 = row.get("p180_pct")
+            if prev_180 is not None and cur_180 is not None:
+                row["p180_change"] = round(cur_180 - prev_180, 1)
+            else:
+                row["p180_change"] = None
     if freshness.data_cutoff and not freshness.is_stale:
         try:
             save_web_daily_snapshot(
