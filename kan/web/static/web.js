@@ -737,6 +737,7 @@ function kanStockPage(info) {
           this.historyMessage = "该周期暂无足够历史 · 可切换周期，或在不同交易日多次更新数据后再看";
           return;
         }
+        this._lastSeries = series;
         this.historyReady = true;
         this.$nextTick(() => this.renderHistory(series));
       } catch (_error) {
@@ -762,6 +763,25 @@ function kanStockPage(info) {
         });
         this.chart.resize();
       });
+    },
+    exportHistoryCsv() {
+      if (!this._lastSeries || this._lastSeries.length === 0) {
+        kanToast("暂无可导出的历史数据", "error");
+        return;
+      }
+      const header = ["日期", `${this.period}日位置%`];
+      const lines = [header.join(",")];
+      for (const item of this._lastSeries) {
+        lines.push(`${item.date},${item.position_pct !== null ? item.position_pct : ""}`);
+      }
+      const blob = new Blob(["\uFEFF" + lines.join("\n")], { type: "text/csv;charset=utf-8;" });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `慢慢看_${this.info.code}_${this.period}日位置历史.csv`;
+      a.click();
+      URL.revokeObjectURL(url);
+      kanToast(`已导出 ${this._lastSeries.length} 条位置历史`);
     },
   };
 }

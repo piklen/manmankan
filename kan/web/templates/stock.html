@@ -103,6 +103,7 @@
         <button type="button" :class="{active: period === 30}" @click="setPeriod(30)">30日</button>
         <button type="button" :class="{active: period === 60}" @click="setPeriod(60)">60日</button>
         <button type="button" :class="{active: period === 180}" @click="setPeriod(180)">180日</button>
+        <button type="button" @click="exportHistoryCsv()" title="导出位置历史为 CSV">导出</button>
       </div>
     </div>
     <div id="history-chart" class="chart" role="img" :aria-label="`${info.name} ${period} 日价格位置走势`" x-show="historyReady"></div>
