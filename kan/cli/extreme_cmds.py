@@ -114,6 +114,12 @@ def _filter_extreme_cmd(
                     board_index_result=board_index_result, board_meta=board_meta,
                 )
             ))
+        elif fmt is export.OutputFormat.csv:
+            typer.echo(export.extreme_csv(
+                results_by_period, mode=mode,
+                board_index_result=board_index_result, board_meta=board_meta,
+                periods=periods,
+            ))
         else:
             typer.echo(export.extreme_markdown(
                 results_by_period, mode=mode,
