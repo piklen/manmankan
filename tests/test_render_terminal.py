@@ -739,3 +739,29 @@ def test_trend_table_hot_adds_rank_column():
     headers = [c.header for c in table.columns]
     assert headers[0] == "榜"
     assert table.columns[0]._cells == ["3", "7"]
+
+
+def test_trim_title_to_width_drops_lowest_value_suffixes_first():
+    """标题后缀按价值从尾舍弃 · 拉取时间先舍,数据截止后舍,基础标题始终保留。"""
+    from kan.render.base import trim_title_to_width
+
+    base = "慢慢看 · 30 日低点 · 6 只触及"
+    suffixes = [" · 数据截止 07-23 收盘", " · 今晨 02:41 拉取"]
+
+    assert trim_title_to_width(base, suffixes, None) == base + "".join(suffixes)
+    assert trim_title_to_width(base, suffixes, 55) == base + suffixes[0]
+    assert trim_title_to_width(base, suffixes, 30) == base
+
+
+def test_extreme_table_cutoff_fetched_at_in_caption_not_title():
+    """low/high 表只 5 列 · 长标题必折行难看 · 数据截止/拉取时间移到表下 caption。"""
+    stock = _stock()
+    hits = [(stock, _period(30, at_low=True, pct=2.5))]
+    table = terminal.extreme_table(
+        30, hits, "low",
+        data_cutoff=date(2026, 5, 21), fetched_at="2026-05-21 23:00:00",
+    )
+    assert "数据截止" not in table.title
+    assert table.caption is not None
+    assert "数据截止 05-21 收盘" in table.caption.plain
+    assert "拉取" in table.caption.plain

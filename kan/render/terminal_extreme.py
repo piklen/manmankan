@@ -33,8 +33,10 @@ def extreme_table(
 ) -> Table:
     """kan low / high 单周期表 · 多周期时由 caller 循环逐张调用。
 
-    title 含周期 + 触及数 + 累积 cutoff/fetched_at(caller 在跨周期循环里累积 ·
-    与原行为一致 · 数据本身不变只是表头不同)。
+    title 只含周期 + 触及数;cutoff/fetched_at 放 caption(表下小字)。
+    理由:low/high 表只有 5 列(~55 显示宽),长 title 必在表宽处折行且
+    断点难看("今晨 \\n 02:49 拉取"),与终端宽度无关;caption 折行自然。
+    (caller 在跨周期循环里累积 cutoff/fetched_at · 数据本身不变只是表头不同)。
 
     Args:
         period: 当前周期天数(2-360)。
@@ -43,8 +45,8 @@ def extreme_table(
         is_hot: True 时加 "榜" 名次列。
         rank_map: 热榜代码 → 名次。is_hot=False 时可 None。
         highlight: 自选股代码集合 · 用于 ⭐ 前缀。
-        data_cutoff: 截至本周期累积的最大 cutoff · 影响 title。
-        fetched_at: 截至本周期累积的最晚 cache_age · 影响 title。
+        data_cutoff: 截至本周期累积的最大 cutoff · 影响 caption。
+        fetched_at: 截至本周期累积的最晚 cache_age · 影响 caption。
         board_index_result: 板块 / 题材指数 K 线 scan 结果 · 不为 None 时
             作为首行 + add_section 与 hits 视觉分隔。caller 提前 scan_stock
             产出(传 periods=用户周期 list)· render 层不调度。
@@ -57,12 +59,19 @@ def extreme_table(
     highlight = highlight or set()
 
     title = f"慢慢看 · {period} 日{label} · {len(hits)} 只触及"
+    caption_parts: list[str] = []
     if data_cutoff:
-        title += f" · 数据截止 {format_date_compact(data_cutoff)} 收盘"
+        caption_parts.append(f"数据截止 {format_date_compact(data_cutoff)} 收盘")
     if fetched_at:
-        title += f" · {format_fetched_at_compact(fetched_at)} 拉取"
+        caption_parts.append(f"{format_fetched_at_compact(fetched_at)} 拉取")
+    caption = (
+        Text(" · ".join(caption_parts), style="dim") if caption_parts else None
+    )
 
-    table = Table(title=title, show_lines=False, pad_edge=False, padding=(0, 1))
+    table = Table(
+        title=title, caption=caption,
+        show_lines=False, pad_edge=False, padding=(0, 1),
+    )
     if is_hot:
         table.add_column("榜", justify="right", style="cyan", min_width=3)
     table.add_column("股票", style="white", no_wrap=True)

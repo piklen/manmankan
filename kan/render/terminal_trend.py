@@ -30,8 +30,6 @@ def trend_title(
     max_width:终端可用宽度 · 与 scan_title 同策略 — 超宽先舍 fetched_at,
     再舍数据截止后缀,避免窄终端标题折行难看。md export 不传 → 完整标题。
     """
-    from rich.cells import cell_len
-
     from kan.core.models import BoardMeta, HotMeta, ThemeMeta
 
     meta = ctx.meta
@@ -59,24 +57,15 @@ def trend_title(
     else:
         title = f"慢慢看 · 连续涨跌看板 · {mode_label}{filter_label}"
 
-    def _fits(candidate: str) -> bool:
-        return max_width is None or cell_len(candidate) <= max_width
+    from kan.render.base import trim_title_to_width
 
+    # 价值从高到低:数据截止 > 拉取时间
+    suffixes: list[str] = []
     if data_cutoff:
-        cutoff_part = f" · 数据截止 {format_date_compact(data_cutoff)} 收盘"
-        fetched_part = (
-            f" · {format_fetched_at_compact(fetched_at)} 拉取" if fetched_at else ""
-        )
-        if _fits(title + cutoff_part + fetched_part):
-            return title + cutoff_part + fetched_part
-        if _fits(title + cutoff_part):
-            return title + cutoff_part
-        return title
+        suffixes.append(f" · 数据截止 {format_date_compact(data_cutoff)} 收盘")
     if fetched_at:
-        fetched_part = f" · {format_fetched_at_compact(fetched_at)} 拉取"
-        if _fits(title + fetched_part):
-            return title + fetched_part
-    return title
+        suffixes.append(f" · {format_fetched_at_compact(fetched_at)} 拉取")
+    return trim_title_to_width(title, suffixes, max_width)
 
 
 def trend_table(
