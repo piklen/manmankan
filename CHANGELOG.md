@@ -9,6 +9,12 @@ explicitly approves a larger bump.
 
 ## [Unreleased]
 
+## [0.0.6.9.20] - 2026-07-24
+
+### Fixed
+
+- `kan low` / `kan high` 表格标题不再折行：数据截止与拉取时间从长标题移到表格下方 caption 小字（low/high 表只有 5 列，长标题必在表宽处折行且断点难看）；`kan scan` / `kan trend` 的标题裁剪逻辑统一为共享 helper。
+
 ## [0.0.6.9.19] - 2026-07-24
 
 ### Fixed
@@ -485,7 +491,8 @@ explicitly approves a larger bump.
 - **Shell 补全** · zsh / bash / fish / powershell
 - **合规与隐私** · 强制风险提示 + 关键词黑名单（无买卖建议 / 无目标价 / 无评级）· 数据全本地
 
-[Unreleased]: https://github.com/piklen/manmankan/compare/v0.0.6.9.19...HEAD
+[Unreleased]: https://github.com/piklen/manmankan/compare/v0.0.6.9.20...HEAD
+[0.0.6.9.20]: https://github.com/piklen/manmankan/compare/v0.0.6.9.19...v0.0.6.9.20
 [0.0.6.9.19]: https://github.com/piklen/manmankan/compare/v0.0.6.9.18...v0.0.6.9.19
 [0.0.6.9.18]: https://github.com/piklen/manmankan/compare/v0.0.6.9.17...v0.0.6.9.18
 [0.0.6.9.17]: https://github.com/piklen/manmankan/compare/v0.0.6.9.16...v0.0.6.9.17
