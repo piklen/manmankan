@@ -253,10 +253,17 @@ def _prepare_scan_render(
                 hint="例: kan add 600519 000858",
             )
     if not ctx.results:
-        _exit_scan_error(
-            fmt, code="data_unavailable", message="无缓存数据",
-            hint="例: kan fetch；或 kan scan 自动拉取默认池 K 线",
-        )
+        # 区分"代码无效"和"数据未拉取"两种情况
+        if ctx.targets:
+            _exit_scan_error(
+                fmt, code="data_unavailable", message="无缓存数据",
+                hint="例: kan fetch；或 kan scan 自动拉取默认池 K 线",
+            )
+        else:
+            _exit_scan_error(
+                fmt, code="empty_pool", message="候选池为空",
+                hint="例: kan scan --codes 600519,000858；或 kan add 600519",
+            )
 
     all_results = service_result.all_results
     results = service_result.results
