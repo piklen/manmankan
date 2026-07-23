@@ -9,6 +9,13 @@ explicitly approves a larger bump.
 
 ## [Unreleased]
 
+## [0.0.6.9.18] - 2026-07-24
+
+### Fixed
+
+- `kan web` 个股详情页 `/stock/{code}` 不再 500：行业位置对照序列化误读模型上不存在的 `stock_pct`/`rank` 字段，已对齐真实模型 `position_pct`/`rank_low_to_high`/`sample` 并补真实模型回归测试。
+- `kan web` 页面内联 SVG favicon，浏览器不再因自动请求 `/favicon.ico` 被会话校验拦截而在控制台报 401。
+
 ## [0.0.6.9.17] - 2026-07-24
 
 ### Fixed
@@ -472,7 +479,8 @@ explicitly approves a larger bump.
 - **Shell 补全** · zsh / bash / fish / powershell
 - **合规与隐私** · 强制风险提示 + 关键词黑名单（无买卖建议 / 无目标价 / 无评级）· 数据全本地
 
-[Unreleased]: https://github.com/piklen/manmankan/compare/v0.0.6.9.17...HEAD
+[Unreleased]: https://github.com/piklen/manmankan/compare/v0.0.6.9.18...HEAD
+[0.0.6.9.18]: https://github.com/piklen/manmankan/compare/v0.0.6.9.17...v0.0.6.9.18
 [0.0.6.9.17]: https://github.com/piklen/manmankan/compare/v0.0.6.9.16...v0.0.6.9.17
 [0.0.6.9.16]: https://github.com/piklen/manmankan/compare/v0.0.6.9.15...v0.0.6.9.16
 [0.0.6.9.15]: https://github.com/piklen/manmankan/compare/v0.0.6.9.14...v0.0.6.9.15

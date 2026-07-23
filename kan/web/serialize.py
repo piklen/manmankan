@@ -265,7 +265,7 @@ def serialize_info(result: InfoServiceResult) -> dict[str, Any]:
 
 
 def _serialize_board_context(ctx: Any) -> dict[str, Any]:
-    """行业位置对照数据。"""
+    """行业位置对照数据 · 模板契约 stock_pct/rank/rank_total ← 模型 position_pct/rank_low_to_high/sample。"""
     return {
         "industry": ctx.industry,
         "constituent_count": ctx.constituent_count,
@@ -273,10 +273,10 @@ def _serialize_board_context(ctx: Any) -> dict[str, Any]:
         "periods": [
             {
                 "period": p.period,
-                "stock_pct": _round(p.stock_pct, 1),
+                "stock_pct": _round(p.position_pct, 1),
                 "board_avg_pct": _round(p.board_avg_pct, 1),
-                "rank": p.rank,
-                "rank_total": p.rank_total,
+                "rank": p.rank_low_to_high,
+                "rank_total": p.sample,
             }
             for p in ctx.periods
         ],
