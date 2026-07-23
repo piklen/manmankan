@@ -15,6 +15,7 @@ from kan.storage.export_cross_section import (
     history_csv,
     history_markdown,
     history_payload,
+    info_csv,
 )
 from kan.storage.export_find_code_pool import code_pool_markdown, code_pool_payload
 from kan.storage.export_find_dimensions import (
@@ -87,4 +88,5 @@ __all__ = [
     "history_csv",
     "history_markdown",
     "history_payload",
+    "info_csv",
 ]

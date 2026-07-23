@@ -228,6 +228,14 @@ def info(
                     def _render_json() -> None:
                         typer.echo(json_str)
                     _render = _render_json
+                elif fmt is export.OutputFormat.csv:
+                    csv_str = export.info_csv(
+                        result, trend_result, volume=volume_state,
+                        moneyflow=moneyflow,
+                    )
+                    def _render_csv() -> None:
+                        typer.echo(csv_str)
+                    _render = _render_csv
                 else:
                     md_str = export.info_markdown(
                         result, trend_result, volume=volume_state, title=title,
