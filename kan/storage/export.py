@@ -90,6 +90,7 @@ from kan.storage.export_trend import (
     compare_payload,
     theme_leaderboard_markdown,
     theme_leaderboard_payload,
+    trend_csv,
     trend_markdown,
     trend_payload,
 )
@@ -170,6 +171,7 @@ __all__ = [
     "theme_leaderboard_markdown",
     "theme_leaderboard_payload",
     "to_json",
+    "trend_csv",
     "trend_markdown",
     "trend_payload",
 ]

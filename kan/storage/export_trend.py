@@ -146,6 +146,38 @@ def trend_markdown(
     return f"# {title}\n\n{md_table(headers, rows)}\n\n{_disclaimer_quote()}"
 
 
+def trend_csv(
+    results: list[TrendResult], *, latest: int | None,
+) -> str:
+    """kan trend --format csv · Excel 兼容(BOM 头)。"""
+    import csv
+    import io
+
+    output = io.StringIO()
+    writer = csv.writer(output)
+    headers = ["股票", "代码", "现价", "连续", "累计%"]
+    n_dates = 0
+    if latest and results:
+        n_dates = min(latest, len(results[0].daily_changes))
+        headers += [d[-5:] for d, _ in results[0].daily_changes[:n_dates]]
+    writer.writerow(headers)
+    for r in results:
+        cells = [
+            r.name.replace(" ", ""),
+            r.symbol,
+            f"{r.current_price:.2f}",
+            r.direction,
+            f"{abs(r.streak_pct):.2f}",
+        ]
+        if n_dates:
+            for _, chg in r.daily_changes[:n_dates]:
+                cells.append(f"{chg:.2f}")
+            while len(cells) < len(headers):
+                cells.append("")
+        writer.writerow(cells)
+    return "\ufeff" + output.getvalue()
+
+
 # ── compare ───────────────────────────────────────────────────────────
 
 def compare_payload(results: list[StockScanResult], *, periods: list[int]) -> dict:
