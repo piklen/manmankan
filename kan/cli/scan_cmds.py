@@ -145,9 +145,21 @@ def _parse_scan_periods(raw: str | None, fmt: export.OutputFormat) -> list[int] 
     return sorted(dict.fromkeys(periods))
 
 
-def _compact_display_periods(periods: list[int]) -> list[int]:
-    """Stable short/mid/long terminal subset for explicit compact scan output."""
-    preferred = [5, 20, 30, 60, 180, 360]
+def _compact_display_periods(
+    periods: list[int], console_width: int = 130,
+) -> list[int]:
+    """Stable short/mid/long terminal subset for explicit compact scan output.
+
+    宽度自适应:固定列(股票~22 + 现价~11 + 量价~12 + 共振~7 ≈ 52)之外,
+    每周期列 ~9 显示宽 · 窄终端少给周期,避免表格超宽被裁掉右边框。
+    """
+    if console_width >= 100:
+        preferred = [5, 20, 30, 60, 180, 360]
+    elif console_width >= 90:
+        preferred = [5, 30, 180, 360]
+    else:
+        # <90 列:涨停/💰 标记会把股票列撑宽 ~8 · 只留 2 个周期保右边框
+        preferred = [30, 180]
     chosen = [p for p in preferred if p in periods]
     if chosen:
         return chosen
@@ -317,6 +329,7 @@ def _prepare_scan_render(
             board_index_result=service_result.board_index_result,
             show_context=show_context_columns,
             show_retail_facts=include_external_context,
+            console_width=console.width,
         )
         is_compact = len(display_periods) < len(period_list)
         is_hot = isinstance(board_meta, HotMeta)
@@ -582,7 +595,7 @@ def scan(
     if wide or periods is not None:
         display_periods = period_list
     elif compact:
-        display_periods = _compact_display_periods(period_list)
+        display_periods = _compact_display_periods(period_list, console.width)
     else:
         display_periods = responsive_periods(console.width - 56, period_list)
     show_context_columns = (

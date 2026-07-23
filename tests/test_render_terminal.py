@@ -307,6 +307,23 @@ def test_scan_table_volume_price_column_not_truncated():
     assert "量缩·…" not in out
 
 
+def test_scan_title_trims_suffixes_for_narrow_terminal():
+    """窄终端下长标题会撑宽表格裁右边框 · 依次舍 fetched_at / 数据截止后缀。"""
+    from kan.render.terminal_scan import scan_title
+
+    ctx = _ctx()
+    full = scan_title(ctx, high_mode=False)
+    assert "数据截止" in full and "拉取" in full
+
+    trimmed = scan_title(ctx, high_mode=False, max_width=60)
+    assert "数据截止" in trimmed  # 保留 cutoff(重要)
+    assert "拉取" not in trimmed  # 舍 fetched_at(价值最低)
+
+    minimal = scan_title(ctx, high_mode=False, max_width=30)
+    assert "数据截止" not in minimal
+    assert "位置扫描" in minimal  # 基础标题始终保留
+
+
 def test_scan_table_context_columns():
     table = terminal.scan_table(
         _ctx(),

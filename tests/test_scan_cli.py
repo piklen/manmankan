@@ -291,6 +291,20 @@ def scan_runner(monkeypatch):
     return CliRunner()
 
 
+def test_compact_display_periods_width_aware():
+    """compact 周期子集随终端宽度收缩 · 防表格超宽被裁右边框。
+
+    实测:80 列下 4 周期 + 涨停标记行必裁边 · <90 列只留 30/180 两个周期。
+    """
+    from kan.cli.scan_cmds import _compact_display_periods
+
+    periods = [3, 5, 10, 15, 30, 60, 90, 120, 180]
+    assert _compact_display_periods(periods, 130) == [5, 30, 60, 180]
+    assert _compact_display_periods(periods, 90) == [5, 30, 180]
+    assert _compact_display_periods(periods, 80) == [30, 180]
+    assert _compact_display_periods(periods, 72) == [30, 180]
+
+
 def test_scan_codes_no_data_reports_codes(scan_runner, monkeypatch):
     """--codes 显式代码全无数据 → 报错点名代码并引导检查,而非泛泛 'kan fetch'."""
     from kan.cli import app

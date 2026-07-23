@@ -54,8 +54,16 @@ def scan_title(
     *,
     high_mode: bool,
     signal_only: bool = False,
+    max_width: int | None = None,
 ) -> str:
-    """构造 scan 命令标题 · 给 terminal table.title + md export 共用 · 单 SOT。"""
+    """构造 scan 命令标题 · 给 terminal table.title + md export 共用 · 单 SOT。
+
+    max_width:终端可用宽度 · rich 表格会被长标题撑宽导致窄终端裁掉右边框,
+    超宽时先舍 fetched_at 后缀(价值最低),再舍数据截止后缀(标题上方已有
+    pool summary / 警告行交代数据状态)。md export 不传 → 始终完整标题。
+    """
+    from rich.cells import cell_len
+
     from kan.core.models import BoardMeta, HotMeta, ThemeMeta
 
     meta = ctx.meta
@@ -84,10 +92,24 @@ def scan_title(
     )
     if signal_only:
         title += " · 仅信号"
+
+    def _fits(candidate: str) -> bool:
+        return max_width is None or cell_len(candidate) <= max_width
+
     if data_cutoff:
-        title += f" · 数据截止 {format_date_compact(data_cutoff)} 收盘"
+        cutoff_part = f" · 数据截止 {format_date_compact(data_cutoff)} 收盘"
+        fetched_part = (
+            f" · {format_fetched_at_compact(fetched_at)} 拉取" if fetched_at else ""
+        )
+        if _fits(title + cutoff_part + fetched_part):
+            return title + cutoff_part + fetched_part
+        if _fits(title + cutoff_part):
+            return title + cutoff_part
+        return title
     if fetched_at:
-        title += f" · {format_fetched_at_compact(fetched_at)} 拉取"
+        fetched_part = f" · {format_fetched_at_compact(fetched_at)} 拉取"
+        if _fits(title + fetched_part):
+            return title + fetched_part
     return title
 
 
@@ -102,6 +124,7 @@ def scan_table(
     show_context: bool = False,
     show_retail_facts: bool = True,
     show_bar: bool = False,
+    console_width: int | None = None,
 ) -> Table:
     """kan scan 10-周期全景表 · 支持板块指数 row + 热榜名次 + 自选 ⭐ 高亮。
 
@@ -118,11 +141,14 @@ def scan_table(
         board_index_result: 板块指数 / 题材指数 K 线 scan 结果 · 不为 None 时作为
             第一行 + section 分隔(与 results 区分)。caller 提前算好(scan_stock 是
             重导入 · render 层不应自己调度)。
+        console_width: 终端宽度 · 传给 scan_title 防长标题撑宽表格裁掉右边框。
     """
     from kan.core.models import HotMeta
 
     meta = ctx.meta
-    title = scan_title(ctx, high_mode=high_mode, signal_only=signal_only)
+    title = scan_title(
+        ctx, high_mode=high_mode, signal_only=signal_only, max_width=console_width,
+    )
     is_hot = isinstance(meta, HotMeta)
     highlight = meta.highlight if meta else set()
     rank_map = meta.rank_map if is_hot else {}
