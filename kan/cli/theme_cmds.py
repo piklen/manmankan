@@ -372,6 +372,26 @@ def trend_cmd(
                     def _render_md() -> None:
                         typer.echo(md_str)
                     _render = _render_md
+                elif fmt is export.OutputFormat.csv:
+                    import csv
+                    import io
+
+                    output = io.StringIO()
+                    writer = csv.writer(output)
+                    writer.writerow(["排名", "题材", "代码", "现价", "连续", "累计%"])
+                    for idx, r in enumerate(shown_results, start=1):
+                        writer.writerow([
+                            str(idx),
+                            r.name.replace(" ", ""),
+                            r.symbol,
+                            f"{r.current_price:.2f}",
+                            r.direction,
+                            f"{abs(r.streak_pct):.2f}",
+                        ])
+                    csv_str = "\ufeff" + output.getvalue()
+                    def _render_csv() -> None:
+                        typer.echo(csv_str)
+                    _render = _render_csv
                 else:
                     # terminal 渲染 —— 在 lifecycle 内构造，context 外输出
                     console = Console()
