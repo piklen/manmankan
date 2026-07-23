@@ -417,3 +417,30 @@ def history_markdown(
             _history_mark_label(res, direction),
         ])
     return f"# {title}\n\n{md_table(headers, rows)}\n\n{_disclaimer_quote()}"
+
+
+def history_csv(
+    entries: list,
+    *,
+    period: int,
+) -> str:
+    """kan history --format csv · Excel 兼容(BOM 头)。"""
+    import csv
+    import io
+
+    from kan.core.scanner import history_mark
+
+    output = io.StringIO()
+    writer = csv.writer(output)
+    writer.writerow(["日期", f"{period}日位置%", "共振", "标记"])
+    for e in entries:
+        cell = e.periods.get(period)
+        pct_str = "-" if cell is None else f"{cell['pct']:.1f}"
+        res, direction = history_mark(e.periods)
+        writer.writerow([
+            e.snapshot_date.isoformat(),
+            pct_str,
+            str(res) if res else "0",
+            _history_mark_label(res, direction),
+        ])
+    return "\ufeff" + output.getvalue()

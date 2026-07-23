@@ -58,6 +58,7 @@ from kan.storage.export_find import (
     cross_section_payload,
     find_markdown,
     find_payload,
+    history_csv,
     history_markdown,
     history_payload,
 )
@@ -158,6 +159,7 @@ __all__ = [
     "extreme_payload",
     "find_markdown",
     "find_payload",
+    "history_csv",
     "history_markdown",
     "history_payload",
     "hold_csv",

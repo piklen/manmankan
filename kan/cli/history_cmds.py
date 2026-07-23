@@ -73,6 +73,12 @@ def history(
             period=service_result.period,
         )))
         return
+    if fmt is export.OutputFormat.csv:
+        typer.echo(export.history_csv(
+            entries,
+            period=service_result.period,
+        ))
+        return
     if fmt is export.OutputFormat.md:
         name_short = name.replace(" ", "")
         title = f"慢慢看 · {name_short} {sym} · {service_result.period}日位置回溯"

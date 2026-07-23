@@ -12,6 +12,7 @@ from kan.storage.export_cross_section import (
     _scan_context_public_dict,
     cross_section_markdown,
     cross_section_payload,
+    history_csv,
     history_markdown,
     history_payload,
 )
@@ -83,6 +84,7 @@ __all__ = [
     "cross_section_payload",
     "find_markdown",
     "find_payload",
+    "history_csv",
     "history_markdown",
     "history_payload",
 ]
