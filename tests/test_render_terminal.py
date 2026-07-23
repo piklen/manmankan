@@ -288,6 +288,25 @@ def test_scan_table_adds_retail_fact_columns_when_present():
     assert table.columns[5]._cells == ["量增·收涨"]
 
 
+def test_scan_table_volume_price_column_not_truncated():
+    """量价列最长值「量缩·收跌」(10 显示宽) · 宽终端渲染不得截成「量缩·…」."""
+    import io
+
+    from rich.console import Console
+
+    table = terminal.scan_table(
+        _ctx(),
+        [_stock(volume_price_state="量缩·收跌")],
+        display_periods=[30, 60, 180],
+        high_mode=False,
+    )
+    buf = io.StringIO()
+    Console(file=buf, force_terminal=True, width=100).print(table)
+    out = buf.getvalue()
+    assert "量缩·收跌" in out
+    assert "量缩·…" not in out
+
+
 def test_scan_table_context_columns():
     table = terminal.scan_table(
         _ctx(),

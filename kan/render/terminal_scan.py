@@ -149,7 +149,8 @@ def scan_table(
     if show_permission:
         table.add_column("权限", justify="right", min_width=6)
     if show_volume_price:
-        table.add_column("量价", justify="right", min_width=6)
+        # 值域最长「量缩·收跌」= 10 显示宽 · min_width 不足会被 rich 截成「量缩·…」
+        table.add_column("量价", justify="right", min_width=10, no_wrap=True)
     if show_context:
         table.add_column("PE", justify="right", min_width=6)
         table.add_column("5日主力(万)", justify="right", min_width=10)

@@ -294,12 +294,33 @@ def render_freshness_warning(
     )
 
     if freshness.is_stale and latest_incomplete:
+        expected_str = format_date_compact(freshness.expected_cutoff)
+        # 部分滞后:已有股票到最新交易日,但整体不齐 — 不能断言「当前缓存到最旧日」
+        stale_count = (
+            freshness.target_count - freshness.current_count
+            if freshness.target_count > 0
+            else 0
+        )
+        if (
+            freshness.current_count > 0
+            and stale_count > 0
+            and freshness.data_cutoff is not None
+        ):
+            oldest_str = (
+                format_date_compact(oldest_cutoff) if oldest_cutoff else "无缓存"
+            )
+            console.print(
+                f"\n  [bold yellow]⚠️ {stale_count}/{freshness.target_count} 只股票数据滞后"
+                f" · 最新 {format_date_compact(freshness.data_cutoff)} 收盘"
+                f" · 最旧 {oldest_str}\n"
+                f"   运行 `{refresh_hint}` 拉取最新数据[/bold yellow]"
+            )
+            return
         warning_cutoff = oldest_cutoff
         cutoff_str = (
             format_date_compact(warning_cutoff)
             if warning_cutoff else "无缓存"
         )
-        expected_str = format_date_compact(freshness.expected_cutoff)
         days_behind = (
             (freshness.expected_cutoff - warning_cutoff).days
             if warning_cutoff else "?"

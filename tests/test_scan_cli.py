@@ -291,6 +291,21 @@ def scan_runner(monkeypatch):
     return CliRunner()
 
 
+def test_scan_codes_no_data_reports_codes(scan_runner, monkeypatch):
+    """--codes 显式代码全无数据 → 报错点名代码并引导检查,而非泛泛 'kan fetch'."""
+    from kan.cli import app
+
+    monkeypatch.setattr(
+        "kan.core.scanner.scan_batch", lambda _pairs, mode="low", periods=None: []
+    )
+
+    result = scan_runner.invoke(app, ["scan", "--codes", "999999"])
+
+    assert result.exit_code == 1
+    assert "999999" in result.output
+    assert "请确认是 6 位 A 股代码" in result.output
+
+
 def test_scan_stale_warning_uses_new_phrasing(scan_runner, monkeypatch):
     """真测: scan 命令的 stale 警告应含'当前缓存到 X 收盘' + '数据滞后 N 天'."""
     from datetime import date

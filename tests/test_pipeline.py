@@ -503,6 +503,34 @@ def test_render_freshness_warning_uses_oldest_cutoff_for_mixed_pool():
     assert "3 天" in msg
 
 
+def test_render_freshness_warning_partial_stale_reports_counts():
+    """部分股票已到最新交易日时,不能断言「当前缓存到最旧日」· 应报滞后只数。
+
+    真实场景:默认池 193 只中 146 只到 07-23 / 47 只停在 07-22 ·
+    旧文案「当前缓存到 07-22 收盘」与标题「数据截止 07-23」自相矛盾。
+    """
+    console = Mock()
+    f = Freshness(
+        data_cutoff=date(2026, 7, 23),
+        min_cutoff=date(2026, 7, 22),
+        fetched_at=None,
+        expected_cutoff=date(2026, 7, 23),
+        is_stale=True,
+        phase="post",
+        current_count=146,
+        target_count=193,
+    )
+
+    pipeline.render_freshness_warning(f, console)
+
+    msg = console.print.call_args.args[0]
+    assert "47/193" in msg
+    assert "最新 07-23" in msg
+    assert "最旧 07-22" in msg
+    assert "当前缓存到" not in msg
+    assert "kan fetch --force" in msg
+
+
 def test_render_freshness_warning_intraday_prints_intraday_warning():
     """is_stale=False + phase=intraday → 「当前盘中」警告。"""
     console = Mock()
