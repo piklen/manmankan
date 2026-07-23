@@ -96,13 +96,32 @@ def _resolve_em_code(theme: Theme) -> str:
     return code
 
 
+def _get_mini_racer_cls():
+    """兼容 mini-racer 0.14+ 的 MiniRacer 导入。
+
+    mini-racer 0.14+ 在 macOS 上安装为 py_mini_racer 命名空间包，
+    没有 __init__.py，需要从 _mini_racer 子模块导入。
+    """
+    try:
+        from py_mini_racer import MiniRacer
+        return MiniRacer
+    except ImportError:
+        pass
+    try:
+        from py_mini_racer._mini_racer import MiniRacer
+        return MiniRacer
+    except ImportError:
+        pass
+    raise ImportError("无法导入 MiniRacer，请检查 mini-racer 或 py-mini-racer 是否已安装")
+
+
 @lru_cache(maxsize=1)
 def _ths_headers() -> dict[str, str]:
     """用 AkShare 固定版本内置脚本生成同花顺访问 Cookie。"""
     from akshare.stock_feature.stock_board_concept_ths import _get_file_content_ths
-    from py_mini_racer import MiniRacer
 
-    with _MINI_RACER_LOCK, MiniRacer() as racer:
+    mini_racer_cls = _get_mini_racer_cls()
+    with _MINI_RACER_LOCK, mini_racer_cls() as racer:
         racer.eval(_get_file_content_ths("ths.js"))
         value = str(racer.call("v"))
     return {

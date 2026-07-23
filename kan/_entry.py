@@ -98,6 +98,15 @@ def _install_doh_dns() -> None:
         pass  # DoH 不可用不阻塞启动
 
 
+def _patch_mini_racer() -> None:
+    """修复 mini-racer 0.14+ 在 macOS 上缺少 __init__.py 的问题。"""
+    try:
+        from kan.infra.finalizer_guard import patch_mini_racer_import
+        patch_mini_racer_import()
+    except Exception:
+        pass  # 补丁失败不阻塞启动
+
+
 def main() -> None:
     _maybe_print_boot_banner()
     if _should_print_fast_start():
@@ -106,6 +115,7 @@ def main() -> None:
     if _should_print_fast_help():
         _print_fast_help()
         return
+    _patch_mini_racer()
     _install_doh_dns()
     try:
         from kan.cli import cli_main

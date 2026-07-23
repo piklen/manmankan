@@ -8,8 +8,40 @@ py_mini_racer 在部分机器上 dylib 加载失败(如架构不匹配)时,半�
 from __future__ import annotations
 
 import contextlib
+import sys
 
 _defused = False
+
+
+def patch_mini_racer_import() -> None:
+    """修复 mini-racer 0.14+ 在 macOS 上缺少 __init__.py 的问题。
+
+    mini-racer 0.14+ 在 macOS 上安装为 py_mini_racer 命名空间包，
+    没有 __init__.py，导致 `from py_mini_racer import MiniRacer` 失败。
+    此函数在 sys.modules 中注入一个兼容的 py_mini_racer 模块。
+    """
+    if "py_mini_racer" in sys.modules:
+        return
+    try:
+        # 先尝试正常导入
+        import py_mini_racer
+        if hasattr(py_mini_racer, "MiniRacer"):
+            return
+    except ImportError:
+        pass
+    # 尝试从 _mini_racer 子模块导入
+    try:
+        import types
+
+        from py_mini_racer._mini_racer import MiniRacer
+
+        # 创建一个兼容的模块对象
+        compat_module = types.ModuleType("py_mini_racer")
+        compat_module.MiniRacer = MiniRacer
+        compat_module.__file__ = getattr(sys.modules.get("py_mini_racer._mini_racer"), "__file__", None)
+        sys.modules["py_mini_racer"] = compat_module
+    except ImportError:
+        pass
 
 
 def defuse_mini_racer_finalizer() -> None:
@@ -23,6 +55,14 @@ def defuse_mini_racer_finalizer() -> None:
         import py_mini_racer
 
         racer_cls = getattr(py_mini_racer, "MiniRacer", None)
+        if racer_cls is None:
+            # mini-racer 0.14+ 在 macOS 上是命名空间包，没有 __init__.py
+            try:
+                from py_mini_racer._mini_racer import MiniRacer
+
+                racer_cls = MiniRacer
+            except ImportError:
+                pass
         if racer_cls is None:
             from py_mini_racer import py_mini_racer as _impl  # type: ignore[attr-defined]
 
