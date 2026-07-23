@@ -118,6 +118,11 @@ def compare(
                 def _render_json() -> None:
                     typer.echo(json_str)
                 _render = _render_json
+            elif fmt is export.OutputFormat.csv:
+                csv_str = export.compare_csv(results, periods=period_list)
+                def _render_csv() -> None:
+                    typer.echo(csv_str)
+                _render = _render_csv
             elif fmt is export.OutputFormat.md:
                 md_str = export.compare_markdown(results, periods=period_list)
                 def _render_md() -> None:

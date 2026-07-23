@@ -86,6 +86,7 @@ from kan.storage.export_scan import (
 )
 from kan.storage.export_trend import (
     _trend_dict,
+    compare_csv,
     compare_markdown,
     compare_payload,
     theme_leaderboard_markdown,
@@ -146,6 +147,7 @@ __all__ = [
     "_valuation_public_dict",
     "code_pool_markdown",
     "code_pool_payload",
+    "compare_csv",
     "compare_markdown",
     "compare_payload",
     "cross_section_markdown",

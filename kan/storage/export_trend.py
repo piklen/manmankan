@@ -214,3 +214,34 @@ def compare_markdown(results: list[StockScanResult], *, periods: list[int]) -> s
     ])
     rows.append(["数据截止", *[r.scan_date.isoformat() for r in results]])
     return f"# 慢慢看 · 多股对比\n\n{md_table(headers, rows)}\n\n{_disclaimer_quote()}"
+
+
+def compare_csv(results: list[StockScanResult], *, periods: list[int]) -> str:
+    """kan compare --format csv · Excel 兼容(BOM 头)。"""
+    import csv
+    import io
+
+    output = io.StringIO()
+    writer = csv.writer(output)
+    headers = ["指标", *[r.symbol for r in results]]
+    writer.writerow(headers)
+    writer.writerow(["股票", *[r.name.replace(" ", "") for r in results]])
+    writer.writerow(["现价", *[f"{r.current_price:.2f}" for r in results]])
+    for p in periods:
+        cells = [f"{p}日位置%"]
+        for r in results:
+            pr = next((x for x in r.periods if x.period == p), None)
+            cells.append("-" if pr is None else f"{pr.position_pct:.1f}")
+        writer.writerow(cells)
+    writer.writerow(["低点共振", *[str(r.low_resonance) for r in results]])
+    writer.writerow(["高点共振", *[str(r.high_resonance) for r in results]])
+    writer.writerow(["ST", *["是" if r.is_st else "否" for r in results]])
+    writer.writerow([
+        "涨跌停",
+        *[
+            "涨停" if r.limit_up else ("跌停" if r.limit_down else "—")
+            for r in results
+        ],
+    ])
+    writer.writerow(["数据截止", *[r.scan_date.isoformat() for r in results]])
+    return "\ufeff" + output.getvalue()
