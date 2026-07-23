@@ -229,6 +229,7 @@ def _prepare_scan_render(
     show_context_columns: bool,
     include_external_context: bool,
     sort_key: str | None = None,
+    group: str | None = None,
 ) -> Callable[[], None]:
     """在 lifecycle 内准备 scan 输出/快照，返回关闭 Live 后执行的渲染闭包。"""
     from kan.core.models import HotMeta, ThemeMeta
@@ -239,11 +240,18 @@ def _prepare_scan_render(
 
     ctx = service_result.ctx
     board_meta = service_result.meta
+    from kan.core.scanner import PERIODS
+
+    # 快照(last_scan.json + snapshots/ 日归档)是 diff 与 kan history 的唯一数据源,
+    # 只允许「全池 + 默认周期 + 无分组」的 canonical 扫描写入:
+    # 分组/小池扫描会覆盖掉完整股票清单,自定义周期会让其余周期历史断档。
     can_write_snapshot = (
         board_meta is None
         and code_pairs is None
         and not all_stocks
         and not only_holdings
+        and group is None
+        and period_list == list(PERIODS)
     )
     lifecycle.phase("检查扫描结果", target_count=len(ctx.targets))
     if not ctx.targets:
@@ -646,6 +654,7 @@ def scan(
                 show_context_columns=show_context_columns,
                 include_external_context=include_external_context,
                 sort_key=sort,
+                group=group,
             )
     except StockSetResolveError as e:
         raise_stock_set_resolve_exit(e)

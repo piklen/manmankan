@@ -305,6 +305,51 @@ def test_compact_display_periods_width_aware():
     assert _compact_display_periods(periods, 72) == [30, 180]
 
 
+def test_scan_custom_periods_skip_snapshot(scan_runner, monkeypatch):
+    """自定义 --periods 扫描不写每日快照 · 防 kan history 其余周期断档。"""
+    from kan.app import app
+
+    saved = []
+    monkeypatch.setattr(
+        "kan.core.scanner.save_snapshot", lambda results: saved.append(results)
+    )
+
+    result = scan_runner.invoke(app, ["scan", "--periods", "3"])
+
+    assert result.exit_code == 0, result.output
+    assert saved == []
+
+
+def test_scan_group_skips_snapshot(scan_runner, monkeypatch):
+    """--group 分组扫描只是全池子集 · 不得用子集覆盖每日快照股票清单。"""
+    from kan.app import app
+
+    saved = []
+    monkeypatch.setattr(
+        "kan.core.scanner.save_snapshot", lambda results: saved.append(results)
+    )
+
+    result = scan_runner.invoke(app, ["scan", "--group", "默认"])
+
+    assert result.exit_code == 0, result.output
+    assert saved == []
+
+
+def test_scan_default_writes_snapshot(scan_runner, monkeypatch):
+    """canonical 扫描(全池 + 默认周期 + 无分组)仍写快照(diff / history 数据源)。"""
+    from kan.app import app
+
+    saved = []
+    monkeypatch.setattr(
+        "kan.core.scanner.save_snapshot", lambda results: saved.append(results)
+    )
+
+    result = scan_runner.invoke(app, ["scan"])
+
+    assert result.exit_code == 0, result.output
+    assert len(saved) == 1
+
+
 def test_scan_codes_no_data_reports_codes(scan_runner, monkeypatch):
     """--codes 显式代码全无数据 → 报错点名代码并引导检查,而非泛泛 'kan fetch'."""
     from kan.cli import app
