@@ -9,6 +9,13 @@ explicitly approves a larger bump.
 
 ## [Unreleased]
 
+## [0.0.6.9.17] - 2026-07-24
+
+### Fixed
+
+- `kan trend` 累计涨跌幅带显式 +/- 号，管道、重定向或无色终端丢失颜色时涨跌方向仍可读（题材连续涨跌榜同步修复）。
+- `kan trend` 表格标题与 `kan scan` 同一策略按终端宽度省略「拉取时间」「数据截止」后缀，窄终端标题折行明显收敛。
+
 ## [0.0.6.9.16] - 2026-07-24
 
 ### Fixed
@@ -465,7 +472,8 @@ explicitly approves a larger bump.
 - **Shell 补全** · zsh / bash / fish / powershell
 - **合规与隐私** · 强制风险提示 + 关键词黑名单（无买卖建议 / 无目标价 / 无评级）· 数据全本地
 
-[Unreleased]: https://github.com/piklen/manmankan/compare/v0.0.6.9.16...HEAD
+[Unreleased]: https://github.com/piklen/manmankan/compare/v0.0.6.9.17...HEAD
+[0.0.6.9.17]: https://github.com/piklen/manmankan/compare/v0.0.6.9.16...v0.0.6.9.17
 [0.0.6.9.16]: https://github.com/piklen/manmankan/compare/v0.0.6.9.15...v0.0.6.9.16
 [0.0.6.9.15]: https://github.com/piklen/manmankan/compare/v0.0.6.9.14...v0.0.6.9.15
 [0.0.6.9.14]: https://github.com/piklen/manmankan/compare/v0.0.6.9.13...v0.0.6.9.14

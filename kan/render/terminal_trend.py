@@ -23,8 +23,15 @@ def trend_title(
     *,
     candle: bool,
     filter_label: str = "",
+    max_width: int | None = None,
 ) -> str:
-    """构造 trend 命令标题 · terminal + md export 共用。"""
+    """构造 trend 命令标题 · terminal + md export 共用。
+
+    max_width:终端可用宽度 · 与 scan_title 同策略 — 超宽先舍 fetched_at,
+    再舍数据截止后缀,避免窄终端标题折行难看。md export 不传 → 完整标题。
+    """
+    from rich.cells import cell_len
+
     from kan.core.models import BoardMeta, HotMeta, ThemeMeta
 
     meta = ctx.meta
@@ -51,10 +58,24 @@ def trend_title(
         title = f"慢慢看 · {source_name}连续涨跌 · {mode_label}{filter_label}"
     else:
         title = f"慢慢看 · 连续涨跌看板 · {mode_label}{filter_label}"
+
+    def _fits(candidate: str) -> bool:
+        return max_width is None or cell_len(candidate) <= max_width
+
     if data_cutoff:
-        title += f" · 数据截止 {format_date_compact(data_cutoff)} 收盘"
+        cutoff_part = f" · 数据截止 {format_date_compact(data_cutoff)} 收盘"
+        fetched_part = (
+            f" · {format_fetched_at_compact(fetched_at)} 拉取" if fetched_at else ""
+        )
+        if _fits(title + cutoff_part + fetched_part):
+            return title + cutoff_part + fetched_part
+        if _fits(title + cutoff_part):
+            return title + cutoff_part
+        return title
     if fetched_at:
-        title += f" · {format_fetched_at_compact(fetched_at)} 拉取"
+        fetched_part = f" · {format_fetched_at_compact(fetched_at)} 拉取"
+        if _fits(title + fetched_part):
+            return title + fetched_part
     return title
 
 
@@ -65,6 +86,7 @@ def trend_table(
     latest: int | None = None,
     candle: bool = False,
     filter_label: str = "",
+    console_width: int | None = None,
 ) -> Table:
     """连续涨跌看板 · 行=股票 · 列=股票/现价/连续/累计(+ 可选近 N 天明细)。
 
@@ -75,11 +97,14 @@ def trend_table(
                 None 或 0 时不加日期列。原 --latest=N 由 caller 截断为窄屏 N′ 后传入。
         candle: 阳线阴线口径 · 影响 mode_label。
         filter_label: " · 连跌≥3天" / " · 连涨≥5天" / "" · caller 构造好传入。
+        console_width: 终端宽度 · 传给 trend_title 防窄屏标题折行。
     """
     from kan.core.models import HotMeta
 
     meta = ctx.meta
-    title = trend_title(ctx, candle=candle, filter_label=filter_label)
+    title = trend_title(
+        ctx, candle=candle, filter_label=filter_label, max_width=console_width,
+    )
     is_hot = isinstance(meta, HotMeta)
     rank_map = meta.rank_map if is_hot else {}
     highlight = meta.highlight if meta else set()
@@ -106,10 +131,11 @@ def trend_table(
 
         if r.streak < 0:
             streak_text = Text(r.direction, style="bold green")
-            cum_text = Text(f"{abs(r.streak_pct):.2f}%", style="green")
+            # 显式负号:管道/重定向丢失颜色时方向仍可读
+            cum_text = Text(f"-{abs(r.streak_pct):.2f}%", style="green")
         elif r.streak > 0:
             streak_text = Text(r.direction, style="bold red")
-            cum_text = Text(f"{abs(r.streak_pct):.2f}%", style="red")
+            cum_text = Text(f"+{abs(r.streak_pct):.2f}%", style="red")
         else:
             streak_text = Text("平", style="dim")
             cum_text = Text("0%", style="dim")
@@ -232,10 +258,11 @@ def theme_leaderboard_table(
 
         if r.streak < 0:
             streak_text = Text(r.direction, style="bold green")
-            cum_text = Text(f"{abs(r.streak_pct):.2f}%", style="green")
+            # 显式负号:管道/重定向丢失颜色时方向仍可读
+            cum_text = Text(f"-{abs(r.streak_pct):.2f}%", style="green")
         elif r.streak > 0:
             streak_text = Text(r.direction, style="bold red")
-            cum_text = Text(f"{abs(r.streak_pct):.2f}%", style="red")
+            cum_text = Text(f"+{abs(r.streak_pct):.2f}%", style="red")
         else:
             streak_text = Text("平", style="dim")
             cum_text = Text("0%", style="dim")
