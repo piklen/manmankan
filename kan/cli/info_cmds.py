@@ -184,15 +184,39 @@ def info(
                     fetch_status=None,
                 ))
             except ValueError as e:
-                _print_err(f"❌ {e}")
+                if fmt is export.OutputFormat.json:
+                    typer.echo(export.to_json(export.error_payload(
+                        "info",
+                        code="not_found",
+                        message=str(e),
+                        hint="例: kan info 600519",
+                    )))
+                else:
+                    _print_err(f"❌ {e}")
                 raise typer.Exit(1) from e
             except InfoFetchError as e:
-                Console(stderr=True).print(
-                    f"❌ 拉取失败：{_safe_error_msg(e.cause)}"
-                )
+                if fmt is export.OutputFormat.json:
+                    typer.echo(export.to_json(export.error_payload(
+                        "info",
+                        code="fetch_error",
+                        message=f"拉取失败：{_safe_error_msg(e.cause)}",
+                        hint="例: kan fetch --force",
+                    )))
+                else:
+                    Console(stderr=True).print(
+                        f"❌ 拉取失败：{_safe_error_msg(e.cause)}"
+                    )
                 raise typer.Exit(1) from e
             except InfoDataUnavailableError as e:
-                _print_err("无数据")
+                if fmt is export.OutputFormat.json:
+                    typer.echo(export.to_json(export.error_payload(
+                        "info",
+                        code="data_unavailable",
+                        message="无数据",
+                        hint="例: kan fetch --force",
+                    )))
+                else:
+                    _print_err("无数据")
                 raise typer.Exit(1) from e
 
             lifecycle.phase("准备输出")
