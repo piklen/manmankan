@@ -78,7 +78,15 @@ def compare(
                 try:
                     sym, name = resolve_symbol_or_name(raw)
                 except ValueError as e:
-                    _print_err(f"❌ {raw}：{e}")
+                    if fmt is export.OutputFormat.json:
+                        typer.echo(export.to_json(export.error_payload(
+                            "compare",
+                            code="not_found",
+                            message=f"{raw}：{e}",
+                            hint="例: kan compare 600519 000858",
+                        )))
+                    else:
+                        _print_err(f"❌ {raw}：{e}")
                     raise typer.Exit(1) from e
                 if sym in seen:
                     continue
