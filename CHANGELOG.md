@@ -9,6 +9,12 @@ explicitly approves a larger bump.
 
 ## [Unreleased]
 
+## [0.0.6.9.23] - 2026-07-24
+
+### Added
+
+- 新增 `kan status` 本地数据状态一览：K 线缓存只数与最新截止、滞后只数、代码表、快照天数、自选/持仓/现金、tushare 凭证与 endpoint、数据源熔断状态；纯本地读取零网络，单项损坏不影响整页；支持 `--format json`。
+
 ## [0.0.6.9.22] - 2026-07-24
 
 ### Added
@@ -520,7 +526,8 @@ explicitly approves a larger bump.
 - **Shell 补全** · zsh / bash / fish / powershell
 - **合规与隐私** · 强制风险提示 + 关键词黑名单（无买卖建议 / 无目标价 / 无评级）· 数据全本地
 
-[Unreleased]: https://github.com/piklen/manmankan/compare/v0.0.6.9.22...HEAD
+[Unreleased]: https://github.com/piklen/manmankan/compare/v0.0.6.9.23...HEAD
+[0.0.6.9.23]: https://github.com/piklen/manmankan/compare/v0.0.6.9.22...v0.0.6.9.23
 [0.0.6.9.22]: https://github.com/piklen/manmankan/compare/v0.0.6.9.21...v0.0.6.9.22
 [0.0.6.9.21]: https://github.com/piklen/manmankan/compare/v0.0.6.9.20...v0.0.6.9.21
 [0.0.6.9.20]: https://github.com/piklen/manmankan/compare/v0.0.6.9.19...v0.0.6.9.20

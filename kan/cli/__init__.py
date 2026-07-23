@@ -33,6 +33,7 @@ else:
         meta_cmds,
         move_export_cmds,
         scan_cmds,
+        status_cmds,
         theme_cmds,
         trend_cmds,
         watchlist_cmds,

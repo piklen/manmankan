@@ -157,6 +157,7 @@ def root_help_text() -> str:
   kan config set tushare-token <YOUR_TOKEN>   设 tushare 凭证
   kan config set tushare-endpoint https://x   设 tushare API 端点
   kan config unset tushare-token              清凭证
+  kan status                                  本地数据状态（缓存/新鲜度/凭证/熔断 · 不联网）
 
 [bold cyan]本地看盘台 (Web)[/bold cyan]
   kan web                   浏览器打开本地看盘台（数据表 / 位置热力图 / 持仓 / 筛选）
