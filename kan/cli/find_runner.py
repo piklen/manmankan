@@ -76,7 +76,29 @@ def _render_terminal(
         return
 
     results_only = [m.result for m in matches_limited]
-    display_periods = responsive_periods(console.width)
+    # 位置分布摘要
+    low_count = mid_count = high_count = 0
+    for r in results_only:
+        periods = getattr(r, "periods", None)
+        if not periods:
+            continue
+        pr = next((p for p in periods if p.period == 180 and not p.insufficient), None)
+        if pr is None:
+            continue
+        if pr.position_pct <= 20:
+            low_count += 1
+        elif pr.position_pct >= 80:
+            high_count += 1
+        else:
+            mid_count += 1
+    if low_count or mid_count or high_count:
+        console.print(
+            f"[dim]  180日位置分布: "
+            f"[green]低位≤20%: {low_count}[/green]  "
+            f"中位: {mid_count}  "
+            f"[red]高位≥80%: {high_count}[/red][/dim]"
+        )
+    display_periods = responsive_periods(console.width - 56)
     table = terminal.scan_table(
         ctx,
         results_only,

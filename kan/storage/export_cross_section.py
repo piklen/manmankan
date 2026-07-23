@@ -40,7 +40,8 @@ if TYPE_CHECKING:
 
     from kan.core.cross_section import CrossSectionRow
     from kan.core.find_filter import TriggeredFilter
-    from kan.core.models import StockScanResult
+    from kan.core.models import MoneyflowMetrics, StockScanResult, VolumeState
+    from kan.core.scanner import TrendResult
 
 def _scan_context_public_dict(scan: StockScanResult | None) -> dict | None:
     """`--all` K 线快照上下文 → JSON 裸值。
@@ -417,3 +418,78 @@ def history_markdown(
             _history_mark_label(res, direction),
         ])
     return f"# {title}\n\n{md_table(headers, rows)}\n\n{_disclaimer_quote()}"
+
+
+def history_csv(
+    entries: list,
+    *,
+    period: int,
+) -> str:
+    """kan history --format csv · Excel 兼容(BOM 头)。"""
+    import csv
+    import io
+
+    from kan.core.scanner import history_mark
+
+    output = io.StringIO()
+    writer = csv.writer(output)
+    writer.writerow(["日期", f"{period}日位置%", "共振", "标记"])
+    for e in entries:
+        cell = e.periods.get(period)
+        pct_str = "-" if cell is None else f"{cell['pct']:.1f}"
+        res, direction = history_mark(e.periods)
+        writer.writerow([
+            e.snapshot_date.isoformat(),
+            pct_str,
+            str(res) if res else "0",
+            _history_mark_label(res, direction),
+        ])
+    return "\ufeff" + output.getvalue()
+
+
+def info_csv(
+    result: StockScanResult,
+    trend: TrendResult,
+    *,
+    volume: VolumeState | None,
+    moneyflow: MoneyflowMetrics | None = None,
+) -> str:
+    """kan info --format csv · Excel 兼容(BOM 头)。"""
+    import csv
+    import io
+
+    output = io.StringIO()
+    writer = csv.writer(output)
+    # 基本信息
+    writer.writerow(["股票", result.name.replace(" ", "")])
+    writer.writerow(["代码", result.symbol])
+    writer.writerow(["现价", f"{result.current_price:.2f}"])
+    writer.writerow(["连续涨跌", trend.direction])
+    writer.writerow(["累计涨跌%", f"{abs(trend.streak_pct):.2f}"])
+    writer.writerow(["1手元", f"{result.lot_cost:,.0f}" if result.lot_cost is not None else "-"])
+    writer.writerow(["低点共振", str(result.low_resonance)])
+    writer.writerow(["高点共振", str(result.high_resonance)])
+    if volume is not None:
+        writer.writerow(["成交量状态", volume.label])
+        writer.writerow(["量比", f"{volume.ratio:.2f}"])
+    if moneyflow is not None:
+        writer.writerow(["今日主力(万)", f"{moneyflow.net_amount:.0f}" if moneyflow.net_amount is not None else "-"])
+        writer.writerow(["5日主力(万)", f"{moneyflow.net_amount_5d:.0f}" if moneyflow.net_amount_5d is not None else "-"])
+    writer.writerow([])
+    # 周期位置表
+    writer.writerow(["周期", "最低", "最高", "位置%", "距低", "距低%", "距高", "距高%"])
+    for pr in result.periods:
+        if pr.insufficient:
+            writer.writerow([f"{pr.period}日", "-", "-", "-", "-", "-", "-", "-"])
+        else:
+            writer.writerow([
+                f"{pr.period}日",
+                f"{pr.n_low:.2f}",
+                f"{pr.n_high:.2f}",
+                f"{pr.position_pct:.1f}",
+                f"{pr.distance_to_low:+.2f}" if pr.distance_to_low is not None else "-",
+                f"{pr.distance_to_low_pct:+.1f}" if pr.distance_to_low_pct is not None else "-",
+                f"{pr.distance_to_high:+.2f}" if pr.distance_to_high is not None else "-",
+                f"{pr.distance_to_high_pct:+.1f}" if pr.distance_to_high_pct is not None else "-",
+            ])
+    return "\ufeff" + output.getvalue()

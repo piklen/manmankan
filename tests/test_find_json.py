@@ -286,10 +286,11 @@ class TestFindPayload:
         assert "候选 ≠ 买入信号" in p["disclaimer"]
         assert "不构成任何形式的推荐或建议" in p["disclaimer"]
         assert p["rule"]["pools"] == ["industry:半导体"]
-        assert p["stats"] == {
-            "pool_size": 87, "matched": 1, "shown": 1,
-            "data_cutoff": "2026-05-29", "stale": False,
-        }
+        assert p["stats"]["pool_size"] == 87
+        assert p["stats"]["matched"] == 1
+        assert p["stats"]["shown"] == 1
+        assert p["stats"]["data_cutoff"] == "2026-05-29"
+        assert p["stats"]["stale"] is False
         r0 = p["results"][0]
         assert r0["code"] == "600519"
         assert r0["price"] == 1326.0

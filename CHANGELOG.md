@@ -9,6 +9,25 @@ explicitly approves a larger bump.
 
 ## [Unreleased]
 
+## [0.0.6.9.21] - 2026-07-24
+
+### Added
+
+- `kan daily` 新增位置变化对比（与上一份快照比较）与池内 180 日中位位置。
+- `kan find` 终端输出新增 180 日位置分布摘要；`--format json` stats 新增 position_180_distribution。
+- `kan history` 新增趋势摘要行（旧→新位置序列 + 整体方向判断）。
+- `kan hold --format csv` 支持（BOM 头，Excel 兼容）。
+
+### Fixed
+
+- 修复 mini-racer 0.14+ 在 macOS 上缺少 `__init__.py` 导致 `from py_mini_racer import MiniRacer` 失败（题材/同花顺 Cookie 生成链路）。
+- `kan web` 个股 180 日位置变化（p180_change）计算中 dict→float 的 TypeError。
+- `kan find` 窄终端表格列截断。
+- `kan scan --sort pos` 高点模式改为降序；无效 `--group` 在 `--format json` 下输出结构化错误。
+- `kan scan` 空结果报错区分「候选池为空」与「数据未拉取」。
+- `kan trend` / `kan compare` / `kan info` 等命令 `--format json` 错误统一结构化 envelope，trend/compare 输出补 `ok` + `schema_version`。
+- `kan daily` / `kan trend` / `kan low` / `kan high` / `kan info` / `kan index` / `kan compare` / `kan history` / `kan board rank` / `kan theme trend` 的 `--format csv` 输出正确 CSV（此前静默输出 Markdown）。
+
 ## [0.0.6.9.20] - 2026-07-24
 
 ### Fixed
@@ -491,7 +510,8 @@ explicitly approves a larger bump.
 - **Shell 补全** · zsh / bash / fish / powershell
 - **合规与隐私** · 强制风险提示 + 关键词黑名单（无买卖建议 / 无目标价 / 无评级）· 数据全本地
 
-[Unreleased]: https://github.com/piklen/manmankan/compare/v0.0.6.9.20...HEAD
+[Unreleased]: https://github.com/piklen/manmankan/compare/v0.0.6.9.21...HEAD
+[0.0.6.9.21]: https://github.com/piklen/manmankan/compare/v0.0.6.9.20...v0.0.6.9.21
 [0.0.6.9.20]: https://github.com/piklen/manmankan/compare/v0.0.6.9.19...v0.0.6.9.20
 [0.0.6.9.19]: https://github.com/piklen/manmankan/compare/v0.0.6.9.18...v0.0.6.9.19
 [0.0.6.9.18]: https://github.com/piklen/manmankan/compare/v0.0.6.9.17...v0.0.6.9.18

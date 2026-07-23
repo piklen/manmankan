@@ -364,6 +364,27 @@ def find_payload(
         ),
         "stale": freshness.is_stale,
     }
+    # 180日位置分布摘要
+    low_180 = mid_180 = high_180 = 0
+    for _m, er in entries:
+        pr = next(
+            (p for p in getattr(er, "periods", []) if p.period == 180 and not p.insufficient),
+            None,
+        )
+        if pr is None:
+            continue
+        if pr.position_pct <= 20:
+            low_180 += 1
+        elif pr.position_pct >= 80:
+            high_180 += 1
+        else:
+            mid_180 += 1
+    if low_180 or mid_180 or high_180:
+        stats["position_180_distribution"] = {
+            "low_lte_20": low_180,
+            "mid": mid_180,
+            "high_gte_80": high_180,
+        }
     data_availability = _data_availability(
         availability_source,
         included_dimensions=included_dimensions,

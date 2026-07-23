@@ -185,7 +185,9 @@ def _sort_scan_results(results: list, sort_key: str, mode: str) -> list:
         except ValueError:
             _print_err(f"⚠️ --sort {sort_key} 无效周期 · 可用: resonance / pos30 / pos60 / pos180 / price / change")
             return results
-        return sorted(results, key=lambda r: _period_pct(r, period))
+        # 低点模式升序（最低在前），高点模式降序（最高在前）
+        reverse = mode == "high"
+        return sorted(results, key=lambda r: _period_pct(r, period), reverse=reverse)
     if key == "price":
         return sorted(results, key=lambda r: r.current_price, reverse=True)
     if key == "change":
@@ -280,10 +282,17 @@ def _prepare_scan_render(
                 message=f"--codes 指定的代码均未获取到数据: {preview}{suffix}",
                 hint="请确认是 6 位 A 股代码(如 600519)；代码无误则稍后重试或先运行 kan fetch",
             )
-        _exit_scan_error(
-            fmt, code="data_unavailable", message="无缓存数据",
-            hint="例: kan fetch；或 kan scan 自动拉取默认池 K 线",
-        )
+        # 区分"代码无效"和"数据未拉取"两种情况
+        if ctx.targets:
+            _exit_scan_error(
+                fmt, code="data_unavailable", message="无缓存数据",
+                hint="例: kan fetch；或 kan scan 自动拉取默认池 K 线",
+            )
+        else:
+            _exit_scan_error(
+                fmt, code="empty_pool", message="候选池为空",
+                hint="例: kan scan --codes 600519,000858；或 kan add 600519",
+            )
 
     all_results = service_result.all_results
     results = service_result.results
@@ -552,6 +561,18 @@ def scan(
             hint="例: kan scan --only-holdings",
             exit_code=2,
         )
+    # 组名验证：在 JSON 模式下输出结构化错误而非纯文本
+    if group is not None and code_pairs is None and not all_stocks and not only_holdings:
+        from kan.storage.watchlist import GroupNotFoundError, load_watchlist
+        try:
+            load_watchlist(group)
+        except GroupNotFoundError as e:
+            _exit_scan_error(
+                fmt,
+                code="group_not_found",
+                message=str(e),
+                exit_code=2,
+            )
     watchlist_pairs = (
         [] if code_pairs is not None or all_stocks or only_holdings or (
             not source_mode and group is None

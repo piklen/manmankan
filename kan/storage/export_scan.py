@@ -273,6 +273,38 @@ def extreme_markdown(
     return "\n\n".join(parts)
 
 
+def extreme_csv(
+    results_by_period: dict[int, list],
+    *,
+    mode: str,
+    board_index_result: StockScanResult | None = None,
+    board_meta: BoardMeta | HotMeta | ThemeMeta | None = None,
+    periods: list[int] | None = None,
+) -> str:
+    """kan low / high --format csv · 每周期一行 · Excel 兼容(BOM 头)。"""
+    import csv
+    import io
+
+    label = "低点" if mode == "low" else "高点"
+    output = io.StringIO()
+    writer = csv.writer(output)
+    writer.writerow(["周期", "股票", "代码", "现价", "区间最低", "区间最高", "位置%"])
+    target_periods = periods if periods is not None else list(results_by_period.keys())
+    for n in target_periods:
+        hits = results_by_period.get(n, [])
+        for r, pr in hits:
+            writer.writerow([
+                f"{n}日{label}",
+                r.name.replace(" ", ""),
+                r.symbol,
+                f"{r.current_price:.2f}",
+                f"{pr.n_low:.2f}",
+                f"{pr.n_high:.2f}",
+                f"{pr.position_pct:.1f}",
+            ])
+    return "\ufeff" + output.getvalue()
+
+
 # ── info ──────────────────────────────────────────────────────────────
 
 def info_payload(

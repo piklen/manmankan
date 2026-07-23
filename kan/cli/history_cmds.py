@@ -73,6 +73,12 @@ def history(
             period=service_result.period,
         )))
         return
+    if fmt is export.OutputFormat.csv:
+        typer.echo(export.history_csv(
+            entries,
+            period=service_result.period,
+        ))
+        return
     if fmt is export.OutputFormat.md:
         name_short = name.replace(" ", "")
         title = f"慢慢看 · {name_short} {sym} · {service_result.period}日位置回溯"
@@ -90,6 +96,26 @@ def history(
 
     console = Console()
     console.print(terminal.history_table(sym, name, entries, period=service_result.period))
+    # 趋势摘要：从有效位置值中提取趋势
+    valid_pcts = [
+        e.periods[service_result.period]["pct"]
+        for e in entries
+        if service_result.period in e.periods
+    ]
+    if len(valid_pcts) >= 2:
+        # entries 是新→旧，反转成旧→新显示趋势
+        trend_vals = list(reversed(valid_pcts[-6:]))
+        trend_str = " → ".join(f"{v:.0f}%" for v in trend_vals)
+        first, last = trend_vals[0], trend_vals[-1]
+        if last < first - 5:
+            direction = "[green]整体下行[/green]"
+        elif last > first + 5:
+            direction = "[red]整体上行[/red]"
+        else:
+            direction = "横盘整理"
+        console.print(
+            f"\n[dim]趋势(旧→新): {trend_str} · {direction}[/dim]"
+        )
     console.print(
         f"\n[dim]共 {len(entries)} 个快照日(新→旧)· 只含跑过 kan scan 的日子 · "
         "换周期 --period 60[/dim]"

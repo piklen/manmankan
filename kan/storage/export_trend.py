@@ -35,6 +35,8 @@ def trend_payload(
 ) -> dict:
     """kan trend --format json 的结构化 payload。"""
     return {
+        "ok": True,
+        "schema_version": 1,
         "command": "trend",
         "mode": "candle" if candle else "close",
         "disclaimer": _disclaimer_text(),
@@ -144,11 +146,45 @@ def trend_markdown(
     return f"# {title}\n\n{md_table(headers, rows)}\n\n{_disclaimer_quote()}"
 
 
+def trend_csv(
+    results: list[TrendResult], *, latest: int | None,
+) -> str:
+    """kan trend --format csv · Excel 兼容(BOM 头)。"""
+    import csv
+    import io
+
+    output = io.StringIO()
+    writer = csv.writer(output)
+    headers = ["股票", "代码", "现价", "连续", "累计%"]
+    n_dates = 0
+    if latest and results:
+        n_dates = min(latest, len(results[0].daily_changes))
+        headers += [d[-5:] for d, _ in results[0].daily_changes[:n_dates]]
+    writer.writerow(headers)
+    for r in results:
+        cells = [
+            r.name.replace(" ", ""),
+            r.symbol,
+            f"{r.current_price:.2f}",
+            r.direction,
+            f"{abs(r.streak_pct):.2f}",
+        ]
+        if n_dates:
+            for _, chg in r.daily_changes[:n_dates]:
+                cells.append(f"{chg:.2f}")
+            while len(cells) < len(headers):
+                cells.append("")
+        writer.writerow(cells)
+    return "\ufeff" + output.getvalue()
+
+
 # ── compare ───────────────────────────────────────────────────────────
 
 def compare_payload(results: list[StockScanResult], *, periods: list[int]) -> dict:
     """kan compare --format json 的结构化 payload。"""
     return {
+        "ok": True,
+        "schema_version": 1,
         "command": "compare",
         "periods": periods,
         "disclaimer": _disclaimer_text(),
@@ -178,3 +214,34 @@ def compare_markdown(results: list[StockScanResult], *, periods: list[int]) -> s
     ])
     rows.append(["数据截止", *[r.scan_date.isoformat() for r in results]])
     return f"# 慢慢看 · 多股对比\n\n{md_table(headers, rows)}\n\n{_disclaimer_quote()}"
+
+
+def compare_csv(results: list[StockScanResult], *, periods: list[int]) -> str:
+    """kan compare --format csv · Excel 兼容(BOM 头)。"""
+    import csv
+    import io
+
+    output = io.StringIO()
+    writer = csv.writer(output)
+    headers = ["指标", *[r.symbol for r in results]]
+    writer.writerow(headers)
+    writer.writerow(["股票", *[r.name.replace(" ", "") for r in results]])
+    writer.writerow(["现价", *[f"{r.current_price:.2f}" for r in results]])
+    for p in periods:
+        cells = [f"{p}日位置%"]
+        for r in results:
+            pr = next((x for x in r.periods if x.period == p), None)
+            cells.append("-" if pr is None else f"{pr.position_pct:.1f}")
+        writer.writerow(cells)
+    writer.writerow(["低点共振", *[str(r.low_resonance) for r in results]])
+    writer.writerow(["高点共振", *[str(r.high_resonance) for r in results]])
+    writer.writerow(["ST", *["是" if r.is_st else "否" for r in results]])
+    writer.writerow([
+        "涨跌停",
+        *[
+            "涨停" if r.limit_up else ("跌停" if r.limit_down else "—")
+            for r in results
+        ],
+    ])
+    writer.writerow(["数据截止", *[r.scan_date.isoformat() for r in results]])
+    return "\ufeff" + output.getvalue()

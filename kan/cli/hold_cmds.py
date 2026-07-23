@@ -93,6 +93,9 @@ def _render_overview(
     if fmt is export.OutputFormat.json:
         typer.echo(export.to_json(export.hold_payload(summary, mask=mask)))
         return
+    if fmt is export.OutputFormat.csv:
+        typer.echo(export.hold_csv(summary, mask=mask))
+        return
     if fmt is export.OutputFormat.md:
         typer.echo(export.hold_markdown(summary, mask=mask))
         return

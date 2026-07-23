@@ -281,3 +281,64 @@ def test_format_md_structure(snap_dir, runner):
     assert "| 日期 | 30日位置 | 共振 | 标记 |" in result.output
     assert "[4%]" in result.output  # at_low → 方括号
     assert "> ⚠️" in result.output  # disclaimer 引用块
+
+
+# ── csv 格式 + terminal 趋势摘要(合并新增路径) ──────────────────────────
+
+
+def test_format_csv_bom_and_rows(snap_dir, runner):
+    _write(snap_dir, "2026-05-22", [
+        _entry(periods={"30": {"pct": 12.0, "at_low": False, "at_high": False}}),
+    ])
+    _write(snap_dir, "2026-05-23", [_entry()])  # 4.0 at_low
+    result = runner.invoke(app, ["history", "600519", "--format", "csv"])
+    assert result.exit_code == 0
+    out = result.output
+    assert out.startswith("\ufeff")
+    lines = out.lstrip("\ufeff").splitlines()
+    assert lines[0] == "日期,30日位置%,共振,标记"
+    # 新→旧顺序
+    assert lines[1].startswith("2026-05-23,4.0,1,")
+    assert lines[2].startswith("2026-05-22,12.0,0,")
+
+
+def test_terminal_trend_summary_downtrend(snap_dir, runner):
+    # 旧→新 80 → 60 → 40 · 跌幅 > 5 → 整体下行
+    _write(snap_dir, "2026-05-21", [
+        _entry(periods={"30": {"pct": 80.0, "at_low": False, "at_high": False}}),
+    ])
+    _write(snap_dir, "2026-05-22", [
+        _entry(periods={"30": {"pct": 60.0, "at_low": False, "at_high": False}}),
+    ])
+    _write(snap_dir, "2026-05-23", [
+        _entry(periods={"30": {"pct": 40.0, "at_low": False, "at_high": False}}),
+    ])
+    result = runner.invoke(app, ["history", "600519"])
+    assert result.exit_code == 0
+    assert "趋势(旧→新): 80% → 60% → 40%" in result.output
+    assert "整体下行" in result.output
+
+
+def test_terminal_trend_summary_uptrend(snap_dir, runner):
+    _write(snap_dir, "2026-05-22", [
+        _entry(periods={"30": {"pct": 20.0, "at_low": False, "at_high": False}}),
+    ])
+    _write(snap_dir, "2026-05-23", [
+        _entry(periods={"30": {"pct": 60.0, "at_low": False, "at_high": False}}),
+    ])
+    result = runner.invoke(app, ["history", "600519"])
+    assert result.exit_code == 0
+    assert "趋势(旧→新): 20% → 60%" in result.output
+    assert "整体上行" in result.output
+
+
+def test_terminal_trend_summary_flat(snap_dir, runner):
+    _write(snap_dir, "2026-05-22", [
+        _entry(periods={"30": {"pct": 50.0, "at_low": False, "at_high": False}}),
+    ])
+    _write(snap_dir, "2026-05-23", [
+        _entry(periods={"30": {"pct": 52.0, "at_low": False, "at_high": False}}),
+    ])
+    result = runner.invoke(app, ["history", "600519"])
+    assert result.exit_code == 0
+    assert "横盘整理" in result.output

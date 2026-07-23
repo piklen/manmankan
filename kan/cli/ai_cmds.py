@@ -441,6 +441,24 @@ def index(
             + f"\n\n> {DISCLAIMER.strip()}"
         )
         return
+    if fmt is export.OutputFormat.csv:
+        import csv
+        import io
+
+        output = io.StringIO()
+        writer = csv.writer(output)
+        writer.writerow(["指数", "代码", "收盘", "位置%", "涨幅%", "数据日"])
+        for r in rows:
+            writer.writerow([
+                r["name"],
+                r["code"],
+                "-" if r["close"] is None else f"{r['close']:.2f}",
+                "-" if r["position_pct"] is None else f"{r['position_pct']:.1f}",
+                "-" if r["gain_pct"] is None else f"{r['gain_pct']:.2f}",
+                r["data_date"] or "-",
+            ])
+        typer.echo("\ufeff" + output.getvalue())
+        return
 
     table = Table(title=f"A 股指数位置参照 · {period}日")
     table.add_column("指数", style="cyan")

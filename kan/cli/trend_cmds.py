@@ -85,6 +85,9 @@ def _finish_trend(
             stale=is_stale,
         ))
         return lambda: typer.echo(payload)
+    if fmt is export.OutputFormat.csv:
+        csv_output = export.trend_csv(results, latest=latest)
+        return lambda: typer.echo(csv_output)
     if fmt is export.OutputFormat.md:
         markdown = export.trend_markdown(results, title=title, latest=latest)
         return lambda: typer.echo(markdown)
