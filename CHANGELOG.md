@@ -9,17 +9,75 @@ explicitly approves a larger bump.
 
 ## [Unreleased]
 
+## [0.0.6.9.21] - 2026-07-24
+
+### Added
+
+- `kan daily` 新增位置变化对比（与上一份快照比较）与池内 180 日中位位置。
+- `kan find` 终端输出新增 180 日位置分布摘要；`--format json` stats 新增 position_180_distribution。
+- `kan history` 新增趋势摘要行（旧→新位置序列 + 整体方向判断）。
+- `kan hold --format csv` 支持（BOM 头，Excel 兼容）。
+
+### Fixed
+
+- 修复 mini-racer 0.14+ 在 macOS 上缺少 `__init__.py` 导致 `from py_mini_racer import MiniRacer` 失败（题材/同花顺 Cookie 生成链路）。
+- `kan web` 个股 180 日位置变化（p180_change）计算中 dict→float 的 TypeError。
+- `kan find` 窄终端表格列截断。
+- `kan scan --sort pos` 高点模式改为降序；无效 `--group` 在 `--format json` 下输出结构化错误。
+- `kan scan` 空结果报错区分「候选池为空」与「数据未拉取」。
+- `kan trend` / `kan compare` / `kan info` 等命令 `--format json` 错误统一结构化 envelope，trend/compare 输出补 `ok` + `schema_version`。
+- `kan daily` / `kan trend` / `kan low` / `kan high` / `kan info` / `kan index` / `kan compare` / `kan history` / `kan board rank` / `kan theme trend` 的 `--format csv` 输出正确 CSV（此前静默输出 Markdown）。
+
+## [0.0.6.9.20] - 2026-07-24
+
+### Fixed
+
+- `kan low` / `kan high` 表格标题不再折行：数据截止与拉取时间从长标题移到表格下方 caption 小字（low/high 表只有 5 列，长标题必在表宽处折行且断点难看）；`kan scan` / `kan trend` 的标题裁剪逻辑统一为共享 helper。
+
+## [0.0.6.9.19] - 2026-07-24
+
+### Fixed
+
+- `kan scan` 每日快照(`last_scan.json` + `snapshots/` 日归档)只允许「全池 + 默认周期 + 无分组」的扫描写入：此前分组扫描、自定义 `--periods` 扫描会用子集数据覆盖完整快照，导致 `kan history` 位置历史大面积显示占位值 50%、周期数据断档。
+
+## [0.0.6.9.18] - 2026-07-24
+
+### Fixed
+
+- `kan web` 个股详情页 `/stock/{code}` 不再 500：行业位置对照序列化误读模型上不存在的 `stock_pct`/`rank` 字段，已对齐真实模型 `position_pct`/`rank_low_to_high`/`sample` 并补真实模型回归测试。
+- `kan web` 页面内联 SVG favicon，浏览器不再因自动请求 `/favicon.ico` 被会话校验拦截而在控制台报 401。
+
+## [0.0.6.9.17] - 2026-07-24
+
+### Fixed
+
+- `kan trend` 累计涨跌幅带显式 +/- 号，管道、重定向或无色终端丢失颜色时涨跌方向仍可读（题材连续涨跌榜同步修复）。
+- `kan trend` 表格标题与 `kan scan` 同一策略按终端宽度省略「拉取时间」「数据截止」后缀，窄终端标题折行明显收敛。
+
+## [0.0.6.9.16] - 2026-07-24
+
+### Fixed
+
+- `kan scan --compact` 周期列数随终端宽度自适应：90 列以下只保留 30/180 两个周期，80 列窄终端（含涨停/持仓标记行）表格不再被裁掉右边框。
+- `kan scan` / `kan find` 表格标题随终端宽度省略后缀：先舍「拉取时间」、再舍「数据截止」，避免长标题把表格撑宽导致窄终端裁边；Markdown 导出始终保留完整标题。
+
+## [0.0.6.9.15] - 2026-07-24
+
 ### Changed
 
 - `--all` 股票池恢复字面全市场语义，保留主板、创业板、科创板、北交所和 ST；需要排除板块时继续使用命令已有的显式过滤项。
 - `kan trend --all` 新增 `--force/-f`，可强制重拉每日全市场截面缓存；每个网络请求等待期间持续显示确定进度，不再停留在"开始每日截面"。
 - TuShare 适配器只发送官方接口参数：`stock_basic(list_status=L)` 与 `stk_factor_pro(trade_date=...)`，不注入或消费兼容端点自定义的分页规则。
+- 数据新鲜度警告区分「全池滞后」与「部分滞后」：部分股票已到最新交易日时按「N/M 只股票数据滞后 · 最新 X · 最旧 Y」提示，不再用「当前缓存到最旧日」与标题数据截止日自相矛盾。
 
 ### Fixed
 
 - 全市场股票列表和近期单日 K 线截面在落盘前执行完整性校验；明显不足的响应会返回 `tushare_data_contract_error` 并停止处理，不再缓存或把第一页冒充全市场。
 - `kan fetch --force --all` 现在会同时强制刷新全市场股票列表，避免强刷 K 线时仍沿用旧的部分股票池缓存。
 - `kan trend --all` 的新鲜度以最新截面日判断，不再把 31 日历史窗口的第一天误报为全市场截止日；新股、停牌等历史不足单独提示，不再误报为市场数据整体滞后。
+- `kan scan` 终端表格「量价」列不再被截断成「量缩·…」，宽终端下完整显示「量缩·收跌」等量价事实。
+- `kan web` 启动时打印的访问地址立即 flush，stdout 重定向（`> log` / nohup）下也能看到本次会话链接。
+- `kan scan --codes` 指定的代码全部无数据时，报错点名具体代码并引导检查代码正确性，不再只给泛泛的 `kan fetch` 提示。
 
 ## [0.0.6.9.14] - 2026-07-22
 
@@ -452,7 +510,14 @@ explicitly approves a larger bump.
 - **Shell 补全** · zsh / bash / fish / powershell
 - **合规与隐私** · 强制风险提示 + 关键词黑名单（无买卖建议 / 无目标价 / 无评级）· 数据全本地
 
-[Unreleased]: https://github.com/piklen/manmankan/compare/v0.0.6.9.14...HEAD
+[Unreleased]: https://github.com/piklen/manmankan/compare/v0.0.6.9.21...HEAD
+[0.0.6.9.21]: https://github.com/piklen/manmankan/compare/v0.0.6.9.20...v0.0.6.9.21
+[0.0.6.9.20]: https://github.com/piklen/manmankan/compare/v0.0.6.9.19...v0.0.6.9.20
+[0.0.6.9.19]: https://github.com/piklen/manmankan/compare/v0.0.6.9.18...v0.0.6.9.19
+[0.0.6.9.18]: https://github.com/piklen/manmankan/compare/v0.0.6.9.17...v0.0.6.9.18
+[0.0.6.9.17]: https://github.com/piklen/manmankan/compare/v0.0.6.9.16...v0.0.6.9.17
+[0.0.6.9.16]: https://github.com/piklen/manmankan/compare/v0.0.6.9.15...v0.0.6.9.16
+[0.0.6.9.15]: https://github.com/piklen/manmankan/compare/v0.0.6.9.14...v0.0.6.9.15
 [0.0.6.9.14]: https://github.com/piklen/manmankan/compare/v0.0.6.9.13...v0.0.6.9.14
 [0.0.6.9.13]: https://github.com/piklen/manmankan/compare/v0.0.6.9.12...v0.0.6.9.13
 [0.0.6.9.12]: https://github.com/piklen/manmankan/compare/v0.0.6.9.11...v0.0.6.9.12

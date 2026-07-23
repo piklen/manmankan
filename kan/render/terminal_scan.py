@@ -54,8 +54,14 @@ def scan_title(
     *,
     high_mode: bool,
     signal_only: bool = False,
+    max_width: int | None = None,
 ) -> str:
-    """构造 scan 命令标题 · 给 terminal table.title + md export 共用 · 单 SOT。"""
+    """构造 scan 命令标题 · 给 terminal table.title + md export 共用 · 单 SOT。
+
+    max_width:终端可用宽度 · rich 表格会被长标题撑宽导致窄终端裁掉右边框,
+    超宽时先舍 fetched_at 后缀(价值最低),再舍数据截止后缀(标题上方已有
+    pool summary / 警告行交代数据状态)。md export 不传 → 始终完整标题。
+    """
     from kan.core.models import BoardMeta, HotMeta, ThemeMeta
 
     meta = ctx.meta
@@ -84,11 +90,16 @@ def scan_title(
     )
     if signal_only:
         title += " · 仅信号"
+
+    from kan.render.base import trim_title_to_width
+
+    # 价值从高到低:数据截止 > 拉取时间
+    suffixes: list[str] = []
     if data_cutoff:
-        title += f" · 数据截止 {format_date_compact(data_cutoff)} 收盘"
+        suffixes.append(f" · 数据截止 {format_date_compact(data_cutoff)} 收盘")
     if fetched_at:
-        title += f" · {format_fetched_at_compact(fetched_at)} 拉取"
-    return title
+        suffixes.append(f" · {format_fetched_at_compact(fetched_at)} 拉取")
+    return trim_title_to_width(title, suffixes, max_width)
 
 
 def scan_table(
@@ -102,6 +113,7 @@ def scan_table(
     show_context: bool = False,
     show_retail_facts: bool = True,
     show_bar: bool = False,
+    console_width: int | None = None,
 ) -> Table:
     """kan scan 10-周期全景表 · 支持板块指数 row + 热榜名次 + 自选 ⭐ 高亮。
 
@@ -118,11 +130,14 @@ def scan_table(
         board_index_result: 板块指数 / 题材指数 K 线 scan 结果 · 不为 None 时作为
             第一行 + section 分隔(与 results 区分)。caller 提前算好(scan_stock 是
             重导入 · render 层不应自己调度)。
+        console_width: 终端宽度 · 传给 scan_title 防长标题撑宽表格裁掉右边框。
     """
     from kan.core.models import HotMeta
 
     meta = ctx.meta
-    title = scan_title(ctx, high_mode=high_mode, signal_only=signal_only)
+    title = scan_title(
+        ctx, high_mode=high_mode, signal_only=signal_only, max_width=console_width,
+    )
     is_hot = isinstance(meta, HotMeta)
     highlight = meta.highlight if meta else set()
     rank_map = meta.rank_map if is_hot else {}
@@ -149,7 +164,8 @@ def scan_table(
     if show_permission:
         table.add_column("权限", justify="right", min_width=6)
     if show_volume_price:
-        table.add_column("量价", justify="right", min_width=6)
+        # 值域最长「量缩·收跌」= 10 显示宽 · min_width 不足会被 rich 截成「量缩·…」
+        table.add_column("量价", justify="right", min_width=10, no_wrap=True)
     if show_context:
         table.add_column("PE", justify="right", min_width=6)
         table.add_column("5日主力(万)", justify="right", min_width=10)

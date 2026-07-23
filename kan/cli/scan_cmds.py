@@ -145,9 +145,21 @@ def _parse_scan_periods(raw: str | None, fmt: export.OutputFormat) -> list[int] 
     return sorted(dict.fromkeys(periods))
 
 
-def _compact_display_periods(periods: list[int]) -> list[int]:
-    """Stable short/mid/long terminal subset for explicit compact scan output."""
-    preferred = [5, 20, 30, 60, 180, 360]
+def _compact_display_periods(
+    periods: list[int], console_width: int = 130,
+) -> list[int]:
+    """Stable short/mid/long terminal subset for explicit compact scan output.
+
+    宽度自适应:固定列(股票~22 + 现价~11 + 量价~12 + 共振~7 ≈ 52)之外,
+    每周期列 ~9 显示宽 · 窄终端少给周期,避免表格超宽被裁掉右边框。
+    """
+    if console_width >= 100:
+        preferred = [5, 20, 30, 60, 180, 360]
+    elif console_width >= 90:
+        preferred = [5, 30, 180, 360]
+    else:
+        # <90 列:涨停/💰 标记会把股票列撑宽 ~8 · 只留 2 个周期保右边框
+        preferred = [30, 180]
     chosen = [p for p in preferred if p in periods]
     if chosen:
         return chosen
@@ -219,6 +231,7 @@ def _prepare_scan_render(
     show_context_columns: bool,
     include_external_context: bool,
     sort_key: str | None = None,
+    group: str | None = None,
 ) -> Callable[[], None]:
     """在 lifecycle 内准备 scan 输出/快照，返回关闭 Live 后执行的渲染闭包。"""
     from kan.core.models import HotMeta, ThemeMeta
@@ -229,11 +242,18 @@ def _prepare_scan_render(
 
     ctx = service_result.ctx
     board_meta = service_result.meta
+    from kan.core.scanner import PERIODS
+
+    # 快照(last_scan.json + snapshots/ 日归档)是 diff 与 kan history 的唯一数据源,
+    # 只允许「全池 + 默认周期 + 无分组」的 canonical 扫描写入:
+    # 分组/小池扫描会覆盖掉完整股票清单,自定义周期会让其余周期历史断档。
     can_write_snapshot = (
         board_meta is None
         and code_pairs is None
         and not all_stocks
         and not only_holdings
+        and group is None
+        and period_list == list(PERIODS)
     )
     lifecycle.phase("检查扫描结果", target_count=len(ctx.targets))
     if not ctx.targets:
@@ -253,6 +273,15 @@ def _prepare_scan_render(
                 hint="例: kan add 600519 000858",
             )
     if not ctx.results:
+        if code_pairs is not None:
+            # 显式 --codes 全无数据:多半是代码不存在或拼错,kan fetch 救不了
+            preview = ",".join(code for code, _ in code_pairs[:5])
+            suffix = "..." if len(code_pairs) > 5 else ""
+            _exit_scan_error(
+                fmt, code="data_unavailable",
+                message=f"--codes 指定的代码均未获取到数据: {preview}{suffix}",
+                hint="请确认是 6 位 A 股代码(如 600519)；代码无误则稍后重试或先运行 kan fetch",
+            )
         # 区分"代码无效"和"数据未拉取"两种情况
         if ctx.targets:
             _exit_scan_error(
@@ -317,6 +346,7 @@ def _prepare_scan_render(
             board_index_result=service_result.board_index_result,
             show_context=show_context_columns,
             show_retail_facts=include_external_context,
+            console_width=console.width,
         )
         is_compact = len(display_periods) < len(period_list)
         is_hot = isinstance(board_meta, HotMeta)
@@ -594,7 +624,7 @@ def scan(
     if wide or periods is not None:
         display_periods = period_list
     elif compact:
-        display_periods = _compact_display_periods(period_list)
+        display_periods = _compact_display_periods(period_list, console.width)
     else:
         display_periods = responsive_periods(console.width - 56, period_list)
     show_context_columns = (
@@ -645,6 +675,7 @@ def scan(
                 show_context_columns=show_context_columns,
                 include_external_context=include_external_context,
                 sort_key=sort,
+                group=group,
             )
     except StockSetResolveError as e:
         raise_stock_set_resolve_exit(e)

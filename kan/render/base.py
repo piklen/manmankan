@@ -20,6 +20,27 @@ FIND_DISCLAIMER_TEXT = (
 HOLD_DISCLAIMER_TEXT = "持仓的客观坐标 + 盈亏事实 · 不构成买卖建议"
 
 
+def trim_title_to_width(
+    base: str, suffixes: list[str], max_width: int | None,
+) -> str:
+    """表格标题按终端宽度从尾舍弃后缀 · scan / trend / extreme 共用。
+
+    suffixes 按价值从高到低排列 · 超宽时从末尾(价值最低)开始整段舍弃,
+    基础标题始终保留。max_width=None(md export 等)时返回完整标题。
+    背景:rich Table 会被长 title 撑宽或折行,窄终端裁右边框 / 折行难看。
+    """
+    full = base + "".join(suffixes)
+    if max_width is None:
+        return full
+    from rich.cells import cell_len
+
+    for keep in range(len(suffixes), -1, -1):
+        candidate = base + "".join(suffixes[:keep])
+        if cell_len(candidate) <= max_width:
+            return candidate
+    return base
+
+
 def responsive_periods(console_width: int, periods: list[int] | None = None) -> list[int]:
     """根据终端宽度选择要展示的周期子集 · 始终保证共振列可见。
 

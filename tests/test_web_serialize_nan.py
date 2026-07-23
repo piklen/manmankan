@@ -110,3 +110,42 @@ def test_payload_has_no_residual_nan() -> None:
                 _walk(v)
 
     _walk(payload)
+
+
+def test_serialize_board_context_uses_real_model_fields() -> None:
+    """回归:/stock/{code} 曾 500 — serializer 读了模型上不存在的 stock_pct/rank。
+
+    真实模型 BoardPositionPeriod 字段是 position_pct / rank_low_to_high / sample,
+    模板契约键是 stock_pct / rank / rank_total · 映射错位即 AttributeError。
+    """
+    from kan.core.models import BoardPositionContext, BoardPositionPeriod
+
+    ctx = BoardPositionContext(
+        industry="食品饮料",
+        board_code="801016",
+        board_level=1,
+        constituent_count=122,
+        cached_sample=122,
+        periods=[
+            BoardPositionPeriod(
+                period=30,
+                position_pct=72.8,
+                board_avg_pct=31.9,
+                rank_low_to_high=118,
+                sample=122,
+            )
+        ],
+    )
+
+    payload = serialize._serialize_board_context(ctx)
+
+    assert payload["industry"] == "食品饮料"
+    assert payload["periods"] == [
+        {
+            "period": 30,
+            "stock_pct": 72.8,
+            "board_avg_pct": 31.9,
+            "rank": 118,
+            "rank_total": 122,
+        }
+    ]

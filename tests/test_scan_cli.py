@@ -291,6 +291,80 @@ def scan_runner(monkeypatch):
     return CliRunner()
 
 
+def test_compact_display_periods_width_aware():
+    """compact 周期子集随终端宽度收缩 · 防表格超宽被裁右边框。
+
+    实测:80 列下 4 周期 + 涨停标记行必裁边 · <90 列只留 30/180 两个周期。
+    """
+    from kan.cli.scan_cmds import _compact_display_periods
+
+    periods = [3, 5, 10, 15, 30, 60, 90, 120, 180]
+    assert _compact_display_periods(periods, 130) == [5, 30, 60, 180]
+    assert _compact_display_periods(periods, 90) == [5, 30, 180]
+    assert _compact_display_periods(periods, 80) == [30, 180]
+    assert _compact_display_periods(periods, 72) == [30, 180]
+
+
+def test_scan_custom_periods_skip_snapshot(scan_runner, monkeypatch):
+    """自定义 --periods 扫描不写每日快照 · 防 kan history 其余周期断档。"""
+    from kan.app import app
+
+    saved = []
+    monkeypatch.setattr(
+        "kan.core.scanner.save_snapshot", lambda results: saved.append(results)
+    )
+
+    result = scan_runner.invoke(app, ["scan", "--periods", "3"])
+
+    assert result.exit_code == 0, result.output
+    assert saved == []
+
+
+def test_scan_group_skips_snapshot(scan_runner, monkeypatch):
+    """--group 分组扫描只是全池子集 · 不得用子集覆盖每日快照股票清单。"""
+    from kan.app import app
+
+    saved = []
+    monkeypatch.setattr(
+        "kan.core.scanner.save_snapshot", lambda results: saved.append(results)
+    )
+
+    result = scan_runner.invoke(app, ["scan", "--group", "默认"])
+
+    assert result.exit_code == 0, result.output
+    assert saved == []
+
+
+def test_scan_default_writes_snapshot(scan_runner, monkeypatch):
+    """canonical 扫描(全池 + 默认周期 + 无分组)仍写快照(diff / history 数据源)。"""
+    from kan.app import app
+
+    saved = []
+    monkeypatch.setattr(
+        "kan.core.scanner.save_snapshot", lambda results: saved.append(results)
+    )
+
+    result = scan_runner.invoke(app, ["scan"])
+
+    assert result.exit_code == 0, result.output
+    assert len(saved) == 1
+
+
+def test_scan_codes_no_data_reports_codes(scan_runner, monkeypatch):
+    """--codes 显式代码全无数据 → 报错点名代码并引导检查,而非泛泛 'kan fetch'."""
+    from kan.cli import app
+
+    monkeypatch.setattr(
+        "kan.core.scanner.scan_batch", lambda _pairs, mode="low", periods=None: []
+    )
+
+    result = scan_runner.invoke(app, ["scan", "--codes", "999999"])
+
+    assert result.exit_code == 1
+    assert "999999" in result.output
+    assert "请确认是 6 位 A 股代码" in result.output
+
+
 def test_scan_stale_warning_uses_new_phrasing(scan_runner, monkeypatch):
     """真测: scan 命令的 stale 警告应含'当前缓存到 X 收盘' + '数据滞后 N 天'."""
     from datetime import date

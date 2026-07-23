@@ -19,8 +19,9 @@ def run_server(port: int, open_browser: bool) -> None:
     session_token = secrets.token_urlsafe(32)
     query = urlencode({SESSION_QUERY_NAME: session_token})
     url = f"http://{WEB_HOST}:{port}/?{query}"
-    print("本地私有服务 · 仅监听 127.0.0.1 · 数据不出本机")
-    print(f"访问地址（本次启动有效）: {url}")
+    # flush=True:stdout 重定向(> log / nohup)时块缓冲会让访问地址迟迟不可见
+    print("本地私有服务 · 仅监听 127.0.0.1 · 数据不出本机", flush=True)
+    print(f"访问地址（本次启动有效）: {url}", flush=True)
     if open_browser:
         webbrowser.open(url)
     logging.getLogger(__name__).info("Starting kan web server")
