@@ -223,6 +223,28 @@ def daily(
     if fmt is export.OutputFormat.json:
         typer.echo(export.to_json(payload))
         return
+    if fmt is export.OutputFormat.csv:
+        import csv
+        import io
+
+        output = io.StringIO()
+        writer = csv.writer(output)
+        writer.writerow(["指标", "值"])
+        writer.writerow(["数据截止", payload["data_cutoff"] or "-"])
+        writer.writerow(["自选股数", str(watchlist_count)])
+        writer.writerow(["持仓股数", str(holding_count)])
+        writer.writerow(["已扫描股数", str(len(rows))])
+        writer.writerow(["现金配置", "是" if book.cash > 0 else "否"])
+        if median_180 is not None:
+            writer.writerow(["180日中位位置%", f"{median_180:.1f}"])
+        writer.writerow(["180日<=10%股数", str(len(low_180))])
+        writer.writerow(["180日>=90%股数", str(len(high_180))])
+        writer.writerow(["特殊权限提示股数", str(len(permission_rows))])
+        if overview.changes and comparison_date:
+            writer.writerow(["位置变化数", str(len(overview.changes))])
+            writer.writerow(["对比日期", comparison_date.isoformat()])
+        typer.echo("\ufeff" + output.getvalue())
+        return
     if fmt is export.OutputFormat.md:
         assert markdown is not None
         typer.echo(markdown)
