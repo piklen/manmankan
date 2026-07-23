@@ -88,6 +88,46 @@ def _names(rows, limit: int = 8) -> list[str]:
     return [f"{r.name.replace(' ', '')} {r.symbol}" for r in rows[:limit]]
 
 
+def _direction_counts(rows) -> dict[str, int]:
+    """按量价事实的收盘方向统计涨/跌/平家数 · 无量价数据的行不计入。"""
+    counts = {"up": 0, "down": 0, "flat": 0}
+    for r in rows:
+        state = getattr(r, "volume_price_state", None) or ""
+        if state.endswith("收涨"):
+            counts["up"] += 1
+        elif state.endswith("收跌"):
+            counts["down"] += 1
+        elif state.endswith("收平"):
+            counts["flat"] += 1
+    return counts
+
+
+def _wrap_names(prefix: str, names: list[str], width: int) -> str:
+    """prefix + 名单一行输出 · 超宽按显示宽度折行,续行悬挂缩进 4 格。
+
+    不能用 textwrap:CJK 按字符数而非显示宽折行会溢出;markup 标签
+    需经 Text.from_markup 测宽,不计入显示宽度。
+    """
+    from rich.text import Text
+
+    sep = ", "
+    if not names:
+        return prefix + "-"
+    if Text.from_markup(prefix + sep.join(names)).cell_len <= width:
+        return prefix + sep.join(names)
+    lines: list[str] = []
+    current = prefix
+    for i, name in enumerate(names):
+        token = name if i == 0 else sep + name
+        if current != prefix and Text.from_markup(current + token).cell_len > width:
+            lines.append(current)
+            current = "    " + name
+        else:
+            current += token
+    lines.append(current)
+    return "\n".join(lines)
+
+
 @app.command()
 def daily(
     fmt: Annotated[
@@ -130,6 +170,7 @@ def daily(
         low_180 = _count_period(rows, period=180, low=10)
         high_180 = _count_period(rows, period=180, high=90)
         permission_rows = [r for r in rows if r.permission_note]
+        direction = _direction_counts(rows)
         # 池内 180 日中位位置
         p180_values = sorted(
             p.position_pct
@@ -170,6 +211,9 @@ def daily(
                 "median_position_180": round(median_180, 1) if median_180 is not None else None,
             },
             "facts": {
+                "direction_up": direction["up"],
+                "direction_down": direction["down"],
+                "direction_flat": direction["flat"],
                 "period_180_low_lte_10_count": len(low_180),
                 "period_180_low_lte_10": _names(low_180),
                 "period_180_high_gte_90_count": len(high_180),
@@ -208,6 +252,10 @@ def daily(
             ]
             if median_180 is not None:
                 md_lines.append(f"- 池内 180 日中位位置: {median_180:.0f}%")
+            if any(direction.values()):
+                md_lines.append(
+                    f"- 今日收盘方向: 涨 {direction['up']} / 跌 {direction['down']} / 平 {direction['flat']}"
+                )
             md_lines.extend([
                 f"- 180 日位置 <=10%: {len(low_180)} 只",
                 f"- 180 日位置 >=90%: {len(high_180)} 只",
@@ -240,6 +288,10 @@ def daily(
         writer.writerow(["180日<=10%股数", str(len(low_180))])
         writer.writerow(["180日>=90%股数", str(len(high_180))])
         writer.writerow(["特殊权限提示股数", str(len(permission_rows))])
+        if any(direction.values()):
+            writer.writerow(["今日涨", str(direction["up"])])
+            writer.writerow(["今日跌", str(direction["down"])])
+            writer.writerow(["今日平", str(direction["flat"])])
         if overview.changes and comparison_date:
             writer.writerow(["位置变化数", str(len(overview.changes))])
             writer.writerow(["对比日期", comparison_date.isoformat()])
@@ -271,18 +323,29 @@ def daily(
         summary_parts.append(f"连阳≥3天 {up_streak} 只")
     if summary_parts:
         console.print(f"  {' · '.join(summary_parts)}")
+    if any(direction.values()):
+        console.print(
+            f"  今日 [red]涨 {direction['up']}[/red] · "
+            f"[green]跌 {direction['down']}[/green] · 平 {direction['flat']}"
+        )
     if median_180 is not None:
         console.print(f"  池内 180日中位位置 [bold]{median_180:.0f}%[/bold]（{len(p180_values)} 只有效）")
-    console.print(
-        f"  180日位置 [green]<=10%[/green] · [bold]{len(low_180)}[/bold] 只: "
-        f"{', '.join(_names(low_180)) or '-'}"
-    )
-    console.print(
-        f"  180日位置 [red]>=90%[/red] · [bold]{len(high_180)}[/bold] 只: "
-        f"{', '.join(_names(high_180)) or '-'}"
-    )
+    console.print(_wrap_names(
+        f"  180日位置 [green]<=10%[/green] · [bold]{len(low_180)}[/bold] 只: ",
+        _names(low_180),
+        console.width,
+    ))
+    console.print(_wrap_names(
+        f"  180日位置 [red]>=90%[/red] · [bold]{len(high_180)}[/bold] 只: ",
+        _names(high_180),
+        console.width,
+    ))
     if permission_rows:
-        console.print(f"  特殊权限提示 · {len(permission_rows)} 只: {', '.join(_names(permission_rows))}")
+        console.print(_wrap_names(
+            f"  特殊权限提示 · {len(permission_rows)} 只: ",
+            _names(permission_rows),
+            console.width,
+        ))
     # 与上一份数据的变化
     if overview.changes and comparison_date:
         console.print(f"  [bold]与 {format_date_compact(comparison_date)} 相比[/bold] · {len(overview.changes)} 条变化:")

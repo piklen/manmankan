@@ -9,6 +9,16 @@ explicitly approves a larger bump.
 
 ## [Unreleased]
 
+## [0.0.6.9.22] - 2026-07-24
+
+### Added
+
+- `kan daily` 新增今日收盘方向分布（涨 / 跌 / 平家数，terminal / JSON / md / csv 同步）。
+
+### Fixed
+
+- `kan daily` 长股票名单折行时续行顶格的问题，改为按显示宽度折行并悬挂缩进。
+
 ## [0.0.6.9.21] - 2026-07-24
 
 ### Added
@@ -510,7 +520,8 @@ explicitly approves a larger bump.
 - **Shell 补全** · zsh / bash / fish / powershell
 - **合规与隐私** · 强制风险提示 + 关键词黑名单（无买卖建议 / 无目标价 / 无评级）· 数据全本地
 
-[Unreleased]: https://github.com/piklen/manmankan/compare/v0.0.6.9.21...HEAD
+[Unreleased]: https://github.com/piklen/manmankan/compare/v0.0.6.9.22...HEAD
+[0.0.6.9.22]: https://github.com/piklen/manmankan/compare/v0.0.6.9.21...v0.0.6.9.22
 [0.0.6.9.21]: https://github.com/piklen/manmankan/compare/v0.0.6.9.20...v0.0.6.9.21
 [0.0.6.9.20]: https://github.com/piklen/manmankan/compare/v0.0.6.9.19...v0.0.6.9.20
 [0.0.6.9.19]: https://github.com/piklen/manmankan/compare/v0.0.6.9.18...v0.0.6.9.19
