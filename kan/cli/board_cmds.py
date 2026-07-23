@@ -207,6 +207,27 @@ def rank_cmd(
                 def _render_md() -> None:
                     typer.echo(md_str)
                 _render = _render_md
+            elif fmt is export.OutputFormat.csv:
+                import csv
+                import io
+
+                output = io.StringIO()
+                writer = csv.writer(output)
+                writer.writerow(["排名", "板块", "代码", "现价", "位置%", "涨幅%", "主力净额(万)"])
+                for idx, r in enumerate(shown, start=1):
+                    writer.writerow([
+                        str(idx),
+                        r.name,
+                        r.code,
+                        f"{r.close:.2f}" if r.close is not None else "-",
+                        f"{r.position_pct:.1f}" if r.position_pct is not None else "-",
+                        f"{r.gain_pct:.2f}" if r.gain_pct is not None else "-",
+                        f"{r.moneyflow_net:.0f}" if r.moneyflow_net is not None else "-",
+                    ])
+                csv_str = "\ufeff" + output.getvalue()
+                def _render_csv() -> None:
+                    typer.echo(csv_str)
+                _render = _render_csv
             else:
                 console = Console()
                 table = _table(shown, title=title)
