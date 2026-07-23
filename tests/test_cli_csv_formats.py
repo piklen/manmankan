@@ -29,6 +29,17 @@ from kan.core.scanner import TrendResult
 BOM = "\ufeff"
 
 
+def _output_json(result) -> dict:
+    """从 CliRunner 混合输出解析首个 JSON 文档。
+
+    CliRunner 默认 mix_stderr=True · 产品侧 JSON 走 stdout、降级警告走
+    stderr(正确),但测试捕获混在一起;offline 环境下交易日历降级等
+    stderr 警告会尾随 JSON,json.loads 整串会 Extra data。
+    """
+    payload, _ = json.JSONDecoder().raw_decode(result.output.lstrip())
+    return payload
+
+
 def _period(period: int, pct: float, *, insufficient: bool = False) -> PeriodResult:
     return PeriodResult(
         period=period, n_low=90.0, n_high=110.0, position_pct=pct,
@@ -184,7 +195,7 @@ def test_compare_resolve_error_json_envelope(monkeypatch: pytest.MonkeyPatch) ->
     result = CliRunner().invoke(app, ["compare", "600519", "badname", "--format", "json"])
 
     assert result.exit_code == 1
-    payload = json.loads(result.output)
+    payload = _output_json(result)
     assert payload["ok"] is False
     assert payload["command"] == "compare"
     assert payload["error"]["code"] == "not_found"
@@ -516,7 +527,7 @@ def test_info_not_found_json_envelope(monkeypatch: pytest.MonkeyPatch) -> None:
     result = CliRunner().invoke(app, ["info", "xxx", "--format", "json"])
 
     assert result.exit_code == 1
-    payload = json.loads(result.output)
+    payload = _output_json(result)
     assert payload["ok"] is False
     assert payload["command"] == "info"
     assert payload["error"]["code"] == "not_found"
@@ -545,7 +556,7 @@ def test_info_fetch_error_json_envelope(monkeypatch: pytest.MonkeyPatch) -> None
     result = CliRunner().invoke(app, ["info", "600519", "--format", "json"])
 
     assert result.exit_code == 1
-    payload = json.loads(result.output)
+    payload = _output_json(result)
     assert payload["ok"] is False
     assert payload["error"]["code"] == "fetch_error"
 
@@ -561,7 +572,7 @@ def test_info_data_unavailable_json_envelope(monkeypatch: pytest.MonkeyPatch) ->
     result = CliRunner().invoke(app, ["info", "600519", "--format", "json"])
 
     assert result.exit_code == 1
-    payload = json.loads(result.output)
+    payload = _output_json(result)
     assert payload["ok"] is False
     assert payload["error"]["code"] == "data_unavailable"
 
@@ -699,7 +710,7 @@ def test_scan_group_not_found_json_envelope(monkeypatch: pytest.MonkeyPatch) -> 
     result = CliRunner().invoke(app, ["scan", "--group", "不存在的组", "--format", "json"])
 
     assert result.exit_code == 2
-    payload = json.loads(result.output)
+    payload = _output_json(result)
     assert payload["ok"] is False
     assert payload["command"] == "scan"
     assert payload["error"]["code"] == "group_not_found"
