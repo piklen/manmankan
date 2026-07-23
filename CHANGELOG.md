@@ -9,6 +9,12 @@ explicitly approves a larger bump.
 
 ## [Unreleased]
 
+## [0.0.6.9.19] - 2026-07-24
+
+### Fixed
+
+- `kan scan` 每日快照(`last_scan.json` + `snapshots/` 日归档)只允许「全池 + 默认周期 + 无分组」的扫描写入：此前分组扫描、自定义 `--periods` 扫描会用子集数据覆盖完整快照，导致 `kan history` 位置历史大面积显示占位值 50%、周期数据断档。
+
 ## [0.0.6.9.18] - 2026-07-24
 
 ### Fixed
@@ -479,7 +485,8 @@ explicitly approves a larger bump.
 - **Shell 补全** · zsh / bash / fish / powershell
 - **合规与隐私** · 强制风险提示 + 关键词黑名单（无买卖建议 / 无目标价 / 无评级）· 数据全本地
 
-[Unreleased]: https://github.com/piklen/manmankan/compare/v0.0.6.9.18...HEAD
+[Unreleased]: https://github.com/piklen/manmankan/compare/v0.0.6.9.19...HEAD
+[0.0.6.9.19]: https://github.com/piklen/manmankan/compare/v0.0.6.9.18...v0.0.6.9.19
 [0.0.6.9.18]: https://github.com/piklen/manmankan/compare/v0.0.6.9.17...v0.0.6.9.18
 [0.0.6.9.17]: https://github.com/piklen/manmankan/compare/v0.0.6.9.16...v0.0.6.9.17
 [0.0.6.9.16]: https://github.com/piklen/manmankan/compare/v0.0.6.9.15...v0.0.6.9.16
