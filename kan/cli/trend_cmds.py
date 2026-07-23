@@ -96,6 +96,7 @@ def _finish_trend(
         latest=actual_latest,
         candle=candle,
         filter_label=filter_label,
+        console_width=console.width,
     )
     def render_terminal() -> None:
         console.print(table)

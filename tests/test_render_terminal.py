@@ -684,6 +684,33 @@ def test_trend_table_basic_no_latest():
     assert table.row_count == 1
 
 
+def test_trend_table_cum_pct_signed():
+    """累计带显式 +/- 号 · 管道/重定向丢失颜色时涨跌方向仍可读。"""
+    up = terminal.trend_table(
+        _ctx(), [_trend(streak=2, pct=3.5)], latest=None, candle=False,
+    )
+    down = terminal.trend_table(
+        _ctx(), [_trend(streak=-3, pct=4.2)], latest=None, candle=False,
+    )
+    assert up.columns[3]._cells[0].plain == "+3.50%"
+    assert down.columns[3]._cells[0].plain == "-4.20%"
+
+
+def test_trend_title_trims_suffixes_for_narrow_terminal():
+    """与 scan_title 同策略 · 窄终端先舍拉取时间再舍数据截止,防标题折行。"""
+    ctx = _ctx()
+    full = terminal.trend_title(ctx, candle=False)
+    assert "数据截止" in full and "拉取" in full
+
+    trimmed = terminal.trend_title(ctx, candle=False, max_width=58)
+    assert "数据截止" in trimmed
+    assert "拉取" not in trimmed
+
+    minimal = terminal.trend_title(ctx, candle=False, max_width=40)
+    assert "数据截止" not in minimal
+    assert "连续涨跌看板" in minimal
+
+
 def test_trend_table_with_latest_adds_date_columns():
     """latest=2 时加 2 个日期列(MM-DD)。"""
     days = [
