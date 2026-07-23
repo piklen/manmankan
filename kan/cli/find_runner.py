@@ -84,6 +84,7 @@ def _render_terminal(
         high_mode=False,
         signal_only=False,
         board_index_result=None,
+        console_width=console.width,
     )
     console.print("[dim]💡 慢慢看是观察工具 · 不预测涨跌 · 详见底部免责[/dim]")
     console.print(table)

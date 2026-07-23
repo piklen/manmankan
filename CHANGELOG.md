@@ -9,6 +9,13 @@ explicitly approves a larger bump.
 
 ## [Unreleased]
 
+## [0.0.6.9.16] - 2026-07-24
+
+### Fixed
+
+- `kan scan --compact` 周期列数随终端宽度自适应：90 列以下只保留 30/180 两个周期，80 列窄终端（含涨停/持仓标记行）表格不再被裁掉右边框。
+- `kan scan` / `kan find` 表格标题随终端宽度省略后缀：先舍「拉取时间」、再舍「数据截止」，避免长标题把表格撑宽导致窄终端裁边；Markdown 导出始终保留完整标题。
+
 ## [0.0.6.9.15] - 2026-07-24
 
 ### Changed
@@ -458,7 +465,8 @@ explicitly approves a larger bump.
 - **Shell 补全** · zsh / bash / fish / powershell
 - **合规与隐私** · 强制风险提示 + 关键词黑名单（无买卖建议 / 无目标价 / 无评级）· 数据全本地
 
-[Unreleased]: https://github.com/piklen/manmankan/compare/v0.0.6.9.15...HEAD
+[Unreleased]: https://github.com/piklen/manmankan/compare/v0.0.6.9.16...HEAD
+[0.0.6.9.16]: https://github.com/piklen/manmankan/compare/v0.0.6.9.15...v0.0.6.9.16
 [0.0.6.9.15]: https://github.com/piklen/manmankan/compare/v0.0.6.9.14...v0.0.6.9.15
 [0.0.6.9.14]: https://github.com/piklen/manmankan/compare/v0.0.6.9.13...v0.0.6.9.14
 [0.0.6.9.13]: https://github.com/piklen/manmankan/compare/v0.0.6.9.12...v0.0.6.9.13
