@@ -251,6 +251,15 @@ def _prepare_scan_render(
                 hint="例: kan add 600519 000858",
             )
     if not ctx.results:
+        if code_pairs is not None:
+            # 显式 --codes 全无数据:多半是代码不存在或拼错,kan fetch 救不了
+            preview = ",".join(code for code, _ in code_pairs[:5])
+            suffix = "..." if len(code_pairs) > 5 else ""
+            _exit_scan_error(
+                fmt, code="data_unavailable",
+                message=f"--codes 指定的代码均未获取到数据: {preview}{suffix}",
+                hint="请确认是 6 位 A 股代码(如 600519)；代码无误则稍后重试或先运行 kan fetch",
+            )
         _exit_scan_error(
             fmt, code="data_unavailable", message="无缓存数据",
             hint="例: kan fetch；或 kan scan 自动拉取默认池 K 线",

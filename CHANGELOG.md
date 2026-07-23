@@ -9,17 +9,23 @@ explicitly approves a larger bump.
 
 ## [Unreleased]
 
+## [0.0.6.9.15] - 2026-07-24
+
 ### Changed
 
 - `--all` 股票池恢复字面全市场语义，保留主板、创业板、科创板、北交所和 ST；需要排除板块时继续使用命令已有的显式过滤项。
 - `kan trend --all` 新增 `--force/-f`，可强制重拉每日全市场截面缓存；每个网络请求等待期间持续显示确定进度，不再停留在"开始每日截面"。
 - TuShare 适配器只发送官方接口参数：`stock_basic(list_status=L)` 与 `stk_factor_pro(trade_date=...)`，不注入或消费兼容端点自定义的分页规则。
+- 数据新鲜度警告区分「全池滞后」与「部分滞后」：部分股票已到最新交易日时按「N/M 只股票数据滞后 · 最新 X · 最旧 Y」提示，不再用「当前缓存到最旧日」与标题数据截止日自相矛盾。
 
 ### Fixed
 
 - 全市场股票列表和近期单日 K 线截面在落盘前执行完整性校验；明显不足的响应会返回 `tushare_data_contract_error` 并停止处理，不再缓存或把第一页冒充全市场。
 - `kan fetch --force --all` 现在会同时强制刷新全市场股票列表，避免强刷 K 线时仍沿用旧的部分股票池缓存。
 - `kan trend --all` 的新鲜度以最新截面日判断，不再把 31 日历史窗口的第一天误报为全市场截止日；新股、停牌等历史不足单独提示，不再误报为市场数据整体滞后。
+- `kan scan` 终端表格「量价」列不再被截断成「量缩·…」，宽终端下完整显示「量缩·收跌」等量价事实。
+- `kan web` 启动时打印的访问地址立即 flush，stdout 重定向（`> log` / nohup）下也能看到本次会话链接。
+- `kan scan --codes` 指定的代码全部无数据时，报错点名具体代码并引导检查代码正确性，不再只给泛泛的 `kan fetch` 提示。
 
 ## [0.0.6.9.14] - 2026-07-22
 
@@ -452,7 +458,8 @@ explicitly approves a larger bump.
 - **Shell 补全** · zsh / bash / fish / powershell
 - **合规与隐私** · 强制风险提示 + 关键词黑名单（无买卖建议 / 无目标价 / 无评级）· 数据全本地
 
-[Unreleased]: https://github.com/piklen/manmankan/compare/v0.0.6.9.14...HEAD
+[Unreleased]: https://github.com/piklen/manmankan/compare/v0.0.6.9.15...HEAD
+[0.0.6.9.15]: https://github.com/piklen/manmankan/compare/v0.0.6.9.14...v0.0.6.9.15
 [0.0.6.9.14]: https://github.com/piklen/manmankan/compare/v0.0.6.9.13...v0.0.6.9.14
 [0.0.6.9.13]: https://github.com/piklen/manmankan/compare/v0.0.6.9.12...v0.0.6.9.13
 [0.0.6.9.12]: https://github.com/piklen/manmankan/compare/v0.0.6.9.11...v0.0.6.9.12
