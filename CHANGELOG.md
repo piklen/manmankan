@@ -9,6 +9,16 @@ explicitly approves a larger bump.
 
 ## [Unreleased]
 
+## [0.0.6.9.30] - 2026-07-24
+
+### Changed
+
+- A 股代码表缓存新鲜窗口从 7 天缩短到 1 天：新上市股票 24 小时内可 `kan add`（刷新走启动期后台 worker，前台无感）。
+
+### Fixed
+
+- `kan hold --format csv --mask` 脱敏输出从空列改为 `***`，与 markdown 口径一致（JSON 路径保持 null + masked 标志）。
+
 ## [0.0.6.9.29] - 2026-07-24
 
 ### Added
@@ -572,7 +582,8 @@ explicitly approves a larger bump.
 - **Shell 补全** · zsh / bash / fish / powershell
 - **合规与隐私** · 强制风险提示 + 关键词黑名单（无买卖建议 / 无目标价 / 无评级）· 数据全本地
 
-[Unreleased]: https://github.com/piklen/manmankan/compare/v0.0.6.9.29...HEAD
+[Unreleased]: https://github.com/piklen/manmankan/compare/v0.0.6.9.30...HEAD
+[0.0.6.9.30]: https://github.com/piklen/manmankan/compare/v0.0.6.9.29...v0.0.6.9.30
 [0.0.6.9.29]: https://github.com/piklen/manmankan/compare/v0.0.6.9.28...v0.0.6.9.29
 [0.0.6.9.28]: https://github.com/piklen/manmankan/compare/v0.0.6.9.27...v0.0.6.9.28
 [0.0.6.9.27]: https://github.com/piklen/manmankan/compare/v0.0.6.9.26...v0.0.6.9.27

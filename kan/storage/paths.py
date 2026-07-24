@@ -31,7 +31,11 @@ CIRCUIT_PATH = BASE_DIR / "circuit.json"
 BOARDS_DIR = BASE_DIR / "boards"
 HOT_DIR = BASE_DIR / "hot"
 
-NAMES_CACHE_MAX_AGE_DAYS = 7
+NAMES_CACHE_MAX_AGE_DAYS = 1
+"""代码表缓存新鲜窗口(天) · 1 天:新上市股票 24h 内可 kan add。
+
+刷新走启动期后台 worker(baostock ~5s · 不占前台),每日一次的代价
+可忽略;7 天窗口会让打新用户最长一周无法添加新股。"""
 
 
 def is_stock_names_cache_fresh() -> bool:

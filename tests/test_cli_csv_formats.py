@@ -481,7 +481,7 @@ def test_hold_csv_mask(monkeypatch: pytest.MonkeyPatch) -> None:
     assert result.exit_code == 0, result.output
     row = result.output.lstrip(BOM).splitlines()[1]
     assert "1680.5000" not in row
-    assert row.startswith('600519,"贵州茅台",1700.00,,,')
+    assert row.startswith('600519,"贵州茅台",1700.00,***,***,***')
 
 
 # ── kan info --format csv + 错误 envelope (info_cmds) ───────────────────
