@@ -9,6 +9,12 @@ explicitly approves a larger bump.
 
 ## [Unreleased]
 
+## [0.0.6.9.27] - 2026-07-24
+
+### Added
+
+- `kan web` 首页新增「池内 180 日位置趋势」卡：近 10 个快照日中位位置迷你柱图 + 趋势摘要（与 `kan history --pool` 同口径），快照不足或读取失败时自动隐藏不影响首页。
+
 ## [0.0.6.9.26] - 2026-07-24
 
 ### Added
@@ -550,7 +556,8 @@ explicitly approves a larger bump.
 - **Shell 补全** · zsh / bash / fish / powershell
 - **合规与隐私** · 强制风险提示 + 关键词黑名单（无买卖建议 / 无目标价 / 无评级）· 数据全本地
 
-[Unreleased]: https://github.com/piklen/manmankan/compare/v0.0.6.9.26...HEAD
+[Unreleased]: https://github.com/piklen/manmankan/compare/v0.0.6.9.27...HEAD
+[0.0.6.9.27]: https://github.com/piklen/manmankan/compare/v0.0.6.9.26...v0.0.6.9.27
 [0.0.6.9.26]: https://github.com/piklen/manmankan/compare/v0.0.6.9.25...v0.0.6.9.26
 [0.0.6.9.25]: https://github.com/piklen/manmankan/compare/v0.0.6.9.24...v0.0.6.9.25
 [0.0.6.9.24]: https://github.com/piklen/manmankan/compare/v0.0.6.9.23...v0.0.6.9.24

@@ -413,10 +413,12 @@ def test_routes_api_error_and_neutral_paths(monkeypatch, tmp_path) -> None:
     monkeypatch.setattr("kan.web.routes_api.serialize_scan", lambda _result: {"ok": True, "rows": []})
     monkeypatch.setattr("kan.web.routes_api.build_daily_overview", lambda *_args, **_kwargs: object())
     monkeypatch.setattr("kan.web.routes_api.serialize_daily_overview", lambda _result: {"change_count": 0})
+    monkeypatch.setattr("kan.web.routes_api._pool_trend_payload", lambda: None)
     assert _client().get("/api/scan").json() == {
         "ok": True,
         "rows": [],
         "overview": {"change_count": 0},
+        "pool_trend": None,
     }
 
     monkeypatch.setattr("kan.web.routes_api.get_stock_info", lambda _request: (_ for _ in ()).throw(ValueError("bad code")))
