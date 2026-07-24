@@ -58,6 +58,20 @@
       <div class="meta" x-show="scan.pool_summary && scan.pool_summary.up_streak_3 > 0" x-text="`连阳≥3天 ${scan.pool_summary.up_streak_3} 只`"></div>
       <div class="meta" x-show="!scan.pool_summary || scan.pool_summary.up_streak_3 === 0">自选与持仓合并去重</div>
     </div>
+    <div class="summary-cell" x-show="scan.pool_trend">
+      <div class="field-label">池内 180 日位置趋势</div>
+      <template x-if="scan.pool_trend">
+        <div>
+          <div style="display:flex;align-items:flex-end;gap:2px;height:26px;margin:6px 0 2px;">
+            <template x-for="d in scan.pool_trend.days" :key="d.date">
+              <div :title="`${d.date} · 中位 ${d.median}% · 低位 ${d.low} / 高位 ${d.high} / ${d.count} 只`"
+                   :style="`flex:1;height:${Math.max(8, d.median)}%;background:var(--accent);opacity:.7;border-radius:2px 2px 0 0;`"></div>
+            </template>
+          </div>
+          <div class="meta" x-text="`${scan.pool_trend.trend_text} · ${scan.pool_trend.direction}`"></div>
+        </div>
+      </template>
+    </div>
   </div>
 
   <div class="overview-grid">

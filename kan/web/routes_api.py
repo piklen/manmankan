@@ -91,7 +91,51 @@ def default_scan_payload() -> dict:
             from kan.infra.log import debug_log
 
             debug_log(__name__, "web daily snapshot unavailable", e)
+    payload["pool_trend"] = _pool_trend_payload()
     return payload
+
+
+def _pool_trend_payload(*, period: int = 180, max_days: int = 10) -> dict | None:
+    """首页池级位置趋势卡 · 读每日快照聚合 · 任何异常 → None(卡片隐藏,不拖垮首页)。
+
+    days 按旧→新排列 · direction 用词与 CLI history --pool 一致(纯状态描述)。
+    """
+    try:
+        from kan.core.scanner_history import load_pool_history
+        from kan.infra.formatting import format_date_compact
+
+        entries = load_pool_history(period)
+    except Exception as e:  # 可选卡片 fail-open
+        from kan.infra.log import debug_log
+
+        debug_log(__name__, "pool trend card unavailable", e)
+        return None
+    if len(entries) < 2:
+        return None
+    days = [
+        {
+            "date": format_date_compact(e.snapshot_date),
+            "median": round(e.median_pct, 1),
+            "low": e.low_count,
+            "high": e.high_count,
+            "count": e.stock_count,
+        }
+        for e in reversed(entries[-max_days:])
+    ]
+    trend_text = " → ".join(f"{d['median']:.0f}%" for d in days)
+    first, last = days[0]["median"], days[-1]["median"]
+    if last < first - 5:
+        direction = "整体下行"
+    elif last > first + 5:
+        direction = "整体上行"
+    else:
+        direction = "横盘整理"
+    return {
+        "period": period,
+        "days": days,
+        "trend_text": trend_text,
+        "direction": direction,
+    }
 
 
 @router.get("/scan")
