@@ -517,6 +517,15 @@ function kanHoldPage(initialHold) {
     saving: false,
     message: "",
     pieChart: null,
+    init() {
+      // 渲染不在 x-effect 里做:x-effect 会把 renderPie 内部对 pieChart 的
+      // 响应式读写也收进依赖,首次赋值即重触发自身造成双渲染(同首页
+      // heatmap 的教训)。$watch 只盯行数,依赖不扩散。
+      this.$watch("hold.rows.length", (n) => {
+        if (n > 1) this.$nextTick(() => this.renderPie());
+      });
+      if (this.hold.rows.length > 1) this.$nextTick(() => this.renderPie());
+    },
     renderPie() {
       const el = document.getElementById("hold-pie");
       if (!el || this.hold.rows.length < 2) return;

@@ -9,6 +9,13 @@ explicitly approves a larger bump.
 
 ## [Unreleased]
 
+## [0.0.6.9.25] - 2026-07-24
+
+### Fixed
+
+- `kan web` 个股详情页组件 init 被 x-data 自动调用与 x-init 重复执行两次（历史数据重复拉取）。
+- `kan web` 持仓页饼图渲染从 x-effect 改为 $watch：x-effect 会把渲染内部对 pieChart 的响应式读写收进依赖，首次赋值即重触发自身造成双渲染。
+
 ## [0.0.6.9.24] - 2026-07-24
 
 ### Changed
@@ -537,7 +544,8 @@ explicitly approves a larger bump.
 - **Shell 补全** · zsh / bash / fish / powershell
 - **合规与隐私** · 强制风险提示 + 关键词黑名单（无买卖建议 / 无目标价 / 无评级）· 数据全本地
 
-[Unreleased]: https://github.com/piklen/manmankan/compare/v0.0.6.9.24...HEAD
+[Unreleased]: https://github.com/piklen/manmankan/compare/v0.0.6.9.25...HEAD
+[0.0.6.9.25]: https://github.com/piklen/manmankan/compare/v0.0.6.9.24...v0.0.6.9.25
 [0.0.6.9.24]: https://github.com/piklen/manmankan/compare/v0.0.6.9.23...v0.0.6.9.24
 [0.0.6.9.23]: https://github.com/piklen/manmankan/compare/v0.0.6.9.22...v0.0.6.9.23
 [0.0.6.9.22]: https://github.com/piklen/manmankan/compare/v0.0.6.9.21...v0.0.6.9.22
