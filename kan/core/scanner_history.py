@@ -21,6 +21,17 @@ class SymbolHistoryEntry:
     periods: dict[int, dict]
 
 
+@dataclass
+class PoolHistoryEntry:
+    """某一快照日的池级位置聚合(纯客观统计 · 不含判断词)。"""
+
+    snapshot_date: date
+    stock_count: int      # 当日有该周期有效位置的股票数
+    median_pct: float     # 池内位置中位数 %
+    low_count: int        # 位置 <= 20% 只数
+    high_count: int       # 位置 >= 80% 只数
+
+
 def _iter_snapshot_files() -> Iterator[tuple[date, list[dict[str, Any]]]]:
     """按文件名(= 快照日)升序遍历 snapshots/*.json · 文件名非法日期的跳过。
 
@@ -63,6 +74,37 @@ def load_symbol_history(symbol: str) -> list[SymbolHistoryEntry]:
                     continue
             entries.append(SymbolHistoryEntry(d, item.get("name", symbol), periods))
             break
+    entries.sort(key=lambda e: e.snapshot_date, reverse=True)
+    return entries
+
+
+def load_pool_history(period: int, *, min_stocks: int = 5) -> list[PoolHistoryEntry]:
+    """读取池级位置趋势 · 纯离线(只读 snapshots/)· 按日期降序(新→旧)。
+
+    只聚合「当日有 period 周期有效位置」的股票;当日有效只数 < min_stocks
+    的整页跳过(自定义周期/分组扫描遗留的残缺快照日不冒充池状态)。
+    """
+    entries: list[PoolHistoryEntry] = []
+    for d, data in _iter_snapshot_files():
+        pcts: list[float] = []
+        for item in data:
+            cell = (item.get("periods") or {}).get(str(period))
+            if cell is None:
+                continue
+            try:
+                pcts.append(float(cell["pct"]))
+            except (KeyError, TypeError, ValueError):
+                continue
+        if len(pcts) < min_stocks:
+            continue
+        pcts.sort()
+        entries.append(PoolHistoryEntry(
+            snapshot_date=d,
+            stock_count=len(pcts),
+            median_pct=pcts[len(pcts) // 2],
+            low_count=sum(1 for p in pcts if p <= 20),
+            high_count=sum(1 for p in pcts if p >= 80),
+        ))
     entries.sort(key=lambda e: e.snapshot_date, reverse=True)
     return entries
 
