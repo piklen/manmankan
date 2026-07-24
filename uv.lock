@@ -835,7 +835,7 @@ wheels = [
 
 [[package]]
 name = "manmankan"
-version = "0.0.6.9.23"
+version = "0.0.6.9.24"
 source = { editable = "." }
 dependencies = [
     { name = "akshare" },

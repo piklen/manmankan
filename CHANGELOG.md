@@ -9,6 +9,17 @@ explicitly approves a larger bump.
 
 ## [Unreleased]
 
+## [0.0.6.9.24] - 2026-07-24
+
+### Changed
+
+- `kan web` 首页默认视图从全量数据表改为位置热力图（分页展示），与「先看关键变化和极端位置，需要时再展开全部数据」的设计对齐；移动端首屏高度从约 13000px 降到约 3300px。
+
+### Fixed
+
+- `kan web` 位置热力图首屏经常渲染失败（格子全空）：ECharts 5.6 首屏异步管线 race，视图渲染先于坐标系/数据就绪。组合修复：lazyUpdate 整批更新、merge 保持坐标系、移除 setOption 后的 resize 触发、硬指标自检（坐标系 + 已绘元素数）失败自动重渲。
+- `kan web` 首页组件 init 被 x-data 自动调用与 x-init 重复执行两次。
+
 ## [0.0.6.9.23] - 2026-07-24
 
 ### Added
@@ -526,7 +537,8 @@ explicitly approves a larger bump.
 - **Shell 补全** · zsh / bash / fish / powershell
 - **合规与隐私** · 强制风险提示 + 关键词黑名单（无买卖建议 / 无目标价 / 无评级）· 数据全本地
 
-[Unreleased]: https://github.com/piklen/manmankan/compare/v0.0.6.9.23...HEAD
+[Unreleased]: https://github.com/piklen/manmankan/compare/v0.0.6.9.24...HEAD
+[0.0.6.9.24]: https://github.com/piklen/manmankan/compare/v0.0.6.9.23...v0.0.6.9.24
 [0.0.6.9.23]: https://github.com/piklen/manmankan/compare/v0.0.6.9.22...v0.0.6.9.23
 [0.0.6.9.22]: https://github.com/piklen/manmankan/compare/v0.0.6.9.21...v0.0.6.9.22
 [0.0.6.9.21]: https://github.com/piklen/manmankan/compare/v0.0.6.9.20...v0.0.6.9.21

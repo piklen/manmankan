@@ -111,7 +111,10 @@ function kanToast(message, type) {
 function kanScanDesk(initialScan) {
   return {
     scan: initialScan,
-    activeTab: "table",
+    // 默认位置热力图:概览优先(首屏关键变化 + 分页图),数据表按需点开
+    // 与首页设计文案「先看关键变化和极端位置,需要时再展开全部数据」对齐;
+    // 此前默认 table 导致移动端首屏 193 行全表(~13000px)。
+    activeTab: "heatmap",
     mode: "low",
     resonanceOnly: false,
     sortKey: "resonance",
@@ -130,6 +133,24 @@ function kanScanDesk(initialScan) {
     init() {
       this.recentStocks = kanRecent.get();
       this.loadIndex();
+      // 不用 x-effect 渲染 heatmap:x-effect 会把 render 内部对 this.chart /
+      // heatmapPage 的响应式读写也收进依赖,首次给 chart 赋值会重触发自身,
+      // 上一帧渲染未完成时重复 setOption 直接抛 TypeError。
+      // $watch 只盯 activeTab,依赖不扩散;首屏主动渲染一次。
+      this.$watch("activeTab", (tab) => {
+        if (tab === "heatmap") this.$nextTick(() => this.renderHeatmap());
+      });
+      if (this.activeTab === "heatmap") {
+        // 首屏渲染等 window load 全资源就绪,避开 Alpine init 期的 DOM 动荡
+        const firstRender = () => this.renderHeatmap();
+        if (document.readyState === "complete") {
+          requestAnimationFrame(firstRender);
+        } else {
+          window.addEventListener(
+            "load", () => requestAnimationFrame(firstRender), { once: true },
+          );
+        }
+      }
       window.addEventListener("resize", () => {
         if (this.chart) this.chart.resize();
       });
@@ -184,8 +205,8 @@ function kanScanDesk(initialScan) {
       return `${this.heatmapPage + 1}/${this.heatmapPageCount}`;
     },
     setTab(tab) {
+      // 渲染交给 init() 里的 $watch("activeTab"),这里只改状态,避免双渲染
       this.activeTab = tab;
-      if (tab === "heatmap") this.$nextTick(() => this.renderHeatmap());
     },
     toggleSortDir() {
       this.sortDir = this.sortDir === "desc" ? "asc" : "desc";
@@ -237,11 +258,22 @@ function kanScanDesk(initialScan) {
       if (this.activeTab !== "heatmap") return;
       const el = document.getElementById("scan-heatmap");
       if (!el) return;
+      // kanLoadEcharts 是异步的 · 加载期间若又触发新渲染(翻页/排序/重进 tab),
+      // 只让最新一次落地,丢弃过期回调,杜绝并发 setOption 赛跑
+      const ticket = (this._renderTicket = (this._renderTicket || 0) + 1);
       kanLoadEcharts().then(() => {
+        if (ticket !== this._renderTicket) return;
         this._doRenderHeatmap(el);
       });
     },
     _doRenderHeatmap(el) {
+      // 首屏默认 heatmap 时,x-effect 可能在 x-show 生效前触发:
+      // display:none 下 clientWidth=0,echarts.init(0 宽容器)渲染即抛
+      // TypeError。等一帧布局完成再渲染。
+      if (el.clientWidth === 0) {
+        requestAnimationFrame(() => this._doRenderHeatmap(el));
+        return;
+      }
       if (this.heatmapPage >= this.heatmapPageCount) this.heatmapPage = this.heatmapPageCount - 1;
       const start = this.heatmapPage * this.heatmapPageSize;
       const rows = this.sortedRows.slice(start, start + this.heatmapPageSize);
@@ -268,6 +300,10 @@ function kanScanDesk(initialScan) {
       this.chart.setOption({
         grid: { left: 128, right: 24, top: 24, bottom: 58 },
         tooltip: {
+          // 显式 item 触发 + 关 axisPointer:默认轴触发在首帧轴未就绪时
+          // 会走 getAxesOnZeroOf 抛 TypeError;热力图格子本就该按 item 触发
+          trigger: "item",
+          axisPointer: { type: "none" },
           formatter(params) {
             const period = periods[params.value[0]];
             const name = names[params.value[1]];
@@ -290,8 +326,21 @@ function kanScanDesk(initialScan) {
           inRange: { color: ["#047857", "#f8fafc", "#b42318"] },
         },
         series: [{ type: "heatmap", data: cells }],
-      });
-      this.chart.resize();
+      }, { lazyUpdate: true });
+      // 不用 notMerge:整体替换模型会反复走坐标系拆除/重建窗口,
+      // 撞上 ECharts 5.6 管线 race(TypeError 或 0 格子);merge 下坐标系
+      // 一旦挂载即保持,后续重渲不再重复踩雷。
+      // 自愈:1s 后按硬指标自检(坐标系 + 已绘元素 ≥ 格子数),不健康则
+      // 重渲,最多 8 次 — 实测管线安定后渲染必成功,8 次覆盖首 ~8 秒。
+      setTimeout(() => {
+        if (!this.chart) return;
+        const series = this.chart.getModel().getSeries()[0];
+        const drawn = this.chart.getZr().storage.getDisplayList().length;
+        const healthy = series && series.coordinateSystem && drawn >= cells.length;
+        if (!healthy && (this._healCount = (this._healCount || 0) + 1) <= 8) {
+          this._doRenderHeatmap(el);
+        }
+      }, 1000);
     },
     async loadIndex() {
       this.indexLoading = true;
