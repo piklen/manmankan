@@ -81,12 +81,22 @@ def _collect_status() -> dict:
     wl_count = _safe(lambda: len(watchlist.load_watchlist().stocks), default=0)
     book = _safe(load_positions, default=None)
 
+    def _universe_count() -> int:
+        from kan.data.universe import fetch_all_stocks
+
+        return len(fetch_all_stocks())
+
+    universe_count = _safe(_universe_count, default=None)
+
     snapshots = len(list(SNAPSHOTS_DIR.glob("*.json"))) if SNAPSHOTS_DIR.exists() else 0
 
     return {
         "data_dir": str(BASE_DIR),
         "disk_bytes": disk_bytes if isinstance(disk_bytes, int) else 0,
         "kline_cached_count": len(symbols),
+        "kline_universe_count": (
+            universe_count if isinstance(universe_count, int) else None
+        ),
         "freshness": (
             {
                 "data_cutoff": (
@@ -143,6 +153,13 @@ def status(
     console.print(f"\n[bold]慢慢看 · 本地数据状态[/bold] · v{kan.__version__}")
     console.print(f"  数据目录 [cyan]{s['data_dir']}[/cyan] · 占用 {_fmt_bytes(s['disk_bytes'])}")
     freshness = s["freshness"]
+    universe = s.get("kline_universe_count")
+    coverage = (
+        f"[bold]{s['kline_cached_count']}[/bold]/{universe} 只"
+        f"（覆盖 {s['kline_cached_count'] / universe * 100:.0f}%）"
+        if isinstance(universe, int) and universe > 0
+        else f"[bold]{s['kline_cached_count']}[/bold] 只"
+    )
     if isinstance(freshness, dict) and freshness.get("data_cutoff"):
         from datetime import date as _date
 
@@ -152,11 +169,11 @@ def status(
             lag = freshness["target_count"] - freshness["current_count"]
             stale_note = f" · [yellow]{lag}/{freshness['target_count']} 只滞后[/yellow]"
         console.print(
-            f"  K线缓存 [bold]{s['kline_cached_count']}[/bold] 只 · "
+            f"  K线缓存 {coverage} · "
             f"最新截止 [cyan]{cutoff}[/cyan]{stale_note}"
         )
     else:
-        console.print(f"  K线缓存 [bold]{s['kline_cached_count']}[/bold] 只 · [dim]无有效截止日[/dim]")
+        console.print(f"  K线缓存 {coverage} · [dim]无有效截止日[/dim]")
     names = s["stock_names"]
     if isinstance(names, dict) and "count" in names:
         console.print(f"  代码表 {names['count']} 只 · 快照 {s['snapshots_days']} 天")

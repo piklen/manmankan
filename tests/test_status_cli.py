@@ -62,6 +62,10 @@ def status_env(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
     monkeypatch.setattr(
         "kan.core.trading_calendar.market_phase", lambda: "post"
     )
+    monkeypatch.setattr(
+        "kan.data.universe.fetch_all_stocks",
+        lambda: [("600519", "贵州茅台"), ("000858", "五粮液"), ("300750", "宁德时代"), ("920799", "艾融软件")],
+    )
     return data_home
 
 
@@ -75,6 +79,7 @@ def test_status_json_shape(status_env) -> None:
     assert payload["ok"] is True
     assert payload["command"] == "status"
     assert payload["kline_cached_count"] == 2  # chip_* 不计入
+    assert payload["kline_universe_count"] == 4
     assert payload["freshness"]["data_cutoff"] == "2026-07-23"
     assert payload["freshness"]["is_stale"] is False
     assert payload["tushare"]["token_configured"] is False
@@ -88,7 +93,7 @@ def test_status_terminal_renders(status_env) -> None:
 
     assert result.exit_code == 0, result.output
     assert "本地数据状态" in result.output
-    assert "K线缓存 2 只" in result.output
+    assert "K线缓存 2/4 只（覆盖 50%）" in result.output
     assert "最新截止 07-23" in result.output
     assert "未配置" in result.output  # tushare 凭证未配置
 

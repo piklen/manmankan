@@ -9,6 +9,16 @@ explicitly approves a larger bump.
 
 ## [Unreleased]
 
+## [0.0.6.9.29] - 2026-07-24
+
+### Added
+
+- `kan status` K 线缓存行显示全市场覆盖率（缓存只数 / universe 只数 + 百分比），全交易所覆盖状态一眼可查。
+
+### Fixed
+
+- `kan scan --codes` 无数据报错提示不再指向不支持代码参数的 `kan fetch`，改为说明停牌/覆盖情况并给出 `kan add <代码> --fetch` 可行路径；补充北交所为 920 段的提示。
+
 ## [0.0.6.9.28] - 2026-07-24
 
 ### Fixed
@@ -562,7 +572,8 @@ explicitly approves a larger bump.
 - **Shell 补全** · zsh / bash / fish / powershell
 - **合规与隐私** · 强制风险提示 + 关键词黑名单（无买卖建议 / 无目标价 / 无评级）· 数据全本地
 
-[Unreleased]: https://github.com/piklen/manmankan/compare/v0.0.6.9.28...HEAD
+[Unreleased]: https://github.com/piklen/manmankan/compare/v0.0.6.9.29...HEAD
+[0.0.6.9.29]: https://github.com/piklen/manmankan/compare/v0.0.6.9.28...v0.0.6.9.29
 [0.0.6.9.28]: https://github.com/piklen/manmankan/compare/v0.0.6.9.27...v0.0.6.9.28
 [0.0.6.9.27]: https://github.com/piklen/manmankan/compare/v0.0.6.9.26...v0.0.6.9.27
 [0.0.6.9.26]: https://github.com/piklen/manmankan/compare/v0.0.6.9.25...v0.0.6.9.26
