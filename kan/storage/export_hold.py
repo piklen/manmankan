@@ -77,7 +77,13 @@ def _hold_cell(value, *, digits: int = 2, mask: bool = False) -> str:
 
 
 def hold_csv(summary: PositionsSummary, *, mask: bool = False) -> str:
-    """kan hold --format csv · BOM 头兼容 Excel。"""
+    """kan hold --format csv · BOM 头兼容 Excel。
+
+    脱敏口径与 markdown 一致输出 "***"(JSON 路径为 null + masked 标志)。
+    """
+    def _cell(value: str, *, mask: bool) -> str:
+        return "***" if mask else value
+
     headers = [
         "代码", "名称", "现价", "成本", "股数", "今日盈亏%", "累计盈亏%",
         "累计盈亏额", "市值", "仓位%", "30日位置%", "60日位置%", "180日位置%",
@@ -88,13 +94,13 @@ def hold_csv(summary: PositionsSummary, *, mask: bool = False) -> str:
             row.symbol,
             f'"{row.name.replace(" ", "")}"',
             f"{row.price:.2f}" if row.price is not None else "",
-            _maybe_mask(f"{row.cost:.4f}", mask=mask) if row.cost is not None else "",
-            _maybe_mask(str(row.shares), mask=mask) if row.shares is not None else "",
-            _maybe_mask(f"{row.daily_pnl_pct:.2f}", mask=mask) if row.daily_pnl_pct is not None else "",
-            _maybe_mask(f"{row.total_pnl_pct:.2f}", mask=mask) if row.total_pnl_pct is not None else "",
-            _maybe_mask(f"{row.total_pnl:.2f}", mask=mask) if row.total_pnl is not None else "",
-            _maybe_mask(f"{row.market_value:.2f}", mask=mask) if row.market_value is not None else "",
-            _maybe_mask(f"{row.weight_pct:.1f}", mask=mask) if row.weight_pct is not None else "",
+            _cell(f"{row.cost:.4f}", mask=mask) if row.cost is not None else "",
+            _cell(str(row.shares), mask=mask) if row.shares is not None else "",
+            _cell(f"{row.daily_pnl_pct:.2f}", mask=mask) if row.daily_pnl_pct is not None else "",
+            _cell(f"{row.total_pnl_pct:.2f}", mask=mask) if row.total_pnl_pct is not None else "",
+            _cell(f"{row.total_pnl:.2f}", mask=mask) if row.total_pnl is not None else "",
+            _cell(f"{row.market_value:.2f}", mask=mask) if row.market_value is not None else "",
+            _cell(f"{row.weight_pct:.1f}", mask=mask) if row.weight_pct is not None else "",
             f"{row.positions.get(30):.1f}" if row.positions.get(30) is not None else "",
             f"{row.positions.get(60):.1f}" if row.positions.get(60) is not None else "",
             f"{row.positions.get(180):.1f}" if row.positions.get(180) is not None else "",

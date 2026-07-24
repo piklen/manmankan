@@ -279,10 +279,10 @@ def test_hold_csv_mask_hides_sensitive_numbers() -> None:
 
     assert text.startswith(BOM)
     row = text.lstrip(BOM).splitlines()[1]
-    # 成本/股数/盈亏被 mask 置空 · 现价与位置不 mask
+    # 成本/股数/盈亏被 mask 为 ***(与 md 口径一致) · 现价与位置不 mask
     assert "1680.5000" not in row
     assert "1950.00" not in row
-    assert row.startswith('600519,"贵州茅台",1700.00,,,,,,,,')
+    assert row.startswith('600519,"贵州茅台",1700.00,***,***,***,***,***,***,***')
     assert "20.0,50.0,80.0" in row
 
 
