@@ -491,6 +491,8 @@ class TestColdStartInvariants:
             watchlist_names, "_fetch_names_baostock",
             lambda: {"600519": "贵州茅台", "000858": "五粮液"},
         )
+        # universe 增强默认空集(单测与真实网络隔离)
+        monkeypatch.setattr("kan.data.universe.fetch_all_stocks", lambda: [])
 
         names = watchlist._load_stock_names()
 
