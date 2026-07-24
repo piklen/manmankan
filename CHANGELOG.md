@@ -9,6 +9,12 @@ explicitly approves a larger bump.
 
 ## [Unreleased]
 
+## [0.0.6.9.26] - 2026-07-24
+
+### Added
+
+- `kan history --pool` 池级位置趋势：按快照日聚合池内位置中位数、低位≤20% 与高位≥80% 只数，带旧→新趋势摘要；残缺快照日（自定义周期/分组扫描遗留）自动跳过；默认周期 180，支持 `-p` 与 `--format json`。
+
 ## [0.0.6.9.25] - 2026-07-24
 
 ### Fixed
@@ -544,7 +550,8 @@ explicitly approves a larger bump.
 - **Shell 补全** · zsh / bash / fish / powershell
 - **合规与隐私** · 强制风险提示 + 关键词黑名单（无买卖建议 / 无目标价 / 无评级）· 数据全本地
 
-[Unreleased]: https://github.com/piklen/manmankan/compare/v0.0.6.9.25...HEAD
+[Unreleased]: https://github.com/piklen/manmankan/compare/v0.0.6.9.26...HEAD
+[0.0.6.9.26]: https://github.com/piklen/manmankan/compare/v0.0.6.9.25...v0.0.6.9.26
 [0.0.6.9.25]: https://github.com/piklen/manmankan/compare/v0.0.6.9.24...v0.0.6.9.25
 [0.0.6.9.24]: https://github.com/piklen/manmankan/compare/v0.0.6.9.23...v0.0.6.9.24
 [0.0.6.9.23]: https://github.com/piklen/manmankan/compare/v0.0.6.9.22...v0.0.6.9.23
