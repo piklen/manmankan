@@ -9,6 +9,12 @@ explicitly approves a larger bump.
 
 ## [Unreleased]
 
+## [0.0.6.9.28] - 2026-07-24
+
+### Fixed
+
+- A 股代码表补齐北交所 920 段：baostock 不覆盖北交所导致 920xxx 代码无法 `kan add`、名称显示为代码本身；现合并全市场 universe(tushare stock_basic)缺失代码与名称，只补缺不覆盖，universe 不可用时静默退回原覆盖范围。
+
 ## [0.0.6.9.27] - 2026-07-24
 
 ### Added
@@ -556,7 +562,8 @@ explicitly approves a larger bump.
 - **Shell 补全** · zsh / bash / fish / powershell
 - **合规与隐私** · 强制风险提示 + 关键词黑名单（无买卖建议 / 无目标价 / 无评级）· 数据全本地
 
-[Unreleased]: https://github.com/piklen/manmankan/compare/v0.0.6.9.27...HEAD
+[Unreleased]: https://github.com/piklen/manmankan/compare/v0.0.6.9.28...HEAD
+[0.0.6.9.28]: https://github.com/piklen/manmankan/compare/v0.0.6.9.27...v0.0.6.9.28
 [0.0.6.9.27]: https://github.com/piklen/manmankan/compare/v0.0.6.9.26...v0.0.6.9.27
 [0.0.6.9.26]: https://github.com/piklen/manmankan/compare/v0.0.6.9.25...v0.0.6.9.26
 [0.0.6.9.25]: https://github.com/piklen/manmankan/compare/v0.0.6.9.24...v0.0.6.9.25

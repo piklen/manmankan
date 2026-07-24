@@ -27,7 +27,32 @@ def _load_stock_names() -> dict[str, str]:
         raise RuntimeError(
             "无法获取 A 股代码表 · baostock 和 akshare 均失败 · 请检查网络"
         )
+    mapping = _augment_with_universe(mapping)
     _atomic_write_json(paths.STOCK_NAMES_CACHE, mapping)
+    return mapping
+
+
+def _augment_with_universe(mapping: dict[str, str]) -> dict[str, str]:
+    """用全市场 universe(tushare stock_basic)补 baostock 缺失的代码(北交所 920 段)。
+
+    baostock query_stock_basic 不覆盖北交所,universe 有 920xxx 带名称 ·
+    只补缺不覆盖(baostock 名称优先);universe 不可用(无 token / 网络失败)
+    静默跳过,代码表退回 baostock 覆盖范围。
+    """
+    try:
+        from kan.data.universe import fetch_all_stocks
+
+        universe = fetch_all_stocks()
+    except Exception as e:  # 增强失败不拖垮主路径
+        debug_log(__name__, "universe augment for stock names", e)
+        return mapping
+    for item in universe:
+        try:
+            code, name = str(item[0]), str(item[1]).strip()
+        except (TypeError, IndexError):
+            continue
+        if re.fullmatch(r"\d{6}", code) and name and code not in mapping:
+            mapping[code] = name
     return mapping
 
 
