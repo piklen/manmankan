@@ -3,7 +3,7 @@
 {% block title %}今日概览 · 慢慢看{% endblock %}
 
 {% block content %}
-<section class="band" x-data="kanScanDesk(window.KAN_SCAN)" x-init="init()" x-cloak>
+<section class="band" x-data="kanScanDesk(window.KAN_SCAN)" x-cloak>
   <div class="band-title">
     <div>
       <strong>今天先看这三件事</strong>
@@ -247,7 +247,7 @@
     </table>
   </div>
 
-  <div id="scan-panel-heatmap" role="tabpanel" aria-labelledby="scan-tab-heatmap" x-show="scan.rows.length > 0 && activeTab === 'heatmap'" x-effect="activeTab === 'heatmap' && renderHeatmap()">
+  <div id="scan-panel-heatmap" role="tabpanel" aria-labelledby="scan-tab-heatmap" x-show="scan.rows.length > 0 && activeTab === 'heatmap'">
     <div id="scan-heatmap" class="chart tall" role="img" aria-label="股票在 30、60、180 日价格区间中的位置热力图"></div>
     <div class="toolbar">
       <span class="meta">0=N日最低 · 100=N日最高</span>
