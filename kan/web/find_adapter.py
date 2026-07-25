@@ -58,20 +58,20 @@ def run_web_find(payload: dict[str, Any]) -> dict[str, Any]:
 
     # 全市场模式使用 cross-section 路径
     if pool["type"] == "all":
-        request = FindCrossSectionRequest(
+        cs_request = FindCrossSectionRequest(
             conditions=conditions,
             output=output_profile,
             source_mode=False,
             limit=50,
         )
         try:
-            result = run_find_cross_section(request)
+            cs_result = run_find_cross_section(cs_request)
         except FindServiceError as e:
             detail = _service_error_detail(e, pool["type"])
             raise HTTPException(status_code=400, detail=detail) from e
-        return _serialize_cross_section_result(result, command=_build_cli_command(pool, filters, exclude_st))
+        return _serialize_cross_section_result(cs_result, command=_build_cli_command(pool, filters, exclude_st))
 
-    request = FindKlineRequest(
+    kline_request = FindKlineRequest(
         conditions=conditions,
         output=output_profile,
         code_pairs=pool.get("code_pairs"),
@@ -83,13 +83,13 @@ def run_web_find(payload: dict[str, Any]) -> dict[str, Any]:
         limit=50,
     )
     try:
-        result = run_find_kline(request)
+        kline_result = run_find_kline(kline_request)
     except FindServiceError as e:
         detail = _service_error_detail(e, pool["type"])
         raise HTTPException(status_code=400, detail=detail) from e
-    if not isinstance(result, FindKlineResult):
+    if not isinstance(kline_result, FindKlineResult):
         raise HTTPException(status_code=400, detail="当前查询没有可展示的 K 线结果")
-    return _serialize_find_result(result, command=_build_cli_command(pool, filters, exclude_st))
+    return _serialize_find_result(kline_result, command=_build_cli_command(pool, filters, exclude_st))
 
 
 def _parse_pool(raw: dict[str, Any]) -> dict[str, Any]:
@@ -209,17 +209,22 @@ def _serialize_cross_section_result(result: FindCrossSectionResult, *, command: 
     rows = []
     for row, triggered in result.limited:
         triggered_text = [f"{t.filter_type} {t.param}" for t in triggered]
+        # 从 scan 结果提取位置数据
+        positions: dict[str, float | None] = {"30": None, "60": None, "180": None}
+        price: float | None = None
+        if row.scan is not None:
+            price = row.scan.current_price
+            for p in row.scan.periods:
+                key = str(p.period)
+                if key in positions and not p.insufficient:
+                    positions[key] = _round(p.position_pct, 1)
         rows.append({
-            "code": row.symbol,
-            "name": row.name.replace(" ", "") if row.name else row.symbol,
-            "price": _round(row.close),
+            "code": row.code,
+            "name": row.name.replace(" ", "") if row.name else row.code,
+            "price": _round(price),
             "triggered_text": triggered_text,
             "metrics": [],
-            "positions": {
-                "30": _round(row.pos_30, 1) if row.pos_30 is not None else None,
-                "60": _round(row.pos_60, 1) if row.pos_60 is not None else None,
-                "180": _round(row.pos_180, 1) if row.pos_180 is not None else None,
-            },
+            "positions": positions,
         })
     return {
         "ok": True,
@@ -230,13 +235,15 @@ def _serialize_cross_section_result(result: FindCrossSectionResult, *, command: 
         "periods": [30, 60, 180],
         "rows": rows,
         "stats": {
-            "targets": result.ctx.total,
-            "pool_size": result.ctx.total,
+            "targets": result.ctx.pool_size,
+            "pool_size": result.ctx.pool_size,
             "matched": len(result.matched),
             "shown": len(rows),
             "skipped_no_cache": 0,
-            "data_cutoff": result.ctx.trade_date,
-            "stale": False,
+            "data_cutoff": (
+                result.ctx.data_cutoff.isoformat() if result.ctx.data_cutoff else None
+            ),
+            "stale": result.ctx.stale,
         },
         "message": None,
         "disclaimer": FIND_DISCLAIMER_TEXT,

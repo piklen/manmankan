@@ -31,19 +31,20 @@ def get_market_sentiment() -> MarketSentiment:
             return MarketSentiment(ok=False, error="本地没有全市场数据，请先更新")
 
         # 计算涨跌家数
+        up_count: int | None = None
+        down_count: int | None = None
+        flat_count: int | None = None
         if "change_pct" in df.columns:
             up_count = int((df["change_pct"] > 0).sum())
             down_count = int((df["change_pct"] < 0).sum())
             flat_count = int((df["change_pct"] == 0).sum())
-        else:
-            up_count = down_count = flat_count = None
 
         # 计算涨停跌停（简化：涨跌幅 >= 9.8% 视为涨停，<= -9.8% 视为跌停）
+        limit_up: int | None = None
+        limit_down: int | None = None
         if "change_pct" in df.columns:
             limit_up = int((df["change_pct"] >= 9.8).sum())
             limit_down = int((df["change_pct"] <= -9.8).sum())
-        else:
-            limit_up = limit_down = None
 
         # 计算 180 日中位位置
         if "pos_180" in df.columns:

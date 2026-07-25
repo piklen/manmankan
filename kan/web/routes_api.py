@@ -320,12 +320,12 @@ def kline(code: str, days: int = Query(120, ge=30, le=360)) -> dict:
     """K 线数据：返回 OHLC + 成交量，用于绘制 K 线图。"""
     import re
 
-    from kan.data.fetcher import load_kline_cache
+    from kan.data.fetcher import get_cached
 
     cleaned = re.sub(r"^(sh|sz|SH|SZ)", "", code.strip())
     if not re.match(r"^\d{6}$", cleaned):
         raise HTTPException(status_code=400, detail="请输入 6 位股票代码")
-    df = load_kline_cache(cleaned)
+    df = get_cached(cleaned)
     if df is None or df.empty:
         raise HTTPException(status_code=404, detail="本地没有该股票的 K 线缓存，请先更新数据")
     # 取最近 N 天
