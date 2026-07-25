@@ -1,0 +1,188 @@
+{% extends "base.html" %}
+
+{% block title %}对比 · 慢慢看{% endblock %}
+
+{% block content %}
+<section class="band" x-data="kanComparePage()" x-cloak>
+  <div class="band-title">
+    <div>
+      <strong>横向对比</strong>
+      <div class="meta">选 2-5 只股票，并排展示位置、估值、资金流对比。</div>
+    </div>
+  </div>
+
+  <div class="form-row">
+    <label for="compare-codes"><strong>输入代码</strong></label>
+    <input id="compare-codes" type="text" inputmode="numeric" x-model="codesInput" placeholder="输入 2-5 个代码，用空格分隔，如 600519 000858">
+    <button class="primary" type="button" @click="doCompare()" :disabled="loading || !codesInput.trim()">
+      <span x-text="loading ? '对比中' : '开始对比'"></span>
+    </button>
+    <span class="meta" role="status" x-text="message"></span>
+  </div>
+
+  <template x-if="stocks.length > 0">
+    <div class="compare-grid" :style="`grid-template-columns: 140px repeat(${stocks.length}, 1fr)`">
+      <div class="compare-header"></div>
+      <template x-for="stock in stocks" :key="stock.code">
+        <div class="compare-header">
+          <a class="stock-link" :href="kanSessionUrl(`/stock/${stock.code}`)">
+            <strong x-text="stock.name"></strong>
+          </a>
+          <span class="code" x-text="stock.code"></span>
+        </div>
+      </template>
+
+      <div class="compare-label">现价</div>
+      <template x-for="stock in stocks" :key="'price-' + stock.code">
+        <div class="compare-value" x-text="formatPrice(stock.price)"></div>
+      </template>
+
+      <div class="compare-label">今日涨跌</div>
+      <template x-for="stock in stocks" :key="'change-' + stock.code">
+        <div class="compare-value" :class="stock.change_pct >= 0 ? 'change-up' : 'change-down'" x-text="stock.change_pct !== null ? (stock.change_pct >= 0 ? '+' : '') + stock.change_pct.toFixed(2) + '%' : '—'"></div>
+      </template>
+
+      <div class="compare-label">30日位置</div>
+      <template x-for="stock in stocks" :key="'p30-' + stock.code">
+        <div class="compare-value" :class="posClass(stock.p30)" x-text="formatPct(stock.p30)"></div>
+      </template>
+
+      <div class="compare-label">60日位置</div>
+      <template x-for="stock in stocks" :key="'p60-' + stock.code">
+        <div class="compare-value" :class="posClass(stock.p60)" x-text="formatPct(stock.p60)"></div>
+      </template>
+
+      <div class="compare-label">180日位置</div>
+      <template x-for="stock in stocks" :key="'p180-' + stock.code">
+        <div class="compare-value" :class="posClass(stock.p180)" x-text="formatPct(stock.p180)"></div>
+      </template>
+
+      <div class="compare-label">低点共振</div>
+      <template x-for="stock in stocks" :key="'lowres-' + stock.code">
+        <div class="compare-value" x-text="'×' + stock.low_resonance"></div>
+      </template>
+
+      <div class="compare-label">高点共振</div>
+      <template x-for="stock in stocks" :key="'highres-' + stock.code">
+        <div class="compare-value" x-text="'×' + stock.high_resonance"></div>
+      </template>
+
+      <div class="compare-label">PE TTM</div>
+      <template x-for="stock in stocks" :key="'pe-' + stock.code">
+        <div class="compare-value" x-text="stock.pe !== null ? stock.pe.toFixed(2) : '—'"></div>
+      </template>
+
+      <div class="compare-label">PB</div>
+      <template x-for="stock in stocks" :key="'pb-' + stock.code">
+        <div class="compare-value" x-text="stock.pb !== null ? stock.pb.toFixed(2) : '—'"></div>
+      </template>
+
+      <div class="compare-label">换手率</div>
+      <template x-for="stock in stocks" :key="'turnover-' + stock.code">
+        <div class="compare-value" x-text="stock.turnover !== null ? stock.turnover.toFixed(2) + '%' : '—'"></div>
+      </template>
+
+      <div class="compare-label">股息率</div>
+      <template x-for="stock in stocks" :key="'dv-' + stock.code">
+        <div class="compare-value" x-text="stock.dv !== null ? stock.dv.toFixed(2) + '%' : '—'"></div>
+      </template>
+
+      <div class="compare-label">一手金额</div>
+      <template x-for="stock in stocks" :key="'lot-' + stock.code">
+        <div class="compare-value" x-text="stock.price ? '¥' + (stock.price * 100).toLocaleString('zh-CN', {maximumFractionDigits: 0}) : '—'"></div>
+      </template>
+    </div>
+  </template>
+
+  <template x-if="stocks.length === 0 && !loading">
+    <div class="empty empty-guide">
+      <div class="empty-icon">⚖️</div>
+      <strong>输入代码开始对比</strong>
+      <p>在上方输入 2-5 个股票代码，并排查看位置、估值和资金流数据。</p>
+    </div>
+  </template>
+</section>
+{% endblock %}
+
+{% block scripts %}
+<script>
+function kanComparePage() {
+  return {
+    codesInput: "",
+    stocks: [],
+    loading: false,
+    message: "",
+    async doCompare() {
+      var raw = this.codesInput.trim();
+      if (!raw) return;
+      var codes = raw.split(/[\s,，]+/).filter(function(c) { return c.length === 6 && /^\d{6}$/.test(c); });
+      if (codes.length < 2) {
+        this.message = "请输入至少 2 个有效的 6 位代码";
+        return;
+      }
+      if (codes.length > 5) {
+        this.message = "最多对比 5 只股票";
+        return;
+      }
+      this.loading = true;
+      this.message = "正在读取数据";
+      this.stocks = [];
+      var results = [];
+      for (var i = 0; i < codes.length; i++) {
+        try {
+          var resp = await kanFetch("/api/info/" + codes[i]);
+          if (resp.ok) {
+            var data = await resp.json();
+            var p30 = null, p60 = null, p180 = null;
+            if (data.periods) {
+              data.periods.forEach(function(p) {
+                if (p.period === 30) p30 = p.position_pct;
+                if (p.period === 60) p60 = p.position_pct;
+                if (p.period === 180) p180 = p.position_pct;
+              });
+            }
+            results.push({
+              code: data.code,
+              name: data.name,
+              price: data.price,
+              change_pct: data.change_pct,
+              p30: p30,
+              p60: p60,
+              p180: p180,
+              low_resonance: data.low_resonance || 0,
+              high_resonance: data.high_resonance || 0,
+              pe: data.valuation ? data.valuation.pe_ttm : null,
+              pb: data.valuation ? data.valuation.pb : null,
+              turnover: data.valuation ? data.valuation.turnover_rate : null,
+              dv: data.valuation ? data.valuation.dv_ttm : null,
+            });
+          } else {
+            var err = await resp.json().catch(function() { return {}; });
+            this.message = codes[i] + ": " + (err.detail || "无数据");
+          }
+        } catch(_) {
+          this.message = codes[i] + ": 读取失败";
+        }
+      }
+      this.stocks = results;
+      this.loading = false;
+      if (results.length > 0) {
+        this.message = "对比 " + results.length + " 只股票";
+      }
+    },
+    formatPrice(v) {
+      return v === null || v === undefined ? "—" : Number(v).toFixed(2);
+    },
+    formatPct(v) {
+      return v === null || v === undefined ? "—" : Number(v).toFixed(1) + "%";
+    },
+    posClass(v) {
+      if (v === null || v === undefined) return "";
+      if (v <= 20) return "pct-low";
+      if (v >= 80) return "pct-high";
+      return "";
+    },
+  };
+}
+</script>
+{% endblock %}

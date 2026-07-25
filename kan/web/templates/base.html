@@ -867,6 +867,276 @@
     td, .field-value, .summary-cell .field-value {
       font-variant-numeric: tabular-nums;
     }
+    .global-search {
+      position: relative;
+    }
+    .search-input {
+      min-height: 32px;
+      min-width: 160px;
+      max-width: 200px;
+      border: 1px solid var(--line);
+      border-radius: 6px;
+      padding: 0 10px;
+      font: inherit;
+      font-size: 13px;
+      background: var(--panel-hover);
+      color: var(--text);
+      transition: all var(--transition);
+    }
+    .search-input:focus {
+      min-width: 220px;
+      border-color: var(--accent);
+      background: var(--panel);
+      outline: none;
+      box-shadow: 0 0 0 3px rgba(13,148,136,.1);
+    }
+    .search-dropdown {
+      position: absolute;
+      top: 100%;
+      right: 0;
+      margin-top: 4px;
+      min-width: 240px;
+      max-height: 320px;
+      overflow-y: auto;
+      background: var(--panel);
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      box-shadow: var(--shadow-lg);
+      z-index: 300;
+    }
+    .search-item {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 10px 14px;
+      color: var(--text);
+      text-decoration: none;
+      font-size: 14px;
+      border-bottom: 1px solid var(--line);
+      transition: background var(--transition);
+    }
+    .search-item:last-child { border-bottom: 0; }
+    .search-item:hover {
+      background: var(--accent-soft);
+    }
+    .search-empty {
+      color: var(--muted);
+      justify-content: center;
+      cursor: default;
+    }
+    .search-empty:hover { background: transparent; }
+    .term-tip {
+      position: relative;
+      display: inline-flex;
+      align-items: center;
+      cursor: help;
+    }
+    .term-tip .tip-icon {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      width: 14px;
+      height: 14px;
+      margin-left: 4px;
+      border-radius: 50%;
+      background: var(--line);
+      color: var(--muted);
+      font-size: 10px;
+      font-weight: 700;
+      line-height: 1;
+    }
+    .term-tip .tip-content {
+      position: absolute;
+      bottom: 100%;
+      left: 50%;
+      transform: translateX(-50%);
+      margin-bottom: 6px;
+      padding: 8px 12px;
+      min-width: 200px;
+      max-width: 280px;
+      background: var(--text);
+      color: var(--bg);
+      font-size: 12px;
+      font-weight: 400;
+      line-height: 1.5;
+      border-radius: 6px;
+      box-shadow: var(--shadow-lg);
+      opacity: 0;
+      visibility: hidden;
+      transition: opacity .2s, visibility .2s;
+      z-index: 400;
+      white-space: normal;
+    }
+    .term-tip .tip-content::after {
+      content: "";
+      position: absolute;
+      top: 100%;
+      left: 50%;
+      transform: translateX(-50%);
+      border: 5px solid transparent;
+      border-top-color: var(--text);
+    }
+    .term-tip:hover .tip-content {
+      opacity: 1;
+      visibility: visible;
+    }
+    .onboarding-overlay {
+      position: fixed;
+      inset: 0;
+      z-index: 1000;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background: rgba(0,0,0,.6);
+      backdrop-filter: blur(4px);
+    }
+    .onboarding-card {
+      max-width: 400px;
+      width: 90%;
+      padding: 32px 28px;
+      background: var(--panel);
+      border: 1px solid var(--line);
+      border-radius: 16px;
+      box-shadow: var(--shadow-lg);
+      text-align: center;
+    }
+    .onboarding-step {
+      display: grid;
+      gap: 12px;
+      justify-items: center;
+    }
+    .onboarding-icon {
+      font-size: 48px;
+      margin-bottom: 8px;
+    }
+    .onboarding-step strong {
+      font-size: 18px;
+    }
+    .onboarding-step p {
+      margin: 0;
+      line-height: 1.6;
+      color: var(--muted);
+    }
+    .onboarding-actions {
+      display: flex;
+      justify-content: center;
+      gap: 12px;
+      margin-top: 24px;
+    }
+    .onboarding-dots {
+      display: flex;
+      justify-content: center;
+      gap: 8px;
+      margin-top: 20px;
+    }
+    .onboarding-dots span {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background: var(--line);
+      transition: background var(--transition);
+    }
+    .onboarding-dots span.active {
+      background: var(--accent);
+    }
+    .fetch-progress {
+      padding: 12px 16px;
+      border-bottom: 1px solid var(--line);
+    }
+    .progress-bar {
+      height: 6px;
+      border-radius: 999px;
+      background: var(--line);
+      overflow: hidden;
+    }
+    .progress-fill {
+      height: 100%;
+      border-radius: 999px;
+      background: linear-gradient(90deg, var(--accent), var(--accent-hover));
+      transition: width .3s ease;
+    }
+    .progress-info {
+      display: flex;
+      justify-content: space-between;
+      margin-top: 6px;
+      font-size: 12px;
+      color: var(--muted);
+    }
+    .alert-badge {
+      display: inline-flex;
+      align-items: center;
+      margin-left: 6px;
+      padding: 0 4px;
+      border-radius: 4px;
+      background: rgba(220,38,38,.1);
+      color: var(--high);
+      font-size: 11px;
+      font-weight: 600;
+    }
+    .alert-badge-low {
+      background: rgba(5,150,105,.1);
+      color: var(--low);
+    }
+    tr.alert-high {
+      background: rgba(220,38,38,.04) !important;
+    }
+    tr.alert-low {
+      background: rgba(5,150,105,.04) !important;
+    }
+    .sub-row td {
+      padding: 4px 12px 10px;
+      border-bottom: 1px solid var(--line);
+    }
+    .compare-grid {
+      display: grid;
+      gap: 1px;
+      background: var(--line);
+      border-bottom: 1px solid var(--line);
+    }
+    .compare-header {
+      padding: 12px;
+      background: var(--panel-hover);
+      text-align: center;
+    }
+    .compare-label {
+      padding: 10px 12px;
+      background: var(--panel-hover);
+      color: var(--muted);
+      font-size: 13px;
+      display: flex;
+      align-items: center;
+    }
+    .compare-value {
+      padding: 10px 12px;
+      background: var(--panel);
+      text-align: center;
+      font-variant-numeric: tabular-nums;
+    }
+    .scan-tile-list {
+      display: none;
+    }
+    .scan-tile {
+      padding: 14px 16px;
+      border-bottom: 1px solid var(--line);
+      cursor: pointer;
+      transition: background var(--transition);
+    }
+    .scan-tile:hover {
+      background: var(--panel-hover);
+    }
+    .scan-tile-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 10px;
+      margin-bottom: 8px;
+    }
+    .scan-tile-positions {
+      display: flex;
+      gap: 14px;
+      flex-wrap: wrap;
+      font-size: 13px;
+    }
     @keyframes pulse-warn {
       0%, 100% { opacity: 1; }
       50% { opacity: .7; }
@@ -943,6 +1213,8 @@
       .hold-result-list {
         display: grid;
       }
+      .table-wrap { display: none !important; }
+      .scan-tile-list { display: block; }
       .summary-grid {
         flex-direction: column;
       }
@@ -980,11 +1252,26 @@
         <nav class="nav-links" aria-label="主导航">
           <a href="{{ session_url(request, '/') }}" class="{% if request.url.path == '/' or request.url.path.startswith('/stock') %}active{% endif %}">今日</a>
           <a href="{{ session_url(request, '/find') }}" class="{% if request.url.path.startswith('/find') %}active{% endif %}">找股票</a>
+          <a href="{{ session_url(request, '/compare') }}" class="{% if request.url.path.startswith('/compare') %}active{% endif %}">对比</a>
           <a href="{{ session_url(request, '/hold') }}" class="{% if request.url.path.startswith('/hold') %}active{% endif %}">我的持仓</a>
           <a href="{{ session_url(request, '/settings') }}" class="{% if request.url.path.startswith('/settings') %}active{% endif %}">数据设置</a>
         </nav>
       </div>
       <div class="meta header-actions">
+        <div class="global-search" x-data="kanGlobalSearch()" @keydown.escape="open = false">
+          <input type="text" class="search-input" x-model="query" @input="debounceSearch()" @focus="if(query.trim()) open = true" @keydown.enter="goFirst()" placeholder="搜索代码/名称" aria-label="搜索股票">
+          <div class="search-dropdown" x-show="open && results.length > 0" @click.away="open = false">
+            <template x-for="item in results" :key="item.code">
+              <a class="search-item" :href="kanSessionUrl(`/stock/${item.code}`)" @click="open = false">
+                <span x-text="item.name"></span>
+                <span class="code" x-text="item.code"></span>
+              </a>
+            </template>
+          </div>
+          <div class="search-dropdown" x-show="open && query.trim() && results.length === 0 && searched">
+            <div class="search-item search-empty">未找到匹配的股票</div>
+          </div>
+        </div>
         {% set phase = market_phase_label() %}
         {% if phase %}
         <span class="phase-badge phase-{{ 'intraday' if phase == '盘中' else 'closed' }}">{{ phase }}</span>

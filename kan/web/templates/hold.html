@@ -119,10 +119,12 @@
       </thead>
       <tbody>
         <template x-for="row in hold.rows" :key="row.code">
-          <tr class="static-row">
+          <tr class="static-row" :class="{'alert-high': row.position_alert === 'high', 'alert-low': row.position_alert === 'low'}">
             <td>
               <span x-show="row.name !== row.code" x-text="row.name"></span>
               <span class="code" x-text="row.code"></span>
+              <span class="alert-badge" x-show="row.position_alert === 'high'" title="180日位置进入高位区">⚠️高</span>
+              <span class="alert-badge alert-badge-low" x-show="row.position_alert === 'low'" title="180日位置进入低位区">⚠️低</span>
             </td>
             <td x-text="formatCost(row.cost)"></td>
             <td x-text="formatInt(row.shares)"></td>
@@ -138,6 +140,11 @@
                 <button type="button" @click="startEdit(row)">修改</button>
                 <button class="danger" type="button" @click="removePosition(row)">删除</button>
               </div>
+            </td>
+          </tr>
+          <tr class="static-row sub-row" x-show="row.distance_to_breakeven !== null && row.distance_to_breakeven > 0">
+            <td colspan="11" class="meta">
+              <span x-text="`回本价 ${formatPrice(row.breakeven_price)} · 距回本还差 ${row.distance_to_breakeven}%`"></span>
             </td>
           </tr>
         </template>

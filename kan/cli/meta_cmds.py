@@ -147,7 +147,7 @@ def uninstall(
     console.print(f"检测到安装方式: [cyan]{install['name']}[/cyan]")
     console.print(f"请手动运行: [bold]{install['cmd']}[/bold]")
     alts = install.get("alts")
-    if alts:
+    if isinstance(alts, list) and alts:
         console.print("[dim]或（如果上面命令不适用）:[/dim]")
         for alt in alts:
             console.print(f"  [dim]{alt}[/dim]")

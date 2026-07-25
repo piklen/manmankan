@@ -7,6 +7,7 @@ from datetime import date
 
 import typer
 from rich.console import Console
+from rich.status import Status
 
 from kan.cli.helpers import (
     _load_names_with_optional_spinner,
@@ -297,6 +298,7 @@ def run_add(
     add_start = time.monotonic()
     use_batch_spinner = len(symbols) >= 20
 
+    spinner_ctx: Status | _NoopContext
     if use_batch_spinner:
         spinner_ctx = console.status(
             f"[cyan]正在添加 {len(symbols)} 只股票...[/cyan]",

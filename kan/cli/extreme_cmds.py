@@ -88,7 +88,7 @@ def _filter_extreme_cmd(
         raise typer.Exit(1)
     highlight = board_meta.highlight if board_meta else set()
     is_hot = isinstance(board_meta, HotMeta)
-    rank_map = board_meta.rank_map if is_hot else {}
+    rank_map = board_meta.rank_map if isinstance(board_meta, HotMeta) else {}
     _auto_fetch_stale(targets, days=max(periods) if periods else None)
 
     # 板块 / 题材指数 reference · 跟 scan --industry / --theme 视觉对齐(backlog)

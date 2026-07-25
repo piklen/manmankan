@@ -355,6 +355,50 @@ def daily(
             console.print(f"    [dim]… 及其他 {len(overview.changes) - 6} 条[/dim]")
     elif comparison_date:
         console.print(f"  与 {format_date_compact(comparison_date)} 相比 · 无关键位置变化")
+    # 位置变动 TOP3（对比上一份快照）
+    if previous_snapshot:
+        top_moves: list[tuple[str, str, float]] = []
+        for r in rows:
+            prev = previous_snapshot.get(r.symbol, {})
+            prev_period = prev.get("180")
+            prev_180 = prev_period.get("pct") if isinstance(prev_period, dict) else None
+            cur_180 = next(
+                (p.position_pct for p in r.periods if p.period == 180 and not p.insufficient),
+                None,
+            )
+            if prev_180 is not None and cur_180 is not None:
+                delta = cur_180 - prev_180
+                if abs(delta) >= 1:
+                    top_moves.append((r.name.replace(" ", ""), r.symbol, delta))
+        if top_moves:
+            top_moves.sort(key=lambda x: abs(x[2]), reverse=True)
+            console.print("  [bold]180日位置变动 TOP3[/bold]")
+            for name, code, delta in top_moves[:3]:
+                arrow = "[red]↑" if delta > 0 else "[green]↓"
+                console.print(f"    {name} {code} · {arrow}{abs(delta):.1f}%[/]")
+    # 持仓今日贡献
+    if book.positions:
+        from kan.service.hold_service import build_hold_summary
+
+        try:
+            hold_result = build_hold_summary()
+            if hold_result.results:
+                sorted_by_pnl = sorted(
+                    hold_result.results,
+                    key=lambda r: abs(r.daily_pnl) if r.daily_pnl is not None else 0,
+                    reverse=True,
+                )
+                top_contrib = sorted_by_pnl[0]
+                if top_contrib.daily_pnl is not None and top_contrib.daily_pnl != 0:
+                    sign = "+" if top_contrib.daily_pnl > 0 else ""
+                    color = "red" if top_contrib.daily_pnl > 0 else "green"
+                    console.print(
+                        f"  持仓今日最大贡献: "
+                        f"{top_contrib.name.replace(' ', '')} {top_contrib.symbol} "
+                        f"[{color}]{sign}{top_contrib.daily_pnl:.0f}元[/]"
+                    )
+        except Exception:
+            pass  # 持仓不可用时静默跳过
     render_freshness_warning(result.ctx.freshness, console)
     console.print("\n[bold]可复制命令[/bold]")
     for command in _command_rows():

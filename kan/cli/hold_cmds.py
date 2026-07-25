@@ -2,7 +2,7 @@
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Annotated
+from typing import Annotated, NoReturn
 
 import typer
 
@@ -19,7 +19,7 @@ hold_app = typer.Typer(
 app.add_typer(hold_app, name="hold")
 
 
-def _exit_hold_error(message: str, *, exit_code: int = 1) -> None:
+def _exit_hold_error(message: str, *, exit_code: int = 1) -> NoReturn:
     _print_err(f"❌ {message}")
     raise typer.Exit(exit_code)
 

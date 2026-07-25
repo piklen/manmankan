@@ -19,6 +19,7 @@ def _info_industry(industry: str, fmt: export.OutputFormat) -> None:
     """kan info --industry · 簡版板块档案。"""
     from rich.console import Console
 
+    from kan.core.models import BoardMeta
     from kan.core.pipeline import resolve_stock_set_or_exit
     from kan.core.scanner import scan_stock
     from kan.core.stock_set import from_flags
@@ -28,7 +29,7 @@ def _info_industry(industry: str, fmt: export.OutputFormat) -> None:
     console = Console()
     _targets, meta = resolve_stock_set_or_exit(from_flags(industry=industry))
 
-    assert meta is not None
+    assert isinstance(meta, BoardMeta)
     board_result = scan_stock(meta.index_kline, meta.board.code, meta.board.name)
 
     if fmt is not export.OutputFormat.terminal:
@@ -62,6 +63,7 @@ def _info_theme(theme_query: str, fmt: export.OutputFormat) -> None:
     """kan info --theme · 题材档案 · 类似 _info_industry。"""
     from rich.console import Console
 
+    from kan.core.models import ThemeMeta
     from kan.core.pipeline import resolve_stock_set_or_exit
     from kan.core.scanner import scan_stock
     from kan.core.stock_set import from_flags
@@ -71,7 +73,7 @@ def _info_theme(theme_query: str, fmt: export.OutputFormat) -> None:
     console = Console()
     _targets, meta = resolve_stock_set_or_exit(from_flags(theme=theme_query))
 
-    assert meta is not None
+    assert isinstance(meta, ThemeMeta)
     if meta.index_kline.empty:
         _print_err(
             "❌ 题材指数 K 线暂不可用 · 无法生成档案\n"

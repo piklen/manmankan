@@ -16,6 +16,7 @@
     <div class="controls">
       <label class="check"><input type="radio" value="watchlist" x-model="pool.type"> 自选</label>
       <label class="check"><input type="radio" value="holdings" x-model="pool.type"> 持仓</label>
+      <label class="check"><input type="radio" value="all" x-model="pool.type"> 全市场</label>
       <label class="check"><input type="radio" value="codes" x-model="pool.type"> 自定义代码</label>
       <label class="check"><input type="radio" value="industry" x-model="pool.type"> 行业</label>
       <label class="check"><input type="radio" value="theme" x-model="pool.type"> 题材</label>
@@ -23,6 +24,7 @@
     <textarea x-show="pool.type === 'codes'" x-model="pool.value" aria-label="自定义股票代码" placeholder="600519,000858 或每行一个代码"></textarea>
     <input x-show="pool.type === 'industry'" type="text" x-model="pool.value" aria-label="行业名称" placeholder="行业名称">
     <input x-show="pool.type === 'theme'" type="text" x-model="pool.value" aria-label="题材名称" placeholder="题材名称">
+    <p class="meta" x-show="pool.type === 'all'">全市场扫描需要较长时间，建议配合筛选条件使用。</p>
   </div>
 
   <div class="stack">
@@ -53,6 +55,8 @@
           <option value="resonance">多周期同时接近低位/高位</option>
           <option value="pe">市盈率（PE TTM）</option>
           <option value="moneyflow">主力资金净额</option>
+          <option value="turnover">换手率</option>
+          <option value="dv">股息率</option>
         </select>
         <select x-show="filter.type === 'pos'" x-model="filter.period" aria-label="周期">
           <option value="">周期</option>
@@ -111,7 +115,16 @@
 
   <div x-show="result && result.rows.length > 0" class="toolbar">
     <span class="meta" x-text="`共 ${result ? result.rows.length : 0} 只符合条件`"></span>
-    <button type="button" @click="addAllToWatchlist()" x-text="batchMsg"></button>
+    <div class="controls">
+      <select x-model="sortKey" aria-label="排序字段">
+        <option value="">默认顺序</option>
+        <option value="price">现价</option>
+        <option value="p180">180日位置</option>
+        <option value="pe">PE</option>
+      </select>
+      <button type="button" @click="sortDir = sortDir === 'desc' ? 'asc' : 'desc'" x-text="sortDir === 'desc' ? '↓ 降序' : '↑ 升序'"></button>
+      <button type="button" @click="addAllToWatchlist()" x-text="batchMsg"></button>
+    </div>
   </div>
 
   <div x-show="result && result.rows.length > 0" class="table-wrap find-results-table">
@@ -129,7 +142,7 @@
         </tr>
       </thead>
       <tbody>
-        <template x-for="row in (result ? result.rows : [])" :key="row.code">
+        <template x-for="row in sortedRows" :key="row.code">
           <tr @click="window.location.href = kanSessionUrl(`/stock/${row.code}`)" style="cursor:pointer;">
             <td x-text="row.code"></td>
             <td><a class="stock-link" :href="kanSessionUrl(`/stock/${row.code}`)" x-text="row.name"></a></td>

@@ -9,6 +9,30 @@ explicitly approves a larger bump.
 
 ## [Unreleased]
 
+## [0.0.6.9.31] - 2026-07-25
+
+### Added
+
+- Web 全局搜索框：Header 支持股票代码/名称快速搜索，下拉候选 + 回车直达详情页。
+- 个股详情页 K 线走势图：ECharts 蜡烛图 + 成交量副图，支持 60/120/250 日切换。
+- 术语平民化提示：位置百分位、共振、PE、PB、换手率、股息率、量比、一手等 8 个关键术语添加 "?" 提示气泡。
+- 一手计算器：个股详情页显示一手金额、占你现金比例、距 180 日高低点距离。
+- 新手引导浮层：首次打开（无数据）时显示 3 步引导，localStorage 记录完成状态。
+- 数据更新进度条：更新数据时显示进度百分比和当前处理股票名。
+- 找股票增强：新增“全市场”池、换手率/股息率筛选条件、结果排序。
+- 市场情绪面板：首页显示全市场涨跌家数、涨停跌停数量、180 日中位位置。
+- 持仓预警：180 日位置进入高位区(>90%)或低位区(<10%)时醒目标注。
+- 盈亏速算：持仓页显示回本价和距回本还差 X%。
+- 自选股分组筛选：首页支持按分组筛选自选股。
+- 对比模式：新增 /compare 页面，2-5 只股票并排对比位置/估值/资金流。
+- 智能日报增强：kan daily 输出增加 180 日位置变动 TOP3 和持仓今日最大贡献。
+- 移动端卡片视图：首页数据表在窄屏自动切换为卡片列表。
+
+### Changed
+
+- 持仓 CSV 导出增加回本价、距回本、位置预警列。
+- 导航栏新增“对比”入口。
+
 ## [0.0.6.9.30] - 2026-07-24
 
 ### Changed
@@ -582,7 +606,8 @@ explicitly approves a larger bump.
 - **Shell 补全** · zsh / bash / fish / powershell
 - **合规与隐私** · 强制风险提示 + 关键词黑名单（无买卖建议 / 无目标价 / 无评级）· 数据全本地
 
-[Unreleased]: https://github.com/piklen/manmankan/compare/v0.0.6.9.30...HEAD
+[Unreleased]: https://github.com/piklen/manmankan/compare/v0.0.6.9.31...HEAD
+[0.0.6.9.31]: https://github.com/piklen/manmankan/compare/v0.0.6.9.30...v0.0.6.9.31
 [0.0.6.9.30]: https://github.com/piklen/manmankan/compare/v0.0.6.9.29...v0.0.6.9.30
 [0.0.6.9.29]: https://github.com/piklen/manmankan/compare/v0.0.6.9.28...v0.0.6.9.29
 [0.0.6.9.28]: https://github.com/piklen/manmankan/compare/v0.0.6.9.27...v0.0.6.9.28

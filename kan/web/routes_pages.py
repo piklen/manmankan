@@ -116,6 +116,11 @@ def find(request: Request):
     return templates.TemplateResponse(request, "find.html", {})
 
 
+@router.get("/compare", response_class=HTMLResponse)
+def compare(request: Request):
+    return templates.TemplateResponse(request, "compare.html", {})
+
+
 @router.get("/stock/{code}", response_class=HTMLResponse)
 def stock(request: Request, code: str):
     try:

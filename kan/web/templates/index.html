@@ -4,6 +4,42 @@
 
 {% block content %}
 <section class="band" x-data="kanScanDesk(window.KAN_SCAN)" x-cloak>
+  <!-- 新手引导浮层 -->
+  <template x-if="showOnboarding">
+    <div class="onboarding-overlay" @click.self="dismissOnboarding()">
+      <div class="onboarding-card">
+        <div class="onboarding-step" x-show="onboardStep === 1">
+          <div class="onboarding-icon">🔍</div>
+          <strong>第一步：添加你关注的股票</strong>
+          <p>在下方输入框输入 6 位股票代码，如 600519（贵州茅台）、000858（五粮液）。</p>
+          <p class="meta">也可以稍后用顶部搜索框查找。</p>
+        </div>
+        <div class="onboarding-step" x-show="onboardStep === 2">
+          <div class="onboarding-icon">🔄</div>
+          <strong>第二步：点击“更新数据”</strong>
+          <p>添加股票后，点击“更新数据”按钮拉取最新行情。</p>
+          <p class="meta">建议每天收盘后（15:30 之后）更新一次。</p>
+        </div>
+        <div class="onboarding-step" x-show="onboardStep === 3">
+          <div class="onboarding-icon">📊</div>
+          <strong>第三步：查看位置变化</strong>
+          <p>更新完成后，这里会显示你的股票在 30/60/180 日价格区间中的位置。</p>
+          <p class="meta">位置只描述坐标，不代表买卖信号。</p>
+        </div>
+        <div class="onboarding-actions">
+          <button type="button" @click="dismissOnboarding()">跳过</button>
+          <button type="button" class="primary" x-show="onboardStep < 3" @click="onboardStep++">下一步</button>
+          <button type="button" class="primary" x-show="onboardStep === 3" @click="dismissOnboarding()">开始使用</button>
+        </div>
+        <div class="onboarding-dots">
+          <span :class="{active: onboardStep === 1}"></span>
+          <span :class="{active: onboardStep === 2}"></span>
+          <span :class="{active: onboardStep === 3}"></span>
+        </div>
+      </div>
+    </div>
+  </template>
+
   <div class="band-title">
     <div>
       <strong>今天先看这三件事</strong>
@@ -32,14 +68,25 @@
     </div>
   </div>
 
+  <!-- 更新进度条 -->
+  <div class="fetch-progress" x-show="fetching" x-cloak>
+    <div class="progress-bar">
+      <div class="progress-fill" :style="`width: ${fetchProgress}%`"></div>
+    </div>
+    <div class="progress-info">
+      <span x-text="fetchStage"></span>
+      <span x-text="fetchProgress + '%'"></span>
+    </div>
+  </div>
+
   <div class="summary-grid daily-summary" aria-label="今日概览">
     <div class="summary-cell">
-      <div class="field-label">180日接近低位</div>
+      <div class="field-label"><span class="term-tip">180日接近低位<span class="tip-icon">?</span><span class="tip-content">180日位置百分位不高于 10% 的股票数量。位置只描述价格坐标，不代表见底或买入信号。</span></span></div>
       <div class="field-value"><span x-text="scan.overview.low_180_count">{{ scan.overview.low_180_count }}</span> 只</div>
       <div class="meta">位置不高于 10%</div>
     </div>
     <div class="summary-cell">
-      <div class="field-label">180日接近高位</div>
+      <div class="field-label"><span class="term-tip">180日接近高位<span class="tip-icon">?</span><span class="tip-content">180日位置百分位不低于 90% 的股票数量。位置只描述价格坐标，不代表见顶或卖出信号。</span></span></div>
       <div class="field-value"><span x-text="scan.overview.high_180_count">{{ scan.overview.high_180_count }}</span> 只</div>
       <div class="meta">位置不低于 90%</div>
     </div>
@@ -119,6 +166,17 @@
     <span class="meta" role="status" aria-live="polite" x-show="watchlistMessage" x-text="watchlistMessage"></span>
   </div>
 
+  <!-- 分组筛选 -->
+  <div class="form-row" x-show="watchlistGroups.length > 1">
+    <span class="meta"><strong>分组筛选</strong></span>
+    <div class="controls">
+      <button type="button" :class="{active: activeGroup === ''}" @click="activeGroup = ''">全部</button>
+      <template x-for="group in watchlistGroups" :key="group.name">
+        <button type="button" :class="{active: activeGroup === group.name}" @click="activeGroup = group.name" x-text="`${group.name} (${group.count})`"></button>
+      </template>
+    </div>
+  </div>
+
   <div class="form-row recent-stocks" x-show="recentStocks.length > 0">
     <span class="meta"><strong>最近浏览</strong></span>
     <template x-for="item in recentStocks" :key="item.code">
@@ -166,6 +224,28 @@
         </template>
       </div>
     </template>
+  </div>
+
+  <!-- 市场情绪面板 -->
+  <div class="index-strip market-sentiment" x-show="marketData.ok">
+    <div class="status-line">
+      <span class="index-item">
+        <strong>市场情绪</strong>
+      </span>
+      <span class="index-item" x-show="marketData.up_count !== null">
+        <span class="change-up" x-text="`↑ ${marketData.up_count}`"></span>
+        <span class="change-down" x-text="`↓ ${marketData.down_count}`"></span>
+        <span class="meta" x-show="marketData.flat_count > 0" x-text="`平 ${marketData.flat_count}`"></span>
+      </span>
+      <span class="index-item" x-show="marketData.limit_up !== null">
+        <span class="change-up" x-text="`涨停 ${marketData.limit_up}`"></span>
+        <span class="change-down" x-text="`跌停 ${marketData.limit_down}`"></span>
+      </span>
+      <span class="index-item" x-show="marketData.median_position_180 !== null">
+        <span>180日中位</span>
+        <strong x-text="formatPct(marketData.median_position_180)"></strong>
+      </span>
+    </div>
   </div>
 
   <div class="toolbar">
@@ -259,6 +339,28 @@
         </template>
       </tbody>
     </table>
+  </div>
+
+  <!-- 移动端卡片视图 -->
+  <div class="scan-tile-list" x-show="scan.rows.length > 0 && activeTab === 'table'">
+    <template x-for="row in sortedRows" :key="'tile-' + row.code">
+      <article class="scan-tile" @click="openStock(row.code)">
+        <div class="scan-tile-header">
+          <a class="stock-link" :href="kanSessionUrl(`/stock/${row.code}`)"><strong x-text="row.name"></strong> <span class="code" x-text="row.code"></span></a>
+          <div class="controls">
+            <span class="tag" x-show="row.in_watchlist">自选</span>
+            <span class="tag" x-show="row.in_holding">持仓</span>
+            <strong x-text="formatPrice(row.price)"></strong>
+          </div>
+        </div>
+        <div class="scan-tile-positions">
+          {% for p in scan.periods %}
+          <span><span class="meta">{{ p }}日</span> <strong :class="periodClass(row, {{ p }})" x-text="formatPct(periodPct(row, {{ p }}))"></strong></span>
+          {% endfor %}
+          <span><span class="meta">共振</span> <strong x-text="'×' + resonance(row)"></strong></span>
+        </div>
+      </article>
+    </template>
   </div>
 
   <div id="scan-panel-heatmap" role="tabpanel" aria-labelledby="scan-tab-heatmap" x-show="scan.rows.length > 0 && activeTab === 'heatmap'">
