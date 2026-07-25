@@ -112,7 +112,7 @@ def _pool_trend_payload(*, period: int = 180, max_days: int = 10) -> dict | None
         return None
     if len(entries) < 2:
         return None
-    days = [
+    days: list[dict[str, Any]] = [
         {
             "date": format_date_compact(e.snapshot_date),
             "median": round(e.median_pct, 1),
@@ -136,6 +136,35 @@ def _pool_trend_payload(*, period: int = 180, max_days: int = 10) -> dict | None
         "trend_text": trend_text,
         "direction": direction,
     }
+
+
+@router.get("/search")
+def search_stocks(q: str = Query("", min_length=1, max_length=20)) -> dict:
+    """全局搜索：支持代码前缀和名称模糊匹配。"""
+    from kan.storage.watchlist_names import load_stock_names_cache
+
+    query = q.strip()
+    if not query:
+        return {"ok": True, "results": []}
+    names = load_stock_names_cache(allow_stale=True)
+    if not names:
+        return {"ok": True, "results": []}
+    results: list[dict[str, str]] = []
+    # 代码前缀匹配优先
+    if query.isdigit():
+        for code, name in names.items():
+            if code.startswith(query):
+                results.append({"code": code, "name": name})
+                if len(results) >= 10:
+                    break
+    # 名称包含匹配
+    if len(results) < 10:
+        for code, name in names.items():
+            if query in name and not any(r["code"] == code for r in results):
+                results.append({"code": code, "name": name})
+                if len(results) >= 10:
+                    break
+    return {"ok": True, "results": results}
 
 
 @router.get("/scan")
@@ -210,6 +239,26 @@ def remove_watchlist(code: str) -> dict:
     return {"ok": True, "message": msg}
 
 
+@router.get("/watchlist/groups")
+def watchlist_groups() -> dict:
+    """获取自选股分组列表。"""
+    try:
+        gw = watchlist.load_grouped_watchlist()
+        groups = []
+        for name, stocks in gw.groups.items():
+            groups.append({
+                "name": name,
+                "count": len(stocks),
+                "is_default": name == gw.default,
+            })
+        return {"ok": True, "groups": groups, "default": gw.default}
+    except Exception as e:
+        from kan.infra.log import debug_log
+
+        debug_log(__name__, "watchlist groups unavailable", e)
+        return {"ok": False, "groups": [], "default": "自选"}
+
+
 @router.post("/fetch")
 def fetch() -> dict:
     job = start_fetch_job()
@@ -264,6 +313,36 @@ def history(
         detail = f"{e.message} · {e.hint}" if e.hint else e.message
         raise HTTPException(status_code=status, detail=detail) from e
     return serialize_history(result)
+
+
+@router.get("/kline/{code}")
+def kline(code: str, days: int = Query(120, ge=30, le=360)) -> dict:
+    """K 线数据：返回 OHLC + 成交量，用于绘制 K 线图。"""
+    import re
+
+    from kan.data.fetcher import load_kline_cache
+
+    cleaned = re.sub(r"^(sh|sz|SH|SZ)", "", code.strip())
+    if not re.match(r"^\d{6}$", cleaned):
+        raise HTTPException(status_code=400, detail="请输入 6 位股票代码")
+    df = load_kline_cache(cleaned)
+    if df is None or df.empty:
+        raise HTTPException(status_code=404, detail="本地没有该股票的 K 线缓存，请先更新数据")
+    # 取最近 N 天
+    df = df.tail(days)
+    rows = []
+    for _, row in df.iterrows():
+        d = row["date"]
+        date_str = d.isoformat() if hasattr(d, "isoformat") else str(d)
+        rows.append({
+            "date": date_str,
+            "open": round(float(row["open"]), 2) if row["open"] == row["open"] else None,
+            "high": round(float(row["high"]), 2) if row["high"] == row["high"] else None,
+            "low": round(float(row["low"]), 2) if row["low"] == row["low"] else None,
+            "close": round(float(row["close"]), 2) if row["close"] == row["close"] else None,
+            "volume": int(row["volume"]) if row.get("volume") == row.get("volume") else None,
+        })
+    return {"ok": True, "code": cleaned, "days": len(rows), "rows": rows}
 
 
 @router.get("/hold")
@@ -366,6 +445,15 @@ def index_reference() -> dict:
     if not payload["ok"]:
         payload["message"] = "指数数据不可用"
     return payload
+
+
+@router.get("/market")
+def market_sentiment() -> dict:
+    """市场情绪面板：涨跌家数、涨停跌停、中位位置。"""
+    from kan.service.market_service import get_market_sentiment, serialize_market_sentiment
+
+    sentiment = get_market_sentiment()
+    return serialize_market_sentiment(sentiment)
 
 
 @router.get("/config/token")

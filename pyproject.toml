@@ -1,6 +1,6 @@
 [project]
 name = "manmankan"
-version = "0.0.6.9.30"
+version = "0.0.6.9.31"
 description = "普通 A 股散户的本地观察台 · 今日变化、自选、持仓与位置一处看清"
 requires-python = ">=3.11"
 license = { file = "LICENSE" }
@@ -86,7 +86,7 @@ ignore = [
 
 [tool.mypy]
 python_version = "3.11"
-files = ["kan/core", "kan/service", "kan/storage/export.py", "kan/data/updater.py", "kan/data/source_chain.py"]
+files = ["kan/core", "kan/service", "kan/cli", "kan/web", "kan/storage/export.py", "kan/data/updater.py", "kan/data/source_chain.py"]
 ignore_missing_imports = true
 check_untyped_defs = true
 warn_unused_ignores = true

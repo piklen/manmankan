@@ -108,6 +108,66 @@ function kanToast(message, type) {
   }, 3000);
 }
 
+// 全局搜索组件
+function kanGlobalSearch() {
+  return {
+    query: "",
+    results: [],
+    open: false,
+    searched: false,
+    _timer: null,
+    debounceSearch() {
+      clearTimeout(this._timer);
+      var self = this;
+      var q = this.query.trim();
+      if (!q) {
+        this.results = [];
+        this.open = false;
+        this.searched = false;
+        return;
+      }
+      this._timer = setTimeout(function() { self.doSearch(q); }, 200);
+    },
+    async doSearch(q) {
+      try {
+        var resp = await kanFetch(`/api/search?q=${encodeURIComponent(q)}`);
+        var data = await resp.json();
+        this.results = data.results || [];
+        this.searched = true;
+        this.open = true;
+      } catch(_) {
+        this.results = [];
+        this.searched = true;
+        this.open = true;
+      }
+    },
+    goFirst() {
+      if (this.results.length > 0) {
+        window.location.href = kanSessionUrl(`/stock/${this.results[0].code}`);
+      }
+    }
+  };
+}
+
+// 术语提示字典
+var kanTermTips = {
+  "位置百分位": "当前价格在过去 N 天最高价和最低价之间的位置。0% = 区间最低点，100% = 区间最高点。只描述坐标，不代表买卖信号。",
+  "共振": "多个时间周期（如 30日、60日、180日）同时接近低位或高位。×N 表示有 N 个周期同时满足。",
+  "量价方向": "今天成交量和价格变化的配合方向。如“放量上涨”表示成交量放大且价格上涨。",
+  "换手率": "当天成交量占流通股总数的比例。换手率高表示交易活跃。",
+  "PE TTM": "市盈率（滚动 12 个月）= 股价 / 每股收益。反映市场对公司盈利的估值水平。",
+  "PB": "市净率 = 股价 / 每股净资产。反映市场对公司净资产的估值水平。",
+  "股息率": "过去 12 个月分红 / 当前股价。反映持有股票的现金回报率。",
+  "一手": "A 股最小交易单位 = 100 股。一手金额 = 现价 × 100。",
+};
+
+// 生成术语提示 HTML
+function kanTip(term) {
+  var tip = kanTermTips[term] || "";
+  if (!tip) return term;
+  return `<span class="term-tip">${term}<span class="tip-icon">?</span><span class="tip-content">${tip}</span></span>`;
+}
+
 function kanScanDesk(initialScan) {
   return {
     scan: initialScan,
@@ -124,15 +184,29 @@ function kanScanDesk(initialScan) {
     chart: null,
     indexLoading: true,
     indexData: { ok: false, periods: [], rows: [] },
+    marketData: { ok: false },
     fetching: false,
     fetchMessage: "",
+    fetchProgress: 0,
+    fetchStage: "准备",
     eventSource: null,
     addCodes: "",
     watchlistMessage: "",
     recentStocks: [],
+    watchlistGroups: [],
+    activeGroup: "",
+    // 新手引导
+    onboardStep: 1,
+    showOnboarding: false,
     init() {
       this.recentStocks = kanRecent.get();
       this.loadIndex();
+      this.loadMarket();
+      this.loadGroups();
+      // 新手引导：无自选、无持仓、无缓存数据时显示
+      var onboarded = localStorage.getItem("kan-onboarded");
+      var isNewUser = !onboarded && this.scan.stats.targets === 0 && this.scan.rows.length === 0;
+      this.showOnboarding = isNewUser;
       // 不用 x-effect 渲染 heatmap:x-effect 会把 render 内部对 this.chart /
       // heatmapPage 的响应式读写也收进依赖,首次给 chart 赋值会重触发自身,
       // 上一帧渲染未完成时重复 setOption 直接抛 TypeError。
@@ -353,6 +427,23 @@ function kanScanDesk(initialScan) {
         this.indexLoading = false;
       }
     },
+    async loadMarket() {
+      try {
+        const response = await kanFetch("/api/market");
+        this.marketData = response.ok ? await response.json() : { ok: false };
+      } catch (_error) {
+        this.marketData = { ok: false };
+      }
+    },
+    async loadGroups() {
+      try {
+        const response = await kanFetch("/api/watchlist/groups");
+        const data = response.ok ? await response.json() : { ok: false, groups: [] };
+        this.watchlistGroups = data.groups || [];
+      } catch (_error) {
+        this.watchlistGroups = [];
+      }
+    },
     indexPct(row, period) {
       const item = row.periods[String(period)];
       return item ? item.position_pct : null;
@@ -388,10 +479,13 @@ function kanScanDesk(initialScan) {
         const data = JSON.parse(event.data);
         const total = data.total || 0;
         this.fetchMessage = total ? `${data.stage} ${data.completed}/${total}` : data.stage;
+        this.fetchStage = data.stage || "准备";
+        this.fetchProgress = total > 0 ? Math.round(data.completed / total * 100) : 0;
         if (data.status === "done") {
           this.eventSource.close();
           const reloaded = await this.reloadScan();
           this.fetching = false;
+          this.fetchProgress = 100;
           this.fetchMessage = reloaded
             ? (data.stage || "更新完成")
             : `${data.stage || "更新完成"} · 页面刷新失败，请手动刷新`;
@@ -429,6 +523,10 @@ function kanScanDesk(initialScan) {
       } catch (_error) {
         return false;
       }
+    },
+    dismissOnboarding() {
+      this.showOnboarding = false;
+      localStorage.setItem("kan-onboarded", "1");
     },
     async addWatchlist() {
       this.watchlistMessage = "添加中";
@@ -671,7 +769,7 @@ function kanHoldPage(initialHold) {
     exportHoldCsv() {
       const rows = this.hold.rows;
       if (!rows || rows.length === 0) { kanToast("没有可导出的持仓数据", "error"); return; }
-      const header = ["代码", "名称", "成本", "股数", "现价", "今日盈亏", "今日盈亏%", "累计盈亏", "累计盈亏%", "仓位%", "30日位置%", "60日位置%", "180日位置%"];
+      const header = ["代码", "名称", "成本", "股数", "现价", "今日盈亏", "今日盈亏%", "累计盈亏", "累计盈亏%", "仓位%", "30日位置%", "60日位置%", "180日位置%", "回本价", "距回本%", "位置预警"];
       const lines = [header.join(",")];
       for (const row of rows) {
         const cols = [
@@ -688,6 +786,9 @@ function kanHoldPage(initialHold) {
           row.p30_pct !== null ? row.p30_pct : "",
           row.p60_pct !== null ? row.p60_pct : "",
           row.p180_pct !== null ? row.p180_pct : "",
+          row.breakeven_price !== null ? row.breakeven_price : "",
+          row.distance_to_breakeven !== null ? row.distance_to_breakeven : "",
+          row.position_alert === "high" ? "高位" : row.position_alert === "low" ? "低位" : "",
         ];
         lines.push(cols.join(","));
       }
@@ -762,13 +863,51 @@ function kanStockPage(info) {
     historyReady: false,
     historyMessage: "该周期暂无足够历史 · 可切换周期，或在不同交易日多次更新数据后再看",
     watchlistMsg: "加入自选",
+    // K 线图状态
+    klineDays: 120,
+    klineChart: null,
+    klineReady: false,
+    klineMessage: "K 线数据加载中",
+    // 一手计算器
+    cashAmount: 0,
     init() {
       // 记录最近浏览
       kanRecent.add(info.code, info.name);
       this.loadHistory();
+      this.loadKline();
+      this.loadCash();
       window.addEventListener("resize", () => {
         if (this.chart) this.chart.resize();
+        if (this.klineChart) this.klineChart.resize();
       });
+    },
+    get lotAmount() {
+      if (!this.info.price) return "—";
+      return "¥" + (this.info.price * 100).toLocaleString("zh-CN", { minimumFractionDigits: 0, maximumFractionDigits: 0 });
+    },
+    get lotPctOfCash() {
+      if (!this.info.price || this.cashAmount <= 0) return "—";
+      const pct = (this.info.price * 100 / this.cashAmount * 100).toFixed(1);
+      return pct + "%";
+    },
+    get distanceToHigh() {
+      const p180 = this.info.periods?.find(p => p.period === 180);
+      if (!p180 || p180.distance_to_high_pct === null || p180.distance_to_high_pct === undefined) return "—";
+      return "+" + p180.distance_to_high_pct.toFixed(1) + "%";
+    },
+    get distanceToLow() {
+      const p180 = this.info.periods?.find(p => p.period === 180);
+      if (!p180 || p180.distance_to_low_pct === null || p180.distance_to_low_pct === undefined) return "—";
+      return "-" + p180.distance_to_low_pct.toFixed(1) + "%";
+    },
+    async loadCash() {
+      try {
+        const resp = await kanFetch("/api/hold");
+        const data = await resp.json();
+        if (data.ok && data.account) {
+          this.cashAmount = data.account.cash || 0;
+        }
+      } catch(_) {}
     },
     async addToWatchlist() {
       this.watchlistMsg = "添加中";
@@ -855,6 +994,95 @@ function kanStockPage(info) {
       a.click();
       URL.revokeObjectURL(url);
       kanToast(`已导出 ${this._lastSeries.length} 条位置历史`);
+    },
+    setKlineDays(days) {
+      this.klineDays = days;
+      this.loadKline();
+    },
+    async loadKline() {
+      this.klineReady = false;
+      this.klineMessage = "K 线数据加载中";
+      try {
+        const response = await kanFetch(`/api/kline/${this.info.code}?days=${this.klineDays}`);
+        if (!response.ok) {
+          const payload = await response.json().catch(() => ({}));
+          this.klineMessage = payload.detail || "本地没有 K 线缓存，请先在首页更新数据";
+          return;
+        }
+        const payload = await response.json();
+        if (!payload.rows || payload.rows.length === 0) {
+          this.klineMessage = "本地没有 K 线缓存，请先在首页更新数据";
+          return;
+        }
+        this.klineReady = true;
+        this.$nextTick(() => this.renderKline(payload.rows));
+      } catch (_error) {
+        this.klineMessage = "本地没有 K 线缓存，请先在首页更新数据";
+      }
+    },
+    renderKline(rows) {
+      const el = document.getElementById("kline-chart");
+      if (!el) return;
+      kanLoadEcharts().then(() => {
+        if (!this.klineChart) this.klineChart = echarts.init(el);
+        const dates = rows.map(r => r.date);
+        const ohlc = rows.map(r => [r.open, r.close, r.low, r.high]);
+        const volumes = rows.map(r => r.volume);
+        const isDark = document.documentElement.getAttribute("data-theme") === "dark";
+        const upColor = isDark ? "#f87171" : "#dc2626";
+        const downColor = isDark ? "#34d399" : "#059669";
+        this.klineChart.setOption({
+          animation: false,
+          tooltip: {
+            trigger: "axis",
+            axisPointer: { type: "cross" },
+          },
+          grid: [
+            { left: 60, right: 20, top: 20, height: "55%" },
+            { left: 60, right: 20, top: "72%", height: "18%" },
+          ],
+          xAxis: [
+            { type: "category", data: dates, gridIndex: 0, axisLabel: { show: false } },
+            { type: "category", data: dates, gridIndex: 1 },
+          ],
+          yAxis: [
+            { scale: true, gridIndex: 0, splitLine: { lineStyle: { opacity: 0.3 } } },
+            { scale: true, gridIndex: 1, splitNumber: 2, axisLabel: { show: false } },
+          ],
+          dataZoom: [
+            { type: "inside", xAxisIndex: [0, 1], start: 50, end: 100 },
+          ],
+          series: [
+            {
+              name: "K线",
+              type: "candlestick",
+              data: ohlc,
+              xAxisIndex: 0,
+              yAxisIndex: 0,
+              itemStyle: {
+                color: upColor,
+                color0: downColor,
+                borderColor: upColor,
+                borderColor0: downColor,
+              },
+            },
+            {
+              name: "成交量",
+              type: "bar",
+              data: volumes,
+              xAxisIndex: 1,
+              yAxisIndex: 1,
+              itemStyle: {
+                color: function(params) {
+                  const row = rows[params.dataIndex];
+                  return row.close >= row.open ? upColor : downColor;
+                },
+              },
+            },
+          ],
+        });
+        this.klineChart.resize();
+      });
     },
   };
 }

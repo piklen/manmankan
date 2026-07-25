@@ -9,13 +9,31 @@ function kanFindPage() {
     result: null,
     nextId: 1,
     batchMsg: "全部加入自选",
+    // 排序
+    sortKey: "",
+    sortDir: "desc",
     get resultPeriods() {
       return this.result ? this.result.periods : [];
+    },
+    get sortedRows() {
+      if (!this.result || !this.result.rows) return [];
+      var rows = [...this.result.rows];
+      if (!this.sortKey) return rows;
+      var dir = this.sortDir === "desc" ? -1 : 1;
+      var key = this.sortKey;
+      rows.sort(function(a, b) {
+        var va = a[key], vb = b[key];
+        if (va === null || va === undefined) va = -Infinity;
+        if (vb === null || vb === undefined) vb = -Infinity;
+        return (va - vb) * dir;
+      });
+      return rows;
     },
     get cliCommand() {
       const parts = ["kan", "find"];
       if (this.pool.type === "watchlist") parts.push("--only-watchlist");
       if (this.pool.type === "holdings") parts.push("--only-holdings");
+      if (this.pool.type === "all") parts.push("--all");
       if (this.pool.type === "codes" && this.pool.value.trim()) {
         parts.push("--codes", this.pool.value.trim().replace(/\s+/g, ","));
       }
@@ -37,6 +55,12 @@ function kanFindPage() {
         }
         if (filter.type === "moneyflow") {
           parts.push("--moneyflow", `${filter.op}:${filter.value}`);
+        }
+        if (filter.type === "turnover") {
+          parts.push("--turnover", `${filter.op}:${filter.value}`);
+        }
+        if (filter.type === "dv") {
+          parts.push("--dv", `${filter.op}:${filter.value}`);
         }
       }
       if (this.excludeSt) parts.push("--exclude-st");
@@ -81,6 +105,8 @@ function kanFindPage() {
       if (filter.type === "pe") return "PE";
       if (filter.type === "moneyflow") return "万元";
       if (filter.type === "resonance") return "周期";
+      if (filter.type === "turnover") return "%";
+      if (filter.type === "dv") return "%";
       return "";
     },
     filterValueLabel(filter) {
@@ -89,6 +115,8 @@ function kanFindPage() {
         resonance: "周期数量",
         pe: "市盈率阈值",
         moneyflow: "主力资金阈值",
+        turnover: "换手率阈值",
+        dv: "股息率阈值",
       }[filter.type];
       return type || "条件数值";
     },

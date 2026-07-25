@@ -316,6 +316,20 @@ def serialize_hold(result: PositionsSummary) -> dict[str, Any]:
     """持仓页数据。"""
     rows = []
     for row in result.results:
+        p180 = row.positions.get(180)
+        # 位置预警：180日位置 > 90% 为高位预警，< 10% 为低位预警
+        position_alert = None
+        if p180 is not None:
+            if p180 >= 90:
+                position_alert = "high"
+            elif p180 <= 10:
+                position_alert = "low"
+        # 盈亏速算：回本价和距回本距离
+        breakeven_price = None
+        distance_to_breakeven = None
+        if row.cost and row.price and row.price > 0:
+            breakeven_price = round(row.cost, 2)
+            distance_to_breakeven = round((row.cost - row.price) / row.price * 100, 1)
         rows.append({
             "code": row.symbol,
             "name": row.name.replace(" ", ""),
@@ -331,9 +345,12 @@ def serialize_hold(result: PositionsSummary) -> dict[str, Any]:
             "weight_pct": _round(row.weight_pct),
             "p30_pct": _round(row.positions.get(30), 1),
             "p60_pct": _round(row.positions.get(60), 1),
-            "p180_pct": _round(row.positions.get(180), 1),
+            "p180_pct": _round(p180, 1),
             "price_source": row.price_source,
             "price_status": row.price_status,
+            "position_alert": position_alert,
+            "breakeven_price": breakeven_price,
+            "distance_to_breakeven": distance_to_breakeven,
         })
     return {
         "ok": True,

@@ -5,7 +5,7 @@
 """
 from __future__ import annotations
 
-from typing import Annotated
+from typing import Annotated, NoReturn
 
 import typer
 
@@ -22,7 +22,7 @@ def _exit_history_error(
     message: str,
     hint: str | None = None,
     exit_code: int = 1,
-) -> None:
+) -> NoReturn:
     if fmt is export.OutputFormat.json:
         typer.echo(export.to_json(export.error_payload(
             "history",

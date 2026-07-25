@@ -11,16 +11,19 @@ from kan.cli.helpers import _parse_codes
 from kan.core.find_dsl import ConditionSet, FilterParseError
 from kan.render.base import FIND_DISCLAIMER_TEXT
 from kan.service.find_service import (
+    FindCrossSectionRequest,
+    FindCrossSectionResult,
     FindKlineRequest,
     FindKlineResult,
     FindOutputProfile,
     FindServiceError,
+    run_find_cross_section,
     run_find_kline,
 )
 from kan.storage import watchlist
 
-POOL_TYPES = {"watchlist", "holdings", "codes", "industry", "theme"}
-FILTER_TYPES = {"pos", "resonance", "pe", "moneyflow"}
+POOL_TYPES = {"watchlist", "holdings", "codes", "industry", "theme", "all"}
+FILTER_TYPES = {"pos", "resonance", "pe", "moneyflow", "turnover", "dv"}
 OPS = {"lt", "gt"}
 MAX_FILTERS = 6
 
@@ -40,19 +43,37 @@ def run_web_find(payload: dict[str, Any]) -> dict[str, Any]:
             resonance=filters.get("resonance"),
             pe=filters.get("pe"),
             moneyflow=filters.get("moneyflow"),
+            turnover=filters.get("turnover"),
             exclude_st=exclude_st,
         )
     except FilterParseError as e:
         raise HTTPException(status_code=400, detail=str(e)) from e
 
+    output_profile = FindOutputProfile(
+        mode="json",
+        compact=True,
+        compact_context=True,
+        field_paths=("code",),
+    )
+
+    # 全市场模式使用 cross-section 路径
+    if pool["type"] == "all":
+        request = FindCrossSectionRequest(
+            conditions=conditions,
+            output=output_profile,
+            source_mode=False,
+            limit=50,
+        )
+        try:
+            result = run_find_cross_section(request)
+        except FindServiceError as e:
+            detail = _service_error_detail(e, pool["type"])
+            raise HTTPException(status_code=400, detail=detail) from e
+        return _serialize_cross_section_result(result, command=_build_cli_command(pool, filters, exclude_st))
+
     request = FindKlineRequest(
         conditions=conditions,
-        output=FindOutputProfile(
-            mode="json",
-            compact=True,
-            compact_context=True,
-            field_paths=("code",),
-        ),
+        output=output_profile,
         code_pairs=pool.get("code_pairs"),
         industry=pool.get("industry"),
         theme=pool.get("theme"),
@@ -179,6 +200,45 @@ def _serialize_find_result(result: FindKlineResult, *, command: str) -> dict[str
             "stale": result.ctx.freshness.is_stale,
         },
         "message": _gap_message(skipped_no_cache),
+        "disclaimer": FIND_DISCLAIMER_TEXT,
+    }
+
+
+def _serialize_cross_section_result(result: FindCrossSectionResult, *, command: str) -> dict[str, Any]:
+    """序列化全市场 cross-section 结果。"""
+    rows = []
+    for row, triggered in result.limited:
+        triggered_text = [f"{t.filter_type} {t.param}" for t in triggered]
+        rows.append({
+            "code": row.symbol,
+            "name": row.name.replace(" ", "") if row.name else row.symbol,
+            "price": _round(row.close),
+            "triggered_text": triggered_text,
+            "metrics": [],
+            "positions": {
+                "30": _round(row.pos_30, 1) if row.pos_30 is not None else None,
+                "60": _round(row.pos_60, 1) if row.pos_60 is not None else None,
+                "180": _round(row.pos_180, 1) if row.pos_180 is not None else None,
+            },
+        })
+    return {
+        "ok": True,
+        "title": "符合条件的股票",
+        "command": command,
+        "filters": result.filters,
+        "pools": ["全市场"],
+        "periods": [30, 60, 180],
+        "rows": rows,
+        "stats": {
+            "targets": result.ctx.total,
+            "pool_size": result.ctx.total,
+            "matched": len(result.matched),
+            "shown": len(rows),
+            "skipped_no_cache": 0,
+            "data_cutoff": result.ctx.trade_date,
+            "stale": False,
+        },
+        "message": None,
         "disclaimer": FIND_DISCLAIMER_TEXT,
     }
 

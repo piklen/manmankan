@@ -2,7 +2,7 @@
 from __future__ import annotations
 
 from collections.abc import Callable
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, cast
 
 import typer
 
@@ -19,6 +19,7 @@ from kan.service.find_service import (
     run_find_cross_section,
     run_find_kline,
 )
+from kan.service.find_service_models import FindOutputMode
 from kan.storage import export
 
 if TYPE_CHECKING:
@@ -35,7 +36,7 @@ def _find_output_profile(
     agent_summary: bool = False,
 ) -> FindOutputProfile:
     return FindOutputProfile(
-        mode=fmt.value,
+        mode=cast(FindOutputMode, fmt.value),
         compact=compact,
         compact_context=compact_context,
         field_paths=field_paths,

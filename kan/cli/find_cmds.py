@@ -16,6 +16,8 @@ AI JSON 层 (AI 消费入口):
 """
 from __future__ import annotations
 
+from typing import cast
+
 import typer
 
 import kan.cli.find_options as opt
@@ -408,10 +410,10 @@ def find(
     code_pairs = _resolve_code_pairs_or_exit_json(codes, fmt) if codes is not None else None
     if explain or dry_run:
         from kan.service.find_plan import build_find_query_plan
-        from kan.service.find_service_models import FindOutputProfile
+        from kan.service.find_service_models import FindOutputMode, FindOutputProfile
 
         output = FindOutputProfile(
-            mode=fmt.value,
+            mode=cast(FindOutputMode, fmt.value),
             compact=compact,
             compact_context=compact_context,
             field_paths=field_paths,

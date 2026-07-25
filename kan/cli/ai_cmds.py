@@ -83,19 +83,20 @@ def examples(
     ] = export.OutputFormat.terminal,
 ) -> None:
     """查看端到端工作流示例。"""
+    examples: list[dict[str, str]] = [
+        {"title": title, "command": command, "detail": detail}
+        for title, command, detail in _EXAMPLES
+    ]
     payload = {
         "command": "examples",
-        "examples": [
-            {"title": title, "command": command, "detail": detail}
-            for title, command, detail in _EXAMPLES
-        ],
+        "examples": examples,
     }
     if fmt is export.OutputFormat.json:
         typer.echo(export.to_json(payload))
         return
     if fmt is export.OutputFormat.md:
         lines = ["# manmankan 工作流示例", ""]
-        for i, item in enumerate(payload["examples"], 1):
+        for i, item in enumerate(examples, 1):
             lines.extend([
                 f"## {i}. {item['title']}",
                 "",
@@ -110,7 +111,7 @@ def examples(
         return
 
     lines = ["慢慢看 · 工作流示例", ""]
-    for i, item in enumerate(payload["examples"], 1):
+    for i, item in enumerate(examples, 1):
         lines.extend([
             f"{i}. {item['title']}",
             f"   {item['command']}",
