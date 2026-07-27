@@ -38,7 +38,7 @@ jobs:
           python-version: '3.12'
       - name: Setup uv on fork runner
         if: github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name != github.repository
-        uses: astral-sh/setup-uv@11f9893b081a58869d3b5fccaea48c9e9e46f990  # pinned 2026-05-27
+        uses: astral-sh/setup-uv@c771a70e6277c0a99b617c7a806ffedaca235ff9  # pinned 2026-05-27
         with:
           version: ${{ env.UV_VERSION }}
           enable-cache: false
@@ -145,7 +145,7 @@ jobs:
           python-version: ${{ matrix.python-version }}
       - name: Setup uv on fork runner
         if: github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name != github.repository
-        uses: astral-sh/setup-uv@11f9893b081a58869d3b5fccaea48c9e9e46f990  # pinned 2026-05-27
+        uses: astral-sh/setup-uv@c771a70e6277c0a99b617c7a806ffedaca235ff9  # pinned 2026-05-27
         with:
           version: ${{ env.UV_VERSION }}
           enable-cache: false
@@ -190,7 +190,7 @@ jobs:
           python-version: ${{ matrix.python-version }}
       - name: Setup uv on fork runner
         if: github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name != github.repository
-        uses: astral-sh/setup-uv@11f9893b081a58869d3b5fccaea48c9e9e46f990  # pinned 2026-05-27
+        uses: astral-sh/setup-uv@c771a70e6277c0a99b617c7a806ffedaca235ff9  # pinned 2026-05-27
         with:
           version: ${{ env.UV_VERSION }}
           enable-cache: false
@@ -290,7 +290,7 @@ jobs:
           python-version: ${{ matrix.python-version }}
       - name: Setup uv on fork runner
         if: github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name != github.repository
-        uses: astral-sh/setup-uv@11f9893b081a58869d3b5fccaea48c9e9e46f990  # pinned 2026-05-27
+        uses: astral-sh/setup-uv@c771a70e6277c0a99b617c7a806ffedaca235ff9  # pinned 2026-05-27
         with:
           version: ${{ env.UV_VERSION }}
           enable-cache: false
