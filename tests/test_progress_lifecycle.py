@@ -377,7 +377,7 @@ def test_refresh_when_closed_is_noop() -> None:
 
 
 def test_progress_suffix_edge_cases() -> None:
-    """_progress_suffix 处理 total=None / completed=None / total=0 · 覆盖行 296-302。"""
+    """_progress_suffix 处理边界值，并渲染明确单位与补充信息。"""
     from kan.infra.lifecycle import LifecycleEvent, LifecycleKind
     from kan.infra.progress import RichOperationReporter
 
@@ -422,6 +422,44 @@ def test_progress_suffix_edge_cases() -> None:
     )
     suffix3 = RichOperationReporter._progress_suffix(ev3)
     assert "0/0" in suffix3
+
+    ev4 = LifecycleEvent(
+        sequence=4,
+        kind=LifecycleKind.PROGRESS,
+        operation_id="t",
+        operation_name="t",
+        occurred_at=0.0,
+        elapsed=0.0,
+        completed=37,
+        total=360,
+        details={
+            "progress_unit": "个交易日",
+            "progress_detail": "2026-07-30 · 本日 5,527 只股票",
+        },
+    )
+    assert RichOperationReporter._progress_suffix(ev4) == (
+        " (37/360 个交易日, 10%) · 2026-07-30 · 本日 5,527 只股票"
+    )
+
+
+def test_progress_suffix_redacts_custom_detail() -> None:
+    from kan.infra.lifecycle import LifecycleEvent, LifecycleKind
+
+    event = LifecycleEvent(
+        sequence=1,
+        kind=LifecycleKind.PROGRESS,
+        operation_id="t",
+        operation_name="t",
+        occurred_at=0.0,
+        elapsed=0.0,
+        completed=1,
+        total=2,
+        details={"progress_detail": "token=secret-value"},
+    )
+
+    suffix = RichOperationReporter._progress_suffix(event)
+    assert "secret-value" not in suffix
+    assert "<redacted>" in suffix
 
 
 def test_degraded_state_shows_in_render() -> None:

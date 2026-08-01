@@ -457,7 +457,7 @@ def fetch_recent_daily_bars(
 
         if active is not None and worker_cap > 1:
             active.phase(
-                "并发获取每日截面",
+                f"准备并发获取 {total:,} 个交易日的全市场行情",
                 total_days=total,
                 workers=worker_cap,
             )
@@ -477,6 +477,12 @@ def fetch_recent_daily_bars(
                     completed,
                     total,
                     "每日截面完成" if frame is not None else "每日截面失败",
+                    progress_unit="个交易日",
+                    progress_detail=(
+                        f"{trade_day:%Y-%m-%d} · 本日 {rows:,} 只股票"
+                        if frame is not None
+                        else f"{trade_day:%Y-%m-%d} · 本日获取失败"
+                    ),
                     trade_date=trade_day.isoformat(),
                     rows=rows,
                     workers=worker_cap,
@@ -493,6 +499,8 @@ def fetch_recent_daily_bars(
                         idx - 1,
                         total,
                         "获取每日截面",
+                        progress_unit="个交易日",
+                        progress_detail=f"正在获取 {trade_day:%Y-%m-%d}",
                         trade_date=trade_day.isoformat(),
                     )
                 def report_serial(

@@ -466,8 +466,19 @@ def test_fetch_batch_market_wide_materializes_symbol_caches_concurrently(
     assert all(thread_id == caller for _symbol, _ok, thread_id in callbacks)
     assert {event.message for event in reporter.events} >= {
         "全市场批量拉取",
-        "并发写入逐股缓存",
+        "准备写入 2 只股票缓存",
     }
+    write_progress = [
+        event
+        for event in reporter.events
+        if event.message == "逐股缓存写入"
+    ]
+    assert write_progress
+    assert (write_progress[-1].completed, write_progress[-1].total) == (2, 2)
+    assert write_progress[-1].details["progress_unit"] == "只股票"
+    assert write_progress[-1].details["progress_detail"] == (
+        "总行情 4 行 · 并发 2"
+    )
     for symbol in results:
         metadata = pq.read_metadata(temp_data_dir / f"{symbol}.parquet").metadata or {}
         assert metadata[b"kan.requested_days"] == b"2"
@@ -576,6 +587,54 @@ def test_fetch_batch_market_wide_can_release_success_frames_after_cache_write(
     assert all(frame.empty for frame in results.values())
     assert (temp_data_dir / "600519.parquet").exists()
     assert (temp_data_dir / "920000.parquet").exists()
+
+
+def test_fetch_batch_market_wide_throttles_cache_write_progress(
+    temp_data_dir, monkeypatch,
+):
+    """全市场逐股写入只发约 100 个进度事件，避免 UI 更新吞掉并发收益。"""
+    symbols = [f"{600000 + index:06d}" for index in range(250)]
+    panel = pd.DataFrame({
+        "symbol": symbols,
+        "date": [date(2026, 7, 31)] * len(symbols),
+        "open": [10.0] * len(symbols),
+        "high": [11.0] * len(symbols),
+        "low": [9.0] * len(symbols),
+        "close": [10.5] * len(symbols),
+        "volume": [1000.0] * len(symbols),
+        "amount": [10000.0] * len(symbols),
+    })
+    monkeypatch.setattr(
+        "kan.data.kline_snapshot.fetch_recent_daily_bars",
+        lambda *_args, **_kwargs: panel,
+    )
+    monkeypatch.setattr(
+        "kan.storage.paths.atomic_write_parquet",
+        lambda *_args, **_kwargs: None,
+    )
+    from kan.infra.lifecycle import CollectingReporter, operation
+
+    reporter = CollectingReporter()
+    with operation("test throttled progress", reporter=reporter) as lifecycle:
+        results, errors = fetcher.fetch_batch(
+            symbols,
+            days=1,
+            force=True,
+            max_workers=32,
+            market_wide=True,
+            retain_frames=False,
+            lifecycle=lifecycle,
+        )
+
+    write_progress = [
+        event
+        for event in reporter.events
+        if event.message == "逐股缓存写入"
+    ]
+    assert errors == {}
+    assert len(results) == len(symbols)
+    assert 1 < len(write_progress) <= 100
+    assert (write_progress[-1].completed, write_progress[-1].total) == (250, 250)
 
 
 # --- get_cached 补缺失列 ---

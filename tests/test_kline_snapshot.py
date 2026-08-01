@@ -287,9 +287,15 @@ def test_fetch_recent_daily_bars_reports_real_stage_events(monkeypatch, tmp_path
     final_daily = reporter.events[6]
     assert final_daily.kind is LifecycleKind.PROGRESS
     assert (final_daily.completed, final_daily.total) == (2, 2)
+    assert final_daily.details["progress_unit"] == "个交易日"
+    assert final_daily.details["progress_detail"] == (
+        "2026-05-29 · 本日 1 只股票"
+    )
     waiting_daily = reporter.events[5]
     assert waiting_daily.kind is LifecycleKind.PROGRESS
     assert (waiting_daily.completed, waiting_daily.total) == (1, 2)
+    assert waiting_daily.details["progress_unit"] == "个交易日"
+    assert waiting_daily.details["progress_detail"] == "正在获取 2026-05-29"
     assert reporter.events[7].kind is LifecycleKind.PHASE
     assert reporter.events[-1].state is OperationState.SUCCEEDED
 
