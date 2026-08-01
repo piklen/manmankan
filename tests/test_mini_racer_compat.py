@@ -149,20 +149,28 @@ def test_patch_mini_racer_import_real_package_has_attr(
 def test_patch_mini_racer_import_preserves_loaded_namespace_package(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """已加载的命名空间包也要原地补属性，不能被无 spec 的 shim 替换。"""
+    """已加载的命名空间包要原地补属性，且测试不依赖平台安装形态。"""
     from kan.infra.finalizer_guard import patch_mini_racer_import
 
-    real_package = importlib.import_module("py_mini_racer")
-    monkeypatch.delattr(real_package, "MiniRacer", raising=False)
-    original_spec = real_package.__spec__
-    original_path = real_package.__path__
+    package = types.ModuleType("py_mini_racer")
+    package.__spec__ = importlib.machinery.ModuleSpec(
+        "py_mini_racer", loader=None, is_package=True,
+    )
+    package.__path__ = ["/fake/py_mini_racer"]
+    submodule = types.ModuleType("py_mini_racer._mini_racer")
+    sentinel = type("MiniRacer", (), {})
+    submodule.MiniRacer = sentinel  # type: ignore[attr-defined]
+    monkeypatch.setitem(sys.modules, "py_mini_racer", package)
+    monkeypatch.setitem(sys.modules, "py_mini_racer._mini_racer", submodule)
+    original_spec = package.__spec__
+    original_path = package.__path__
 
     patch_mini_racer_import()
 
-    assert sys.modules["py_mini_racer"] is real_package
-    assert real_package.__spec__ is original_spec
-    assert real_package.__path__ is original_path
-    assert hasattr(real_package, "MiniRacer")
+    assert sys.modules["py_mini_racer"] is package
+    assert package.__spec__ is original_spec
+    assert package.__path__ is original_path
+    assert package.MiniRacer is sentinel  # type: ignore[attr-defined]
 
 
 def test_patch_mini_racer_import_shims_namespace_package(
