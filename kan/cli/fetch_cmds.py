@@ -29,7 +29,7 @@ def fetch(
     ] = None,
     all_stocks: Annotated[
         bool,
-        typer.Option("--all", help="预拉 A 股全市场 K 线缓存（约 5500 只，耗时较久）"),
+        typer.Option("--all", help="批量并发预拉 A 股全市场 K 线缓存（约 5500 只）"),
     ] = False,
     only_watchlist: Annotated[
         bool,
@@ -38,6 +38,16 @@ def fetch(
     group: Annotated[
         str | None,
         typer.Option("--group", "-g", help="选自选股分组 (默认 default 组)"),
+    ] = None,
+    workers: Annotated[
+        int | None,
+        typer.Option(
+            "--workers",
+            "-j",
+            min=1,
+            max=32,
+            help="最大并发数（默认自适应；全市场网络链路最高 12、缓存写入最高 32）",
+        ),
     ] = None,
     verbose: Annotated[
         bool,
@@ -132,7 +142,14 @@ def fetch(
             pending = [symbol for symbol in symbols if symbol not in fresh_set]
 
         lifecycle.phase("批量拉取 K 线", pending=len(pending), fresh=len(fresh_symbols))
-        results, batch_errors = fetch_batch(pending, force=force, lifecycle=lifecycle)
+        results, batch_errors = fetch_batch(
+            pending,
+            force=force,
+            max_workers=workers,
+            lifecycle=lifecycle,
+            market_wide=all_stocks,
+            retain_frames=not all_stocks or verbose,
+        )
 
         error_by_symbol = {
             symbol: _safe_error_msg(ValueError(message))

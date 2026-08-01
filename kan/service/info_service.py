@@ -6,7 +6,7 @@ from __future__ import annotations
 
 from collections.abc import Callable
 from contextlib import AbstractContextManager, nullcontext
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from datetime import date
 
 from kan.core.models import (
@@ -137,15 +137,37 @@ def get_stock_info(request: InfoRequest) -> InfoServiceResult:
 
 
 def _apply_retail_facts(result: StockScanResult) -> StockScanResult:
+    cash: float | None = None
+    holding_symbols: set[str] = set()
     try:
         from kan.storage.positions import load_positions
 
-        cash = load_positions().cash
+        position_book = load_positions()
+        cash = position_book.cash
+        holding_symbols = {
+            position.symbol for position in position_book.positions
+        }
     except Exception:
-        cash = None
+        pass
     from kan.core.retail_facts import apply_retail_facts
 
-    return apply_retail_facts(result, cash=cash)
+    enriched = apply_retail_facts(result, cash=cash)
+    watchlist_symbols: set[str] = set()
+    try:
+        from kan.storage.watchlist import load_grouped_watchlist
+
+        grouped = load_grouped_watchlist()
+        watchlist_symbols = {
+            stock.symbol
+            for group_stocks in grouped.groups.values()
+            for stock in group_stocks
+        }
+    except Exception:
+        pass
+    return enriched.model_copy(update={
+        "in_watchlist": result.symbol in watchlist_symbols,
+        "in_holding": result.symbol in holding_symbols,
+    })
 
 
 def _enrich_info_best_effort(
@@ -165,6 +187,34 @@ def _enrich_info_best_effort(
 
         debug_log(__name__, f"info enrich failed · {result.symbol}", e)
         return None, None, None
+
+
+def enrich_info_results_best_effort(
+    results: list[InfoServiceResult],
+) -> list[InfoServiceResult]:
+    """批量补齐对比页需要的估值与资金流，避免每只股票重复拉全市场截面。"""
+    if not results:
+        return []
+    try:
+        from kan.core.enrich import enrich_results
+
+        enriched = enrich_results(
+            [item.result for item in results],
+            need_moneyflow=True,
+        )
+        return [
+            replace(
+                item,
+                valuation=row.valuation,
+                moneyflow=row.moneyflow,
+            )
+            for item, row in zip(results, enriched, strict=True)
+        ]
+    except Exception as e:
+        from kan.infra.log import debug_log
+
+        debug_log(__name__, "batch info enrich failed", e)
+        return results
 
 
 def _valuation_context_best_effort(

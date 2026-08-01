@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 import os
+import threading
+import time
 from datetime import date, datetime, timedelta
 
 import pandas as pd
@@ -182,6 +184,70 @@ def test_fetch_recent_daily_bars_reports_progress(monkeypatch, tmp_path):
     ]
 
 
+def test_fetch_recent_daily_bars_parallelizes_large_history(monkeypatch, tmp_path):
+    """全市场长窗口按交易日并发，且输出仍按日期排序。"""
+    monkeypatch.setattr(kline_snapshot, "DATA_DIR", tmp_path)
+    days = [date(2026, 5, 1) + timedelta(days=i) for i in range(12)]
+    monkeypatch.setattr(kline_snapshot, "_recent_trade_dates", lambda _end, _count: days)
+    active = 0
+    peak = 0
+    lock = threading.Lock()
+
+    def fake_daily(td, **_kwargs):
+        nonlocal active, peak
+        with lock:
+            active += 1
+            peak = max(peak, active)
+        try:
+            time.sleep(0.02)
+            trade_day = datetime.strptime(td, "%Y%m%d").date()
+            return _daily(trade_day, 100.0)
+        finally:
+            with lock:
+                active -= 1
+
+    monkeypatch.setattr(kline_snapshot, "fetch_daily_bars", fake_daily)
+
+    out = kline_snapshot.fetch_recent_daily_bars(
+        len(days),
+        end_date="20260512",
+        symbols=["600519"],
+        max_workers=8,
+    )
+
+    assert 1 < peak <= 8
+    assert list(out["date"]) == days
+
+
+def test_fetch_recent_daily_bars_parallel_contract_failure_is_reported(
+    monkeypatch, tmp_path,
+):
+    """并发窗口中任一交易日契约异常必须让整批明确失败。"""
+    days = [date(2026, 5, 1) + timedelta(days=i) for i in range(8)]
+    monkeypatch.setattr(kline_snapshot, "DATA_DIR", tmp_path)
+    monkeypatch.setattr(kline_snapshot, "_recent_trade_dates", lambda _end, _count: days)
+
+    def fake_daily(td, **_kwargs):
+        if td == "20260503":
+            raise kline_snapshot.TushareDataContractError("stk_factor_pro", "incomplete")
+        return _daily(datetime.strptime(td, "%Y%m%d").date(), 100.0)
+
+    monkeypatch.setattr(kline_snapshot, "fetch_daily_bars", fake_daily)
+    reporter = CollectingReporter()
+
+    with pytest.raises(RuntimeError, match="数据契约校验失败"):
+        kline_snapshot.fetch_recent_daily_bars(
+            len(days),
+            end_date="20260508",
+            symbols=["600519"],
+            max_workers=4,
+            reporter=reporter,
+        )
+
+    degraded = [event for event in reporter.events if event.kind is LifecycleKind.DEGRADED]
+    assert degraded and degraded[-1].details["failure_count"] == 1
+
+
 def test_fetch_recent_daily_bars_reports_real_stage_events(monkeypatch, tmp_path):
     days = [date(2026, 5, 28), date(2026, 5, 29)]
     monkeypatch.setattr(kline_snapshot, "DATA_DIR", tmp_path)
@@ -265,6 +331,55 @@ def test_fetch_daily_bars_rejects_incomplete_cross_section_before_cache(
         kline_snapshot.fetch_daily_bars("20260720", force=True)
 
     assert not kline_snapshot._daily_cache_path("20260720").exists()
+
+
+def test_fetch_daily_bars_uses_complete_raw_fallback_for_latest_day(
+    monkeypatch, tmp_path,
+):
+    """最新日复权 generation 不完整时，用完整 daily 截面补齐。"""
+    trade_day = date(2026, 7, 31)
+    incomplete = _daily(trade_day, 100.0)
+    complete = pd.concat([
+        incomplete,
+        _daily(trade_day, 20.0).assign(symbol="920000"),
+    ], ignore_index=True)
+    monkeypatch.setattr(kline_snapshot, "DATA_DIR", tmp_path)
+    monkeypatch.setattr(kline_snapshot, "_MIN_COMPLETE_DAILY_BARS", 2)
+    monkeypatch.setattr(kline_snapshot, "_latest_trade_date_str", lambda: "20260731")
+    monkeypatch.setattr(
+        "kan.data.tushare._fetch_tushare_daily_bars",
+        lambda _td: incomplete,
+    )
+    monkeypatch.setattr(
+        "kan.data.tushare._fetch_tushare_raw_daily_bars",
+        lambda _td: complete,
+    )
+
+    out = kline_snapshot.fetch_daily_bars("20260731", force=True)
+
+    assert set(out["symbol"]) == {"600519", "920000"}
+    assert kline_snapshot._daily_cache_path("20260731").exists()
+
+
+def test_fetch_daily_bars_never_uses_raw_fallback_for_historical_day(
+    monkeypatch, tmp_path,
+):
+    """历史 raw 价格不能混入当前口径的前复权序列。"""
+    trade_day = date(2026, 7, 30)
+    monkeypatch.setattr(kline_snapshot, "DATA_DIR", tmp_path)
+    monkeypatch.setattr(kline_snapshot, "_MIN_COMPLETE_DAILY_BARS", 2)
+    monkeypatch.setattr(kline_snapshot, "_latest_trade_date_str", lambda: "20260731")
+    monkeypatch.setattr(
+        "kan.data.tushare._fetch_tushare_daily_bars",
+        lambda _td: _daily(trade_day, 100.0),
+    )
+    monkeypatch.setattr(
+        "kan.data.tushare._fetch_tushare_raw_daily_bars",
+        lambda _td: (_ for _ in ()).throw(AssertionError("历史日不应走 raw daily")),
+    )
+
+    with pytest.raises(kline_snapshot.TushareDataContractError):
+        kline_snapshot.fetch_daily_bars("20260730", force=True)
 
 
 def test_daily_completeness_floor_scales_with_known_universe(monkeypatch):

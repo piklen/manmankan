@@ -8,12 +8,13 @@
     <div>
       <strong>横向对比</strong>
       <div class="meta">选 2-5 只股票，并排展示位置、估值、资金流对比。</div>
+      <div class="meta">缺失项显示为 —；估值与资金流需要在“数据设置”中配置 TuShare。</div>
     </div>
   </div>
 
   <div class="form-row">
     <label for="compare-codes"><strong>输入代码</strong></label>
-    <input id="compare-codes" type="text" inputmode="numeric" x-model="codesInput" placeholder="输入 2-5 个代码，用空格分隔，如 600519 000858">
+    <input id="compare-codes" type="text" inputmode="text" autocapitalize="none" x-model="codesInput" placeholder="输入 2-5 个代码，如 600519、sh000858 或 920000.BJ">
     <button class="primary" type="button" @click="doCompare()" :disabled="loading || !codesInput.trim()">
       <span x-text="loading ? '对比中' : '开始对比'"></span>
     </button>
@@ -21,7 +22,8 @@
   </div>
 
   <template x-if="stocks.length > 0">
-    <div class="compare-grid" :style="`grid-template-columns: 140px repeat(${stocks.length}, 1fr)`">
+    <div class="compare-scroll">
+    <div class="compare-grid" :style="`grid-template-columns: 140px repeat(${stocks.length}, minmax(120px, 1fr)); min-width: ${140 + stocks.length * 120}px`">
       <div class="compare-header"></div>
       <template x-for="stock in stocks" :key="stock.code">
         <div class="compare-header">
@@ -40,6 +42,11 @@
       <div class="compare-label">今日涨跌</div>
       <template x-for="stock in stocks" :key="'change-' + stock.code">
         <div class="compare-value" :class="stock.change_pct >= 0 ? 'change-up' : 'change-down'" x-text="stock.change_pct !== null ? (stock.change_pct >= 0 ? '+' : '') + stock.change_pct.toFixed(2) + '%' : '—'"></div>
+      </template>
+
+      <div class="compare-label">行情日期</div>
+      <template x-for="stock in stocks" :key="'cutoff-' + stock.code">
+        <div class="compare-value" x-text="stock.dataCutoff || '—'"></div>
       </template>
 
       <div class="compare-label">30日位置</div>
@@ -87,10 +94,31 @@
         <div class="compare-value" x-text="stock.dv !== null ? stock.dv.toFixed(2) + '%' : '—'"></div>
       </template>
 
+      <div class="compare-label">估值日期</div>
+      <template x-for="stock in stocks" :key="'valuation-date-' + stock.code">
+        <div class="compare-value" x-text="stock.valuationDate || '—'"></div>
+      </template>
+
+      <div class="compare-label">单日主力净额</div>
+      <template x-for="stock in stocks" :key="'moneyflow-' + stock.code">
+        <div class="compare-value" x-text="formatAmount(stock.moneyflow)"></div>
+      </template>
+
+      <div class="compare-label">近5日主力净额</div>
+      <template x-for="stock in stocks" :key="'moneyflow5-' + stock.code">
+        <div class="compare-value" x-text="formatAmount(stock.moneyflow5)"></div>
+      </template>
+
+      <div class="compare-label">资金流日期</div>
+      <template x-for="stock in stocks" :key="'moneyflow-date-' + stock.code">
+        <div class="compare-value" x-text="stock.moneyflowDate || '—'"></div>
+      </template>
+
       <div class="compare-label">一手金额</div>
       <template x-for="stock in stocks" :key="'lot-' + stock.code">
         <div class="compare-value" x-text="stock.price ? '¥' + (stock.price * 100).toLocaleString('zh-CN', {maximumFractionDigits: 0}) : '—'"></div>
       </template>
+    </div>
     </div>
   </template>
 
@@ -115,7 +143,23 @@ function kanComparePage() {
     async doCompare() {
       var raw = this.codesInput.trim();
       if (!raw) return;
-      var codes = raw.split(/[\s,，]+/).filter(function(c) { return c.length === 6 && /^\d{6}$/.test(c); });
+      var tokens = raw.split(/[\s,，;；]+/).filter(Boolean);
+      var normalized = tokens.map(function(token) {
+        var code = token
+          .replace(/^(sh|sz|bj)[.:]?/i, "")
+          .replace(/[.:]?(sh|sz|bj)$/i, "");
+        return /^\d{6}$/.test(code) ? code : null;
+      });
+      var invalid = tokens.filter(function(_token, index) { return normalized[index] === null; });
+      if (invalid.length > 0) {
+        this.message = "请输入有效的 6 位股票代码：" + invalid.slice(0, 3).join("、");
+        return;
+      }
+      var codes = Array.from(new Set(normalized));
+      if (codes.length !== normalized.length) {
+        this.message = "请删除重复的股票代码";
+        return;
+      }
       if (codes.length < 2) {
         this.message = "请输入至少 2 个有效的 6 位代码";
         return;
@@ -127,54 +171,67 @@ function kanComparePage() {
       this.loading = true;
       this.message = "正在读取数据";
       this.stocks = [];
-      var results = [];
-      for (var i = 0; i < codes.length; i++) {
-        try {
-          var resp = await kanFetch("/api/info/" + codes[i]);
-          if (resp.ok) {
-            var data = await resp.json();
-            var p30 = null, p60 = null, p180 = null;
-            if (data.periods) {
-              data.periods.forEach(function(p) {
-                if (p.period === 30) p30 = p.position_pct;
-                if (p.period === 60) p60 = p.position_pct;
-                if (p.period === 180) p180 = p.position_pct;
-              });
-            }
-            results.push({
-              code: data.code,
-              name: data.name,
-              price: data.price,
-              change_pct: data.change_pct,
-              p30: p30,
-              p60: p60,
-              p180: p180,
-              low_resonance: data.low_resonance || 0,
-              high_resonance: data.high_resonance || 0,
-              pe: data.valuation ? data.valuation.pe_ttm : null,
-              pb: data.valuation ? data.valuation.pb : null,
-              turnover: data.valuation ? data.valuation.turnover_rate : null,
-              dv: data.valuation ? data.valuation.dv_ttm : null,
-            });
-          } else {
-            var err = await resp.json().catch(function() { return {}; });
-            this.message = codes[i] + ": " + (err.detail || "无数据");
-          }
-        } catch(_) {
-          this.message = codes[i] + ": 读取失败";
+      try {
+        var response = await kanFetch("/api/compare", {
+          method: "POST",
+          headers: { "Content-Type": "application/json", "X-Kan-Web": "1" },
+          body: JSON.stringify({ codes: codes }),
+        });
+        var payload = await response.json().catch(function() { return {}; });
+        if (!response.ok) {
+          this.message = payload.detail || "对比数据加载失败";
+          return;
         }
+        var results = (payload.stocks || []).map(this.toStock);
+        var failures = payload.errors || [];
+        this.stocks = results.length >= 2 ? results : [];
+        if (results.length >= 2 && failures.length === 0) {
+          this.message = "已对比 " + results.length + " 只股票";
+        } else if (results.length >= 2) {
+          this.message = "已对比 " + results.length + " 只；未载入 " + failures.map((item) => item.code).join("、");
+        } else {
+          var failedText = failures.map((item) => item.code + "（" + item.message + "）").join("、");
+          this.message = "至少需要 2 只有行情数据的股票" + (failedText ? "；" + failedText : "");
+        }
+      } catch(_) {
+        this.message = "对比数据加载失败，请稍后重试";
+      } finally {
+        this.loading = false;
       }
-      this.stocks = results;
-      this.loading = false;
-      if (results.length > 0) {
-        this.message = "对比 " + results.length + " 只股票";
-      }
+    },
+    toStock(data) {
+      var positions = {};
+      (data.periods || []).forEach(function(p) { positions[p.period] = p.position_pct; });
+      return {
+        code: data.code,
+        name: data.name,
+        price: data.price,
+        change_pct: data.change_pct,
+        dataCutoff: data.data_cutoff || data.scan_date,
+        p30: positions[30] ?? null,
+        p60: positions[60] ?? null,
+        p180: positions[180] ?? null,
+        low_resonance: data.low_resonance || 0,
+        high_resonance: data.high_resonance || 0,
+        pe: data.valuation ? data.valuation.pe_ttm : null,
+        pb: data.valuation ? data.valuation.pb : null,
+        turnover: data.valuation ? data.valuation.turnover_rate : null,
+        dv: data.valuation ? data.valuation.dv_ttm : null,
+        valuationDate: data.valuation ? data.valuation.trade_date : null,
+        moneyflow: data.moneyflow ? data.moneyflow.net_amount : null,
+        moneyflow5: data.moneyflow ? data.moneyflow.net_amount_5d : null,
+        moneyflowDate: data.moneyflow ? data.moneyflow.trade_date : null,
+      };
     },
     formatPrice(v) {
       return v === null || v === undefined ? "—" : Number(v).toFixed(2);
     },
     formatPct(v) {
       return v === null || v === undefined ? "—" : Number(v).toFixed(1) + "%";
+    },
+    formatAmount(v) {
+      if (v === null || v === undefined) return "—";
+      return Number(v).toLocaleString("zh-CN", { maximumFractionDigits: 2 }) + " 万元";
     },
     posClass(v) {
       if (v === null || v === undefined) return "";

@@ -27,6 +27,7 @@ venv/
 .pytest_cache/
 .mypy_cache/
 .ruff_cache/
+.playwright-cli/
 htmlcov/
 .coverage
 .coverage.*

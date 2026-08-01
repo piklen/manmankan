@@ -83,7 +83,7 @@ def _make_session(*, retries: int = 1) -> requests.Session:
     架构考量:
     - 付费 token 用户主动配置 TuShare Pro 当主路径 · 期望 production 级
     - 5xx / connection reset 应给 1 次重试 · 不立即降级 baostock(免费 · 慢 · 精度低)
-    - fetch_batch 12 并发 · pool_maxsize=12 防 connection-pool-is-full 警告
+    - fetch_batch 最多 32 并发 · pool_maxsize=32 防 connection-pool-is-full 警告
     - allowed_methods 含 POST(TuShare 用 POST JSON)
     - backoff_factor=0.5 · 重试间隔 0.5s · 不过分阻塞用户
     """
@@ -94,7 +94,7 @@ def _make_session(*, retries: int = 1) -> requests.Session:
         allowed_methods=["POST"],
         backoff_factor=0.5,
     )
-    adapter = HTTPAdapter(max_retries=retry, pool_maxsize=12)
+    adapter = HTTPAdapter(max_retries=retry, pool_connections=32, pool_maxsize=32)
     s.mount("https://", adapter)
     s.mount("http://", adapter)
     return s
@@ -386,7 +386,9 @@ def _should_trip_tushare_circuit(err: TushareApiError | None) -> bool:
     上游和 endpoint 仍可能健康；让它们触发 5 分钟整源熔断会把后续
     股票全部误降级到 baostock。
     """
-    if err is None or err.failure_kind == FetchFailureKind.RATE_LIMIT:
+    # 可重试错误只属于当前请求：批量任务里一次网络抖动会同时产生多个失败，
+    # 若把第一条写入跨进程 5 分钟熔断，剩余数千任务会全部误判主源不可用。
+    if err is None or err.retryable or err.failure_kind == FetchFailureKind.RATE_LIMIT:
         return False
     try:
         code = int(err.code)
@@ -403,7 +405,7 @@ def _retryable_sleep_seconds(err: TushareApiError, attempt: int) -> float | None
         return float(min(max(err.retry_after, 1), 2))
     if err.code in {50002, 50003, 50004}:
         return 0.5 + attempt * 0.5
-    return None
+    return min(0.5 + attempt * 0.5, 2.0)
 
 
 def _to_kline_df(data: dict | None) -> pd.DataFrame | None:
@@ -597,6 +599,9 @@ def _fetch_tushare(symbol: str, start: str) -> pd.DataFrame | None:
 _DAILY_BARS_FIELDS = "ts_code,trade_date,open_qfq,high_qfq,low_qfq,close_qfq,vol,amount"
 """stk_factor_pro 按交易日拉全市场前复权日 K 字段 · 供 --all K 线类 filter 的批量预计算缓存。"""
 
+_RAW_DAILY_BARS_FIELDS = "ts_code,trade_date,open,high,low,close,vol,amount"
+"""daily 按交易日拉全市场未复权日 K 字段 · 仅兜底最新交易日不完整的复权截面。"""
+
 
 class TushareDataContractError(RuntimeError):
     """配置的数据源返回了不符合 Tushare 接口语义的数据。"""
@@ -625,6 +630,27 @@ def _to_daily_bars_df(data: dict | None) -> pd.DataFrame | None:
     return df
 
 
+def _to_raw_daily_bars_df(data: dict | None) -> pd.DataFrame | None:
+    """TuShare daily(trade_date=...) data 块 → 标准日 K 截面 DataFrame。
+
+    只允许调用方把它用于最新交易日：前复权以最新复权因子为基准，因此最新一日
+    的前复权价与未复权价相同；历史日不能这样替换，否则会在除权点制造断层。
+    """
+    import pandas as pd
+
+    if not data:
+        return None
+    fields = data.get("fields") or []
+    items = data.get("items") or []
+    if not items:
+        return None
+    df = pd.DataFrame(items, columns=fields)
+    if "ts_code" not in df.columns:
+        return None
+    df["symbol"] = df["ts_code"].map(_strip_ts_suffix)
+    return df.drop(columns=["ts_code"]).rename(columns=_FIELD_MAP)
+
+
 def _fetch_tushare_daily_bars(trade_date: str) -> pd.DataFrame | None:
     """TuShare 前复权单日全市场日 K 截面 · `kan find --all` 时序预计算原料。
 
@@ -642,21 +668,29 @@ def _fetch_tushare_daily_bars(trade_date: str) -> pd.DataFrame | None:
         return None
 
     try:
-        data, _err = _post_tushare_api(
-            endpoint=endpoint,
-            token=token,
-            api_name="stk_factor_pro",
-            # 与 Tushare 官方 Python SDK 保持同一语义：按 trade_date 取单日截面，
-            # 不根据响应 has_more 自动追加请求；完整性由调用方按 A 股领域约束校验。
-            params={"trade_date": trade_date},
-            fields=_DAILY_BARS_FIELDS,
-        )
+        data: dict | None = None
+        for attempt in range(3):
+            data, err = _post_tushare_api(
+                endpoint=endpoint,
+                token=token,
+                api_name="stk_factor_pro",
+                # 与 Tushare 官方 Python SDK 保持同一语义：按 trade_date 取单日截面，
+                # 不根据响应 has_more 自动追加请求；完整性由调用方按 A 股领域约束校验。
+                params={"trade_date": trade_date},
+                fields=_DAILY_BARS_FIELDS,
+            )
+            if data is not None:
+                break
+            if _should_trip_tushare_circuit(err):
+                cb.record("tushare_daily_bars", ok=False)
+            delay = _retryable_sleep_seconds(err, attempt) if err else None
+            if delay is None or attempt >= 2:
+                return None
+            time.sleep(delay)
         if data is None:
-            cb.record("tushare_daily_bars", ok=False)
             return None
         df = _to_daily_bars_df(data)
         if df is None or df.empty:
-            cb.record("tushare_daily_bars", ok=False)
             return None
         returned_dates = set(df["date"].astype(str).str.strip())
         if returned_dates != {trade_date}:
@@ -671,7 +705,37 @@ def _fetch_tushare_daily_bars(trade_date: str) -> pd.DataFrame | None:
         raise
     except Exception as e:
         debug_log(__name__, "fetch tushare daily bars 失败", e)
-        cb.record("tushare_daily_bars", ok=False)
+        return None
+
+
+def _fetch_tushare_raw_daily_bars(trade_date: str) -> pd.DataFrame | None:
+    """TuShare 未复权单日全市场日 K 截面 · 仅供最新交易日批量兜底。
+
+    `stk_factor_pro` 在 PanShu 当日 generation 尚未完整时可能只返回部分股票，
+    而基础 `daily` 已完整。最新交易日 qfq 价格等于原始价格，可安全补齐；调用方
+    仍必须做全市场完整性校验，且禁止把该结果用于历史交易日。
+    """
+    token, endpoint = _resolve_config()
+    if not token:
+        return None
+    try:
+        for attempt in range(3):
+            data, err = _post_tushare_api(
+                endpoint=endpoint,
+                token=token,
+                api_name="daily",
+                params={"trade_date": trade_date},
+                fields=_RAW_DAILY_BARS_FIELDS,
+            )
+            if data is not None:
+                return _to_raw_daily_bars_df(data)
+            delay = _retryable_sleep_seconds(err, attempt) if err else None
+            if delay is None or attempt >= 2:
+                return None
+            time.sleep(delay)
+        return None
+    except Exception as exc:
+        debug_log(__name__, "fetch tushare raw daily bars 失败", exc)
         return None
 
 
@@ -695,8 +759,8 @@ class TushareKlineSource:
     name = "tushare"
     priority = 10
     capabilities = ProviderCapabilities(
-        max_concurrency=12,
-        initial_concurrency=4,
+        max_concurrency=32,
+        initial_concurrency=16,
         max_attempts=3,
         timeout_seconds=_TIMEOUT_SECONDS,
         backoff_base_seconds=0.5,

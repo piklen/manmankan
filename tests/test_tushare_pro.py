@@ -295,6 +295,33 @@ class TestToKlineDf:
         assert df.iloc[0]["open"] == 1490.0
         assert df.iloc[0]["close"] == 1510.0
 
+    def test_maps_raw_daily_cross_section_fields(self):
+        data = {
+            "fields": [
+                "ts_code", "trade_date", "open", "high", "low", "close",
+                "vol", "amount",
+            ],
+            "items": [[
+                "920000.BJ", "20260731", 20.0, 21.0, 19.0, 20.5,
+                2000.0, 20000.0,
+            ]],
+        }
+
+        df = tushare._to_raw_daily_bars_df(data)
+
+        assert df is not None
+        assert df.iloc[0]["symbol"] == "920000"
+        assert list(df.columns) == [
+            "date", "open", "high", "low", "close", "volume", "amount", "symbol",
+        ]
+
+    @pytest.mark.parametrize(
+        "data",
+        [None, {}, {"fields": ["ts_code"], "items": []}, {"fields": ["x"], "items": [[1]]}],
+    )
+    def test_raw_daily_cross_section_rejects_empty_or_missing_symbol(self, data):
+        assert tushare._to_raw_daily_bars_df(data) is None
+
 
 class TestFetchTushare:
     """_fetch_tushare 集成：resolver + circuit_breaker + client + DataFrame"""
@@ -363,6 +390,59 @@ class TestFetchTushare:
 
         assert df is not None and list(df["symbol"]) == ["600519"]
 
+    def test_raw_daily_bars_retries_transient_failure_then_maps_response(
+        self, temp_env, monkeypatch,
+    ):
+        config.save({**config.DEFAULT_CONFIG, "tushare_token": "tk"})
+        err = tushare.TushareApiError(
+            code=-1,
+            msg="temporary reset",
+            api_name="daily",
+            retryable=True,
+            failure_kind=tushare.FetchFailureKind.TRANSPORT,
+        )
+        payload = {
+            "fields": [
+                "ts_code", "trade_date", "open", "high", "low", "close",
+                "vol", "amount",
+            ],
+            "items": [[
+                "920000.BJ", "20260731", 20.0, 21.0, 19.0, 20.5,
+                2000.0, 20000.0,
+            ]],
+        }
+        responses = iter([(None, err), (payload, None)])
+        calls: list[dict] = []
+        sleeps: list[float] = []
+
+        def fake_post(**kwargs):
+            calls.append(kwargs)
+            return next(responses)
+
+        monkeypatch.setattr(tushare, "_post_tushare_api", fake_post)
+        monkeypatch.setattr(tushare.time, "sleep", sleeps.append)
+
+        df = tushare._fetch_tushare_raw_daily_bars("20260731")
+
+        assert df is not None and list(df["symbol"]) == ["920000"]
+        assert len(calls) == 2
+        assert calls[0]["api_name"] == "daily"
+        assert calls[0]["params"] == {"trade_date": "20260731"}
+        assert sleeps == [0.5]
+
+    def test_raw_daily_bars_without_token_or_on_unexpected_error_returns_none(
+        self, temp_env, monkeypatch,
+    ):
+        assert tushare._fetch_tushare_raw_daily_bars("20260731") is None
+
+        config.save({**config.DEFAULT_CONFIG, "tushare_token": "tk"})
+        monkeypatch.setattr(
+            tushare,
+            "_post_tushare_api",
+            lambda **_kwargs: (_ for _ in ()).throw(RuntimeError("unexpected")),
+        )
+        assert tushare._fetch_tushare_raw_daily_bars("20260731") is None
+
     def test_with_token_returns_dataframe(self, temp_env, monkeypatch):
         config.save({**config.DEFAULT_CONFIG, "tushare_token": "tk"})
 
@@ -418,17 +498,58 @@ class TestFetchTushare:
         assert tushare._fetch_tushare("600519", "20260101") is None
         assert not called["hit"]
 
-    def test_api_failure_records_breaker(self, temp_env, monkeypatch):
+    def test_retryable_api_failure_does_not_trip_global_breaker(self, temp_env, monkeypatch):
         from kan.infra import circuit_breaker
         config.save({**config.DEFAULT_CONFIG, "tushare_token": "tk"})
 
-        def fake_post(*a, **kw):
-            raise tushare.requests.exceptions.ConnectionError("boom")
-        monkeypatch.setattr(tushare.requests, "post", fake_post)
+        class _FailingSession:
+            def post(self, *_args, **_kwargs):
+                raise tushare.requests.exceptions.ConnectionError("boom")
 
+        monkeypatch.setattr(tushare, "_get_session", lambda: _FailingSession())
+
+        monkeypatch.setattr(tushare.time, "sleep", lambda *_args: None)
         tushare._fetch_tushare("600519", "20260101")
         cb = circuit_breaker.get_breaker()
-        assert cb.is_down("tushare")
+        assert not cb.is_down("tushare")
+
+    def test_daily_bars_retries_transient_failure_without_tripping_breaker(
+        self, temp_env, monkeypatch,
+    ):
+        from kan.infra import circuit_breaker
+
+        config.save({**config.DEFAULT_CONFIG, "tushare_token": "tk"})
+        err = tushare.TushareApiError(
+            code=-1,
+            msg="temporary connection reset",
+            api_name="stk_factor_pro",
+            retryable=True,
+            failure_kind=tushare.FetchFailureKind.TRANSPORT,
+        )
+        payload = {
+            "fields": [
+                "ts_code", "trade_date", "open_qfq", "high_qfq",
+                "low_qfq", "close_qfq", "vol", "amount",
+            ],
+            "items": [[
+                "600519.SH", "20260720", 100.0, 102.0, 99.0, 101.0,
+                100000.0, 150000000.0,
+            ]],
+        }
+        responses = iter([(None, err), (payload, None)])
+        sleeps: list[float] = []
+        monkeypatch.setattr(
+            tushare,
+            "_post_tushare_api",
+            lambda *_args, **_kwargs: next(responses),
+        )
+        monkeypatch.setattr(tushare.time, "sleep", lambda seconds: sleeps.append(seconds))
+
+        df = tushare._fetch_tushare_daily_bars("20260720")
+
+        assert df is not None and list(df["symbol"]) == ["600519"]
+        assert sleeps == [0.5]
+        assert not circuit_breaker.get_breaker().is_down("tushare_daily_bars")
 
     def test_retryable_data_hub_error_does_not_trip_breaker(self, temp_env, monkeypatch):
         from kan.infra import circuit_breaker
@@ -446,6 +567,21 @@ class TestFetchTushare:
 
         assert tushare._fetch_tushare("600519", "20260101") is None
         assert not circuit_breaker.get_breaker().is_down("tushare")
+
+    def test_permanent_api_failure_still_trips_breaker(self, temp_env, monkeypatch):
+        from kan.infra import circuit_breaker
+
+        config.save({**config.DEFAULT_CONFIG, "tushare_token": "tk"})
+        err = tushare.TushareApiError(
+            code=40101,
+            msg="token 无效",
+            api_name="stk_factor_pro",
+            retryable=False,
+        )
+        monkeypatch.setattr(tushare, "_post_tushare_api", lambda *a, **kw: (None, err))
+
+        assert tushare._fetch_tushare("600519", "20260101") is None
+        assert circuit_breaker.get_breaker().is_down("tushare")
 
     def test_retryable_data_hub_error_short_retries_then_succeeds(
         self, temp_env, monkeypatch,

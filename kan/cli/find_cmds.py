@@ -22,12 +22,6 @@ import typer
 
 import kan.cli.find_options as opt
 from kan.app import app
-from kan.cli.find_io import _exit_find_error, _resolve_code_pairs_or_exit_json
-from kan.cli.find_runner import _run_all_stocks_path, _run_kline_path
-from kan.core.find_registry import (
-    dimensions_from_fields,
-    parse_find_fields,
-)
 from kan.data.relative_strength import DEFAULT_RS_INDEX
 from kan.storage import export
 
@@ -42,6 +36,7 @@ def find(
     match_any: opt.MatchAnyOption = False,
     pe: opt.PeOption = [],  # noqa: B006 · typer multi-option 需要 list 默认值
     pb: opt.PbOption = [],  # noqa: B006 · typer multi-option 需要 list 默认值
+    dv: opt.DivYieldOption = [],  # noqa: B006 · typer multi-option 需要 list 默认值
     turnover: opt.TurnoverOption = [],  # noqa: B006 · typer multi-option 需要 list 默认值
     market_cap: opt.MarketCapOption = [],  # noqa: B006 · typer multi-option 需要 list 默认值
     volume_ratio: opt.VolumeRatioOption = [],  # noqa: B006 · typer multi-option 需要 list 默认值
@@ -117,6 +112,7 @@ def find(
       估值 / 质量 / 资金:
         --pe OP:VAL            PE TTM 裸值筛 · 例 lt:20
         --pb OP:VAL            PB 裸值筛 · 例 lt:3
+        --dv OP:VAL            股息率 TTM % 裸值筛 · 例 gte:3
         --turnover OP:VAL      换手率% 裸值筛 · 例 gt:5
         --market-cap OP:VAL    总市值(亿元)裸值筛 · 例 gt:100
         --volume-ratio OP:VAL  量比裸值筛 · 例 gt:1.5
@@ -157,7 +153,12 @@ def find(
     """
     from rich.console import Console
 
+    # `kan find --help` 只需要 Typer 参数元数据；执行链会引入 pipeline、requests
+    # 和 pydantic。延迟到命令真正执行再导入，显著缩短冷启动帮助页等待。
+    from kan.cli.find_io import _exit_find_error, _resolve_code_pairs_or_exit_json
+    from kan.cli.find_runner import _run_all_stocks_path, _run_kline_path
     from kan.core.find_dsl import ConditionSet, FilterParseError
+    from kan.core.find_registry import dimensions_from_fields, parse_find_fields
     from kan.render.base import FIND_DISCLAIMER_TEXT
 
     console = Console()
@@ -244,6 +245,7 @@ def find(
             resonance=resonance,
             pe=pe,
             pb=pb,
+            dv=dv,
             turnover=turnover,
             market_cap=market_cap,
             volume_ratio=volume_ratio,

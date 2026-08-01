@@ -14,6 +14,7 @@ def _nested(obj: object, attr: str, sub: str) -> float | None:
 SORT_FIELD_GETTERS = {
     "pe": lambda o: _nested(o, "valuation", "pe_ttm"),
     "pb": lambda o: _nested(o, "valuation", "pb"),
+    "dv": lambda o: _nested(o, "valuation", "dv_ttm"),
     "turnover": lambda o: _nested(o, "valuation", "turnover_rate"),
     "market_cap": lambda o: _nested(o, "valuation", "total_mv"),
     "volume_ratio": lambda o: _nested(o, "valuation", "volume_ratio"),

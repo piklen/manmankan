@@ -16,6 +16,7 @@ from kan.service.info_service import (
     get_stock_info,
 )
 from kan.storage import positions
+from kan.web.find_adapter import MAX_FILTERS, web_filter_groups
 from kan.web.routes_api import default_scan_payload, settings_facts
 from kan.web.security import SESSION_QUERY_NAME
 from kan.web.serialize import empty_hold_payload, serialize_hold, serialize_info
@@ -113,7 +114,17 @@ def index(request: Request):
 
 @router.get("/find", response_class=HTMLResponse)
 def find(request: Request):
-    return templates.TemplateResponse(request, "find.html", {})
+    groups = web_filter_groups()
+    options = [option for group in groups for option in group["options"]]
+    return templates.TemplateResponse(
+        request,
+        "find.html",
+        {
+            "find_filter_groups": groups,
+            "find_filter_options": options,
+            "find_max_filters": MAX_FILTERS,
+        },
+    )
 
 
 @router.get("/compare", response_class=HTMLResponse)

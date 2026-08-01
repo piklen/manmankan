@@ -382,6 +382,36 @@ def test_fetch_all_pulls_all_stocks(
     assert fetched == [["600519", "000858"]]
 
 
+def test_fetch_all_enables_market_batch_and_forwards_worker_cap(
+    all_pool_runner: CliRunner,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    captured: dict[str, object] = {}
+    monkeypatch.setattr(
+        "kan.data.universe.fetch_all_stocks",
+        lambda force=False: list(ALL_PAIRS),
+    )
+    monkeypatch.setattr("kan.data.fetcher.is_fresh", lambda _symbol: False)
+
+    def fake_fetch_batch(symbols, **kwargs):
+        captured["symbols"] = list(symbols)
+        captured.update(kwargs)
+        return ({symbol: pd.DataFrame({"close": [1.0]}) for symbol in symbols}, {})
+
+    monkeypatch.setattr("kan.data.fetcher.fetch_batch", fake_fetch_batch)
+
+    result = all_pool_runner.invoke(
+        app,
+        ["fetch", "--all", "--force", "--workers", "24"],
+    )
+
+    assert result.exit_code == 0, result.output
+    assert captured["symbols"] == ["600519", "000858"]
+    assert captured["market_wide"] is True
+    assert captured["max_workers"] == 24
+    assert captured["retain_frames"] is False
+
+
 @pytest.mark.parametrize(
     "args,expected",
     [

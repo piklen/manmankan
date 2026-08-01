@@ -16,8 +16,8 @@
         </div>
         <div class="onboarding-step" x-show="onboardStep === 2">
           <div class="onboarding-icon">🔄</div>
-          <strong>第二步：点击“更新数据”</strong>
-          <p>添加股票后，点击“更新数据”按钮拉取最新行情。</p>
+          <strong>第二步：等待自动更新</strong>
+          <p>添加股票后会自动拉取行情；以后也可以点击“更新数据”重新检查。</p>
           <p class="meta">建议每天收盘后（15:30 之后）更新一次。</p>
         </div>
         <div class="onboarding-step" x-show="onboardStep === 3">
@@ -50,7 +50,7 @@
         <button class="primary" type="button" @click="document.getElementById('watchlist-codes')?.focus()">先添加自选</button>
       </template>
       <template x-if="scan.stats.targets > 0">
-        <button class="primary" type="button" @click="startFetch()" :disabled="fetching">
+        <button id="refresh-data-button" class="primary" type="button" @click="startFetch()" :disabled="fetching">
           <span x-text="fetching ? '更新中' : scan.freshness.action_label"></span>
         </button>
       </template>
@@ -287,7 +287,7 @@
     <div class="empty empty-guide">
       <div class="empty-icon">📊</div>
       <strong>还没有数据</strong>
-      <p>在上方输入框添加你关注的股票代码（如 600519），然后点击「更新数据」开始观察。</p>
+      <p>在上方输入框添加你关注的股票代码（如 600519），系统会自动更新行情并开始观察。</p>
       <p class="meta">提示：按 / 键可快速聚焦输入框</p>
     </div>
   </template>

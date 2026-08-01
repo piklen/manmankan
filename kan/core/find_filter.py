@@ -37,6 +37,7 @@ from kan.core.find_filter_technical import (
     _match_winner,
 )
 from kan.core.find_filter_valuation import (
+    _match_dv,
     _match_market_cap,
     _match_pb,
     _match_pe,
@@ -66,6 +67,7 @@ FIND_MATCH_SEGMENTS: tuple[MatchSegmentSpec, ...] = (
     ),
     MatchSegmentSpec("pe", "pe_filters", "valuation", _match_pe),
     MatchSegmentSpec("pb", "pb_filters", "valuation", _match_pb),
+    MatchSegmentSpec("dv", "dv_filters", "valuation", _match_dv),
     MatchSegmentSpec("turnover", "turnover_filters", "valuation", _match_turnover),
     MatchSegmentSpec("market_cap", "market_cap_filters", "valuation", _match_market_cap),
     MatchSegmentSpec(

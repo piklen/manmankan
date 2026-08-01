@@ -137,8 +137,12 @@ def compact_dimensions(conditions: ConditionSet, *, is_export: bool) -> set[str]
 
 def _condition_dimensions(conditions: ConditionSet) -> set[str]:
     dims: set[str] = set()
-    if conditions.pe_filters:
-        dims.add("valuation")
+    for filter_type, spec in FILTER_SPECS.items():
+        if spec.dimension != "valuation":
+            continue
+        if getattr(conditions, condition_attr_for_filter(filter_type)):
+            dims.add("valuation")
+            break
     if conditions.needs_fundamentals():
         dims.add("fundamentals")
     if conditions.needs_moneyflow():

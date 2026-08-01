@@ -673,6 +673,7 @@ def _info_payload() -> dict:
         "data_cutoff": "2026-05-23",
         "fetched_at": None,
         "stale": False,
+        "in_watchlist": True,
         "low_resonance": 1,
         "high_resonance": 0,
         "trend": {"streak": 1, "streak_pct": 1.2, "direction": "涨1天"},
@@ -688,6 +689,13 @@ def _info_payload() -> dict:
             "volume_ratio": None,
             "total_mv": None,
             "circ_mv": None,
+        },
+        "moneyflow": {
+            "trade_date": None,
+            "net_amount": None,
+            "net_amount_5d": None,
+            "inflow_days": None,
+            "outflow_days": None,
         },
         "periods": [{
             "period": 30,
@@ -714,6 +722,7 @@ def test_stock_page_contains_disclaimer(monkeypatch) -> None:
     assert DISCLAIMER.strip() in response.text
     assert "位置标尺" in response.text
     assert "位置走势" in response.text
+    assert '"in_watchlist": true' in response.text
 
 
 def test_stock_page_unknown_code_is_neutral_404(monkeypatch) -> None:

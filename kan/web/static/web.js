@@ -24,13 +24,15 @@ document.addEventListener("keydown", function(e) {
   } else if (e.key === "2") {
     window.location.href = kanSessionUrl("/find");
   } else if (e.key === "3") {
-    window.location.href = kanSessionUrl("/hold");
+    window.location.href = kanSessionUrl("/compare");
   } else if (e.key === "4") {
+    window.location.href = kanSessionUrl("/hold");
+  } else if (e.key === "5") {
     window.location.href = kanSessionUrl("/settings");
   } else if (e.key === "r" || e.key === "R") {
     // R = 刷新数据（仅首页）
     if (path === "/") {
-      const btn = document.querySelector("[x-data] button.primary");
+      const btn = document.getElementById("refresh-data-button");
       if (btn && !btn.disabled) btn.click();
     }
   } else if (e.key === "/") {
@@ -56,7 +58,7 @@ function kanShowShortcuts() {
   overlay.innerHTML = '<div style="background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:24px 28px;max-width:360px;width:90%;box-shadow:var(--shadow-lg);">' +
     '<strong style="font-size:16px;">键盘快捷键</strong>' +
     '<table style="width:100%;margin-top:14px;border-collapse:collapse;font-size:14px;">' +
-    '<tr><td style="padding:6px 0;color:var(--muted);">1 / 2 / 3 / 4</td><td>切换页面</td></tr>' +
+    '<tr><td style="padding:6px 0;color:var(--muted);">1 / 2 / 3 / 4 / 5</td><td>今日 / 找股票 / 对比 / 持仓 / 设置</td></tr>' +
     '<tr><td style="padding:6px 0;color:var(--muted);">D</td><td>切换深色模式</td></tr>' +
     '<tr><td style="padding:6px 0;color:var(--muted);">R</td><td>更新数据（首页）</td></tr>' +
     '<tr><td style="padding:6px 0;color:var(--muted);">/</td><td>聚焦添加自选</td></tr>' +
@@ -192,6 +194,7 @@ function kanScanDesk(initialScan) {
     eventSource: null,
     addCodes: "",
     watchlistMessage: "",
+    watchlistFetchPending: false,
     recentStocks: [],
     watchlistGroups: [],
     activeGroup: "",
@@ -226,7 +229,10 @@ function kanScanDesk(initialScan) {
         }
       }
       window.addEventListener("resize", () => {
-        if (this.chart) this.chart.resize();
+        clearTimeout(this._heatmapResizeTimer);
+        this._heatmapResizeTimer = setTimeout(() => {
+          if (this.chart && this.activeTab === "heatmap") this.chart.resize();
+        }, 80);
       });
     },
     get positionDistribution() {
@@ -370,8 +376,12 @@ function kanScanDesk(initialScan) {
           const code = params.value && params.value[3];
           if (code) this.openStock(code);
         });
+      } else {
+        // 分页最后一页高度可能变化，先同步容器尺寸再更新模型。
+        this.chart.resize({ width: el.clientWidth, height: el.clientHeight, silent: true });
       }
       this.chart.setOption({
+        animation: false,
         grid: { left: 128, right: 24, top: 24, bottom: 58 },
         tooltip: {
           // 显式 item 触发 + 关 axisPointer:默认轴触发在首帧轴未就绪时
@@ -400,21 +410,10 @@ function kanScanDesk(initialScan) {
           inRange: { color: ["#047857", "#f8fafc", "#b42318"] },
         },
         series: [{ type: "heatmap", data: cells }],
-      }, { lazyUpdate: true });
-      // 不用 notMerge:整体替换模型会反复走坐标系拆除/重建窗口,
-      // 撞上 ECharts 5.6 管线 race(TypeError 或 0 格子);merge 下坐标系
-      // 一旦挂载即保持,后续重渲不再重复踩雷。
-      // 自愈:1s 后按硬指标自检(坐标系 + 已绘元素 ≥ 格子数),不健康则
-      // 重渲,最多 8 次 — 实测管线安定后渲染必成功,8 次覆盖首 ~8 秒。
-      setTimeout(() => {
-        if (!this.chart) return;
-        const series = this.chart.getModel().getSeries()[0];
-        const drawn = this.chart.getZr().storage.getDisplayList().length;
-        const healthy = series && series.coordinateSystem && drawn >= cells.length;
-        if (!healthy && (this._healCount = (this._healCount || 0) + 1) <= 8) {
-          this._doRenderHeatmap(el);
-        }
-      }, 1000);
+      }, { notMerge: true, lazyUpdate: false, silent: true });
+      // lazyUpdate 会把轴模型提交推迟到下一帧；首屏 resize 恰好落在中间时，
+      // ECharts 5.6 会读取尚未挂载的轴并抛 getAxesOnZeroOf。这里的数据量只有
+      // 60×周期数，同步整批更新更快，也消除了需要反复自愈的竞态窗口。
     },
     async loadIndex() {
       this.indexLoading = true;
@@ -467,8 +466,16 @@ function kanScanDesk(initialScan) {
       } catch (_error) {
         this.fetchMessage = "数据不可用";
       } finally {
-        if (!listening) this.fetching = false;
+        if (!listening) {
+          this.fetching = false;
+          this.finishWatchlistFetch(`已添加 · ${this.fetchMessage}`);
+        }
       }
+    },
+    finishWatchlistFetch(message) {
+      if (!this.watchlistFetchPending) return;
+      this.watchlistMessage = message;
+      this.watchlistFetchPending = false;
     },
     listenFetch(job) {
       if (this.eventSource) this.eventSource.close();
@@ -489,6 +496,9 @@ function kanScanDesk(initialScan) {
           this.fetchMessage = reloaded
             ? (data.stage || "更新完成")
             : `${data.stage || "更新完成"} · 页面刷新失败，请手动刷新`;
+          this.finishWatchlistFetch(
+            reloaded ? "已添加并更新行情" : "已添加，行情更新完成 · 请手动刷新页面",
+          );
           kanToast(reloaded ? "数据更新完成" : "更新完成，请手动刷新页面");
         }
         if (data.status === "partial") {
@@ -497,18 +507,21 @@ function kanScanDesk(initialScan) {
           this.fetching = false;
           const message = data.error || data.stage || "部分股票未更新 · 可重试";
           this.fetchMessage = reloaded ? message : `${message} · 请手动刷新页面`;
+          this.finishWatchlistFetch(`已添加 · ${message}`);
           kanToast(message, "error");
         }
         if (data.status === "error") {
           this.eventSource.close();
           this.fetching = false;
           this.fetchMessage = data.error || "数据不可用";
+          this.finishWatchlistFetch(`已添加 · ${this.fetchMessage}`);
           kanToast(data.error || "数据更新失败", "error");
         }
       });
       this.eventSource.onerror = () => {
         this.fetching = false;
         this.fetchMessage = "进度连接中断";
+        this.finishWatchlistFetch("已添加 · 进度连接中断");
         this.eventSource.close();
       };
     },
@@ -546,6 +559,7 @@ function kanScanDesk(initialScan) {
           return;
         }
         this.addCodes = "";
+        this.watchlistFetchPending = true;
         this.watchlistMessage = `${(payload.messages || []).join(" · ") || "已添加"} · 正在更新行情`;
         kanToast((payload.messages || []).join(" · ") || "已添加自选");
         await this.startFetch();
@@ -862,7 +876,7 @@ function kanStockPage(info) {
     chart: null,
     historyReady: false,
     historyMessage: "该周期暂无足够历史 · 可切换周期，或在不同交易日多次更新数据后再看",
-    watchlistMsg: "加入自选",
+    watchlistMsg: info.in_watchlist ? "已在自选 ✓" : "加入自选",
     // K 线图状态
     klineDays: 120,
     klineChart: null,
@@ -877,8 +891,11 @@ function kanStockPage(info) {
       this.loadKline();
       this.loadCash();
       window.addEventListener("resize", () => {
-        if (this.chart) this.chart.resize();
-        if (this.klineChart) this.klineChart.resize();
+        clearTimeout(this._resizeTimer);
+        this._resizeTimer = setTimeout(() => {
+          if (this.chart) this.chart.resize();
+          if (this.klineChart) this.klineChart.resize();
+        }, 80);
       });
     },
     get lotAmount() {
@@ -893,12 +910,19 @@ function kanStockPage(info) {
     get distanceToHigh() {
       const p180 = this.info.periods?.find(p => p.period === 180);
       if (!p180 || p180.distance_to_high_pct === null || p180.distance_to_high_pct === undefined) return "—";
-      return "+" + p180.distance_to_high_pct.toFixed(1) + "%";
+      return Math.abs(p180.distance_to_high_pct).toFixed(1) + "%";
     },
     get distanceToLow() {
       const p180 = this.info.periods?.find(p => p.period === 180);
       if (!p180 || p180.distance_to_low_pct === null || p180.distance_to_low_pct === undefined) return "—";
-      return "-" + p180.distance_to_low_pct.toFixed(1) + "%";
+      return Math.abs(p180.distance_to_low_pct).toFixed(1) + "%";
+    },
+    formatMoney(value) {
+      if (value === null || value === undefined) return "—";
+      return "¥" + Number(value).toLocaleString("zh-CN", {
+        minimumFractionDigits: 0,
+        maximumFractionDigits: 2,
+      });
     },
     async loadCash() {
       try {
@@ -910,6 +934,7 @@ function kanStockPage(info) {
       } catch(_) {}
     },
     async addToWatchlist() {
+      if (this.info.in_watchlist) return;
       this.watchlistMsg = "添加中";
       try {
         const response = await kanFetch("/api/watchlist", {
@@ -923,6 +948,7 @@ function kanStockPage(info) {
           kanToast(payload.detail || "添加失败", "error");
           return;
         }
+        this.info.in_watchlist = true;
         this.watchlistMsg = "已在自选 ✓";
         kanToast(`${this.info.name} 已加入自选`);
       } catch (_error) {
@@ -972,8 +998,7 @@ function kanStockPage(info) {
             showSymbol: false,
             data: series.map((item) => item.position_pct),
           }],
-        });
-        this.chart.resize();
+        }, { notMerge: true, lazyUpdate: false, silent: true });
       });
     },
     exportHistoryCsv() {
@@ -1080,9 +1105,36 @@ function kanStockPage(info) {
               },
             },
           ],
-        });
-        this.klineChart.resize();
+        }, { notMerge: true, lazyUpdate: false, silent: true });
       });
+    },
+  };
+}
+
+function kanMissingStock(code) {
+  return {
+    loading: false,
+    message: "",
+    async load() {
+      this.loading = true;
+      this.message = "正在拉取行情";
+      try {
+        const response = await kanFetch(`/api/info/${encodeURIComponent(code)}/refresh`, {
+          method: "POST",
+          headers: { "X-Kan-Web": "1" },
+        });
+        const payload = await response.json().catch(() => ({}));
+        if (!response.ok) {
+          this.message = payload.detail || "行情加载失败";
+          return;
+        }
+        this.message = "行情已加载，正在打开";
+        window.location.reload();
+      } catch (_error) {
+        this.message = "行情加载失败，请检查网络后重试";
+      } finally {
+        this.loading = false;
+      }
     },
   };
 }
