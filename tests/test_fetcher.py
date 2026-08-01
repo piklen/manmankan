@@ -479,7 +479,12 @@ def test_fetch_batch_market_wide_fails_fast_without_serial_scheduler(
     """批量源整体失败时不能把全市场静默降级到串行 Baostock。"""
     monkeypatch.setattr(
         "kan.data.kline_snapshot.fetch_recent_daily_bars",
-        lambda *_args, **_kwargs: (_ for _ in ()).throw(RuntimeError("batch unavailable")),
+        lambda *_args, **_kwargs: (_ for _ in ()).throw(
+            RuntimeError(
+                "batch unavailable: https://example.test/api?token=secret-token-123 "
+                "/Users/private/data"
+            )
+        ),
     )
 
     class UnexpectedScheduler:
@@ -502,6 +507,9 @@ def test_fetch_batch_market_wide_fails_fast_without_serial_scheduler(
     assert results == {}
     assert set(errors) == {"600519", "920000"}
     assert all("已停止耗时的串行降级" in message for message in errors.values())
+    assert all("secret-token-123" not in message for message in errors.values())
+    assert all("/Users/private" not in message for message in errors.values())
+    assert all("token=<redacted>" in message for message in errors.values())
     assert any(event.kind is LifecycleKind.DEGRADED for event in reporter.events)
 
 

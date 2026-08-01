@@ -24,7 +24,7 @@ from typing import TYPE_CHECKING
 
 from kan.data.scheduler import KlineFetchResult, KlineScheduler
 from kan.data.source_chain import default_kline_chain
-from kan.infra.log import debug_log
+from kan.infra.log import debug_log, redact_text
 from kan.infra.numeric import to_numeric_checked
 from kan.storage.paths import DATA_DIR
 
@@ -535,9 +535,10 @@ def _fetch_market_batch(
             sort_by_symbol=False,
         )
     except Exception as exc:
+        safe_detail = redact_text(str(exc))
         message = (
             "全市场批量源不可用，已停止耗时的串行降级："
-            f"{type(exc).__name__}: {exc}"
+            f"{type(exc).__name__}: {safe_detail}"
         )
         if lifecycle is not None:
             lifecycle.degraded(
