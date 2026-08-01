@@ -300,14 +300,27 @@ class RichOperationReporter:
 
     @staticmethod
     def _progress_suffix(event: LifecycleEvent) -> str:
+        raw_unit = event.details.get("progress_unit")
+        unit = ""
+        if raw_unit is not None and str(raw_unit).strip():
+            unit = f" {redact_text(str(raw_unit).strip())}"
+
         if event.total is None:
-            return f" ({event.completed:g})" if event.completed is not None else ""
-        if event.completed is None:
-            return f" (/{event.total:g})"
-        if event.total > 0:
+            suffix = f" ({event.completed:g}{unit})" if event.completed is not None else ""
+        elif event.completed is None:
+            suffix = f" (/{event.total:g}{unit})"
+        elif event.total > 0:
             percentage = event.completed / event.total * 100
-            return f" ({event.completed:g}/{event.total:g}, {percentage:.0f}%)"
-        return f" ({event.completed:g}/{event.total:g})"
+            suffix = (
+                f" ({event.completed:g}/{event.total:g}{unit}, {percentage:.0f}%)"
+            )
+        else:
+            suffix = f" ({event.completed:g}/{event.total:g}{unit})"
+
+        raw_detail = event.details.get("progress_detail")
+        if raw_detail is not None and str(raw_detail).strip():
+            suffix += f" · {redact_text(str(raw_detail).strip())}"
+        return suffix
 
 
 def operation_reporter(

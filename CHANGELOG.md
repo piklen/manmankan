@@ -9,6 +9,12 @@ explicitly approves a larger bump.
 
 ## [Unreleased]
 
+## [0.0.6.9.33] - 2026-08-01
+
+### Fixed
+
+- `kan fetch --all --force` 的全市场进度明确区分“360 个交易日”和“约 5500 只股票”：每日截面显示交易日单位、日期与当日股票数，逐股缓存阶段显示已写入股票数、总行情行数和并发数，避免把交易日总数误读成股票总数。
+
 ## [0.0.6.9.32] - 2026-08-01
 
 ### Added
@@ -635,7 +641,8 @@ explicitly approves a larger bump.
 - **Shell 补全** · zsh / bash / fish / powershell
 - **合规与隐私** · 强制风险提示 + 关键词黑名单（无买卖建议 / 无目标价 / 无评级）· 数据全本地
 
-[Unreleased]: https://github.com/piklen/manmankan/compare/v0.0.6.9.32...HEAD
+[Unreleased]: https://github.com/piklen/manmankan/compare/v0.0.6.9.33...HEAD
+[0.0.6.9.33]: https://github.com/piklen/manmankan/compare/v0.0.6.9.32...v0.0.6.9.33
 [0.0.6.9.32]: https://github.com/piklen/manmankan/compare/v0.0.6.9.31...v0.0.6.9.32
 [0.0.6.9.31]: https://github.com/piklen/manmankan/compare/v0.0.6.9.30...v0.0.6.9.31
 [0.0.6.9.30]: https://github.com/piklen/manmankan/compare/v0.0.6.9.29...v0.0.6.9.30

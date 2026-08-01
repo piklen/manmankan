@@ -552,7 +552,7 @@ def _fetch_market_batch(
 
     if lifecycle is not None:
         lifecycle.phase(
-            "并发写入逐股缓存",
+            f"准备写入 {len(pending_symbols):,} 只股票缓存",
             symbols=len(pending_symbols),
             rows=len(panel),
             workers=worker_limit,
@@ -562,6 +562,31 @@ def _fetch_market_batch(
 
     wanted = set(pending_symbols)
     seen: set[str] = set()
+    write_completed = 0
+    last_write_reported = 0
+    write_report_step = max(1, (len(pending_symbols) + 99) // 100)
+
+    def report_write_progress(*, force_report: bool = False) -> None:
+        """最多约 100 次刷新终端，避免逐股 Live 更新反向拖慢缓存写入。"""
+        nonlocal last_write_reported
+        if lifecycle is None or write_completed == last_write_reported:
+            return
+        if (
+            not force_report
+            and write_completed < len(pending_symbols)
+            and write_completed - last_write_reported < write_report_step
+        ):
+            return
+        last_write_reported = write_completed
+        lifecycle.progress(
+            write_completed,
+            len(pending_symbols),
+            "逐股缓存写入",
+            progress_unit="只股票",
+            progress_detail=f"总行情 {len(panel):,} 行 · 并发 {worker_limit}",
+            rows=len(panel),
+            workers=worker_limit,
+        )
 
     def write_one(symbol: str, group: pd.DataFrame) -> tuple[str, pd.DataFrame | None, str | None]:
         try:
@@ -582,9 +607,12 @@ def _fetch_market_batch(
             return symbol, None, str(exc)
 
     def consume(done: set[Future]) -> None:
+        nonlocal write_completed
         for future in done:
             symbol, frame, error = future.result()
             finish(symbol, frame, error)
+            write_completed += 1
+        report_write_progress()
 
     outstanding: set[Future] = set()
     with ThreadPoolExecutor(
@@ -607,6 +635,10 @@ def _fetch_market_batch(
     for symbol in pending_symbols:
         if symbol not in seen:
             finish(symbol, None, f"无效股票代码或无数据: {symbol}")
+            write_completed += 1
+            report_write_progress()
+
+    report_write_progress(force_report=True)
 
     return results, errors
 
