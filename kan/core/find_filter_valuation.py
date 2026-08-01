@@ -4,6 +4,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 
 from kan.core.find_dsl import (
+    DvFilter,
     MarketCapFilter,
     PbFilter,
     PeFilter,
@@ -44,6 +45,21 @@ def _match_pb(
             filter_type="pb",
             param=f"{filter.op}:{filter.value:g}",
             value=valuation.pb,
+        )
+    return None
+
+
+def _match_dv(
+    filter: DvFilter, valuation: ValuationMetrics | None
+) -> TriggeredFilter | None:
+    """匹配股息率 TTM filter · dv_ttm 缺失不命中。"""
+    if valuation is None or valuation.dv_ttm is None:
+        return None
+    if apply_op(filter.op, valuation.dv_ttm, filter.value):
+        return TriggeredFilter(
+            filter_type="dv",
+            param=f"{filter.op}:{filter.value:g}",
+            value=valuation.dv_ttm,
         )
     return None
 

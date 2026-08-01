@@ -140,7 +140,29 @@ def test_patch_mini_racer_import_real_package_has_attr(
 
     monkeypatch.delitem(sys.modules, "py_mini_racer", raising=False)
     patch_mini_racer_import()
-    assert hasattr(sys.modules["py_mini_racer"], "MiniRacer")
+    package = sys.modules["py_mini_racer"]
+    assert hasattr(package, "MiniRacer")
+    assert package.__spec__ is not None
+    assert package.__path__
+
+
+def test_patch_mini_racer_import_preserves_loaded_namespace_package(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """已加载的命名空间包也要原地补属性，不能被无 spec 的 shim 替换。"""
+    from kan.infra.finalizer_guard import patch_mini_racer_import
+
+    real_package = importlib.import_module("py_mini_racer")
+    monkeypatch.delattr(real_package, "MiniRacer", raising=False)
+    original_spec = real_package.__spec__
+    original_path = real_package.__path__
+
+    patch_mini_racer_import()
+
+    assert sys.modules["py_mini_racer"] is real_package
+    assert real_package.__spec__ is original_spec
+    assert real_package.__path__ is original_path
+    assert hasattr(real_package, "MiniRacer")
 
 
 def test_patch_mini_racer_import_shims_namespace_package(
@@ -181,6 +203,27 @@ def test_patch_mini_racer_import_all_fail_is_silent(
     monkeypatch.delitem(sys.modules, "py_mini_racer", raising=False)
     monkeypatch.delitem(sys.modules, "py_mini_racer._mini_racer", raising=False)
     _block_import(monkeypatch, {"py_mini_racer", "py_mini_racer._mini_racer"})
+
+    patch_mini_racer_import()  # 不抛异常
+    assert "py_mini_racer" not in sys.modules
+
+
+def test_patch_mini_racer_import_native_load_failure_is_silent(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """原生扩展加载错误不能让不依赖 AkShare 的 kan.data 导入失败。"""
+    from kan.infra.finalizer_guard import patch_mini_racer_import
+
+    monkeypatch.delitem(sys.modules, "py_mini_racer", raising=False)
+    monkeypatch.delitem(sys.modules, "py_mini_racer._mini_racer", raising=False)
+    real_import = builtins.__import__
+
+    def fake_import(name, globals=None, locals=None, fromlist=(), level=0):
+        if name in {"py_mini_racer", "py_mini_racer._mini_racer"}:
+            raise OSError("native library has incompatible architecture")
+        return real_import(name, globals, locals, fromlist, level)
+
+    monkeypatch.setattr(builtins, "__import__", fake_import)
 
     patch_mini_racer_import()  # 不抛异常
     assert "py_mini_racer" not in sys.modules

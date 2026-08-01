@@ -236,6 +236,22 @@ def serialize_info(result: InfoServiceResult) -> dict[str, Any]:
             "total_mv": _round(result.valuation.total_mv),
             "circ_mv": _round(result.valuation.circ_mv),
         })
+    moneyflow = {
+        "trade_date": _date_text(getattr(result.result, "moneyflow_trade_date", None)),
+        "net_amount": _round(getattr(result.result, "moneyflow_net_amount", None)),
+        "net_amount_5d": _round(getattr(result.result, "moneyflow_5d_net_amount", None)),
+        "inflow_days": getattr(result.result, "moneyflow_inflow_days", None),
+        "outflow_days": getattr(result.result, "moneyflow_outflow_days", None),
+    }
+    enriched_moneyflow = getattr(result, "moneyflow", None)
+    if enriched_moneyflow is not None:
+        moneyflow.update({
+            "trade_date": _date_text(enriched_moneyflow.trade_date),
+            "net_amount": _round(enriched_moneyflow.net_amount),
+            "net_amount_5d": _round(enriched_moneyflow.net_amount_5d),
+            "inflow_days": enriched_moneyflow.inflow_days,
+            "outflow_days": enriched_moneyflow.outflow_days,
+        })
     change_pct = None
     if result.trend.daily_changes:
         change_pct = _round(result.trend.daily_changes[0][1])
@@ -249,6 +265,7 @@ def serialize_info(result: InfoServiceResult) -> dict[str, Any]:
         "data_cutoff": _date_text(result.data_cutoff),
         "fetched_at": result.fetched_at,
         "stale": result.stale,
+        "in_watchlist": bool(getattr(result.result, "in_watchlist", False)),
         "low_resonance": result.result.low_resonance,
         "high_resonance": result.result.high_resonance,
         "trend": {
@@ -259,6 +276,7 @@ def serialize_info(result: InfoServiceResult) -> dict[str, Any]:
         "volume": volume,
         "volume_price_state": result.result.volume_price_state,
         "valuation": valuation,
+        "moneyflow": moneyflow,
         "periods": periods,
         "board_context": _serialize_board_context(result.board_context) if getattr(result, "board_context", None) else None,
     }

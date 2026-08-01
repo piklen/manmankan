@@ -108,6 +108,11 @@ FILTER_SPECS = {
         "tushare_daily_basic", "daily",
         "metric_null_or_data_unavailable",
     ),
+    "dv": FindFilterSpec(
+        "dv", "--dv", "valuation", True,
+        "tushare_daily_basic", "daily",
+        "metric_null_or_data_unavailable",
+    ),
     "turnover": FindFilterSpec(
         "turnover", "--turnover", "valuation", True,
         "tushare_daily_basic", "daily",
@@ -221,7 +226,7 @@ FIND_FILTER_HELP_GROUPS = (
         "valuation_quality_money",
         "估值 / 质量 / 资金",
         (
-            "pe", "pb", "turnover", "market_cap", "volume_ratio", "roe",
+            "pe", "pb", "dv", "turnover", "market_cap", "volume_ratio", "roe",
             "moneyflow", "moneyflow_daily", "moneyflow_days",
         ),
         "`--market-cap` 单位亿元;`--roe` 为逐股报告期数据，`--all` 不支持；资金流单位万元。",

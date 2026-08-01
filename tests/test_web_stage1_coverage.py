@@ -315,7 +315,11 @@ def test_serialize_scan_info_history_hold_and_index_branches() -> None:
     info = InfoServiceResult(
         symbol="600519",
         name="贵州 茅台",
-        result=full.model_copy(update={"valuation_trade_date": date(2026, 5, 22), "pe_ttm": 20.456}),
+        result=full.model_copy(update={
+            "valuation_trade_date": date(2026, 5, 22),
+            "pe_ttm": 20.456,
+            "in_watchlist": True,
+        }),
         trend=TrendResult("600519", "贵州茅台", 100.0, 0, 0.0, []),
         volume=None,
         data_cutoff=None,
@@ -336,6 +340,7 @@ def test_serialize_scan_info_history_hold_and_index_branches() -> None:
     info_payload = serialize_info(info)
     assert info_payload["change_pct"] is None
     assert info_payload["volume"] is None
+    assert info_payload["in_watchlist"] is True
     assert info_payload["valuation"]["pe_ttm"] == 18.33
     assert info_payload["periods"][0]["position_pct"] == 96.0
 
@@ -449,7 +454,10 @@ def test_routes_api_error_and_neutral_paths(monkeypatch, tmp_path) -> None:
             exit_code=1,
         )),
     )
-    assert _client().get("/api/history/600519?period=10").status_code == 404
+    no_history = _client().get("/api/history/600519?period=10")
+    assert no_history.status_code == 200
+    assert no_history.json()["series"] == []
+    assert no_history.json()["message"] == "没有历史"
 
     monkeypatch.setattr("kan.web.routes_api.build_hold_summary", lambda: (_ for _ in ()).throw(RuntimeError("bad hold")))
     hold = _client().get("/api/hold")
@@ -528,6 +536,89 @@ def test_routes_api_success_info_history_and_watchlist_errors(monkeypatch) -> No
     assert missing.status_code == 404
 
 
+def test_refresh_info_fetches_missing_cache_without_changing_watchlist(monkeypatch) -> None:
+    captured = {}
+    info_result = InfoServiceResult(
+        symbol="600519",
+        name="贵州茅台",
+        result=_scan_result(),
+        trend=TrendResult("600519", "贵州茅台", 100.0, 0, 0.0, []),
+        volume=None,
+        data_cutoff=date(2026, 7, 31),
+        fetched_at="2026-08-01T10:00:00",
+        stale=False,
+    )
+
+    def fake_info(request):
+        captured["request"] = request
+        return info_result
+
+    monkeypatch.setattr("kan.web.routes_api.get_stock_info", fake_info)
+    response = _client().post(
+        "/api/info/600519/refresh",
+        headers={"X-Kan-Web": "1"},
+    )
+
+    assert response.status_code == 200
+    assert response.json()["code"] == "600519"
+    assert captured["request"].allow_fetch is True
+    assert captured["request"].include_board_context is False
+
+
+def test_compare_api_batches_enrichment_and_fetches_only_missing_cache(monkeypatch) -> None:
+    calls = []
+    enriched_batches = []
+
+    def make_result(code: str) -> InfoServiceResult:
+        return InfoServiceResult(
+            symbol=code,
+            name="贵州茅台" if code == "600519" else "五粮液",
+            result=_scan_result(code, code),
+            trend=TrendResult(code, code, 100.0, 0, 0.0, []),
+            volume=None,
+            data_cutoff=date(2026, 7, 31),
+            fetched_at=None,
+            stale=False,
+        )
+
+    def fake_info(request: InfoRequest):
+        calls.append((request.symbol_or_name, request.allow_fetch))
+        if request.symbol_or_name == "000858" and not request.allow_fetch:
+            raise InfoDataUnavailableError("000858")
+        return make_result(request.symbol_or_name)
+
+    def fake_enrich(results):
+        enriched_batches.append([item.symbol for item in results])
+        return results
+
+    monkeypatch.setattr("kan.web.routes_api.get_stock_info", fake_info)
+    monkeypatch.setattr("kan.web.routes_api.enrich_info_results_best_effort", fake_enrich)
+
+    response = _client().post(
+        "/api/compare",
+        headers={"X-Kan-Web": "1"},
+        json={"codes": ["600519", "000858"]},
+    )
+
+    assert response.status_code == 200
+    assert [row["code"] for row in response.json()["stocks"]] == ["600519", "000858"]
+    assert calls == [("600519", False), ("000858", False), ("000858", True)]
+    assert enriched_batches == [["600519", "000858"]]
+
+
+@pytest.mark.parametrize(
+    "codes",
+    [None, ["600519"], ["600519", "bad"], ["600519", "600519"]],
+)
+def test_compare_api_rejects_invalid_code_sets(codes) -> None:
+    response = _client().post(
+        "/api/compare",
+        headers={"X-Kan-Web": "1"},
+        json={"codes": codes},
+    )
+
+    assert response.status_code == 400
+
 def test_find_adapter_pool_filter_and_command_branches(monkeypatch) -> None:
     from kan.web.find_adapter import (
         _build_cli_command,
@@ -556,11 +647,11 @@ def test_find_adapter_pool_filter_and_command_branches(monkeypatch) -> None:
         ("bad", "筛选条件格式错误"),
         ([object()], "筛选条件格式错误"),
         ([{"type": "bad"}], "暂不支持这个筛选条件"),
-        ([{"type": "pos", "period": "180", "op": "eq", "value": "20"}], "--pos 需要"),
+        ([{"type": "pos", "period": "180", "op": "bad", "value": "20"}], "--pos 需要"),
         ([{"type": "resonance", "level": "mid", "value": "2"}], "--resonance 需要"),
         ([{"type": "pe", "op": "", "value": "20"}], "--pe 需要"),
         ([{"type": "moneyflow", "op": "lt", "value": ""}], "--moneyflow 需要"),
-        ([{"type": "pe", "op": "lt", "value": "20"}] * 7, "最多同时填写"),
+        ([{"type": "pe", "op": "lt", "value": "20"}] * 13, "最多同时填写"),
     ]:
         with pytest.raises(HTTPException) as exc_info:
             _parse_filters(filters)
@@ -576,7 +667,7 @@ def test_find_adapter_pool_filter_and_command_branches(monkeypatch) -> None:
     with pytest.raises(HTTPException) as exc_info:
         run_web_find({
             "pool": {"type": "holdings"},
-            "filters": [{"type": "resonance", "level": "low", "value": "2"}],
+            "filters": [{"type": "resonance", "level": "low", "op": "gte", "value": "2"}],
             "exclude_st": True,
         })
     assert "没有可展示" in str(exc_info.value.detail)
@@ -589,7 +680,7 @@ def test_find_adapter_pool_filter_and_command_branches(monkeypatch) -> None:
     )
     assert command == "kan find --industry '半导体 龙头' --pos 180:lt:20 --resonance low:gte:2 --pe lt:30 --moneyflow gt:0 --exclude-st --format json"
 
-    assert _parse_filters(None) == {"pos": [], "resonance": [], "pe": [], "moneyflow": []}
+    assert all(not values for values in _parse_filters(None).values())
     assert _parse_pool({"type": "theme", "value": "AI"})["theme"] == "AI"
     assert _build_cli_command({"type": "watchlist", "value": ""}, {"pos": [], "resonance": [], "pe": [], "moneyflow": []}, False) == "kan find --only-watchlist --format json"
     assert _build_cli_command({"type": "holdings", "value": ""}, {"pos": [], "resonance": [], "pe": [], "moneyflow": []}, False) == "kan find --only-holdings --format json"

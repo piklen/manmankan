@@ -42,6 +42,7 @@ def find(
     match_any: opt.MatchAnyOption = False,
     pe: opt.PeOption = [],  # noqa: B006 · typer multi-option 需要 list 默认值
     pb: opt.PbOption = [],  # noqa: B006 · typer multi-option 需要 list 默认值
+    dv: opt.DivYieldOption = [],  # noqa: B006 · typer multi-option 需要 list 默认值
     turnover: opt.TurnoverOption = [],  # noqa: B006 · typer multi-option 需要 list 默认值
     market_cap: opt.MarketCapOption = [],  # noqa: B006 · typer multi-option 需要 list 默认值
     volume_ratio: opt.VolumeRatioOption = [],  # noqa: B006 · typer multi-option 需要 list 默认值
@@ -117,6 +118,7 @@ def find(
       估值 / 质量 / 资金:
         --pe OP:VAL            PE TTM 裸值筛 · 例 lt:20
         --pb OP:VAL            PB 裸值筛 · 例 lt:3
+        --dv OP:VAL            股息率 TTM % 裸值筛 · 例 gte:3
         --turnover OP:VAL      换手率% 裸值筛 · 例 gt:5
         --market-cap OP:VAL    总市值(亿元)裸值筛 · 例 gt:100
         --volume-ratio OP:VAL  量比裸值筛 · 例 gt:1.5
@@ -244,6 +246,7 @@ def find(
             resonance=resonance,
             pe=pe,
             pb=pb,
+            dv=dv,
             turnover=turnover,
             market_cap=market_cap,
             volume_ratio=volume_ratio,

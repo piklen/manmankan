@@ -71,9 +71,10 @@ def test_api_find_returns_web_shape(monkeypatch) -> None:
     payload = response.json()
     assert payload["title"] == "符合条件的股票"
     assert payload["rows"][0]["code"] == "600519"
-    assert payload["rows"][0]["metrics"][0]["label"] == "PE TTM"
+    assert payload["rows"][0]["metrics"][0]["label"] == "市盈率 PE TTM"
     assert payload["rows"][0]["triggered_text"] == [
-        "180 日位置低于 20%，当前 10.0%"
+        "180 日价格区间位置低于 20%，当前 10%",
+        "市盈率 PE TTM低于 30倍，当前 20倍",
     ]
     assert "triggered_filters" not in payload["rows"][0]
     assert set(payload["periods"]).issubset({30, 60, 180})
@@ -92,6 +93,94 @@ def test_api_find_rejects_empty_conditions() -> None:
 
     assert response.status_code == 400
     assert "请至少填写一个筛选条件" in response.text
+
+
+def test_web_filter_metadata_covers_every_core_filter() -> None:
+    from kan.core.find_registry import FILTER_SPECS
+    from kan.web.find_adapter import web_filter_groups
+
+    web_types = {
+        option["type"]
+        for group in web_filter_groups()
+        for option in group["options"]
+    }
+    assert web_types == set(FILTER_SPECS) - {"exclude_st"}
+
+
+def test_api_find_passes_all_filter_types_and_any_mode(monkeypatch) -> None:
+    captured = {}
+
+    def fake_run(request):
+        captured["request"] = request
+        return _find_result()
+
+    monkeypatch.setattr("kan.web.find_adapter.run_find_kline", fake_run)
+    response = _client().post(
+        "/api/find",
+        headers={"X-Kan-Web": "1"},
+        json={
+            "pool": {"type": "codes", "value": "600519"},
+            "match_any": True,
+            "filters": [
+                {"type": "turnover", "op": "gte", "value": "1"},
+                {"type": "dv", "op": "gte", "value": "3"},
+                {"type": "rsi", "op": "lte", "value": "30"},
+                {"type": "gain", "period": "20", "op": "gt", "value": "5"},
+            ],
+        },
+    )
+
+    assert response.status_code == 200
+    conditions = captured["request"].conditions
+    assert len(conditions.turnover_filters) == 1
+    assert len(conditions.dv_filters) == 1
+    assert len(conditions.rsi_filters) == 1
+    assert conditions.gain_filters[0].period == 20
+    assert conditions.match_any is True
+    command = response.json()["command"]
+    assert "--any" in command
+    assert "--turnover gte:1" in command
+    assert "--dv gte:3" in command
+    assert "--rsi lte:30" in command
+    assert "--gain 20:gt:5" in command
+
+
+def test_api_find_preserves_numeric_zero_threshold(monkeypatch) -> None:
+    captured = {}
+
+    def fake_run(request):
+        captured["request"] = request
+        return _find_result()
+
+    monkeypatch.setattr("kan.web.find_adapter.run_find_kline", fake_run)
+    response = _client().post(
+        "/api/find",
+        headers={"X-Kan-Web": "1"},
+        json={
+            "pool": {"type": "codes", "value": "600519"},
+            "filters": [{"type": "moneyflow_daily", "op": "gt", "value": 0}],
+        },
+    )
+
+    assert response.status_code == 200
+    condition = captured["request"].conditions.moneyflow_daily_filters[0]
+    assert condition.value == 0
+    assert "--moneyflow-daily gt:0" in response.json()["command"]
+
+
+def test_api_find_rejects_unsupported_full_market_filter() -> None:
+    response = _client().post(
+        "/api/find",
+        headers={"X-Kan-Web": "1"},
+        json={
+            "pool": {"type": "all"},
+            "filters": [{"type": "roe", "op": "gte", "value": "15"}],
+        },
+    )
+
+    assert response.status_code == 400
+    assert "全市场暂不支持 --roe" in response.text
+    assert "自选、持仓、行业、题材或自定义代码池" in response.text
 
 
 def test_api_find_requires_csrf_header() -> None:
@@ -260,7 +349,10 @@ def _find_result():
     )
     match = FindMatch(
         result=row,
-        triggered=(TriggeredFilter("pos", "180:lt:20", 10.0),),
+        triggered=(
+            TriggeredFilter("pos", "180:lt:20", 10.0),
+            TriggeredFilter("pe", "lt:30", 20.0),
+        ),
     )
     freshness = SimpleNamespace(
         data_cutoff=date(2026, 5, 23),

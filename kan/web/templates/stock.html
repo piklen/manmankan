@@ -6,12 +6,17 @@
 
 {% block content %}
 {% if not_found %}
-<section class="band">
+<section class="band" data-code="{{ code }}" x-data="kanMissingStock($el.dataset.code)">
   <div class="band-title">
     <span>本地缓存没有该代码数据</span>
     <a class="meta" href="{{ session_url(request, '/') }}">返回看盘台</a>
   </div>
-  <div class="empty">代码：{{ code }}</div>
+  <div class="empty empty-guide">
+    <strong>代码：{{ code }}</strong>
+    <p>可以直接加载这只股票的行情，不会自动加入自选。</p>
+    <button class="primary" type="button" @click="load()" :disabled="loading" x-text="loading ? '加载中' : '加载行情'"></button>
+    <span class="meta" role="status" aria-live="polite" x-text="message"></span>
+  </div>
 </section>
 {% else %}
 <div x-data="kanStockPage(window.KAN_STOCK)" x-cloak>
@@ -29,7 +34,7 @@
         {% endif %}
       </div>
       <div class="controls">
-        <button type="button" @click="addToWatchlist()" x-text="watchlistMsg" :disabled="watchlistMsg === '添加中'"></button>
+        <button type="button" @click="addToWatchlist()" x-text="watchlistMsg" :disabled="info.in_watchlist || watchlistMsg === '添加中'"></button>
         <a class="meta" href="{{ session_url(request, '/') }}">返回看盘台</a>
       </div>
     </div>
@@ -65,7 +70,7 @@
           {% if period.distance_to_low_pct is not none or period.gain_pct is not none %}
           <div class="meta">
             {% if period.distance_to_low_pct is not none %}距低 {{ "%.1f%%"|format(period.distance_to_low_pct) }}{% endif %}
-            {% if period.distance_to_high_pct is not none %} · 距高 {{ "%.1f%%"|format(period.distance_to_high_pct) }}{% endif %}
+            {% if period.distance_to_high_pct is not none %} · 距高 {{ "%.1f%%"|format(period.distance_to_high_pct|abs) }}{% endif %}
           </div>
           {% endif %}
         </div>
@@ -223,6 +228,24 @@
       <div class="field">
         <div class="field-label">估值日期</div>
         <div class="field-value">{{ info.valuation.trade_date or "—" }}</div>
+      </div>
+      <div class="field">
+        <div class="field-label">单日主力净额</div>
+        <div class="field-value">{{ "%.2f 万元"|format(info.moneyflow.net_amount) if info.moneyflow.net_amount is not none else "—" }}</div>
+      </div>
+      <div class="field">
+        <div class="field-label">近5日主力净额</div>
+        <div class="field-value">{{ "%.2f 万元"|format(info.moneyflow.net_amount_5d) if info.moneyflow.net_amount_5d is not none else "—" }}</div>
+      </div>
+      <div class="field">
+        <div class="field-label">资金流日期</div>
+        <div class="field-value">{{ info.moneyflow.trade_date or "—" }}</div>
+      </div>
+      <div class="field">
+        <div class="field-label">连续主力流入 / 流出</div>
+        <div class="field-value">
+          {{ info.moneyflow.inflow_days if info.moneyflow.inflow_days is not none else "—" }} / {{ info.moneyflow.outflow_days if info.moneyflow.outflow_days is not none else "—" }} 天
+        </div>
       </div>
       <div class="field">
         <div class="field-label">数据说明</div>

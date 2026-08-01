@@ -387,6 +387,7 @@ class TestFindServiceDataGap:
         ("conditions", "needle"),
         [
             (ConditionSet.from_flags(pe=["lt:20"]), "--pe"),
+            (ConditionSet.from_flags(dv=["gte:3"]), "--dv"),
             (ConditionSet.from_flags(moneyflow=["gt:0"]), "--moneyflow filter"),
             (ConditionSet.from_flags(moneyflow_daily=["gt:0"]), "--moneyflow-daily"),
             (ConditionSet.from_flags(moneyflow_days=["gte:3"]), "--moneyflow-days"),
@@ -411,6 +412,20 @@ class TestFindServiceDataGap:
         result = SimpleNamespace(valuation=SimpleNamespace(pe_ttm=12.3))
 
         assert _find_data_gap(conditions, [result]) is None
+
+    def test_find_data_gap_checks_each_requested_valuation_field(self):
+        from kan.service.find_service import _find_data_gap
+
+        conditions = ConditionSet.from_flags(pe=["lt:20"], dv=["gte:3"])
+        result = SimpleNamespace(
+            valuation=SimpleNamespace(pe_ttm=12.3, dv_ttm=None),
+        )
+
+        gap = _find_data_gap(conditions, [result])
+
+        assert gap is not None
+        assert "--dv" in gap[1]
+        assert "--pe" not in gap[1]
 
     def test_find_data_gap_technical_and_ma_bias_paths(self):
         from kan.service.find_service import _find_data_gap

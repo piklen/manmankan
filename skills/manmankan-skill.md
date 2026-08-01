@@ -43,7 +43,7 @@
 | `kan find` | 按条件筛选股票 | **AI 的核心消费入口**——把自然语言需求翻译为 find 参数 |
 | `--pos N:lt:M` | 位置筛选（N 日位置 < M%） | 如 `--pos 180:lt:10` = 180 日低位 |
 | `--resonance low:gte:N` | 共振筛选（至少 N 个周期同时低位） | 多周期共振比单周期更可靠 |
-| `--pe` / `--pb` / `--turnover` / `--market-cap` / `--volume-ratio` | 估值、换手、市值、量比筛选 | 来自截面指标；看 `data_availability` 区分缺数据 |
+| `--pe` / `--pb` / `--dv` / `--turnover` / `--market-cap` / `--volume-ratio` | 估值、股息率、换手、市值、量比筛选 | 来自截面指标；`--dv gte:3` 表示股息率 TTM 不低于 3%；看 `data_availability` 区分缺数据 |
 | `--roe` | ROE 逐股报告期筛选 | 需要先缩小代码池 / 行业 / 题材；全市场模式不支持 |
 | `--moneyflow` / `--moneyflow-daily` / `--moneyflow-days` | 主力资金净额、单日资金、连续净流入天数 | 单位万元；输出分类资金流裸值 |
 | `--exclude-st` | 排除 ST 股 | **每次全市场扫描都必须加** |

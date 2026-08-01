@@ -16,6 +16,7 @@ _FILTER_EXAMPLES = {
     "rs_board": "30:gt:0",
     "pe": "lt:20",
     "pb": "lt:3",
+    "dv": "gte:3",
     "turnover": "gt:5",
     "market_cap": "gt:100",
     "volume_ratio": "gt:1.5",

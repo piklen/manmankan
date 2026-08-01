@@ -4,7 +4,7 @@
 
 ## Web 适配契约
 
-本地观察台的 `POST /api/find` 是页面专用的扁平响应，不等同于下文 CLI JSON 契约。页面结果使用 `rows[].triggered_text: string[]` 保存可直接展示的中文条件说明，不返回 CLI 的结构化 `rows[].triggered_filters`；需要稳定的机器可读筛选审计时，应使用 `kan find --format json`。
+本地观察台的 `POST /api/find` 是页面专用的扁平响应，不等同于下文 CLI JSON 契约。Web 条件清单从核心 `FILTER_SPECS` 生成，覆盖除独立“排除 ST”开关外的全部 27 类 filter，最多组合 12 条，支持 AND / OR、六种比较符和 2-360 日周期。全市场模式开放其中 23 类；ROE、股东户数、前十大流通集中度和北向持股比例需要逐股或报告期数据，只能用于其余五类候选池。服务端最多返回 10000 条命中结果，页面每次渲染 50 条并在浏览器内排序、分页；“本页加入自选”只作用于当前页。页面结果使用 `rows[].triggered_text: string[]` 保存可直接展示的中文条件说明，不返回 CLI 的结构化 `rows[].triggered_filters`；需要稳定的机器可读筛选审计时，应使用 `kan find --format json`。
 
 ## JSON 输出
 
@@ -203,6 +203,7 @@ kan find --industry 半导体 --pos 20:lt:30 --sort pos_20:asc --limit 30 --form
 | `--rs-board` | 个股本地/快照 K 线 + 申万一级行业指数对照 | 是 | 是 | 日频 | 个股或行业指数周期不足 / 个股行业未知为不命中 |
 | `--pe` | TuShare `daily_basic` 衍生截面指标 | 是 | 是 | 日频 | 指标为空为缺数据;整池缺失时返回 `data_unavailable` |
 | `--pb` | TuShare `daily_basic` 衍生截面指标 | 是 | 是 | 日频 | 指标为空为缺数据;整池缺失时返回 `data_unavailable` |
+| `--dv` | TuShare `daily_basic` 衍生截面指标 | 是 | 是 | 日频 | 指标为空为缺数据;整池缺失时返回 `data_unavailable` |
 | `--turnover` | TuShare `daily_basic` 衍生截面指标 | 是 | 是 | 日频 | 指标为空为缺数据;整池缺失时返回 `data_unavailable` |
 | `--market-cap` | TuShare `daily_basic` 衍生截面指标 | 是 | 是 | 日频 | 指标为空为缺数据;整池缺失时返回 `data_unavailable` |
 | `--volume-ratio` | TuShare `daily_basic` 衍生截面指标 | 是 | 是 | 日频 | 指标为空为缺数据;整池缺失时返回 `data_unavailable` |

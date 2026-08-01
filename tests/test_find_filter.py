@@ -246,7 +246,7 @@ class TestMoneyflowMatchers:
 
 
 class TestValuationScalarMatchers:
-    """估值维度 ScalarFilter matcher 单测 (--pb/--turnover/--market-cap/--volume-ratio)。"""
+    """估值维度 ScalarFilter matcher 单测。"""
 
     @staticmethod
     def _val(**kw):
@@ -271,6 +271,18 @@ class TestValuationScalarMatchers:
         assert _match_pb(PbFilter(op="gt", value=3.0), v) is None
         # 缺数据(pb None)→ 不命中 · 优雅降级
         assert _match_pb(PbFilter(op="lt", value=3.0), self._val()) is None
+
+    def test_dividend_yield_match_and_missing(self):
+        from kan.core.find_dsl import DvFilter
+        from kan.core.find_filter import _match_dv
+
+        valuation = self._val(dv_ttm=3.6)
+        hit = _match_dv(DvFilter(op="gte", value=3.0), valuation)
+        assert hit is not None
+        assert hit.filter_type == "dv"
+        assert hit.value == 3.6
+        assert _match_dv(DvFilter(op="gt", value=4.0), valuation) is None
+        assert _match_dv(DvFilter(op="gt", value=0.0), self._val()) is None
 
     def test_turnover_and_volume_ratio(self):
         from kan.core.find_dsl import TurnoverFilter, VolumeRatioFilter

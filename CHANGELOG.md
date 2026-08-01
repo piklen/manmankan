@@ -9,6 +9,29 @@ explicitly approves a larger bump.
 
 ## [Unreleased]
 
+## [0.0.6.9.32] - 2026-08-01
+
+### Added
+
+- Web 找股票与核心 `kan find` registry 对齐：六类候选池共提供 27 类条件；全市场开放其中 23 类，ROE 与三类股东条件继续要求缩小候选池。支持 AND / OR、六种比较符、2-360 日周期、动态排序和每页 50 只分页。
+- `kan find` 新增 `--dv OP:VAL` 股息率 TTM 裸值筛选，并贯通 DSL、数据缺口诊断、排序、CLI、JSON 和 Web。
+- 对比页改用 2-5 只股票批量接口，估值与资金流截面只读取一次，并展示行情、估值和资金流日期。
+- 本地没有个股缓存时，详情页可直接补行情，且不会顺带修改自选列表。
+
+### Changed
+
+- Web 结果不再静默截断前 50 只；完整命中集在浏览器内分页，批量加入仅作用于当前页。
+- 移动端导航、搜索、筛选表单和 2-5 股横向对比改为窄屏可操作布局；快捷键扩展为 1-5 对应今日、找股票、对比、持仓和设置。
+
+### Fixed
+
+- 修复 Web 换手率和股息率条件虽可填写却未进入核心 `ConditionSet`、估值维度只由 PE 触发、组合估值条件可能掩盖单字段缺数的问题。
+- 修复 `py_mini_racer` 兼容补丁覆盖命名空间包元数据，导致 AkShare 交易日历失效并错误降级为工作日的问题。
+- 修复首页热力图和个股 K 线首屏 resize 与 ECharts 异步模型提交竞态产生的 `getAxesOnZeroOf` 异常。
+- 修复个股页高低点距离出现双符号、`formatMoney` 未定义、无历史快照产生 404、已有自选仍显示可添加的问题。
+- 修复对比页逐只串行加载、失败后仍显示单股对比、估值与资金流长期为空，以及筛选结果非自选按钮被意外禁用的问题。
+- 修复首页新手引导文案与自动更新行为不一致、`R` 快捷键可能误触引导按钮、添加后的更新状态长期停留在“正在更新”的问题。
+
 ## [0.0.6.9.31] - 2026-07-25
 
 ### Added
@@ -606,7 +629,8 @@ explicitly approves a larger bump.
 - **Shell 补全** · zsh / bash / fish / powershell
 - **合规与隐私** · 强制风险提示 + 关键词黑名单（无买卖建议 / 无目标价 / 无评级）· 数据全本地
 
-[Unreleased]: https://github.com/piklen/manmankan/compare/v0.0.6.9.31...HEAD
+[Unreleased]: https://github.com/piklen/manmankan/compare/v0.0.6.9.32...HEAD
+[0.0.6.9.32]: https://github.com/piklen/manmankan/compare/v0.0.6.9.31...v0.0.6.9.32
 [0.0.6.9.31]: https://github.com/piklen/manmankan/compare/v0.0.6.9.30...v0.0.6.9.31
 [0.0.6.9.30]: https://github.com/piklen/manmankan/compare/v0.0.6.9.29...v0.0.6.9.30
 [0.0.6.9.29]: https://github.com/piklen/manmankan/compare/v0.0.6.9.28...v0.0.6.9.29

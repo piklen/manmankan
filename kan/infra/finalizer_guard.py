@@ -8,7 +8,9 @@ py_mini_racer 在部分机器上 dylib 加载失败(如架构不匹配)时,半�
 from __future__ import annotations
 
 import contextlib
+import importlib.machinery
 import sys
+import types
 
 _defused = False
 
@@ -18,29 +20,38 @@ def patch_mini_racer_import() -> None:
 
     mini-racer 0.14+ 在 macOS 上安装为 py_mini_racer 命名空间包，
     没有 __init__.py，导致 `from py_mini_racer import MiniRacer` 失败。
-    此函数在 sys.modules 中注入一个兼容的 py_mini_racer 模块。
+    此函数给真实命名空间包补上 MiniRacer 属性。保留包本身的 ``__spec__``、
+    ``__path__`` 和资源目录很重要，mini-racer 运行时会通过
+    ``importlib.resources.files("py_mini_racer")`` 查找原生库。
     """
-    if "py_mini_racer" in sys.modules:
+    package = sys.modules.get("py_mini_racer")
+    if package is not None and hasattr(package, "MiniRacer"):
         return
     try:
         # 先尝试正常导入
-        import py_mini_racer
-        if hasattr(py_mini_racer, "MiniRacer"):
+        import py_mini_racer as imported_package
+
+        package = imported_package
+        if hasattr(package, "MiniRacer"):
             return
-    except ImportError:
+    except Exception:
+        # 原生扩展可能因架构或动态库问题抛 OSError；兼容补丁不得拖垮
+        # 不依赖 AkShare 的本地命令，后续真正使用时再由调用链报告数据不可用。
         pass
     # 尝试从 _mini_racer 子模块导入
     try:
-        import types
-
         from py_mini_racer._mini_racer import MiniRacer
 
-        # 创建一个兼容的模块对象
-        compat_module = types.ModuleType("py_mini_racer")
-        compat_module.MiniRacer = MiniRacer
-        compat_module.__file__ = getattr(sys.modules.get("py_mini_racer._mini_racer"), "__file__", None)
-        sys.modules["py_mini_racer"] = compat_module
-    except ImportError:
+        if package is None:
+            # 仅供异常安装形态兜底；正常 0.14+ 安装会走上面的命名空间包。
+            package = types.ModuleType("py_mini_racer")
+            package.__spec__ = importlib.machinery.ModuleSpec(
+                "py_mini_racer", loader=None, is_package=True,
+            )
+            package.__path__ = []
+            sys.modules["py_mini_racer"] = package
+        package.MiniRacer = MiniRacer
+    except Exception:
         pass
 
 

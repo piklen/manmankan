@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import math
+from dataclasses import replace
 from datetime import date
 from typing import Annotated, Any
 from urllib.parse import urlsplit
@@ -22,7 +23,10 @@ from kan.service.hold_service import build_hold_summary
 from kan.service.index_service import IndexRequest, get_index_reference
 from kan.service.info_service import (
     InfoDataUnavailableError,
+    InfoFetchError,
     InfoRequest,
+    InfoServiceResult,
+    enrich_info_results_best_effort,
     get_stock_info,
 )
 from kan.service.scan_service import ScanRequest, run_scan
@@ -42,6 +46,8 @@ from kan.web.serialize import (
 )
 
 router = APIRouter(prefix="/api")
+_COMPARE_MIN = 2
+_COMPARE_MAX = 5
 
 
 def default_scan_payload() -> dict:
@@ -299,6 +305,74 @@ def info(code: str) -> dict:
     return serialize_info(result)
 
 
+@router.post("/info/{code}/refresh")
+def refresh_info(code: str) -> dict:
+    """为对比等显式交互补单股 K 线；只写本地缓存，不改自选。"""
+    try:
+        result = get_stock_info(InfoRequest(
+            symbol_or_name=code,
+            allow_fetch=True,
+            include_external_context=False,
+            include_valuation_context=False,
+            include_board_context=False,
+        ))
+    except ValueError as e:
+        raise HTTPException(status_code=404, detail=str(e)) from e
+    except InfoFetchError as e:
+        raise HTTPException(
+            status_code=502,
+            detail=f"{e.symbol} 行情更新失败，请检查网络后重试",
+        ) from e
+    except InfoDataUnavailableError as e:
+        raise HTTPException(status_code=404, detail="更新后仍没有该股票行情") from e
+    return serialize_info(result)
+
+
+@router.post("/compare")
+def compare_stocks(payload: Annotated[dict[str, Any], Body()]) -> dict:
+    """批量读取 2-5 只股票，并只拉一次估值/资金流截面。"""
+    raw_codes = payload.get("codes")
+    if not isinstance(raw_codes, list):
+        raise HTTPException(status_code=400, detail="请提交 2-5 个股票代码")
+    codes = [str(code).strip() for code in raw_codes]
+    if not (_COMPARE_MIN <= len(codes) <= _COMPARE_MAX):
+        raise HTTPException(status_code=400, detail="请选择 2-5 只股票进行对比")
+    if any(len(code) != 6 or not code.isdigit() for code in codes):
+        raise HTTPException(status_code=400, detail="请输入有效的 6 位股票代码")
+    if len(set(codes)) != len(codes):
+        raise HTTPException(status_code=400, detail="请删除重复的股票代码")
+
+    results: list[InfoServiceResult] = []
+    errors: list[dict[str, str]] = []
+    for code in codes:
+        request = InfoRequest(
+            symbol_or_name=code,
+            allow_fetch=False,
+            include_external_context=False,
+            include_valuation_context=False,
+            include_board_context=False,
+        )
+        try:
+            result = get_stock_info(request)
+        except InfoDataUnavailableError:
+            try:
+                result = get_stock_info(replace(request, allow_fetch=True))
+            except (ValueError, InfoDataUnavailableError, InfoFetchError):
+                errors.append({"code": code, "message": "行情加载失败"})
+                continue
+        except (ValueError, InfoFetchError):
+            errors.append({"code": code, "message": "股票代码或行情不可用"})
+            continue
+        results.append(result)
+
+    results = enrich_info_results_best_effort(results)
+    return {
+        "ok": True,
+        "stocks": [serialize_info(result) for result in results],
+        "errors": errors,
+    }
+
+
 @router.get("/history/{code}")
 def history(
     code: str,
@@ -309,6 +383,16 @@ def history(
     try:
         result = get_symbol_history(HistoryRequest(symbol_or_name=code, period=period))
     except HistoryServiceError as e:
+        if e.code in {"history_unavailable", "history_not_found"}:
+            return {
+                "ok": True,
+                "code": code,
+                "name": code,
+                "period": period,
+                "series": [],
+                "stats": {"shown": 0},
+                "message": e.message,
+            }
         status = 400 if e.exit_code == 2 else 404
         detail = f"{e.message} · {e.hint}" if e.hint else e.message
         raise HTTPException(status_code=status, detail=detail) from e

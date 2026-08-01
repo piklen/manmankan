@@ -7,3 +7,10 @@
 - hot: 东方财富热榜
 - updater: 自动升级检查
 """
+
+# AkShare 导入期间会执行 ``from py_mini_racer import MiniRacer``。mini-racer
+# 0.14+ 在 macOS 上是缺少 __init__.py 的命名空间包，因此库调用（不经过 kan
+# console entry）也必须先补兼容属性；补丁只加载本地模块，不发起网络请求。
+from kan.infra.finalizer_guard import patch_mini_racer_import
+
+patch_mini_racer_import()

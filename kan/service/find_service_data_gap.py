@@ -75,8 +75,22 @@ def _find_data_gap(
     if not results:
         return None
     token_hint = "例: kan config set tushare-token <你的_token>；或去掉对应 filter"
-    if conditions.pe_filters and not _any_metric(results, "valuation", ("pe_ttm",)):
-        return ("data_unavailable", "当前候选池缺少估值数据，无法执行 --pe filter", token_hint)
+    missing_valuation_flags: list[str] = []
+    for attr, field, flag in (
+        ("pe_filters", "pe_ttm", "--pe"),
+        ("pb_filters", "pb", "--pb"),
+        ("dv_filters", "dv_ttm", "--dv"),
+        ("turnover_filters", "turnover_rate", "--turnover"),
+        ("market_cap_filters", "total_mv", "--market-cap"),
+        ("volume_ratio_filters", "volume_ratio", "--volume-ratio"),
+    ):
+        if getattr(conditions, attr) and not _any_metric(
+            results, "valuation", (field,)
+        ):
+            missing_valuation_flags.append(flag)
+    if missing_valuation_flags:
+        flags = "/".join(missing_valuation_flags)
+        return ("data_unavailable", f"当前候选池缺少估值数据，无法执行 {flags} filter", token_hint)
     if conditions.moneyflow_filters and not _any_metric(
         results, "moneyflow", ("net_amount", "net_amount_5d")
     ):

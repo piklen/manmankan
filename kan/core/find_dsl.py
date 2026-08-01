@@ -236,6 +236,16 @@ class PbFilter(ScalarFilter):
     example = "lt:3"
 
 
+class DvFilter(ScalarFilter):
+    """股息率 TTM filter · 例 OP=gte VALUE=3 = 近 12 个月股息率 ≥ 3%。
+
+    读 valuation.dv_ttm (% · None → 不命中)；仅比较用户指定的客观阈值。
+    """
+
+    flag = "--dv"
+    example = "gte:3"
+
+
 class TurnoverFilter(ScalarFilter):
     """换手率 filter · 例 OP=gt VALUE=5 = 换手 > 5% (裸值筛 · 估值/质量/资金维度).
 
@@ -468,6 +478,7 @@ class ConditionSet:
     resonance_filters: tuple[ResonanceFilter, ...] = ()
     pe_filters: tuple[PeFilter, ...] = ()
     pb_filters: tuple[PbFilter, ...] = ()
+    dv_filters: tuple[DvFilter, ...] = ()
     turnover_filters: tuple[TurnoverFilter, ...] = ()
     market_cap_filters: tuple[MarketCapFilter, ...] = ()
     volume_ratio_filters: tuple[VolumeRatioFilter, ...] = ()
@@ -501,6 +512,7 @@ class ConditionSet:
         resonance: list[str] | None = None,
         pe: list[str] | None = None,
         pb: list[str] | None = None,
+        dv: list[str] | None = None,
         turnover: list[str] | None = None,
         market_cap: list[str] | None = None,
         volume_ratio: list[str] | None = None,
@@ -532,6 +544,7 @@ class ConditionSet:
             resonance_filters=tuple(ResonanceFilter.parse(r) for r in (resonance or [])),
             pe_filters=tuple(PeFilter.parse(p) for p in (pe or [])),
             pb_filters=tuple(PbFilter.parse(p) for p in (pb or [])),
+            dv_filters=tuple(DvFilter.parse(d) for d in (dv or [])),
             turnover_filters=tuple(TurnoverFilter.parse(t) for t in (turnover or [])),
             market_cap_filters=tuple(
                 MarketCapFilter.parse(m) for m in (market_cap or [])
@@ -572,6 +585,7 @@ class ConditionSet:
             or self.resonance_filters
             or self.pe_filters
             or self.pb_filters
+            or self.dv_filters
             or self.turnover_filters
             or self.market_cap_filters
             or self.volume_ratio_filters
@@ -618,6 +632,7 @@ class ConditionSet:
         return bool(
             self.pe_filters
             or self.pb_filters
+            or self.dv_filters
             or self.turnover_filters
             or self.market_cap_filters
             or self.volume_ratio_filters
@@ -710,6 +725,7 @@ __all__ = [
     "RESONANCE_LEVELS",
     "AtrPctFilter",
     "ConditionSet",
+    "DvFilter",
     "FilterParseError",
     "GainFilter",
     "HoldersFilter",

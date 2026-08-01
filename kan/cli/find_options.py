@@ -61,6 +61,14 @@ PbOption = Annotated[
     ),
 ]
 
+DivYieldOption = Annotated[
+    list[str],
+    typer.Option(
+        "--dv",
+        help="股息率 filter OP:VAL 例 gte:3 (股息率 TTM ≥ 3% · 裸值筛) · 可多次",
+    ),
+]
+
 TurnoverOption = Annotated[
     list[str],
     typer.Option(
