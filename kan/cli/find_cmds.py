@@ -22,12 +22,6 @@ import typer
 
 import kan.cli.find_options as opt
 from kan.app import app
-from kan.cli.find_io import _exit_find_error, _resolve_code_pairs_or_exit_json
-from kan.cli.find_runner import _run_all_stocks_path, _run_kline_path
-from kan.core.find_registry import (
-    dimensions_from_fields,
-    parse_find_fields,
-)
 from kan.data.relative_strength import DEFAULT_RS_INDEX
 from kan.storage import export
 
@@ -159,7 +153,12 @@ def find(
     """
     from rich.console import Console
 
+    # `kan find --help` 只需要 Typer 参数元数据；执行链会引入 pipeline、requests
+    # 和 pydantic。延迟到命令真正执行再导入，显著缩短冷启动帮助页等待。
+    from kan.cli.find_io import _exit_find_error, _resolve_code_pairs_or_exit_json
+    from kan.cli.find_runner import _run_all_stocks_path, _run_kline_path
     from kan.core.find_dsl import ConditionSet, FilterParseError
+    from kan.core.find_registry import dimensions_from_fields, parse_find_fields
     from kan.render.base import FIND_DISCLAIMER_TEXT
 
     console = Console()

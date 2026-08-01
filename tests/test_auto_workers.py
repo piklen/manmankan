@@ -1,8 +1,8 @@
 """历史背景(用户反馈触发):resolve_max_workers 启发式测试.
 
-改动: max_workers 硬编码 5 → min(cpu_count*2, 12) 启发式.
+改动: max_workers 硬编码 5 → min(cpu_count*2, 16) 启发式.
 - akshare 是 I/O bound 不是 CPU bound · cpu_count*2 比 cpu-1 更合理
-- 上限 cap 12 防 akshare 限流
+- 默认起跑 cap 16；provider lane 独立限流，TuShare 健康时最多探到 32
 
 教育性 (用户反馈"并发可以根据系统的核数-1来自动适配"):
 - 老观点: cpu-1 (CPU bound 经典启发式 · 留 1 核给主线程)
@@ -18,11 +18,11 @@ from kan.data.fetcher import resolve_max_workers
 class TestAutoMaxWorkers:
     """4 case 覆盖 cpu_count 边界 (8/4/2/None)."""
 
-    def test_default_8_core_returns_12_capped(self, monkeypatch):
-        """8 核: cpu_count*2 = 16 → cap 12."""
+    def test_default_8_core_returns_16_capped(self, monkeypatch):
+        """8 核: cpu_count*2 = 16。"""
         monkeypatch.delenv("KAN_WORKERS", raising=False)
         with patch("os.cpu_count", return_value=8):
-            assert resolve_max_workers() == 12
+            assert resolve_max_workers() == 16
 
     def test_default_4_core_returns_8(self, monkeypatch):
         """4 核: cpu_count*2 = 8 (未到 cap)."""
@@ -42,11 +42,11 @@ class TestAutoMaxWorkers:
         with patch("os.cpu_count", return_value=None):
             assert resolve_max_workers() == 8
 
-    def test_default_16_core_caps_at_12(self, monkeypatch):
-        """16 核 Mac Studio: cpu_count*2 = 32 · cap 12 防 akshare 限流."""
+    def test_default_16_core_caps_at_16(self, monkeypatch):
+        """16 核 Mac Studio: cpu_count*2 = 32 · 默认起跑 cap 16。"""
         monkeypatch.delenv("KAN_WORKERS", raising=False)
         with patch("os.cpu_count", return_value=16):
-            assert resolve_max_workers() == 12
+            assert resolve_max_workers() == 16
 
 
 class TestKanWorkersEnvVar:
@@ -58,22 +58,22 @@ class TestKanWorkersEnvVar:
             assert resolve_max_workers() == 3
 
     def test_env_var_zero_falls_back(self, monkeypatch):
-        """0 不在 1-20 范围 · 回退默认 (历史背景上限 50→20)."""
+        """0 不在 1-32 范围 · 回退默认。"""
         monkeypatch.setenv("KAN_WORKERS", "0")
         with patch("os.cpu_count", return_value=8):
-            assert resolve_max_workers() == 12  # 8*2 cap 12
+            assert resolve_max_workers() == 16
 
-    def test_env_var_over_20_falls_back(self, monkeypatch):
-        """历史背景安全收紧:上限 50→20 · 防 KAN_WORKERS=50 反射 DoS akshare."""
-        monkeypatch.setenv("KAN_WORKERS", "21")
+    def test_env_var_over_32_falls_back(self, monkeypatch):
+        """超过 32 回退默认，不创建无界线程。"""
+        monkeypatch.setenv("KAN_WORKERS", "33")
         with patch("os.cpu_count", return_value=8):
-            assert resolve_max_workers() == 12
+            assert resolve_max_workers() == 16
 
-    def test_env_var_20_at_upper_boundary(self, monkeypatch):
-        """20 是新上限边界 · 应允许."""
-        monkeypatch.setenv("KAN_WORKERS", "20")
+    def test_env_var_32_at_upper_boundary(self, monkeypatch):
+        """32 是新上限边界 · 应允许。"""
+        monkeypatch.setenv("KAN_WORKERS", "32")
         with patch("os.cpu_count", return_value=8):
-            assert resolve_max_workers() == 20
+            assert resolve_max_workers() == 32
 
     def test_env_var_invalid_falls_back(self, monkeypatch):
         monkeypatch.setenv("KAN_WORKERS", "not-a-number")

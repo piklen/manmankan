@@ -194,6 +194,7 @@ function kanScanDesk(initialScan) {
     eventSource: null,
     addCodes: "",
     watchlistMessage: "",
+    watchlistFetchPending: false,
     recentStocks: [],
     watchlistGroups: [],
     activeGroup: "",
@@ -465,8 +466,16 @@ function kanScanDesk(initialScan) {
       } catch (_error) {
         this.fetchMessage = "数据不可用";
       } finally {
-        if (!listening) this.fetching = false;
+        if (!listening) {
+          this.fetching = false;
+          this.finishWatchlistFetch(`已添加 · ${this.fetchMessage}`);
+        }
       }
+    },
+    finishWatchlistFetch(message) {
+      if (!this.watchlistFetchPending) return;
+      this.watchlistMessage = message;
+      this.watchlistFetchPending = false;
     },
     listenFetch(job) {
       if (this.eventSource) this.eventSource.close();
@@ -487,11 +496,9 @@ function kanScanDesk(initialScan) {
           this.fetchMessage = reloaded
             ? (data.stage || "更新完成")
             : `${data.stage || "更新完成"} · 页面刷新失败，请手动刷新`;
-          if (this.watchlistMessage.includes("正在更新行情")) {
-            this.watchlistMessage = reloaded
-              ? "已添加并更新行情"
-              : "已添加，行情更新完成 · 请手动刷新页面";
-          }
+          this.finishWatchlistFetch(
+            reloaded ? "已添加并更新行情" : "已添加，行情更新完成 · 请手动刷新页面",
+          );
           kanToast(reloaded ? "数据更新完成" : "更新完成，请手动刷新页面");
         }
         if (data.status === "partial") {
@@ -500,24 +507,21 @@ function kanScanDesk(initialScan) {
           this.fetching = false;
           const message = data.error || data.stage || "部分股票未更新 · 可重试";
           this.fetchMessage = reloaded ? message : `${message} · 请手动刷新页面`;
-          if (this.watchlistMessage.includes("正在更新行情")) {
-            this.watchlistMessage = `已添加 · ${message}`;
-          }
+          this.finishWatchlistFetch(`已添加 · ${message}`);
           kanToast(message, "error");
         }
         if (data.status === "error") {
           this.eventSource.close();
           this.fetching = false;
           this.fetchMessage = data.error || "数据不可用";
-          if (this.watchlistMessage.includes("正在更新行情")) {
-            this.watchlistMessage = `已添加 · ${this.fetchMessage}`;
-          }
+          this.finishWatchlistFetch(`已添加 · ${this.fetchMessage}`);
           kanToast(data.error || "数据更新失败", "error");
         }
       });
       this.eventSource.onerror = () => {
         this.fetching = false;
         this.fetchMessage = "进度连接中断";
+        this.finishWatchlistFetch("已添加 · 进度连接中断");
         this.eventSource.close();
       };
     },
@@ -555,6 +559,7 @@ function kanScanDesk(initialScan) {
           return;
         }
         this.addCodes = "";
+        this.watchlistFetchPending = true;
         this.watchlistMessage = `${(payload.messages || []).join(" · ") || "已添加"} · 正在更新行情`;
         kanToast((payload.messages || []).join(" · ") || "已添加自选");
         await this.startFetch();

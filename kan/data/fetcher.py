@@ -47,7 +47,7 @@ KLINE_COLUMNS = KLINE_REQUIRED + KLINE_OPTIONAL
 # 6 位纯数字股票代码 · 防止 path traversal
 _SYMBOL_PATTERN = re.compile(r"^\d{6}$")
 DEFAULT_KLINE_DAYS = 360
-DEFAULT_ADAPTIVE_MAX_WORKERS = 20
+DEFAULT_ADAPTIVE_MAX_WORKERS = 32
 _ADAPTIVE_WINDOW_SIZE = 20
 _BACKPRESSURE_KEYWORDS = (
     "40203",
@@ -386,27 +386,28 @@ def resolve_max_workers() -> int:
     """启发式 max_workers · 不再硬编码 5.
 
     akshare 是 I/O bound (HTTP 拉取 · 不是 CPU 计算) · cpu_count*2 比 cpu-1 更合理.
-    上限 cap 12 防 akshare 限流 (弱网下 ≥ 12 反而变慢).
+    默认上限 16；TuShare/PanShu lane 健康时仍可继续自适应探到 32。
+    公开源各自还有 provider lane 上限，不会因为全局窗口变大而失控。
 
     Examples:
-    - 4 核 Mac mini: cpu_count=4 → workers=8 (5 → 8 提升 60%)
-    - 8 核 MacBook: cpu_count=8 → workers=12 (cap)
-    - 16 核 Mac Studio: cpu_count=16 → workers=12 (cap · 防限流)
-    - Docker / cgroup 返宿主机核数: cap 12 天然缓解
+    - 4 核 Mac mini: cpu_count=4 → workers=8
+    - 8 核 MacBook: cpu_count=8 → workers=16
+    - 16 核 Mac Studio: cpu_count=16 → workers=16 (默认起跑 cap)
+    - Docker / cgroup 返宿主机核数: 默认起跑 cap 16
 
-    KAN_WORKERS env var 可显式 override (整数 · 1-20 范围 · 越界回退默认).
+    KAN_WORKERS env var 可显式 override (整数 · 1-32 范围 · 越界回退默认).
     """
     override = _worker_override_from_env()
     if override is not None:
         return override
-    return min((os.cpu_count() or 4) * 2, 12)
+    return min((os.cpu_count() or 4) * 2, 16)
 
 
 def resolve_batch_worker_bounds(max_workers: int | None = None) -> tuple[int, int]:
     """返回批量 fetch 的 (起跑并发, 自适应上限)。
 
     - 显式 `max_workers` 或 `KAN_WORKERS` 代表用户手动控速,不越过该上限。
-    - 默认从历史启发式起跑,健康时最多探到 20；失败/限流时控制器会回落。
+    - 默认从 I/O 启发式起跑,健康时最多探到 32；失败/限流时控制器会回落。
     """
     if max_workers is not None and max_workers >= 1:
         workers = min(max_workers, DEFAULT_ADAPTIVE_MAX_WORKERS)
@@ -428,9 +429,185 @@ def _worker_override_from_env() -> int | None:
         n = int(raw)
     except ValueError:
         return None
-    # 上限从 50 收紧到 20 · 防 KAN_WORKERS=50 反射 DoS akshare
-    # akshare 限流阈值实测约 10-15 req/s · 20 并发已超 · 50 必触发限流
+    # 32 是 PanShu 逐股接口在真实全板块样本上的吞吐甜点上界；公开源仍受
+    # 自己的 provider lane (1/4/4/2) 限制，不会直接收到 32 路请求。
     return n if 1 <= n <= DEFAULT_ADAPTIVE_MAX_WORKERS else None
+
+
+def _fetch_market_batch(
+    symbols: list[str],
+    *,
+    days: int,
+    force: bool,
+    max_workers: int | None,
+    on_progress: Callable | None,
+    on_progress_state: Callable[[FetchProgress], None] | None,
+    lifecycle: OperationLifecycle | None,
+    retain_frames: bool,
+) -> tuple[dict[str, pd.DataFrame], dict[str, str]]:
+    """全市场高速路径：按交易日批量拉取，再并发物化逐股 parquet。
+
+    这是 `kan fetch --all` 的主路径。把约 5500 次逐股 HTTP 改为 `days` 次
+    全市场截面请求；批量源整体不可用时明确失败，不再静默退化到 5500 次
+    串行 Baostock。
+    """
+    import time
+    from concurrent.futures import FIRST_COMPLETED, Future, ThreadPoolExecutor, wait
+
+    import pandas as pd
+
+    from kan.data.kline_snapshot import fetch_recent_daily_bars
+
+    results: dict[str, pd.DataFrame] = {}
+    errors: dict[str, str] = {}
+    success_marker = pd.DataFrame()
+    unique_symbols = list(dict.fromkeys(symbols))
+    completed = 0
+    started_at = time.monotonic()
+    worker_limit = min(
+        max_workers or resolve_max_workers(),
+        DEFAULT_ADAPTIVE_MAX_WORKERS,
+        max(1, len(unique_symbols)),
+    )
+
+    def safe_callback(callback: Callable | None, *args: object) -> None:
+        if callback is None:
+            return
+        try:
+            callback(*args)
+        except Exception as exc:
+            debug_log(__name__, "fetch_market_batch progress callback", exc)
+
+    def finish(symbol: str, frame: pd.DataFrame | None, error: str | None) -> None:
+        nonlocal completed
+        completed += 1
+        ok = frame is not None and error is None
+        if ok and frame is not None:
+            # CLI 全市场刷新只需要成功集合；不为 5534 只股票同时保留约 200 万
+            # 行 DataFrame。库调用默认仍返回完整结果，保持公开 API 兼容。
+            results[symbol] = frame if retain_frames else success_marker
+        else:
+            errors[symbol] = error or "unknown error"
+        state = FetchProgress(
+            symbol=symbol,
+            ok=ok,
+            error=error,
+            elapsed_seconds=max(0.0, time.monotonic() - started_at),
+            concurrency=worker_limit,
+            max_concurrency=worker_limit,
+            inflight=0,
+            completed=completed,
+            total=len(unique_symbols),
+        )
+        safe_callback(on_progress_state, state)
+        safe_callback(on_progress, symbol, ok, error)
+
+    pending_symbols: list[str] = []
+    for symbol in unique_symbols:
+        try:
+            _validate_symbol(symbol)
+            cache = _cache_path(symbol)
+            if not force and _is_cache_fresh(cache, min_rows=days):
+                finish(symbol, pd.read_parquet(cache), None)
+                continue
+        except Exception as exc:
+            finish(symbol, None, str(exc))
+            continue
+        pending_symbols.append(symbol)
+
+    if not pending_symbols:
+        return results, errors
+
+    if lifecycle is not None:
+        lifecycle.phase(
+            "全市场批量拉取",
+            symbols=len(pending_symbols),
+            days=days,
+            workers=min(max_workers or 12, 12),
+        )
+    try:
+        panel = fetch_recent_daily_bars(
+            days,
+            symbols=pending_symbols,
+            force=force,
+            lifecycle=lifecycle,
+            max_workers=max_workers,
+            sort_by_symbol=False,
+        )
+    except Exception as exc:
+        message = (
+            "全市场批量源不可用，已停止耗时的串行降级："
+            f"{type(exc).__name__}: {exc}"
+        )
+        if lifecycle is not None:
+            lifecycle.degraded(
+                "全市场批量拉取失败",
+                error_type=type(exc).__name__,
+                fallback="serial_disabled",
+            )
+        for symbol in pending_symbols:
+            finish(symbol, None, message)
+        return results, errors
+
+    if lifecycle is not None:
+        lifecycle.phase(
+            "并发写入逐股缓存",
+            symbols=len(pending_symbols),
+            rows=len(panel),
+            workers=worker_limit,
+        )
+
+    from kan.storage.paths import atomic_write_parquet
+
+    wanted = set(pending_symbols)
+    seen: set[str] = set()
+
+    def write_one(symbol: str, group: pd.DataFrame) -> tuple[str, pd.DataFrame | None, str | None]:
+        try:
+            frame = _normalize_kline(
+                group,
+                source="tushare_market_batch",
+                symbol=symbol,
+            )
+            if frame.empty:
+                raise ValueError(f"无效股票代码或无数据: {symbol}")
+            atomic_write_parquet(
+                frame,
+                _cache_path(symbol),
+                metadata={"kan.requested_days": str(int(days))},
+            )
+            return symbol, frame, None
+        except Exception as exc:
+            return symbol, None, str(exc)
+
+    def consume(done: set[Future]) -> None:
+        for future in done:
+            symbol, frame, error = future.result()
+            finish(symbol, frame, error)
+
+    outstanding: set[Future] = set()
+    with ThreadPoolExecutor(
+        max_workers=worker_limit,
+        thread_name_prefix="kan-market-cache",
+    ) as executor:
+        for raw_symbol, group in panel.groupby("symbol", sort=False):
+            symbol = str(raw_symbol)
+            if symbol not in wanted:
+                continue
+            seen.add(symbol)
+            outstanding.add(executor.submit(write_one, symbol, group))
+            if len(outstanding) >= worker_limit * 2:
+                done, outstanding = wait(outstanding, return_when=FIRST_COMPLETED)
+                consume(done)
+        while outstanding:
+            done, outstanding = wait(outstanding, return_when=FIRST_COMPLETED)
+            consume(done)
+
+    for symbol in pending_symbols:
+        if symbol not in seen:
+            finish(symbol, None, f"无效股票代码或无数据: {symbol}")
+
+    return results, errors
 
 
 def fetch_batch(
@@ -441,11 +618,16 @@ def fetch_batch(
     on_progress: Callable | None = None,
     on_progress_state: Callable[[FetchProgress], None] | None = None,
     lifecycle: OperationLifecycle | None = None,
+    market_wide: bool = False,
+    retain_frames: bool = True,
 ) -> tuple[dict[str, pd.DataFrame], dict[str, str]]:
     """批量拉取 · 自适应提交窗口 + 可选 progress callback.
 
-    max_workers=None → resolve_max_workers() 启发式 (cpu_count*2 cap 12).
-    未显式设置上限时,控制器可在健康窗口内继续升到 20；遇到限流/超时/失败回落。
+    max_workers=None → resolve_max_workers() 启发式 (cpu_count*2 cap 16).
+    未显式设置上限时,控制器可在健康窗口内继续升到 32；遇到限流/超时/失败回落。
+    market_wide=True → 按交易日批量获取全市场，再并发物化逐股缓存。
+    retain_frames=False → 成功结果只保留代码键，值为空 DataFrame；适合只需刷新
+    缓存和成功计数的 CLI 全市场任务，可显著降低 360 日窗口峰值内存。
     """
     import time
     from collections import defaultdict
@@ -454,6 +636,18 @@ def fetch_batch(
 
     if not symbols:
         return {}, {}
+
+    if market_wide:
+        return _fetch_market_batch(
+            symbols,
+            days=days,
+            force=force,
+            max_workers=max_workers,
+            on_progress=on_progress,
+            on_progress_state=on_progress_state,
+            lifecycle=lifecycle,
+            retain_frames=retain_frames,
+        )
 
     initial_workers, worker_cap = resolve_batch_worker_bounds(max_workers)
     worker_cap = min(worker_cap, len(symbols))

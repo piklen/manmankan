@@ -150,6 +150,7 @@ kan find --codes 600519,688981 --format json --fields @core,@valuation,@moneyflo
 kan scan --codes 600519,000858 --format json # 拉公开日 K 的真实坐标 JSON
 kan find --all --pe lt:20 --format json --compact
 kan trend --all --down 3                      # 全市场连续下跌看板
+kan fetch --all --workers 12                  # 批量并发刷新全市场 360 日 K 线缓存
 kan hold cash 50000                           # 录入现金,用于展示一手占现金比例
 kan hold add 600519 --cost 1680 --shares 100 # 手动录入真实持仓事实
 kan hold                                      # 持仓盈亏 + 仓位 + 位置总览

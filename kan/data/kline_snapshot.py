@@ -258,7 +258,10 @@ def fetch_daily_bars(
     minimum_rows: int | None = None,
 ) -> pd.DataFrame:
     """按交易日拉全市场 daily OHLC 截面 · parquet 缓存后按 symbols 过滤。"""
-    from kan.data.tushare import _fetch_tushare_daily_bars
+    from kan.data.tushare import (
+        _fetch_tushare_daily_bars,
+        _fetch_tushare_raw_daily_bars,
+    )
 
     td = _validate_trade_date(trade_date or _latest_trade_date_str())
     ensure_dirs()
@@ -279,9 +282,37 @@ def fetch_daily_bars(
 
     raw = _fetch_tushare_daily_bars(td)
     if raw is None or raw.empty:
-        return _empty_daily_df()
+        if td != _latest_trade_date_str():
+            return _empty_daily_df()
+        raw = _fetch_tushare_raw_daily_bars(td)
+        if raw is None or raw.empty:
+            return _empty_daily_df()
     df = _normalize_daily_bars(raw)
-    _validate_daily_cross_section(df, td, minimum_rows=minimum_rows)
+    try:
+        _validate_daily_cross_section(df, td, minimum_rows=minimum_rows)
+    except TushareDataContractError as primary_error:
+        # PanShu 的 stk_factor_pro 当日 generation 可能晚于基础 daily。最新交易日
+        # 的 qfq 价与原始价相同，可用完整 daily 截面安全补齐；历史日绝不这样做。
+        if td != _latest_trade_date_str():
+            raise
+        fallback = _fetch_tushare_raw_daily_bars(td)
+        if fallback is None or fallback.empty:
+            raise primary_error
+        candidate = _normalize_daily_bars(fallback)
+        try:
+            _validate_daily_cross_section(
+                candidate,
+                td,
+                minimum_rows=minimum_rows,
+            )
+        except TushareDataContractError:
+            raise primary_error from None
+        debug_log(
+            __name__,
+            f"最新交易日复权截面不完整，已用 daily 完整截面补齐: {td}",
+            primary_error,
+        )
+        df = candidate
     atomic_write_parquet(df, cache)
     return _filter_symbols(df, symbols)
 
@@ -315,6 +346,8 @@ def fetch_recent_daily_bars(
     lifecycle: OperationLifecycle | None = None,
     reporter: LifecycleReporter | None = None,
     on_progress: Callable[[int, int, date, int], None] | None = None,
+    max_workers: int | None = None,
+    sort_by_symbol: bool = True,
 ) -> pd.DataFrame:
     """拉近 `days` 个交易日的全市场 daily OHLC panel · trend --all 截面路径专用。
 
@@ -327,6 +360,9 @@ def fetch_recent_daily_bars(
     - force: 强刷每日截面缓存
     - lifecycle/reporter: 复用外部 operation，或独立创建一个 operation
     - on_progress: 保留旧回调；仅在单日截面真实完成后调用
+    - max_workers: 交易日之间的并发上限；默认从 8 起跑、最高 12
+    - sort_by_symbol: 默认保持公开函数原有 symbol/date 顺序；仅写逐股缓存的调用方
+      可关闭全表排序，因为每个交易日本来已按日期有序，分组后仍保持日期顺序
     """
     import pandas as pd
 
@@ -343,58 +379,207 @@ def fetch_recent_daily_bars(
         if not dates:
             raise RuntimeError("交易日历未返回可用交易日")
 
-        frames: list[pd.DataFrame] = []
+        frames_by_date: dict[str, pd.DataFrame] = {}
         total = len(dates)
         minimum_rows = _minimum_daily_rows(symbols)
-        for idx, trade_day in enumerate(dates, start=1):
-            if active is not None:
-                # 请求期间保持可见的确定进度；phase 会覆盖刚完成的 n/total，导致用户
-                # 在最慢的网络等待阶段只能看到一句“开始每日截面”。
-                active.progress(
-                    idx - 1,
-                    total,
-                    "获取每日截面",
-                    trade_date=trade_day.isoformat(),
-                )
+        from kan.data.provider_batch import (
+            ProviderJob,
+            ProviderJobResult,
+            resolve_provider_workers,
+            run_provider_jobs,
+        )
+        from kan.data.provider_contracts import (
+            FetchFailure,
+            FetchFailureKind,
+            ProviderCapabilities,
+            ProviderFetchResult,
+        )
+
+        requested_workers = resolve_provider_workers(max_workers)
+        worker_cap = min(12, requested_workers, total)
+        # 小批保持原有确定顺序；全市场历史窗口才启用并发扇出。
+        if max_workers is None and total < 8:
+            worker_cap = 1
+        capabilities = ProviderCapabilities(
+            max_concurrency=max(1, worker_cap),
+            initial_concurrency=min(8, max(1, worker_cap)),
+            max_attempts=2,
+            timeout_seconds=45,
+            backoff_base_seconds=0.5,
+            backoff_cap_seconds=2.0,
+            rate_limit_cooldown_seconds=2.0,
+        )
+
+        def fetch_one(trade_day: date) -> ProviderFetchResult[pd.DataFrame]:
             try:
                 daily = fetch_daily_bars(
                     trade_day.strftime("%Y%m%d"),
                     force=force,
                     minimum_rows=minimum_rows,
                 )
-                if daily.empty:
-                    raise RuntimeError(f"交易日 {trade_day:%Y-%m-%d} 的日线截面为空")
+            except TushareDataContractError as exc:
+                return ProviderFetchResult.failed(
+                    FetchFailure(
+                        FetchFailureKind.INVALID_SCHEMA,
+                        message=str(exc),
+                    )
+                )
             except Exception as exc:
+                return ProviderFetchResult.failed(
+                    FetchFailure(
+                        FetchFailureKind.TRANSPORT,
+                        message=f"{type(exc).__name__}: {exc}",
+                        retryable=True,
+                        affects_circuit=True,
+                    )
+                )
+            if daily.empty:
+                return ProviderFetchResult.failed(
+                    FetchFailure(
+                        FetchFailureKind.EMPTY,
+                        message=f"交易日 {trade_day:%Y-%m-%d} 的日线截面为空",
+                    )
+                )
+            # fetch_daily_bars 内部已经完成 provider 熔断记账，避免重复累计。
+            return ProviderFetchResult.succeeded(daily, breaker_recorded=True)
+
+        from functools import partial
+
+        jobs: list[ProviderJob[pd.DataFrame]] = [
+            ProviderJob(
+                trade_day.strftime("%Y%m%d"),
+                "tushare_daily_bars",
+                partial(fetch_one, trade_day),
+                capabilities,
+            )
+            for trade_day in dates
+        ]
+
+        if active is not None and worker_cap > 1:
+            active.phase(
+                "并发获取每日截面",
+                total_days=total,
+                workers=worker_cap,
+            )
+
+        def report_daily(
+            result: ProviderJobResult[pd.DataFrame],
+            completed: int,
+            _total: int,
+        ) -> None:
+            trade_day = _date_from_trade_date(result.key)
+            frame = result.result.data
+            rows = 0 if frame is None else len(frame)
+            if frame is not None:
+                frames_by_date[result.key] = frame
+            if active is not None:
+                active.progress(
+                    completed,
+                    total,
+                    "每日截面完成" if frame is not None else "每日截面失败",
+                    trade_date=trade_day.isoformat(),
+                    rows=rows,
+                    workers=worker_cap,
+                )
+            if frame is not None and on_progress is not None:
+                on_progress(completed, total, trade_day, rows)
+
+        if worker_cap == 1:
+            # 保留小批量逐日等待提示和确定回调顺序。
+            for idx, job in enumerate(jobs, start=1):
+                trade_day = _date_from_trade_date(job.key)
+                if active is not None:
+                    active.progress(
+                        idx - 1,
+                        total,
+                        "获取每日截面",
+                        trade_date=trade_day.isoformat(),
+                    )
+                def report_serial(
+                    result: ProviderJobResult[pd.DataFrame],
+                    _done: int,
+                    _count: int,
+                    *,
+                    completed: int = idx,
+                ) -> None:
+                    report_daily(result, completed, total)
+
+                batch = run_provider_jobs(
+                    [job],
+                    max_workers=1,
+                    on_result=report_serial,
+                )
+                result = batch[job.key]
+                if result.result.data is None:
+                    failure = result.result.failure
+                    if active is not None:
+                        active.degraded(
+                            "每日截面失败",
+                            trade_date=trade_day.isoformat(),
+                            error_type=(failure.kind.value if failure else "unknown"),
+                        )
+                    raise RuntimeError(
+                        failure.message if failure else f"交易日 {trade_day:%Y-%m-%d} 拉取失败"
+                    )
+        else:
+            def report_heartbeat(running: int, waiting: int) -> None:
+                if active is not None:
+                    active.heartbeat(
+                        active_calls=running,
+                        waiting=waiting,
+                        workers=worker_cap,
+                    )
+
+            batch = run_provider_jobs(
+                jobs,
+                max_workers=worker_cap,
+                on_result=report_daily,
+                heartbeat=None if active is None else report_heartbeat,
+            )
+            failures = [result for result in batch.values() if result.result.data is None]
+            if failures:
+                first = failures[0]
+                failure = first.result.failure
                 if active is not None:
                     active.degraded(
                         "每日截面失败",
-                        trade_date=trade_day.isoformat(),
-                        error_type=type(exc).__name__,
+                        failure_count=len(failures),
+                        trade_date=_date_from_trade_date(first.key).isoformat(),
+                        error_type=(failure.kind.value if failure else "unknown"),
                     )
-                raise
-            frames.append(daily)
-            if active is not None:
-                active.progress(
-                    idx,
-                    total,
-                    "每日截面完成",
-                    trade_date=trade_day.isoformat(),
-                    rows=len(daily),
+                raise RuntimeError(
+                    failure.message if failure else f"交易日 {first.key} 拉取失败"
                 )
-            if on_progress is not None:
-                on_progress(idx, total, trade_day, len(daily))
+
+        frames = [frames_by_date[d.strftime("%Y%m%d")] for d in dates]
 
         if active is not None:
             active.phase("合并每日截面", frame_count=len(frames))
         panel = pd.concat(frames, ignore_index=True)
+        # `run_provider_jobs` 结果、按日字典和 frames 列表都持有 360 份原始
+        # DataFrame。concat 完成后立即断开这些引用，避免排序 200 万行面板时
+        # 同时保留一整份日截面副本。
+        frames.clear()
+        frames_by_date.clear()
+        batch.clear()
         if active is not None:
             active.phase("每日截面合并完成", rows=len(panel))
-            active.phase("排序日线面板", rows=len(panel))
-        panel = panel.sort_values(["symbol", "date"]).reset_index(drop=True)
+        if sort_by_symbol:
+            if active is not None:
+                active.phase("排序日线面板", rows=len(panel))
+            panel.sort_values(["symbol", "date"], inplace=True, ignore_index=True)
+            if active is not None:
+                active.phase("日线面板排序完成", rows=len(panel))
+        elif active is not None:
+            active.phase("保留交易日顺序", rows=len(panel))
         if active is not None:
-            active.phase("日线面板排序完成", rows=len(panel))
             active.phase("过滤目标股票", target_count=len(symbols or []))
-        filtered = _filter_symbols(panel, symbols)
+        # 正常路径的每个 fetch_daily_bars 调用已经按 symbols 过滤。仅在自定义
+        # provider / 测试替身没有遵守该约定时再复制，兼顾公开函数语义与内存。
+        if symbols is not None and not panel["symbol"].isin(set(symbols)).all():
+            filtered = _filter_symbols(panel, symbols)
+        else:
+            filtered = panel
         if active is not None:
             active.phase("目标股票过滤完成", rows=len(filtered))
         return filtered

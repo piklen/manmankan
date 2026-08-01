@@ -64,16 +64,16 @@ class _Done(Generic[T]):
 def resolve_provider_workers(max_workers: int | None = None) -> int:
     """解析逐实体 provider 调用硬上限；与 K 线的 KAN_WORKERS 约定一致。"""
     if max_workers is not None:
-        return min(20, max(1, max_workers))
+        return min(32, max(1, max_workers))
     raw = os.environ.get("KAN_WORKERS")
     if raw:
         try:
             value = int(raw)
         except ValueError:
             value = 0
-        if 1 <= value <= 20:
+        if 1 <= value <= 32:
             return value
-    return min((os.cpu_count() or 4) * 2, 12)
+    return min((os.cpu_count() or 4) * 2, 16)
 
 
 def run_provider_jobs(

@@ -50,8 +50,11 @@ def test_info_service_returns_single_stock_contract(monkeypatch) -> None:
         lambda: type("Book", (), {"cash": 20000.0})(),
     )
     monkeypatch.setattr(
-        "kan.core.stock_set_local.WatchlistHoldingsSet.membership",
-        lambda _self, _symbol: (True, False),
+        "kan.storage.watchlist.load_grouped_watchlist",
+        lambda: SimpleNamespace(groups={
+            "自选": [],
+            "长期观察": [SimpleNamespace(symbol="600519")],
+        }),
     )
 
     result = get_stock_info(InfoRequest(

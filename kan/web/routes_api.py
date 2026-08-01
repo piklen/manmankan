@@ -10,6 +10,7 @@ from urllib.parse import urlsplit
 from fastapi import APIRouter, Body, HTTPException, Query, Request
 from fastapi.responses import StreamingResponse
 
+from kan.cli.helpers import _parse_codes
 from kan.core.models import Stock
 from kan.core.pipeline import StockSetResolveError
 from kan.core.scanner_snapshot import (
@@ -334,11 +335,14 @@ def compare_stocks(payload: Annotated[dict[str, Any], Body()]) -> dict:
     raw_codes = payload.get("codes")
     if not isinstance(raw_codes, list):
         raise HTTPException(status_code=400, detail="请提交 2-5 个股票代码")
-    codes = [str(code).strip() for code in raw_codes]
-    if not (_COMPARE_MIN <= len(codes) <= _COMPARE_MAX):
+    if not (_COMPARE_MIN <= len(raw_codes) <= _COMPARE_MAX):
         raise HTTPException(status_code=400, detail="请选择 2-5 只股票进行对比")
-    if any(len(code) != 6 or not code.isdigit() for code in codes):
-        raise HTTPException(status_code=400, detail="请输入有效的 6 位股票代码")
+    codes: list[str] = []
+    for raw_code in raw_codes:
+        normalized, invalid = _parse_codes(str(raw_code).strip())
+        if invalid or len(normalized) != 1:
+            raise HTTPException(status_code=400, detail="请输入有效的 6 位股票代码")
+        codes.append(normalized[0])
     if len(set(codes)) != len(codes):
         raise HTTPException(status_code=400, detail="请删除重复的股票代码")
 

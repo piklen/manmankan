@@ -34,8 +34,8 @@
         <div class="meta">最多 {{ find_max_filters }} 条；可选择满足全部条件（AND）或任一条件（OR）。</div>
       </div>
       <div class="controls">
-        <label class="check"><input type="radio" value="all" x-model="matchMode"> 满足全部</label>
-        <label class="check"><input type="radio" value="any" x-model="matchMode"> 满足任一</label>
+        <label class="check"><input type="radio" name="find-match-mode" value="all" x-model="matchMode"> 满足全部</label>
+        <label class="check"><input type="radio" name="find-match-mode" value="any" x-model="matchMode"> 满足任一</label>
         <label class="check"><input type="checkbox" x-model="excludeSt"> 排除 ST</label>
         <button type="button" @click="addFilter()" :disabled="filters.length >= maxFilters">添加条件</button>
       </div>

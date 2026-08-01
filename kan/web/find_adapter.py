@@ -26,7 +26,6 @@ from kan.storage import watchlist
 POOL_TYPES = {"watchlist", "holdings", "codes", "industry", "theme", "all"}
 FILTER_TYPES = set(FILTER_SPECS) - {"exclude_st"}
 OPS = set(ALLOWED_OPS)
-PERIOD_FILTERS = {"pos", "gain", "ma_bias", "rs_index", "rs_board"}
 MAX_FILTERS = 12
 WEB_RESULT_LIMIT = 10_000
 
@@ -91,6 +90,11 @@ WEB_FILTER_BY_TYPE = {
     }
     for _group, options in _WEB_FILTER_GROUPS
     for filter_type, label, unit, input_kind in options
+}
+PERIOD_FILTERS = {
+    filter_type
+    for filter_type, metadata in WEB_FILTER_BY_TYPE.items()
+    if metadata["input"] == "period"
 }
 
 
@@ -278,7 +282,7 @@ def _serialize_find_result(result: FindKlineResult, *, command: str) -> dict[str
             "name": row.name.replace(" ", ""),
             "price": _round(row.current_price),
             "in_watchlist": bool(getattr(row, "in_watchlist", False)),
-            "triggered_text": _web_triggered_text(match),
+            "triggered_text": _web_triggered_text(match.triggered),
             "metrics": _trigger_metrics(match.triggered),
             "sort_values": _trigger_sort_values(match.triggered),
             "positions": {
@@ -316,7 +320,12 @@ def _serialize_cross_section_result(result: FindCrossSectionResult, *, command: 
     """序列化全市场 cross-section 结果。"""
     rows = []
     try:
-        watchlist_symbols = {stock.symbol for stock in watchlist.list_all()}
+        grouped = watchlist.load_grouped_watchlist()
+        watchlist_symbols = {
+            stock.symbol
+            for group_stocks in grouped.groups.values()
+            for stock in group_stocks
+        }
     except Exception:
         watchlist_symbols = set()
     periods = {30, 60, 180}
@@ -387,8 +396,8 @@ def _display_periods(result: FindKlineResult) -> list[int]:
     return sorted(available & requested)
 
 
-def _web_triggered_text(match_or_triggered: Any) -> list[str]:
-    triggered_items = getattr(match_or_triggered, "triggered", match_or_triggered)
+def _web_triggered_text(triggered_items: Any) -> list[str]:
+    """把明确的 TriggeredFilter 序列转换为 Web 人话文案。"""
     labels: list[str] = []
     for triggered in triggered_items:
         parts = triggered.param.split(":")

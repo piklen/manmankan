@@ -115,8 +115,11 @@ def main() -> None:
     if _should_print_fast_help():
         _print_fast_help()
         return
-    _patch_mini_racer()
-    _install_doh_dns()
+    # 子命令帮助页不执行数据源，也不需要 mini-racer ABI 修补或 DoH 安装；
+    # 冷机 Linux 上这两步会显著推迟首字节。completion 仍走完整初始化。
+    if _fast_subcommand_help_command() is None:
+        _patch_mini_racer()
+        _install_doh_dns()
     try:
         from kan.cli import cli_main
     except (ImportError, ModuleNotFoundError) as e:

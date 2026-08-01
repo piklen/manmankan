@@ -181,7 +181,7 @@ kan fields list --format json
 
 `--all`、估值、资金、技术、筹码、股东等维度可能依赖 TuShare token 或上游接口权限。用 `data_availability` 区分未请求、不可用和缺失。
 
-`--all` 可作为完整上市 A 股（含北交所 / ST）股票池 selector 用在 `find`、`scan`、`trend`、`low`、`high`、`fetch`。`find --all` 走截面数据；`scan/trend/low/high/fetch --all` 走全市场 K 线池，首次可能需要更久补缓存。若上游全市场响应明显不完整，会返回 `tushare_data_contract_error` 且不缓存该响应；这表示当前配置的 TuShare endpoint 偏离官方接口语义，不是筛选结果为空。
+`--all` 可作为完整上市 A 股（含北交所 / ST）股票池 selector 用在 `find`、`scan`、`trend`、`low`、`high`、`fetch`。`find --all` 走截面数据；`scan/trend/low/high/fetch --all` 走全市场 K 线池。`kan fetch --all` 按交易日批量并发拉取并拆分逐股缓存，默认 360 个交易日；`--workers/-j 1..32` 可设硬上限，其中全市场大响应网络链路最多使用 12 路。若批量源不可用，命令会快速失败而不会静默退化成数千次串行请求。若上游全市场响应明显不完整，会返回 `tushare_data_contract_error` 且不缓存该响应；这表示当前配置的 TuShare endpoint 偏离官方接口语义，不是筛选结果为空。
 
 `@fundamentals` 是 ROE、净利润同比、营收同比等逐股报告期字段；全市场模式不支持这类逐股高成本维度，先用 `--codes`、`--industry` 或 `--theme` 缩小候选池。
 

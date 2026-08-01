@@ -137,24 +137,36 @@ def get_stock_info(request: InfoRequest) -> InfoServiceResult:
 
 
 def _apply_retail_facts(result: StockScanResult) -> StockScanResult:
+    cash: float | None = None
+    holding_symbols: set[str] = set()
     try:
         from kan.storage.positions import load_positions
 
-        cash = load_positions().cash
+        position_book = load_positions()
+        cash = position_book.cash
+        holding_symbols = {
+            position.symbol for position in position_book.positions
+        }
     except Exception:
-        cash = None
+        pass
     from kan.core.retail_facts import apply_retail_facts
 
     enriched = apply_retail_facts(result, cash=cash)
+    watchlist_symbols: set[str] = set()
     try:
-        from kan.core.stock_set import WatchlistHoldingsSet
+        from kan.storage.watchlist import load_grouped_watchlist
 
-        in_watchlist, in_holding = WatchlistHoldingsSet().membership(result.symbol)
+        grouped = load_grouped_watchlist()
+        watchlist_symbols = {
+            stock.symbol
+            for group_stocks in grouped.groups.values()
+            for stock in group_stocks
+        }
     except Exception:
-        in_watchlist, in_holding = False, False
+        pass
     return enriched.model_copy(update={
-        "in_watchlist": in_watchlist,
-        "in_holding": in_holding,
+        "in_watchlist": result.symbol in watchlist_symbols,
+        "in_holding": result.symbol in holding_symbols,
     })
 
 

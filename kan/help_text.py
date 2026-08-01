@@ -150,7 +150,8 @@ def root_help_text() -> str:
   kan fetch --industry X    预拉某行业全部成分股
   kan fetch --hot rank      预拉东财人气榜股票
   kan fetch --theme AI      预拉某题材全部成分股
-  kan fetch --all           预拉全市场 K 线缓存（耗时较久）
+  kan fetch --all           批量并发预拉全市场 360 日 K 线缓存
+  kan fetch --all -j 12     显式设置全市场并发上限（1-32）
 
 [bold cyan]配置（tushare-pro 凭证）[/bold cyan]
   kan config get                              查看当前配置（全部）

@@ -406,6 +406,170 @@ def test_fetch_batch_duplicate_symbol_emits_two_callbacks(temp_data_dir, raw_kli
     assert [state.symbol for state in states] == ["600519", "600519"]
 
 
+def test_fetch_batch_market_wide_materializes_symbol_caches_concurrently(
+    temp_data_dir, monkeypatch,
+):
+    """全市场路径把按日 panel 正确拆回逐股缓存并写入请求周期元数据。"""
+    import pyarrow.parquet as pq
+
+    days = [date(2026, 7, 30), date(2026, 7, 31)]
+    panel = pd.DataFrame([
+        {
+            "symbol": symbol,
+            "date": trade_day,
+            "open": close - 1,
+            "high": close + 1,
+            "low": close - 2,
+            "close": close,
+            "volume": 1000,
+            "amount": 10000,
+        }
+        for symbol, close in (("600519", 100.0), ("920000", 20.0))
+        for trade_day in days
+    ])
+    captured: dict[str, object] = {}
+
+    def fake_recent(days_count: int, **kwargs):
+        captured.update(days=days_count, **kwargs)
+        return panel
+
+    monkeypatch.setattr(
+        "kan.data.kline_snapshot.fetch_recent_daily_bars",
+        fake_recent,
+    )
+    caller = threading.get_ident()
+    callbacks: list[tuple[str, bool, int]] = []
+    from kan.infra.lifecycle import CollectingReporter, operation
+
+    reporter = CollectingReporter()
+
+    with operation("test market batch", reporter=reporter) as lifecycle:
+        results, errors = fetcher.fetch_batch(
+            ["600519", "920000"],
+            days=2,
+            force=True,
+            max_workers=4,
+            market_wide=True,
+            lifecycle=lifecycle,
+            on_progress=lambda symbol, ok, _error: callbacks.append(
+                (symbol, ok, threading.get_ident())
+            ),
+        )
+
+    assert errors == {}
+    assert set(results) == {"600519", "920000"}
+    assert captured["days"] == 2
+    assert captured["symbols"] == ["600519", "920000"]
+    assert captured["max_workers"] == 4
+    assert captured["sort_by_symbol"] is False
+    assert all((frame["_source"] == "tushare_market_batch").all() for frame in results.values())
+    assert all(thread_id == caller for _symbol, _ok, thread_id in callbacks)
+    assert {event.message for event in reporter.events} >= {
+        "全市场批量拉取",
+        "并发写入逐股缓存",
+    }
+    for symbol in results:
+        metadata = pq.read_metadata(temp_data_dir / f"{symbol}.parquet").metadata or {}
+        assert metadata[b"kan.requested_days"] == b"2"
+
+
+def test_fetch_batch_market_wide_fails_fast_without_serial_scheduler(
+    temp_data_dir, monkeypatch,
+):
+    """批量源整体失败时不能把全市场静默降级到串行 Baostock。"""
+    monkeypatch.setattr(
+        "kan.data.kline_snapshot.fetch_recent_daily_bars",
+        lambda *_args, **_kwargs: (_ for _ in ()).throw(RuntimeError("batch unavailable")),
+    )
+
+    class UnexpectedScheduler:
+        def __init__(self, *args, **kwargs):
+            raise AssertionError("全市场批量失败后不应构造逐股 scheduler")
+
+    monkeypatch.setattr(fetcher, "KlineScheduler", UnexpectedScheduler)
+
+    from kan.infra.lifecycle import CollectingReporter, LifecycleKind, operation
+
+    reporter = CollectingReporter()
+    with operation("test market batch failure", reporter=reporter) as lifecycle:
+        results, errors = fetcher.fetch_batch(
+            ["600519", "920000"],
+            force=True,
+            market_wide=True,
+            lifecycle=lifecycle,
+        )
+
+    assert results == {}
+    assert set(errors) == {"600519", "920000"}
+    assert all("已停止耗时的串行降级" in message for message in errors.values())
+    assert any(event.kind is LifecycleKind.DEGRADED for event in reporter.events)
+
+
+def test_fetch_batch_market_wide_fresh_cache_is_fast_and_callback_safe(
+    temp_data_dir, raw_kline_df, monkeypatch,
+):
+    """全市场缓存命中不构造批量源，且用户回调失败不影响刷新结果。"""
+    cached = fetcher._normalize_kline(raw_kline_df, source="cache", symbol="600519")
+    cached.to_parquet(temp_data_dir / "600519.parquet")
+    monkeypatch.setattr(
+        trading_calendar,
+        "latest_trade_date",
+        lambda *_args, **_kwargs: cached["date"].iloc[-1],
+    )
+    monkeypatch.setattr(
+        "kan.data.kline_snapshot.fetch_recent_daily_bars",
+        lambda *_args, **_kwargs: (_ for _ in ()).throw(
+            AssertionError("新鲜缓存不应请求批量源")
+        ),
+    )
+
+    results, errors = fetcher.fetch_batch(
+        ["600519"],
+        days=1,
+        market_wide=True,
+        retain_frames=False,
+        on_progress=lambda *_args: (_ for _ in ()).throw(RuntimeError("callback")),
+    )
+
+    assert errors == {}
+    assert list(results) == ["600519"]
+    assert results["600519"].empty
+
+
+def test_fetch_batch_market_wide_can_release_success_frames_after_cache_write(
+    temp_data_dir, monkeypatch,
+):
+    """CLI 只计成功数时，不在内存中再保留全市场历史面板副本。"""
+    panel = pd.DataFrame({
+        "symbol": ["600519", "920000"],
+        "date": [date(2026, 7, 31), date(2026, 7, 31)],
+        "open": [100.0, 20.0],
+        "high": [101.0, 21.0],
+        "low": [99.0, 19.0],
+        "close": [100.5, 20.5],
+        "volume": [1000.0, 2000.0],
+        "amount": [10000.0, 20000.0],
+    })
+    monkeypatch.setattr(
+        "kan.data.kline_snapshot.fetch_recent_daily_bars",
+        lambda *_args, **_kwargs: panel,
+    )
+
+    results, errors = fetcher.fetch_batch(
+        ["600519", "920000"],
+        days=1,
+        force=True,
+        market_wide=True,
+        retain_frames=False,
+    )
+
+    assert errors == {}
+    assert set(results) == {"600519", "920000"}
+    assert all(frame.empty for frame in results.values())
+    assert (temp_data_dir / "600519.parquet").exists()
+    assert (temp_data_dir / "920000.parquet").exists()
+
+
 # --- get_cached 补缺失列 ---
 
 

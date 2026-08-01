@@ -597,7 +597,7 @@ def test_compare_api_batches_enrichment_and_fetches_only_missing_cache(monkeypat
     response = _client().post(
         "/api/compare",
         headers={"X-Kan-Web": "1"},
-        json={"codes": ["600519", "000858"]},
+        json={"codes": ["sh600519", "000858.SZ"]},
     )
 
     assert response.status_code == 200
@@ -608,7 +608,13 @@ def test_compare_api_batches_enrichment_and_fetches_only_missing_cache(monkeypat
 
 @pytest.mark.parametrize(
     "codes",
-    [None, ["600519"], ["600519", "bad"], ["600519", "600519"]],
+    [
+        None,
+        ["600519"],
+        ["600519", "bad"],
+        ["600519", "600519"],
+        ["sh600519", "600519.SH"],
+    ],
 )
 def test_compare_api_rejects_invalid_code_sets(codes) -> None:
     response = _client().post(

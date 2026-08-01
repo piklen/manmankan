@@ -114,7 +114,7 @@ class TestFindCli:
         assert invalid == []
 
     def test_find_codes_json_uses_cached_names_only(self, monkeypatch):
-        from kan.cli.find_cmds import _resolve_code_pairs_or_exit_json
+        from kan.cli.find_io import _resolve_code_pairs_or_exit_json
         from kan.storage import export, watchlist
 
         def fail_preload():

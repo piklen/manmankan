@@ -44,6 +44,7 @@ def test_find_page_contains_disclaimer_and_cli_area() -> None:
     assert 'aria-label="题材名称"' in response.text
     assert 'aria-live="polite" x-text="message"' in response.text
     assert 'x-show="message"' not in response.text
+    assert response.text.count('name="find-match-mode"') == 2
 
 
 def test_api_find_returns_web_shape(monkeypatch) -> None:
@@ -166,6 +167,36 @@ def test_api_find_preserves_numeric_zero_threshold(monkeypatch) -> None:
     condition = captured["request"].conditions.moneyflow_daily_filters[0]
     assert condition.value == 0
     assert "--moneyflow-daily gt:0" in response.json()["command"]
+
+
+def test_full_market_find_marks_watchlist_members_from_any_group(monkeypatch) -> None:
+    """全市场结果中的自选标记覆盖非默认分组。"""
+    from kan.core.cross_section import CrossSectionRow
+    from kan.service.find_service import FindCrossSectionResult
+    from kan.web.find_adapter import _serialize_cross_section_result
+
+    row = CrossSectionRow("920000", "安徽凤凰", None, None)
+    triggered = (TriggeredFilter("pe", "lt:30", 20.0),)
+    result = FindCrossSectionResult(
+        ctx=SimpleNamespace(pool_size=1, data_cutoff=date(2026, 7, 31), stale=False),
+        matched=[(row, triggered)],
+        limited=[(row, triggered)],
+        query_time="2026-08-01T10:00:00",
+        filters=[],
+        included_dimensions=set(),
+        compact_dimensions=set(),
+    )
+    monkeypatch.setattr(
+        "kan.web.find_adapter.watchlist.load_grouped_watchlist",
+        lambda: SimpleNamespace(groups={
+            "自选": [],
+            "北交所观察": [Stock(symbol="920000", name="安徽凤凰", added_at=date(2026, 1, 1))],
+        }),
+    )
+
+    payload = _serialize_cross_section_result(result, command="kan find --all --pe lt:30")
+
+    assert payload["rows"][0]["in_watchlist"] is True
 
 
 def test_api_find_rejects_unsupported_full_market_filter() -> None:
