@@ -1,3 +1,5 @@
+# 自动依赖 PR 已停用；依赖升级由人工发起并完成受影响链路验证。
+# 保留配置是为了显式维持零配额，避免旧调度被重放。
 version: 2
 updates:
   - package-ecosystem: "uv"
@@ -5,7 +7,7 @@ updates:
     schedule:
       interval: "weekly"
       day: "monday"
-    open-pull-requests-limit: 5
+    open-pull-requests-limit: 0
     groups:
       python-dev-tools:
         patterns:
@@ -45,7 +47,7 @@ updates:
     schedule:
       interval: "weekly"
       day: "monday"
-    open-pull-requests-limit: 3
+    open-pull-requests-limit: 0
     groups:
       github-actions-non-major:
         patterns:
