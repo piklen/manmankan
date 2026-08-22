@@ -75,7 +75,7 @@ def test_no_args_shows_short_retail_start_instead_of_full_reference() -> None:
     result = runner.invoke(app, [])
 
     assert result.exit_code == 0
-    assert "慢慢看 · 从今天开始" in result.stdout
+    assert "慢慢看 · 从一条明确规则开始" in result.stdout
     assert "kan web" in result.stdout
     assert "数据保存在本机" in result.stdout
     assert "条件筛选" not in result.stdout

@@ -421,6 +421,11 @@ function Builder({
           />
         </div>
         <div className="condition-list">
+          {conditions.length === 0 ? (
+            <div className="condition-list__empty">
+              还没有条件。添加一条并确认阈值，或只选择需要的排除规则。
+            </div>
+          ) : null}
           {conditions.map((condition, index) => (
             <ConditionEditor
               key={`${index}-${condition.type}`}
@@ -907,6 +912,9 @@ export function ScreenWorkbench() {
     versionsQuery.data?.[0]?.version ??
     null;
   const busy = saveMutation.isPending || runMutation.isPending;
+  const hasRule = Boolean(
+    spec.conditions?.length || spec.exclude_st || spec.exclude_star || spec.exclude_bj,
+  );
 
   const openScreen = (saved: SavedScreen) => {
     setActiveId(saved.screen_id);
@@ -927,10 +935,14 @@ export function ScreenWorkbench() {
         actions={
           <>
             {notice ? <span className="notice-pill">{notice}</span> : null}
-            <Button variant="secondary" onClick={() => saveMutation.mutate()} disabled={busy}>
+            <Button
+              variant="secondary"
+              onClick={() => saveMutation.mutate()}
+              disabled={busy || !hasRule}
+            >
               <Save size={16} /> 保存规则
             </Button>
-            <Button onClick={() => runMutation.mutate()} disabled={busy}>
+            <Button onClick={() => runMutation.mutate()} disabled={busy || !hasRule}>
               <Play size={16} fill="currentColor" />
               {runMutation.isPending ? "正在运行" : "保存并运行"}
             </Button>

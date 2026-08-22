@@ -1,8 +1,24 @@
 # MCP 接入
 
-`manmankan` 提供本地 MCP server，让 AI 客户端直接调用同一套 CLI / JSON 数据契约。当前支持 stdio 和本机 Streamable HTTP 两种 transport。MCP 只负责把结构化行情数据交给 agent，不提供买卖动作、评级、目标价或策略结论。
+`manmankan` 提供本地 MCP server，让 AI 客户端调用同一套 Python application service 与既有 CLI / JSON 数据契约。当前支持 stdio 和本机 Streamable HTTP 两种 transport。MCP 只负责整理 typed Screen、执行确定性查询和返回证据，不提供买卖动作、评级、目标价或策略结论。
 
 MCP `tools/list` 会返回每个工具的 `inputSchema` 和 `outputSchema`。`tools/call` 保留兼容旧客户端的 text content；当 CLI 输出是 JSON object 时，同时返回 `structuredContent`，客户端可以直接校验和读取结构，不需要再从文本里二次解析 JSON。
+
+## Screen 生命周期 tools
+
+vNext 新增五个不经过 shell/CLI 的复合工具：
+
+| Tool | 输入/输出 | 行为边界 |
+|---|---|---|
+| `kan_screen_parse` | `ScreenParseInput → ScreenParseResult` | 只识别明确字段、比较符、数值、股票池和排除项；未知文字进入 `ignored_text` |
+| `kan_screen_plan` | `ScreenPlanInput → ScreenPlan` | 返回 canonical hash、执行路径、数据维度、来源、频率、限制和 `executable`，不取数 |
+| `kan_screen_run` | `ScreenRunInput → ScreenRun` | 按 typed spec 或已保存 Screen 调 application service；可选择是否持久化 ad-hoc run |
+| `kan_screen_get` | `ScreenGetInput → ScreenArtifact` | 按 ID 获取已保存 Screen 或不可变 ScreenRun |
+| `kan_screen_explain` | `ScreenExplainInput → ScreenExplanation` | 只用持久运行中的阈值、实际值、日期、来源、coverage 和 diff 解释 |
+
+示例意图 `600519 000858 180日位置<30 pe<35 排除ST` 可以自动形成可执行 ScreenSpec。`低估、强势、近期` 等没有显式定义的文字不会被偷偷换成阈值；agent 应先展示 `ignored_text / errors / executable`，再补充明确条件。
+
+完整领域说明见 [`selection-workbench.md`](selection-workbench.md)。
 
 ## 快速路径
 
@@ -134,6 +150,8 @@ MCP 工具返回的数据仍然遵守 CLI / JSON 契约：
 - 保留 `disclaimer`。
 - 读取 `data_cutoff` / `fetched_at`，不要假设数据实时。
 - 用 `data_availability` 区分未请求、缺数据和当前模式不支持。
+- 对 Screen 先调用 `kan_screen_plan`；只有 `executable=true` 才运行，不能忽略 `unsupported_filters` 或 `warnings`。
+- 解释 ScreenRun 时只引用已返回的 evidence；不得补造不存在的来源、日期、阈值或实际值。
 - 把结果解释为研究输入，不输出买卖建议、预测、评级或策略结论。
 
 `kan_screen_then_hydrate` 是复合 MCP tool：用用户显式 filter 做一次 `find`，并在同一次调用里按 `hydrate_fields` 补字段。默认字段是 `@core,@valuation,@moneyflow,@technical`。它只减少 tool 往返，不会添加默认策略、评分、排名结论或买卖建议。

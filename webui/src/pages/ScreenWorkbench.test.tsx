@@ -98,9 +98,11 @@ describe("ScreenWorkbench", () => {
     renderWorkbench();
 
     expect(await screen.findByText("把选股变成一条可复跑的研究流水线")).toBeInTheDocument();
-    expect(screen.getAllByLabelText("筛选指标")).toHaveLength(1);
+    expect(screen.queryAllByLabelText("筛选指标")).toHaveLength(0);
+    expect(screen.getByRole("button", { name: "保存并运行" })).toBeDisabled();
     fireEvent.click(screen.getByRole("button", { name: "添加条件" }));
-    expect(screen.getAllByLabelText("筛选指标")).toHaveLength(2);
+    expect(screen.getAllByLabelText("筛选指标")).toHaveLength(1);
+    expect(screen.getByRole("button", { name: "保存并运行" })).toBeEnabled();
   });
 
   it("saves, starts a persistent job, and renders its auditable result", async () => {
@@ -122,6 +124,7 @@ describe("ScreenWorkbench", () => {
     ]);
 
     renderWorkbench();
+    fireEvent.click(await screen.findByRole("button", { name: "添加条件" }));
     fireEvent.click(await screen.findByRole("button", { name: "保存并运行" }));
 
     await waitFor(() => expect(api.startScreenJob).toHaveBeenCalledWith({

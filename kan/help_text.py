@@ -15,10 +15,20 @@ def root_help_text() -> str:
     return f"""[bold]慢慢看 · 命令速记[/bold]
 
 [bold cyan]普通用户先从这里开始[/bold cyan]
-  kan web                   打开本地观察台：今日概览 / 自选 / 持仓 / 找股票
+  kan web                   打开选股工作台：规则 / 运行 / 候选 / 对比 / 数据
   kan daily                 在终端查看一日事实概览
   kan guide                 只看最常用的下一步
   kan help                  查看这份完整命令表
+
+[bold cyan]可复跑选股规则[/bold cyan]
+  kan screen filters                    查看 27 类条件与数据边界
+  kan screen save screen.json           保存规则；内容变化时追加版本
+  kan screen run <screen_id>             运行并保存不可变 ScreenRun
+  kan screen versions <screen_id>        查看规则版本
+  kan screen restore <screen_id> 1       把历史规则恢复为新版本
+  kan screen runs <screen_id>            查看运行历史
+  kan screen show-run <run_id>           查看结果、覆盖率与逐条件证据
+  kan workspace status                  查看 SQLite / JSON 状态后端
 
 [bold cyan]自选股管理[/bold cyan]
   kan add 600519 000858       添加自选股（代码）
@@ -161,8 +171,8 @@ def root_help_text() -> str:
   kan config unset tushare-token              清凭证
   kan status                                  本地数据状态（缓存/新鲜度/凭证/熔断 · 不联网）
 
-[bold cyan]本地看盘台 (Web)[/bold cyan]
-  kan web                   浏览器打开本地看盘台（数据表 / 位置热力图 / 持仓 / 筛选）
+[bold cyan]本地选股工作台 (Web)[/bold cyan]
+  kan web                   浏览器打开 Screen / 候选 / 对比 / 研究 / 数据 / 持仓
   kan web --port 8876 --no-open  指定端口 · 不自动开浏览器（仅监听本机回环）
 
 [bold cyan]版本管理[/bold cyan]
@@ -198,9 +208,10 @@ def print_root_help() -> None:
 
 def start_help_text() -> str:
     """无参数启动时只展示普通散户的最短路径。"""
-    return """[bold]慢慢看 · 从今天开始[/bold]
+    return """[bold]慢慢看 · 从一条明确规则开始[/bold]
 
-  kan web       打开本地观察台（推荐）
+  kan web       打开本地选股研究工作台
+  kan screen    查看可复跑 Screen 命令
   kan daily     在终端看一日事实概览
   kan guide     按目的查看下一步
   kan help      查看完整命令表

@@ -34,17 +34,12 @@ describe("API client", () => {
     expect(headers.get("Content-Type")).toBe("application/json");
   });
 
-  it("keeps a fully explicit default ScreenSpec", () => {
+  it("starts without a hidden default strategy", () => {
     const spec = defaultScreenSpec();
 
     expect(spec.universe?.kind).toBe("watchlist");
-    expect(spec.conditions).toHaveLength(1);
-    expect(spec.conditions?.[0]).toMatchObject({
-      type: "pos",
-      period: 180,
-      operator: "lt",
-      null_policy: "exclude",
-    });
-    expect(spec.sort?.[0]?.field_id).toBe("position.180d");
+    expect(spec.conditions).toHaveLength(0);
+    expect(spec.exclude_st).toBe(false);
+    expect(spec.sort).toHaveLength(0);
   });
 });

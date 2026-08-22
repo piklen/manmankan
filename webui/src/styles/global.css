@@ -912,6 +912,17 @@ input[type="checkbox"] {
   margin-bottom: 10px;
 }
 
+.condition-list__empty {
+  padding: 18px;
+  color: var(--ink-soft);
+  font-size: 12px;
+  line-height: 1.6;
+  text-align: center;
+  background: var(--surface-soft);
+  border: 1px dashed var(--line-strong);
+  border-radius: 12px;
+}
+
 .condition-row {
   position: relative;
   display: grid;

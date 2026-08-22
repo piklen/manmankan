@@ -12,6 +12,7 @@
 git clone https://github.com/piklen/manmankan.git
 cd manmankan
 uv sync
+npm --prefix webui ci
 
 # 激活 pre-commit hook (隐私词扫描 · 防 PII 泄漏)
 git config core.hooksPath .githooks
@@ -25,6 +26,9 @@ git config core.hooksPath .githooks
 ```bash
 uv run pytest
 uv run pytest --cov=kan          # 带覆盖率
+npm --prefix webui run check     # OpenAPI 生成 + TypeScript
+npm --prefix webui test
+npm --prefix webui run build     # 输出到 kan/web/spa
 ```
 
 ## 适合先做的小改动

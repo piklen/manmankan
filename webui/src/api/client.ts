@@ -257,20 +257,11 @@ export const defaultScreenSpec = (): ScreenSpec => ({
     freshness_policy: "allow_stale",
   },
   match_mode: "all",
-  conditions: [
-    {
-      type: "pos",
-      operator: "lt",
-      value: 30,
-      period: 180,
-      level: null,
-      null_policy: "exclude",
-    },
-  ],
-  exclude_st: true,
+  conditions: [],
+  exclude_st: false,
   exclude_star: false,
   exclude_bj: false,
-  sort: [{ field_id: "position.180d", direction: "asc", nulls: "last" }],
+  sort: [],
   columns: [
     "symbol",
     "name",

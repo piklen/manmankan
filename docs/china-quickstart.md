@@ -1,6 +1,6 @@
 # 中国用户快速开始
 
-这份文档首先面向普通 A 股用户:目标是在国内常见网络环境下打开本地观察台,完成自选、持仓和每日查看。CLI、JSON、AI / MCP 接入放在后续进阶章节。
+这份文档首先面向普通 A 股用户：目标是在国内常见网络环境下打开本地选股研究工作台，完成规则运行、候选复看、数据更新和持仓查看。CLI、JSON、AI / MCP 接入放在后续进阶章节。
 
 `manmankan` 是本地工具:不需要 manmankan 账号,不向 manmankan 服务上传自选和持仓,不做云同步或遥测。查询行情时会向所选数据源发送股票代码;配置 TuShare 时,token 只发送到你配置的数据源。持仓成本、股数和现金不会发送。工具只提供行情数据坐标和用户显式规则命中结果,不提供买卖建议、评级、目标价或涨跌预测。
 
@@ -11,20 +11,23 @@ uv tool install manmankan
 kan web
 ```
 
-浏览器会打开只监听本机的观察台。在“今日”添加自选,在“我的持仓”录入现金和持仓,点击“更新数据”后确认当前截止日是否达到正常应截止日。
+浏览器会打开只监听本机的 Screen 工作台。先选择自选、持仓、全市场、行业、题材或自定义代码池，再添加客观条件并点击“保存并运行”；结果右侧可核对实际值、阈值、来源和数据日。把需要继续核对的对象加入候选池，或建立 3–10 股对比组。
 
-如果浏览器没有自动打开,请复制终端刚打印的完整地址。地址带有本次启动随机生成的会话凭证,站内页面会一直保留该参数;不要把完整地址发给别人,直接手输 `127.0.0.1` 也不会绕过保护。首次更新会下载并缓存日 K,可能需要几十秒;后续同日运行会明显更快。
+如果浏览器没有自动打开，请复制终端刚打印的完整地址。地址带有本次启动随机生成的会话凭证，站内页面会保留访问状态；不要把完整地址发给别人，直接手输 `127.0.0.1` 也不会绕过保护。“市场与数据”页可更新默认池或全市场，进度和部分失败会写入 SQLite；首次更新可能需要数十秒到数分钟，后续同日运行会复用缓存。
 
 开发者或自动化脚本要验证安装和 JSON 契约,再运行:
 
 ```bash
 kan --version
 KAN_NO_UPDATE_CHECK=1 kan help
+KAN_NO_UPDATE_CHECK=1 kan screen filters --format json
 NO_COLOR=1 KAN_NO_UPDATE_CHECK=1 kan find --codes 600519,000858 --format json --dry-run
 KAN_NO_UPDATE_CHECK=1 kan scan --codes 600519,000858 --periods 5,20,60,180 --format json
 ```
 
-`kan find --dry-run` 只验证安装、入口、JSON envelope、免责声明、退出码和查询计划,不拉行情。`kan scan` 才验证真实日 K 数据路径。不想打开浏览器时,`KAN_NO_UPDATE_CHECK=1 kan daily` 可以在终端输出一日事实概览。
+`kan screen filters` 发现新版稳定条件契约；`kan find --dry-run` 只验证兼容入口、JSON envelope、免责声明、退出码和查询计划，不拉行情；`kan scan` 才验证真实日 K 数据路径。完整 Screen CLI 见 [`selection-workbench.md`](selection-workbench.md)。
+
+旧版本已有 `config.json / watchlist.json / positions.json` 时，新版会在接管前保留 `.vnext-backup`。可用 `kan workspace status` 查看状态，完整回滚手册见 [`workspace-migration.md`](workspace-migration.md)。
 
 ## 2. Windows / PowerShell 首跑样本
 

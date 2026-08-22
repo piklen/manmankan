@@ -1,7 +1,7 @@
 """选股条件与结果字段目录。
 
 目录以核心 `FILTER_SPECS` 为存在性与数据来源真相，补充 UI/AI 所需的中文标签、
-单位和输入形状。旧 Web、新 SPA、CLI schema 和 MCP 都从这里读取。
+单位和输入形状。React SPA、CLI schema、HTTP 与 MCP 都从这里读取。
 """
 
 from __future__ import annotations
@@ -123,4 +123,3 @@ def assert_catalog_complete() -> None:
 
 
 assert_catalog_complete()
-
