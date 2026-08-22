@@ -310,3 +310,9 @@ class CompareSet(StrictModel):
     symbols: list[str] = Field(min_length=3, max_length=10)
     created_at: datetime
     updated_at: datetime
+
+    @model_validator(mode="after")
+    def require_unique_symbols(self) -> CompareSet:
+        if len(set(self.symbols)) != len(self.symbols):
+            raise ValueError("对比组合不能包含重复股票")
+        return self

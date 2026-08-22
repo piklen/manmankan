@@ -8,6 +8,8 @@ from fastapi import FastAPI, Request
 from fastapi.responses import JSONResponse, PlainTextResponse, Response
 from fastapi.staticfiles import StaticFiles
 
+from kan import __version__
+from kan.web.api_v1 import router as api_v1_router
 from kan.web.routes_api import router as api_router
 from kan.web.routes_pages import router as pages_router
 from kan.web.security import (
@@ -25,15 +27,17 @@ def create_app(*, session_token: str | None = None) -> FastAPI:
     """创建本地 Web 应用。"""
     active_session_token = session_token or secrets.token_urlsafe(32)
     app = FastAPI(
-        title="manmankan local web",
+        title="ManManKan Local API",
+        version=__version__,
         docs_url=None,
         redoc_url=None,
-        openapi_url=None,
+        openapi_url="/api/v1/openapi.json",
     )
     app.state.kan_session_token = active_session_token
     app.mount("/static", StaticFiles(directory=str(STATIC_DIR)), name="static")
-    app.include_router(pages_router)
-    app.include_router(api_router)
+    app.include_router(pages_router, include_in_schema=False)
+    app.include_router(api_router, include_in_schema=False)
+    app.include_router(api_v1_router)
 
     @app.middleware("http")
     async def local_access_guard(request: Request, call_next):

@@ -14,10 +14,28 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from typing import Any
 from urllib.parse import urlsplit
 
+from pydantic import BaseModel
 from typer.testing import CliRunner
 
 from kan import __version__
+from kan.domain.screen import ScreenRun
 from kan.infra.log import redact_text
+from kan.service.screen_ai import (
+    ScreenArtifact,
+    ScreenExplainInput,
+    ScreenExplanation,
+    ScreenGetInput,
+    ScreenParseInput,
+    ScreenParseResult,
+    ScreenPlan,
+    ScreenPlanInput,
+    ScreenRunInput,
+    explain_run,
+    get_artifact,
+    parse_screen_text,
+    plan_screen,
+    run_from_input,
+)
 
 SERVER_NAME = "manmankan"
 SERVER_VERSION = __version__
@@ -203,6 +221,37 @@ def _kan_screen_then_hydrate(payload: dict[str, Any]) -> dict[str, Any]:
     )
     delegated.pop("hydrate_fields", None)
     return _kan_find(delegated)
+
+
+def _model_result(value: BaseModel) -> dict[str, Any]:
+    """把直接 application-service 结果适配为既有 MCP renderer 输入。"""
+    return {
+        "exit_code": 0,
+        "stdout": value.model_dump_json(),
+        "stderr": "",
+    }
+
+
+def _kan_screen_parse(payload: dict[str, Any]) -> dict[str, Any]:
+    return _model_result(parse_screen_text(ScreenParseInput.model_validate(payload)))
+
+
+def _kan_screen_plan(payload: dict[str, Any]) -> dict[str, Any]:
+    request = ScreenPlanInput.model_validate(payload)
+    return _model_result(plan_screen(request.spec))
+
+
+def _kan_screen_run(payload: dict[str, Any]) -> dict[str, Any]:
+    return _model_result(run_from_input(ScreenRunInput.model_validate(payload)))
+
+
+def _kan_screen_get(payload: dict[str, Any]) -> dict[str, Any]:
+    return _model_result(get_artifact(ScreenGetInput.model_validate(payload)))
+
+
+def _kan_screen_explain(payload: dict[str, Any]) -> dict[str, Any]:
+    request = ScreenExplainInput.model_validate(payload)
+    return _model_result(explain_run(request.run_id))
 
 
 def _kan_hold(payload: dict[str, Any]) -> dict[str, Any]:
@@ -420,6 +469,53 @@ TOOLS = {
         },
         handler=_kan_index,
         output_schema=DEFAULT_OUTPUT_SCHEMA,
+    ),
+    "kan_screen_parse": ToolSpec(
+        name="kan_screen_parse",
+        description=(
+            "Parse explicit stock-screen threshold expressions into a typed ScreenSpec; "
+            "unknown text is surfaced and no thresholds are invented."
+        ),
+        input_schema=ScreenParseInput.model_json_schema(),
+        handler=_kan_screen_parse,
+        output_schema=ScreenParseResult.model_json_schema(),
+    ),
+    "kan_screen_plan": ToolSpec(
+        name="kan_screen_plan",
+        description=(
+            "Validate a ScreenSpec and return its engine path, data dependencies, "
+            "limitations, and canonical hash without executing it."
+        ),
+        input_schema=ScreenPlanInput.model_json_schema(),
+        handler=_kan_screen_plan,
+        output_schema=ScreenPlan.model_json_schema(),
+    ),
+    "kan_screen_run": ToolSpec(
+        name="kan_screen_run",
+        description=(
+            "Execute either a typed ScreenSpec or a saved Screen through the shared "
+            "ManManKan application service and return an auditable immutable run."
+        ),
+        input_schema=ScreenRunInput.model_json_schema(),
+        handler=_kan_screen_run,
+        output_schema=ScreenRun.model_json_schema(),
+    ),
+    "kan_screen_get": ToolSpec(
+        name="kan_screen_get",
+        description="Load one saved Screen or immutable ScreenRun by ID.",
+        input_schema=ScreenGetInput.model_json_schema(),
+        handler=_kan_screen_get,
+        output_schema=ScreenArtifact.model_json_schema(),
+    ),
+    "kan_screen_explain": ToolSpec(
+        name="kan_screen_explain",
+        description=(
+            "Explain why each row matched a persisted ScreenRun using stored facts, "
+            "thresholds, dates, coverage, and run-to-run changes."
+        ),
+        input_schema=ScreenExplainInput.model_json_schema(),
+        handler=_kan_screen_explain,
+        output_schema=ScreenExplanation.model_json_schema(),
     ),
 }
 

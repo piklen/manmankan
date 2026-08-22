@@ -563,6 +563,14 @@ def list_compare_sets() -> list[CompareSet]:
         ]
 
 
+def delete_compare_set(compare_id: str) -> bool:
+    with transaction() as conn:
+        cursor = conn.execute(
+            "DELETE FROM compare_sets WHERE compare_id = ?", (compare_id,)
+        )
+        return cursor.rowcount > 0
+
+
 def migration_completed(name: str) -> bool:
     with contextlib.closing(_connect()) as conn:
         return conn.execute(

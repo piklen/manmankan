@@ -102,5 +102,7 @@ def test_run_candidate_and_compare_round_trip(isolated_workspace_db: Path) -> No
     assert workspace_db.latest_run_for_screen(saved.screen_id) == run
     assert workspace_db.list_candidate_lists()[0].candidates == [candidate]
     assert workspace_db.list_compare_sets() == [compare]
+    assert workspace_db.delete_compare_set(compare.compare_id) is True
+    assert workspace_db.delete_compare_set(compare.compare_id) is False
     assert workspace_db.remove_candidate(candidate.list_id, candidate.symbol) is True
     assert workspace_db.remove_candidate(candidate.list_id, candidate.symbol) is False
