@@ -2,9 +2,13 @@
 
 `kan find` 是用户主导的条件筛选器。规则必须由命令参数显式给出;工具只返回符合规则的数据,不提供评分、评级、目标价、买卖建议或策略 preset。
 
-## Web 适配契约
+## Web / Screen 适配契约
 
-本地观察台的 `POST /api/find` 是页面专用的扁平响应，不等同于下文 CLI JSON 契约。Web 条件清单从核心 `FILTER_SPECS` 生成，覆盖除独立“排除 ST”开关外的全部 27 类 filter，最多组合 12 条，支持 AND / OR、六种比较符和 2-360 日周期。全市场模式开放其中 23 类；ROE、股东户数、前十大流通集中度和北向持股比例需要逐股或报告期数据，只能用于其余五类候选池。服务端最多返回 10000 条命中结果，页面每次渲染 50 条并在浏览器内排序、分页；“本页加入自选”只作用于当前页。页面结果使用 `rows[].triggered_text: string[]` 保存可直接展示的中文条件说明，不返回 CLI 的结构化 `rows[].triggered_filters`；需要稳定的机器可读筛选审计时，应使用 `kan find --format json`。
+默认 React 工作台不再使用页面专属 `POST /api/find`，而是通过 `/api/v1` 提交严格 `ScreenSpec`，由 `screen_service` 翻译到同一个 find engine，并返回不可变 `ScreenRun`。旧 `/api/find` 只作为迁移期兼容路由保留，不进入 OpenAPI。
+
+Screen 条件清单仍从核心 `FILTER_SPECS` 生成，覆盖除独立“排除 ST”开关外的全部 27 类 filter，最多组合 12 条，支持 AND / OR、六种比较符和 2–360 日周期。全市场模式开放其中 23 类；ROE、股东户数、前十大流通集中度和北向持股比例需要逐股或报告期数据，只能用于其余股票池。Screen 额外提供版本、多键排序、结果字段、缺失策略、数据新鲜度、逐条件 evidence、运行哈希和相邻运行 diff。
+
+需要一次性 shell 查询时继续使用下文 `kan find`；需要保存和复跑时使用 [`selection-workbench.md`](selection-workbench.md) 中的 `kan screen` 或 `/api/v1`。
 
 ## JSON 输出
 

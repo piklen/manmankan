@@ -1133,17 +1133,17 @@ def test_info_cli_fetch_and_unavailable_errors(monkeypatch) -> None:
     assert "无数据" in unavailable.output
 
 
-def test_hold_page_unavailable_is_neutral(monkeypatch) -> None:
+def test_hold_api_unavailable_is_neutral(monkeypatch) -> None:
     monkeypatch.setattr(
-        "kan.web.routes_pages.build_hold_summary",
+        "kan.web.routes_api.build_hold_summary",
         lambda: (_ for _ in ()).throw(RuntimeError("hold down")),
     )
 
-    response = _client().get("/hold")
+    response = _client().get("/api/hold")
 
     assert response.status_code == 200
-    assert '"ok": false' in response.text
-    assert "\\u6301\\u4ed3\\u6570\\u636e\\u6682\\u4e0d\\u53ef\\u7528" in response.text
+    assert response.json()["ok"] is False
+    assert response.json()["error"] == "持仓数据不可用"
 
 
 def test_history_period_out_of_range_maps_to_400() -> None:

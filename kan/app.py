@@ -12,7 +12,7 @@ from kan import __version__
 
 app = typer.Typer(
     name="kan",
-    help="慢慢看 · 普通散户的本地 A 股观察台",
+    help="慢慢看 · 本地优先的 A 股选股研究工作台",
     invoke_without_command=True,
     # -h 作 --help short flag · Unix 通用约定 (F2 修)
     context_settings={"help_option_names": ["-h", "--help"]},
@@ -33,7 +33,7 @@ def main(
         typer.Option("--version", "-v", callback=version_callback, is_eager=True, help="显示版本号"),
     ] = None,
 ) -> None:
-    """慢慢看 · 先看今天发生了什么，再展开数据。"""
+    """慢慢看 · 把用户规则变成可复跑、可审计的研究事实。"""
     # 用 Click 解析结果判断"没敲子命令" · 不读进程全局 sys.argv：
     # MCP server(kan-mcp 进程)用 CliRunner 在进程内 invoke 子命令时,
     # sys.argv 恒为 ['kan-mcp'](长度 1),旧的 len(sys.argv)==1 会误判成

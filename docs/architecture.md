@@ -1,28 +1,27 @@
-# manmankan 架构愿景
+# manmankan 当前架构与演进边界
 
-> 撰写日期：2026-06-04 · 描述目标架构和设计原则，不等同于当前实现状态。
+> 当前实现 SOT · 2026-08-23。Screen 领域细节见 [`selection-workbench.md`](selection-workbench.md)。
 
 ---
 
-## 一、定位：一个事实层,两个产品出口
+## 一、定位：一个 Python 事实核心，五个产品入口
 
-manmankan 的底层仍是行情数据翻译层,但产品不再以 AI Agent 为中心组织。用户优先级是硬约束:
+manmankan 的底层仍是行情数据翻译层，但默认产品已经从“今日观察页”迁移为可复跑选股研究工作台。用户优先级是硬约束：
 
-1. **普通 A 股散户是唯一第一用户**:本地 Web 是默认产品入口,先回答今天发生了什么、数据是否可信、自己的股票处于什么位置。
-2. **AI / 开发者是第二用户**:CLI、JSON、Python API 与 MCP 是高级出口,机器契约继续保持稳定,但不决定普通用户的首屏和术语。
+1. **普通 A 股用户是第一用户**：本地 Web 默认完成 Screen → Run → Candidate → Compare → 复看 diff。
+2. **CLI / Python / HTTP / MCP 是同级适配器**：都执行同一个 Python application service，不复制筛选逻辑。
+3. **AI 是 typed contract 的消费者**：可以解析明确阈值、规划、运行和解释证据，不能成为指标或候选计算真相源。
 
-两个出口必须复用同一套 service/domain 事实,不得复制位置计算、数据新鲜度或持仓逻辑。
+所有入口必须复用同一套 domain/service 事实，不得复制位置计算、数据新鲜度、排序、证据或持仓逻辑。
 
 ```
 ┌─────────────────────────────────────────────────────────┐
-│             Layer 3: 产品出口                              │
-│  第一出口:本地 Web(今日 / 找股票 / 对比 / 持仓 / 数据设置)   │
-│  第二出口:CLI / JSON / Python API / MCP                    │
+│             Layer 3: 产品入口                              │
+│ React Web · Typer CLI · kan.api · FastAPI /api/v1 · MCP   │
 ├─────────────────────────────────────────────────────────┤
 │                 ★ Layer 2: 数据中间层 ★                    │
 │                     manmankan 在这里                      │
-│  筛选  ·  位置语义  ·  共振检测  ·  合规包装  ·  低 token   │
-│  输出:可复用的扫描 / 新鲜度 / 持仓 / 筛选结果                │
+│ ScreenSpec · ScreenRun · 证据 / diff · 候选 / 对比 · 持仓    │
 ├─────────────────────────────────────────────────────────┤
 │                 Layer 1: 数据基础设施                       │
 │  tushare / akshare / baostock / Wind / iFinD / ...       │
@@ -85,20 +84,27 @@ Protocol、provider 注册与责任链；市场级 `Source` 聚合及多市场�
 
 ## 三、产品出口设计
 
-### 3.1 普通用户消费(本地 Web)
+### 3.1 普通用户消费（React Web）
 
-- 默认入口是 `kan web`,不要求用户先学习命令、周期参数或筛选 DSL。
-- 今日页默认展示 30 / 60 / 180 日关键周期、数据截止日和上一份快照以来的变化。
-- 自选、持仓、现金和筛选都能在 Web 内完成,失败状态必须包含恢复动作。
-- 完整十周期表和高级等价 CLI 按需折叠,避免把工程能力直接铺到普通用户首屏。
+- 默认入口是 `kan web`，生产由 Python 同源托管预构建 SPA，不要求用户安装 Node 或运行第二个服务。
+- 首页是 Screen 工作台：保存/复制/版本化规则、运行、证据、历史与 diff 在一个闭环中完成。
+- 候选、对比、个股研究、市场数据、持仓和设置是独立页面，但都消费 `/api/v1` typed model。
+- 开发期 TypeScript 类型从 OpenAPI 生成；React 不重算指标，也不直接访问 provider 或 SQLite。
+- 旧 Jinja 模板和手写业务 JavaScript 已经删除；旧 `/api` 只作为暂时兼容层隐藏于 OpenAPI。
 
 ### 3.2 终端消费(CLI)
 
-- Rich 表格、颜色、emoji、对齐
-- `kan scan` 默认终端表格
-- `kan history` ASCII K 线图
+- `kan screen` 提供规则发现、保存、版本、恢复、执行与运行历史。
+- `kan find / scan / history` 等原命令继续兼容，适合一次性查询。
+- `--format json` 使用稳定 envelope，业务失败不泄漏 traceback。
 
-### 3.3 AI / 脚本消费(JSON)
+### 3.3 Python / HTTP 消费
+
+- `kan.api` 公开导出 Screen 类型和 application service；用户脚本不需要 import 内部 storage/service。
+- FastAPI 只在 `/api/v1` 暴露 OpenAPI；Pydantic 是请求/响应 SOT，生成 TypeScript 类型。
+- Web 写请求叠加本机会话、Host、Origin 和自定义 header 检查。
+
+### 3.4 AI / 脚本消费（JSON）
 
 所有数据查询命令（`scan` / `find` / `info` / `history` / `board rank` / `trend`）支持 `--format json`：
 
@@ -121,10 +127,11 @@ Protocol、provider 注册与责任链；市场级 `Source` 聚合及多市场�
 - `schema_version` 保证向后兼容——AI 可以根据版本号适配解析逻辑
 - 字段白名单 `--fields @core,@valuation` 让 AI 只要求需要的数据，节省 token
 
-### 3.4 Agent 消费(MCP + Skills.md)
+### 3.5 Agent 消费（MCP + Skills.md）
 
 - **Skills.md**：`skills/manmankan-skill.md` 是给 AI Agent 的能力清单——Agent 读到就知道所有命令、参数和典型用法
-- **MCP Server**：`kan mcp serve` 在 CLI 契约上提供 stdio MCP；`kan mcp http` 提供本机 Streamable HTTP endpoint；`kan mcp install` 负责注册到常见用户级客户端配置
+- **MCP Server**：`kan mcp serve` 提供 stdio；`kan mcp http` 提供本机 Streamable HTTP endpoint；`kan mcp install` 负责注册客户端。
+- **Screen tools**：`kan_screen_parse / plan / run / get / explain` 直接调用 Python service，不 shell 到 CLI，也不允许任意 SQL/Pandas。
 - **退出码语义**：0=成功，非 0=具体错误类别，Agent 不需要解析 stderr
 
 ---
@@ -132,7 +139,7 @@ Protocol、provider 注册与责任链；市场级 `Source` 聚合及多市场�
 ## 四、数据管道
 
 ```
-用户入口 (Web / CLI / MCP / API)
+用户入口 (React Web / CLI / Python / HTTP / MCP)
        │
        ▼
 ┌──────────────────┐
@@ -141,27 +148,30 @@ Protocol、provider 注册与责任链；市场级 `Source` 聚合及多市场�
          │
          ▼
 ┌──────────────────┐
-│  服务层 (Service) │  业务逻辑 · 筛选条件编译 · 合规注入
+│  服务层 (Service) │  Screen 编排 · 证据 · diff · 任务 · 兼容 find
 └────────┬─────────┘
          │
          ▼
 ┌──────────────────┐
-│  数据层 (Data)    │  Source 路由 · DataProvider 责任链 · 缓存管理
+│ 数据/状态层        │  provider 责任链 + Parquet · SQLite WAL repository
 └────────┬─────────┘
          │
          ▼
 ┌──────────────────┐
-│  渲染层 (Render)  │  终端表格 / JSON / Markdown
+│  适配输出          │  React JSON / 终端 / JSON / Markdown / MCP
 └──────────────────┘
 ```
 
 **关键设计决策**：
 
-- **入口适配层**(`kan/web/`、`kan/cli/`、`kan/mcp/`)只做交互、参数校验和序列化,不复制业务计算
-- **服务层**（`kan/service/`）承载所有出口复用的业务事实,核心逻辑不与 FastAPI、typer 或 MCP 耦合
+- **领域层**（`kan/domain/`）定义严格 `ScreenSpec / ScreenRun / CandidateList / CompareSet / WorkspaceJob`，未知字段 fail-fast。
+- **入口适配层**（`kan/web/`、`kan/cli/`、`kan/mcp/`、`kan/api.py`）只做交互、参数校验和序列化，不复制业务计算。
+- **服务层**（`kan/service/`）承载 Screen 编排、排序、证据、diff、AI plan 和任务，核心逻辑不与 FastAPI、Typer、React 或 MCP 耦合。
 - **数据层**（`kan/data/`）使用责任链模式——依次尝试多个 DataProvider，第一个成功即返回
 - **TuShare 兼容边界**:公开适配器只实现官方 TuShare 的请求与响应语义；用户配置的替代 endpoint 必须可替换地兼容该契约。仓库不加入某个中转服务专属的默认行数、分页或扩展字段逻辑；全市场响应会在缓存前做中立完整性校验，偏差作为数据契约错误暴露
 - **缓存层**（`kan/infra/`）基于 XDG 规范，增量更新策略
+- **状态层**（`kan/storage/workspace_db.py`）用 SQLite WAL 保存版本化/关系状态；配置、自选和持仓由可回滚 facade 接管；行情不迁入 SQLite。
+- **持久任务**：ScreenRun 和默认池/全市场刷新共用 `WorkspaceJob` 与 SSE；启动恢复把遗留运行态标为 `interrupted`。
 - **快照隔离**:CLI diff/history 与 Web 每日概览使用独立命名空间;Web 只在全部候选到达正常交易日时按行情截止日写入版本化快照
 - **本地 Web 安全边界**:只监听回环地址;每次启动签发随机会话,页面导航保留会话参数、API 使用会话请求头、SSE 使用会话参数;写请求继续叠加 Host / Origin / 自定义头检查
 - **渲染层**（`kan/render/`）终端和 JSON 走不同 code path，互不污染
@@ -171,13 +181,13 @@ Protocol、provider 注册与责任链；市场级 `Source` 聚合及多市场�
 ## 五、演进路线
 
 ```
-现在                         近期 (下一批)          中期                    远期
+现在                         近期                   中期                    远期
 ┌─────────────────┐    ┌─────────────────┐    ┌──────────────────┐    ┌──────────────────┐
-│ 本地 Web 日常闭环│    │ 首用与复看验证  │    │ + Source 接口抽象 │    │ 多市场支持       │
-│ CLI + JSON 输出  │ →  │ 错误恢复与可用性│ →  │ + 首个非A股Source│ →  │ 社区数据源生态   │
-│ 位置扫描 / 筛选  │    │ + JSON 兼容维护 │    │ + Hub 策展目录   │    │ "manmankan 协议" │
-│ 自选 / 持仓管理  │    │ + Skills.md同步 │    │ + DataProvider   │    │ 开放数据标准     │
-│ MCP stdio/http   │    │                  │    │                  │    │                  │
+│ Screen 工作台    │    │ 真实用户复看验证│    │ + 市场级 Source  │    │ 多市场支持       │
+│ React + /api/v1  │ →  │ 规则模板导入导出│ →  │ + 首个非A股Source│ →  │ 社区数据源生态   │
+│ CLI/Python/MCP   │    │ 证据回放能力增强│    │ + point-in-time  │    │ 开放数据标准     │
+│ SQLite 持久状态  │    │ 契约兼容维护    │    │   数据边界       │    │                  │
+│ Parquet 行情缓存 │    │                  │    │                  │    │                  │
 └─────────────────┘    └─────────────────┘    └──────────────────┘    └──────────────────┘
 ```
 
@@ -193,7 +203,7 @@ Protocol、provider 注册与责任链；市场级 `Source` 聚合及多市场�
 
 3. **渐进披露**：普通用户默认只看关键事实,完整周期和高级参数按需展开；AI 默认输出不超过上下文窗口的合理比例。
 
-4. **本地优先**：零云依赖、零遥测；当前用户状态使用 JSON + 文件锁，行情与截面缓存使用 Parquet。普通用户无需账号,AI 也不依赖外部服务即可消费数据。
+4. **本地优先**：零云依赖、零遥测；工作台关系状态使用 SQLite WAL，行情与截面缓存使用 Parquet，原 JSON 状态有可验证备份和回滚。普通用户无需 manmankan 账号。
 
 5. **合规红线硬编码**：输出不含"推荐""看好""低估""目标价"等词。免责声明自动注入，不由命令调用者选择。
 
@@ -201,4 +211,4 @@ Protocol、provider 注册与责任链；市场级 `Source` 聚合及多市场�
 
 ---
 
-*最后更新：2026-07-21 · 与 `README.md` / `roadmap.md` / `compliance.md` 互为补充*
+*最后更新：2026-08-23 · 与 `README.md` / `selection-workbench.md` / `roadmap.md` / `compliance.md` 互为补充*

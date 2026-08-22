@@ -14,7 +14,17 @@
 设计原则:
 - 本模块是**公开 contract** · 一旦添加的符号在下个版本不应被 breaking 变更
 - 内部模块布局可继续重构 · 用户脚本不受影响
-- 不引入新概念 · 只是 re-export · 文档汇集于此
+- StockSet verb 与 vNext Screen application service 都只在这里暴露稳定入口
+
+vNext 可复跑选股规则:
+
+    >>> from kan.api import ScreenSpec, save_screen, run_screen
+    >>> spec = ScreenSpec(name="排除 ST", exclude_st=True)
+    >>> saved = save_screen(spec)
+    >>> result = run_screen(saved.spec, screen_id=saved.screen_id,
+    ...                     screen_version=saved.current_version)
+    >>> result.spec_hash == saved.spec_hash
+    True
 
 四类股票集合 (StockSet):
 - WatchlistSet:   自选股 (本地 `kan add` 管理的列表)
@@ -187,32 +197,81 @@ from kan.data.theme_constituents import (
 from kan.data.theme_constituents import (
     default_theme_constituent_chain as theme_constituent_chain,
 )
+from kan.domain.screen import (
+    CandidateList,
+    CompareSet,
+    SavedScreen,
+    ScreenRun,
+    ScreenSpec,
+)
+from kan.service.screen_ai import (
+    ScreenExplainInput,
+    ScreenParseInput,
+    ScreenPlanInput,
+    explain_run,
+    parse_screen_text,
+    plan_screen,
+)
+from kan.service.screen_service import (
+    add_candidate,
+    filter_catalog,
+    get_run,
+    get_screen,
+    list_candidate_lists,
+    list_compare_sets,
+    list_runs,
+    list_screens,
+    remove_candidate,
+    run_screen,
+    save_compare_set,
+    save_screen,
+    screen_schema,
+)
 
 __all__ = [
-    # StockSet
+    "CandidateList",
+    "CompareSet",
     "HoldingsSet",
     "HotRankSet",
     "IndustrySet",
-    # 背景: 数据源扩展 Protocol (用户写自定义源时用作 typing 提示)
     "KlineSource",
+    "SavedScreen",
+    "ScreenExplainInput",
+    "ScreenParseInput",
+    "ScreenPlanInput",
+    "ScreenRun",
+    "ScreenSpec",
     "StockSet",
     "ThemeConstituentSource",
     "ThemeSet",
     "WatchlistHoldingsSet",
     "WatchlistSet",
-    # 背景: chain inspect
+    "add_candidate",
     "clear_user_kline_sources",
     "clear_user_theme_constituent_sources",
-    # verbs
+    "explain_run",
     "fetch",
+    "filter_catalog",
     "from_flags",
+    "get_run",
+    "get_screen",
     "high",
     "kline_chain",
+    "list_candidate_lists",
+    "list_compare_sets",
+    "list_runs",
+    "list_screens",
     "low",
-    # 背景: register 自定义数据源
+    "parse_screen_text",
+    "plan_screen",
     "register_kline_source",
     "register_theme_constituent_source",
+    "remove_candidate",
+    "run_screen",
+    "save_compare_set",
+    "save_screen",
     "scan",
+    "screen_schema",
     "theme_constituent_chain",
     "trend",
 ]

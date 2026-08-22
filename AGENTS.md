@@ -4,10 +4,11 @@
 
 This file applies to the whole `manmankan` repository.
 
-`manmankan` is a local-first China A-share observation tool. Ordinary retail investors
-are the only primary users: the local Web experience owns first-run, daily review,
-watchlists, holdings, screening, and data recovery. AI agents and developers are secondary
-users served through stable CLI, JSON, Python API, and MCP contracts.
+`manmankan` is a local-first China A-share screening and research workbench. Ordinary
+retail users are the primary users: the local Web experience owns first-run, versioned
+Screens, auditable runs, candidate research, comparisons, holdings, and data recovery.
+AI agents and developers are secondary users served through the same stable CLI, JSON,
+Python API, typed HTTP, and MCP contracts.
 
 The tool stops at data facts. It must not produce buy/sell actions, ratings, price
 targets, stock picks, strategy conclusions, or hosted advisory workflows.
@@ -17,6 +18,8 @@ targets, stock picks, strategy conclusions, or hosted advisory workflows.
 - For ordinary-user first-run and daily workflows, read `README.md` and `docs/china-quickstart.md`.
 - For using the CLI as an AI agent, read `skills/manmankan-skill.md` and `docs/ai-quickstart.md`.
 - For JSON contracts, read `docs/find.md`.
+- For the vNext domain and adapter contract, read `docs/selection-workbench.md`.
+- For local-state migration and rollback, read `docs/workspace-migration.md`.
 - For compliance language, read `docs/compliance.md`.
 - For architecture direction, read `docs/architecture.md`.
 - For contribution rules, read `CONTRIBUTING.md`.
@@ -44,6 +47,10 @@ uv lock --check
 uv run ruff check kan/ tests/
 uv run mypy
 uv run pytest -q -m "not network and not tty"
+npm --prefix webui ci
+npm --prefix webui run check
+npm --prefix webui test
+npm --prefix webui run build
 bash scripts/check-privacy-leaks.sh
 ```
 
@@ -77,7 +84,8 @@ KAN_NO_UPDATE_CHECK=1 uv run kan mcp install --dry-run
 - `kan/cli/` owns argument parsing and user-facing command orchestration.
 - `kan/service/` owns reusable business logic shared by Web, CLI, MCP, and Python API.
 - `kan/data/` owns provider adapters and fallback chains.
-- `kan/storage/` owns XDG local files and export payloads.
+- `kan/storage/` owns the SQLite workspace repository, XDG market/cache files, migration,
+  rollback, and export payloads.
 - `kan/render/` owns terminal rendering only.
 - MCP tools should wrap CLI/service behavior; do not create a second business contract there.
 - Do not let an AI/developer feature displace the ordinary-user Web path or introduce

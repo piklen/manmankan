@@ -33,10 +33,12 @@ else:
         meta_cmds,
         move_export_cmds,
         scan_cmds,
+        screen_cmds,
         status_cmds,
         theme_cmds,
         trend_cmds,
         watchlist_cmds,
         web_cmds,
+        workspace_cmds,
     )
 from kan.cli.main import cli_main

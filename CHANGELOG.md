@@ -9,6 +9,34 @@ explicitly approves a larger bump.
 
 ## [Unreleased]
 
+## [0.0.6.9.34] - 2026-08-23
+
+### Added
+
+- 新增可复跑选股领域：版本化 `Screen`、不可变 `ScreenRun`、独立 `CandidateList` 和 3–10 股 `CompareSet`；运行固化规则/结果哈希、覆盖率、缺字段、逐条件证据、来源、数据日及相邻运行新增/移出/排名变化。
+- 新增 `kan screen` 规则发现、保存、版本、恢复、运行和运行历史 CLI，并从 `kan.api` 暴露同一 Python application service。
+- 新增 `/api/v1` Pydantic/OpenAPI 契约与生成的 TypeScript 类型；MCP 新增 `kan_screen_parse / plan / run / get / explain`，直接调用 Python service，不通过 shell，也不让模型重算金融事实。
+- 新增 SQLite WAL 工作台 repository 和 `kan workspace status / migrate / rollback`；旧配置、自选、持仓和现金迁移前保留 `.vnext-backup`，重复迁移幂等，回滚先导出迁移后的当前值。
+- 新增 ScreenRun 与默认池/全市场行情刷新持久任务、SSE、`partial` 终态、进程中断恢复和缓存复用水位。
+
+### Changed
+
+- `kan web` 默认入口迁移为 React + TypeScript 选股研究工作台，覆盖规则构建、版本历史、运行证据、候选研究、横向对比、个股研究、市场数据、持仓和设置；旧 `/find`、`/stock/{symbol}`、`/hold` URL 映射到新页面。
+- Web、CLI、Python API、typed HTTP 与 MCP 统一执行 `ScreenSpec → ScreenRun`；27 类条件继续复用既有 find registry，全市场按数据能力开放 23 类，未知/重复排序与结果字段 fail-fast。
+- 前端构建产物随 wheel/sdist 打包；CI 增加 OpenAPI drift、TypeScript、Vitest、Vite build、三平台 fresh Web asset 和缓存应用路径性能门。
+
+### Removed
+
+- 删除旧 Jinja 页面、Alpine/ECharts 手写业务前端及对应 vendor 静态资源；终端用户仍只需安装 Python 包，不需要 Node。
+
+### Performance
+
+- 500 行已缓存 ScreenRun 应用层基准 30 轮实测 p95 32.31ms，低于 500ms 交互门槛；CI 固化同口径性能守门。
+
+### Security
+
+- 工作台数据库、迁移备份和敏感状态保持本地 XDG 路径与 `0600` 权限；Web 继续只监听回环地址，并保留随机会话、Host、Origin 和写请求 header 校验。
+
 ## [0.0.6.9.33] - 2026-08-01
 
 ### Fixed
@@ -641,7 +669,8 @@ explicitly approves a larger bump.
 - **Shell 补全** · zsh / bash / fish / powershell
 - **合规与隐私** · 强制风险提示 + 关键词黑名单（无买卖建议 / 无目标价 / 无评级）· 数据全本地
 
-[Unreleased]: https://github.com/piklen/manmankan/compare/v0.0.6.9.33...HEAD
+[Unreleased]: https://github.com/piklen/manmankan/compare/v0.0.6.9.34...HEAD
+[0.0.6.9.34]: https://github.com/piklen/manmankan/compare/v0.0.6.9.33...v0.0.6.9.34
 [0.0.6.9.33]: https://github.com/piklen/manmankan/compare/v0.0.6.9.32...v0.0.6.9.33
 [0.0.6.9.32]: https://github.com/piklen/manmankan/compare/v0.0.6.9.31...v0.0.6.9.32
 [0.0.6.9.31]: https://github.com/piklen/manmankan/compare/v0.0.6.9.30...v0.0.6.9.31

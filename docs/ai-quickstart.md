@@ -1,6 +1,6 @@
 # AI agent 快速开始
 
-`manmankan` 给外部 AI agent 提供可审计的 A 股数据输入：CLI、JSON、字段白名单和本地 MCP。工具只返回客观数据和用户显式规则命中结果，不内置 LLM，也不输出买卖动作、评级、目标价或策略结论。
+`manmankan` 给外部 AI agent 提供可审计的 A 股数据输入：typed Screen、CLI、JSON、字段白名单和本地 MCP。工具不内置 LLM；自然语言 parser 只整理明确阈值，最终仍由确定性 Python application service 计算用户规则命中与证据。
 
 ## 1. 安装和发现
 
@@ -8,6 +8,7 @@
 uv tool install manmankan
 kan --version
 KAN_NO_UPDATE_CHECK=1 kan guide
+KAN_NO_UPDATE_CHECK=1 kan screen filters --format json
 KAN_NO_UPDATE_CHECK=1 kan find --codes 600519,000858 --format json --dry-run
 ```
 
@@ -76,7 +77,27 @@ uv run kan fields list --format json
 
 这些 discovery smoke 用于确认机器可读 schema、examples 与字段 / preset 清单，不拉行情；需要验证某个 `find` 调用路径但不取数时，用 `--dry-run`。`$env:PYTHONUTF8 = "1"` 用于降低中文和 `≠`、`·` 等符号在部分 Windows 终端里的编码风险。
 
-## 2. 两条首用路径
+## 2. 常用首用路径
+
+### 可复跑 Screen：优先用于持续研究
+
+需要保存规则、回看版本、比较多次运行、保留 evidence handle 或建立候选来源时，使用 `ScreenSpec / ScreenRun`，不要把多轮一次性 `find` 输出拼成隐式状态。
+
+```bash
+kan screen filters --format json
+kan screen save screen.json --format json
+kan screen run <screen_id> --format json
+kan screen runs <screen_id> --format json
+```
+
+MCP agent 的等价路径是：
+
+1. `kan_screen_parse` 整理明确表达；检查 `ignored_text / errors / executable`。
+2. `kan_screen_plan` 核对执行路径、数据源、限制和 canonical hash。
+3. 只有 `executable=true` 才调用 `kan_screen_run`。
+4. 后续用 `kan_screen_get` 取不可变 run，用 `kan_screen_explain` 基于持久 evidence 解释。
+
+不要让模型自行删除 `unsupported_filters`、发明模糊阈值、把 `null` 改成 `0`，或根据自然语言重新排序 Python 已返回的 ScreenRun。
 
 ### 查询计划 smoke：不取数
 
@@ -226,7 +247,7 @@ kan mcp http --host localhost --port 8765 --path /mcp
 
 HTTP transport 默认只绑定本机地址，并检查浏览器 `Origin`。它适合本机 agent、浏览器插件或调试工具连接；不要把本机 MCP 端口直接暴露成公网服务。
 
-MCP 工具仍沿用 CLI/JSON 契约。`tools/list` 会暴露 `inputSchema` 和 `outputSchema`；`tools/call` 保留 text content，同时在 JSON 输出可解析时返回 `structuredContent`。AI 调 MCP 时也要保留免责声明、检查 `isError` / `ok:false`，并把数据解释为研究输入而不是交易结论。
+MCP 同时提供既有 CLI/JSON 工具和直接 application service 的 `kan_screen_parse / plan / run / get / explain`。`tools/list` 会暴露 `inputSchema` 和 `outputSchema`；`tools/call` 保留 text content，并返回可校验的 `structuredContent`。AI 调 MCP 时要检查 `isError` / `ok:false`，读取 coverage、warnings 和 evidence，把数据解释为研究输入而不是交易结论。
 
 支持的客户端和写入规则见 [`docs/mcp.md`](mcp.md)。
 

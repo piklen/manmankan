@@ -171,33 +171,55 @@ def _apply_cached_names(book: PositionsBook) -> PositionsBook:
 
 
 def load_positions() -> PositionsBook:
-    """读取 positions.json；不存在时返回空账本。"""
-    if not POSITIONS_PATH.exists():
-        return PositionsBook()
-    try:
-        raw = json.loads(POSITIONS_PATH.read_text(encoding="utf-8"))
-    except json.JSONDecodeError as e:
-        raise PositionsCorruptError(
-            f"持仓文件损坏（{POSITIONS_PATH.name}）· 错误: {e.msg} (行 {e.lineno} 列 {e.colno})"
-        ) from e
+    """读取 SQLite 持仓状态；首次访问自动迁移旧 positions.json。"""
+    from kan.storage.workspace_migration import adopt_state, load_state
+
+    raw = load_state("positions", POSITIONS_PATH)
+    needs_adoption = raw is None
+    if raw is None:
+        if not POSITIONS_PATH.exists():
+            raw = {}
+        else:
+            try:
+                candidate = json.loads(POSITIONS_PATH.read_text(encoding="utf-8"))
+            except json.JSONDecodeError as e:
+                raise PositionsCorruptError(
+                    f"持仓文件损坏（{POSITIONS_PATH.name}）· "
+                    f"错误: {e.msg} (行 {e.lineno} 列 {e.colno})"
+                ) from e
+            if not isinstance(candidate, dict):
+                raise PositionsCorruptError(
+                    f"持仓文件结构无效（{POSITIONS_PATH.name}）"
+                )
+            raw = candidate
     try:
         payload = {
             "version": raw.get("version", SCHEMA_VERSION),
             "cash": raw.get("cash", 0.0),
             "positions": raw.get("positions", []),
         }
-        return _apply_cached_names(PositionsBook(**payload))
+        book = _apply_cached_names(PositionsBook.model_validate(payload))
     except Exception as e:
         raise PositionsCorruptError(f"持仓文件结构无效（{POSITIONS_PATH.name}）") from e
+    if needs_adoption:
+        adopt_state("positions", POSITIONS_PATH, _positions_payload(book))
+    return book
 
 
-def save_positions(book: PositionsBook) -> None:
-    ensure_dirs()
-    payload = {
+def _positions_payload(book: PositionsBook) -> dict[str, object]:
+    return {
         "version": SCHEMA_VERSION,
         "cash": round(book.cash, 2),
         "positions": [p.model_dump(mode="json") for p in book.positions],
     }
+
+
+def save_positions(book: PositionsBook) -> None:
+    from kan.storage.workspace_migration import save_state
+
+    ensure_dirs()
+    payload = _positions_payload(book)
+    save_state("positions", POSITIONS_PATH, payload)
     _atomic_write_json(POSITIONS_PATH, payload)
 
 

@@ -1,6 +1,6 @@
 # 慢慢看 · manmankan
 
-> **先看清，再决定。A股行情翻译官。**
+> **先定义规则，再复跑证据。A 股选股研究工作台。**
 >
 > 散户看得清，AI 调得动。只给数据，不给答案。
 
@@ -12,76 +12,92 @@
 [![Local-first](https://img.shields.io/badge/local--first-no_telemetry-green.svg)](docs/compliance.md)
 [![Local Web](https://img.shields.io/badge/default-local_Web-0f766e.svg)](docs/china-quickstart.md)
 
-![慢慢看今日概览：数据新鲜度、关键位置、自选和指数对照](docs/assets/readme-web-overview.png)
+![慢慢看选股工作台：规则构建、运行结果与逐条件证据](docs/assets/readme-selection-workbench.png)
 
-慢慢看是一个给普通 A 股散户使用的本地观察台。它先回答每天最常见的三个问题：**我的股票今天有什么关键变化、哪些接近长期高低位、当前数据是否可信**。需要深入时，再展开位置、持仓、筛选和历史数据。
+慢慢看是一个给普通 A 股用户使用的本地优先选股研究工作台。它把“股票池、客观阈值、排序、运行结果、候选研究和横向对比”连成一条可复跑流水线，重点回答三个问题：**这次哪些股票符合我写下的规则、为什么符合、与上次运行相比发生了什么变化**。
 
 ```bash
 uv tool install manmankan
 kan web
 ```
 
-浏览器会打开只监听本机的观察台。每次启动都会生成一条仅本次有效的随机会话链接；如果浏览器没有自动打开，请使用终端刚打印的完整地址。你可以直接在网页里：
+浏览器会打开只监听本机的 React + TypeScript 工作台。每次启动都会生成一条仅本次有效的随机会话链接；如果浏览器没有自动打开，请使用终端刚打印的完整地址。你可以直接在网页里：
 
-- 添加自选股，查看 30 / 60 / 180 日关键位置。
+- 从自选、持仓、全市场、行业、题材或自定义代码池建立 `Screen`。
+- 组合 27 类中文条件、AND / OR、最多三层排序、结果字段和缺失值策略；全市场按数据能力开放其中 23 类。
+- 保存并版本化规则，形成不可变 `ScreenRun`，查看数据截止日、覆盖率、逐条件实际值与来源。
+- 重跑同一规则，查看新增、移出和排名变化；历史规则可预览并恢复为新版本。
+- 把结果加入独立候选池，记录状态、来源运行和待验证问题；规则重跑不会冲掉人工研究进度。
+- 保存 3–10 只股票的对比组，横向查看最近一次可追溯运行中的位置、估值、资金和技术数据。
+- 在“市场与数据”页用 SQLite 持久任务更新默认池或全市场；部分失败、中断和恢复水位保持可见。
 - 录入、修改或删除持仓和现金，查看盈亏与仓位事实。
-- 查看与上一份不同交易日快照相比进入或离开关键位置区的变化。
-- 用 27 类中文条件从自选、持仓、全市场、行业、题材或代码池中组合找股票，并排序、分页查看命中事实；全市场按数据能力开放其中 23 类。
-- 横向对比 2-5 只股票的位置、估值、资金流及对应数据日期。
-- 明确看到“数据截止日 / 正常应截止日 / 是否需要更新”。
 
 所有自选、持仓、缓存和 token 都保存在本机；不登录 manmankan 服务、不做云同步或遥测。查询行情时会向所选数据源发送股票代码；配置 TuShare 时，token 只发送到你配置的数据源。持仓成本、股数和现金不会发送。
 
 ## 普通用户从这里开始
 
-### 1. 打开今日概览
+### 1. 打开选股工作台
 
 ```bash
 kan web
 ```
 
-首页默认只展示 30 / 60 / 180 日三个关键周期，并把完整数据表放在概览之后。位置百分位只描述当前价在历史区间中的坐标，不代表见底、见顶或买卖信号。
+默认页就是 Screen 工作台，不需要先学 CLI 或筛选 DSL。新规则不预置条件、排除项或排序，必须由用户明确选择后才能保存/运行；左侧管理规则，中间定义股票池、条件、排序和结果字段，右侧查看运行证据与历史变化。
 
-### 2. 添加自己的股票
+### 2. 写下规则并保存运行
 
-在“今日”页直接添加自选；在“我的持仓”页录入券商当前显示的成本、股数和现金。数据只写入本机 XDG 目录，持仓文件权限收紧为 `0600`。
+先选股票池，再用“添加条件”组合客观阈值。点击“保存并运行”后，规则版本和运行结果都会写入本机；同一规则、同一数据产生稳定的 `spec_hash` / `result_hash`，每次运行仍有独立 `run_id`。
 
-### 3. 每天收盘后看变化
+### 3. 核对覆盖率与逐条件证据
 
-点击“更新数据”后，首页会显示整池数据是否到达正常交易日，并对比上一份不同交易日快照。没有上一份数据时会明确说明，不会伪造变化。
+结果不是一列代码：每一行都保留实际值、阈值、数据日、来源和证据引用。缺数据、陈旧数据和不支持的全市场字段不会被当成 `0`，也不会静默制造完整结果。
 
-不想打开浏览器时，可以在终端运行：
+### 4. 进入候选、对比与复看
+
+候选池是人工研究队列，不等于一次 Screen 命中。你可以保留备注和来源运行，再从结果或候选池建立 3–10 股对比；下次重跑 Screen 时，候选状态不会被覆盖。
+
+### 5. 更新数据或使用 CLI
+
+“市场与数据”页可以更新默认池或全市场，并持久显示 `queued / running / succeeded / partial / failed / interrupted`。不想打开浏览器时，仍可在终端运行：
 
 ```bash
+kan screen filters
+kan screen list
 kan daily
 ```
 
 ## 进阶用户：CLI、JSON 与 AI
 
-Web 和 CLI 共用同一套 service 数据层。开发者、脚本和 AI agent 可以继续使用完整 CLI、JSON、Python API 与 MCP，现有机器契约保持兼容。
+Web、CLI、Python API、HTTP 和 MCP 共用同一套 `ScreenSpec → ScreenRun` application service。React 只负责交互和展示，不在浏览器重算金融事实；既有 `kan find` JSON 契约继续兼容。
 
 ```bash
+kan screen filters --format json
+kan screen save screen.json --format json
+kan screen run <screen_id> --format json
+kan screen versions <screen_id> --format json
+kan screen runs <screen_id> --format json
 kan scan --codes 600519,000858 --periods 30,60,180 --format json
 kan find --codes 600519,000858 --format json --fields @core,@valuation,@moneyflow,@technical
 kan mcp install --dry-run --format json
 kan mcp http --host localhost --port 8765
 ```
 
-`kan find --codes ... --format json --dry-run` 只返回查询计划；真实行情坐标使用 `kan scan --codes ... --format json`。完整 AI 首用路径见 [`docs/ai-quickstart.md`](docs/ai-quickstart.md)。
+`kan screen` 使用严格、版本化的领域契约；`kan find` 保持原有一次性查询入口。Screen 完整说明见 [`docs/selection-workbench.md`](docs/selection-workbench.md)，迁移与回滚见 [`docs/workspace-migration.md`](docs/workspace-migration.md)，AI 首用路径见 [`docs/ai-quickstart.md`](docs/ai-quickstart.md)。
 
 ## 从哪里继续
 
 | 你是谁 | 先跑 / 先读 |
 |---|---|
-| 普通 A 股用户 | `kan web`：今日概览、自选、持仓、找股票、数据更新 |
+| 普通 A 股用户 | `kan web`：Screen、运行证据、候选、对比、研究、数据和持仓 |
 | 中国用户 / 开发者 | [`docs/china-quickstart.md`](docs/china-quickstart.md)：安装、行情源网络、TuShare、代理和 Windows / PowerShell |
-| AI agent / 自动化脚本 | `kan find --codes 600519,000858 --format json --dry-run` + [`docs/ai-quickstart.md`](docs/ai-quickstart.md) + [`skills/manmankan-skill.md`](skills/manmankan-skill.md) |
+| CLI / Python / HTTP 开发者 | [`docs/selection-workbench.md`](docs/selection-workbench.md)：同源领域模型、命令、Python API 与 `/api/v1` |
+| AI agent / 自动化脚本 | `kan_screen_plan` + [`docs/ai-quickstart.md`](docs/ai-quickstart.md) + [`docs/mcp.md`](docs/mcp.md) |
 | 第一次贡献者 | [`docs/contributor-quickstart.md`](docs/contributor-quickstart.md)：本地跑起来、验证命令、good first issue、合规边界 |
 
 <details>
 <summary><b>English summary</b></summary>
 
-**manmankan** (*"take your time, see clearly"*) is a local-first A-share observation tool for ordinary retail investors. Its default Web view brings daily changes, watchlists, holdings, key price-range positions, and data freshness into one place. CLI, JSON, Python API, and MCP remain available as the secondary automation layer.
+**manmankan** (*"take your time, see clearly"*) is a local-first A-share screening and research workbench. Its default React Web UI turns explicit rules into versioned Screens, immutable auditable runs, independent candidate lists, and saved comparisons. The Python application service is shared by Web, CLI, public Python API, HTTP, and MCP.
 
 Data, not decisions: no buy/sell advice, no ratings, no price targets. Python 3.11+ · local-first · A-share (architecture designed for multi-market extension) · [GNU AGPL-3.0](LICENSE).
 </details>
@@ -92,8 +108,8 @@ Data, not decisions: no buy/sell advice, no ratings, no price targets. Python 3.
 
 慢慢看把这些输入统一成一个可复核的数据层，并按用户优先级提供两种出口：
 
-- **第一出口，给普通散户**：Web 先展示今日关键事实、数据新鲜度、自选与持仓，再按需展开明细。
-- **第二出口，给 AI / 开发者**：CLI、JSON、MCP 和 `kan.api` 提供可审计、可组合的数据契约。
+- **第一出口，给普通用户**：Web 完成规则构建、版本、运行证据、候选研究、横向对比、数据更新和持仓闭环。
+- **第二出口，给 AI / 开发者**：CLI、Python API、typed HTTP 和 MCP 执行相同 Screen 契约。
 
 如果你要让 AI 参与候选筛选，慢慢看的角色是提供可审计输入：它负责把"坐标"和"条件命中"说清楚，不负责替你下结论。
 
@@ -111,6 +127,8 @@ AI / 开发者是第二用户，但机器契约仍是一等工程能力：
 | **示例可机器读取** | `kan examples --format json` 输出端到端命令清单，AI 可以先读示例再选择最短命令 |
 | **Skills.md 能力清单** | [`skills/manmankan-skill.md`](skills/manmankan-skill.md) 是给 AI Agent 的"说明书"——AI 读到它就知道 manmankan 能做什么、怎么调、错误怎么处理 |
 | **MCP Server** | `kan mcp serve` 提供 stdio MCP；`kan mcp http` 提供本机 Streamable HTTP endpoint；tools/list 暴露 `outputSchema`，tools/call 同时返回 text 与 `structuredContent`；接入细节见 [`docs/mcp.md`](docs/mcp.md) |
+| **Typed Screen 生命周期** | `kan_screen_parse / plan / run / get / explain` 只整理、执行和解释 `ScreenSpec`，不让模型另造筛选算法 |
+| **OpenAPI 生成前端类型** | `/api/v1/openapi.json` 是 HTTP SOT，TypeScript 类型由它生成并在 CI 检查 drift |
 | **退出码即 API** | 每个命令的退出码有明确语义（0=成功，非 0=具体错误类别），AI 不需要解析 stderr 来判断成败 |
 
 AI agent 首次接入推荐读 [`docs/ai-quickstart.md`](docs/ai-quickstart.md)。它把“查询计划 smoke”和“真实取数路径”拆开，避免把预演当成已经形成行情证据。
@@ -138,6 +156,11 @@ kan help
 
 ```bash
 kan scan                                      # 扫默认池（自选 ∪ 持仓）
+kan screen filters                            # 查看 vNext 可用条件
+kan screen save screen.json                   # 保存/版本化 ScreenSpec
+kan screen run <screen_id> --format json      # 执行并保存不可变 ScreenRun
+kan screen versions <screen_id>               # 查看规则版本
+kan screen runs <screen_id>                   # 查看运行历史
 kan scan --all                                # 扫 A 股全市场池（首次较慢）
 kan scan --only-watchlist                     # 只扫自选
 kan scan --exclude-star --exclude-bj          # 排除科创板 / 北交所
@@ -167,13 +190,15 @@ kan history 600519 --format json
 
 主要能力：
 
+- 选股领域对象：版本化 `Screen`、不可变 `ScreenRun`、独立 `CandidateList`、3–10 股 `CompareSet`。
+- 运行审计：规则/结果哈希、数据截止日、覆盖率、缺字段计数、逐条件证据、来源和相邻运行 diff。
 - 多周期位置百分位：3 / 5 / 7 / 10 / 15 / 30 / 60 / 90 / 120 / 180 日。
 - 共振：同一候选在多个周期同时接近低位或高位。
 - 散户事实：一手金额、占已录入现金比例、科创/北交/创业板权限提示、距区间高低点距离、量价方向组合。
 - 候选池：自选、行业、题材、热榜、完整 A 股市场（含北交所 / ST）、外部 `--codes` 或 stdin。
 - 真实持仓：用户在 Web 或 CLI 录入成本 / 股数 / 现金，本地计算市值、仓位、今日和累计盈亏。
 - 筛选条件：位置、共振、涨跌、连阳连阴、估值、质量、资金、技术指标、筹码、股东、除权除息事件等。
-- 输出形态：终端表格、Markdown、JSON、紧凑 JSON、字段白名单、Python API。
+- 输出形态：React Web、终端表格、Markdown、JSON、紧凑 JSON、字段白名单、Python API、typed HTTP 与 MCP。
 
 JSON 相关入口：
 
@@ -226,7 +251,7 @@ uv tool install manmankan --index-url https://pypi.org/simple/
 - 不内置策略 preset、打分模型或"最佳标的"排序。
 - 不下单、不接券商账户、不自动读取外部持仓；真实持仓只来自用户在 Web 或 CLI 主动录入的本地 XDG 数据。
 - 不提供实时行情推送、分钟级行情、港股、美股、期货或完整财报数据库（多市场是远期路线图，当前仅 A 股）。
-- 不内置 AI / LLM / 托管服务——AI 由用户自己选择和运行。
+- 不内置模型 provider 或托管 AI 服务；typed AI/MCP adapter 只整理明确规则、调用确定性服务并引用已有证据。
 
 位置百分位的定义是：
 
@@ -240,8 +265,9 @@ uv tool install manmankan --index-url https://pypi.org/simple/
 
 慢慢看本地运行：
 
-- 自选股、缓存、扫描快照存放在 `~/.local/share/kan/`，按 XDG 规范管理。
-- 真实持仓存放在 `~/.local/share/kan/positions.json`，父目录 `0700`，文件 `0600`。
+- 工作台状态存放在 `~/.local/share/kan/workspace.sqlite3`（WAL）；行情继续使用 Parquet，二者都按 XDG 规范管理。
+- 旧 `config.json`、`watchlist.json`、`positions.json` 首次接管前保留不可覆盖的 `.vnext-backup`；可用 `kan workspace rollback --yes` 导出当前值并切回 JSON。
+- 数据目录权限收紧为 `0700`，数据库、备份和敏感状态文件为 `0600`。
 - `kan web` 每次启动生成随机会话凭证；页面、API 和数据更新事件都要通过本次浏览器会话访问。
 - 持仓输出可加 `--mask` 脱敏金额；本地数据仍可能被 Time Machine / iCloud 等系统备份工具复制。
 - 不需要登录，不上传自选股，不做遥测。
@@ -257,6 +283,8 @@ uv tool install manmankan --index-url https://pypi.org/simple/
 |---|---|
 | [`CHANGELOG.md`](CHANGELOG.md) | 版本变更记录 |
 | [`docs/architecture.md`](docs/architecture.md) | 架构愿景：三层定位、Source 模型、多市场路线、AI 消费设计 |
+| [`docs/selection-workbench.md`](docs/selection-workbench.md) | vNext 当前架构、四领域对象、Web / CLI / Python / HTTP / MCP 使用契约 |
+| [`docs/workspace-migration.md`](docs/workspace-migration.md) | SQLite 状态迁移、备份、幂等、诊断与回滚手册 |
 | [`docs/china-quickstart.md`](docs/china-quickstart.md) | 中国用户 / 开发者首用路径、国内网络、PyPI 镜像、TuShare 与代理排查 |
 | [`docs/contributor-quickstart.md`](docs/contributor-quickstart.md) | 首次贡献路径、good first issue、验证命令和 AI 协作边界 |
 | [`docs/ai-quickstart.md`](docs/ai-quickstart.md) | AI agent 首用路径、JSON / MCP 消费规则 |
@@ -277,9 +305,13 @@ uv tool install manmankan --index-url https://pypi.org/simple/
 git clone https://github.com/piklen/manmankan.git
 cd manmankan
 uv sync
+npm --prefix webui ci
 uv run ruff check kan/ tests/
 uv run mypy
 uv run pytest -q -m "not network and not tty"
+npm --prefix webui run check
+npm --prefix webui test
+npm --prefix webui run build
 ```
 
 启用本地 hooks：

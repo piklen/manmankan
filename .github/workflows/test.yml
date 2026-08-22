@@ -51,6 +51,23 @@ jobs:
         run: uv lock --check
       - name: Install dependencies
         run: uv sync --python 3.12 --frozen --all-groups --all-extras
+      - name: Setup Node.js for Web UI
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020  # setup-node 7
+        with:
+          node-version: '24'
+          cache: npm
+          cache-dependency-path: webui/package-lock.json
+      - name: Install Web UI dependencies
+        working-directory: webui
+        run: npm ci
+      - name: Check, test, and build Web UI
+        working-directory: webui
+        run: |
+          npm run check
+          npm test
+          npm run build
+      - name: Generated Web UI artifacts are current
+        run: git diff --exit-code -- webui/openapi.json webui/src/api/schema.ts kan/web/spa
       - name: Dependency upper-bound review
         run: uv run python scripts/check-dependency-bounds.py
       - name: Privacy / public archive scan
@@ -59,6 +76,8 @@ jobs:
         run: uv run ruff check kan/ tests/
       - name: Type check core
         run: uv run mypy
+      - name: Cached ScreenRun performance gate
+        run: uv run python scripts/benchmark-screen.py --assert-p95 500
       - name: Tracked package sanity
         run: |
           python3 - <<'PY'
@@ -71,6 +90,8 @@ jobs:
               "kan/cli/__init__.py",
               "kan/storage/export.py",
               "tests/test_ci_dependency_isolation.py",
+              "kan/web/spa/index.html",
+              "webui/package-lock.json",
               "uv.lock",
           }
           missing = sorted(required - tracked)
@@ -100,6 +121,37 @@ jobs:
         if: always()
         continue-on-error: true
         uses: ./.github/actions/cleanup-runner
+
+  web-ui:
+    name: Web UI (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7 (pinned 2026-07-14)
+        with:
+          persist-credentials: false
+      - name: Setup Node.js
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020  # setup-node 7
+        with:
+          node-version: '24'
+          cache: npm
+          cache-dependency-path: webui/package-lock.json
+      - name: Install dependencies
+        working-directory: webui
+        run: npm ci
+      - name: Type check
+        working-directory: webui
+        run: npx tsc -b --pretty false
+      - name: Unit tests
+        working-directory: webui
+        run: npm test
+      - name: Production build
+        working-directory: webui
+        run: npx vite build
 
   # 保留独立 job 名，避免已有 branch protection 仍绑定旧检查名时被误断。
   privacy-scan:
@@ -216,6 +268,8 @@ jobs:
         run: |
           "$SMOKE_VENV/bin/kan" --version
           "$SMOKE_VENV/bin/kan" --help
+          "$SMOKE_VENV/bin/kan" screen --help
+          "$SMOKE_VENV/bin/kan" workspace --help
           "$SMOKE_VENV/bin/kan" scan --help
           "$SMOKE_VENV/bin/kan" find --help
           HOME="$(mktemp -d "$RUNNER_TEMP/kan-home-XXXXXX")" XDG_DATA_HOME="$(mktemp -d "$RUNNER_TEMP/kan-xdg-XXXXXX")" NO_COLOR=1 "$SMOKE_VENV/bin/kan" find --codes 600519,000858 --format json --dry-run > "$SMOKE_JSON"
@@ -244,10 +298,13 @@ jobs:
           import kan
           import importlib.metadata
           from kan.api import WatchlistSet, fetch, from_flags, scan
+          from kan.web.app import SPA_INDEX
 
           assert kan.__version__
           assert importlib.metadata.version("manmankan") == kan.__version__
           assert Path(kan.__file__).resolve().is_relative_to(Path(os.environ["SMOKE_VENV"]).resolve())
+          assert SPA_INDEX.is_file()
+          assert "/assets/index-" in SPA_INDEX.read_text(encoding="utf-8")
           assert WatchlistSet().name
           assert callable(scan)
           assert callable(fetch)

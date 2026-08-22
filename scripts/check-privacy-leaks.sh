@@ -307,6 +307,7 @@ VERSION_LEAKS=$(scan_files_z | xargs -0 grep -nEH "$VERSION_PATTERN" 2>/dev/null
   | grep -v '^docs/reviews/' \
   | grep -v '^CODE_OF_CONDUCT\.md:' \
   | grep -v '^kan/web/static/vendor/' \
+  | grep -v '^kan/web/spa/assets/' \
   || true)
 
 if [ -n "$VERSION_LEAKS" ]; then

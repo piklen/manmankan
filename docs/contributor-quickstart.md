@@ -30,6 +30,7 @@
 git clone https://github.com/piklen/manmankan.git
 cd manmankan
 uv sync --frozen --all-groups --all-extras
+npm --prefix webui ci
 git config core.hooksPath .githooks
 ```
 
@@ -44,6 +45,7 @@ KAN_NO_UPDATE_CHECK=1 uv run kan --help
 KAN_NO_UPDATE_CHECK=1 uv run kan examples
 KAN_NO_UPDATE_CHECK=1 uv run kan examples --format json
 KAN_NO_UPDATE_CHECK=1 uv run kan fields list --format json
+KAN_NO_UPDATE_CHECK=1 uv run kan screen filters --format json
 KAN_NO_UPDATE_CHECK=1 uv run kan find --codes 600519,000858 --format json --dry-run
 KAN_NO_UPDATE_CHECK=1 uv run kan mcp install --dry-run --format json
 ```
@@ -87,6 +89,18 @@ uv run pytest -q -m "not network and not tty"
 bash scripts/check-privacy-leaks.sh
 ```
 
+改 React、CSS、OpenAPI 或 `/api/v1` 时再跑：
+
+```bash
+npm --prefix webui ci
+npm --prefix webui run check
+npm --prefix webui test
+npm --prefix webui run build
+git diff --exit-code -- webui/openapi.json webui/src/api/schema.ts kan/web/spa
+```
+
+`webui/` 是开发源码，`kan/web/spa/` 是进入 wheel 的构建产物；两者必须在同一提交同步。不要手改生成的 OpenAPI、TypeScript schema 或 hashed bundle。
+
 改安装、打包、MCP、README、站点或 release surface 时额外跑：
 
 ```bash
@@ -102,6 +116,7 @@ KAN_NO_UPDATE_CHECK=1 uv run kan mcp install --dry-run --format json
 - 提交 PR 或 issue 前先看 [`SUPPORT.md`](../SUPPORT.md) 区分入口；贴截图、日志或 JSON envelope 前先看 [`安全反馈说明`](china-quickstart.md#8-反馈问题时请带上这些信息) 并脱敏 token、代理账号、本机路径和真实持仓金额。
 - 如果改了用户可见输出，先读 [`docs/compliance.md`](compliance.md)。
 - 如果改了 JSON 字段、filter 或 error envelope，同步 [`docs/find.md`](find.md) 和测试。
+- 如果改了 `ScreenSpec / ScreenRun` 或 `/api/v1`，同步 [`selection-workbench.md`](selection-workbench.md)、OpenAPI 生成物和 adapter 契约测试。
 - 如果改了 AI / MCP 工作流，同步 [`docs/ai-quickstart.md`](ai-quickstart.md)、[`docs/mcp.md`](mcp.md) 或 [`skills/manmankan-skill.md`](../skills/manmankan-skill.md)。
 
 ## 6. 用 AI 编程助手协作

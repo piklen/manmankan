@@ -22,6 +22,7 @@ BASE_DIR = _get_base_dir()
 DATA_DIR = BASE_DIR / "data"
 WATCHLIST_PATH = BASE_DIR / "watchlist.json"
 POSITIONS_PATH = BASE_DIR / "positions.json"
+WORKSPACE_DB_NAME = "workspace.sqlite3"
 STOCK_NAMES_CACHE = BASE_DIR / "stock_names.json"
 SNAPSHOT_PATH = BASE_DIR / "last_scan.json"
 SNAPSHOTS_DIR = BASE_DIR / "snapshots"
@@ -71,6 +72,11 @@ def ensure_dirs() -> None:
         # mkdir(exist_ok=True) 不会收紧升级前已经存在的宽松权限。
         with contextlib.suppress(OSError):
             os.chmod(directory, 0o700)
+
+
+def workspace_db_path() -> Path:
+    """返回 vNext 工作台 SQLite 路径，保持测试可替换 ``BASE_DIR``。"""
+    return BASE_DIR / WORKSPACE_DB_NAME
 
 
 def atomic_write_parquet(

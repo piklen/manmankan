@@ -8,24 +8,38 @@
 
 ## 工具概述
 
-**manmankan** (`kan`) 是一个 A 股本地数据筛选 CLI。
-它不接 AI、不荐股、不预测——只提供结构化数据，供外部 AI（你）消费。
+**manmankan** (`kan`) 是一个本地优先的 A 股选股研究工作台。
+它提供 React Web、CLI、Python API、typed HTTP 和 MCP，但不内置 LLM；AI 只能整理明确 Screen、执行确定性服务和引用已保存证据。
 
 **命令入口**：终端执行 `kan <command> [options]`
 **安装**：`uv tool install manmankan`
 **市场**：当前仅 A 股（架构预留多市场扩展）
 **首用文档**：`docs/ai-quickstart.md`
 **MCP 文档**：`docs/mcp.md`
+**Screen 契约**：`docs/selection-workbench.md`
 
 ---
 
 ## 命令族
 
+### 0. 可复跑 Screen
+
+| 命令 | 用途 | AI 使用规则 |
+|------|------|------------|
+| `kan screen filters --format json` | 发现 27 类条件与全市场支持范围 | 先读实时 catalog，不维护第二份 filter 列表 |
+| `kan screen save screen.json --format json` | 保存或创建 Screen v1 | 规则必须含显式条件或排除项 |
+| `kan screen save screen.json --id <id>` | 更新既有 Screen | 内容变化才追加版本 |
+| `kan screen versions <id>` | 查看不可变规则版本 | 历史恢复会创建新版本，不覆盖旧版本 |
+| `kan screen run <id> --format json` | 执行并保存不可变 ScreenRun | 读取 coverage、warnings、hash、evidence 和 diff |
+| `kan screen run-spec screen.json --no-persist` | ad-hoc 执行 typed spec | 只有明确要求无状态运行时使用 |
+| `kan screen runs <id>` / `show-run <run_id>` | 读取运行历史和证据 | 不用今天的数据重建过去结果 |
+| `kan workspace status/migrate/rollback` | 检查、接管或回退本地状态 backend | 只报告状态，不回显配置/持仓内容 |
+
 ### 1. 扫描与发现
 
 | 命令 | 用途 | AI 使用建议 |
 |------|------|------------|
-| `kan scan` | 扫描默认池（自选 ∪ 持仓）的多周期位置 | 每日起手第一步，了解持仓+自选的整体位置 |
+| `kan scan` | 扫描默认池（自选 ∪ 持仓）的多周期位置 | 一次性读取持仓+自选的客观位置 |
 | `kan scan --only-holdings` | 只扫描真实持仓池 | 单独查看持仓位置 |
 | `kan scan --group <组名>` | 扫描指定分组 | 分组巡检 |
 | `kan scan --codes <代码列表>` | 扫描外部代码 | 临时查看一批候选 |
@@ -40,13 +54,13 @@
 
 | 命令 | 用途 | AI 使用建议 |
 |------|------|------------|
-| `kan find` | 按条件筛选股票 | **AI 的核心消费入口**——把自然语言需求翻译为 find 参数 |
+| `kan find` | 一次性按条件筛选股票 | 既有 shell/JSON 消费入口；持续研究优先使用 Screen |
 | `--pos N:lt:M` | 位置筛选（N 日位置 < M%） | 如 `--pos 180:lt:10` = 180 日低位 |
-| `--resonance low:gte:N` | 共振筛选（至少 N 个周期同时低位） | 多周期共振比单周期更可靠 |
+| `--resonance low:gte:N` | 共振筛选（至少 N 个周期同时触及低位阈值） | 只报告同时触及的周期数，不评价可靠性 |
 | `--pe` / `--pb` / `--dv` / `--turnover` / `--market-cap` / `--volume-ratio` | 估值、股息率、换手、市值、量比筛选 | 来自截面指标；`--dv gte:3` 表示股息率 TTM 不低于 3%；看 `data_availability` 区分缺数据 |
 | `--roe` | ROE 逐股报告期筛选 | 需要先缩小代码池 / 行业 / 题材；全市场模式不支持 |
 | `--moneyflow` / `--moneyflow-daily` / `--moneyflow-days` | 主力资金净额、单日资金、连续净流入天数 | 单位万元；输出分类资金流裸值 |
-| `--exclude-st` | 排除 ST 股 | **每次全市场扫描都必须加** |
+| `--exclude-st` | 排除 ST 股 | 是否排除由用户定义的股票池范围决定，不能由 agent 偷加 |
 | `--gain N:OP:V` / `--ma-bias N:OP:V` | 2-360 周期涨幅和均线乖离率 | 周期直接写入 filter，如 `20:gt:5` |
 | `--sort FIELD:asc/desc` / `--offset N` / `--limit N` | 排序与分页 | 适合全市场或大行业池低上下文消费 |
 
@@ -99,6 +113,8 @@
 | `kan fetch --all` | 预拉完整 A 股市场 K 线缓存 | 耗时较久；给 `scan/trend/low/high --all` 预热；明显不完整的上游响应会停止且不缓存 |
 | `kan fetch --verbose` | 逐只输出拉取状态 | 排障时使用 |
 
+Web 的“市场与数据”页还可启动 SQLite 持久刷新任务。终态包括 `succeeded / partial / failed / interrupted`；部分失败不等于完整成功，重新发起会复用已写入缓存。
+
 ---
 
 ## JSON 输出约定
@@ -138,6 +154,19 @@
 - **字段白名单**：`--fields @core,@valuation,@moneyflow` 只返回指定字段组，节省 token
 - **查询计划**：`kan find ... --dry-run` 只返回数据源和字段计划，不取数
 - **会话 delta**：`kan find ... --snapshot` / `--since <snapshot_id>` 显式保存和比较结构化结果
+- **Screen evidence**：只使用 `ScreenRun.rows[].evidence[]` 中存在的 ref、阈值、实际值、来源和数据日
+
+### MCP Screen tools
+
+| Tool | 行为 |
+|---|---|
+| `kan_screen_parse` | 只解析明确股票池、字段、比较符和数值；未知内容放入 `ignored_text` |
+| `kan_screen_plan` | 返回执行路径、依赖、限制与 `executable`，不取数 |
+| `kan_screen_run` | 按 spec 或 screen ID 调同一 Python application service |
+| `kan_screen_get` | 获取已保存 Screen 或不可变 ScreenRun |
+| `kan_screen_explain` | 只根据持久 evidence、coverage 和 diff 解释 |
+
+AI 不得把“低估、强势、近期”等模糊词静默映射成阈值，不得删除 `unsupported_filters` 后继续，也不得自行执行 SQL/Pandas 重算候选。
 
 ---
 
@@ -166,7 +195,7 @@ kan mcp http --host localhost --port 8765 --path /mcp
 
 第 1 步只返回查询计划，不代表行情维度已取到。第 2 步返回字段补全事实，`triggered_filters=[]` 是正常状态。第 3 步首次运行会建立本地缓存，可能需要几十秒；读取 `data_cutoff` / `fetched_at` 后再解释结果。
 
-### 工作流 1：每日全市场扫描
+### 工作流 1：用户已明确规则的全市场扫描
 
 ```bash
 # 1. 可选：预热全市场 K 线缓存（首次较慢）
@@ -175,14 +204,14 @@ kan fetch --all
 # 2. 全市场位置坐标巡检
 kan scan --all --periods 20,60,180 --format json
 
-# 3. 全市场低位筛选（排除 ST）
+# 3. 执行用户明确给出的 180 日位置与 ST 范围
 kan find --all --pos 180:lt:10 --exclude-st --format json --compact
 
 # 4. 叠加资金流和估值过滤，控制字段量
 kan find --all --pos 180:lt:10 --exclude-st --moneyflow gt:1000 \
   --fields @core,@context,@moneyflow --format json
 
-# 5. 对候选池做深度研判
+# 5. 读取候选的客观详情
 kan info <候选代码> --format json
 ```
 
@@ -192,8 +221,8 @@ kan info <候选代码> --format json
 # 1. 查看板块资金排名
 kan board rank --kind industry --by moneyflow --format json
 
-# 2. 在资金流入前三的行业中找低位股
-kan find --industry <行业名> --pos 60:lt:20 --format json --compact
+# 2. 用户给出行业名和阈值后执行，不根据榜单自动拼策略
+kan find --industry <用户指定行业> --pos 60:lt:20 --format json --compact
 ```
 
 ### 工作流 3：真实持仓坐标
@@ -259,6 +288,7 @@ Agent 可以通过以下方式发现 manmankan 的能力：
 9. **`docs/find.md`**——`kan find` 的完整 JSON schema 和字段定义
 10. **`docs/ai-quickstart.md`**——首次接入的结构 smoke、真实行情路径和 MCP 规则
 11. **`docs/mcp.md`**——MCP 支持客户端、dry-run、HTTP transport、写入规则和 agent 解释边界
+12. **`docs/selection-workbench.md`**——Screen / Run / Candidate / Compare 与五入口同源契约
 
 建议 AI 在首次使用 manmankan 时：
 1. 读本文件了解全局能力
@@ -268,4 +298,4 @@ Agent 可以通过以下方式发现 manmankan 的能力：
 
 ---
 
-*维护：manmankan 能力变更时同步更新本文件 · 最后更新：2026-06-19*
+*维护：manmankan 能力变更时同步更新本文件 · 最后更新：2026-08-23*
