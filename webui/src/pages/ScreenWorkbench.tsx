@@ -822,10 +822,10 @@ export function ScreenWorkbench() {
       setSelectedSymbol(latest.rows?.[0]?.symbol ?? null);
     }
   }, [activeId, historyQuery.data, run]);
-  const options = useMemo(
-    () => filtersQuery.data?.flatMap((group) => group.options) ?? FALLBACK_FILTERS,
-    [filtersQuery.data],
-  );
+  const options = useMemo(() => {
+    const received = filtersQuery.data?.flatMap((group) => group.options) ?? [];
+    return received.length ? received : FALLBACK_FILTERS;
+  }, [filtersQuery.data]);
 
   const saveMutation = useMutation({
     mutationFn: () => api.saveScreen(spec, activeId),
