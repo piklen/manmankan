@@ -4,11 +4,12 @@ import {
   GitCompareArrows,
   ListPlus,
   MessageSquareText,
+  Pencil,
   Plus,
   Search,
   Trash2,
 } from "lucide-react";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import {
   api,
@@ -99,6 +100,7 @@ export function CandidatesPage() {
   const [selected, setSelected] = useState<string[]>([]);
   const [search, setSearch] = useState("");
   const [newListName, setNewListName] = useState("");
+  const [editListName, setEditListName] = useState("");
   const [manualCode, setManualCode] = useState("");
   const [notice, setNotice] = useState<string | null>(null);
 
@@ -108,6 +110,9 @@ export function CandidatesPage() {
   });
   const lists = listsQuery.data ?? [];
   const activeList = lists.find((item) => item.list_id === activeListId) ?? lists[0];
+  useEffect(() => {
+    setEditListName(activeList?.name ?? "");
+  }, [activeList?.list_id, activeList?.name]);
   const candidates = useMemo(() => {
     const query = search.trim().toLowerCase();
     const items = activeList?.candidates ?? [];
@@ -124,6 +129,24 @@ export function CandidatesPage() {
       setActiveListId(list.list_id);
       setNewListName("");
       setNotice(`已创建「${list.name}」`);
+      void invalidate();
+    },
+    onError: (error) => setNotice(errorMessage(error)),
+  });
+  const renameList = useMutation({
+    mutationFn: () => api.renameCandidateList(activeList!.list_id, editListName),
+    onSuccess: (list) => {
+      setNotice(`已重命名为「${list.name}」`);
+      void invalidate();
+    },
+    onError: (error) => setNotice(errorMessage(error)),
+  });
+  const deleteList = useMutation({
+    mutationFn: () => api.deleteCandidateList(activeList!.list_id),
+    onSuccess: () => {
+      setActiveListId("default");
+      setSelected([]);
+      setNotice("候选池已删除");
       void invalidate();
     },
     onError: (error) => setNotice(errorMessage(error)),
@@ -228,6 +251,30 @@ export function CandidatesPage() {
               <Plus size={15} />
             </Button>
           </form>
+          {activeList && activeList.list_id !== "default" ? (
+            <form
+              className="candidate-list-management"
+              onSubmit={(event) => {
+                event.preventDefault();
+                if (editListName.trim()) renameList.mutate();
+              }}
+            >
+              <label>
+                <span className="sr-only">当前候选池名称</span>
+                <input value={editListName} onChange={(event) => setEditListName(event.target.value)} />
+              </label>
+              <Button size="sm" variant="ghost" type="submit" aria-label="重命名候选池">
+                <Pencil size={13} />
+              </Button>
+              <Button
+                size="sm"
+                variant="ghost"
+                type="button"
+                aria-label="删除候选池"
+                onClick={() => deleteList.mutate()}
+              ><Trash2 size={13} /></Button>
+            </form>
+          ) : null}
           <div className="candidate-sidebar__tip">
             <CheckSquare2 size={17} />
             <p>建议每只候选都留一个“下次重看条件”，避免候选池变成收藏夹。</p>

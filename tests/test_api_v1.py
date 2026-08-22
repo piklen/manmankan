@@ -61,6 +61,33 @@ def test_screen_crud_and_meta_round_trip(client: TestClient) -> None:
     assert client.get(f"/api/v1/screens/{screen_id}").status_code == 404
 
 
+def test_screen_versions_can_be_inspected_and_restored_as_new_version(
+    client: TestClient,
+) -> None:
+    first = client.post(
+        "/api/v1/screens",
+        json={"spec": {"name": "版本规则", "exclude_st": True}},
+    ).json()
+    screen_id = first["screen_id"]
+    second = client.post(
+        "/api/v1/screens",
+        json={
+            "screen_id": screen_id,
+            "spec": {"name": "版本规则", "exclude_st": True, "exclude_bj": True},
+        },
+    ).json()
+
+    versions = client.get(f"/api/v1/screens/{screen_id}/versions").json()
+    restored = client.post(
+        f"/api/v1/screens/{screen_id}/versions/1/restore"
+    ).json()
+
+    assert second["current_version"] == 2
+    assert [item["version"] for item in versions] == [2, 1]
+    assert restored["current_version"] == 3
+    assert restored["spec"]["exclude_bj"] is False
+
+
 def test_candidates_and_compare_sets_round_trip(client: TestClient) -> None:
     assert client.get("/api/v1/candidate-lists").json()[0]["list_id"] == (
         workspace_db.DEFAULT_CANDIDATE_LIST_ID
@@ -89,6 +116,21 @@ def test_candidates_and_compare_sets_round_trip(client: TestClient) -> None:
     assert client.delete(f"/api/v1/compare-sets/{compare_id}").json() == {
         "deleted": True
     }
+
+
+def test_candidate_list_can_be_renamed_and_deleted(client: TestClient) -> None:
+    created = client.post("/api/v1/candidate-lists", json={"name": "临时池"}).json()
+    list_id = created["list_id"]
+
+    renamed = client.patch(
+        f"/api/v1/candidate-lists/{list_id}", json={"name": "长期观察"}
+    )
+    deleted = client.delete(f"/api/v1/candidate-lists/{list_id}")
+    protected = client.delete("/api/v1/candidate-lists/default")
+
+    assert renamed.json()["name"] == "长期观察"
+    assert deleted.json()["deleted"] is True
+    assert protected.status_code == 400
 
 
 def test_compare_set_rejects_duplicate_symbols(client: TestClient) -> None:

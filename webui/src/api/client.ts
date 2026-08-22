@@ -7,6 +7,7 @@ export type ScreenCondition = components["schemas"]["ScreenCondition"];
 export type ScreenEvidence = components["schemas"]["ScreenEvidence"];
 export type ScreenFilterType = components["schemas"]["ScreenFilterType"];
 export type ScreenRun = components["schemas"]["ScreenRun"];
+export type ScreenVersion = components["schemas"]["ScreenVersion"];
 export type ScreenRow = components["schemas"]["ScreenRow"];
 export type Candidate = components["schemas"]["Candidate"];
 export type CandidateList = components["schemas"]["CandidateList"];
@@ -129,6 +130,15 @@ export const api = {
   screens: () => request<SavedScreen[]>("/api/v1/screens"),
   screen: (screenId: string) =>
     request<SavedScreen>(`/api/v1/screens/${encodeURIComponent(screenId)}`),
+  screenVersions: (screenId: string) =>
+    request<ScreenVersion[]>(
+      `/api/v1/screens/${encodeURIComponent(screenId)}/versions`,
+    ),
+  restoreScreenVersion: (screenId: string, version: number) =>
+    request<SavedScreen>(
+      `/api/v1/screens/${encodeURIComponent(screenId)}/versions/${version}/restore`,
+      { method: "POST" },
+    ),
   saveScreen: (spec: ScreenSpec, screenId?: string | null) =>
     request<SavedScreen>("/api/v1/screens", {
       method: "POST",
@@ -171,6 +181,16 @@ export const api = {
       method: "POST",
       body: json({ name }),
     }),
+  renameCandidateList: (listId: string, name: string) =>
+    request<CandidateList>(
+      `/api/v1/candidate-lists/${encodeURIComponent(listId)}`,
+      { method: "PATCH", body: json({ name }) },
+    ),
+  deleteCandidateList: (listId: string) =>
+    request<{ deleted: boolean }>(
+      `/api/v1/candidate-lists/${encodeURIComponent(listId)}`,
+      { method: "DELETE" },
+    ),
   upsertCandidate: (
     listId: string,
     symbol: string,

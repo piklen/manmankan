@@ -111,6 +111,15 @@ describe("ScreenWorkbench", () => {
     vi.spyOn(api, "job").mockResolvedValue(succeededJob);
     vi.spyOn(api, "run").mockResolvedValue(run);
     vi.spyOn(api, "runs").mockResolvedValue([run]);
+    vi.spyOn(api, "screenVersions").mockResolvedValue([
+      {
+        screen_id: "screen-1",
+        version: 1,
+        spec: defaultScreenSpec(),
+        spec_hash: "spec-hash",
+        created_at: "2026-08-23T00:00:00Z",
+      },
+    ]);
 
     renderWorkbench();
     fireEvent.click(await screen.findByRole("button", { name: "保存并运行" }));

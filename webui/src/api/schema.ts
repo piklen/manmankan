@@ -227,6 +227,40 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/screens/{screen_id}/versions": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Screen Versions */
+        get: operations["screen_versions_api_v1_screens__screen_id__versions_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/screens/{screen_id}/versions/{version}/restore": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Restore Screen Version */
+        post: operations["restore_screen_version_api_v1_screens__screen_id__versions__version__restore_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/screens/{screen_id}/runs": {
         parameters: {
             query?: never;
@@ -295,6 +329,24 @@ export interface paths {
         options?: never;
         head?: never;
         patch?: never;
+        trace?: never;
+    };
+    "/api/v1/candidate-lists/{list_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /** Delete Candidate List */
+        delete: operations["delete_candidate_list_api_v1_candidate_lists__list_id__delete"];
+        options?: never;
+        head?: never;
+        /** Rename Candidate List */
+        patch: operations["rename_candidate_list_api_v1_candidate_lists__list_id__patch"];
         trace?: never;
     };
     "/api/v1/candidate-lists/{list_id}/candidates/{symbol}": {
@@ -520,6 +572,11 @@ export interface components {
         };
         /** CandidateListCreateRequest */
         CandidateListCreateRequest: {
+            /** Name */
+            name: string;
+        };
+        /** CandidateListRenameRequest */
+        CandidateListRenameRequest: {
             /** Name */
             name: string;
         };
@@ -1024,6 +1081,21 @@ export interface components {
             spec: components["schemas"]["ScreenSpec"];
             /** Screen Id */
             screen_id?: string | null;
+        };
+        /** ScreenVersion */
+        ScreenVersion: {
+            /** Screen Id */
+            screen_id: string;
+            /** Version */
+            version: number;
+            spec: components["schemas"]["ScreenSpec"];
+            /** Spec Hash */
+            spec_hash: string;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
         };
         /** SettingsFactsResponse */
         SettingsFactsResponse: {
@@ -1538,6 +1610,69 @@ export interface operations {
             };
         };
     };
+    screen_versions_api_v1_screens__screen_id__versions_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                screen_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ScreenVersion"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    restore_screen_version_api_v1_screens__screen_id__versions__version__restore_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                screen_id: string;
+                version: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SavedScreen"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     run_saved_screen_api_v1_screens__screen_id__runs_post: {
         parameters: {
             query?: never;
@@ -1700,6 +1835,72 @@ export interface operations {
         responses: {
             /** @description Successful Response */
             201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CandidateList"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    delete_candidate_list_api_v1_candidate_lists__list_id__delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                list_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DeleteResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    rename_candidate_list_api_v1_candidate_lists__list_id__patch: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                list_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CandidateListRenameRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
                 headers: {
                     [name: string]: unknown;
                 };

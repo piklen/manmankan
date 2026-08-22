@@ -9,8 +9,7 @@
     "build": "npm run generate:api && tsc -b && vite build",
     "check": "npm run generate:api && tsc -b --pretty false",
     "test": "vitest run",
-    "test:watch": "vitest",
-    "test:e2e": "playwright test"
+    "test:watch": "vitest"
   },
   "dependencies": {
     "@tanstack/react-query": "5.101.4",
@@ -20,7 +19,6 @@
     "react-router-dom": "7.18.2"
   },
   "devDependencies": {
-    "@playwright/test": "1.62.1",
     "@testing-library/jest-dom": "7.0.1",
     "@testing-library/react": "16.3.2",
     "@types/node": "26.2.0",

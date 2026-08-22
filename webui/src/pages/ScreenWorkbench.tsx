@@ -30,6 +30,7 @@ import {
   type ScreenRow,
   type ScreenRun,
   type ScreenSpec,
+  type ScreenVersion,
 } from "../api/client";
 import {
   Badge,
@@ -100,6 +101,21 @@ const SORT_FIELDS = [
   ["position.180d", "180 日位置"],
   ["position.60d", "60 日位置"],
   ["position.30d", "30 日位置"],
+  ["pe", "PE TTM"],
+  ["pb", "PB"],
+  ["roe", "ROE"],
+  ["turnover", "换手率"],
+  ["moneyflow", "主力净额"],
+  ["rsi", "RSI"],
+] as const;
+
+const COLUMN_FIELDS = [
+  ["symbol", "代码"],
+  ["name", "名称"],
+  ["price", "价格"],
+  ["position.30d", "30 日位置"],
+  ["position.60d", "60 日位置"],
+  ["position.180d", "180 日位置"],
   ["pe", "PE TTM"],
   ["pb", "PB"],
   ["roe", "ROE"],
@@ -462,48 +478,72 @@ function Builder({
               </label>
             ))}
           </div>
-          <div className="sort-row">
-            <ArrowDownUp size={16} />
-            <label>
-              <span>优先排序</span>
-              <select
-                value={spec.sort?.[0]?.field_id ?? "position.180d"}
-                onChange={(event) =>
+          <div className="sort-config">
+            <div className="sort-config__heading">
+              <span><ArrowDownUp size={15} /> 多级排序</span>
+              <Button
+                size="sm"
+                variant="ghost"
+                disabled={(spec.sort?.length ?? 0) >= 3}
+                onClick={() => {
+                  const current = spec.sort ?? [];
+                  const next = SORT_FIELDS.find(
+                    ([field]) => !current.some((item) => item.field_id === field),
+                  )?.[0] ?? "position.180d";
                   onChange({
                     ...spec,
-                    sort: [{
-                      field_id: event.target.value,
-                      direction: spec.sort?.[0]?.direction ?? "asc",
-                      nulls: "last",
-                    }],
-                  })
-                }
+                    sort: [...current, { field_id: next, direction: "asc", nulls: "last" }],
+                  });
+                }}
               >
-                {SORT_FIELDS.map(([field, label]) => (
-                  <option key={field} value={field}>{label}</option>
-                ))}
-              </select>
-            </label>
-            <label>
-              <span>方向</span>
-              <select
-                value={spec.sort?.[0]?.direction ?? "asc"}
-                onChange={(event) =>
-                  onChange({
-                    ...spec,
-                    sort: [{
-                      field_id: spec.sort?.[0]?.field_id ?? "position.180d",
-                      direction: event.target.value as "asc" | "desc",
-                      nulls: "last",
-                    }],
-                  })
-                }
-              >
-                <option value="asc">从小到大</option>
-                <option value="desc">从大到小</option>
-              </select>
-            </label>
-            <label>
+                <Plus size={13} /> 排序
+              </Button>
+            </div>
+            <div className="sort-stack">
+              {(spec.sort ?? []).map((sort, index) => (
+                <div className="sort-entry" key={`${index}-${sort.field_id}`}>
+                  <span>{index + 1}</span>
+                  <select
+                    aria-label={`第 ${index + 1} 排序字段`}
+                    value={sort.field_id}
+                    onChange={(event) => {
+                      const next = [...(spec.sort ?? [])];
+                      next[index] = { ...sort, field_id: event.target.value };
+                      onChange({ ...spec, sort: next });
+                    }}
+                  >
+                    {SORT_FIELDS.map(([field, label]) => (
+                      <option key={field} value={field}>{label}</option>
+                    ))}
+                  </select>
+                  <select
+                    aria-label={`第 ${index + 1} 排序方向`}
+                    value={sort.direction}
+                    onChange={(event) => {
+                      const next = [...(spec.sort ?? [])];
+                      next[index] = {
+                        ...sort,
+                        direction: event.target.value as "asc" | "desc",
+                      };
+                      onChange({ ...spec, sort: next });
+                    }}
+                  >
+                    <option value="asc">从小到大</option>
+                    <option value="desc">从大到小</option>
+                  </select>
+                  <button
+                    type="button"
+                    className="icon-button"
+                    aria-label={`删除第 ${index + 1} 排序`}
+                    onClick={() => onChange({
+                      ...spec,
+                      sort: (spec.sort ?? []).filter((_, itemIndex) => itemIndex !== index),
+                    })}
+                  ><X size={13} /></button>
+                </div>
+              ))}
+            </div>
+            <label className="limit-field">
               <span>最多返回</span>
               <input
                 type="number"
@@ -515,6 +555,32 @@ function Builder({
             </label>
           </div>
         </div>
+        <div className="column-config">
+          <span>结果字段</span>
+          <div>
+            {COLUMN_FIELDS.map(([field, label]) => {
+              const required = field === "symbol" || field === "name";
+              const checked = required || (spec.columns ?? []).includes(field);
+              return (
+                <label className="column-chip" key={field}>
+                  <input
+                    type="checkbox"
+                    checked={checked}
+                    disabled={required}
+                    onChange={(event) => {
+                      const current = spec.columns ?? [];
+                      const columns = event.target.checked
+                        ? [...new Set([...current, field])]
+                        : current.filter((item) => item !== field);
+                      onChange({ ...spec, columns });
+                    }}
+                  />
+                  <span>{label}</span>
+                </label>
+              );
+            })}
+          </div>
+        </div>
       </Card>
     </div>
   );
@@ -522,18 +588,35 @@ function Builder({
 
 function ResultsTable({
   run,
+  columns,
   selected,
   checked,
   onSelect,
   onCheck,
 }: {
   run: ScreenRun | null;
+  columns: string[];
   selected: string | null;
   checked: string[];
   onSelect: (row: ScreenRow) => void;
   onCheck: (symbol: string, active: boolean) => void;
 }) {
   const rows = run?.rows ?? [];
+  const visibleColumns = columns.filter(
+    (field) => field !== "symbol" && field !== "name",
+  );
+  const labelByField = Object.fromEntries(COLUMN_FIELDS);
+  const renderValue = (row: ScreenRow, field: string) => {
+    const value = field === "price"
+      ? row.price
+      : field.startsWith("position.")
+        ? row.values?.[field] ?? row.positions?.[field.slice(9).replace("d", "")]
+        : row.values?.[field];
+    if (field.startsWith("position.") || ["roe", "turnover"].includes(field)) {
+      return percent(value);
+    }
+    return number(value);
+  };
   if (!run) {
     return (
       <EmptyState
@@ -558,12 +641,9 @@ function ResultsTable({
             <th aria-label="加入对比" />
             <th>#</th>
             <th>股票</th>
-            <th>价格</th>
-            <th>30 日位置</th>
-            <th>60 日位置</th>
-            <th>180 日位置</th>
-            <th>PE</th>
-            <th>换手率</th>
+            {visibleColumns.map((field) => (
+              <th key={field}>{labelByField[field] ?? field}</th>
+            ))}
             <th>证据</th>
           </tr>
         </thead>
@@ -589,12 +669,9 @@ function ResultsTable({
                   <span>{row.symbol}</span>
                 </div>
               </td>
-              <td>{number(row.price)}</td>
-              <td>{percent(row.values?.["position.30d"] ?? row.positions?.["30"])}</td>
-              <td>{percent(row.values?.["position.60d"] ?? row.positions?.["60"])}</td>
-              <td>{percent(row.values?.["position.180d"] ?? row.positions?.["180"])}</td>
-              <td>{number(row.values?.pe)}</td>
-              <td>{percent(row.values?.turnover)}</td>
+              {visibleColumns.map((field) => (
+                <td key={field}>{renderValue(row, field)}</td>
+              ))}
               <td><Badge tone="info">{row.evidence?.length ?? 0} 条</Badge></td>
             </tr>
           ))}
@@ -715,6 +792,7 @@ export function ScreenWorkbench() {
   const navigate = useNavigate();
   const [spec, setSpec] = useState<ScreenSpec>(() => defaultScreenSpec());
   const [activeId, setActiveId] = useState<string | null>(null);
+  const [previewVersion, setPreviewVersion] = useState<number | null>(null);
   const [run, setRun] = useState<ScreenRun | null>(null);
   const [selectedSymbol, setSelectedSymbol] = useState<string | null>(null);
   const [compareSymbols, setCompareSymbols] = useState<string[]>([]);
@@ -725,6 +803,11 @@ export function ScreenWorkbench() {
   const historyQuery = useQuery({
     queryKey: ["runs", activeId],
     queryFn: () => api.runs(activeId, 20),
+    enabled: Boolean(activeId),
+  });
+  const versionsQuery = useQuery({
+    queryKey: ["screen-versions", activeId],
+    queryFn: () => api.screenVersions(activeId!),
     enabled: Boolean(activeId),
   });
   useEffect(() => {
@@ -743,9 +826,11 @@ export function ScreenWorkbench() {
     mutationFn: () => api.saveScreen(spec, activeId),
     onSuccess: (saved) => {
       setActiveId(saved.screen_id);
+      setPreviewVersion(saved.current_version);
       setSpec(cloneSpec(saved.spec));
       setNotice(`已保存 v${saved.current_version}`);
       void queryClient.invalidateQueries({ queryKey: ["screens"] });
+      void queryClient.invalidateQueries({ queryKey: ["screen-versions", saved.screen_id] });
     },
     onError: (error) => setNotice(errorMessage(error)),
   });
@@ -763,6 +848,7 @@ export function ScreenWorkbench() {
     },
     onSuccess: ({ saved, result }) => {
       setActiveId(saved.screen_id);
+      setPreviewVersion(saved.current_version);
       setSpec(cloneSpec(saved.spec));
       setRun(result);
       setSelectedSymbol(result.rows?.[0]?.symbol ?? null);
@@ -770,6 +856,7 @@ export function ScreenWorkbench() {
       setNotice(`运行完成：返回 ${result.coverage.returned} 只`);
       void queryClient.invalidateQueries({ queryKey: ["screens"] });
       void queryClient.invalidateQueries({ queryKey: ["runs", saved.screen_id] });
+      void queryClient.invalidateQueries({ queryKey: ["screen-versions", saved.screen_id] });
     },
     onError: (error) => setNotice(errorMessage(error)),
   });
@@ -800,13 +887,30 @@ export function ScreenWorkbench() {
     },
     onError: (error) => setNotice(errorMessage(error)),
   });
+  const restoreMutation = useMutation({
+    mutationFn: ({ screenId, version }: { screenId: string; version: number }) =>
+      api.restoreScreenVersion(screenId, version),
+    onSuccess: (saved) => {
+      setSpec(cloneSpec(saved.spec));
+      setPreviewVersion(saved.current_version);
+      setNotice(`历史规则已恢复为新版本 v${saved.current_version}`);
+      void queryClient.invalidateQueries({ queryKey: ["screens"] });
+      void queryClient.invalidateQueries({ queryKey: ["screen-versions", saved.screen_id] });
+    },
+    onError: (error) => setNotice(errorMessage(error)),
+  });
 
   const selectedRow =
     run?.rows?.find((row) => row.symbol === selectedSymbol) ?? null;
+  const currentVersion =
+    screensQuery.data?.find((item) => item.screen_id === activeId)?.current_version ??
+    versionsQuery.data?.[0]?.version ??
+    null;
   const busy = saveMutation.isPending || runMutation.isPending;
 
   const openScreen = (saved: SavedScreen) => {
     setActiveId(saved.screen_id);
+    setPreviewVersion(saved.current_version);
     setSpec(cloneSpec(saved.spec));
     setRun(null);
     setSelectedSymbol(null);
@@ -841,6 +945,7 @@ export function ScreenWorkbench() {
           onOpen={openScreen}
           onNew={() => {
             setActiveId(null);
+            setPreviewVersion(null);
             setSpec(defaultScreenSpec());
             setRun(null);
             setSelectedSymbol(null);
@@ -858,13 +963,57 @@ export function ScreenWorkbench() {
               />
             </label>
             <div>
-              {activeId ? <Badge tone="neutral">ID {compactId(activeId)}</Badge> : <Badge tone="info">未保存</Badge>}
+              {activeId ? (
+                <>
+                  <Badge tone="neutral">ID {compactId(activeId)}</Badge>
+                  <label className="version-picker">
+                    <span className="sr-only">规则版本</span>
+                    <select
+                      value={previewVersion ?? currentVersion ?? ""}
+                      onChange={(event) => {
+                        const versionNumber = Number(event.target.value);
+                        const historical = versionsQuery.data?.find(
+                          (item: ScreenVersion) => item.version === versionNumber,
+                        );
+                        if (!historical) return;
+                        setPreviewVersion(historical.version);
+                        setSpec(cloneSpec(historical.spec));
+                        setNotice(
+                          historical.version === currentVersion
+                            ? `已载入当前 v${historical.version}`
+                            : `正在预览历史 v${historical.version}`,
+                        );
+                      }}
+                    >
+                      {(versionsQuery.data ?? []).map((version) => (
+                        <option key={version.version} value={version.version}>
+                          v{version.version}{version.version === currentVersion ? " · 当前" : ""}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                  {previewVersion !== null &&
+                  currentVersion !== null &&
+                  previewVersion !== currentVersion ? (
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      disabled={restoreMutation.isPending}
+                      onClick={() => restoreMutation.mutate({
+                        screenId: activeId,
+                        version: previewVersion,
+                      })}
+                    >恢复为新版本</Button>
+                  ) : null}
+                </>
+              ) : <Badge tone="info">未保存</Badge>}
               <button
                 type="button"
                 className="icon-button"
                 aria-label="复制规则"
                 onClick={() => {
                   setActiveId(null);
+                  setPreviewVersion(null);
                   setSpec({ ...cloneSpec(spec), name: `${spec.name} · 副本` });
                   setNotice("已复制为未保存规则");
                 }}
@@ -898,6 +1047,7 @@ export function ScreenWorkbench() {
             </div>
             <ResultsTable
               run={run}
+              columns={spec.columns ?? ["price", "position.180d"]}
               selected={selectedSymbol}
               checked={compareSymbols}
               onSelect={(row) => setSelectedSymbol(row.symbol)}

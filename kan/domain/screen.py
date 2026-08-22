@@ -116,8 +116,12 @@ class UniverseSpec(StrictModel):
             raise ValueError("自定义代码池至少需要一只股票")
         if self.kind in {UniverseKind.INDUSTRY, UniverseKind.THEME} and not self.value:
             raise ValueError("行业或题材股票池必须提供名称")
+        if self.kind not in {UniverseKind.INDUSTRY, UniverseKind.THEME} and self.value:
+            raise ValueError("只有行业或题材股票池可以携带 value")
         if self.kind is not UniverseKind.CODES and self.codes:
             raise ValueError("只有自定义代码池可以携带 codes")
+        if self.kind is not UniverseKind.WATCHLIST and self.group:
+            raise ValueError("只有自选股票池可以指定 group")
         return self
 
 
@@ -201,6 +205,11 @@ class ScreenSpec(StrictModel):
             self.exclude_st or self.exclude_star or self.exclude_bj
         ):
             raise ValueError("至少需要一个筛选条件或排除规则")
+        sort_fields = [item.field_id for item in self.sort]
+        if len(set(sort_fields)) != len(sort_fields):
+            raise ValueError("排序字段不能重复")
+        if len(set(self.columns)) != len(self.columns):
+            raise ValueError("结果字段不能重复")
         return self
 
 
@@ -284,6 +293,14 @@ class SavedScreen(StrictModel):
     spec_hash: str
     created_at: datetime
     updated_at: datetime
+
+
+class ScreenVersion(StrictModel):
+    screen_id: str
+    version: int
+    spec: ScreenSpec
+    spec_hash: str
+    created_at: datetime
 
 
 class Candidate(StrictModel):

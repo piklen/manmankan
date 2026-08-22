@@ -19,6 +19,7 @@ from kan.domain.screen import (
     CompareSet,
     SavedScreen,
     ScreenRun,
+    ScreenVersion,
 )
 from kan.service import job_service, screen_service
 from kan.service.hold_service import build_hold_summary
@@ -30,6 +31,7 @@ from kan.storage import positions, watchlist, workspace_db
 from kan.web.api_models import (
     ApiMeta,
     CandidateListCreateRequest,
+    CandidateListRenameRequest,
     CandidateUpsertRequest,
     CashUpdateRequest,
     CompareSetUpsertRequest,
@@ -219,6 +221,38 @@ def screen(screen_id: str) -> SavedScreen:
     return item
 
 
+@router.get("/screens/{screen_id}/versions", response_model=list[ScreenVersion])
+def screen_versions(screen_id: str) -> list[ScreenVersion]:
+    if workspace_db.get_screen(screen_id) is None:
+        raise HTTPException(
+            status_code=404,
+            detail={
+                "code": "screen_not_found",
+                "message": f"Screen 不存在: {screen_id}",
+                "hint": None,
+            },
+        )
+    return workspace_db.list_screen_versions(screen_id)
+
+
+@router.post(
+    "/screens/{screen_id}/versions/{version}/restore",
+    response_model=SavedScreen,
+)
+def restore_screen_version(screen_id: str, version: int) -> SavedScreen:
+    historical = workspace_db.get_screen_version(screen_id, version)
+    if historical is None:
+        raise HTTPException(
+            status_code=404,
+            detail={
+                "code": "screen_version_not_found",
+                "message": f"Screen {screen_id} 不存在 v{version}",
+                "hint": None,
+            },
+        )
+    return screen_service.save_screen(historical.spec, screen_id=screen_id)
+
+
 @router.delete("/screens/{screen_id}", response_model=DeleteResponse)
 def delete_screen(screen_id: str) -> DeleteResponse:
     return DeleteResponse(deleted=workspace_db.delete_screen(screen_id))
@@ -272,6 +306,25 @@ def candidate_lists() -> list[CandidateList]:
 def create_candidate_list(payload: CandidateListCreateRequest) -> CandidateList:
     try:
         return workspace_db.create_candidate_list(payload.name)
+    except ValueError as exc:
+        _value_error(exc)
+
+
+@router.patch("/candidate-lists/{list_id}", response_model=CandidateList)
+def rename_candidate_list(
+    list_id: str,
+    payload: CandidateListRenameRequest,
+) -> CandidateList:
+    try:
+        return workspace_db.rename_candidate_list(list_id, payload.name)
+    except ValueError as exc:
+        _value_error(exc)
+
+
+@router.delete("/candidate-lists/{list_id}", response_model=DeleteResponse)
+def delete_candidate_list(list_id: str) -> DeleteResponse:
+    try:
+        return DeleteResponse(deleted=workspace_db.delete_candidate_list(list_id))
     except ValueError as exc:
         _value_error(exc)
 

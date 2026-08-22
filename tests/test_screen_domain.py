@@ -10,7 +10,9 @@ from kan.domain.screen import (
     ComparisonOperator,
     ScreenCondition,
     ScreenFilterType,
+    ScreenSort,
     ScreenSpec,
+    SortDirection,
     UniverseKind,
     UniverseSpec,
 )
@@ -59,6 +61,18 @@ def test_universe_and_screen_reject_ambiguous_shapes() -> None:
 
     with pytest.raises(ValidationError, match="至少需要一个筛选条件"):
         ScreenSpec()
+
+    with pytest.raises(ValidationError, match="只有自选股票池"):
+        UniverseSpec(kind=UniverseKind.ALL, group="短线")
+
+    with pytest.raises(ValidationError, match="排序字段不能重复"):
+        ScreenSpec(
+            exclude_st=True,
+            sort=[
+                ScreenSort(field_id="pe", direction=SortDirection.ASC, nulls="last"),
+                ScreenSort(field_id="pe", direction=SortDirection.DESC, nulls="last"),
+            ],
+        )
 
 
 def test_content_hash_is_canonical_across_equivalent_models() -> None:

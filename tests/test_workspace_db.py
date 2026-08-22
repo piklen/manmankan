@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import os
+import sqlite3
 from datetime import UTC, datetime
 from pathlib import Path
 
@@ -77,6 +78,11 @@ def test_screen_versions_are_append_only_and_idempotent(
     assert unchanged.current_version == 1
     assert changed.current_version == 2
     assert workspace_db.get_screen(first.screen_id) == changed
+    versions = workspace_db.list_screen_versions(first.screen_id)
+    original = workspace_db.get_screen_version(first.screen_id, 1)
+    assert [item.version for item in versions] == [2, 1]
+    assert original is not None
+    assert original.spec == first_spec
     assert os.stat(isolated_workspace_db).st_mode & 0o777 == 0o600
 
 
@@ -106,3 +112,45 @@ def test_run_candidate_and_compare_round_trip(isolated_workspace_db: Path) -> No
     assert workspace_db.delete_compare_set(compare.compare_id) is False
     assert workspace_db.remove_candidate(candidate.list_id, candidate.symbol) is True
     assert workspace_db.remove_candidate(candidate.list_id, candidate.symbol) is False
+
+
+def test_candidate_list_rename_delete_and_default_protection(
+    isolated_workspace_db: Path,
+) -> None:
+    created = workspace_db.create_candidate_list("初始名称")
+    renamed = workspace_db.rename_candidate_list(created.list_id, "长期观察")
+
+    assert renamed.name == "长期观察"
+    assert workspace_db.delete_candidate_list(created.list_id) is True
+    with pytest.raises(ValueError, match="默认研究候选池不能删除"):
+        workspace_db.delete_candidate_list(workspace_db.DEFAULT_CANDIDATE_LIST_ID)
+
+
+def test_schema_upgrade_adds_job_result_reference(
+    isolated_workspace_db: Path,
+) -> None:
+    with sqlite3.connect(isolated_workspace_db) as conn:
+        conn.execute(
+            """
+            CREATE TABLE jobs (
+                job_id TEXT PRIMARY KEY,
+                kind TEXT NOT NULL,
+                status TEXT NOT NULL,
+                progress INTEGER NOT NULL DEFAULT 0,
+                total INTEGER NOT NULL DEFAULT 0,
+                watermark TEXT,
+                message TEXT NOT NULL DEFAULT '',
+                error TEXT,
+                created_at TEXT NOT NULL,
+                updated_at TEXT NOT NULL
+            )
+            """
+        )
+        conn.execute("PRAGMA user_version = 2")
+
+    assert workspace_db.list_jobs() == []
+    with sqlite3.connect(isolated_workspace_db) as conn:
+        columns = {row[1] for row in conn.execute("PRAGMA table_info(jobs)")}
+        version = conn.execute("PRAGMA user_version").fetchone()[0]
+    assert "result_ref" in columns
+    assert version == workspace_db.SCHEMA_VERSION

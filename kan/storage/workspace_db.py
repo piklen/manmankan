@@ -26,6 +26,7 @@ from kan.domain.screen import (
     SavedScreen,
     ScreenRun,
     ScreenSpec,
+    ScreenVersion,
 )
 from kan.storage import paths
 
@@ -303,6 +304,50 @@ def get_screen(screen_id: str) -> SavedScreen | None:
         return None if row is None else _screen_from_row(conn, row)
 
 
+def list_screen_versions(screen_id: str) -> list[ScreenVersion]:
+    with contextlib.closing(_connect()) as conn:
+        rows = conn.execute(
+            """
+            SELECT screen_id, version, spec_json, spec_hash, created_at
+            FROM screen_versions
+            WHERE screen_id = ?
+            ORDER BY version DESC
+            """,
+            (screen_id,),
+        ).fetchall()
+        return [
+            ScreenVersion(
+                screen_id=row["screen_id"],
+                version=row["version"],
+                spec=ScreenSpec.model_validate_json(row["spec_json"]),
+                spec_hash=row["spec_hash"],
+                created_at=datetime.fromisoformat(row["created_at"]),
+            )
+            for row in rows
+        ]
+
+
+def get_screen_version(screen_id: str, version: int) -> ScreenVersion | None:
+    with contextlib.closing(_connect()) as conn:
+        row = conn.execute(
+            """
+            SELECT screen_id, version, spec_json, spec_hash, created_at
+            FROM screen_versions
+            WHERE screen_id = ? AND version = ?
+            """,
+            (screen_id, version),
+        ).fetchone()
+        if row is None:
+            return None
+        return ScreenVersion(
+            screen_id=row["screen_id"],
+            version=row["version"],
+            spec=ScreenSpec.model_validate_json(row["spec_json"]),
+            spec_hash=row["spec_hash"],
+            created_at=datetime.fromisoformat(row["created_at"]),
+        )
+
+
 def delete_screen(screen_id: str) -> bool:
     with transaction() as conn:
         cursor = conn.execute("DELETE FROM screens WHERE screen_id = ?", (screen_id,))
@@ -466,6 +511,31 @@ def create_candidate_list(name: str) -> CandidateList:
         created_at=now,
         updated_at=now,
     )
+
+
+def rename_candidate_list(list_id: str, name: str) -> CandidateList:
+    actual_name = name.strip()
+    if not actual_name:
+        raise ValueError("候选池名称不能为空")
+    now = _now()
+    with transaction() as conn:
+        cursor = conn.execute(
+            "UPDATE candidate_lists SET name = ?, updated_at = ? WHERE list_id = ?",
+            (actual_name, now.isoformat(), list_id),
+        )
+        if cursor.rowcount == 0:
+            raise ValueError(f"候选池不存在: {list_id}")
+    return next(item for item in list_candidate_lists() if item.list_id == list_id)
+
+
+def delete_candidate_list(list_id: str) -> bool:
+    if list_id == DEFAULT_CANDIDATE_LIST_ID:
+        raise ValueError("默认研究候选池不能删除")
+    with transaction() as conn:
+        cursor = conn.execute(
+            "DELETE FROM candidate_lists WHERE list_id = ?", (list_id,)
+        )
+        return cursor.rowcount > 0
 
 
 def upsert_candidate(
