@@ -73,18 +73,32 @@ def load_grouped_watchlist() -> GroupedWatchlist:
       {"version": 2, "default": "自选", "groups": {"自选": {"stocks": [...]}}}
     文件不存在 → 返回空的 default 组;default 指向不存在的组时降级修正(防御性)。
     """
-    if not paths.WATCHLIST_PATH.exists():
-        return GroupedWatchlist(source_token=_MISSING_SOURCE_TOKEN)
-    try:
-        raw = paths.WATCHLIST_PATH.read_bytes()
-        data = json.loads(raw)
-    except json.JSONDecodeError as e:
-        raise WatchlistCorruptError(
-            f"自选股文件损坏（{paths.WATCHLIST_PATH.name}）· "
-            f"错误: {e.msg} (行 {e.lineno} 列 {e.colno})"
-        ) from e
+    from kan.storage.workspace_migration import adopt_state, load_state
 
-    raw_groups = data.get("groups", {})
+    data = load_state("watchlist", paths.WATCHLIST_PATH)
+    needs_adoption = data is None
+    if data is None:
+        if not paths.WATCHLIST_PATH.exists():
+            data = {
+                "version": SCHEMA_VERSION,
+                "default": DEFAULT_GROUP_NAME,
+                "groups": {DEFAULT_GROUP_NAME: {"stocks": []}},
+            }
+        else:
+            try:
+                data = json.loads(paths.WATCHLIST_PATH.read_bytes())
+            except json.JSONDecodeError as e:
+                raise WatchlistCorruptError(
+                    f"自选股文件损坏（{paths.WATCHLIST_PATH.name}）· "
+                    f"错误: {e.msg} (行 {e.lineno} 列 {e.colno})"
+                ) from e
+            if not isinstance(data, dict):
+                raise WatchlistCorruptError(
+                    f"自选股文件结构无效（{paths.WATCHLIST_PATH.name}）"
+                )
+
+    raw_groups_value = data.get("groups", {})
+    raw_groups = raw_groups_value if isinstance(raw_groups_value, dict) else {}
     groups: dict[str, list[Stock]] = {}
     for name, payload in raw_groups.items():
         stock_list = payload.get("stocks", []) if isinstance(payload, dict) else []
@@ -101,19 +115,18 @@ def load_grouped_watchlist() -> GroupedWatchlist:
             groups[DEFAULT_GROUP_NAME] = []
             default = DEFAULT_GROUP_NAME
 
-    return GroupedWatchlist(
+    grouped = GroupedWatchlist(
         groups=groups,
         default=default,
-        source_token=hashlib.sha256(raw).hexdigest(),
+        source_token=_current_source_token(),
     )
+    if needs_adoption:
+        adopt_state("watchlist", paths.WATCHLIST_PATH, _grouped_payload(grouped))
+    return grouped
 
 
-def _save_grouped_watchlist(gw: GroupedWatchlist) -> None:
-    """原子写 v2 schema · 保 0o600 持仓画像隐私底线。"""
-    paths.ensure_dirs()
-    if gw._source_token is not None and gw._source_token != _current_source_token():
-        raise WatchlistConflictError("自选数据已被其他窗口修改 · 请重新打开后再试")
-    data = {
+def _grouped_payload(gw: GroupedWatchlist) -> dict[str, object]:
+    return {
         "version": SCHEMA_VERSION,
         "default": gw.default,
         "groups": {
@@ -121,6 +134,17 @@ def _save_grouped_watchlist(gw: GroupedWatchlist) -> None:
             for name, stocks in gw.groups.items()
         },
     }
+
+
+def _save_grouped_watchlist(gw: GroupedWatchlist) -> None:
+    """原子写 v2 schema · 保 0o600 持仓画像隐私底线。"""
+    paths.ensure_dirs()
+    if gw._source_token is not None and gw._source_token != _current_source_token():
+        raise WatchlistConflictError("自选数据已被其他窗口修改 · 请重新打开后再试")
+    from kan.storage.workspace_migration import save_state
+
+    data = _grouped_payload(gw)
+    save_state("watchlist", paths.WATCHLIST_PATH, data)
     _atomic_write_json(paths.WATCHLIST_PATH, data)
     gw._source_token = _current_source_token()
 

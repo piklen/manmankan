@@ -13,6 +13,9 @@ build/
 venv/
 .uv/
 
+# Web UI dependencies / transient build state
+webui/node_modules/
+
 # Environment variables
 .env
 .env.local

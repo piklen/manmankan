@@ -15,7 +15,6 @@ from kan.core.models import (
     StockScanResult,
     ValuationMetrics,
 )
-from kan.render.base import FIND_DISCLAIMER_TEXT
 from kan.service.find_service import FindKlineResult
 from kan.web.app import create_app
 from kan.web.security import SESSION_HEADER_NAME
@@ -31,20 +30,12 @@ def _client() -> TestClient:
     )
 
 
-def test_find_page_contains_disclaimer_and_cli_area() -> None:
+def test_legacy_find_route_serves_spa_entry() -> None:
     response = _client().get("/find")
 
     assert response.status_code == 200
-    assert FIND_DISCLAIMER_TEXT in response.text
-    assert "高级用法：复制到终端或交给 AI" in response.text
-    assert "按你的条件找股票" in response.text
-    assert "快速填入示例" in response.text
-    assert 'aria-label="自定义股票代码"' in response.text
-    assert 'aria-label="行业名称"' in response.text
-    assert 'aria-label="题材名称"' in response.text
-    assert 'aria-live="polite" x-text="message"' in response.text
-    assert 'x-show="message"' not in response.text
-    assert response.text.count('name="find-match-mode"') == 2
+    assert '<div id="root"></div>' in response.text
+    assert "/assets/index-" in response.text
 
 
 def test_api_find_returns_web_shape(monkeypatch) -> None:

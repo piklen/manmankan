@@ -87,16 +87,22 @@ def load() -> dict[str, Any]:
 
     返回值是新 dict · 修改它不影响 DEFAULT_CONFIG。
     """
+    from kan.storage.workspace_migration import adopt_state, load_state
+
     config = dict(DEFAULT_CONFIG)
-    if not CONFIG_PATH.exists():
-        return config
-    try:
-        with open(CONFIG_PATH, encoding="utf-8") as f:
-            loaded = json.load(f)
-    except (json.JSONDecodeError, OSError):
-        return config  # 损坏自愈
-    if not isinstance(loaded, dict):
-        return config  # 类型损坏自愈
+    loaded = load_state("config", CONFIG_PATH)
+    if loaded is None:
+        if CONFIG_PATH.exists():
+            try:
+                with open(CONFIG_PATH, encoding="utf-8") as f:
+                    candidate = json.load(f)
+            except (json.JSONDecodeError, OSError):
+                candidate = {}
+            loaded = candidate if isinstance(candidate, dict) else {}
+        else:
+            loaded = {}
+        migrated = {key: loaded.get(key, default) for key, default in DEFAULT_CONFIG.items()}
+        adopt_state("config", CONFIG_PATH, migrated)
     for key in DEFAULT_CONFIG:
         if key in loaded:
             config[key] = loaded[key]
@@ -105,7 +111,10 @@ def load() -> dict[str, Any]:
 
 def save(config: dict[str, Any]) -> None:
     """原子写入 · 自动 mkdir · 防半截写入。"""
+    from kan.storage.workspace_migration import save_state
+
     with config_lock():
+        save_state("config", CONFIG_PATH, config)
         _atomic_write_json(CONFIG_PATH, config)
 
 
@@ -117,6 +126,9 @@ def update(**changes: Any) -> dict[str, Any]:
     with config_lock():
         current = load()
         current.update(changes)
+        from kan.storage.workspace_migration import save_state
+
+        save_state("config", CONFIG_PATH, current)
         _atomic_write_json(CONFIG_PATH, current)
         return current
 

@@ -12,6 +12,7 @@ from kan.core.models import EnrichedResult, PeriodResult, ValuationMetrics
 from kan.domain.screen import (
     ComparisonOperator,
     DataCoverage,
+    NullPolicy,
     ScreenCondition,
     ScreenFilterType,
     ScreenSort,
@@ -146,3 +147,31 @@ def test_next_run_records_added_removed_and_rank_changes(
     assert [(item.symbol, item.delta) for item in second.diff.rank_changes] == [
         ("600519", 1)
     ]
+
+
+def test_fail_null_policy_rejects_partial_dimension_gaps(
+    isolated_workspace: None,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    spec = _spec()
+    conditions = [
+        item.model_copy(update={"null_policy": NullPolicy.FAIL})
+        if item.type is ScreenFilterType.PE
+        else item
+        for item in spec.conditions
+    ]
+    spec = spec.model_copy(update={"conditions": conditions})
+    coverage = _coverage(2).model_copy(
+        update={"missing_by_field": {"pe": 1}}
+    )
+    monkeypatch.setattr(
+        screen_service,
+        "_run_engine",
+        lambda _spec: ([_match("600519", "贵州茅台", pe=20, position=25)], coverage),
+    )
+
+    with pytest.raises(screen_service.ScreenServiceError) as exc_info:
+        screen_service.run_screen(spec, persist=False)
+
+    assert exc_info.value.code == "incomplete_data"
+    assert "pe 缺 1" in exc_info.value.message

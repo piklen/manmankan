@@ -7,7 +7,7 @@ from pathlib import Path
 import pytest
 from fastapi.testclient import TestClient
 
-from kan.storage import paths, workspace_db
+from kan.storage import config, paths, positions, workspace_db
 from kan.web.app import create_app
 from kan.web.security import SESSION_HEADER_NAME
 
@@ -17,6 +17,10 @@ _SESSION = "api-v1-test-session"
 @pytest.fixture
 def client(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> TestClient:
     monkeypatch.setattr(paths, "BASE_DIR", tmp_path)
+    monkeypatch.setattr(paths, "DATA_DIR", tmp_path / "data")
+    monkeypatch.setattr(paths, "POSITIONS_PATH", tmp_path / "positions.json")
+    monkeypatch.setattr(config, "CONFIG_PATH", tmp_path / "config.json")
+    monkeypatch.setattr(positions, "POSITIONS_PATH", tmp_path / "positions.json")
     monkeypatch.setattr(paths, "ensure_dirs", lambda: tmp_path.mkdir(exist_ok=True))
     return TestClient(
         create_app(session_token=_SESSION),
@@ -31,6 +35,8 @@ def test_openapi_only_exposes_typed_v1_contract(client: TestClient) -> None:
     assert response.status_code == 200
     schema = response.json()
     assert "/api/v1/screens" in schema["paths"]
+    assert "/api/v1/portfolio" in schema["paths"]
+    assert "/api/v1/jobs/screen-runs" in schema["paths"]
     assert "/api/find" not in schema["paths"]
     assert "ScreenSpec" in schema["components"]["schemas"]
     assert "ScreenRun" in schema["components"]["schemas"]
@@ -93,3 +99,81 @@ def test_compare_set_rejects_duplicate_symbols(client: TestClient) -> None:
 
     assert response.status_code == 400
     assert response.json()["detail"]["code"] == "invalid_request"
+
+
+def test_stock_research_missing_cache_is_successful_availability_response(
+    client: TestClient,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from kan.service.info_service import InfoDataUnavailableError
+
+    monkeypatch.setattr(
+        "kan.web.api_v1.get_stock_info",
+        lambda _request: (_ for _ in ()).throw(InfoDataUnavailableError("600519")),
+    )
+
+    response = client.get("/api/v1/stocks/600519")
+
+    assert response.status_code == 200
+    assert response.json()["available"] is False
+    assert response.json()["data"] is None
+
+
+def test_portfolio_mutations_use_typed_v1_contract(
+    client: TestClient,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from kan.web.api_models import PortfolioAccountResponse, PortfolioResponse
+
+    empty = PortfolioResponse(
+        ok=True,
+        price_mode="cache",
+        account=PortfolioAccountResponse(),
+        rows=[],
+    )
+    calls: dict[str, object] = {}
+    monkeypatch.setattr("kan.web.api_v1._portfolio_response", lambda: empty)
+    monkeypatch.setattr(
+        "kan.web.api_v1.positions.set_cash",
+        lambda amount: calls.update(cash=amount),
+    )
+    monkeypatch.setattr(
+        "kan.web.api_v1.positions.add_position",
+        lambda symbol, **kwargs: calls.update(symbol=symbol, **kwargs),
+    )
+
+    cash = client.put("/api/v1/portfolio/cash", json={"cash": 12345})
+    position = client.post(
+        "/api/v1/portfolio/positions",
+        json={"code": "600519", "cost": 1500, "shares": 100},
+    )
+
+    assert cash.status_code == 200
+    assert position.status_code == 200
+    assert calls["cash"] == 12345
+    assert calls["symbol"] == "600519"
+    assert calls["cost"] == 1500
+
+
+def test_settings_never_returns_full_token(
+    client: TestClient,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(
+        "kan.web.routes_api.settings_facts",
+        lambda: {
+            "data_dir": "/tmp/kan/data",
+            "kline_cache_files": 3,
+            "tushare_endpoint_domain": "api.tushare.pro",
+        },
+    )
+    monkeypatch.setattr(
+        "kan.web.routes_api._token_status",
+        lambda: {"ok": True, "configured": True, "masked": "***2345"},
+    )
+
+    response = client.get("/api/v1/settings")
+
+    assert response.status_code == 200
+    assert response.json()["tushare_masked"] == "***2345"
+    assert "secret" not in response.text.lower()

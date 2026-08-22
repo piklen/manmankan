@@ -8,7 +8,6 @@ from types import SimpleNamespace
 import pytest
 from fastapi.testclient import TestClient
 
-from kan.render.base import DISCLAIMER, HOLD_DISCLAIMER_TEXT
 from kan.web.app import create_app
 from kan.web.security import SESSION_HEADER_NAME, SESSION_QUERY_NAME, _safe_session_equal
 
@@ -90,21 +89,14 @@ def _scan_payload() -> dict:
     }
 
 
-def test_index_contains_disclaimer(monkeypatch) -> None:
-    monkeypatch.setattr("kan.web.routes_pages.default_scan_payload", _scan_payload)
-    client = _client()
-
-    response = client.get("/")
+def test_index_serves_compiled_spa_shell() -> None:
+    response = _client().get("/")
 
     assert response.status_code == 200
-    assert DISCLAIMER.strip() in response.text
-    assert "数据表" in response.text
-    assert "位置热力图" in response.text
-    assert "代码 / 名称" in response.text
-    assert "今天先看这三件事" in response.text
-    assert "我的持仓" in response.text
-    assert "数据设置" in response.text
-    assert "指数数据读取中" in response.text
+    assert '<div id="root"></div>' in response.text
+    assert "/assets/index-" in response.text
+    assert 'name="kan-session" content="test-session-token"' in response.text
+    assert "jinja" not in response.text.lower()
 
 
 def test_session_is_required_and_query_opens_authenticated_page() -> None:
@@ -117,7 +109,7 @@ def test_session_is_required_and_query_opens_authenticated_page() -> None:
     page = client.get(f"/?{SESSION_QUERY_NAME}={_TEST_SESSION_TOKEN}")
     assert page.status_code == 200
     assert "set-cookie" not in page.headers
-    assert f"/?{SESSION_QUERY_NAME}={_TEST_SESSION_TOKEN}" in page.text
+    assert f'content="{_TEST_SESSION_TOKEN}"' in page.text
     assert page.headers["x-frame-options"] == "DENY"
     assert page.headers["content-security-policy"] == "frame-ancestors 'none'"
     assert page.headers["referrer-policy"] == "no-referrer"
@@ -412,78 +404,13 @@ def test_positions_api_explains_corrupt_local_file(monkeypatch) -> None:
     assert "请先备份 positions.json" in response.text
 
 
-def test_hold_page_contains_hold_disclaimer(monkeypatch) -> None:
-    monkeypatch.setattr("kan.web.routes_pages.build_hold_summary", lambda: _hold_summary())
+def test_spa_deep_routes_share_the_same_entry_shell() -> None:
     client = _client()
 
-    response = client.get("/hold")
+    responses = [client.get(path) for path in ("/hold", "/portfolio", "/candidates")]
 
-    assert response.status_code == 200
-    assert DISCLAIMER.strip() in response.text
-    assert HOLD_DISCLAIMER_TEXT in response.text
-    assert "名称代码" in response.text
-    assert "隐藏金额" in response.text
-    assert "添加一只持仓" in response.text
-    assert "hold-result-list" in response.text
-
-
-def test_hold_page_empty_state(monkeypatch) -> None:
-    from kan.web.serialize import empty_hold_payload
-
-    monkeypatch.setattr("kan.web.routes_pages.serialize_hold", lambda _summary: empty_hold_payload())
-    monkeypatch.setattr("kan.web.routes_pages.build_hold_summary", lambda: object())
-    client = _client()
-
-    response = client.get("/hold")
-
-    assert response.status_code == 200
-    assert "还没有持仓记录" in response.text
-    assert "在上方录入第一只持仓" in response.text
-    assert "kan hold add" not in response.text
-
-
-def test_hold_page_error_state_explains_recovery_and_stops_writes(monkeypatch) -> None:
-    monkeypatch.setattr(
-        "kan.web.routes_pages.build_hold_summary",
-        lambda: (_ for _ in ()).throw(RuntimeError("broken")),
-    )
-
-    response = _client().get("/hold")
-
-    assert response.status_code == 200
-    assert "\\u6301\\u4ed3\\u6570\\u636e\\u6682\\u4e0d\\u53ef\\u7528" in response.text
-    assert "当前页面已停止写入" in response.text
-
-
-def test_hold_page_corrupt_file_explains_backup_and_data_directory(monkeypatch) -> None:
-    from kan.storage.positions import PositionsCorruptError
-
-    monkeypatch.setattr(
-        "kan.web.routes_pages.build_hold_summary",
-        lambda: (_ for _ in ()).throw(PositionsCorruptError("broken")),
-    )
-
-    response = _client().get("/hold")
-
-    assert response.status_code == 200
-    assert "\\u6301\\u4ed3\\u6587\\u4ef6\\u65e0\\u6cd5\\u8bfb\\u53d6" in response.text
-    assert "请先备份 positions.json" in response.text
-    assert "本页已停止写入" in response.text
-    assert "打开数据设置" in response.text
-
-
-def test_index_page_unavailable_is_neutral(monkeypatch) -> None:
-    monkeypatch.setattr(
-        "kan.web.routes_pages.default_scan_payload",
-        lambda: (_ for _ in ()).throw(RuntimeError("scan down")),
-    )
-    client = _client()
-
-    response = client.get("/")
-
-    assert response.status_code == 200
-    assert "暂时无法读取本地行情" in response.text
-    assert "还没有数据" in response.text
+    assert all(response.status_code == 200 for response in responses)
+    assert all('<div id="root"></div>' in response.text for response in responses)
 
 
 def test_api_index_returns_reference_rows(monkeypatch) -> None:
@@ -527,44 +454,6 @@ def test_api_index_unavailable_is_neutral(monkeypatch) -> None:
 
     assert response.status_code == 200
     assert response.json()["message"] == "指数数据不可用"
-
-
-def test_settings_page_shows_masked_token_and_facts(tmp_path, monkeypatch) -> None:
-    from kan.storage import config
-
-    cfg_path = tmp_path / "config.json"
-    monkeypatch.setattr(config, "CONFIG_PATH", cfg_path)
-    config.save({**config.DEFAULT_CONFIG, "tushare_token": "abc12345"})
-    monkeypatch.setattr(
-        "kan.web.routes_pages.settings_facts",
-        lambda: {
-            "data_dir": "/tmp/kan/data",
-            "kline_cache_files": 3,
-            "tushare_endpoint_domain": "api.tushare.pro",
-        },
-    )
-    client = _client()
-
-    response = client.get("/settings")
-
-    assert response.status_code == 200
-    assert "***2345" in response.text
-    assert "abc12345" not in response.text
-    assert "/tmp/kan/data" in response.text
-    assert "api.tushare.pro" in response.text
-
-
-def test_settings_page_unavailable_is_neutral(monkeypatch) -> None:
-    monkeypatch.setattr(
-        "kan.web.routes_api._token_status",
-        lambda: (_ for _ in ()).throw(RuntimeError("config down")),
-    )
-    client = _client()
-
-    response = client.get("/settings")
-
-    assert response.status_code == 200
-    assert "数据暂不可用" in response.text
 
 
 def test_config_token_api_masks_full_token(tmp_path, monkeypatch) -> None:
@@ -711,34 +600,11 @@ def _info_payload() -> dict:
     }
 
 
-def test_stock_page_contains_disclaimer(monkeypatch) -> None:
-    monkeypatch.setattr("kan.web.routes_pages.get_stock_info", lambda request: SimpleNamespace())
-    monkeypatch.setattr("kan.web.routes_pages.serialize_info", lambda result: _info_payload())
-    client = _client()
-
-    response = client.get("/stock/600519")
+def test_legacy_stock_deep_link_is_handled_by_spa() -> None:
+    response = _client().get("/stock/600519")
 
     assert response.status_code == 200
-    assert DISCLAIMER.strip() in response.text
-    assert "位置标尺" in response.text
-    assert "位置走势" in response.text
-    assert '"in_watchlist": true' in response.text
-
-
-def test_stock_page_unknown_code_is_neutral_404(monkeypatch) -> None:
-    from kan.service.info_service import InfoDataUnavailableError
-
-    def raise_missing(request):
-        raise InfoDataUnavailableError("000000")
-
-    monkeypatch.setattr("kan.web.routes_pages.get_stock_info", raise_missing)
-    client = _client()
-
-    response = client.get("/stock/000000")
-
-    assert response.status_code == 404
-    assert DISCLAIMER.strip() in response.text
-    assert "本地缓存没有该代码数据" in response.text
+    assert '<div id="root"></div>' in response.text
 
 
 def test_server_host_constant_and_uvicorn_host(monkeypatch) -> None:

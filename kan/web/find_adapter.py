@@ -21,6 +21,7 @@ from kan.service.find_service import (
     run_find_cross_section,
     run_find_kline,
 )
+from kan.service.screen_catalog import SCREEN_FILTER_CATALOG, screen_filter_groups
 from kan.storage import watchlist
 
 POOL_TYPES = {"watchlist", "holdings", "codes", "industry", "theme", "all"}
@@ -29,68 +30,7 @@ OPS = set(ALLOWED_OPS)
 MAX_FILTERS = 12
 WEB_RESULT_LIMIT = 10_000
 
-_WEB_FILTER_GROUPS = (
-    (
-        "价格位置与趋势",
-        (
-            ("pos", "价格区间位置", "%", "period"),
-            ("resonance", "多周期位置共振", "周期", "resonance"),
-            ("gain", "区间涨跌幅", "%", "period"),
-            ("up_days", "连续阳线天数", "天", "scalar"),
-            ("ma_bias", "均线乖离率", "%", "period"),
-            ("rs_index", "相对大盘涨幅差", "百分点", "period"),
-            ("rs_board", "相对行业涨幅差", "百分点", "period"),
-        ),
-    ),
-    (
-        "估值、质量与交易",
-        (
-            ("pe", "市盈率 PE TTM", "倍", "scalar"),
-            ("pb", "市净率 PB", "倍", "scalar"),
-            ("dv", "股息率 TTM", "%", "scalar"),
-            ("roe", "净资产收益率 ROE", "%", "scalar"),
-            ("turnover", "换手率", "%", "scalar"),
-            ("market_cap", "总市值", "亿元", "scalar"),
-            ("volume_ratio", "量比", "倍", "scalar"),
-        ),
-    ),
-    (
-        "资金、技术与筹码",
-        (
-            ("moneyflow", "主力净额（近5日优先）", "万元", "scalar"),
-            ("moneyflow_daily", "单日主力净额", "万元", "scalar"),
-            ("moneyflow_days", "连续主力净流入", "天", "scalar"),
-            ("rsi", "RSI（6日）", "", "scalar"),
-            ("macd_dif", "MACD DIF", "", "scalar"),
-            ("macd", "MACD 柱", "", "scalar"),
-            ("kdj_j", "KDJ J值", "", "scalar"),
-            ("atr_pct", "ATR 波动率", "%", "scalar"),
-            ("winner", "获利盘比例", "%", "scalar"),
-            ("streak", "连板天数", "天", "scalar"),
-        ),
-    ),
-    (
-        "股东与持股结构",
-        (
-            ("holders", "股东户数环比", "%", "scalar"),
-            ("top10", "前十大流通集中度", "%", "scalar"),
-            ("north", "北向持股比例", "%", "scalar"),
-        ),
-    ),
-)
-
-WEB_FILTER_BY_TYPE = {
-    filter_type: {
-        "type": filter_type,
-        "label": label,
-        "unit": unit,
-        "input": input_kind,
-        "flag": FILTER_SPECS[filter_type].flag,
-        "supports_all": FILTER_SPECS[filter_type].supports_all,
-    }
-    for _group, options in _WEB_FILTER_GROUPS
-    for filter_type, label, unit, input_kind in options
-}
+WEB_FILTER_BY_TYPE = SCREEN_FILTER_CATALOG
 PERIOD_FILTERS = {
     filter_type
     for filter_type, metadata in WEB_FILTER_BY_TYPE.items()
@@ -100,13 +40,7 @@ PERIOD_FILTERS = {
 
 def web_filter_groups() -> list[dict[str, Any]]:
     """返回 Web 表单元数据；可选项必须与核心 FILTER_SPECS 同源。"""
-    return [
-        {
-            "label": group,
-            "options": [WEB_FILTER_BY_TYPE[filter_type] for filter_type, *_ in options],
-        }
-        for group, options in _WEB_FILTER_GROUPS
-    ]
+    return screen_filter_groups()
 
 
 def run_web_find(payload: dict[str, Any]) -> dict[str, Any]:

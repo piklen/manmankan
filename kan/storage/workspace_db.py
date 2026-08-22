@@ -17,6 +17,7 @@ from uuid import uuid4
 
 from pydantic import BaseModel
 
+from kan.domain.job import JobStatus, WorkspaceJob
 from kan.domain.screen import (
     Candidate,
     CandidateList,
@@ -28,7 +29,7 @@ from kan.domain.screen import (
 )
 from kan.storage import paths
 
-SCHEMA_VERSION = 1
+SCHEMA_VERSION = 3
 DEFAULT_CANDIDATE_LIST_ID = "default"
 DEFAULT_CANDIDATE_LIST_NAME = "研究候选"
 
@@ -45,6 +46,11 @@ def _json(value: object) -> str:
 
 def _database_path() -> Path:
     return paths.workspace_db_path()
+
+
+def database_path() -> Path:
+    """公开只读路径，供设置页与诊断输出。"""
+    return _database_path()
 
 
 def _connect() -> sqlite3.Connection:
@@ -166,6 +172,7 @@ def _ensure_schema(conn: sqlite3.Connection) -> None:
             watermark TEXT,
             message TEXT NOT NULL DEFAULT '',
             error TEXT,
+            result_ref TEXT,
             created_at TEXT NOT NULL,
             updated_at TEXT NOT NULL
         );
@@ -176,8 +183,26 @@ def _ensure_schema(conn: sqlite3.Connection) -> None:
             details_json TEXT NOT NULL,
             completed_at TEXT NOT NULL
         );
+
+        CREATE TABLE IF NOT EXISTS workspace_state (
+            namespace TEXT PRIMARY KEY,
+            payload_json TEXT NOT NULL,
+            source_hash TEXT,
+            updated_at TEXT NOT NULL
+        );
+
+        CREATE TABLE IF NOT EXISTS workspace_meta (
+            key TEXT PRIMARY KEY,
+            value TEXT NOT NULL,
+            updated_at TEXT NOT NULL
+        );
         """
     )
+    job_columns = {
+        str(row[1]) for row in conn.execute("PRAGMA table_info(jobs)").fetchall()
+    }
+    if "result_ref" not in job_columns:
+        conn.execute("ALTER TABLE jobs ADD COLUMN result_ref TEXT")
     conn.execute(f"PRAGMA user_version = {SCHEMA_VERSION}")
     now = _now().isoformat()
     conn.execute(
@@ -571,11 +596,240 @@ def delete_compare_set(compare_id: str) -> bool:
         return cursor.rowcount > 0
 
 
+def _job_from_row(row: sqlite3.Row) -> WorkspaceJob:
+    return WorkspaceJob(
+        job_id=row["job_id"],
+        kind=row["kind"],
+        status=JobStatus(row["status"]),
+        progress=row["progress"],
+        total=row["total"],
+        watermark=row["watermark"],
+        message=row["message"],
+        error=row["error"],
+        result_ref=row["result_ref"],
+        created_at=datetime.fromisoformat(row["created_at"]),
+        updated_at=datetime.fromisoformat(row["updated_at"]),
+    )
+
+
+def create_job(kind: str, *, total: int = 0, message: str = "") -> WorkspaceJob:
+    now = _now()
+    job = WorkspaceJob(
+        job_id=uuid4().hex,
+        kind=kind,
+        status=JobStatus.QUEUED,
+        progress=0,
+        total=total,
+        message=message,
+        created_at=now,
+        updated_at=now,
+    )
+    with transaction() as conn:
+        conn.execute(
+            """
+            INSERT INTO jobs(
+                job_id, kind, status, progress, total, watermark,
+                message, error, result_ref, created_at, updated_at
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+            (
+                job.job_id,
+                job.kind,
+                job.status.value,
+                job.progress,
+                job.total,
+                job.watermark,
+                job.message,
+                job.error,
+                job.result_ref,
+                job.created_at.isoformat(),
+                job.updated_at.isoformat(),
+            ),
+        )
+    return job
+
+
+def update_job(
+    job_id: str,
+    *,
+    status: JobStatus | None = None,
+    progress: int | None = None,
+    total: int | None = None,
+    watermark: str | None = None,
+    message: str | None = None,
+    error: str | None = None,
+    result_ref: str | None = None,
+) -> WorkspaceJob:
+    with transaction() as conn:
+        row = conn.execute("SELECT * FROM jobs WHERE job_id = ?", (job_id,)).fetchone()
+        if row is None:
+            raise ValueError(f"任务不存在: {job_id}")
+        current = _job_from_row(row)
+        updated = current.model_copy(
+            update={
+                "status": status if status is not None else current.status,
+                "progress": progress if progress is not None else current.progress,
+                "total": total if total is not None else current.total,
+                "watermark": watermark if watermark is not None else current.watermark,
+                "message": message if message is not None else current.message,
+                "error": error if error is not None else current.error,
+                "result_ref": result_ref if result_ref is not None else current.result_ref,
+                "updated_at": _now(),
+            }
+        )
+        conn.execute(
+            """
+            UPDATE jobs SET
+                status = ?, progress = ?, total = ?, watermark = ?,
+                message = ?, error = ?, result_ref = ?, updated_at = ?
+            WHERE job_id = ?
+            """,
+            (
+                updated.status.value,
+                updated.progress,
+                updated.total,
+                updated.watermark,
+                updated.message,
+                updated.error,
+                updated.result_ref,
+                updated.updated_at.isoformat(),
+                job_id,
+            ),
+        )
+        return updated
+
+
+def get_job(job_id: str) -> WorkspaceJob | None:
+    with contextlib.closing(_connect()) as conn:
+        row = conn.execute("SELECT * FROM jobs WHERE job_id = ?", (job_id,)).fetchone()
+        return None if row is None else _job_from_row(row)
+
+
+def list_jobs(*, limit: int = 50) -> list[WorkspaceJob]:
+    with contextlib.closing(_connect()) as conn:
+        rows = conn.execute(
+            "SELECT * FROM jobs ORDER BY created_at DESC LIMIT ?", (limit,)
+        ).fetchall()
+        return [_job_from_row(row) for row in rows]
+
+
+def interrupt_incomplete_jobs() -> int:
+    now = _now().isoformat()
+    with transaction() as conn:
+        cursor = conn.execute(
+            """
+            UPDATE jobs
+            SET status = ?, message = ?, updated_at = ?
+            WHERE status IN (?, ?)
+            """,
+            (
+                JobStatus.INTERRUPTED.value,
+                "进程退出前任务未完成，可重新发起",
+                now,
+                JobStatus.QUEUED.value,
+                JobStatus.RUNNING.value,
+            ),
+        )
+        return cursor.rowcount
+
+
+def get_state(namespace: str) -> dict[str, object] | None:
+    with contextlib.closing(_connect()) as conn:
+        row = conn.execute(
+            "SELECT payload_json FROM workspace_state WHERE namespace = ?",
+            (namespace,),
+        ).fetchone()
+        if row is None:
+            return None
+        payload = json.loads(row["payload_json"])
+        if not isinstance(payload, dict):
+            raise RuntimeError(f"工作台状态 {namespace} 不是 JSON object")
+        return payload
+
+
+def put_state(
+    namespace: str,
+    payload: dict[str, object],
+    *,
+    source_hash: str | None = None,
+    conn: sqlite3.Connection | None = None,
+) -> None:
+    values = (namespace, _json(payload), source_hash, _now().isoformat())
+    if conn is not None:
+        conn.execute(
+            """
+            INSERT INTO workspace_state(namespace, payload_json, source_hash, updated_at)
+            VALUES (?, ?, ?, ?)
+            ON CONFLICT(namespace) DO UPDATE SET
+                payload_json = excluded.payload_json,
+                source_hash = excluded.source_hash,
+                updated_at = excluded.updated_at
+            """,
+            values,
+        )
+        return
+    with transaction() as owned:
+        put_state(namespace, payload, source_hash=source_hash, conn=owned)
+
+
+def delete_state(namespace: str, *, conn: sqlite3.Connection | None = None) -> bool:
+    if conn is not None:
+        return conn.execute(
+            "DELETE FROM workspace_state WHERE namespace = ?", (namespace,)
+        ).rowcount > 0
+    with transaction() as owned:
+        return delete_state(namespace, conn=owned)
+
+
+def get_meta(key: str) -> str | None:
+    with contextlib.closing(_connect()) as conn:
+        row = conn.execute(
+            "SELECT value FROM workspace_meta WHERE key = ?", (key,)
+        ).fetchone()
+        return None if row is None else str(row["value"])
+
+
+def set_meta(
+    key: str,
+    value: str,
+    *,
+    conn: sqlite3.Connection | None = None,
+) -> None:
+    values = (key, value, _now().isoformat())
+    if conn is not None:
+        conn.execute(
+            """
+            INSERT INTO workspace_meta(key, value, updated_at)
+            VALUES (?, ?, ?)
+            ON CONFLICT(key) DO UPDATE SET
+                value = excluded.value,
+                updated_at = excluded.updated_at
+            """,
+            values,
+        )
+        return
+    with transaction() as owned:
+        set_meta(key, value, conn=owned)
+
+
+def state_backend_enabled() -> bool:
+    return get_meta("state_backend") != "legacy"
+
+
 def migration_completed(name: str) -> bool:
     with contextlib.closing(_connect()) as conn:
         return conn.execute(
             "SELECT 1 FROM migrations WHERE name = ?", (name,)
         ).fetchone() is not None
+
+
+def delete_migration(name: str, *, conn: sqlite3.Connection | None = None) -> bool:
+    if conn is not None:
+        return conn.execute(
+            "DELETE FROM migrations WHERE name = ?", (name,)
+        ).rowcount > 0
+    with transaction() as owned:
+        return delete_migration(name, conn=owned)
 
 
 def record_migration(

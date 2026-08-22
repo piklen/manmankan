@@ -197,6 +197,7 @@ def _run_engine(spec: ScreenSpec) -> tuple[list[tuple[object, tuple[TriggeredFil
                 else 0,
                 stale=cross_result.ctx.stale,
                 data_cutoff=cutoff,
+                missing_by_field=_missing_by_field(cross_result.ctx.rows, spec),
             )
             return matches, coverage
 
@@ -233,6 +234,7 @@ def _run_engine(spec: ScreenSpec) -> tuple[list[tuple[object, tuple[TriggeredFil
             else 0,
             stale=kline_result.ctx.freshness.is_stale,
             data_cutoff=kline_result.ctx.freshness.data_cutoff,
+            missing_by_field=_missing_by_field(kline_result.ctx.results, spec),
         )
         return matches, coverage
     except FindServiceError as exc:
@@ -317,6 +319,8 @@ def _row_values(obj: object, triggered: tuple[TriggeredFilter, ...]) -> tuple[
         "low_resonance": _safe_number(getattr(base, "low_resonance", None)),
         "high_resonance": _safe_number(getattr(base, "high_resonance", None)),
         "up_days": _safe_number(getattr(base, "up_days", None)),
+        "resonance.low": _safe_number(getattr(base, "low_resonance", None)),
+        "resonance.high": _safe_number(getattr(base, "high_resonance", None)),
     }
     positions: dict[str, float | None] = {}
     for period in getattr(base, "periods", []) or []:
@@ -327,6 +331,18 @@ def _row_values(obj: object, triggered: tuple[TriggeredFilter, ...]) -> tuple[
         values[f"gain.{period.period}d"] = _safe_number(period.gain_pct)
     for prefix, fields in _DIMENSION_FIELDS.items():
         values.update(_dimension_values(obj, prefix, fields))
+    for period, value in (getattr(base, "ma_biases", {}) or {}).items():
+        values[f"ma_bias.{period}d"] = _safe_number(value)
+    relative = getattr(obj, "relative_strength", None)
+    if relative is not None:
+        for field in ("rs_index", "rs_board"):
+            for period, value in (getattr(relative, field, {}) or {}).items():
+                values[f"{field}.{period}d"] = _safe_number(value)
+    technical = getattr(obj, "technical", None)
+    if technical is not None:
+        atr_pct = getattr(technical, "atr_pct", None)
+        if callable(atr_pct):
+            values["atr_pct"] = _safe_number(atr_pct())
     values.update(_filter_alias_values(values))
     for item in triggered:
         values[item.filter_type] = _safe_number(item.value)
@@ -388,6 +404,25 @@ def _condition_lookup(spec: ScreenSpec) -> dict[tuple[str, str], ScreenCondition
     }
 
 
+def _condition_field_id(condition: ScreenCondition) -> str:
+    if condition.period is not None:
+        return f"{condition.type.value}.{condition.period}d"
+    if condition.level is not None:
+        return f"{condition.type.value}.{condition.level}"
+    return condition.type.value
+
+
+def _missing_by_field(objects: Sequence[object], spec: ScreenSpec) -> dict[str, int]:
+    counts = {_condition_field_id(item): 0 for item in spec.conditions}
+    for obj in objects:
+        _, _, _, _, values, _ = _row_values(obj, ())
+        for condition in spec.conditions:
+            field_id = _condition_field_id(condition)
+            if values.get(field_id) is None:
+                counts[field_id] += 1
+    return {field: count for field, count in counts.items() if count}
+
+
 def _source_and_date(obj: object, condition: ScreenCondition) -> tuple[str | None, date | None]:
     spec = FILTER_SPECS[condition.type.value]
     dimension = spec.dimension
@@ -425,9 +460,7 @@ def _evidence(
                 evidence_ref=f"run:{run_id}:row:{symbol}:condition:{index}",
                 filter_type=condition.type,
                 field_id=(
-                    f"{condition.type.value}.{condition.period}d"
-                    if condition.period is not None
-                    else condition.type.value
+                    _condition_field_id(condition)
                 ),
                 operator=condition.operator,
                 threshold=condition.value,
@@ -541,10 +574,23 @@ def _enforce_missing_policy(spec: ScreenSpec, coverage: DataCoverage) -> None:
             "行情数据尚未到达最新完整交易日",
             hint="先更新数据，或把 freshness_policy 改为 allow_stale",
         )
-    if any(item.null_policy is NullPolicy.FAIL for item in spec.conditions) and coverage.missing:
+    fail_fields = {
+        _condition_field_id(item)
+        for item in spec.conditions
+        if item.null_policy is NullPolicy.FAIL
+    }
+    field_missing = {
+        field: count
+        for field, count in coverage.missing_by_field.items()
+        if field in fail_fields and count
+    }
+    if fail_fields and (coverage.missing or field_missing):
+        details = "、".join(f"{field} 缺 {count}" for field, count in field_missing.items())
+        if coverage.missing:
+            details = f"行情缺 {coverage.missing}" + (f"、{details}" if details else "")
         raise ScreenServiceError(
             "incomplete_data",
-            f"候选池有 {coverage.missing} 只缺少可评估数据",
+            f"候选池存在不可接受的缺失数据：{details}",
             hint="更新数据或将条件 null_policy 改为 exclude",
         )
 
@@ -585,6 +631,11 @@ def run_screen(
         warnings.append("行情数据可能需要更新")
     if coverage.missing:
         warnings.append(f"{coverage.missing} 只股票缺少可评估数据")
+    if coverage.missing_by_field:
+        detail = "、".join(
+            f"{field} 缺 {count}" for field, count in coverage.missing_by_field.items()
+        )
+        warnings.append(f"条件字段缺失：{detail}")
     hashable_rows = _hashable_rows(rows)
     snapshot_id = content_hash(
         {

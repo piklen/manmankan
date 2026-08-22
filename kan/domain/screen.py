@@ -242,6 +242,7 @@ class DataCoverage(StrictModel):
     ratio: float = 0.0
     stale: bool = False
     data_cutoff: date | None = None
+    missing_by_field: dict[str, int] = Field(default_factory=dict)
 
 
 class RankChange(StrictModel):

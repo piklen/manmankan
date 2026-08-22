@@ -9,8 +9,10 @@ from __future__ import annotations
 from typing import Annotated, NoReturn
 
 from fastapi import APIRouter, Body, HTTPException, Query
+from fastapi.responses import StreamingResponse
 
 from kan import __version__
+from kan.domain.job import WorkspaceJob
 from kan.domain.screen import (
     Candidate,
     CandidateList,
@@ -18,19 +20,31 @@ from kan.domain.screen import (
     SavedScreen,
     ScreenRun,
 )
-from kan.service import screen_service
+from kan.service import job_service, screen_service
+from kan.service.hold_service import build_hold_summary
+from kan.service.info_service import InfoDataUnavailableError, InfoRequest, get_stock_info
+from kan.service.market_service import get_market_sentiment, serialize_market_sentiment
+from kan.service.screen_ai import ScreenRunInput
 from kan.service.screen_catalog import screen_filter_groups
-from kan.storage import watchlist, workspace_db
+from kan.storage import positions, watchlist, workspace_db
 from kan.web.api_models import (
     ApiMeta,
     CandidateListCreateRequest,
     CandidateUpsertRequest,
+    CashUpdateRequest,
     CompareSetUpsertRequest,
     DeleteResponse,
     HealthResponse,
+    MarketOverviewResponse,
+    MarketSentimentResponse,
+    PortfolioResponse,
+    PositionCreateRequest,
     ScreenRunRequest,
     ScreenUpsertRequest,
+    SettingsFactsResponse,
+    StockResearchResponse,
 )
+from kan.web.serialize import empty_hold_payload, serialize_hold, serialize_info
 
 router = APIRouter(prefix="/api/v1", tags=["v1"])
 
@@ -72,6 +86,112 @@ def meta() -> ApiMeta:
 @router.get("/filters", response_model=list[dict[str, object]])
 def filters() -> list[dict[str, object]]:
     return screen_filter_groups()
+
+
+@router.get("/stocks/{symbol}", response_model=StockResearchResponse)
+def stock_research(symbol: str) -> StockResearchResponse:
+    try:
+        result = get_stock_info(
+            InfoRequest(
+                symbol_or_name=symbol,
+                allow_fetch=False,
+                include_external_context=False,
+                include_valuation_context=False,
+                include_board_context=True,
+            )
+        )
+    except (ValueError, InfoDataUnavailableError):
+        return StockResearchResponse(
+            available=False,
+            message="本地暂无该股票行情；ScreenRun 证据仍可独立查看",
+        )
+    return StockResearchResponse(available=True, data=serialize_info(result))
+
+
+@router.get("/stocks/{symbol}/history", response_model=dict[str, object])
+def stock_history(symbol: str, period: Annotated[int, Query(ge=2, le=360)] = 60) -> dict:
+    from kan.web.routes_api import history
+
+    return history(symbol, period)
+
+
+@router.get("/market", response_model=MarketOverviewResponse)
+def market_overview() -> MarketOverviewResponse:
+    from kan.web.routes_api import default_scan_payload
+
+    message: str | None = None
+    try:
+        scan = default_scan_payload()
+    except Exception:
+        scan = None
+        message = "默认股票池暂不可用；全市场截面状态仍可独立查看"
+    sentiment = MarketSentimentResponse.model_validate(
+        serialize_market_sentiment(get_market_sentiment())
+    )
+    return MarketOverviewResponse(scan=scan, sentiment=sentiment, message=message)
+
+
+def _portfolio_response() -> PortfolioResponse:
+    try:
+        payload = serialize_hold(build_hold_summary())
+    except Exception:
+        payload = empty_hold_payload(error="持仓数据不可用")
+    return PortfolioResponse.model_validate(payload)
+
+
+@router.get("/portfolio", response_model=PortfolioResponse)
+def portfolio() -> PortfolioResponse:
+    return _portfolio_response()
+
+
+@router.put("/portfolio/cash", response_model=PortfolioResponse)
+def update_portfolio_cash(payload: CashUpdateRequest) -> PortfolioResponse:
+    try:
+        positions.set_cash(payload.cash)
+    except ValueError as exc:
+        _value_error(exc)
+    return _portfolio_response()
+
+
+@router.post("/portfolio/positions", response_model=PortfolioResponse)
+def create_portfolio_position(payload: PositionCreateRequest) -> PortfolioResponse:
+    try:
+        positions.add_position(
+            payload.code,
+            cost=payload.cost,
+            shares=payload.shares,
+            name=payload.name,
+            merge=payload.merge,
+        )
+    except ValueError as exc:
+        _value_error(exc)
+    return _portfolio_response()
+
+
+@router.delete("/portfolio/positions/{symbol}", response_model=PortfolioResponse)
+def delete_portfolio_position(symbol: str) -> PortfolioResponse:
+    try:
+        positions.remove_position(symbol)
+    except ValueError as exc:
+        _value_error(exc)
+    return _portfolio_response()
+
+
+@router.get("/settings", response_model=SettingsFactsResponse)
+def settings() -> SettingsFactsResponse:
+    from kan.web.routes_api import _token_status, settings_facts
+
+    facts = settings_facts()
+    token = _token_status()
+    return SettingsFactsResponse(
+        data_dir=str(facts["data_dir"]),
+        workspace_db=str(workspace_db.database_path()),
+        kline_cache_files=int(facts["kline_cache_files"]),
+        tushare_endpoint_domain=str(facts["tushare_endpoint_domain"]),
+        tushare_configured=bool(token["configured"]),
+        tushare_masked=str(token["masked"]) if token["masked"] is not None else None,
+        state_backend="sqlite" if workspace_db.state_backend_enabled() else "legacy",
+    )
 
 
 @router.get("/screens", response_model=list[SavedScreen])
@@ -216,3 +336,48 @@ def upsert_compare_set(payload: CompareSetUpsertRequest) -> CompareSet:
 @router.delete("/compare-sets/{compare_id}", response_model=DeleteResponse)
 def delete_compare_set(compare_id: str) -> DeleteResponse:
     return DeleteResponse(deleted=workspace_db.delete_compare_set(compare_id))
+
+
+@router.post("/jobs/screen-runs", response_model=WorkspaceJob, status_code=202)
+def start_screen_run_job(payload: ScreenRunInput) -> WorkspaceJob:
+    return job_service.start_screen_run_job(payload)
+
+
+@router.get("/jobs", response_model=list[WorkspaceJob])
+def jobs(
+    limit: Annotated[int, Query(ge=1, le=200)] = 50,
+) -> list[WorkspaceJob]:
+    return workspace_db.list_jobs(limit=limit)
+
+
+@router.get("/jobs/{job_id}", response_model=WorkspaceJob)
+def job(job_id: str) -> WorkspaceJob:
+    item = workspace_db.get_job(job_id)
+    if item is None:
+        raise HTTPException(
+            status_code=404,
+            detail={
+                "code": "job_not_found",
+                "message": f"任务不存在: {job_id}",
+                "hint": None,
+            },
+        )
+    return item
+
+
+@router.get("/jobs/{job_id}/events", response_class=StreamingResponse)
+def job_events(job_id: str) -> StreamingResponse:
+    if workspace_db.get_job(job_id) is None:
+        raise HTTPException(
+            status_code=404,
+            detail={
+                "code": "job_not_found",
+                "message": f"任务不存在: {job_id}",
+                "hint": None,
+            },
+        )
+    return StreamingResponse(
+        job_service.iter_job_events(job_id),
+        media_type="text/event-stream",
+        headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
+    )
