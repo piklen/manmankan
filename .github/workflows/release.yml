@@ -52,8 +52,10 @@ jobs:
           assert callable(akshare.tool_trade_date_hist_sina)
           PY
           /tmp/manmankan-macos-smoke/bin/kan > /tmp/kan-start.txt
-          grep "慢慢看 · 从今天开始" /tmp/kan-start.txt
+          grep "慢慢看 · 从一条明确规则开始" /tmp/kan-start.txt
           test "$(wc -l < /tmp/kan-start.txt)" -lt 40
+          /tmp/manmankan-macos-smoke/bin/kan screen --help
+          /tmp/manmankan-macos-smoke/bin/kan workspace --help
 
   build-and-publish:
     name: Build and publish to PyPI
@@ -151,6 +153,8 @@ jobs:
           HOME="$(mktemp -d)" XDG_DATA_HOME="$(mktemp -d)" /tmp/manmankan-release-smoke/bin/kan --help
           HOME="$(mktemp -d)" XDG_DATA_HOME="$(mktemp -d)" /tmp/manmankan-release-smoke/bin/kan scan --help
           HOME="$(mktemp -d)" XDG_DATA_HOME="$(mktemp -d)" /tmp/manmankan-release-smoke/bin/kan find --help
+          HOME="$(mktemp -d)" XDG_DATA_HOME="$(mktemp -d)" /tmp/manmankan-release-smoke/bin/kan screen --help
+          HOME="$(mktemp -d)" XDG_DATA_HOME="$(mktemp -d)" /tmp/manmankan-release-smoke/bin/kan workspace --help
           HOME="$(mktemp -d)" XDG_DATA_HOME="$(mktemp -d)" /tmp/manmankan-release-smoke/bin/kan board rank --help
           HOME="$(mktemp -d)" XDG_DATA_HOME="$(mktemp -d)" /tmp/manmankan-release-smoke/bin/kan history --help
           FIND_JSON="$(mktemp)"
@@ -166,10 +170,13 @@ jobs:
 
           version = os.environ["GITHUB_REF_NAME"].removeprefix("v")
           import kan
+          from kan.web.app import SPA_INDEX
 
           assert importlib.metadata.version("manmankan") == version
           assert kan.__version__ == version
           assert Path(kan.__file__).resolve().is_relative_to(Path("/tmp/manmankan-release-smoke").resolve())
+          assert SPA_INDEX.is_file()
+          assert "/assets/index-" in SPA_INDEX.read_text(encoding="utf-8")
           payload = json.loads(Path(os.environ["FIND_JSON"]).read_text())
           assert payload["ok"] is True
           assert payload["command"] == "find"
@@ -180,11 +187,13 @@ jobs:
           PY
       - name: Compute install.sh / install.ps1 SHA256
         run: |
-          echo "## install scripts SHA256 (for Verify before bash · 用户校验用)" >> "$GITHUB_STEP_SUMMARY"
-          echo '```' >> "$GITHUB_STEP_SUMMARY"
-          shasum -a 256 scripts/install.sh >> "$GITHUB_STEP_SUMMARY"
-          shasum -a 256 scripts/install.ps1 >> "$GITHUB_STEP_SUMMARY"
-          echo '```' >> "$GITHUB_STEP_SUMMARY"
+          {
+            echo "## install scripts SHA256 (for Verify before bash · 用户校验用)"
+            echo '```'
+            shasum -a 256 scripts/install.sh
+            shasum -a 256 scripts/install.ps1
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
       - name: Publish to PyPI
         uses: pypa/gh-action-pypi-publish@ba38be9e461d3875417946c167d0b5f3d385a247  # pinned 2026-06-02
         with:
@@ -249,6 +258,8 @@ jobs:
           KAN_NO_UPDATE_CHECK=1 kan --help
           KAN_NO_UPDATE_CHECK=1 kan scan --help
           KAN_NO_UPDATE_CHECK=1 kan find --help
+          KAN_NO_UPDATE_CHECK=1 kan screen --help
+          KAN_NO_UPDATE_CHECK=1 kan workspace --help
           NO_COLOR=1 KAN_NO_UPDATE_CHECK=1 kan find --help > /tmp/kan-find-help.txt
           python - <<'PY'
           import re
