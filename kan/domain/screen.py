@@ -6,6 +6,7 @@
 
 from __future__ import annotations
 
+import re
 from datetime import date, datetime
 from enum import StrEnum
 from typing import Annotated, Literal
@@ -102,6 +103,58 @@ PERIOD_FILTER_TYPES = {
     ScreenFilterType.RS_INDEX,
     ScreenFilterType.RS_BOARD,
 }
+
+SCREEN_STATIC_FIELD_IDS = {
+    "symbol",
+    "name",
+    "price",
+    "low_resonance",
+    "high_resonance",
+    "up_days",
+    "atr_pct",
+    "resonance.low",
+    "resonance.high",
+    *[item.value for item in ScreenFilterType],
+    *[
+        f"{dimension}.{field}"
+        for dimension, fields in {
+            "valuation": (
+                "close", "pe_ttm", "pb", "ps_ttm", "dv_ttm", "turnover_rate",
+                "volume_ratio", "total_mv", "circ_mv", "trade_date", "source",
+            ),
+            "fundamentals": ("roe", "netprofit_yoy", "or_yoy", "end_date", "source"),
+            "moneyflow": (
+                "net_amount", "net_amount_5d", "buy_elg_amount", "buy_lg_amount",
+                "inflow_days", "outflow_days", "trade_date", "source",
+            ),
+            "technical": (
+                "rsi_6", "macd_dif", "macd", "kdj_j", "atr", "trade_date", "source",
+            ),
+            "sentiment": (
+                "limit_times", "open_times", "fd_amount", "trade_date", "source",
+            ),
+            "chip": (
+                "winner_rate", "cost_5pct", "cost_50pct", "cost_95pct", "trade_date",
+                "source",
+            ),
+            "shareholder": (
+                "holder_chg_pct", "top10_float_ratio", "north_hold_ratio",
+                "holder_end_date", "top10_end_date", "source",
+            ),
+        }.items()
+        for field in fields
+    ],
+}
+_PERIOD_FIELD_RE = re.compile(
+    r"^(?:position|gain|ma_bias|rs_index|rs_board)\.(\d{1,3})d$"
+)
+
+
+def is_screen_field_id(value: str) -> bool:
+    if value in SCREEN_STATIC_FIELD_IDS:
+        return True
+    match = _PERIOD_FIELD_RE.fullmatch(value)
+    return match is not None and 2 <= int(match.group(1)) <= 360
 
 
 class UniverseSpec(StrictModel):
@@ -201,6 +254,8 @@ class ScreenSpec(StrictModel):
 
     @model_validator(mode="after")
     def require_rule(self) -> ScreenSpec:
+        if not self.name.strip():
+            raise ValueError("规则名称不能为空")
         if not self.conditions and not (
             self.exclude_st or self.exclude_star or self.exclude_bj
         ):
@@ -210,6 +265,15 @@ class ScreenSpec(StrictModel):
             raise ValueError("排序字段不能重复")
         if len(set(self.columns)) != len(self.columns):
             raise ValueError("结果字段不能重复")
+        unknown_fields = sorted(
+            {
+                field
+                for field in [*sort_fields, *self.columns]
+                if not is_screen_field_id(field)
+            }
+        )
+        if unknown_fields:
+            raise ValueError(f"未知结果字段: {', '.join(unknown_fields)}")
         return self
 
 

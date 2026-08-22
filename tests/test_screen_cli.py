@@ -62,6 +62,39 @@ def test_save_accepts_stdin(runner: CliRunner) -> None:
     assert json.loads(result.stdout)["screen"]["name"] == "stdin 规则"
 
 
+def test_versions_and_restore_append_a_new_version(
+    runner: CliRunner,
+    tmp_path: Path,
+) -> None:
+    source = _write_spec(tmp_path)
+    saved = runner.invoke(app, ["screen", "save", str(source), "--format", "json"])
+    screen_id = json.loads(saved.stdout)["screen"]["screen_id"]
+    source.write_text(
+        json.dumps(
+            {"name": "CLI 规则", "exclude_st": True, "exclude_bj": True},
+            ensure_ascii=False,
+        ),
+        encoding="utf-8",
+    )
+    runner.invoke(
+        app,
+        ["screen", "save", str(source), "--id", screen_id, "--format", "json"],
+    )
+
+    versions = runner.invoke(
+        app,
+        ["screen", "versions", screen_id, "--format", "json"],
+    )
+    restored = runner.invoke(
+        app,
+        ["screen", "restore", screen_id, "1", "--format", "json"],
+    )
+
+    assert [item["version"] for item in json.loads(versions.stdout)["versions"]] == [2, 1]
+    assert json.loads(restored.stdout)["screen"]["current_version"] == 3
+    assert json.loads(restored.stdout)["screen"]["spec"]["exclude_bj"] is False
+
+
 def test_invalid_spec_returns_machine_error(runner: CliRunner, tmp_path: Path) -> None:
     source = tmp_path / "invalid.json"
     source.write_text("{}", encoding="utf-8")

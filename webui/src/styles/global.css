@@ -2239,6 +2239,51 @@ input[type="checkbox"] {
   gap: 13px;
 }
 
+.refresh-job-card {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(180px, 34%) auto;
+  align-items: center;
+  gap: 18px;
+  margin-bottom: 18px;
+}
+
+.refresh-job-card h2 {
+  margin: 4px 0;
+  font-size: 17px;
+}
+
+.refresh-job-card p {
+  margin: 0;
+  color: var(--text-muted);
+  font-size: 13px;
+}
+
+.refresh-job-card__progress {
+  height: 7px;
+  overflow: hidden;
+  border-radius: 999px;
+  background: var(--surface-soft);
+}
+
+.refresh-job-card__progress span {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: linear-gradient(90deg, var(--brand), var(--accent));
+  transition: width 220ms ease;
+}
+
+.refresh-job-card > .inline-warning {
+  grid-column: 1 / -1;
+}
+
+.data-lineage-card__note {
+  margin: 18px 0 0;
+  color: var(--text-muted);
+  font-size: 12px;
+  line-height: 1.65;
+}
+
 .data-health-card {
   grid-column: span 12;
   display: grid;
@@ -2610,6 +2655,15 @@ input[type="checkbox"] {
 }
 
 @media (max-width: 860px) {
+  .refresh-job-card {
+    grid-template-columns: 1fr auto;
+  }
+
+  .refresh-job-card__progress {
+    grid-column: 1 / -1;
+    grid-row: 2;
+  }
+
   .app-shell {
     display: block;
   }

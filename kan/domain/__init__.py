@@ -1,6 +1,11 @@
 """ManManKan 稳定领域契约。"""
 
-from kan.domain.job import JobStatus, WorkspaceJob
+from kan.domain.job import (
+    JobStatus,
+    MarketRefreshRequest,
+    MarketRefreshScope,
+    WorkspaceJob,
+)
 from kan.domain.screen import (
     AsOfSpec,
     Candidate,
@@ -39,6 +44,8 @@ __all__ = [
     "DataCoverage",
     "FilterInputKind",
     "JobStatus",
+    "MarketRefreshRequest",
+    "MarketRefreshScope",
     "MatchMode",
     "NullPolicy",
     "RankChange",

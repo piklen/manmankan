@@ -171,6 +171,11 @@ export const api = {
       method: "POST",
       body: json(payload),
     }),
+  startMarketRefresh: (scope: "default" | "all", force = false) =>
+    request<WorkspaceJob>("/api/v1/jobs/market-refresh", {
+      method: "POST",
+      body: json({ scope, force, days: 360 }),
+    }),
   job: (jobId: string) =>
     request<WorkspaceJob>(`/api/v1/jobs/${encodeURIComponent(jobId)}`),
   jobs: (limit = 50) => request<WorkspaceJob[]>(`/api/v1/jobs?limit=${limit}`),
@@ -235,7 +240,7 @@ export async function waitForJob(
   while (Date.now() < deadline) {
     const job = await api.job(jobId);
     onUpdate?.(job);
-    if (["succeeded", "failed", "interrupted"].includes(job.status)) return job;
+    if (["succeeded", "partial", "failed", "interrupted"].includes(job.status)) return job;
     await new Promise((resolve) => window.setTimeout(resolve, 250));
   }
   throw new ApiError(408, "job_timeout", "任务等待超过 10 分钟，可在任务记录中继续查看");

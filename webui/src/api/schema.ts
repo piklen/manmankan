@@ -419,6 +419,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/jobs/market-refresh": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Start Market Refresh Job */
+        post: operations["start_market_refresh_job_api_v1_jobs_market_refresh_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/jobs": {
         parameters: {
             query?: never;
@@ -713,7 +730,7 @@ export interface components {
          * JobStatus
          * @enum {string}
          */
-        JobStatus: "queued" | "running" | "succeeded" | "failed" | "interrupted";
+        JobStatus: "queued" | "running" | "succeeded" | "partial" | "failed" | "interrupted";
         /** MarketOverviewResponse */
         MarketOverviewResponse: {
             /** Scan */
@@ -724,6 +741,26 @@ export interface components {
             /** Message */
             message?: string | null;
         };
+        /** MarketRefreshRequest */
+        MarketRefreshRequest: {
+            /** @default default */
+            scope: components["schemas"]["MarketRefreshScope"];
+            /**
+             * Force
+             * @default false
+             */
+            force: boolean;
+            /**
+             * Days
+             * @default 360
+             */
+            days: number;
+        };
+        /**
+         * MarketRefreshScope
+         * @enum {string}
+         */
+        MarketRefreshScope: "default" | "all";
         /** MarketSentimentResponse */
         MarketSentimentResponse: {
             /** Ok */
@@ -2081,6 +2118,39 @@ export interface operations {
         requestBody: {
             content: {
                 "application/json": components["schemas"]["ScreenRunInput"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WorkspaceJob"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    start_market_refresh_job_api_v1_jobs_market_refresh_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["MarketRefreshRequest"];
             };
         };
         responses: {

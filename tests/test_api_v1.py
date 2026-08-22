@@ -37,6 +37,7 @@ def test_openapi_only_exposes_typed_v1_contract(client: TestClient) -> None:
     assert "/api/v1/screens" in schema["paths"]
     assert "/api/v1/portfolio" in schema["paths"]
     assert "/api/v1/jobs/screen-runs" in schema["paths"]
+    assert "/api/v1/jobs/market-refresh" in schema["paths"]
     assert "/api/find" not in schema["paths"]
     assert "ScreenSpec" in schema["components"]["schemas"]
     assert "ScreenRun" in schema["components"]["schemas"]
@@ -219,3 +220,25 @@ def test_settings_never_returns_full_token(
     assert response.status_code == 200
     assert response.json()["tushare_masked"] == "***2345"
     assert "secret" not in response.text.lower()
+
+
+def test_market_refresh_uses_persistent_job_contract(
+    client: TestClient,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(
+        "kan.web.api_v1.job_service.start_market_refresh_job",
+        lambda request: workspace_db.create_job(
+            f"market_refresh:{request.scope.value}",
+            message="全市场行情刷新已排队",
+        ),
+    )
+
+    response = client.post(
+        "/api/v1/jobs/market-refresh",
+        json={"scope": "all", "force": False, "days": 360},
+    )
+
+    assert response.status_code == 202
+    assert response.json()["kind"] == "market_refresh:all"
+    assert response.json()["status"] == "queued"

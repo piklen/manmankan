@@ -12,7 +12,7 @@ import typer
 from pydantic import BaseModel, ValidationError
 
 from kan.app import app
-from kan.domain.screen import SavedScreen, ScreenRun, ScreenSpec
+from kan.domain.screen import SavedScreen, ScreenRun, ScreenSpec, ScreenVersion
 from kan.service import screen_service
 from kan.storage import export, workspace_db
 
@@ -125,6 +125,20 @@ def _render_run(run: ScreenRun, fmt: ScreenOutputFormat) -> None:
     )
 
 
+def _render_versions(items: list[ScreenVersion], fmt: ScreenOutputFormat) -> None:
+    if fmt is ScreenOutputFormat.json:
+        typer.echo(export.to_json(_json_payload("screen versions", "versions", items)))
+        return
+    if not items:
+        typer.echo("没有可用版本")
+        return
+    for item in items:
+        typer.echo(
+            f"v{item.version:<3}  {item.spec_hash[:12]}  "
+            f"{item.created_at.isoformat()}  {len(item.spec.conditions)} 条件"
+        )
+
+
 @screen_app.command("filters")
 def list_filters(
     fmt: Annotated[
@@ -212,6 +226,43 @@ def show(
     _render_saved(item, fmt)
 
 
+@screen_app.command("versions")
+def versions(
+    screen_id: Annotated[str, typer.Argument(help="Screen ID")],
+    fmt: Annotated[
+        ScreenOutputFormat,
+        typer.Option("--format", help="输出格式：terminal（默认）/ json"),
+    ] = ScreenOutputFormat.terminal,
+) -> None:
+    """列出一份 Screen 的全部不可变规则版本。"""
+    if workspace_db.get_screen(screen_id) is None:
+        _fail(fmt, code="screen_not_found", message=f"Screen 不存在: {screen_id}")
+    _render_versions(workspace_db.list_screen_versions(screen_id), fmt)
+
+
+@screen_app.command("restore")
+def restore(
+    screen_id: Annotated[str, typer.Argument(help="Screen ID")],
+    version: Annotated[int, typer.Argument(min=1, help="要恢复的历史版本号")],
+    fmt: Annotated[
+        ScreenOutputFormat,
+        typer.Option("--format", help="输出格式：terminal（默认）/ json"),
+    ] = ScreenOutputFormat.terminal,
+) -> None:
+    """把历史规则恢复成一个新的当前版本，不覆盖历史。"""
+    historical = workspace_db.get_screen_version(screen_id, version)
+    if historical is None:
+        _fail(
+            fmt,
+            code="screen_version_not_found",
+            message=f"Screen {screen_id} 不存在 v{version}",
+        )
+    _render_saved(
+        screen_service.save_screen(historical.spec, screen_id=screen_id),
+        fmt,
+    )
+
+
 @screen_app.command("run")
 def run(
     screen_id: Annotated[str, typer.Argument(help="Screen ID")],
@@ -253,6 +304,51 @@ def run_spec(
     except screen_service.ScreenServiceError as exc:
         _fail(fmt, code=exc.code, message=exc.message, hint=exc.hint)
     _render_run(result, fmt)
+
+
+@screen_app.command("runs")
+def runs(
+    screen_id: Annotated[
+        str | None,
+        typer.Argument(help="可选 Screen ID；省略则列出全部运行"),
+    ] = None,
+    limit: Annotated[
+        int,
+        typer.Option("--limit", min=1, max=200, help="最多返回多少次运行"),
+    ] = 20,
+    fmt: Annotated[
+        ScreenOutputFormat,
+        typer.Option("--format", help="输出格式：terminal（默认）/ json"),
+    ] = ScreenOutputFormat.terminal,
+) -> None:
+    """列出不可变 ScreenRun 历史。"""
+    items = workspace_db.list_runs(screen_id=screen_id, limit=limit)
+    if fmt is ScreenOutputFormat.json:
+        typer.echo(export.to_json(_json_payload("screen runs", "runs", items)))
+        return
+    if not items:
+        typer.echo("还没有 ScreenRun")
+        return
+    for item in items:
+        typer.echo(
+            f"{item.run_id}  {item.spec.name}  {item.coverage.returned} 只  "
+            f"{item.created_at.isoformat()}"
+        )
+
+
+@screen_app.command("show-run")
+def show_run(
+    run_id: Annotated[str, typer.Argument(help="ScreenRun ID")],
+    fmt: Annotated[
+        ScreenOutputFormat,
+        typer.Option("--format", help="输出格式：terminal（默认）/ json"),
+    ] = ScreenOutputFormat.terminal,
+) -> None:
+    """显示一份不可变 ScreenRun 与逐行证据。"""
+    item = workspace_db.get_run(run_id)
+    if item is None:
+        _fail(fmt, code="run_not_found", message=f"ScreenRun 不存在: {run_id}")
+    _render_run(item, fmt)
 
 
 @screen_app.command("delete")

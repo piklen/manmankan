@@ -1202,6 +1202,47 @@
         }
       }
     },
+    "/api/v1/jobs/market-refresh": {
+      "post": {
+        "tags": [
+          "v1"
+        ],
+        "summary": "Start Market Refresh Job",
+        "operationId": "start_market_refresh_job_api_v1_jobs_market_refresh_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/MarketRefreshRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "202": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WorkspaceJob"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/jobs": {
       "get": {
         "tags": [
@@ -1805,6 +1846,7 @@
           "queued",
           "running",
           "succeeded",
+          "partial",
           "failed",
           "interrupted"
         ],
@@ -1845,6 +1887,37 @@
           "sentiment"
         ],
         "title": "MarketOverviewResponse"
+      },
+      "MarketRefreshRequest": {
+        "properties": {
+          "scope": {
+            "$ref": "#/components/schemas/MarketRefreshScope",
+            "default": "default"
+          },
+          "force": {
+            "type": "boolean",
+            "title": "Force",
+            "default": false
+          },
+          "days": {
+            "type": "integer",
+            "maximum": 720.0,
+            "minimum": 180.0,
+            "title": "Days",
+            "default": 360
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "title": "MarketRefreshRequest"
+      },
+      "MarketRefreshScope": {
+        "type": "string",
+        "enum": [
+          "default",
+          "all"
+        ],
+        "title": "MarketRefreshScope"
       },
       "MarketSentimentResponse": {
         "properties": {

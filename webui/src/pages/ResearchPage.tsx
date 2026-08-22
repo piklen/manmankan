@@ -51,7 +51,7 @@ interface HistoryPayload {
 const CANDIDATE_LABEL = {
   research: "待研究",
   watch: "持续观察",
-  selected: "已入选",
+  selected: "用户已保留",
   rejected: "已排除",
 } as const;
 

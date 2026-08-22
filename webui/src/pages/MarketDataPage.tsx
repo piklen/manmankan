@@ -1,4 +1,4 @@
-import { useQuery } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   Activity,
   ArrowDown,
@@ -7,10 +7,12 @@ import {
   Database,
   Gauge,
   HardDrive,
+  RefreshCw,
 } from "lucide-react";
-import { api } from "../api/client";
-import { Badge, Card, Loading, PageHeader } from "../components/ui";
-import { number, percent } from "../lib/format";
+import { useState } from "react";
+import { api, type WorkspaceJob, waitForJob } from "../api/client";
+import { Badge, Button, Card, Loading, PageHeader } from "../components/ui";
+import { errorMessage, number, percent, shortDate } from "../lib/format";
 
 interface ScanPayload {
   ok: boolean;
@@ -35,10 +37,37 @@ interface ScanPayload {
 }
 
 export function MarketDataPage() {
+  const queryClient = useQueryClient();
+  const [refreshJob, setRefreshJob] = useState<WorkspaceJob | null>(null);
+  const [notice, setNotice] = useState<string | null>(null);
   const marketQuery = useQuery({
     queryKey: ["market"],
     queryFn: api.market,
     retry: false,
+  });
+  const jobsQuery = useQuery({
+    queryKey: ["jobs", "market-refresh"],
+    queryFn: () => api.jobs(20),
+    refetchInterval: 1500,
+  });
+  const latestPersistedJob = jobsQuery.data?.find((job) => job.kind.startsWith("market_refresh:"));
+  const visibleJob = refreshJob ?? latestPersistedJob ?? null;
+  const refreshMutation = useMutation({
+    mutationFn: async (scope: "default" | "all") => {
+      const started = await api.startMarketRefresh(scope);
+      setRefreshJob(started);
+      const completed = await waitForJob(started.job_id, setRefreshJob);
+      if (!["succeeded", "partial"].includes(completed.status)) {
+        throw new Error(completed.error || completed.message || "行情刷新未完成");
+      }
+      return completed;
+    },
+    onSuccess: (job) => {
+      setNotice(job.message);
+      void queryClient.invalidateQueries({ queryKey: ["market"] });
+      void queryClient.invalidateQueries({ queryKey: ["jobs", "market-refresh"] });
+    },
+    onError: (error) => setNotice(errorMessage(error)),
   });
   const scan = marketQuery.data?.scan as ScanPayload | null | undefined;
   const market = marketQuery.data?.sentiment;
@@ -51,8 +80,52 @@ export function MarketDataPage() {
         eyebrow="Market & data"
         title="先确认数据边界，再看任何筛选结果"
         description="集中查看本地行情截止日、覆盖范围与全市场截面事实；不会在缺数时给出伪精确结论。"
+        actions={
+          <>
+            {notice ? <span className="notice-pill">{notice}</span> : null}
+            <Button
+              variant="secondary"
+              disabled={refreshMutation.isPending}
+              onClick={() => refreshMutation.mutate("default")}
+            >
+              <RefreshCw size={15} /> 更新默认池
+            </Button>
+            <Button
+              disabled={refreshMutation.isPending}
+              onClick={() => refreshMutation.mutate("all")}
+            >
+              <Database size={15} /> 更新全市场
+            </Button>
+          </>
+        }
       />
       {marketQuery.isLoading ? <Loading label="读取本地市场快照" /> : null}
+
+      {visibleJob ? (
+        <Card className="refresh-job-card">
+          <div>
+            <span className="panel-kicker">Persistent job</span>
+            <h2>{visibleJob.message || "行情刷新任务"}</h2>
+            <p>
+              {visibleJob.progress}/{visibleJob.total || "?"}
+              {visibleJob.watermark ? ` · 水位 ${visibleJob.watermark}` : ""}
+              {` · ${shortDate(visibleJob.updated_at)}`}
+            </p>
+          </div>
+          <div className="refresh-job-card__progress">
+            <span style={{
+              width: `${visibleJob.total ? Math.min(100, (visibleJob.progress / visibleJob.total) * 100) : 0}%`,
+            }} />
+          </div>
+          <Badge tone={
+            visibleJob.status === "succeeded" ? "positive"
+              : visibleJob.status === "partial" ? "warning"
+                : visibleJob.status === "failed" || visibleJob.status === "interrupted" ? "danger"
+                  : "info"
+          }>{visibleJob.status}</Badge>
+          {visibleJob.error ? <p className="inline-warning">{visibleJob.error}</p> : null}
+        </Card>
+      ) : null}
 
       <div className="market-grid">
         <Card className="data-health-card">
@@ -100,6 +173,10 @@ export function MarketDataPage() {
             <li><span>02</span><div><strong>完整交易日判断</strong><p>截止：{scan?.stats.data_cutoff ?? "未知"}</p></div></li>
             <li><span>03</span><div><strong>选股应用服务</strong><p>ScreenRun 固化 snapshot_id、覆盖率与逐行证据。</p></div></li>
           </ol>
+          <p className="data-lineage-card__note">
+            全市场更新需要已配置的 TuShare 数据能力，可能持续数分钟；任务进度写入 SQLite，
+            中断后重新发起会复用已完成缓存。
+          </p>
         </Card>
       </div>
     </div>

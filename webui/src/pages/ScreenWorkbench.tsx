@@ -840,7 +840,7 @@ export function ScreenWorkbench() {
       const saved = await api.saveScreen(spec, activeId);
       const job = await api.startScreenJob({ screen_id: saved.screen_id, persist: true });
       const completed = await waitForJob(job.job_id, (current) => setNotice(current.message));
-      if (completed.status !== "succeeded" || !completed.result_ref) {
+      if (!["succeeded", "partial"].includes(completed.status) || !completed.result_ref) {
         throw new Error(completed.error || completed.message || "选股任务未完成");
       }
       const result = await api.run(completed.result_ref);

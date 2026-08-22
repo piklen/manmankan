@@ -14,8 +14,20 @@ class JobStatus(StrEnum):
     QUEUED = "queued"
     RUNNING = "running"
     SUCCEEDED = "succeeded"
+    PARTIAL = "partial"
     FAILED = "failed"
     INTERRUPTED = "interrupted"
+
+
+class MarketRefreshScope(StrEnum):
+    DEFAULT = "default"
+    ALL = "all"
+
+
+class MarketRefreshRequest(StrictModel):
+    scope: MarketRefreshScope = MarketRefreshScope.DEFAULT
+    force: bool = False
+    days: int = Field(default=360, ge=180, le=720)
 
 
 class WorkspaceJob(StrictModel):

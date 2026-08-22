@@ -12,7 +12,7 @@ from fastapi import APIRouter, Body, HTTPException, Query
 from fastapi.responses import StreamingResponse
 
 from kan import __version__
-from kan.domain.job import WorkspaceJob
+from kan.domain.job import MarketRefreshRequest, WorkspaceJob
 from kan.domain.screen import (
     Candidate,
     CandidateList,
@@ -394,6 +394,11 @@ def delete_compare_set(compare_id: str) -> DeleteResponse:
 @router.post("/jobs/screen-runs", response_model=WorkspaceJob, status_code=202)
 def start_screen_run_job(payload: ScreenRunInput) -> WorkspaceJob:
     return job_service.start_screen_run_job(payload)
+
+
+@router.post("/jobs/market-refresh", response_model=WorkspaceJob, status_code=202)
+def start_market_refresh_job(payload: MarketRefreshRequest) -> WorkspaceJob:
+    return job_service.start_market_refresh_job(payload)
 
 
 @router.get("/jobs", response_model=list[WorkspaceJob])

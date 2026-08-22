@@ -3,13 +3,14 @@
 from __future__ import annotations
 
 import time
-from datetime import UTC, datetime
+from datetime import UTC, date, datetime
 from pathlib import Path
 
 import pytest
 from fastapi.testclient import TestClient
 
-from kan.domain.job import JobStatus
+from kan.data.fetcher import FetchProgress
+from kan.domain.job import JobStatus, MarketRefreshRequest
 from kan.domain.screen import DataCoverage, ScreenRun, ScreenSpec
 from kan.service import job_service, screen_service
 from kan.service.screen_ai import ScreenRunInput
@@ -79,6 +80,52 @@ def test_recovery_marks_incomplete_jobs_interrupted(isolated_workspace: None) ->
     assert running_after is not None
     assert queued_after.status is JobStatus.INTERRUPTED
     assert running_after.status is JobStatus.INTERRUPTED
+
+
+def test_market_refresh_persists_partial_progress_and_resume_watermark(
+    isolated_workspace: None,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(
+        job_service,
+        "_resolve_refresh_targets",
+        lambda _request: ["600519", "000858"],
+    )
+
+    def fake_fetch(symbols, **kwargs):
+        callback = kwargs["on_progress_state"]
+        for index, symbol in enumerate(symbols, 1):
+            callback(
+                FetchProgress(
+                    symbol=symbol,
+                    ok=index == 1,
+                    error=None if index == 1 else "upstream unavailable",
+                    elapsed_seconds=0.01,
+                    concurrency=1,
+                    max_concurrency=1,
+                    inflight=0,
+                    completed=index,
+                    total=len(symbols),
+                )
+            )
+        return {"600519": object()}, {"000858": "upstream unavailable"}
+
+    monkeypatch.setattr("kan.data.fetcher.fetch_batch", fake_fetch)
+    monkeypatch.setattr(
+        "kan.core.trading_calendar.latest_trade_date",
+        lambda: date(2026, 8, 21),
+    )
+    job = workspace_db.create_job("market_refresh:default")
+
+    job_service._execute_market_refresh(job.job_id, MarketRefreshRequest())
+    completed = workspace_db.get_job(job.job_id)
+
+    assert completed is not None
+    assert completed.status is JobStatus.PARTIAL
+    assert completed.progress == completed.total == 2
+    assert completed.watermark == "2026-08-21"
+    assert completed.result_ref == "market-cache:2026-08-21"
+    assert completed.error is not None
 
 
 def test_sse_accepts_session_query_and_closes_after_terminal(

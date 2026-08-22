@@ -23,7 +23,7 @@ import { errorMessage, shortDate } from "../lib/format";
 const STATUS_META: Record<CandidateStatus, { label: string; tone: "neutral" | "info" | "positive" | "danger" }> = {
   research: { label: "待研究", tone: "info" },
   watch: { label: "持续观察", tone: "neutral" },
-  selected: { label: "已入选", tone: "positive" },
+  selected: { label: "用户已保留", tone: "positive" },
   rejected: { label: "已排除", tone: "danger" },
 };
 

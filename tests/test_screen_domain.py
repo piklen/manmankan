@@ -74,6 +74,12 @@ def test_universe_and_screen_reject_ambiguous_shapes() -> None:
             ],
         )
 
+    with pytest.raises(ValidationError, match="未知结果字段: magic_score"):
+        ScreenSpec(exclude_st=True, sort=[ScreenSort(field_id="magic_score")])
+
+    with pytest.raises(ValidationError, match="未知结果字段: future_price"):
+        ScreenSpec(exclude_st=True, columns=["symbol", "future_price"])
+
 
 def test_content_hash_is_canonical_across_equivalent_models() -> None:
     first = ScreenSpec(
