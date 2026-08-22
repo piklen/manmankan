@@ -9,7 +9,9 @@ import pytest
 from typer.testing import CliRunner
 
 from kan.cli import app
-from kan.storage import paths
+from kan.domain.screen import DataCoverage
+from kan.service import screen_service
+from kan.storage import paths, workspace_db
 
 
 @pytest.fixture
@@ -117,3 +119,98 @@ def test_filter_catalog_is_discoverable_as_json(runner: CliRunner) -> None:
         for option in group["options"]
     }
     assert {"pos", "pe", "moneyflow", "rsi", "north"} <= types
+
+
+def test_terminal_screen_lifecycle_is_inspectable(
+    runner: CliRunner,
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    source = _write_spec(tmp_path)
+    assert "还没有保存的 Screen" in runner.invoke(app, ["screen", "list"]).output
+    assert "价格区间位置" in runner.invoke(app, ["screen", "filters"]).output
+
+    saved_result = runner.invoke(app, ["screen", "save", str(source)])
+    saved = workspace_db.list_screens()[0]
+    assert saved_result.exit_code == 0
+    assert saved.screen_id in saved_result.output
+    assert saved.screen_id in runner.invoke(app, ["screen", "list"]).output
+    assert "规则哈希" in runner.invoke(
+        app, ["screen", "show", saved.screen_id]
+    ).output
+    assert "v1" in runner.invoke(
+        app, ["screen", "versions", saved.screen_id]
+    ).output
+
+    coverage = DataCoverage(
+        universe_size=2,
+        evaluated=2,
+        matched=0,
+        returned=0,
+        ratio=1,
+    )
+    monkeypatch.setattr(
+        screen_service,
+        "_run_engine",
+        lambda _spec: ([], coverage),
+    )
+    run_result = runner.invoke(app, ["screen", "run", saved.screen_id])
+    run = workspace_db.list_runs(screen_id=saved.screen_id)[0]
+    assert run_result.exit_code == 0
+    assert "覆盖 2/2" in run_result.output
+    assert run.run_id in runner.invoke(
+        app, ["screen", "runs", saved.screen_id]
+    ).output
+    shown = runner.invoke(
+        app,
+        ["screen", "show-run", run.run_id, "--format", "json"],
+    )
+    assert json.loads(shown.stdout)["run"]["run_id"] == run.run_id
+
+    direct = runner.invoke(app, ["screen", "run-spec", str(source), "--no-persist"])
+    assert direct.exit_code == 0
+    assert "CLI 规则" in direct.output
+    restored = runner.invoke(app, ["screen", "restore", saved.screen_id, "1"])
+    assert restored.exit_code == 0
+    assert "v1" in restored.output
+    deleted = runner.invoke(app, ["screen", "delete", saved.screen_id, "--yes"])
+    assert deleted.exit_code == 0
+    assert "已删除" in deleted.output
+
+
+def test_terminal_screen_errors_are_actionable(
+    runner: CliRunner,
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    missing_path = tmp_path / "missing.json"
+    missing_save = runner.invoke(app, ["screen", "save", str(missing_path)])
+    missing_run_spec = runner.invoke(app, ["screen", "run-spec", str(missing_path)])
+    missing_show = runner.invoke(app, ["screen", "show", "missing"])
+    missing_versions = runner.invoke(app, ["screen", "versions", "missing"])
+    missing_restore = runner.invoke(app, ["screen", "restore", "missing", "1"])
+    missing_run = runner.invoke(app, ["screen", "show-run", "missing"])
+    confirmation = runner.invoke(app, ["screen", "delete", "missing"])
+    absent_delete = runner.invoke(app, ["screen", "delete", "missing", "--yes"])
+
+    assert missing_save.exit_code == 1
+    assert missing_run_spec.exit_code == 1
+    assert missing_show.exit_code == 1
+    assert missing_versions.exit_code == 1
+    assert missing_restore.exit_code == 1
+    assert missing_run.exit_code == 1
+    assert confirmation.exit_code == 2
+    assert "Screen 不存在" in absent_delete.output
+
+    def fail_with_hint(_screen_id: str):
+        raise screen_service.ScreenServiceError(
+            "data_unavailable",
+            "没有可用数据",
+            hint="先更新数据",
+        )
+
+    monkeypatch.setattr(screen_service, "run_saved_screen", fail_with_hint)
+    failed = runner.invoke(app, ["screen", "run", "screen-id"])
+    assert failed.exit_code == 1
+    assert "没有可用数据" in failed.output
+    assert "先更新数据" in failed.output

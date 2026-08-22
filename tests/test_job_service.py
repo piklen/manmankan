@@ -5,12 +5,13 @@ from __future__ import annotations
 import time
 from datetime import UTC, date, datetime
 from pathlib import Path
+from types import SimpleNamespace
 
 import pytest
 from fastapi.testclient import TestClient
 
 from kan.data.fetcher import FetchProgress
-from kan.domain.job import JobStatus, MarketRefreshRequest
+from kan.domain.job import JobStatus, MarketRefreshRequest, MarketRefreshScope
 from kan.domain.screen import DataCoverage, ScreenRun, ScreenSpec
 from kan.service import job_service, screen_service
 from kan.service.screen_ai import ScreenRunInput
@@ -126,6 +127,126 @@ def test_market_refresh_persists_partial_progress_and_resume_watermark(
     assert completed.watermark == "2026-08-21"
     assert completed.result_ref == "market-cache:2026-08-21"
     assert completed.error is not None
+
+
+def test_screen_job_records_partial_and_planning_failure(
+    isolated_workspace: None,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    partial_run = _run().model_copy(update={"warnings": ["行情数据可能需要更新"]})
+    monkeypatch.setattr(job_service, "run_from_input", lambda _request: partial_run)
+    partial_job = workspace_db.create_job("screen_run", total=3)
+    job_service._execute_screen_run(
+        partial_job.job_id,
+        ScreenRunInput(spec=ScreenSpec(name="任务规则", exclude_st=True)),
+    )
+
+    partial = workspace_db.get_job(partial_job.job_id)
+    assert partial is not None
+    assert partial.status is JobStatus.PARTIAL
+    assert "1 项数据提示" in partial.message
+
+    monkeypatch.setattr(
+        job_service,
+        "plan_screen",
+        lambda _spec: SimpleNamespace(executable=False, warnings=["当前条件不可执行"]),
+    )
+    failed_job = workspace_db.create_job("screen_run", total=3)
+    job_service._execute_screen_run(
+        failed_job.job_id,
+        ScreenRunInput(spec=ScreenSpec(name="失败规则", exclude_st=True)),
+    )
+    failed = workspace_db.get_job(failed_job.job_id)
+    assert failed is not None
+    assert failed.status is JobStatus.FAILED
+    assert failed.error == "当前条件不可执行"
+
+
+def test_market_refresh_single_worker_success_and_failures(
+    isolated_workspace: None,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    class PendingThread:
+        def __init__(self, **_kwargs) -> None:
+            self.started = False
+
+        def start(self) -> None:
+            self.started = True
+
+    monkeypatch.setattr(job_service.threading, "Thread", PendingThread)
+    monkeypatch.setattr(job_service, "_ACTIVE_REFRESH_JOB_ID", None)
+    request = MarketRefreshRequest(scope=MarketRefreshScope.ALL)
+    first = job_service.start_market_refresh_job(request)
+    duplicate = job_service.start_market_refresh_job(request)
+    assert duplicate.job_id == first.job_id
+
+    workspace_db.update_job(first.job_id, status=JobStatus.SUCCEEDED)
+    replacement = job_service.start_market_refresh_job(request)
+    assert replacement.job_id != first.job_id
+    monkeypatch.setattr(job_service, "_ACTIVE_REFRESH_JOB_ID", None)
+
+    monkeypatch.setattr(
+        job_service,
+        "_resolve_refresh_targets",
+        lambda _request: ["600519"],
+    )
+    monkeypatch.setattr(
+        "kan.core.trading_calendar.latest_trade_date",
+        lambda: date(2026, 8, 21),
+    )
+    monkeypatch.setattr(
+        "kan.data.fetcher.fetch_batch",
+        lambda _symbols, **_kwargs: ({"600519": object()}, {}),
+    )
+    success_job = workspace_db.create_job("market_refresh:all")
+    job_service._execute_market_refresh(success_job.job_id, request)
+    success = workspace_db.get_job(success_job.job_id)
+    assert success is not None
+    assert success.status is JobStatus.SUCCEEDED
+    assert success.message == "全市场行情已更新 1 只"
+
+    monkeypatch.setattr(
+        "kan.data.fetcher.fetch_batch",
+        lambda _symbols, **_kwargs: ({}, {"600519": "failed"}),
+    )
+    failed_job = workspace_db.create_job("market_refresh:all")
+    job_service._execute_market_refresh(failed_job.job_id, request)
+    failed = workspace_db.get_job(failed_job.job_id)
+    assert failed is not None
+    assert failed.status is JobStatus.FAILED
+    assert "全部更新失败" in (failed.error or "")
+
+    monkeypatch.setattr(job_service, "_resolve_refresh_targets", lambda _request: [])
+    empty_job = workspace_db.create_job("market_refresh:default")
+    job_service._execute_market_refresh(empty_job.job_id, MarketRefreshRequest())
+    empty = workspace_db.get_job(empty_job.job_id)
+    assert empty is not None
+    assert empty.status is JobStatus.FAILED
+    assert empty.error == "默认池股票池为空"
+    job_service._THREADS.clear()
+
+
+def test_job_lookup_and_sse_wait_for_terminal_state(
+    isolated_workspace: None,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    with pytest.raises(ValueError, match="任务不存在"):
+        job_service.get_job("missing")
+
+    job = workspace_db.create_job("screen_run", total=1)
+
+    def complete(_interval: float) -> None:
+        workspace_db.update_job(
+            job.job_id,
+            status=JobStatus.SUCCEEDED,
+            progress=1,
+        )
+
+    monkeypatch.setattr(job_service.time, "sleep", complete)
+    events = list(job_service.iter_job_events(job.job_id, poll_interval=0))
+    assert len(events) == 2
+    assert '"status":"queued"' in events[0]
+    assert '"status":"succeeded"' in events[1]
 
 
 def test_sse_accepts_session_query_and_closes_after_terminal(

@@ -127,3 +127,30 @@ def test_workspace_cli_reports_backend_without_exposing_state(
     assert payload["backend"] == "sqlite"
     assert payload["migrated"] == ["config", "watchlist", "positions"]
     assert "secret" not in result.stdout
+
+
+def test_workspace_terminal_status_migrate_and_rollback(
+    legacy_workspace: Path,
+) -> None:
+    runner = CliRunner()
+    status = runner.invoke(app, ["workspace", "status"])
+    confirmation = runner.invoke(app, ["workspace", "rollback"])
+    confirmation_json = runner.invoke(
+        app,
+        ["workspace", "rollback", "--format", "json"],
+    )
+    migrated = runner.invoke(app, ["workspace", "migrate"])
+    rolled_back = runner.invoke(app, ["workspace", "rollback", "--yes"])
+
+    assert status.exit_code == 0
+    assert "工作台状态后端: sqlite" in status.output
+    assert "SQLite 命名空间: 无" in status.output
+    assert confirmation.exit_code == 2
+    assert "需要 --yes" in confirmation.output
+    assert json.loads(confirmation_json.stdout)["error"]["code"] == (
+        "confirmation_required"
+    )
+    assert "原始备份" in migrated.output
+    assert "config.json.vnext-backup" in migrated.output
+    assert rolled_back.exit_code == 0
+    assert "已导出到 JSON: config, watchlist, positions" in rolled_back.output
