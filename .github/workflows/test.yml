@@ -268,6 +268,8 @@ jobs:
         run: |
           "$SMOKE_VENV/bin/kan" --version
           "$SMOKE_VENV/bin/kan" --help
+          "$SMOKE_VENV/bin/kan" screen --help
+          "$SMOKE_VENV/bin/kan" workspace --help
           "$SMOKE_VENV/bin/kan" scan --help
           "$SMOKE_VENV/bin/kan" find --help
           HOME="$(mktemp -d "$RUNNER_TEMP/kan-home-XXXXXX")" XDG_DATA_HOME="$(mktemp -d "$RUNNER_TEMP/kan-xdg-XXXXXX")" NO_COLOR=1 "$SMOKE_VENV/bin/kan" find --codes 600519,000858 --format json --dry-run > "$SMOKE_JSON"
@@ -296,10 +298,13 @@ jobs:
           import kan
           import importlib.metadata
           from kan.api import WatchlistSet, fetch, from_flags, scan
+          from kan.web.app import SPA_INDEX
 
           assert kan.__version__
           assert importlib.metadata.version("manmankan") == kan.__version__
           assert Path(kan.__file__).resolve().is_relative_to(Path(os.environ["SMOKE_VENV"]).resolve())
+          assert SPA_INDEX.is_file()
+          assert "/assets/index-" in SPA_INDEX.read_text(encoding="utf-8")
           assert WatchlistSet().name
           assert callable(scan)
           assert callable(fetch)
