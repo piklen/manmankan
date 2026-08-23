@@ -24,7 +24,8 @@ kan web
 浏览器会打开只监听本机的 React + TypeScript 工作台。每次启动都会生成一条仅本次有效的随机会话链接；如果浏览器没有自动打开，请使用终端刚打印的完整地址。你可以直接在网页里：
 
 - 把申万行业或概念题材指数当作 OHLC 标的，按连续涨跌、连续阳线/阴线、最新涨幅或主力净额发现趋势。
-- 复核板块近日日涨跌轨迹，再把所选板块一键带入 Screen；系统只带入股票池，不偷加选股条件。
+- 复核板块近日日涨跌轨迹和成分股内部结构：上涨/下跌家数、中位涨跌及涨跌靠前成员；这些事实不冒充指数权重贡献或新闻因果。
+- 把所选板块一键带入 Screen；系统只带入股票池，不偷加选股条件。
 - 从自选、持仓、全市场、行业、题材或自定义代码池建立 `Screen`。
 - 组合 27 类中文条件、AND / OR、最多三层排序、结果字段和缺失值策略；全市场按数据能力开放其中 23 类。
 - 保存并版本化规则，形成不可变 `ScreenRun`，查看数据截止日、覆盖率、逐条件实际值与来源。
@@ -44,7 +45,7 @@ kan web
 kan web
 ```
 
-默认页是“趋势发现”：先切换行业/题材、收盘连续/阳线连续、方向与天数，再复核板块近日日涨跌。点击“用本板块选股”只会把板块成分股带入 Screen，不预置阈值、排除项或排序。
+默认页是“趋势发现”：先切换行业/题材、收盘连续/阳线连续、方向与天数，再复核板块近日日涨跌和同一截止日的成员涨跌分布。成员涨跌靠前不等于指数贡献；点击“用本板块选股”只会把板块成分股带入 Screen，不预置阈值、排除项或排序。
 
 ### 2. 写下规则并保存运行
 
@@ -70,7 +71,7 @@ kan daily
 
 ## 进阶用户：CLI、JSON 与 AI
 
-Web、CLI、Python API 和 HTTP 共用同一套 `BoardTrendQuery → BoardTrendSnapshot` 服务；Web、CLI、Python API、HTTP 和 MCP 也共用同一套 `ScreenSpec → ScreenRun` 服务。React 只负责交互和展示，不在浏览器重算金融事实；既有 `kan find` JSON 契约继续兼容。
+Web、CLI、Python API 和 HTTP 共用 `BoardTrendQuery → BoardTrendSnapshot`；Web、Python API 和 HTTP 还共用 `BoardPulseQuery → BoardPulseSnapshot` 成员结构服务。Web、CLI、Python API、HTTP 和 MCP 也共用同一套 `ScreenSpec → ScreenRun` 服务。React 只负责交互和展示，不在浏览器重算金融事实；既有 `kan find` JSON 契约继续兼容。
 
 ```bash
 kan screen filters --format json

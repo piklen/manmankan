@@ -222,6 +222,91 @@
         }
       }
     },
+    "/api/v1/boards/{kind}/{value}/pulse": {
+      "get": {
+        "tags": [
+          "v1"
+        ],
+        "summary": "Board Pulse",
+        "description": "\u8fd4\u56de\u677f\u5757\u6210\u5206\u80a1\u5728\u6700\u65b0\u5b8c\u6574\u4ea4\u6613\u65e5\u7684\u6da8\u8dcc\u7ed3\u6784\u3002",
+        "operationId": "board_pulse_api_v1_boards__kind___value__pulse_get",
+        "parameters": [
+          {
+            "name": "kind",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "$ref": "#/components/schemas/BoardKind"
+            }
+          },
+          {
+            "name": "value",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Value"
+            }
+          },
+          {
+            "name": "level",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "maximum": 3,
+              "minimum": 1,
+              "default": 1,
+              "title": "Level"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "maximum": 10,
+              "minimum": 1,
+              "default": 5,
+              "title": "Limit"
+            }
+          },
+          {
+            "name": "force",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "boolean",
+              "default": false,
+              "title": "Force"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BoardPulseSnapshot"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/stocks/{symbol}": {
       "get": {
         "tags": [
@@ -1627,6 +1712,208 @@
           "theme"
         ],
         "title": "BoardKind"
+      },
+      "BoardPulseCoverage": {
+        "properties": {
+          "total": {
+            "type": "integer",
+            "title": "Total"
+          },
+          "evaluated": {
+            "type": "integer",
+            "title": "Evaluated"
+          },
+          "up": {
+            "type": "integer",
+            "title": "Up"
+          },
+          "down": {
+            "type": "integer",
+            "title": "Down"
+          },
+          "flat": {
+            "type": "integer",
+            "title": "Flat"
+          },
+          "missing": {
+            "type": "integer",
+            "title": "Missing"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "total",
+          "evaluated",
+          "up",
+          "down",
+          "flat",
+          "missing"
+        ],
+        "title": "BoardPulseCoverage"
+      },
+      "BoardPulseMember": {
+        "properties": {
+          "rank": {
+            "type": "integer",
+            "title": "Rank"
+          },
+          "code": {
+            "type": "string",
+            "title": "Code"
+          },
+          "name": {
+            "type": "string",
+            "title": "Name"
+          },
+          "close": {
+            "type": "number",
+            "title": "Close"
+          },
+          "change_pct": {
+            "type": "number",
+            "title": "Change Pct"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "rank",
+          "code",
+          "name",
+          "close",
+          "change_pct"
+        ],
+        "title": "BoardPulseMember"
+      },
+      "BoardPulseQuery": {
+        "properties": {
+          "kind": {
+            "$ref": "#/components/schemas/BoardKind"
+          },
+          "value": {
+            "type": "string",
+            "maxLength": 80,
+            "minLength": 1,
+            "title": "Value"
+          },
+          "level": {
+            "type": "integer",
+            "maximum": 3.0,
+            "minimum": 1.0,
+            "title": "Level",
+            "default": 1
+          },
+          "limit": {
+            "type": "integer",
+            "maximum": 10.0,
+            "minimum": 1.0,
+            "title": "Limit",
+            "default": 5
+          },
+          "force": {
+            "type": "boolean",
+            "title": "Force",
+            "default": false
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "kind",
+          "value"
+        ],
+        "title": "BoardPulseQuery",
+        "description": "\u67e5\u8be2\u4e00\u4e2a\u884c\u4e1a/\u9898\u6750\u5728\u6700\u65b0\u5b8c\u6574\u4ea4\u6613\u65e5\u7684\u6210\u5206\u80a1\u5185\u90e8\u7ed3\u6784\u3002"
+      },
+      "BoardPulseSnapshot": {
+        "properties": {
+          "schema_version": {
+            "type": "integer",
+            "title": "Schema Version",
+            "default": 1
+          },
+          "query": {
+            "$ref": "#/components/schemas/BoardPulseQuery"
+          },
+          "board_code": {
+            "type": "string",
+            "title": "Board Code"
+          },
+          "board_name": {
+            "type": "string",
+            "title": "Board Name"
+          },
+          "source": {
+            "type": "string",
+            "title": "Source"
+          },
+          "data_cutoff": {
+            "type": "string",
+            "title": "Data Cutoff"
+          },
+          "previous_date": {
+            "type": "string",
+            "title": "Previous Date"
+          },
+          "partial": {
+            "type": "boolean",
+            "title": "Partial",
+            "default": false
+          },
+          "coverage": {
+            "$ref": "#/components/schemas/BoardPulseCoverage"
+          },
+          "up_ratio_pct": {
+            "type": "number",
+            "title": "Up Ratio Pct"
+          },
+          "down_ratio_pct": {
+            "type": "number",
+            "title": "Down Ratio Pct"
+          },
+          "median_change_pct": {
+            "type": "number",
+            "title": "Median Change Pct"
+          },
+          "top_up": {
+            "items": {
+              "$ref": "#/components/schemas/BoardPulseMember"
+            },
+            "type": "array",
+            "title": "Top Up"
+          },
+          "top_down": {
+            "items": {
+              "$ref": "#/components/schemas/BoardPulseMember"
+            },
+            "type": "array",
+            "title": "Top Down"
+          },
+          "warnings": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Warnings"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "query",
+          "board_code",
+          "board_name",
+          "source",
+          "data_cutoff",
+          "previous_date",
+          "coverage",
+          "up_ratio_pct",
+          "down_ratio_pct",
+          "median_change_pct"
+        ],
+        "title": "BoardPulseSnapshot",
+        "description": "\u677f\u5757\u6210\u5206\u80a1\u540c\u4e00\u4ea4\u6613\u65e5\u7684\u6da8\u8dcc\u5206\u5e03\uff0c\u4e0d\u8868\u793a\u6743\u91cd\u8d21\u732e\u6216\u65b0\u95fb\u56e0\u679c\u3002"
       },
       "BoardTrendCoverage": {
         "properties": {

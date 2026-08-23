@@ -93,7 +93,7 @@
 | `kan index [sh sz cyb hs300] --format json` | 常用指数日线位置参照 | 补大盘基准 |
 | `kan low N` / `kan high N` | N 日新低/新高 | 极端位置发现；支持 `--all` 全市场池 |
 
-板块趋势的 Python/HTTP 稳定入口分别是 `kan.api.query_board_trends(BoardTrendQuery(...))` 和 `GET /api/v1/boards/trends`。Web 趋势页也消费同一 snapshot；从板块下钻 Screen 时只带入 `universe.kind/value`，不得假设网页已经替用户添加筛选条件。
+板块趋势的 Python/HTTP 稳定入口分别是 `kan.api.query_board_trends(BoardTrendQuery(...))` 和 `GET /api/v1/boards/trends`。成员结构使用 `query_board_pulse(BoardPulseQuery(...))` 或 `GET /api/v1/boards/{kind}/{value}/pulse`；它只描述成员涨跌家数、中位涨跌和靠前成员，不表示指数权重贡献或事件因果。Web 趋势页也消费同一 snapshot；从板块下钻 Screen 时只带入 `universe.kind/value`，不得假设网页已经替用户添加筛选条件。
 
 ### 5. 真实持仓
 

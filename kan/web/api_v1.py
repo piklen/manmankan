@@ -14,6 +14,8 @@ from fastapi.responses import StreamingResponse
 from kan import __version__
 from kan.domain.board import (
     BoardKind,
+    BoardPulseQuery,
+    BoardPulseSnapshot,
     BoardTrendMode,
     BoardTrendQuery,
     BoardTrendSnapshot,
@@ -73,6 +75,14 @@ def _value_error(exc: ValueError) -> NoReturn:
     ) from exc
 
 
+def _board_error(exc: board_service.BoardServiceError) -> NoReturn:
+    status = 404 if exc.code == "board_not_found" else 503
+    raise HTTPException(
+        status_code=status,
+        detail={"code": exc.code, "message": exc.message, "hint": exc.hint},
+    ) from exc
+
+
 @router.get("/health", response_model=HealthResponse)
 def health() -> HealthResponse:
     return HealthResponse()
@@ -85,6 +95,7 @@ def meta() -> ApiMeta:
         capabilities=[
             "screens",
             "board-trends",
+            "board-pulse",
             "immutable-runs",
             "candidate-lists",
             "compare-sets",
@@ -130,6 +141,32 @@ def board_trends(
             status_code=503,
             detail={"code": exc.code, "message": exc.message, "hint": exc.hint},
         ) from exc
+    except ValueError as exc:
+        _value_error(exc)
+
+
+@router.get("/boards/{kind}/{value}/pulse", response_model=BoardPulseSnapshot)
+def board_pulse(
+    kind: BoardKind,
+    value: str,
+    level: Annotated[int, Query(ge=1, le=3)] = 1,
+    limit: Annotated[int, Query(ge=1, le=10)] = 5,
+    force: Annotated[bool, Query()] = False,
+) -> BoardPulseSnapshot:
+    """返回板块成分股在最新完整交易日的涨跌结构。"""
+
+    try:
+        return board_service.query_board_pulse(
+            BoardPulseQuery(
+                kind=kind,
+                value=value,
+                level=level,
+                limit=limit,
+                force=force,
+            )
+        )
+    except board_service.BoardServiceError as exc:
+        _board_error(exc)
     except ValueError as exc:
         _value_error(exc)
 
