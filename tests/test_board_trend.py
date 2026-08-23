@@ -4,10 +4,13 @@ from __future__ import annotations
 from datetime import date, timedelta
 
 import pandas as pd
+import pytest
 
 from kan.core.models import Board, Theme
 from kan.core.scanner import TrendResult
 from kan.data import board_trend
+from kan.data.provider_contracts import FetchFailureKind
+from kan.infra.lifecycle import CollectingReporter, LifecycleKind, operation
 
 
 def _kline(closes: list[float], opens: list[float] | None = None) -> pd.DataFrame:
@@ -107,3 +110,154 @@ def test_sort_board_trends_filters_up_days():
     filtered = board_trend.sort_board_trends(rows, up_filter=3)
 
     assert [row.symbol for row in filtered] == ["1"]
+
+
+@pytest.mark.parametrize(
+    ("failure", "expected_kind"),
+    [
+        ("empty", FetchFailureKind.EMPTY),
+        ("transport", FetchFailureKind.TRANSPORT),
+        ("unexpected", FetchFailureKind.TRANSPORT),
+        ("empty_frame", FetchFailureKind.EMPTY),
+    ],
+)
+def test_fetch_industry_kline_job_classifies_failures(monkeypatch, failure, expected_kind):
+    from kan.data import boards
+
+    industry = Board(code="801080", name="电子", level=1, size=100)
+
+    def fake_fetch(_board, force=False):
+        if failure == "empty":
+            raise boards.BoardDataUnavailableError("申万指数 K 线为空")
+        if failure == "transport":
+            raise boards.BoardDataUnavailableError("申万指数 K 线暂不可用")
+        if failure == "unexpected":
+            raise ValueError("boom")
+        return pd.DataFrame()
+
+    monkeypatch.setattr(boards, "fetch_industry_kline", fake_fetch)
+
+    result = board_trend._fetch_industry_kline_job(industry, force=True)
+
+    assert result.data is None
+    assert result.failure is not None
+    assert result.failure.kind is expected_kind
+
+
+def test_load_industry_trends_rejects_empty_level(monkeypatch):
+    from kan.data import boards
+
+    monkeypatch.setattr(boards, "load_industry_catalog", lambda force=False: [])
+
+    with pytest.raises(boards.BoardDataUnavailableError, match="清单为空"):
+        board_trend.load_industry_trends(level=3, parallel=1)
+
+
+def test_load_industry_trends_reports_partial_failure_lifecycle(monkeypatch):
+    from kan.data import boards
+
+    industries = [
+        Board(code="801080", name="电子", level=1, size=100),
+        Board(code="801120", name="食品饮料", level=1, size=50),
+    ]
+    monkeypatch.setattr(boards, "load_industry_catalog", lambda force=False: industries)
+
+    def fake_fetch(industry, force=False):
+        if industry.code == "801120":
+            raise boards.BoardDataUnavailableError("申万指数 K 线暂不可用")
+        return _kline([100.0, 101.0, 102.0])
+
+    monkeypatch.setattr(boards, "fetch_industry_kline", fake_fetch)
+    reporter = CollectingReporter()
+
+    with operation("行业趋势测试", reporter=reporter) as lifecycle:
+        results, errors = board_trend.load_industry_trends(
+            level=1,
+            parallel=1,
+            lifecycle=lifecycle,
+        )
+
+    assert [result.symbol for result in results] == ["801080"]
+    assert [industry.code for industry, _ in errors] == ["801120"]
+    assert any(event.kind is LifecycleKind.WAIT for event in reporter.events)
+    assert any(event.kind is LifecycleKind.DEGRADED for event in reporter.events)
+    assert any(event.kind is LifecycleKind.PROGRESS for event in reporter.events)
+
+
+def test_load_industry_trends_collects_calculation_error(monkeypatch):
+    from kan.data import boards
+
+    industry = Board(code="801080", name="电子", level=1, size=100)
+    monkeypatch.setattr(boards, "load_industry_catalog", lambda force=False: [industry])
+    monkeypatch.setattr(
+        boards,
+        "fetch_industry_kline",
+        lambda board, force=False: _kline([100.0, 101.0]),
+    )
+    monkeypatch.setattr(
+        board_trend,
+        "calc_trend",
+        lambda *args, **kwargs: (_ for _ in ()).throw(ValueError("bad kline")),
+    )
+
+    results, errors = board_trend.load_industry_trends(level=1, parallel=1)
+
+    assert results == []
+    assert isinstance(errors[0][1], ValueError)
+
+
+def test_load_board_trends_delegates_industry(monkeypatch):
+    result = TrendResult("801080", "电子", 100.0, 2, 3.0, [])
+    industry = Board(code="801080", name="电子", level=1, size=100)
+    monkeypatch.setattr(
+        board_trend,
+        "load_industry_trends",
+        lambda **kwargs: ([result], [(industry, RuntimeError("partial"))]),
+    )
+
+    results, errors, source, diagnosis = board_trend.load_board_trends(
+        kind="industry",
+        level=2,
+        candle=True,
+        force=True,
+        parallel=3,
+    )
+
+    assert results == [result]
+    assert errors[0][0] == industry
+    assert source == "sw"
+    assert diagnosis is None
+
+
+def test_board_trend_moneyflow_maps_industry_names(monkeypatch):
+    rows = [
+        TrendResult("801080", "电子", 100.0, 2, 3.0, []),
+        TrendResult("801120", "食品饮料", 100.0, 1, 1.0, []),
+    ]
+    monkeypatch.setattr(
+        "kan.data.board_leaderboard.industry_moneyflow_map",
+        lambda: {"电子": 123.0},
+    )
+
+    assert board_trend.board_trend_moneyflow_map("industry", rows) == {"801080": 123.0}
+
+
+def test_board_trend_moneyflow_builds_theme_requests(monkeypatch):
+    rows = [TrendResult("885881", "云办公", 100.0, 2, 3.0, [])]
+    captured = {}
+
+    def fake_moneyflow(themes, **kwargs):
+        captured["themes"] = themes
+        captured.update(kwargs)
+        return {"885881": 456.0}
+
+    monkeypatch.setattr(
+        "kan.data.board_leaderboard.theme_moneyflow_map",
+        fake_moneyflow,
+    )
+
+    result = board_trend.board_trend_moneyflow_map("theme", rows, force=True)
+
+    assert result == {"885881": 456.0}
+    assert captured["themes"][0].source == "ths"
+    assert captured["force"] is True
