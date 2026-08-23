@@ -1,7 +1,10 @@
 import { useQuery } from "@tanstack/react-query";
 import {
   ArrowRight,
+  ArrowDown,
+  ArrowUp,
   CalendarDays,
+  CircleHelp,
   Layers3,
   LineChart,
   RefreshCw,
@@ -12,6 +15,7 @@ import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import {
   api,
+  type BoardPulseSnapshot,
   type BoardTrendParams,
   type BoardTrendRow,
 } from "../api/client";
@@ -30,6 +34,11 @@ const SOURCE_LABELS: Record<string, string> = {
   sw: "申万行业指数",
   ths: "同花顺概念指数",
   em: "东方财富概念指数",
+};
+
+const PULSE_SOURCE_LABELS: Record<string, string> = {
+  tushare_daily_bars: "全市场日线截面 · TuShare 兼容",
+  individual_cache: "本地个股缓存",
 };
 
 const KIND_OPTIONS = [
@@ -160,6 +169,148 @@ function TrendChart({ row }: { row: BoardTrendRow }) {
   );
 }
 
+function BoardPulsePanel({
+  pulse,
+  isLoading,
+  error,
+  onRetry,
+  onOpenMarket,
+}: {
+  pulse?: BoardPulseSnapshot;
+  isLoading: boolean;
+  error: unknown;
+  onRetry: () => void;
+  onOpenMarket: () => void;
+}) {
+  if (isLoading) {
+    return (
+      <section className="trend-pulse">
+        <Loading label="读取板块内部结构" />
+      </section>
+    );
+  }
+  if (error) {
+    return (
+      <section className="trend-pulse trend-pulse--error">
+        <div>
+          <strong>板块内部结构暂不可用</strong>
+          <p>{errorMessage(error)}</p>
+        </div>
+        <div>
+          <Button size="sm" variant="secondary" onClick={onRetry}>再试一次</Button>
+          <Button size="sm" variant="ghost" onClick={onOpenMarket}>更新行情</Button>
+        </div>
+      </section>
+    );
+  }
+  if (!pulse) return null;
+
+  const evaluated = Math.max(pulse.coverage.evaluated, 1);
+  const flatRatio = pulse.coverage.flat / evaluated * 100;
+  const source = PULSE_SOURCE_LABELS[pulse.source] ?? pulse.source;
+  const topUp = pulse.top_up ?? [];
+  const topDown = pulse.top_down ?? [];
+
+  return (
+    <section className="trend-pulse">
+      <div className="trend-pulse__heading">
+        <div>
+          <span className="panel-kicker">成员结构</span>
+          <h3>最新交易日，板块内部怎么动</h3>
+          <p>
+            {source} · {pulse.previous_date} → {pulse.data_cutoff} ·
+            已比较 {pulse.coverage.evaluated}/{pulse.coverage.total} 只
+          </p>
+        </div>
+        {pulse.partial ? <Badge tone="warning">部分覆盖</Badge> : <Badge tone="neutral">完整覆盖</Badge>}
+      </div>
+
+      <div className="trend-pulse__metrics">
+        <div>
+          <span>上涨成员</span>
+          <strong>{pulse.coverage.up} 只</strong>
+          <small>{number(pulse.up_ratio_pct, 1)}%</small>
+        </div>
+        <div>
+          <span>下跌成员</span>
+          <strong>{pulse.coverage.down} 只</strong>
+          <small>{number(pulse.down_ratio_pct, 1)}%</small>
+        </div>
+        <div>
+          <span>平盘成员</span>
+          <strong>{pulse.coverage.flat} 只</strong>
+          <small>{number(flatRatio, 1)}%</small>
+        </div>
+        <div>
+          <span>成员中位涨跌</span>
+          <strong>{percent(pulse.median_change_pct)}</strong>
+          <small>不按指数权重</small>
+        </div>
+      </div>
+
+      <div className="trend-pulse__breadth" aria-label="板块成员涨跌家数分布">
+        <span
+          className="is-up"
+          style={{ width: `${pulse.up_ratio_pct}%` }}
+          title={`上涨 ${pulse.coverage.up} 只`}
+        />
+        <span
+          className="is-flat"
+          style={{ width: `${flatRatio}%` }}
+          title={`平盘 ${pulse.coverage.flat} 只`}
+        />
+        <span
+          className="is-down"
+          style={{ width: `${pulse.down_ratio_pct}%` }}
+          title={`下跌 ${pulse.coverage.down} 只`}
+        />
+      </div>
+      <div className="trend-pulse__legend">
+        <span><i className="is-up" /> 上涨 {pulse.coverage.up}</span>
+        <span><i className="is-flat" /> 平盘 {pulse.coverage.flat}</span>
+        <span><i className="is-down" /> 下跌 {pulse.coverage.down}</span>
+      </div>
+
+      <div className="trend-pulse__movers">
+        <div>
+          <h4><ArrowUp size={14} /> 涨幅靠前成员</h4>
+          {topUp.length ? (
+            <ol>
+              {topUp.map((member) => (
+                <li key={member.code}>
+                  <span><strong>{member.name}</strong><small>{member.code}</small></span>
+                  <b>{percent(member.change_pct)}</b>
+                </li>
+              ))}
+            </ol>
+          ) : <p>没有上涨成员</p>}
+        </div>
+        <div>
+          <h4><ArrowDown size={14} /> 跌幅靠前成员</h4>
+          {topDown.length ? (
+            <ol>
+              {topDown.map((member) => (
+                <li key={member.code}>
+                  <span><strong>{member.name}</strong><small>{member.code}</small></span>
+                  <b>{percent(member.change_pct)}</b>
+                </li>
+              ))}
+            </ol>
+          ) : <p>没有下跌成员</p>}
+        </div>
+      </div>
+
+      {(pulse.warnings?.length ?? 0) > 0 ? (
+        <p className="trend-pulse__warning">{pulse.warnings?.join(" · ")}</p>
+      ) : null}
+      <p className="trend-pulse__boundary">
+        <CircleHelp size={14} />
+        这里描述成员涨跌分布和靠前成员，不代表指数权重贡献，也不是新闻事件的因果归因。
+      </p>
+    </section>
+  );
+}
+
 export function TrendDiscoveryPage() {
   const navigate = useNavigate();
   const [kind, setKind] = useState<BoardTrendParams["kind"]>("industry");
@@ -188,6 +339,16 @@ export function TrendDiscoveryPage() {
   }, [rows, selectedCode]);
 
   const selected = rows.find((row) => row.code === selectedCode) ?? rows[0] ?? null;
+  const pulseLevel = selected?.kind === "industry" ? level : 1;
+  const pulseQuery = useQuery({
+    queryKey: ["board-pulse", selected?.kind, selected?.code, pulseLevel],
+    queryFn: () => api.boardPulse(
+      selected!.kind,
+      selected!.kind === "industry" ? selected!.code : selected!.name,
+      pulseLevel,
+    ),
+    enabled: Boolean(selected),
+  });
   const source = trendQuery.data?.source
     ? (SOURCE_LABELS[trendQuery.data.source] ?? trendQuery.data.source)
     : "等待数据";
@@ -424,6 +585,13 @@ export function TrendDiscoveryPage() {
                 </div>
               </div>
               <TrendChart row={selected} />
+              <BoardPulsePanel
+                pulse={pulseQuery.data}
+                isLoading={pulseQuery.isLoading}
+                error={pulseQuery.error}
+                onRetry={() => void pulseQuery.refetch()}
+                onOpenMarket={() => navigate("/market")}
+              />
               <div className="trend-drilldown">
                 <span className="trend-drilldown__icon"><Layers3 size={19} /></span>
                 <div>
@@ -449,8 +617,8 @@ export function TrendDiscoveryPage() {
       <div className="trend-principle">
         <TrendingUp size={18} />
         <p>
-          <strong>这页回答“哪里正在形成趋势”。</strong>
-          真正的个股条件、运行证据与候选比较，继续由选股工作台负责。
+          <strong>这页回答“哪里正在形成趋势、板块内部最新交易日怎么动”。</strong>
+          成员分布不是权重归因；真正的个股条件、运行证据与候选比较，继续由选股工作台负责。
         </p>
       </div>
     </div>

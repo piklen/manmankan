@@ -75,6 +75,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/boards/{kind}/{value}/pulse": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Board Pulse
+         * @description 返回板块成分股在最新完整交易日的涨跌结构。
+         */
+        get: operations["board_pulse_api_v1_boards__kind___value__pulse_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/stocks/{symbol}": {
         parameters: {
             query?: never;
@@ -572,6 +592,98 @@ export interface components {
          * @enum {string}
          */
         BoardKind: "industry" | "theme";
+        /** BoardPulseCoverage */
+        BoardPulseCoverage: {
+            /** Total */
+            total: number;
+            /** Evaluated */
+            evaluated: number;
+            /** Up */
+            up: number;
+            /** Down */
+            down: number;
+            /** Flat */
+            flat: number;
+            /** Missing */
+            missing: number;
+        };
+        /** BoardPulseMember */
+        BoardPulseMember: {
+            /** Rank */
+            rank: number;
+            /** Code */
+            code: string;
+            /** Name */
+            name: string;
+            /** Close */
+            close: number;
+            /** Change Pct */
+            change_pct: number;
+        };
+        /**
+         * BoardPulseQuery
+         * @description 查询一个行业/题材在最新完整交易日的成分股内部结构。
+         */
+        BoardPulseQuery: {
+            kind: components["schemas"]["BoardKind"];
+            /** Value */
+            value: string;
+            /**
+             * Level
+             * @default 1
+             */
+            level: number;
+            /**
+             * Limit
+             * @default 5
+             */
+            limit: number;
+            /**
+             * Force
+             * @default false
+             */
+            force: boolean;
+        };
+        /**
+         * BoardPulseSnapshot
+         * @description 板块成分股同一交易日的涨跌分布，不表示权重贡献或新闻因果。
+         */
+        BoardPulseSnapshot: {
+            /**
+             * Schema Version
+             * @default 1
+             */
+            schema_version: number;
+            query: components["schemas"]["BoardPulseQuery"];
+            /** Board Code */
+            board_code: string;
+            /** Board Name */
+            board_name: string;
+            /** Source */
+            source: string;
+            /** Data Cutoff */
+            data_cutoff: string;
+            /** Previous Date */
+            previous_date: string;
+            /**
+             * Partial
+             * @default false
+             */
+            partial: boolean;
+            coverage: components["schemas"]["BoardPulseCoverage"];
+            /** Up Ratio Pct */
+            up_ratio_pct: number;
+            /** Down Ratio Pct */
+            down_ratio_pct: number;
+            /** Median Change Pct */
+            median_change_pct: number;
+            /** Top Up */
+            top_up?: components["schemas"]["BoardPulseMember"][];
+            /** Top Down */
+            top_down?: components["schemas"]["BoardPulseMember"][];
+            /** Warnings */
+            warnings?: string[];
+        };
         /** BoardTrendCoverage */
         BoardTrendCoverage: {
             /** Total */
@@ -1481,6 +1593,42 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["BoardTrendSnapshot"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    board_pulse_api_v1_boards__kind___value__pulse_get: {
+        parameters: {
+            query?: {
+                level?: number;
+                limit?: number;
+                force?: boolean;
+            };
+            header?: never;
+            path: {
+                kind: components["schemas"]["BoardKind"];
+                value: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BoardPulseSnapshot"];
                 };
             };
             /** @description Validation Error */

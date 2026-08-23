@@ -20,6 +20,8 @@ export type SettingsFacts = components["schemas"]["SettingsFactsResponse"];
 export type StockResearch = components["schemas"]["StockResearchResponse"];
 export type BoardTrendSnapshot = components["schemas"]["BoardTrendSnapshot"];
 export type BoardTrendRow = components["schemas"]["BoardTrendRow"];
+export type BoardPulseSnapshot = components["schemas"]["BoardPulseSnapshot"];
+export type BoardPulseMember = components["schemas"]["BoardPulseMember"];
 
 export interface BoardTrendParams {
   kind: "industry" | "theme";
@@ -119,6 +121,17 @@ export const api = {
     if (query.direction === "up") params.set("up", String(query.days));
     if (query.direction === "down") params.set("down", String(query.days));
     return request<BoardTrendSnapshot>(`/api/v1/boards/trends?${params}`);
+  },
+  boardPulse: (
+    kind: "industry" | "theme",
+    value: string,
+    level = 1,
+    limit = 5,
+  ) => {
+    const params = new URLSearchParams({ level: String(level), limit: String(limit) });
+    return request<BoardPulseSnapshot>(
+      `/api/v1/boards/${kind}/${encodeURIComponent(value)}/pulse?${params}`,
+    );
   },
   market: () => request<MarketOverview>("/api/v1/market"),
   portfolio: () => request<Portfolio>("/api/v1/portfolio"),

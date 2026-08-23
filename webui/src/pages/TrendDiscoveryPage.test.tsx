@@ -2,7 +2,11 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { MemoryRouter, Route, Routes, useLocation } from "react-router-dom";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { api, type BoardTrendSnapshot } from "../api/client";
+import {
+  api,
+  type BoardPulseSnapshot,
+  type BoardTrendSnapshot,
+} from "../api/client";
 import { TrendDiscoveryPage } from "./TrendDiscoveryPage";
 
 const snapshot: BoardTrendSnapshot = {
@@ -61,6 +65,28 @@ const snapshot: BoardTrendSnapshot = {
   warnings: [],
 };
 
+const pulse: BoardPulseSnapshot = {
+  schema_version: 1,
+  query: { kind: "industry", value: "电子", level: 1, limit: 5, force: false },
+  board_code: "801080",
+  board_name: "电子",
+  source: "tushare_daily_bars",
+  data_cutoff: "2026-08-21",
+  previous_date: "2026-08-20",
+  partial: false,
+  coverage: { total: 100, evaluated: 100, up: 62, down: 35, flat: 3, missing: 0 },
+  up_ratio_pct: 62,
+  down_ratio_pct: 35,
+  median_change_pct: 0.8,
+  top_up: [
+    { rank: 1, code: "000001", name: "上涨成员甲", close: 11, change_pct: 10 },
+  ],
+  top_down: [
+    { rank: 1, code: "000002", name: "下跌成员乙", close: 9, change_pct: -5 },
+  ],
+  warnings: [],
+};
+
 function LocationProbe() {
   const location = useLocation();
   return <div>{`${location.pathname}${location.search}`}</div>;
@@ -88,6 +114,7 @@ afterEach(() => {
 describe("TrendDiscoveryPage", () => {
   it("shows the shared board trend snapshot and drills into Screen", async () => {
     const query = vi.spyOn(api, "boardTrends").mockResolvedValue(snapshot);
+    const pulseQuery = vi.spyOn(api, "boardPulse").mockResolvedValue(pulse);
 
     renderPage();
 
@@ -96,6 +123,10 @@ describe("TrendDiscoveryPage", () => {
     ).toBeInTheDocument();
     expect((await screen.findAllByText("电子")).length).toBeGreaterThanOrEqual(2);
     expect(screen.getByText("已评估 31/31 个 · 命中 2 个")).toBeInTheDocument();
+    expect(await screen.findByText("最新交易日，板块内部怎么动")).toBeInTheDocument();
+    expect(screen.getByText("上涨成员甲")).toBeInTheDocument();
+    expect(screen.getByText("下跌成员乙")).toBeInTheDocument();
+    expect(screen.getByText("62 只")).toBeInTheDocument();
     expect(query).toHaveBeenCalledWith({
       kind: "industry",
       mode: "close",
@@ -105,6 +136,7 @@ describe("TrendDiscoveryPage", () => {
       level: 1,
       limit: 50,
     });
+    expect(pulseQuery).toHaveBeenCalledWith("industry", "801080", 1);
 
     fireEvent.click(screen.getByRole("button", { name: /用本板块选股/ }));
 
@@ -115,6 +147,7 @@ describe("TrendDiscoveryPage", () => {
 
   it("requeries when the trend definition changes", async () => {
     const query = vi.spyOn(api, "boardTrends").mockResolvedValue(snapshot);
+    vi.spyOn(api, "boardPulse").mockResolvedValue(pulse);
 
     renderPage();
     await screen.findByText("申万行业指数");
@@ -127,5 +160,40 @@ describe("TrendDiscoveryPage", () => {
         expect.objectContaining({ kind: "theme", mode: "candle", direction: "down" }),
       ),
     );
+  });
+
+  it("uses the theme name when loading members from a TuShare trend row", async () => {
+    const themeSnapshot: BoardTrendSnapshot = {
+      ...snapshot,
+      query: { ...snapshot.query, kind: "theme" },
+      source: "tushare",
+      coverage: { total: 400, evaluated: 400, matched: 1, returned: 1, errors: 0 },
+      rows: [
+        {
+          ...snapshot.rows![0]!,
+          kind: "theme",
+          code: "885781",
+          name: "石墨电极",
+        },
+      ],
+    };
+    vi.spyOn(api, "boardTrends").mockImplementation((params) =>
+      Promise.resolve(params.kind === "theme" ? themeSnapshot : snapshot),
+    );
+    const pulseQuery = vi.spyOn(api, "boardPulse").mockResolvedValue({
+      ...pulse,
+      query: { ...pulse.query, kind: "theme", value: "石墨电极" },
+      board_code: "307512",
+      board_name: "石墨电极",
+    });
+
+    renderPage();
+    await screen.findByText("申万行业指数");
+    fireEvent.click(screen.getByRole("radio", { name: "题材" }));
+
+    await waitFor(() =>
+      expect(pulseQuery).toHaveBeenCalledWith("theme", "石墨电极", 1),
+    );
+    expect(pulseQuery).not.toHaveBeenCalledWith("theme", "885781", 1);
   });
 });

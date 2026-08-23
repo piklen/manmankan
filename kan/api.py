@@ -200,6 +200,10 @@ from kan.data.theme_constituents import (
 from kan.domain.board import (
     BoardDailyChange,
     BoardKind,
+    BoardPulseCoverage,
+    BoardPulseMember,
+    BoardPulseQuery,
+    BoardPulseSnapshot,
     BoardTrendCoverage,
     BoardTrendFailure,
     BoardTrendMode,
@@ -216,7 +220,10 @@ from kan.domain.screen import (
     ScreenSpec,
 )
 from kan.service.board_service import (
+    BoardPulseServiceError,
+    BoardServiceError,
     BoardTrendServiceError,
+    query_board_pulse,
     query_board_trends,
 )
 from kan.service.screen_ai import (
@@ -246,6 +253,12 @@ from kan.service.screen_service import (
 __all__ = [
     "BoardDailyChange",
     "BoardKind",
+    "BoardPulseCoverage",
+    "BoardPulseMember",
+    "BoardPulseQuery",
+    "BoardPulseServiceError",
+    "BoardPulseSnapshot",
+    "BoardServiceError",
     "BoardTrendCoverage",
     "BoardTrendFailure",
     "BoardTrendMode",
@@ -289,6 +302,7 @@ __all__ = [
     "low",
     "parse_screen_text",
     "plan_screen",
+    "query_board_pulse",
     "query_board_trends",
     "register_kline_source",
     "register_theme_constituent_source",

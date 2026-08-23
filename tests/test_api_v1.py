@@ -36,6 +36,7 @@ def test_openapi_only_exposes_typed_v1_contract(client: TestClient) -> None:
     schema = response.json()
     assert "/api/v1/screens" in schema["paths"]
     assert "/api/v1/boards/trends" in schema["paths"]
+    assert "/api/v1/boards/{kind}/{value}/pulse" in schema["paths"]
     assert "/api/v1/portfolio" in schema["paths"]
     assert "/api/v1/jobs/screen-runs" in schema["paths"]
     assert "/api/v1/jobs/market-refresh" in schema["paths"]
@@ -43,6 +44,7 @@ def test_openapi_only_exposes_typed_v1_contract(client: TestClient) -> None:
     assert "ScreenSpec" in schema["components"]["schemas"]
     assert "ScreenRun" in schema["components"]["schemas"]
     assert "BoardTrendSnapshot" in schema["components"]["schemas"]
+    assert "BoardPulseSnapshot" in schema["components"]["schemas"]
 
 
 def test_board_trends_uses_shared_typed_query(
@@ -106,6 +108,82 @@ def test_board_trends_rejects_conflicting_directions(client: TestClient) -> None
 
     assert response.status_code == 400
     assert response.json()["detail"]["code"] == "invalid_request"
+
+
+def test_board_pulse_uses_shared_typed_service(
+    client: TestClient,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    captured: dict[str, object] = {}
+
+    def fake_pulse(query):
+        captured["query"] = query
+        return {
+            "query": query.model_dump(mode="json"),
+            "board_code": "801080",
+            "board_name": "电子",
+            "source": "tushare_daily_bars",
+            "data_cutoff": "2026-08-21",
+            "previous_date": "2026-08-20",
+            "partial": False,
+            "coverage": {
+                "total": 100,
+                "evaluated": 100,
+                "up": 62,
+                "down": 35,
+                "flat": 3,
+                "missing": 0,
+            },
+            "up_ratio_pct": 62.0,
+            "down_ratio_pct": 35.0,
+            "median_change_pct": 0.8,
+            "top_up": [
+                {
+                    "rank": 1,
+                    "code": "000001",
+                    "name": "甲",
+                    "close": 11.0,
+                    "change_pct": 10.0,
+                }
+            ],
+            "top_down": [],
+        }
+
+    monkeypatch.setattr(
+        "kan.web.api_v1.board_service.query_board_pulse",
+        fake_pulse,
+    )
+
+    response = client.get(
+        "/api/v1/boards/industry/%E7%94%B5%E5%AD%90/pulse?level=1&limit=3"
+    )
+
+    assert response.status_code == 200
+    assert response.json()["coverage"]["up"] == 62
+    assert response.json()["top_up"][0]["name"] == "甲"
+    query = captured["query"]
+    assert query.kind.value == "industry"
+    assert query.value == "电子"
+    assert query.limit == 3
+
+
+def test_board_pulse_maps_missing_board_to_not_found(
+    client: TestClient,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from kan.service.board_service import BoardPulseServiceError
+
+    monkeypatch.setattr(
+        "kan.web.api_v1.board_service.query_board_pulse",
+        lambda _query: (_ for _ in ()).throw(
+            BoardPulseServiceError("board_not_found", "没有找到板块")
+        ),
+    )
+
+    response = client.get("/api/v1/boards/theme/missing/pulse")
+
+    assert response.status_code == 404
+    assert response.json()["detail"]["code"] == "board_not_found"
 
 
 def test_screen_crud_and_meta_round_trip(client: TestClient) -> None:

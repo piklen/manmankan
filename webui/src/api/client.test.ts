@@ -42,4 +42,20 @@ describe("API client", () => {
     expect(spec.exclude_st).toBe(false);
     expect(spec.sort).toHaveLength(0);
   });
+
+  it("encodes board pulse paths without changing the board value", async () => {
+    const fetchMock = vi.fn().mockResolvedValue(
+      new Response(JSON.stringify({}), {
+        status: 200,
+        headers: { "Content-Type": "application/json" },
+      }),
+    );
+    vi.stubGlobal("fetch", fetchMock);
+
+    await api.boardPulse("theme", "AI 应用", 1, 3);
+
+    expect(fetchMock.mock.calls[0]?.[0]).toBe(
+      "/api/v1/boards/theme/AI%20%E5%BA%94%E7%94%A8/pulse?level=1&limit=3",
+    );
+  });
 });
