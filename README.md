@@ -14,7 +14,7 @@
 
 ![慢慢看趋势发现：行业题材趋势榜、走势复核与成分股下钻](docs/assets/readme-trend-discovery.png)
 
-慢慢看是一个给普通 A 股用户使用的本地优先趋势选股研究工作台。它把“行业/题材趋势发现、成分股下钻、客观阈值、运行结果、候选研究和横向对比”连成一条可复跑流水线，重点回答四个问题：**哪里正在形成趋势、板块里哪些股票符合我写下的规则、为什么符合、与上次运行相比发生了什么变化**。
+慢慢看是一个给普通 A 股用户使用的本地优先趋势选股研究工作台。它把“行业/题材趋势发现、历史复核、成分股下钻、客观阈值、运行结果、候选研究和横向对比”连成一条可复跑流水线，重点回答五个问题：**哪里正在形成趋势、同类趋势过去怎样分布、板块里哪些股票符合我写下的规则、为什么符合、与上次运行相比发生了什么变化**。
 
 ```bash
 uv tool install manmankan
@@ -25,6 +25,7 @@ kan web
 
 - 把申万行业或概念题材指数当作 OHLC 标的，按连续涨跌、连续阳线/阴线、最新涨幅或主力净额发现趋势。
 - 复核板块近日日涨跌轨迹和成分股内部结构：上涨/下跌家数、中位涨跌及涨跌靠前成员；这些事实不冒充指数权重贡献或新闻因果。
+- 从趋势详情进入“历史复核”：按你明确设置的连续条件查看板块指数未来区间分布、逐事件明细及相对沪深 300 的同日结果；不拿今天的成分股重造过去，也不遍历参数挑最好看的结果。
 - 保存行业与题材的每日趋势复看，跨日区分连续天数延长/缩短、方向切换和数据可用性变化；相同数据重复点击不会制造历史。
 - 把所选板块一键带入 Screen；系统只带入股票池，不偷加选股条件。
 - 从自选、持仓、全市场、行业、题材或自定义代码池建立 `Screen`。
@@ -46,7 +47,7 @@ kan web
 kan web
 ```
 
-默认页是“趋势发现”：先切换行业/题材、收盘连续/阳线连续、方向与天数，再复核板块近日日涨跌和同一截止日的成员涨跌分布。成员涨跌靠前不等于指数贡献；点击“用本板块选股”只会把板块成分股带入 Screen，不预置阈值、排除项或排序。
+默认页是“趋势发现”：先切换行业/题材、收盘连续/阳线连续、方向与天数，再复核板块近日日涨跌和同一截止日的成员涨跌分布。成员涨跌靠前不等于指数贡献；点击“历史复核”会带入当前板块和连续条件，点击“用本板块选股”只会把板块成分股带入 Screen，不预置阈值、排除项或排序。
 
 ### 2. 写下规则并保存运行
 
@@ -76,7 +77,7 @@ kan daily
 
 ## 进阶用户：CLI、JSON 与 AI
 
-Web、CLI、Python API 和 HTTP 共用 `BoardTrendQuery → BoardTrendSnapshot`；Web、Python API 和 HTTP 还共用 `BoardPulseQuery → BoardPulseSnapshot` 成员结构与 `BoardDailyReview` 跨日复看服务。Web、CLI、Python API、HTTP 和 MCP 也共用同一套 `ScreenSpec → ScreenRun` 服务。React 只负责交互和展示，不在浏览器重算金融事实；既有 `kan find` JSON 契约继续兼容。
+Web、CLI、Python API 和 HTTP 共用 `BoardTrendQuery → BoardTrendSnapshot`；Web、Python API 和 HTTP 还共用 `BoardPulseQuery → BoardPulseSnapshot` 成员结构、`BoardDailyReview` 跨日复看和 `BoardHistoryStudy` 板块指数历史复核服务。Web、CLI、Python API、HTTP 和 MCP 也共用同一套 `ScreenSpec → ScreenRun` 服务。React 只负责交互和展示，不在浏览器重算金融事实；既有 `kan find` JSON 契约继续兼容。
 
 ```bash
 kan screen filters --format json

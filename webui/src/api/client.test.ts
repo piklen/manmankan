@@ -83,4 +83,34 @@ describe("API client", () => {
       force: false,
     });
   });
+
+  it("posts every visible board history parameter", async () => {
+    const fetchMock = vi.fn().mockResolvedValue(
+      new Response(JSON.stringify({}), {
+        status: 200,
+        headers: { "Content-Type": "application/json" },
+      }),
+    );
+    vi.stubGlobal("fetch", fetchMock);
+    const payload = {
+      kind: "theme" as const,
+      value: "885781",
+      level: 1,
+      mode: "close" as const,
+      direction: "up" as const,
+      min_streak: 3,
+      forward_days: 5,
+      lookback_years: 5,
+      sample_policy: "first_hit" as const,
+      benchmark_code: "000300.SH",
+      force: false,
+    };
+
+    await api.studyBoardHistory(payload);
+
+    const [path, init] = fetchMock.mock.calls[0] as [string, RequestInit];
+    expect(path).toBe("/api/v1/board-history-studies");
+    expect(init.method).toBe("POST");
+    expect(JSON.parse(String(init.body))).toEqual(payload);
+  });
 });

@@ -212,6 +212,16 @@ from kan.domain.board import (
     BoardTrendSnapshot,
     BoardTrendSort,
 )
+from kan.domain.board_history import (
+    BoardHistoryCoverage,
+    BoardHistoryEvent,
+    BoardHistoryStudy,
+    BoardHistoryStudyQuery,
+    BoardStudyDirection,
+    BoardStudySamplePolicy,
+    PointInTimeAudit,
+    ReturnDistribution,
+)
 from kan.domain.board_review import (
     BoardDailyReview,
     BoardDailyReviewRequest,
@@ -228,6 +238,10 @@ from kan.domain.screen import (
     SavedScreen,
     ScreenRun,
     ScreenSpec,
+)
+from kan.service.board_history_service import (
+    BoardHistoryServiceError,
+    study_board_history,
 )
 from kan.service.board_review_service import (
     BoardReviewServiceError,
@@ -271,6 +285,11 @@ __all__ = [
     "BoardDailyReview",
     "BoardDailyReviewRequest",
     "BoardDailyReviewSummary",
+    "BoardHistoryCoverage",
+    "BoardHistoryEvent",
+    "BoardHistoryServiceError",
+    "BoardHistoryStudy",
+    "BoardHistoryStudyQuery",
     "BoardKind",
     "BoardPulseCoverage",
     "BoardPulseMember",
@@ -284,6 +303,8 @@ __all__ = [
     "BoardReviewSectionSummary",
     "BoardReviewServiceError",
     "BoardServiceError",
+    "BoardStudyDirection",
+    "BoardStudySamplePolicy",
     "BoardTrendCoverage",
     "BoardTrendFailure",
     "BoardTrendMode",
@@ -298,6 +319,8 @@ __all__ = [
     "HotRankSet",
     "IndustrySet",
     "KlineSource",
+    "PointInTimeAudit",
+    "ReturnDistribution",
     "SavedScreen",
     "ScreenExplainInput",
     "ScreenParseInput",
@@ -340,6 +363,7 @@ __all__ = [
     "save_screen",
     "scan",
     "screen_schema",
+    "study_board_history",
     "theme_constituent_chain",
     "trend",
 ]

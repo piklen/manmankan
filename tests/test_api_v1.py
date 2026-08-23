@@ -52,6 +52,48 @@ def _board_review_model():
     )
 
 
+def _board_history_study_model():
+    from kan.domain.board_history import (
+        BoardHistoryCoverage,
+        BoardHistoryStudy,
+        BoardHistoryStudyQuery,
+        ReturnDistribution,
+    )
+
+    query = BoardHistoryStudyQuery(
+        kind="industry",
+        value="电子",
+        mode="close",
+        direction="up",
+        min_streak=3,
+        forward_days=5,
+        lookback_years=5,
+        sample_policy="first_hit",
+    )
+    empty = ReturnDistribution(count=0, positive=0, negative=0, flat=0)
+    return BoardHistoryStudy(
+        query=query,
+        board_code="801080",
+        board_name="电子",
+        source="sw_index_history",
+        benchmark_name="沪深300",
+        benchmark_source="fixture",
+        data_start="2021-08-21",
+        data_cutoff="2026-08-21",
+        coverage=BoardHistoryCoverage(
+            observations=1200,
+            first_hits=0,
+            selected=0,
+            completed=0,
+            censored=0,
+            benchmark_aligned=0,
+        ),
+        raw_distribution=empty,
+        benchmark_distribution=empty,
+        relative_distribution=empty,
+    )
+
+
 @pytest.fixture
 def client(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> TestClient:
     monkeypatch.setattr(paths, "BASE_DIR", tmp_path)
@@ -77,6 +119,7 @@ def test_openapi_only_exposes_typed_v1_contract(client: TestClient) -> None:
     assert "/api/v1/boards/{kind}/{value}/pulse" in schema["paths"]
     assert "/api/v1/board-reviews" in schema["paths"]
     assert "/api/v1/board-reviews/{review_id}" in schema["paths"]
+    assert "/api/v1/board-history-studies" in schema["paths"]
     assert "/api/v1/portfolio" in schema["paths"]
     assert "/api/v1/jobs/screen-runs" in schema["paths"]
     assert "/api/v1/jobs/market-refresh" in schema["paths"]
@@ -86,6 +129,7 @@ def test_openapi_only_exposes_typed_v1_contract(client: TestClient) -> None:
     assert "BoardTrendSnapshot" in schema["components"]["schemas"]
     assert "BoardPulseSnapshot" in schema["components"]["schemas"]
     assert "BoardDailyReview" in schema["components"]["schemas"]
+    assert "BoardHistoryStudy" in schema["components"]["schemas"]
 
 
 def test_board_trends_uses_shared_typed_query(
@@ -301,6 +345,89 @@ def test_board_review_errors_map_to_recoverable_http_status(
     unavailable = client.post("/api/v1/board-reviews", json={})
     assert unavailable.status_code == 503
     assert unavailable.json()["detail"]["code"] == "data_unavailable"
+
+
+def test_board_history_study_uses_typed_service(
+    client: TestClient,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    study = _board_history_study_model()
+    captured: dict[str, object] = {}
+
+    def fake(payload):
+        captured["payload"] = payload
+        return study
+
+    monkeypatch.setattr(
+        "kan.web.api_v1.board_history_service.study_board_history",
+        fake,
+    )
+    response = client.post(
+        "/api/v1/board-history-studies",
+        json={
+            "kind": "industry",
+            "value": "电子",
+            "level": 1,
+            "mode": "close",
+            "direction": "up",
+            "min_streak": 3,
+            "forward_days": 5,
+            "lookback_years": 5,
+            "sample_policy": "first_hit",
+            "benchmark_code": "000300.SH",
+            "force": False,
+        },
+    )
+
+    assert response.status_code == 200
+    assert response.json()["audit"]["uses_current_constituents"] is False
+    payload = captured["payload"]
+    assert payload.min_streak == 3
+    assert payload.sample_policy.value == "first_hit"
+
+
+def test_board_history_study_maps_invalid_benchmark(
+    client: TestClient,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from kan.service.board_history_service import BoardHistoryServiceError
+
+    monkeypatch.setattr(
+        "kan.web.api_v1.board_history_service.study_board_history",
+        lambda _payload: (_ for _ in ()).throw(
+            BoardHistoryServiceError("invalid_benchmark", "基准代码错误")
+        ),
+    )
+    payload = _board_history_study_model().query.model_dump(mode="json")
+    response = client.post("/api/v1/board-history-studies", json=payload)
+
+    assert response.status_code == 400
+    assert response.json()["detail"]["code"] == "invalid_benchmark"
+
+
+@pytest.mark.parametrize(
+    ("code", "status"),
+    [("board_not_found", 404), ("data_unavailable", 503)],
+)
+def test_board_history_study_maps_stable_service_errors(
+    client: TestClient,
+    monkeypatch: pytest.MonkeyPatch,
+    code: str,
+    status: int,
+) -> None:
+    from kan.service.board_history_service import BoardHistoryServiceError
+
+    monkeypatch.setattr(
+        "kan.web.api_v1.board_history_service.study_board_history",
+        lambda _payload: (_ for _ in ()).throw(BoardHistoryServiceError(code, "失败")),
+    )
+    response = client.post(
+        "/api/v1/board-history-studies",
+        json=_board_history_study_model().query.model_dump(mode="json"),
+    )
+
+    assert response.status_code == status
+    assert response.json()["detail"]["code"] == code
 
 
 def test_screen_crud_and_meta_round_trip(client: TestClient) -> None:

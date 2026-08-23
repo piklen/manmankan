@@ -1,5 +1,15 @@
 """ManManKan 稳定领域契约。"""
 
+from kan.domain.board_history import (
+    BoardHistoryCoverage,
+    BoardHistoryEvent,
+    BoardHistoryStudy,
+    BoardHistoryStudyQuery,
+    BoardStudyDirection,
+    BoardStudySamplePolicy,
+    PointInTimeAudit,
+    ReturnDistribution,
+)
 from kan.domain.board_review import (
     BoardDailyReview,
     BoardDailyReviewRequest,
@@ -49,11 +59,17 @@ __all__ = [
     "BoardDailyReview",
     "BoardDailyReviewRequest",
     "BoardDailyReviewSummary",
+    "BoardHistoryCoverage",
+    "BoardHistoryEvent",
+    "BoardHistoryStudy",
+    "BoardHistoryStudyQuery",
     "BoardReviewChange",
     "BoardReviewChangeCounts",
     "BoardReviewChangeType",
     "BoardReviewSection",
     "BoardReviewSectionSummary",
+    "BoardStudyDirection",
+    "BoardStudySamplePolicy",
     "Candidate",
     "CandidateList",
     "CandidateStatus",
@@ -66,7 +82,9 @@ __all__ = [
     "MarketRefreshScope",
     "MatchMode",
     "NullPolicy",
+    "PointInTimeAudit",
     "RankChange",
+    "ReturnDistribution",
     "SavedScreen",
     "ScreenCondition",
     "ScreenDiff",

@@ -95,9 +95,13 @@ def test_api_all_lists_match_actual_exports():
         "BoardPulseServiceError", "BoardPulseSnapshot", "BoardServiceError",
         "query_board_pulse",
         "BoardDailyReview", "BoardDailyReviewRequest", "BoardDailyReviewSummary",
+        "BoardHistoryCoverage", "BoardHistoryEvent", "BoardHistoryServiceError",
+        "BoardHistoryStudy", "BoardHistoryStudyQuery", "BoardStudyDirection",
+        "BoardStudySamplePolicy", "PointInTimeAudit", "ReturnDistribution",
         "BoardReviewChange", "BoardReviewChangeCounts", "BoardReviewChangeType",
         "BoardReviewSection", "BoardReviewSectionSummary", "BoardReviewServiceError",
         "create_board_review", "get_board_review", "list_board_reviews",
+        "study_board_history",
         # vNext Screen application service
         "CandidateList", "CompareSet", "SavedScreen", "ScreenRun", "ScreenSpec",
         "ScreenExplainInput", "ScreenParseInput", "ScreenPlanInput",
@@ -116,15 +120,27 @@ def test_api_exports_board_trend_application_service():
     query = api.BoardTrendQuery(kind=api.BoardKind.INDUSTRY, up=3)
     pulse = api.BoardPulseQuery(kind=api.BoardKind.INDUSTRY, value="电子")
     review = api.BoardDailyReviewRequest()
+    history = api.BoardHistoryStudyQuery(
+        kind="industry",
+        value="电子",
+        mode="close",
+        direction="up",
+        min_streak=3,
+        forward_days=5,
+        lookback_years=5,
+        sample_policy="first_hit",
+    )
 
     assert query.up == 3
     assert pulse.value == "电子"
     assert review.industry_level == 1
+    assert history.forward_days == 5
     assert callable(api.query_board_trends)
     assert callable(api.query_board_pulse)
     assert callable(api.create_board_review)
     assert callable(api.get_board_review)
     assert callable(api.list_board_reviews)
+    assert callable(api.study_board_history)
 
 
 def test_api_exports_vnext_screen_application_service():

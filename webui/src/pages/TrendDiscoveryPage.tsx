@@ -5,6 +5,7 @@ import {
   ArrowUp,
   CalendarDays,
   CircleHelp,
+  History,
   Layers3,
   LineChart,
   RefreshCw,
@@ -64,6 +65,26 @@ function boardPath(row: BoardTrendRow): string {
     source: "trends",
   });
   return `/screen?${params}`;
+}
+
+function boardHistoryPath(
+  row: BoardTrendRow,
+  mode: BoardTrendParams["mode"],
+  level: number,
+): string {
+  const params = new URLSearchParams({
+    kind: row.kind,
+    value: row.code,
+    name: row.name,
+    level: String(row.kind === "industry" ? level : 1),
+    mode,
+    direction: row.streak < 0 ? "down" : "up",
+    days: String(Math.max(2, Math.min(30, Math.abs(row.streak) || 2))),
+    forward: "5",
+    years: "5",
+    sample: "first_hit",
+  });
+  return `/history/board?${params}`;
 }
 
 function signedDays(value: number): string {
@@ -592,17 +613,34 @@ export function TrendDiscoveryPage() {
                 onRetry={() => void pulseQuery.refetch()}
                 onOpenMarket={() => navigate("/market")}
               />
-              <div className="trend-drilldown">
-                <span className="trend-drilldown__icon"><Layers3 size={19} /></span>
-                <div>
-                  <strong>下一步：看这个板块里的股票</strong>
-                  <p>
-                    只把“{selected.name}”带入选股工作台。系统不会预设低位、估值或技术指标。
-                  </p>
+              <div className="trend-next-actions">
+                <div className="trend-drilldown">
+                  <span className="trend-drilldown__icon"><History size={19} /></span>
+                  <div>
+                    <strong>先看：同类趋势过去怎么走</strong>
+                    <p>
+                      复核“{signedDays(selected.streak)}”首次出现后，未来交易日的实际涨跌分布。
+                    </p>
+                  </div>
+                  <Button
+                    variant="secondary"
+                    onClick={() => navigate(boardHistoryPath(selected, mode, level))}
+                  >
+                    历史复核 <ArrowRight size={16} />
+                  </Button>
                 </div>
-                <Button onClick={() => navigate(boardPath(selected))}>
-                  用本板块选股 <ArrowRight size={16} />
-                </Button>
+                <div className="trend-drilldown">
+                  <span className="trend-drilldown__icon"><Layers3 size={19} /></span>
+                  <div>
+                    <strong>再看：这个板块里的股票</strong>
+                    <p>
+                      只把“{selected.name}”带入选股工作台。系统不会预设低位、估值或技术指标。
+                    </p>
+                  </div>
+                  <Button onClick={() => navigate(boardPath(selected))}>
+                    用本板块选股 <ArrowRight size={16} />
+                  </Button>
+                </div>
               </div>
             </>
           ) : (
@@ -618,7 +656,7 @@ export function TrendDiscoveryPage() {
         <TrendingUp size={18} />
         <p>
           <strong>这页回答“哪里正在形成趋势、板块内部最新交易日怎么动”。</strong>
-          成员分布不是权重归因；真正的个股条件、运行证据与候选比较，继续由选股工作台负责。
+          成员分布不是权重归因；历史复核只描述过去样本，个股条件、运行证据与候选比较继续由选股工作台负责。
         </p>
       </div>
     </div>

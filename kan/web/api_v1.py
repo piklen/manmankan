@@ -21,6 +21,7 @@ from kan.domain.board import (
     BoardTrendSnapshot,
     BoardTrendSort,
 )
+from kan.domain.board_history import BoardHistoryStudy, BoardHistoryStudyQuery
 from kan.domain.board_review import (
     BoardDailyReview,
     BoardDailyReviewRequest,
@@ -35,7 +36,13 @@ from kan.domain.screen import (
     ScreenRun,
     ScreenVersion,
 )
-from kan.service import board_review_service, board_service, job_service, screen_service
+from kan.service import (
+    board_history_service,
+    board_review_service,
+    board_service,
+    job_service,
+    screen_service,
+)
 from kan.service.hold_service import build_hold_summary
 from kan.service.info_service import InfoDataUnavailableError, InfoRequest, get_stock_info
 from kan.service.market_service import get_market_sentiment, serialize_market_sentiment
@@ -96,6 +103,19 @@ def _board_review_error(exc: board_review_service.BoardReviewServiceError) -> No
     ) from exc
 
 
+def _board_history_error(exc: board_history_service.BoardHistoryServiceError) -> NoReturn:
+    if exc.code == "board_not_found":
+        status = 404
+    elif exc.code == "invalid_benchmark":
+        status = 400
+    else:
+        status = 503
+    raise HTTPException(
+        status_code=status,
+        detail={"code": exc.code, "message": exc.message, "hint": exc.hint},
+    ) from exc
+
+
 @router.get("/health", response_model=HealthResponse)
 def health() -> HealthResponse:
     return HealthResponse()
@@ -110,6 +130,7 @@ def meta() -> ApiMeta:
             "board-trends",
             "board-pulse",
             "board-daily-reviews",
+            "board-history-studies",
             "immutable-runs",
             "candidate-lists",
             "compare-sets",
@@ -208,6 +229,16 @@ def board_review(review_id: str) -> BoardDailyReview:
         return board_review_service.get_board_review(review_id)
     except board_review_service.BoardReviewServiceError as exc:
         _board_review_error(exc)
+
+
+@router.post("/board-history-studies", response_model=BoardHistoryStudy)
+def board_history_study(payload: BoardHistoryStudyQuery) -> BoardHistoryStudy:
+    """复核单个板块指数历史事件，不读取当前成分股。"""
+
+    try:
+        return board_history_service.study_board_history(payload)
+    except board_history_service.BoardHistoryServiceError as exc:
+        _board_history_error(exc)
 
 
 @router.get("/stocks/{symbol}", response_model=StockResearchResponse)

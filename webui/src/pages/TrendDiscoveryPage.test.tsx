@@ -100,6 +100,7 @@ function renderPage() {
         <Routes>
           <Route path="/trends" element={<TrendDiscoveryPage />} />
           <Route path="/screen" element={<LocationProbe />} />
+          <Route path="/history/board" element={<LocationProbe />} />
         </Routes>
       </MemoryRouter>
     </QueryClientProvider>,
@@ -160,6 +161,23 @@ describe("TrendDiscoveryPage", () => {
         expect.objectContaining({ kind: "theme", mode: "candle", direction: "down" }),
       ),
     );
+  });
+
+  it("opens an explicit board-index history review without adding stock filters", async () => {
+    vi.spyOn(api, "boardTrends").mockResolvedValue(snapshot);
+    vi.spyOn(api, "boardPulse").mockResolvedValue(pulse);
+
+    renderPage();
+    await screen.findByText("申万行业指数");
+    fireEvent.click(screen.getByRole("button", { name: /历史复核/ }));
+
+    const location = await screen.findByText((content) =>
+      content.startsWith("/history/board?") && content.includes("value=801080"),
+    );
+    expect(location.textContent).toContain("mode=close");
+    expect(location.textContent).toContain("direction=up");
+    expect(location.textContent).toContain("days=4");
+    expect(location.textContent).not.toContain("conditions");
   });
 
   it("uses the theme name when loading members from a TuShare trend row", async () => {

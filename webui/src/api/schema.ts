@@ -133,6 +133,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/board-history-studies": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Board History Study
+         * @description 复核单个板块指数历史事件，不读取当前成分股。
+         */
+        post: operations["board_history_study_api_v1_board_history_studies_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/stocks/{symbol}": {
         parameters: {
             query?: never;
@@ -710,6 +730,105 @@ export interface components {
             sections: components["schemas"]["BoardReviewSectionSummary"][];
             change_counts?: components["schemas"]["BoardReviewChangeCounts"];
         };
+        /** BoardHistoryCoverage */
+        BoardHistoryCoverage: {
+            /** Observations */
+            observations: number;
+            /** First Hits */
+            first_hits: number;
+            /** Selected */
+            selected: number;
+            /** Completed */
+            completed: number;
+            /** Censored */
+            censored: number;
+            /** Benchmark Aligned */
+            benchmark_aligned: number;
+        };
+        /** BoardHistoryEvent */
+        BoardHistoryEvent: {
+            /** Event Date */
+            event_date: string;
+            /** Forward Date */
+            forward_date: string;
+            /** Streak */
+            streak: number;
+            /** Event Close */
+            event_close: number;
+            /** Forward Close */
+            forward_close: number;
+            /** Return Pct */
+            return_pct: number;
+            /** Benchmark Return Pct */
+            benchmark_return_pct?: number | null;
+            /** Relative Return Pct */
+            relative_return_pct?: number | null;
+        };
+        /** BoardHistoryStudy */
+        BoardHistoryStudy: {
+            /**
+             * Schema Version
+             * @default 1
+             */
+            schema_version: number;
+            query: components["schemas"]["BoardHistoryStudyQuery"];
+            /** Board Code */
+            board_code: string;
+            /** Board Name */
+            board_name: string;
+            /** Source */
+            source: string;
+            /** Benchmark Name */
+            benchmark_name?: string | null;
+            /** Benchmark Source */
+            benchmark_source?: string | null;
+            /** Data Start */
+            data_start: string;
+            /** Data Cutoff */
+            data_cutoff: string;
+            coverage: components["schemas"]["BoardHistoryCoverage"];
+            /** Events */
+            events?: components["schemas"]["BoardHistoryEvent"][];
+            raw_distribution: components["schemas"]["ReturnDistribution"];
+            benchmark_distribution: components["schemas"]["ReturnDistribution"];
+            relative_distribution: components["schemas"]["ReturnDistribution"];
+            audit?: components["schemas"]["PointInTimeAudit"];
+            /** Warnings */
+            warnings?: string[];
+        };
+        /**
+         * BoardHistoryStudyQuery
+         * @description 用户显式选择的历史事件定义，不含自动优化参数。
+         */
+        BoardHistoryStudyQuery: {
+            kind: components["schemas"]["BoardKind"];
+            /** Value */
+            value: string;
+            /**
+             * Level
+             * @default 1
+             */
+            level: number;
+            mode: components["schemas"]["BoardTrendMode"];
+            direction: components["schemas"]["BoardStudyDirection"];
+            /** Min Streak */
+            min_streak: number;
+            /** Forward Days */
+            forward_days: number;
+            /** Lookback Years */
+            lookback_years: number;
+            sample_policy: components["schemas"]["BoardStudySamplePolicy"];
+            /**
+             * Benchmark Code
+             * @default 000300.SH
+             */
+            benchmark_code: string | null;
+            /**
+             * Force
+             * @default false
+             */
+            force: boolean;
+        };
         /**
          * BoardKind
          * @enum {string}
@@ -899,6 +1018,16 @@ export interface components {
             /** Error Message */
             error_message?: string | null;
         };
+        /**
+         * BoardStudyDirection
+         * @enum {string}
+         */
+        BoardStudyDirection: "up" | "down";
+        /**
+         * BoardStudySamplePolicy
+         * @enum {string}
+         */
+        BoardStudySamplePolicy: "first_hit" | "non_overlapping";
         /** BoardTrendCoverage */
         BoardTrendCoverage: {
             /** Total */
@@ -1265,6 +1394,41 @@ export interface components {
          * @enum {string}
          */
         NullPolicy: "exclude" | "fail";
+        /** PointInTimeAudit */
+        PointInTimeAudit: {
+            /**
+             * Scope
+             * @default provider_board_index_series
+             * @constant
+             */
+            scope: "provider_board_index_series";
+            /**
+             * Uses Current Constituents
+             * @default false
+             * @constant
+             */
+            uses_current_constituents: false;
+            /**
+             * Reconstructs Historical Stock Pool
+             * @default false
+             * @constant
+             */
+            reconstructs_historical_stock_pool: false;
+            /**
+             * Provider Vintage Archive
+             * @default false
+             * @constant
+             */
+            provider_vintage_archive: false;
+            /**
+             * Benchmark Exact Date Alignment
+             * @default true
+             * @constant
+             */
+            benchmark_exact_date_alignment: true;
+            /** Notes */
+            notes?: string[];
+        };
         /** PortfolioAccountResponse */
         PortfolioAccountResponse: {
             /** Cash */
@@ -1365,6 +1529,31 @@ export interface components {
             current_rank: number;
             /** Delta */
             delta: number;
+        };
+        /** ReturnDistribution */
+        ReturnDistribution: {
+            /** Count */
+            count: number;
+            /** Positive */
+            positive: number;
+            /** Negative */
+            negative: number;
+            /** Flat */
+            flat: number;
+            /** Positive Ratio Pct */
+            positive_ratio_pct?: number | null;
+            /** Mean Pct */
+            mean_pct?: number | null;
+            /** Median Pct */
+            median_pct?: number | null;
+            /** P25 Pct */
+            p25_pct?: number | null;
+            /** P75 Pct */
+            p75_pct?: number | null;
+            /** Min Pct */
+            min_pct?: number | null;
+            /** Max Pct */
+            max_pct?: number | null;
         };
         /** SavedScreen */
         SavedScreen: {
@@ -1939,6 +2128,39 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["BoardDailyReview"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    board_history_study_api_v1_board_history_studies_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["BoardHistoryStudyQuery"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BoardHistoryStudy"];
                 };
             };
             /** @description Validation Error */

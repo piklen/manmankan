@@ -4,19 +4,20 @@
 
 ## 1. 产品心智模型
 
-慢慢看把趋势发现与选股拆成七个彼此独立的对象：
+慢慢看把趋势发现与选股拆成八个彼此独立的对象：
 
 | 对象 | 解决的问题 | 关键性质 |
 |---|---|---|
 | `BoardTrendSnapshot` | 哪些行业/题材正在连续上涨、下跌、收阳或收阴？ | 一次只读截面；保留查询口径、来源、截止日、覆盖率和部分失败；不是股票结果行 |
 | `BoardPulseSnapshot` | 选中板块在最新完整日有多少成员上涨、下跌或缺数？ | 同一今/昨截止日计算；不按指数权重，不声称新闻因果，不进入 ScreenRow |
+| `BoardHistoryStudy` | 同一板块指数过去首次达到某个连续条件后怎样分布？ | 用户显式参数；只用板块原生指数历史；不拿当前成分股回填过去，不自动调参 |
 | `BoardDailyReview` | 与上一份同口径行业/题材趋势相比，哪些事实发生变化？ | 不可变且 result-hash 幂等；区分延长、缩短、方向切换与数据可用性，不输出强弱评级 |
 | `Screen` | 我定义了什么股票池、阈值、排序和字段？ | 保存时生成内容哈希；内容变化才追加版本；历史版本不可变 |
 | `ScreenRun` | 这份规则在当时数据上得到什么结果？ | 每次运行不可变；固化规则、结果、覆盖率、证据、数据日和 diff |
 | `CandidateList` | 哪些对象由我保留继续核对？ | 与 Screen 解耦；人工状态、备注和来源运行不会被重跑覆盖 |
 | `CompareSet` | 哪几只股票需要放在同一口径下比较？ | 保存 3–10 个代码；只读取最近可追溯事实，不做综合评分 |
 
-板块趋势回答“哪里正在形成连续走势”，成员 pulse 回答“板块内部最新交易日怎么动”，每日复看回答“与上一份同口径事实相比发生了什么”；它们都不把连续延长写成转强，不把靠前成员写成指数贡献或事件因果。选中板块只会填入 Screen 的 `universe.kind/value`，不会自动生成条件。一次 Screen 命中也只是“符合用户写下的条件”，不是长期候选或买卖信号。
+板块趋势回答“哪里正在形成连续走势”，成员 pulse 回答“板块内部最新交易日怎么动”，历史复核回答“同一指数过去的事件分布怎样”，每日复看回答“与上一份同口径事实相比发生了什么”；它们都不把连续延长写成转强，不把靠前成员写成指数贡献或事件因果。选中板块只会填入 Screen 的 `universe.kind/value`，不会自动生成条件。一次 Screen 命中也只是“符合用户写下的条件”，不是长期候选或买卖信号。
 
 ## 2. 架构与数据流
 
@@ -98,13 +99,14 @@ flowchart LR
 
 1. 在趋势发现页选择行业/题材、收盘连续/阳线连续、方向、连续天数和排序，读取同一 `BoardTrendSnapshot`。
 2. 选中板块后复核近日日涨跌轨迹和同一截止日的成员涨跌分布；停牌或缺行成员进入 `missing`，不当作平盘。
-3. “每日复看”保存行业与题材趋势；第一份只建立基线，后续同口径记录显示连续天数和数据可用性变化。单类数据源失败只让该分区 partial，不会把全部板块写成退出。
-4. 点击“用本板块选股”只把行业/题材及名称带入一个空 Screen。
-5. 新建或打开 Screen，设置条件、排除项、缺失策略、排序和结果列。
-6. “保存规则”只保存定义；“保存并运行”创建 SQLite 持久任务并生成不可变 ScreenRun。
-7. 结果表展示用户选择的字段；右侧显示逐条件阈值、实际值、来源、数据日和 evidence ref。
-8. 最近运行可切换查看；每日复看页也可顺序重跑全部已保存 Screen，继续记录 `added`、`removed` 和 `rank_changes`，不改变规则。
-9. 结果可以进入独立候选池或 3–10 股对比组；“个股研究”与“市场与数据”页负责事实复核和持久行情刷新。
+3. 点击“历史复核”会把当前板块、收盘/阳线口径、方向和连续天数显式带入；用户再设置未来窗口、历史范围和样本是否重叠，页面展示板块自身、沪深 300 与相对基准的分布及逐事件证据。
+4. “每日复看”保存行业与题材趋势；第一份只建立基线，后续同口径记录显示连续天数和数据可用性变化。单类数据源失败只让该分区 partial，不会把全部板块写成退出。
+5. 点击“用本板块选股”只把行业/题材及名称带入一个空 Screen。
+6. 新建或打开 Screen，设置条件、排除项、缺失策略、排序和结果列。
+7. “保存规则”只保存定义；“保存并运行”创建 SQLite 持久任务并生成不可变 ScreenRun。
+8. 结果表展示用户选择的字段；右侧显示逐条件阈值、实际值、来源、数据日和 evidence ref。
+9. 最近运行可切换查看；每日复看页也可顺序重跑全部已保存 Screen，继续记录 `added`、`removed` 和 `rank_changes`，不改变规则。
+10. 结果可以进入独立候选池或 3–10 股对比组；“个股研究”与“市场与数据”页负责事实复核和持久行情刷新。
 
 新建 Screen 是空规则：不预置阈值、排除项或排序，至少由用户添加一个条件或勾选一个排除项后才允许保存/运行。新增条件行会显示可编辑起始值，用户应在执行前明确核对字段、比较符和阈值。
 
@@ -178,7 +180,7 @@ same_run = get_run(run.run_id)
 assert same_run.result_hash == run.result_hash
 ```
 
-公开 surface 还包括板块趋势、成员结构、每日复看的 typed 模型和 create/list/get service，以及 Screen 列表、运行列表、候选增删、候选池列表、对比组、filter catalog、JSON Schema 和 `parse_screen_text / plan_screen / explain_run` typed AI adapter。内部 `kan.storage` 和 `kan.service` 路径不作为用户脚本 contract。
+公开 surface 还包括板块趋势、成员结构、每日复看、板块指数历史复核的 typed 模型和 service，以及 Screen 列表、运行列表、候选增删、候选池列表、对比组、filter catalog、JSON Schema 和 `parse_screen_text / plan_screen / explain_run` typed AI adapter。内部 `kan.storage` 和 `kan.service` 路径不作为用户脚本 contract。
 
 ## 7. HTTP API 与 TypeScript
 
@@ -188,6 +190,7 @@ assert same_run.result_hash == run.result_hash
 |---|---|
 | 行业/题材趋势与成员结构 | `/boards/trends`、`/boards/{kind}/{value}/pulse` |
 | 每日板块复看 | `/board-reviews`、`/board-reviews/{review_id}` |
+| 板块指数历史复核 | `/board-history-studies` |
 | Screen 与版本 | `/screens`、`/screens/{id}`、`/screens/{id}/versions`、`.../{version}/restore` |
 | ScreenRun | `/screens/{id}/runs`、`/runs`、`/runs/{id}` |
 | 候选池 | `/candidate-lists`、`/candidate-lists/{id}`、`.../candidates/{symbol}` |

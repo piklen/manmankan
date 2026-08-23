@@ -1,6 +1,7 @@
 import { Navigate, Route, Routes } from "react-router-dom";
 import { AppShell } from "./components/AppShell";
 import { CandidatesPage } from "./pages/CandidatesPage";
+import { BoardHistoryPage } from "./pages/BoardHistoryPage";
 import { ComparePage } from "./pages/ComparePage";
 import { DailyReviewPage } from "./pages/DailyReviewPage";
 import { MarketDataPage } from "./pages/MarketDataPage";
@@ -16,6 +17,7 @@ export default function App() {
       <Route element={<AppShell />}>
         <Route index element={<Navigate to="/trends" replace />} />
         <Route path="trends" element={<TrendDiscoveryPage />} />
+        <Route path="history/board" element={<BoardHistoryPage />} />
         <Route path="review" element={<DailyReviewPage />} />
         <Route path="screen" element={<ScreenWorkbench />} />
         <Route path="candidates" element={<CandidatesPage />} />
