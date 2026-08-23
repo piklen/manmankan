@@ -7,12 +7,14 @@ import { PortfolioPage } from "./pages/PortfolioPage";
 import { ResearchPage } from "./pages/ResearchPage";
 import { ScreenWorkbench } from "./pages/ScreenWorkbench";
 import { SettingsPage } from "./pages/SettingsPage";
+import { TrendDiscoveryPage } from "./pages/TrendDiscoveryPage";
 
 export default function App() {
   return (
     <Routes>
       <Route element={<AppShell />}>
-        <Route index element={<Navigate to="/screen" replace />} />
+        <Route index element={<Navigate to="/trends" replace />} />
+        <Route path="trends" element={<TrendDiscoveryPage />} />
         <Route path="screen" element={<ScreenWorkbench />} />
         <Route path="candidates" element={<CandidatesPage />} />
         <Route path="compare" element={<ComparePage />} />
@@ -24,7 +26,7 @@ export default function App() {
         <Route path="find" element={<Navigate to="/screen" replace />} />
         <Route path="stock/:symbol" element={<ResearchPage />} />
         <Route path="hold" element={<Navigate to="/portfolio" replace />} />
-        <Route path="*" element={<Navigate to="/screen" replace />} />
+        <Route path="*" element={<Navigate to="/trends" replace />} />
       </Route>
     </Routes>
   );

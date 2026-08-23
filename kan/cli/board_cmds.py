@@ -10,6 +10,12 @@ from rich.table import Table
 
 from kan.app import app
 from kan.core.scanner import MAX_PERIOD, MIN_PERIOD
+from kan.domain.board import (
+    BoardKind,
+    BoardTrendMode,
+    BoardTrendQuery,
+    BoardTrendSort,
+)
 from kan.render.base import DISCLAIMER
 from kan.storage import export
 
@@ -21,21 +27,10 @@ board_app = typer.Typer(
 app.add_typer(board_app, name="board")
 
 
-class BoardKind(StrEnum):
-    industry = "industry"
-    theme = "theme"
-
-
 class BoardMetric(StrEnum):
     moneyflow = "moneyflow"
     gain = "gain"
     pos = "pos"
-
-
-class BoardTrendSort(StrEnum):
-    streak = "streak"
-    latest = "latest"
-    moneyflow = "moneyflow"
 
 
 def _fmt_num(value: float | None, *, digits: int = 2, suffix: str = "") -> str:
@@ -101,7 +96,7 @@ def rank_cmd(
     kind: Annotated[
         BoardKind,
         typer.Option("--kind", help="板块类型: industry(申万行业) / theme(题材概念)"),
-    ] = BoardKind.industry,
+    ] = BoardKind.INDUSTRY,
     by: Annotated[
         BoardMetric,
         typer.Option("--by", help="排序口径: moneyflow(主力净额) / gain(区间涨幅) / pos(位置分位)"),
@@ -173,7 +168,7 @@ def rank_cmd(
             # CLI limit 裁剪
             shown = rows[:limit]
 
-            kind_label = "申万行业" if kind is BoardKind.industry else "题材概念"
+            kind_label = "申万行业" if kind is BoardKind.INDUSTRY else "题材概念"
             metric_label = {
                 BoardMetric.moneyflow: "主力净额",
                 BoardMetric.gain: f"{period}日涨幅",
@@ -199,7 +194,7 @@ def rank_cmd(
                     "kind": kind.value,
                     "sort": by.value,
                     "period": period,
-                    "level": level if kind is BoardKind.industry else None,
+                    "level": level if kind is BoardKind.INDUSTRY else None,
                     "shown": len(shown),
                     "errors_count": len(errors),
                     "results": _rows_payload(shown),
@@ -286,7 +281,7 @@ def trend_cmd(
     kind: Annotated[
         BoardKind,
         typer.Option("--kind", help="板块类型: industry(申万行业) / theme(概念题材)"),
-    ] = BoardKind.industry,
+    ] = BoardKind.INDUSTRY,
     up: Annotated[
         int | None,
         typer.Option("--up", help="只看连续上涨 ≥ N 天的板块(1-30)"),
@@ -305,7 +300,7 @@ def trend_cmd(
             "--sort",
             help="排序口径: streak(连续天数) / latest(最新单日涨幅) / moneyflow(主力净额)",
         ),
-    ] = BoardTrendSort.streak,
+    ] = BoardTrendSort.STREAK,
     latest: Annotated[
         int | None,
         typer.Option("--latest", "-l", help="展示近 N 天每日 ▲▼ 明细(1-30)", min=1, max=30),
@@ -353,7 +348,7 @@ def trend_cmd(
                 hint="例: kan board trend --kind theme --up 3",
                 exit_code=2,
             )
-    if sort is BoardTrendSort.moneyflow and kind is BoardKind.industry and level != 1:
+    if sort is BoardTrendSort.MONEYFLOW and kind is BoardKind.INDUSTRY and level != 1:
         _exit_board_trend_error(
             fmt,
             code="unsupported_moneyflow_level",
@@ -364,15 +359,13 @@ def trend_cmd(
 
     from rich.console import Console
 
-    from kan.data import boards
-    from kan.data.board_trend import (
-        board_trend_moneyflow_map,
-        load_board_trends,
-        sort_board_trends,
-    )
     from kan.infra.lifecycle import operation
     from kan.infra.progress import operation_reporter
     from kan.render import terminal as render_terminal
+    from kan.service.board_service import (
+        BoardTrendServiceError,
+        execute_board_trends,
+    )
 
     reporter = operation_reporter()
 
@@ -380,69 +373,50 @@ def trend_cmd(
         pass
 
     try:
-        operation_label = "申万行业趋势榜" if kind is BoardKind.industry else "概念题材趋势榜"
+        operation_label = "申万行业趋势榜" if kind is BoardKind.INDUSTRY else "概念题材趋势榜"
         with operation(operation_label, reporter=reporter) as lifecycle:
             lifecycle.phase("加载板块指数数据")
             try:
-                all_results, errors, source, diagnosis = load_board_trends(
-                    kind=kind.value,
-                    level=level,
-                    candle=candle,
-                    force=force,
+                execution = execute_board_trends(
+                    BoardTrendQuery(
+                        kind=kind,
+                        mode=BoardTrendMode.CANDLE if candle else BoardTrendMode.CLOSE,
+                        up=up,
+                        down=down,
+                        min_streak=min_streak,
+                        sort=sort,
+                        level=level,
+                        limit=None if all_ else limit,
+                        force=force,
+                    ),
                     lifecycle=lifecycle,
                 )
-            except (boards.BoardDataUnavailableError, boards.ThemeDataUnavailableError) as exc:
-                _exit_board_trend_error(
-                    fmt,
-                    code="data_unavailable",
-                    message=f"{operation_label}不可用: {exc}",
-                    hint="检查网络 / token / 上游数据源后重试，或去掉 --force 使用本地缓存",
-                )
-
-            if not all_results:
-                if kind is BoardKind.theme and diagnosis is not None and fmt is not export.OutputFormat.json:
+            except BoardTrendServiceError as exc:
+                if (
+                    kind is BoardKind.THEME
+                    and exc.diagnosis is not None
+                    and fmt is not export.OutputFormat.json
+                ):
+                    from kan.cli.helpers import _print_err
                     from kan.cli.theme_cmds import _render_failure_diagnosis
 
-                    for line in _render_failure_diagnosis(diagnosis):
-                        from kan.cli.helpers import _print_err
-
+                    for line in _render_failure_diagnosis(exc.diagnosis):
                         _print_err(line)
-                    raise typer.Exit(1)
+                    raise typer.Exit(1) from exc
                 _exit_board_trend_error(
                     fmt,
-                    code="data_unavailable",
-                    message=f"{operation_label}无可用指数 K 线",
-                    hint="检查网络 / token / 上游数据源后重试",
+                    code=exc.code,
+                    message=exc.message,
+                    hint=exc.hint,
                 )
 
-            moneyflow = None
-            if sort is BoardTrendSort.moneyflow:
-                lifecycle.phase("聚合板块资金")
-                moneyflow = board_trend_moneyflow_map(
-                    kind.value,
-                    all_results,
-                    force=force,
-                    lifecycle=lifecycle,
-                )
-
-            lifecycle.phase("过滤与排序板块趋势")
-            sorted_results = sort_board_trends(
-                all_results,
-                up_filter=up,
-                down_filter=down,
-                min_streak=min_streak,
-                sort_by=sort.value,
-                moneyflow=moneyflow,
-            )
-            shown_results = sorted_results if all_ else sorted_results[:limit]
-            total_boards = len(all_results) + len(errors)
-            entity_label = "申万行业" if kind is BoardKind.industry else "概念题材"
-            data_dates = [
-                result.daily_changes[0][0]
-                for result in all_results
-                if result.daily_changes
-            ]
-            data_cutoff = max(data_dates) if data_dates else None
+            snapshot = execution.snapshot
+            shown_results = execution.results
+            total_boards = snapshot.coverage.total
+            errors = snapshot.failures
+            source = snapshot.source
+            data_cutoff = snapshot.data_cutoff
+            entity_label = "申万行业" if kind is BoardKind.INDUSTRY else "概念题材"
 
             filter_label = ""
             if up is not None:
@@ -451,8 +425,8 @@ def trend_cmd(
                 filter_label = f" · 连跌≥{down}天"
             if min_streak is not None:
                 filter_label += f" · 连续≥{min_streak}天"
-            if sort is not BoardTrendSort.streak:
-                sort_label = "最新单日涨幅" if sort is BoardTrendSort.latest else "主力净额"
+            if sort is not BoardTrendSort.STREAK:
+                sort_label = "最新单日涨幅" if sort is BoardTrendSort.LATEST else "主力净额"
                 filter_label += f" · 按{sort_label}排序"
 
             lifecycle.phase("准备板块趋势输出", result_count=len(shown_results))
@@ -469,7 +443,7 @@ def trend_cmd(
                 payload = export.board_trend_payload(
                     shown_results,
                     kind=kind.value,
-                    level=level if kind is BoardKind.industry else None,
+                    level=level if kind is BoardKind.INDUSTRY else None,
                     candle=candle,
                     total_boards=total_boards,
                     errors_count=len(errors),
@@ -541,7 +515,7 @@ def trend_cmd(
                     entity_label=entity_label,
                     include_code=True,
                 )
-                error_names = ", ".join(item.name for item, _ in errors[:10])
+                error_names = ", ".join(item.name for item in errors[:10])
 
                 def _render_terminal() -> None:
                     console.print(table)
@@ -550,9 +524,9 @@ def trend_cmd(
                             f"\n  [dim]窄屏模式 · 显示近 {actual_latest}/{latest} 天"
                             " · 加宽终端可见全部[/dim]"
                         )
-                    if not all_ and len(sorted_results) > limit:
+                    if not all_ and snapshot.coverage.matched > limit:
                         console.print(
-                            f"\n  [dim]显示前 {limit}/{len(sorted_results)}"
+                            f"\n  [dim]显示前 {limit}/{snapshot.coverage.matched}"
                             f" · 看全部:kan board trend --kind {kind.value} --all[/dim]"
                         )
                     if errors:
@@ -570,7 +544,7 @@ def trend_cmd(
                             "[dim]  收盘价口径:今日收盘 > 昨日收盘 = ▲"
                             " · 今日收盘 < 昨日收盘 = ▼ · 平盘不断连续[/dim]"
                         )
-                    if kind is BoardKind.theme:
+                    if kind is BoardKind.THEME:
                         from kan.render.theme import render_theme_trend_disclaimer
 
                         render_theme_trend_disclaimer(source=source)

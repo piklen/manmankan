@@ -1,6 +1,6 @@
 # manmankan 当前架构与演进边界
 
-> 当前实现 SOT · 2026-08-23。Screen 领域细节见 [`selection-workbench.md`](selection-workbench.md)。
+> 当前实现 SOT · 2026-08-24。趋势发现与 Screen 领域细节见 [`selection-workbench.md`](selection-workbench.md)。
 
 ---
 
@@ -8,7 +8,7 @@
 
 manmankan 的底层仍是行情数据翻译层，但默认产品已经从“今日观察页”迁移为可复跑选股研究工作台。用户优先级是硬约束：
 
-1. **普通 A 股用户是第一用户**：本地 Web 默认完成 Screen → Run → Candidate → Compare → 复看 diff。
+1. **普通 A 股用户是第一用户**：本地 Web 默认完成 Board Trend → Screen → Run → Candidate → Compare → 复看 diff。
 2. **CLI / Python / HTTP / MCP 是同级适配器**：都执行同一个 Python application service，不复制筛选逻辑。
 3. **AI 是 typed contract 的消费者**：可以解析明确阈值、规划、运行和解释证据，不能成为指标或候选计算真相源。
 
@@ -21,7 +21,7 @@ manmankan 的底层仍是行情数据翻译层，但默认产品已经从“今�
 ├─────────────────────────────────────────────────────────┤
 │                 ★ Layer 2: 数据中间层 ★                    │
 │                     manmankan 在这里                      │
-│ ScreenSpec · ScreenRun · 证据 / diff · 候选 / 对比 · 持仓    │
+│ BoardTrendSnapshot · ScreenRun · 证据 / diff · 候选 / 对比   │
 ├─────────────────────────────────────────────────────────┤
 │                 Layer 1: 数据基础设施                       │
 │  tushare / akshare / baostock / Wind / iFinD / ...       │
@@ -87,7 +87,8 @@ Protocol、provider 注册与责任链；市场级 `Source` 聚合及多市场�
 ### 3.1 普通用户消费（React Web）
 
 - 默认入口是 `kan web`，生产由 Python 同源托管预构建 SPA，不要求用户安装 Node 或运行第二个服务。
-- 首页是 Screen 工作台：保存/复制/版本化规则、运行、证据、历史与 diff 在一个闭环中完成。
+- 首页是趋势发现：行业/题材指数使用同一连续涨跌口径，选中板块后只把成分股池带入 Screen，不预置筛选条件。
+- Screen 工作台继续负责保存/复制/版本化规则、运行、证据、历史与 diff；板块榜不建立第二套股票筛选器。
 - 候选、对比、个股研究、市场数据、持仓和设置是独立页面，但都消费 `/api/v1` typed model。
 - 开发期 TypeScript 类型从 OpenAPI 生成；React 不重算指标，也不直接访问 provider 或 SQLite。
 - 旧 Jinja 模板和手写业务 JavaScript 已经删除；旧 `/api` 只作为暂时兼容层隐藏于 OpenAPI。
@@ -100,8 +101,8 @@ Protocol、provider 注册与责任链；市场级 `Source` 聚合及多市场�
 
 ### 3.3 Python / HTTP 消费
 
-- `kan.api` 公开导出 Screen 类型和 application service；用户脚本不需要 import 内部 storage/service。
-- FastAPI 只在 `/api/v1` 暴露 OpenAPI；Pydantic 是请求/响应 SOT，生成 TypeScript 类型。
+- `kan.api` 公开导出 Board Trend、Screen 类型和 application service；用户脚本不需要 import 内部 storage/service。
+- FastAPI 只在 `/api/v1` 暴露 OpenAPI；`/boards/trends`、Screen 与其他资源都以 Pydantic 作为请求/响应 SOT，并生成 TypeScript 类型。
 - Web 写请求叠加本机会话、Host、Origin 和自定义 header 检查。
 
 ### 3.4 AI / 脚本消费（JSON）
@@ -148,7 +149,7 @@ Protocol、provider 注册与责任链；市场级 `Source` 聚合及多市场�
          │
          ▼
 ┌──────────────────┐
-│  服务层 (Service) │  Screen 编排 · 证据 · diff · 任务 · 兼容 find
+│  服务层 (Service) │  板块趋势 · Screen 编排 · 证据 · diff · 任务
 └────────┬─────────┘
          │
          ▼
@@ -164,9 +165,9 @@ Protocol、provider 注册与责任链；市场级 `Source` 聚合及多市场�
 
 **关键设计决策**：
 
-- **领域层**（`kan/domain/`）定义严格 `ScreenSpec / ScreenRun / CandidateList / CompareSet / WorkspaceJob`，未知字段 fail-fast。
+- **领域层**（`kan/domain/`）定义严格 `BoardTrendQuery / BoardTrendSnapshot / ScreenSpec / ScreenRun / CandidateList / CompareSet / WorkspaceJob`，未知字段 fail-fast。
 - **入口适配层**（`kan/web/`、`kan/cli/`、`kan/mcp/`、`kan/api.py`）只做交互、参数校验和序列化，不复制业务计算。
-- **服务层**（`kan/service/`）承载 Screen 编排、排序、证据、diff、AI plan 和任务，核心逻辑不与 FastAPI、Typer、React 或 MCP 耦合。
+- **服务层**（`kan/service/`）承载板块趋势加载/过滤/排序以及 Screen 编排、证据、diff、AI plan 和任务，核心逻辑不与 FastAPI、Typer、React 或 MCP 耦合。
 - **数据层**（`kan/data/`）使用责任链模式——依次尝试多个 DataProvider，第一个成功即返回
 - **TuShare 兼容边界**:公开适配器只实现官方 TuShare 的请求与响应语义；用户配置的替代 endpoint 必须可替换地兼容该契约。仓库不加入某个中转服务专属的默认行数、分页或扩展字段逻辑；全市场响应会在缓存前做中立完整性校验，偏差作为数据契约错误暴露
 - **缓存层**（`kan/infra/`）基于 XDG 规范，增量更新策略

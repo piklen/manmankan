@@ -18,7 +18,7 @@ import {
   X,
 } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import {
   api,
   defaultScreenSpec,
@@ -157,6 +157,27 @@ function conditionFor(option: FilterOption): ScreenCondition {
 
 function cloneSpec(spec: ScreenSpec): ScreenSpec {
   return JSON.parse(JSON.stringify(spec)) as ScreenSpec;
+}
+
+function specFromSearchParams(searchParams: URLSearchParams): ScreenSpec {
+  const spec = defaultScreenSpec();
+  const kind = searchParams.get("universe");
+  const value = searchParams.get("value")?.trim();
+  if ((kind === "industry" || kind === "theme") && value) {
+    spec.name = `${value} · 自定义规则`;
+    spec.universe = { kind, value, codes: [], group: null };
+    spec.conditions = [];
+  }
+  return spec;
+}
+
+function noticeFromSearchParams(searchParams: URLSearchParams): string | null {
+  const kind = searchParams.get("universe");
+  const value = searchParams.get("value")?.trim();
+  if ((kind === "industry" || kind === "theme") && value) {
+    return `已带入“${value}”${kind === "industry" ? "行业" : "题材"}股票池 · 尚未添加选股条件`;
+  }
+  return null;
 }
 
 function ScreenLibrary({
@@ -795,13 +816,16 @@ function Inspector({
 export function ScreenWorkbench() {
   const queryClient = useQueryClient();
   const navigate = useNavigate();
-  const [spec, setSpec] = useState<ScreenSpec>(() => defaultScreenSpec());
+  const [searchParams] = useSearchParams();
+  const [spec, setSpec] = useState<ScreenSpec>(() => specFromSearchParams(searchParams));
   const [activeId, setActiveId] = useState<string | null>(null);
   const [previewVersion, setPreviewVersion] = useState<number | null>(null);
   const [run, setRun] = useState<ScreenRun | null>(null);
   const [selectedSymbol, setSelectedSymbol] = useState<string | null>(null);
   const [compareSymbols, setCompareSymbols] = useState<string[]>([]);
-  const [notice, setNotice] = useState<string | null>(null);
+  const [notice, setNotice] = useState<string | null>(() =>
+    noticeFromSearchParams(searchParams),
+  );
 
   const screensQuery = useQuery({ queryKey: ["screens"], queryFn: api.screens });
   const filtersQuery = useQuery({ queryKey: ["filters"], queryFn: api.filters });

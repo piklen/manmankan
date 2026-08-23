@@ -51,12 +51,22 @@ jobs:
         run: uv lock --check
       - name: Install dependencies
         run: uv sync --python 3.12 --frozen --all-groups --all-extras
-      - name: Setup Node.js for Web UI
+      - name: Setup Node.js on fork runner
+        if: github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name != github.repository
         uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020  # setup-node 7
         with:
           node-version: '24'
           cache: npm
           cache-dependency-path: webui/package-lock.json
+      - name: Verify Node.js runtime
+        shell: bash
+        run: |
+          node_version="$(node --version)"
+          npm --version
+          case "$node_version" in
+            v24.*) ;;
+            *) echo "Node 24 is required, got $node_version" >&2; exit 1 ;;
+          esac
       - name: Install Web UI dependencies
         working-directory: webui
         run: npm ci

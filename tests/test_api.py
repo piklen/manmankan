@@ -87,6 +87,10 @@ def test_api_all_lists_match_actual_exports():
         "register_kline_source", "register_theme_constituent_source",
         "clear_user_kline_sources", "clear_user_theme_constituent_sources",
         "kline_chain", "theme_constituent_chain",
+        # 板块趋势 application service
+        "BoardDailyChange", "BoardKind", "BoardTrendCoverage", "BoardTrendFailure",
+        "BoardTrendMode", "BoardTrendQuery", "BoardTrendRow", "BoardTrendSnapshot",
+        "BoardTrendSort", "BoardTrendServiceError", "query_board_trends",
         # vNext Screen application service
         "CandidateList", "CompareSet", "SavedScreen", "ScreenRun", "ScreenSpec",
         "ScreenExplainInput", "ScreenParseInput", "ScreenPlanInput",
@@ -96,6 +100,16 @@ def test_api_all_lists_match_actual_exports():
         "parse_screen_text", "plan_screen", "explain_run",
     }
     assert declared == expected, f"kan.api.__all__ 与预期 surface 不符: 多={declared-expected} · 少={expected-declared}"
+
+
+def test_api_exports_board_trend_application_service():
+    """Python 用户可从公开入口构造板块趋势查询。"""
+    from kan import api
+
+    query = api.BoardTrendQuery(kind=api.BoardKind.INDUSTRY, up=3)
+
+    assert query.up == 3
+    assert callable(api.query_board_trends)
 
 
 def test_api_exports_vnext_screen_application_service():

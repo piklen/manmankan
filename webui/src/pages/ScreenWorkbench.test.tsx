@@ -72,13 +72,13 @@ const succeededJob: WorkspaceJob = {
   updated_at: "2026-08-23T00:00:01Z",
 };
 
-function renderWorkbench() {
+function renderWorkbench(initialEntry = "/screen") {
   const client = new QueryClient({
     defaultOptions: { queries: { retry: false }, mutations: { retry: false } },
   });
   return render(
     <QueryClientProvider client={client}>
-      <MemoryRouter>
+      <MemoryRouter initialEntries={[initialEntry]}>
         <ScreenWorkbench />
       </MemoryRouter>
     </QueryClientProvider>,
@@ -91,6 +91,20 @@ afterEach(() => {
 });
 
 describe("ScreenWorkbench", () => {
+  it("prefills only the selected board universe from trend discovery", async () => {
+    vi.spyOn(api, "screens").mockResolvedValue([]);
+    vi.spyOn(api, "filters").mockResolvedValue([]);
+
+    renderWorkbench("/screen?universe=industry&value=%E7%94%B5%E5%AD%90&source=trends");
+
+    expect(
+      await screen.findByText("已带入“电子”行业股票池 · 尚未添加选股条件"),
+    ).toBeInTheDocument();
+    expect(screen.getByLabelText("行业名称")).toHaveValue("电子");
+    expect(screen.queryAllByLabelText("筛选指标")).toHaveLength(0);
+    expect(screen.getByRole("button", { name: "保存并运行" })).toBeDisabled();
+  });
+
   it("builds a rule and adds another typed condition", async () => {
     vi.spyOn(api, "screens").mockResolvedValue([]);
     vi.spyOn(api, "filters").mockResolvedValue([]);

@@ -73,6 +73,155 @@
         }
       }
     },
+    "/api/v1/boards/trends": {
+      "get": {
+        "tags": [
+          "v1"
+        ],
+        "summary": "Board Trends",
+        "description": "\u8fd4\u56de\u884c\u4e1a / \u9898\u6750\u6307\u6570\u7684\u8fde\u7eed\u8d8b\u52bf\u5feb\u7167\u3002",
+        "operationId": "board_trends_api_v1_boards_trends_get",
+        "parameters": [
+          {
+            "name": "kind",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "$ref": "#/components/schemas/BoardKind",
+              "default": "industry"
+            }
+          },
+          {
+            "name": "mode",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "$ref": "#/components/schemas/BoardTrendMode",
+              "default": "close"
+            }
+          },
+          {
+            "name": "up",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "integer",
+                  "maximum": 30,
+                  "minimum": 1
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Up"
+            }
+          },
+          {
+            "name": "down",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "integer",
+                  "maximum": 30,
+                  "minimum": 1
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Down"
+            }
+          },
+          {
+            "name": "min_streak",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "integer",
+                  "maximum": 30,
+                  "minimum": 1
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Min Streak"
+            }
+          },
+          {
+            "name": "sort",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "$ref": "#/components/schemas/BoardTrendSort",
+              "default": "streak"
+            }
+          },
+          {
+            "name": "level",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "maximum": 3,
+              "minimum": 1,
+              "default": 1,
+              "title": "Level"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "maximum": 500,
+              "minimum": 1,
+              "default": 30,
+              "title": "Limit"
+            }
+          },
+          {
+            "name": "force",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "boolean",
+              "default": false,
+              "title": "Force"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BoardTrendSnapshot"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/stocks/{symbol}": {
       "get": {
         "tags": [
@@ -1451,6 +1600,334 @@
         "additionalProperties": false,
         "type": "object",
         "title": "AsOfSpec"
+      },
+      "BoardDailyChange": {
+        "properties": {
+          "date": {
+            "type": "string",
+            "title": "Date"
+          },
+          "change_pct": {
+            "type": "number",
+            "title": "Change Pct"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "date",
+          "change_pct"
+        ],
+        "title": "BoardDailyChange"
+      },
+      "BoardKind": {
+        "type": "string",
+        "enum": [
+          "industry",
+          "theme"
+        ],
+        "title": "BoardKind"
+      },
+      "BoardTrendCoverage": {
+        "properties": {
+          "total": {
+            "type": "integer",
+            "title": "Total"
+          },
+          "evaluated": {
+            "type": "integer",
+            "title": "Evaluated"
+          },
+          "matched": {
+            "type": "integer",
+            "title": "Matched"
+          },
+          "returned": {
+            "type": "integer",
+            "title": "Returned"
+          },
+          "errors": {
+            "type": "integer",
+            "title": "Errors"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "total",
+          "evaluated",
+          "matched",
+          "returned",
+          "errors"
+        ],
+        "title": "BoardTrendCoverage"
+      },
+      "BoardTrendFailure": {
+        "properties": {
+          "code": {
+            "type": "string",
+            "title": "Code"
+          },
+          "name": {
+            "type": "string",
+            "title": "Name"
+          },
+          "message": {
+            "type": "string",
+            "title": "Message"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "code",
+          "name",
+          "message"
+        ],
+        "title": "BoardTrendFailure"
+      },
+      "BoardTrendMode": {
+        "type": "string",
+        "enum": [
+          "close",
+          "candle"
+        ],
+        "title": "BoardTrendMode"
+      },
+      "BoardTrendQuery": {
+        "properties": {
+          "kind": {
+            "$ref": "#/components/schemas/BoardKind",
+            "default": "industry"
+          },
+          "mode": {
+            "$ref": "#/components/schemas/BoardTrendMode",
+            "default": "close"
+          },
+          "up": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "maximum": 30.0,
+                "minimum": 1.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Up"
+          },
+          "down": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "maximum": 30.0,
+                "minimum": 1.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Down"
+          },
+          "min_streak": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "maximum": 30.0,
+                "minimum": 1.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Min Streak"
+          },
+          "sort": {
+            "$ref": "#/components/schemas/BoardTrendSort",
+            "default": "streak"
+          },
+          "level": {
+            "type": "integer",
+            "maximum": 3.0,
+            "minimum": 1.0,
+            "title": "Level",
+            "default": 1
+          },
+          "limit": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "maximum": 500.0,
+                "minimum": 1.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Limit",
+            "default": 30
+          },
+          "force": {
+            "type": "boolean",
+            "title": "Force",
+            "default": false
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "title": "BoardTrendQuery",
+        "description": "\u6240\u6709\u5165\u53e3\u5171\u7528\u7684\u677f\u5757\u8d8b\u52bf\u67e5\u8be2\u3002"
+      },
+      "BoardTrendRow": {
+        "properties": {
+          "rank": {
+            "type": "integer",
+            "title": "Rank"
+          },
+          "kind": {
+            "$ref": "#/components/schemas/BoardKind"
+          },
+          "code": {
+            "type": "string",
+            "title": "Code"
+          },
+          "name": {
+            "type": "string",
+            "title": "Name"
+          },
+          "current_price": {
+            "type": "number",
+            "title": "Current Price"
+          },
+          "streak": {
+            "type": "integer",
+            "title": "Streak"
+          },
+          "streak_pct": {
+            "type": "number",
+            "title": "Streak Pct"
+          },
+          "direction": {
+            "type": "string",
+            "title": "Direction"
+          },
+          "latest_change_pct": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Latest Change Pct"
+          },
+          "moneyflow_net": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Moneyflow Net"
+          },
+          "daily_changes": {
+            "items": {
+              "$ref": "#/components/schemas/BoardDailyChange"
+            },
+            "type": "array",
+            "title": "Daily Changes"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "rank",
+          "kind",
+          "code",
+          "name",
+          "current_price",
+          "streak",
+          "streak_pct",
+          "direction"
+        ],
+        "title": "BoardTrendRow"
+      },
+      "BoardTrendSnapshot": {
+        "properties": {
+          "schema_version": {
+            "type": "integer",
+            "title": "Schema Version",
+            "default": 1
+          },
+          "query": {
+            "$ref": "#/components/schemas/BoardTrendQuery"
+          },
+          "source": {
+            "type": "string",
+            "title": "Source"
+          },
+          "data_cutoff": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Data Cutoff"
+          },
+          "partial": {
+            "type": "boolean",
+            "title": "Partial",
+            "default": false
+          },
+          "coverage": {
+            "$ref": "#/components/schemas/BoardTrendCoverage"
+          },
+          "rows": {
+            "items": {
+              "$ref": "#/components/schemas/BoardTrendRow"
+            },
+            "type": "array",
+            "title": "Rows"
+          },
+          "failures": {
+            "items": {
+              "$ref": "#/components/schemas/BoardTrendFailure"
+            },
+            "type": "array",
+            "title": "Failures"
+          },
+          "warnings": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Warnings"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "query",
+          "source",
+          "coverage"
+        ],
+        "title": "BoardTrendSnapshot"
+      },
+      "BoardTrendSort": {
+        "type": "string",
+        "enum": [
+          "streak",
+          "latest",
+          "moneyflow"
+        ],
+        "title": "BoardTrendSort"
       },
       "Candidate": {
         "properties": {

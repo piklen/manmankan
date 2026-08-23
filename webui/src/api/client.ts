@@ -18,6 +18,18 @@ export type MarketOverview = components["schemas"]["MarketOverviewResponse"];
 export type Portfolio = components["schemas"]["PortfolioResponse"];
 export type SettingsFacts = components["schemas"]["SettingsFactsResponse"];
 export type StockResearch = components["schemas"]["StockResearchResponse"];
+export type BoardTrendSnapshot = components["schemas"]["BoardTrendSnapshot"];
+export type BoardTrendRow = components["schemas"]["BoardTrendRow"];
+
+export interface BoardTrendParams {
+  kind: "industry" | "theme";
+  mode: "close" | "candle";
+  direction: "all" | "up" | "down";
+  days: number;
+  sort: "streak" | "latest" | "moneyflow";
+  level: number;
+  limit?: number;
+}
 
 export interface FilterOption {
   type: ScreenFilterType;
@@ -96,6 +108,18 @@ const json = (value: unknown): string => JSON.stringify(value);
 
 export const api = {
   meta: () => request<ApiMeta>("/api/v1/meta"),
+  boardTrends: (query: BoardTrendParams) => {
+    const params = new URLSearchParams({
+      kind: query.kind,
+      mode: query.mode,
+      sort: query.sort,
+      level: String(query.level),
+      limit: String(query.limit ?? 30),
+    });
+    if (query.direction === "up") params.set("up", String(query.days));
+    if (query.direction === "down") params.set("down", String(query.days));
+    return request<BoardTrendSnapshot>(`/api/v1/boards/trends?${params}`);
+  },
   market: () => request<MarketOverview>("/api/v1/market"),
   portfolio: () => request<Portfolio>("/api/v1/portfolio"),
   updateCash: (cash: number) =>

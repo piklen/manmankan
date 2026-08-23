@@ -55,6 +55,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/boards/trends": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Board Trends
+         * @description 返回行业 / 题材指数的连续趋势快照。
+         */
+        get: operations["board_trends_api_v1_boards_trends_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/stocks/{symbol}": {
         parameters: {
             query?: never;
@@ -540,6 +560,132 @@ export interface components {
              */
             freshness_policy: "require_complete" | "allow_stale";
         };
+        /** BoardDailyChange */
+        BoardDailyChange: {
+            /** Date */
+            date: string;
+            /** Change Pct */
+            change_pct: number;
+        };
+        /**
+         * BoardKind
+         * @enum {string}
+         */
+        BoardKind: "industry" | "theme";
+        /** BoardTrendCoverage */
+        BoardTrendCoverage: {
+            /** Total */
+            total: number;
+            /** Evaluated */
+            evaluated: number;
+            /** Matched */
+            matched: number;
+            /** Returned */
+            returned: number;
+            /** Errors */
+            errors: number;
+        };
+        /** BoardTrendFailure */
+        BoardTrendFailure: {
+            /** Code */
+            code: string;
+            /** Name */
+            name: string;
+            /** Message */
+            message: string;
+        };
+        /**
+         * BoardTrendMode
+         * @enum {string}
+         */
+        BoardTrendMode: "close" | "candle";
+        /**
+         * BoardTrendQuery
+         * @description 所有入口共用的板块趋势查询。
+         */
+        BoardTrendQuery: {
+            /** @default industry */
+            kind: components["schemas"]["BoardKind"];
+            /** @default close */
+            mode: components["schemas"]["BoardTrendMode"];
+            /** Up */
+            up?: number | null;
+            /** Down */
+            down?: number | null;
+            /** Min Streak */
+            min_streak?: number | null;
+            /** @default streak */
+            sort: components["schemas"]["BoardTrendSort"];
+            /**
+             * Level
+             * @default 1
+             */
+            level: number;
+            /**
+             * Limit
+             * @default 30
+             */
+            limit: number | null;
+            /**
+             * Force
+             * @default false
+             */
+            force: boolean;
+        };
+        /** BoardTrendRow */
+        BoardTrendRow: {
+            /** Rank */
+            rank: number;
+            kind: components["schemas"]["BoardKind"];
+            /** Code */
+            code: string;
+            /** Name */
+            name: string;
+            /** Current Price */
+            current_price: number;
+            /** Streak */
+            streak: number;
+            /** Streak Pct */
+            streak_pct: number;
+            /** Direction */
+            direction: string;
+            /** Latest Change Pct */
+            latest_change_pct?: number | null;
+            /** Moneyflow Net */
+            moneyflow_net?: number | null;
+            /** Daily Changes */
+            daily_changes?: components["schemas"]["BoardDailyChange"][];
+        };
+        /** BoardTrendSnapshot */
+        BoardTrendSnapshot: {
+            /**
+             * Schema Version
+             * @default 1
+             */
+            schema_version: number;
+            query: components["schemas"]["BoardTrendQuery"];
+            /** Source */
+            source: string;
+            /** Data Cutoff */
+            data_cutoff?: string | null;
+            /**
+             * Partial
+             * @default false
+             */
+            partial: boolean;
+            coverage: components["schemas"]["BoardTrendCoverage"];
+            /** Rows */
+            rows?: components["schemas"]["BoardTrendRow"][];
+            /** Failures */
+            failures?: components["schemas"]["BoardTrendFailure"][];
+            /** Warnings */
+            warnings?: string[];
+        };
+        /**
+         * BoardTrendSort
+         * @enum {string}
+         */
+        BoardTrendSort: "streak" | "latest" | "moneyflow";
         /** Candidate */
         Candidate: {
             /** List Id */
@@ -1305,6 +1451,45 @@ export interface operations {
                     "application/json": {
                         [key: string]: unknown;
                     }[];
+                };
+            };
+        };
+    };
+    board_trends_api_v1_boards_trends_get: {
+        parameters: {
+            query?: {
+                kind?: components["schemas"]["BoardKind"];
+                mode?: components["schemas"]["BoardTrendMode"];
+                up?: number | null;
+                down?: number | null;
+                min_streak?: number | null;
+                sort?: components["schemas"]["BoardTrendSort"];
+                level?: number;
+                limit?: number;
+                force?: boolean;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BoardTrendSnapshot"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
                 };
             };
         };

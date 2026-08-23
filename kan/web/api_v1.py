@@ -12,6 +12,13 @@ from fastapi import APIRouter, Body, HTTPException, Query
 from fastapi.responses import StreamingResponse
 
 from kan import __version__
+from kan.domain.board import (
+    BoardKind,
+    BoardTrendMode,
+    BoardTrendQuery,
+    BoardTrendSnapshot,
+    BoardTrendSort,
+)
 from kan.domain.job import MarketRefreshRequest, WorkspaceJob
 from kan.domain.screen import (
     Candidate,
@@ -21,7 +28,7 @@ from kan.domain.screen import (
     ScreenRun,
     ScreenVersion,
 )
-from kan.service import job_service, screen_service
+from kan.service import board_service, job_service, screen_service
 from kan.service.hold_service import build_hold_summary
 from kan.service.info_service import InfoDataUnavailableError, InfoRequest, get_stock_info
 from kan.service.market_service import get_market_sentiment, serialize_market_sentiment
@@ -77,6 +84,7 @@ def meta() -> ApiMeta:
         product_version=__version__,
         capabilities=[
             "screens",
+            "board-trends",
             "immutable-runs",
             "candidate-lists",
             "compare-sets",
@@ -88,6 +96,42 @@ def meta() -> ApiMeta:
 @router.get("/filters", response_model=list[dict[str, object]])
 def filters() -> list[dict[str, object]]:
     return screen_filter_groups()
+
+
+@router.get("/boards/trends", response_model=BoardTrendSnapshot)
+def board_trends(
+    kind: Annotated[BoardKind, Query()] = BoardKind.INDUSTRY,
+    mode: Annotated[BoardTrendMode, Query()] = BoardTrendMode.CLOSE,
+    up: Annotated[int | None, Query(ge=1, le=30)] = None,
+    down: Annotated[int | None, Query(ge=1, le=30)] = None,
+    min_streak: Annotated[int | None, Query(ge=1, le=30)] = None,
+    sort: Annotated[BoardTrendSort, Query()] = BoardTrendSort.STREAK,
+    level: Annotated[int, Query(ge=1, le=3)] = 1,
+    limit: Annotated[int, Query(ge=1, le=500)] = 30,
+    force: Annotated[bool, Query()] = False,
+) -> BoardTrendSnapshot:
+    """返回行业 / 题材指数的连续趋势快照。"""
+
+    try:
+        query = BoardTrendQuery(
+            kind=kind,
+            mode=mode,
+            up=up,
+            down=down,
+            min_streak=min_streak,
+            sort=sort,
+            level=level,
+            limit=limit,
+            force=force,
+        )
+        return board_service.query_board_trends(query)
+    except board_service.BoardTrendServiceError as exc:
+        raise HTTPException(
+            status_code=503,
+            detail={"code": exc.code, "message": exc.message, "hint": exc.hint},
+        ) from exc
+    except ValueError as exc:
+        _value_error(exc)
 
 
 @router.get("/stocks/{symbol}", response_model=StockResearchResponse)
