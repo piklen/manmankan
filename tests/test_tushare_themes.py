@@ -107,6 +107,38 @@ def test_catalog_success_strips_ti_suffix(monkeypatch):
     assert catalog[0].size == 156
 
 
+def test_catalog_requests_concept_type_and_rejects_industry_rows(monkeypatch):
+    """题材 catalog 必须请求 N 概念，且本地拒绝兼容端点混入的 I 行业。"""
+    from kan.data import tushare_themes
+
+    captured = {}
+    monkeypatch.setattr(
+        "kan.data.tushare_themes._resolve_config", lambda: ("tok", "http://e"),
+    )
+
+    def fake_post(endpoint, token, *, api_name, params, fields):
+        captured.update({"api_name": api_name, "params": params, "fields": fields})
+        return ({
+            "fields": ["ts_code", "name", "count", "exchange", "type"],
+            "items": [
+                ["885881.TI", "云办公", 29, "A", "N"],
+                ["700676.TI", "化学纤维制造业指数", 88, "A", "I"],
+                ["885999.TI", "港股概念", 20, "HK", "N"],
+            ],
+        }, None)
+
+    monkeypatch.setattr("kan.data.tushare_themes._post_tushare_api", fake_post)
+
+    catalog, err = tushare_themes.tushare_load_theme_catalog()
+
+    assert err is None
+    assert captured["api_name"] == "ths_index"
+    assert captured["params"] == {"type": "N", "exchange": "A"}
+    assert "type" in captured["fields"]
+    assert catalog is not None
+    assert [(theme.code, theme.name) for theme in catalog] == [("885881", "云办公")]
+
+
 def test_catalog_empty_items_returns_error(monkeypatch):
     """server 返空 items 返 (None, TushareApiError) · 暴露空 server 数据问题。"""
     from kan.data import tushare_themes

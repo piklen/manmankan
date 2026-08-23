@@ -87,6 +87,9 @@
 | `kan trend [--up/down N]` | 连续涨跌跟踪 | 发现异动 |
 | `kan trend --all [--up/down N]` | 全市场连续涨跌跟踪 | 大池首轮看分布，必要时再缩小候选池 |
 | `kan board rank --kind industry --by moneyflow --format json` | 板块资金排名 | 板块级客观裸值聚合 |
+| `kan board trend --kind industry --up 3 --format json` | 申万行业指数连续涨跌 | 默认按收盘较前收；`--level 1/2/3` 切行业层级 |
+| `kan board trend --kind theme --up 3 --format json` | 概念题材指数连续涨跌 | 题材使用 THS N 类概念指数；读取 `source` / `data_availability` |
+| `kan board trend --kind theme --up 3 --candle --format json` | 概念题材连续阳线 | `--candle` 按当日 close 与 open；不要与收盘连续上涨混称 |
 | `kan index [sh sz cyb hs300] --format json` | 常用指数日线位置参照 | 补大盘基准 |
 | `kan low N` / `kan high N` | N 日新低/新高 | 极端位置发现；支持 `--all` 全市场池 |
 
@@ -221,7 +224,13 @@ kan info <候选代码> --format json
 # 1. 查看板块资金排名
 kan board rank --kind industry --by moneyflow --format json
 
-# 2. 用户给出行业名和阈值后执行，不根据榜单自动拼策略
+# 2. 查看连续上涨不少于 3 天的行业指数；只返回用户指定的客观阈值
+kan board trend --kind industry --up 3 --format json
+
+# 3. 连续阳线是另一口径，必须显式加 --candle
+kan board trend --kind theme --up 3 --candle --format json
+
+# 4. 用户给出行业名和阈值后执行，不根据榜单自动拼策略
 kan find --industry <用户指定行业> --pos 60:lt:20 --format json --compact
 ```
 

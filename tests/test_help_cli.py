@@ -202,6 +202,8 @@ def test_root_help_lists_batch_sources_and_theme_watchlist_commands() -> None:
     assert "kan hold add 600519 --cost 1680 --shares 100" in output
     assert "kan hold --format json --mask" in output
     assert "kan board rank --kind industry --by moneyflow" in output
+    assert "kan board trend --kind industry --up 3" in output
+    assert "kan board trend --kind theme --up 3 --candle" in output
     assert "kan scan --periods 5,20,60,180" in output
     assert "kan scan --wide" in output
     assert "kan scan --compact" in output

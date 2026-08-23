@@ -106,7 +106,7 @@ Protocol、provider 注册与责任链；市场级 `Source` 聚合及多市场�
 
 ### 3.4 AI / 脚本消费（JSON）
 
-所有数据查询命令（`scan` / `find` / `info` / `history` / `board rank` / `trend`）支持 `--format json`：
+所有数据查询命令（`scan` / `find` / `info` / `history` / `board rank` / `board trend` / `trend`）支持 `--format json`：
 
 ```json
 {

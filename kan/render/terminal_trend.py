@@ -176,17 +176,18 @@ def theme_leaderboard_title(
     data_cutoff: date | None = None,
     fetched_at: str | None = None,
     errors_count: int = 0,
+    entity_label: str = "题材",
 ) -> str:
-    """题材榜标题 · terminal + md export 共用。"""
+    """板块趋势榜标题 · 旧题材命令默认沿用“题材”口径。"""
     mode_label = "阳线阴线口径" if candle else "收盘价口径"
-    title = f"慢慢看 · 题材连续涨跌榜 · {mode_label}{filter_label}"
-    title += f" · {shown}/{total_themes} 题材"
+    title = f"慢慢看 · {entity_label}连续涨跌榜 · {mode_label}{filter_label}"
+    title += f" · {shown}/{total_themes} {entity_label}"
     if data_cutoff:
         title += f" · 数据截止 {format_date_compact(data_cutoff)} 收盘"
     if fetched_at:
         title += f" · {format_fetched_at_compact(fetched_at)} 拉取"
     if errors_count:
-        title += f" · {errors_count} 题材数据不可用"
+        title += f" · {errors_count} {entity_label}数据不可用"
     return title
 
 
@@ -200,6 +201,8 @@ def theme_leaderboard_table(
     data_cutoff: date | None = None,
     fetched_at: str | None = None,
     errors_count: int = 0,
+    entity_label: str = "题材",
+    include_code: bool = False,
 ) -> Table:
     """题材连续涨跌榜 · 行=题材 · 列=排名/题材/现价/连续/累计(+ 可选近 N 天明细)。
 
@@ -224,11 +227,12 @@ def theme_leaderboard_table(
         data_cutoff=data_cutoff,
         fetched_at=fetched_at,
         errors_count=errors_count,
+        entity_label=entity_label,
     )
 
     table = Table(title=title, show_lines=False, pad_edge=False, padding=(0, 1))
     table.add_column("排名", justify="right", style="cyan", min_width=4)
-    table.add_column("题材", style="white", no_wrap=True)
+    table.add_column(entity_label, style="white", no_wrap=True)
     table.add_column("现价", justify="right", style="white")
     table.add_column("连续", justify="center")
     table.add_column("累计", justify="right")
@@ -258,7 +262,7 @@ def theme_leaderboard_table(
 
         row: list[str | Text] = [
             str(idx),
-            name_short,
+            f"{name_short} {r.symbol}" if include_code else name_short,
             f"{r.current_price:.2f}",
             streak_text,
             cum_text,

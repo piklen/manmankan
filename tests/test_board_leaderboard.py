@@ -90,3 +90,17 @@ def test_theme_pos_uses_tushare_batch_klines(monkeypatch):
     assert rows[0].code == "886108"
     assert rows[0].position_pct is not None
     assert rows[0].gain_pct is not None
+
+
+def test_industry_loader_uses_public_moneyflow_helper(monkeypatch):
+    monkeypatch.setattr("kan.data.boards.load_industry_catalog", lambda force=False: [])
+    monkeypatch.setattr(board_leaderboard, "industry_moneyflow_map", lambda: {})
+
+    rows, errors = board_leaderboard.load_board_leaderboard(
+        kind="industry",
+        metric="moneyflow",
+        parallel=1,
+    )
+
+    assert rows == []
+    assert errors == []

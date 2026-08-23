@@ -80,7 +80,7 @@ def _scan_theme_klines(
     return out
 
 
-def _resolve_parallel(parallel: int | None) -> int:
+def resolve_board_parallel(parallel: int | None) -> int:
     """决定板块指数 K 线并发数 · CLI 参数 > env > 默认 16 · clamp 到 [1, 32]。"""
     if parallel is None:
         env = os.environ.get("KAN_BOARD_RANK_PARALLEL")
@@ -94,7 +94,7 @@ def _resolve_parallel(parallel: int | None) -> int:
     return max(1, min(32, parallel))
 
 
-_BOARD_INDEX_CAPABILITIES = ProviderCapabilities(
+BOARD_INDEX_CAPABILITIES = ProviderCapabilities(
     max_concurrency=16,
     initial_concurrency=4,
     max_attempts=2,
@@ -105,7 +105,7 @@ _BOARD_INDEX_CAPABILITIES = ProviderCapabilities(
 
 # 题材 EM 指数扫描必须串行：底层 akshare → py_mini_racer (V8) 非线程安全，
 # 多 worker 同时初始化 V8 isolate pool 会触发 Check failed: !pool->IsInitialized() segfault。
-_BOARD_INDEX_THEME_CAPABILITIES = ProviderCapabilities(
+BOARD_INDEX_THEME_CAPABILITIES = ProviderCapabilities(
     max_concurrency=1,
     initial_concurrency=1,
     max_attempts=2,
@@ -141,7 +141,7 @@ def _scan_index_job(
     return ProviderFetchResult.succeeded(result)
 
 
-def _industry_moneyflow_map() -> dict[str, float]:
+def industry_moneyflow_map() -> dict[str, float]:
     """申万一级行业 → 主力净额合计(万元)。无数据返回空 dict。"""
     from kan.data.industry_map import fetch_sw_l1_map
     from kan.data.moneyflow import fetch_moneyflow
@@ -248,7 +248,7 @@ def load_board_leaderboard(
     catalog: Sequence[Board | Theme]
     if kind == "industry":
         catalog = [b for b in boards.load_industry_catalog(force=force) if b.level == level]
-        mf_map = _industry_moneyflow_map()
+        mf_map = industry_moneyflow_map()
     else:
         # 题材路径：优先走 data-hub/TuShare 批量接口（避开 akshare EM 的 DNS/代理问题 +
         # mini_racer 线程不安全），EM 只在 TuShare 未配或失败时做 fallback。
@@ -330,9 +330,9 @@ def load_board_leaderboard(
         and not (kind == "theme" and getattr(item, "source", "") == "tushare")
     ]
 
-    workers = _resolve_parallel(parallel)
+    workers = resolve_board_parallel(parallel)
     # 题材 EM 扫描必须串行（mini_racer/V8 非线程安全），行业可并发
-    board_caps = _BOARD_INDEX_THEME_CAPABILITIES if kind == "theme" else _BOARD_INDEX_CAPABILITIES
+    board_caps = BOARD_INDEX_THEME_CAPABILITIES if kind == "theme" else BOARD_INDEX_CAPABILITIES
     if needs_scan and workers > 1:
         if lifecycle is not None:
             lifecycle.phase("扫描板块指数 K 线", total=len(needs_scan))
@@ -391,9 +391,13 @@ def load_board_leaderboard(
 
 
 __all__ = [
+    "BOARD_INDEX_CAPABILITIES",
+    "BOARD_INDEX_THEME_CAPABILITIES",
     "BoardKind",
     "BoardMetric",
     "BoardRankRow",
+    "industry_moneyflow_map",
     "load_board_leaderboard",
+    "resolve_board_parallel",
     "theme_moneyflow_map",
 ]

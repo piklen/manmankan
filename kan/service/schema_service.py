@@ -127,9 +127,22 @@ def _command_schemas(*, compact: bool) -> list[dict[str, Any]]:
         {
             "name": "board rank",
             "purpose": "Return objective board-level moneyflow, gain, or position rows.",
-            "formats": ["terminal", "md", "json"],
+            "formats": ["terminal", "md", "json", "csv"],
             "success_keys": ["ok", "schema_version", "command", "query_time", "stats", "results"],
             "examples": ["kan board rank --kind industry --by moneyflow --format json"],
+        },
+        {
+            "name": "board trend",
+            "purpose": "Treat industry or concept indexes as OHLC series and return objective streak rows.",
+            "formats": ["terminal", "md", "json", "csv"],
+            "success_keys": [
+                "ok", "schema_version", "command", "query_time", "kind", "mode",
+                "filters", "data_cutoff", "stats", "data_availability", "results",
+            ],
+            "examples": [
+                "kan board trend --kind industry --up 3 --format json",
+                "kan board trend --kind theme --up 3 --candle --format json",
+            ],
         },
         {
             "name": "hold",

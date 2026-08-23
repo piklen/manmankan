@@ -31,6 +31,7 @@ def test_examples_command_runs() -> None:
         in commands
     )
     assert "kan scan --codes 600519,000858 --periods 5,20,60,180 --format json" in commands
+    assert "kan board trend --kind industry --up 3 --format json" in commands
     assert "kan mcp install --dry-run" in commands
     assert "kan schema --format json --section find --compact" in commands
     assert all("--all --pe lt:20 --roe" not in command for command in commands)
@@ -51,7 +52,7 @@ def test_examples_command_markdown_is_copyable() -> None:
     assert result.exit_code == 0
     assert result.output.startswith("# manmankan 工作流示例")
     assert "```bash\nkan find --codes 600519,000858 --format json --dry-run\n```" in result.output
-    assert "## 8. 预览 MCP 注册" in result.output
+    assert "## 9. 预览 MCP 注册" in result.output
 
 
 def test_example_find_commands_do_not_use_impossible_field_combinations() -> None:
