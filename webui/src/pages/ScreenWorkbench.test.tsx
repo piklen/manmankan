@@ -105,6 +105,28 @@ describe("ScreenWorkbench", () => {
     expect(screen.getByRole("button", { name: "保存并运行" })).toBeDisabled();
   });
 
+  it("opens the requested saved Screen from daily review", async () => {
+    const requested: SavedScreen = {
+      ...saved,
+      screen_id: "screen-from-review",
+      name: "从每日复看打开",
+      spec: {
+        ...defaultScreenSpec(),
+        name: "从每日复看打开",
+        exclude_st: true,
+      },
+    };
+    vi.spyOn(api, "screens").mockResolvedValue([requested]);
+    vi.spyOn(api, "filters").mockResolvedValue([]);
+    vi.spyOn(api, "runs").mockResolvedValue([]);
+    vi.spyOn(api, "screenVersions").mockResolvedValue([]);
+
+    renderWorkbench("/screen?screen=screen-from-review");
+
+    expect(await screen.findByDisplayValue("从每日复看打开")).toBeInTheDocument();
+    expect(screen.getByText("已打开「从每日复看打开」")).toBeInTheDocument();
+  });
+
   it("builds a rule and adds another typed condition", async () => {
     vi.spyOn(api, "screens").mockResolvedValue([]);
     vi.spyOn(api, "filters").mockResolvedValue([]);

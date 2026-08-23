@@ -816,19 +816,42 @@ function Inspector({
 export function ScreenWorkbench() {
   const queryClient = useQueryClient();
   const navigate = useNavigate();
-  const [searchParams] = useSearchParams();
+  const [searchParams, setSearchParams] = useSearchParams();
   const [spec, setSpec] = useState<ScreenSpec>(() => specFromSearchParams(searchParams));
   const [activeId, setActiveId] = useState<string | null>(null);
   const [previewVersion, setPreviewVersion] = useState<number | null>(null);
   const [run, setRun] = useState<ScreenRun | null>(null);
   const [selectedSymbol, setSelectedSymbol] = useState<string | null>(null);
   const [compareSymbols, setCompareSymbols] = useState<string[]>([]);
+  const [queryScreenResolved, setQueryScreenResolved] = useState(
+    !searchParams.get("screen")?.trim(),
+  );
   const [notice, setNotice] = useState<string | null>(() =>
     noticeFromSearchParams(searchParams),
   );
 
   const screensQuery = useQuery({ queryKey: ["screens"], queryFn: api.screens });
   const filtersQuery = useQuery({ queryKey: ["filters"], queryFn: api.filters });
+  useEffect(() => {
+    if (queryScreenResolved || !screensQuery.data) return;
+    const requestedId = searchParams.get("screen")?.trim();
+    const saved = screensQuery.data.find((item) => item.screen_id === requestedId);
+    setQueryScreenResolved(true);
+    const nextParams = new URLSearchParams(searchParams);
+    nextParams.delete("screen");
+    setSearchParams(nextParams, { replace: true });
+    if (!saved) {
+      setNotice("链接中的 Screen 不存在，已打开新规则");
+      return;
+    }
+    setActiveId(saved.screen_id);
+    setPreviewVersion(saved.current_version);
+    setSpec(cloneSpec(saved.spec));
+    setRun(null);
+    setSelectedSymbol(null);
+    setCompareSymbols([]);
+    setNotice(`已打开「${saved.name}」`);
+  }, [queryScreenResolved, screensQuery.data, searchParams, setSearchParams]);
   const historyQuery = useQuery({
     queryKey: ["runs", activeId],
     queryFn: () => api.runs(activeId, 20),

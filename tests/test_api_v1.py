@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from datetime import UTC, datetime
 from pathlib import Path
 
 import pytest
@@ -12,6 +13,43 @@ from kan.web.app import create_app
 from kan.web.security import SESSION_HEADER_NAME
 
 _SESSION = "api-v1-test-session"
+
+
+def _board_review_model():
+    from kan.domain.board import (
+        BoardKind,
+        BoardTrendCoverage,
+        BoardTrendQuery,
+        BoardTrendSnapshot,
+    )
+    from kan.domain.board_review import BoardDailyReview, BoardReviewSection
+
+    sections = [
+        BoardReviewSection(
+            kind=kind,
+            snapshot=BoardTrendSnapshot(
+                query=BoardTrendQuery(kind=kind, limit=None),
+                source="sw" if kind is BoardKind.INDUSTRY else "tushare",
+                data_cutoff="2026-08-21",
+                coverage=BoardTrendCoverage(
+                    total=1,
+                    evaluated=1,
+                    matched=1,
+                    returned=1,
+                    errors=0,
+                ),
+            ),
+        )
+        for kind in (BoardKind.INDUSTRY, BoardKind.THEME)
+    ]
+    return BoardDailyReview(
+        review_id="review-1",
+        created_at=datetime(2026, 8, 24, tzinfo=UTC),
+        mode="close",
+        industry_level=1,
+        result_hash="a" * 64,
+        sections=sections,
+    )
 
 
 @pytest.fixture
@@ -37,6 +75,8 @@ def test_openapi_only_exposes_typed_v1_contract(client: TestClient) -> None:
     assert "/api/v1/screens" in schema["paths"]
     assert "/api/v1/boards/trends" in schema["paths"]
     assert "/api/v1/boards/{kind}/{value}/pulse" in schema["paths"]
+    assert "/api/v1/board-reviews" in schema["paths"]
+    assert "/api/v1/board-reviews/{review_id}" in schema["paths"]
     assert "/api/v1/portfolio" in schema["paths"]
     assert "/api/v1/jobs/screen-runs" in schema["paths"]
     assert "/api/v1/jobs/market-refresh" in schema["paths"]
@@ -45,6 +85,7 @@ def test_openapi_only_exposes_typed_v1_contract(client: TestClient) -> None:
     assert "ScreenRun" in schema["components"]["schemas"]
     assert "BoardTrendSnapshot" in schema["components"]["schemas"]
     assert "BoardPulseSnapshot" in schema["components"]["schemas"]
+    assert "BoardDailyReview" in schema["components"]["schemas"]
 
 
 def test_board_trends_uses_shared_typed_query(
@@ -184,6 +225,82 @@ def test_board_pulse_maps_missing_board_to_not_found(
 
     assert response.status_code == 404
     assert response.json()["detail"]["code"] == "board_not_found"
+
+
+def test_board_review_create_list_and_get_use_shared_service(
+    client: TestClient,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from kan.service.board_review_service import summarize_board_review
+
+    review = _board_review_model()
+    captured: dict[str, object] = {}
+
+    def create(payload):
+        captured["payload"] = payload
+        return review
+
+    def listing(*, limit: int):
+        captured["limit"] = limit
+        return [summarize_board_review(review)]
+
+    monkeypatch.setattr(
+        "kan.web.api_v1.board_review_service.create_board_review",
+        create,
+    )
+    monkeypatch.setattr(
+        "kan.web.api_v1.board_review_service.list_board_reviews",
+        listing,
+    )
+    monkeypatch.setattr(
+        "kan.web.api_v1.board_review_service.get_board_review",
+        lambda review_id: review if review_id == "review-1" else None,
+    )
+
+    created = client.post(
+        "/api/v1/board-reviews",
+        json={"mode": "candle", "industry_level": 2, "force": True},
+    )
+    listed = client.get("/api/v1/board-reviews?limit=5")
+    fetched = client.get("/api/v1/board-reviews/review-1")
+
+    assert created.status_code == 201
+    assert created.json()["review_id"] == "review-1"
+    assert captured["payload"].mode.value == "candle"
+    assert captured["payload"].industry_level == 2
+    assert captured["payload"].force is True
+    assert listed.status_code == 200
+    assert listed.json()[0]["sections"][0]["evaluated"] == 1
+    assert captured["limit"] == 5
+    assert fetched.status_code == 200
+    assert fetched.json()["result_hash"] == "a" * 64
+
+
+def test_board_review_errors_map_to_recoverable_http_status(
+    client: TestClient,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from kan.service.board_review_service import BoardReviewServiceError
+
+    monkeypatch.setattr(
+        "kan.web.api_v1.board_review_service.get_board_review",
+        lambda _review_id: (_ for _ in ()).throw(
+            BoardReviewServiceError("review_not_found", "记录不存在")
+        ),
+    )
+    missing = client.get("/api/v1/board-reviews/missing")
+    assert missing.status_code == 404
+    assert missing.json()["detail"]["code"] == "review_not_found"
+
+    monkeypatch.setattr(
+        "kan.web.api_v1.board_review_service.create_board_review",
+        lambda _payload: (_ for _ in ()).throw(
+            BoardReviewServiceError("data_unavailable", "数据不可用")
+        ),
+    )
+    unavailable = client.post("/api/v1/board-reviews", json={})
+    assert unavailable.status_code == 503
+    assert unavailable.json()["detail"]["code"] == "data_unavailable"
 
 
 def test_screen_crud_and_meta_round_trip(client: TestClient) -> None:

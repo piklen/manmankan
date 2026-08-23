@@ -8,7 +8,7 @@ vNext 把需要事务和版本关系的本地状态放入 `workspace.sqlite3`。
 
 | 数据 | 当前存储 |
 |---|---|
-| Screen、规则版本、ScreenRun、成员、候选池、对比组、任务 | `workspace.sqlite3` |
+| Screen、规则版本、ScreenRun、成员、候选池、对比组、每日板块复看、任务 | `workspace.sqlite3` |
 | 配置、自选、持仓、现金 | SQLite `workspace_state`；旧 JSON 作为迁移输入/回滚出口 |
 | K 线、全市场截面和其他行情缓存 | `data/` 下 Parquet 与既有缓存文件 |
 | 原始 JSON 备份 | `config.json.vnext-backup`、`watchlist.json.vnext-backup`、`positions.json.vnext-backup` |
@@ -71,7 +71,7 @@ kan workspace status
 2. 删除这三个 namespace 的 SQLite 副本和 migration record。
 3. 把用户状态 backend 切为 `legacy`。
 
-因此回滚不会拿旧备份覆盖迁移后的修改。`.vnext-backup` 仍保留最初升级前的证据。Screen、ScreenRun、候选、对比和任务仍保存在 SQLite 中；回滚只切换原有三类用户状态，因为旧版本本来不认识 vNext 领域对象。
+因此回滚不会拿旧备份覆盖迁移后的修改。`.vnext-backup` 仍保留最初升级前的证据。Screen、ScreenRun、候选、对比、每日板块复看和任务仍保存在 SQLite 中；回滚只切换原有三类用户状态，因为旧版本本来不认识 vNext 领域对象。每日复看使用现有 `workspace_state` 的独立 namespace，不提高 `PRAGMA user_version`，旧程序会安全忽略。
 
 再次运行 `kan workspace migrate` 会从当前 JSON 重新接管并切回 SQLite。
 

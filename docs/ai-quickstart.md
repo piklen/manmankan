@@ -197,7 +197,7 @@ kan find --codes 600519,000858 --roe gt:10 --fields @core,@fundamentals --format
 
 `kan board trend` 把板块指数作为 OHLC 序列计算：默认比较“今日收盘与前日收盘”，`--candle` 改为比较“当日收盘与当日开盘”。因此“连续上涨 3 天”和“连续 3 根阳线”是两个不同口径；读取 JSON 的 `mode` 后再解释 `streak`。
 
-需要进程内 typed 调用时，使用 `from kan.api import BoardTrendQuery, query_board_trends`；HTTP 客户端使用 `GET /api/v1/boards/trends`。成员内部结构使用 `BoardPulseQuery / query_board_pulse` 或 `GET /api/v1/boards/{kind}/{value}/pulse`，只可解释为同一截止日的成员涨跌分布，不能把涨跌靠前成员改写成指数权重贡献或新闻因果。CLI、Python、HTTP 与 Web 趋势页共享 typed snapshot，不要在 agent 内重新计算或重新排序。从 Web 板块下钻只代表 Screen 股票池已填入，不代表存在任何选股条件。
+需要进程内 typed 调用时，使用 `from kan.api import BoardTrendQuery, query_board_trends`；HTTP 客户端使用 `GET /api/v1/boards/trends`。成员内部结构使用 `BoardPulseQuery / query_board_pulse` 或 `GET /api/v1/boards/{kind}/{value}/pulse`，只可解释为同一截止日的成员涨跌分布，不能把涨跌靠前成员改写成指数权重贡献或新闻因果。跨日复看使用 `create_board_review(BoardDailyReviewRequest(...))` 或 `POST /api/v1/board-reviews`；`streak_extended` 只表示连续天数绝对值增加，不得改写成“转强”或行动信号。CLI、Python、HTTP 与 Web 共享 typed snapshot，不要在 agent 内重新计算或重新排序。从 Web 板块下钻只代表 Screen 股票池已填入，不代表存在任何选股条件。
 
 字段和 preset 以命令输出为准：
 

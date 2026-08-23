@@ -212,12 +212,28 @@ from kan.domain.board import (
     BoardTrendSnapshot,
     BoardTrendSort,
 )
+from kan.domain.board_review import (
+    BoardDailyReview,
+    BoardDailyReviewRequest,
+    BoardDailyReviewSummary,
+    BoardReviewChange,
+    BoardReviewChangeCounts,
+    BoardReviewChangeType,
+    BoardReviewSection,
+    BoardReviewSectionSummary,
+)
 from kan.domain.screen import (
     CandidateList,
     CompareSet,
     SavedScreen,
     ScreenRun,
     ScreenSpec,
+)
+from kan.service.board_review_service import (
+    BoardReviewServiceError,
+    create_board_review,
+    get_board_review,
+    list_board_reviews,
 )
 from kan.service.board_service import (
     BoardPulseServiceError,
@@ -252,12 +268,21 @@ from kan.service.screen_service import (
 
 __all__ = [
     "BoardDailyChange",
+    "BoardDailyReview",
+    "BoardDailyReviewRequest",
+    "BoardDailyReviewSummary",
     "BoardKind",
     "BoardPulseCoverage",
     "BoardPulseMember",
     "BoardPulseQuery",
     "BoardPulseServiceError",
     "BoardPulseSnapshot",
+    "BoardReviewChange",
+    "BoardReviewChangeCounts",
+    "BoardReviewChangeType",
+    "BoardReviewSection",
+    "BoardReviewSectionSummary",
+    "BoardReviewServiceError",
     "BoardServiceError",
     "BoardTrendCoverage",
     "BoardTrendFailure",
@@ -287,14 +312,17 @@ __all__ = [
     "add_candidate",
     "clear_user_kline_sources",
     "clear_user_theme_constituent_sources",
+    "create_board_review",
     "explain_run",
     "fetch",
     "filter_catalog",
     "from_flags",
+    "get_board_review",
     "get_run",
     "get_screen",
     "high",
     "kline_chain",
+    "list_board_reviews",
     "list_candidate_lists",
     "list_compare_sets",
     "list_runs",

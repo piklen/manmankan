@@ -95,6 +95,44 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/board-reviews": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Board Reviews */
+        get: operations["board_reviews_api_v1_board_reviews_get"];
+        put?: never;
+        /**
+         * Create Board Review
+         * @description 保存行业与题材最新趋势事实，并与上一份同口径记录比较。
+         */
+        post: operations["create_board_review_api_v1_board_reviews_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/board-reviews/{review_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Board Review */
+        get: operations["board_review_api_v1_board_reviews__review_id__get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/stocks/{symbol}": {
         parameters: {
             query?: never;
@@ -588,6 +626,91 @@ export interface components {
             change_pct: number;
         };
         /**
+         * BoardDailyReview
+         * @description 一次不可变的行业 + 题材日线趋势复看。
+         */
+        BoardDailyReview: {
+            /**
+             * Schema Version
+             * @default 1
+             */
+            schema_version: number;
+            /** Review Id */
+            review_id: string;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            mode: components["schemas"]["BoardTrendMode"];
+            /** Industry Level */
+            industry_level: number;
+            /** Result Hash */
+            result_hash: string;
+            /** Previous Review Id */
+            previous_review_id?: string | null;
+            /**
+             * Partial
+             * @default false
+             */
+            partial: boolean;
+            /** Sections */
+            sections: components["schemas"]["BoardReviewSection"][];
+            /** Changes */
+            changes?: components["schemas"]["BoardReviewChange"][];
+            change_counts?: components["schemas"]["BoardReviewChangeCounts"];
+            /** Warnings */
+            warnings?: string[];
+        };
+        /**
+         * BoardDailyReviewRequest
+         * @description 创建每日复看的输入；不包含策略阈值或隐藏评分。
+         */
+        BoardDailyReviewRequest: {
+            /** @default close */
+            mode: components["schemas"]["BoardTrendMode"];
+            /**
+             * Industry Level
+             * @default 1
+             */
+            industry_level: number;
+            /**
+             * Force
+             * @default false
+             */
+            force: boolean;
+        };
+        /** BoardDailyReviewSummary */
+        BoardDailyReviewSummary: {
+            /**
+             * Schema Version
+             * @default 1
+             */
+            schema_version: number;
+            /** Review Id */
+            review_id: string;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            mode: components["schemas"]["BoardTrendMode"];
+            /** Industry Level */
+            industry_level: number;
+            /** Result Hash */
+            result_hash: string;
+            /** Previous Review Id */
+            previous_review_id?: string | null;
+            /**
+             * Partial
+             * @default false
+             */
+            partial: boolean;
+            /** Sections */
+            sections: components["schemas"]["BoardReviewSectionSummary"][];
+            change_counts?: components["schemas"]["BoardReviewChangeCounts"];
+        };
+        /**
          * BoardKind
          * @enum {string}
          */
@@ -683,6 +806,98 @@ export interface components {
             top_down?: components["schemas"]["BoardPulseMember"][];
             /** Warnings */
             warnings?: string[];
+        };
+        /** BoardReviewChange */
+        BoardReviewChange: {
+            kind: components["schemas"]["BoardKind"];
+            /** Code */
+            code: string;
+            /** Name */
+            name: string;
+            change_type: components["schemas"]["BoardReviewChangeType"];
+            /** Previous Streak */
+            previous_streak?: number | null;
+            /** Current Streak */
+            current_streak?: number | null;
+            /** Previous Rank */
+            previous_rank?: number | null;
+            /** Current Rank */
+            current_rank?: number | null;
+        };
+        /** BoardReviewChangeCounts */
+        BoardReviewChangeCounts: {
+            /**
+             * Data Appeared
+             * @default 0
+             */
+            data_appeared: number;
+            /**
+             * Data Unavailable
+             * @default 0
+             */
+            data_unavailable: number;
+            /**
+             * Direction Changed
+             * @default 0
+             */
+            direction_changed: number;
+            /**
+             * Streak Extended
+             * @default 0
+             */
+            streak_extended: number;
+            /**
+             * Streak Shortened
+             * @default 0
+             */
+            streak_shortened: number;
+        };
+        /**
+         * BoardReviewChangeType
+         * @description 两份同口径板块趋势快照之间的客观变化。
+         * @enum {string}
+         */
+        BoardReviewChangeType: "data_appeared" | "data_unavailable" | "direction_changed" | "streak_extended" | "streak_shortened";
+        /**
+         * BoardReviewSection
+         * @description 一个板块类型的趋势事实，或该类型的明确失败。
+         */
+        BoardReviewSection: {
+            kind: components["schemas"]["BoardKind"];
+            snapshot?: components["schemas"]["BoardTrendSnapshot"] | null;
+            /** Error Code */
+            error_code?: string | null;
+            /** Error Message */
+            error_message?: string | null;
+            /** Error Hint */
+            error_hint?: string | null;
+        };
+        /** BoardReviewSectionSummary */
+        BoardReviewSectionSummary: {
+            kind: components["schemas"]["BoardKind"];
+            /** Source */
+            source?: string | null;
+            /** Data Cutoff */
+            data_cutoff?: string | null;
+            /**
+             * Partial
+             * @default false
+             */
+            partial: boolean;
+            /**
+             * Total
+             * @default 0
+             */
+            total: number;
+            /**
+             * Evaluated
+             * @default 0
+             */
+            evaluated: number;
+            /** Error Code */
+            error_code?: string | null;
+            /** Error Message */
+            error_message?: string | null;
         };
         /** BoardTrendCoverage */
         BoardTrendCoverage: {
@@ -1629,6 +1844,101 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["BoardPulseSnapshot"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    board_reviews_api_v1_board_reviews_get: {
+        parameters: {
+            query?: {
+                limit?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BoardDailyReviewSummary"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    create_board_review_api_v1_board_reviews_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["BoardDailyReviewRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BoardDailyReview"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    board_review_api_v1_board_reviews__review_id__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                review_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BoardDailyReview"];
                 };
             };
             /** @description Validation Error */

@@ -88,6 +88,8 @@ Protocol、provider 注册与责任链；市场级 `Source` 聚合及多市场�
 
 - 默认入口是 `kan web`，生产由 Python 同源托管预构建 SPA，不要求用户安装 Node 或运行第二个服务。
 - 首页是趋势发现：行业/题材指数使用同一连续涨跌口径；选中板块后用 `BoardPulseSnapshot` 展示同一截止日的成员涨跌分布，再只把成分股池带入 Screen，不预置筛选条件。
+- “每日复看”把行业与题材 `BoardTrendSnapshot` 保存为不可变 `BoardDailyReview`，只比较连续天数、方向与数据可用性；相同 result hash 幂等返回已有记录。
+- 每日复看页复用已有 ScreenRun diff 与 CandidateList 备注，不复制规则执行器或候选领域，也不自动修改用户状态。
 - 成员 pulse 只描述上涨/下跌/平盘家数、中位涨跌和涨跌靠前成员；没有指数权重时不称“贡献”，没有公告/新闻证据时不称“因果”。
 - Screen 工作台继续负责保存/复制/版本化规则、运行、证据、历史与 diff；板块榜不建立第二套股票筛选器。
 - 候选、对比、个股研究、市场数据、持仓和设置是独立页面，但都消费 `/api/v1` typed model。
@@ -102,8 +104,8 @@ Protocol、provider 注册与责任链；市场级 `Source` 聚合及多市场�
 
 ### 3.3 Python / HTTP 消费
 
-- `kan.api` 公开导出 Board Trend/Pulse、Screen 类型和 application service；用户脚本不需要 import 内部 storage/service。
-- FastAPI 只在 `/api/v1` 暴露 OpenAPI；`/boards/trends`、`/boards/{kind}/{value}/pulse`、Screen 与其他资源都以 Pydantic 作为请求/响应 SOT，并生成 TypeScript 类型。
+- `kan.api` 公开导出 Board Trend/Pulse/DailyReview、Screen 类型和 application service；用户脚本不需要 import 内部 storage/service。
+- FastAPI 只在 `/api/v1` 暴露 OpenAPI；`/boards/trends`、`/boards/{kind}/{value}/pulse`、`/board-reviews`、Screen 与其他资源都以 Pydantic 作为请求/响应 SOT，并生成 TypeScript 类型。
 - Web 写请求叠加本机会话、Host、Origin 和自定义 header 检查。
 
 ### 3.4 AI / 脚本消费（JSON）
@@ -166,7 +168,7 @@ Protocol、provider 注册与责任链；市场级 `Source` 聚合及多市场�
 
 **关键设计决策**：
 
-- **领域层**（`kan/domain/`）定义严格 `BoardTrendQuery / BoardTrendSnapshot / BoardPulseQuery / BoardPulseSnapshot / ScreenSpec / ScreenRun / CandidateList / CompareSet / WorkspaceJob`，未知字段 fail-fast。
+- **领域层**（`kan/domain/`）定义严格 `BoardTrendQuery / BoardTrendSnapshot / BoardPulseQuery / BoardPulseSnapshot / BoardDailyReview / ScreenSpec / ScreenRun / CandidateList / CompareSet / WorkspaceJob`，未知字段 fail-fast。
 - **入口适配层**（`kan/web/`、`kan/cli/`、`kan/mcp/`、`kan/api.py`）只做交互、参数校验和序列化，不复制业务计算。
 - **服务层**（`kan/service/`）承载板块趋势加载/过滤/排序以及 Screen 编排、证据、diff、AI plan 和任务，核心逻辑不与 FastAPI、Typer、React 或 MCP 耦合。
 - **数据层**（`kan/data/`）使用责任链模式——依次尝试多个 DataProvider，第一个成功即返回

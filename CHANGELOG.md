@@ -14,6 +14,7 @@ explicitly approves a larger bump.
 - 新增 Web“趋势发现”首页：行业/题材、收盘连续/阳线连续、方向、天数与排序共用板块趋势契约；支持近日日涨跌轨迹复核，并把选中板块的成分股池带入 Screen。
 - 新增严格 `BoardTrendQuery / BoardTrendSnapshot` 领域模型与共享 application service，并从 `kan.api` 和 `GET /api/v1/boards/trends` 暴露；CLI `kan board trend` 改为调用同一服务。
 - 新增 `BoardPulseQuery / BoardPulseSnapshot` 成员结构服务与 `GET /api/v1/boards/{kind}/{value}/pulse`：按同一最新完整交易日统计上涨/下跌/平盘家数、中位涨跌、覆盖率和涨跌靠前成员；缺行只进入 `missing`，不当作 0。
+- 新增 Web“每日复看”与 `BoardDailyReview`：保存行业/题材 latest-complete 趋势事实，跨日区分连续天数延长/缩短、方向切换和数据可用性变化；相同 result hash 幂等复用。页面同时复用现有 ScreenRun diff 与候选备注，不自动改写规则或候选状态。
 
 ### Changed
 
