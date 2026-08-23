@@ -9,6 +9,8 @@ explicitly approves a larger bump.
 
 ## [Unreleased]
 
+## [0.0.6.9.36] - 2026-08-24
+
 ### Added
 
 - 新增 Web“趋势发现”首页：行业/题材、收盘连续/阳线连续、方向、天数与排序共用板块趋势契约；支持近日日涨跌轨迹复核，并把选中板块的成分股池带入 Screen。
@@ -694,7 +696,8 @@ explicitly approves a larger bump.
 - **Shell 补全** · zsh / bash / fish / powershell
 - **合规与隐私** · 强制风险提示 + 关键词黑名单（无买卖建议 / 无目标价 / 无评级）· 数据全本地
 
-[Unreleased]: https://github.com/piklen/manmankan/compare/v0.0.6.9.35...HEAD
+[Unreleased]: https://github.com/piklen/manmankan/compare/v0.0.6.9.36...HEAD
+[0.0.6.9.36]: https://github.com/piklen/manmankan/compare/v0.0.6.9.35...v0.0.6.9.36
 [0.0.6.9.35]: https://github.com/piklen/manmankan/compare/v0.0.6.9.34...v0.0.6.9.35
 [0.0.6.9.34]: https://github.com/piklen/manmankan/compare/v0.0.6.9.33...v0.0.6.9.34
 [0.0.6.9.33]: https://github.com/piklen/manmankan/compare/v0.0.6.9.32...v0.0.6.9.33
