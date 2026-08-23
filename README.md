@@ -173,6 +173,9 @@ kan find --codes 600519,688981 --format json --fields @core,@valuation,@moneyflo
 kan scan --codes 600519,000858 --format json # 拉公开日 K 的真实坐标 JSON
 kan find --all --pe lt:20 --format json --compact
 kan trend --all --down 3                      # 全市场连续下跌看板
+kan board trend --kind industry --up 3        # 连续上涨 ≥3 天的申万行业指数
+kan board trend --kind theme --up 3           # 连续上涨 ≥3 天的概念题材指数
+kan board trend --kind theme --up 3 --candle  # 连续 3 根阳线的概念题材指数
 kan fetch --all --workers 12                  # 批量并发刷新全市场 360 日 K 线缓存
 kan hold cash 50000                           # 录入现金,用于展示一手占现金比例
 kan hold add 600519 --cost 1680 --shares 100 # 手动录入真实持仓事实
@@ -181,6 +184,8 @@ kan hold --format json --mask                 # AI/脚本消费；金额脱敏
 kan board rank --kind industry --by moneyflow --format json
 kan history 600519 --format json
 ```
+
+板块趋势有两个明确口径：默认“今日收盘 > 前日收盘”计连续上涨，`--candle` 则按“当日收盘 > 当日开盘”计连续阳线。`kan theme trend` 继续作为旧题材入口兼容；新脚本统一使用 `kan board trend --kind industry|theme`。
 
 `kan scan` / `kan daily` 面向终端阅读；`kan find --format json`、`kan hold --format json` 和 MCP 面向脚本与 AI 消费。
 
@@ -198,6 +203,7 @@ kan history 600519 --format json
 - 候选池：自选、行业、题材、热榜、完整 A 股市场（含北交所 / ST）、外部 `--codes` 或 stdin。
 - 真实持仓：用户在 Web 或 CLI 录入成本 / 股数 / 现金，本地计算市值、仓位、今日和累计盈亏。
 - 筛选条件：位置、共振、涨跌、连阳连阴、估值、质量、资金、技术指标、筹码、股东、除权除息事件等。
+- 板块指数：行业 / 题材区间涨幅、位置、资金榜，以及按收盘价或阳线阴线口径计算的连续涨跌榜；板块与股票复用同一 streak 算法。
 - 输出形态：React Web、终端表格、Markdown、JSON、紧凑 JSON、字段白名单、Python API、typed HTTP 与 MCP。
 
 JSON 相关入口：

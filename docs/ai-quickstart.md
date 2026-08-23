@@ -190,8 +190,12 @@ kan find --codes 600519,688981 --format json --agent-summary
 kan find --all --pe lt:20 --format json --compact --no-compact-context
 kan scan --all --periods 20,60,180 --format json
 kan trend --all --down 3 --format json
+kan board trend --kind industry --up 3 --format json
+kan board trend --kind theme --up 3 --candle --format json
 kan find --codes 600519,000858 --roe gt:10 --fields @core,@fundamentals --format json
 ```
+
+`kan board trend` 把板块指数作为 OHLC 序列计算：默认比较“今日收盘与前日收盘”，`--candle` 改为比较“当日收盘与当日开盘”。因此“连续上涨 3 天”和“连续 3 根阳线”是两个不同口径；读取 JSON 的 `mode` 后再解释 `streak`。
 
 字段和 preset 以命令输出为准：
 

@@ -88,6 +88,9 @@ from kan.storage.export_scan import (
 )
 from kan.storage.export_trend import (
     _trend_dict,
+    board_trend_csv,
+    board_trend_markdown,
+    board_trend_payload,
     compare_csv,
     compare_markdown,
     compare_payload,
@@ -147,6 +150,9 @@ __all__ = [
     "_trend_dict",
     "_triggered_filters_public",
     "_valuation_public_dict",
+    "board_trend_csv",
+    "board_trend_markdown",
+    "board_trend_payload",
     "code_pool_markdown",
     "code_pool_payload",
     "compare_csv",

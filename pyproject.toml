@@ -1,6 +1,6 @@
 [project]
 name = "manmankan"
-version = "0.0.6.9.34"
+version = "0.0.6.9.35"
 description = "本地优先的 A 股选股研究工作台 · 可复跑规则、证据、候选与对比"
 requires-python = ">=3.11"
 license = { file = "LICENSE" }

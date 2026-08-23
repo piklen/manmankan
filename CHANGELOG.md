@@ -9,6 +9,17 @@ explicitly approves a larger bump.
 
 ## [Unreleased]
 
+## [0.0.6.9.35] - 2026-08-23
+
+### Added
+
+- 新增 `kan board trend --kind industry|theme`，把申万行业或 THS 概念题材指数作为 OHLC 序列，支持 `--up`、`--down`、`--min-streak`、`--latest`、`--sort`、`--level` 与 terminal / Markdown / JSON / CSV 输出。
+- 新增 `--candle` 阳线阴线口径；默认口径仍是今日收盘与前日收盘比较，JSON 通过 `mode=close|candle` 明确区分。
+
+### Fixed
+
+- 修复 TuShare 题材 catalog 实际请求 `type=I` 行业指数却按题材展示的问题；现在请求并本地复核 `exchange=A,type=N`，旧行业口径缓存不会再被题材路径读取。
+
 ## [0.0.6.9.34] - 2026-08-23
 
 ### Added
@@ -669,7 +680,8 @@ explicitly approves a larger bump.
 - **Shell 补全** · zsh / bash / fish / powershell
 - **合规与隐私** · 强制风险提示 + 关键词黑名单（无买卖建议 / 无目标价 / 无评级）· 数据全本地
 
-[Unreleased]: https://github.com/piklen/manmankan/compare/v0.0.6.9.34...HEAD
+[Unreleased]: https://github.com/piklen/manmankan/compare/v0.0.6.9.35...HEAD
+[0.0.6.9.35]: https://github.com/piklen/manmankan/compare/v0.0.6.9.34...v0.0.6.9.35
 [0.0.6.9.34]: https://github.com/piklen/manmankan/compare/v0.0.6.9.33...v0.0.6.9.34
 [0.0.6.9.33]: https://github.com/piklen/manmankan/compare/v0.0.6.9.32...v0.0.6.9.33
 [0.0.6.9.32]: https://github.com/piklen/manmankan/compare/v0.0.6.9.31...v0.0.6.9.32

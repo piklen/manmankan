@@ -97,6 +97,9 @@ def root_help_text() -> str:
   kan trend --industry 半导体     行业范围连续涨跌（自选 ⭐ 高亮）
   kan trend --hot rank            热榜范围连续涨跌
   kan trend --theme AI应用        题材范围连续涨跌
+  kan board trend --kind industry --up 3  连续上涨 ≥ 3 天的申万行业指数
+  kan board trend --kind theme --up 3     连续上涨 ≥ 3 天的概念题材指数
+  kan board trend --kind theme --up 3 --candle  连续 3 根阳线的概念题材指数
 
   [dim]以上参数可任意组合：kan trend --down 5 --latest 7 --candle --industry 半导体[/dim]
   [dim]N 范围：2-30[/dim]
@@ -141,6 +144,8 @@ def root_help_text() -> str:
   kan theme trend --sort latest   按最新单日涨幅排序
   kan board rank --kind industry --by moneyflow  行业资金净额榜
   kan board rank --kind theme --by pos -p 30      题材位置分位榜
+  kan board trend --kind industry --up 3          行业指数连续上涨榜
+  kan board trend --kind theme --up 3 --candle    题材指数连续阳线榜
 
   [dim]scan / low / high / trend / fetch 全部支持 --industry / --hot / --theme / --all 自由切换[/dim]
   [dim]find 支持 --industry / --hot / --theme / --all / --codes / --only-watchlist / --only-holdings 候选池 · 池参数互斥[/dim]
@@ -150,8 +155,9 @@ def root_help_text() -> str:
   kan scan --format json    JSON 结构化输出
   kan compare 600519 000858 --format md
   kan board rank --kind industry --by gain --format json
+  kan board trend --kind theme --up 3 --format json
 
-  [dim]--format 适用 scan / low / high / info / trend / compare / history / find / hold / board rank[/dim]
+  [dim]--format 适用 scan / low / high / info / trend / compare / history / find / hold / board rank / board trend[/dim]
 
 [bold cyan]数据管理[/bold cyan]
   kan fetch                 拉取数据（通常不需要，scan 自动更新）

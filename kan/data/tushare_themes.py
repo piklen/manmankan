@@ -4,7 +4,7 @@
 - EM datacenter HTTP 服务端不稳定(2026-05-25 实测 RemoteDisconnected
   全部 391 题材失败)· 没 stale cache 兜底时 kan theme trend 直接挂
 - TuShare ths_daily 是 batch 接口 · trade_date=YYYYMMDD 一次 HTTP 拿
-  ~1232 个 TuShare 题材当日数据(含 A 股 / 港股 / 美股各 exchange)· 1.79s
+  全部板块当日数据，客户端只保留 A 股 N 类概念指数
 - 历史 K 线按交易日 loop:60 个交易日 = 60 次 HTTP · 仍比 EM 单题材路径
   (391 题材 × 30 天历史 / 16 worker · 走 datacenter 单题材接口)架构更优
 
@@ -57,7 +57,7 @@ def _cache_fresh(path, ttl: float) -> bool:
 
 
 def tushare_load_theme_catalog() -> tuple[list[Theme] | None, TushareApiError | None]:
-    """走 ths_index?type=N&exchange=A · A 股题材清单(~409 个)· 24h JSON cache。
+    """走 ths_index?type=N&exchange=A · A 股概念题材清单 · 24h JSON cache。
 
     Returns:
         (themes, error):
@@ -73,7 +73,8 @@ def tushare_load_theme_catalog() -> tuple[list[Theme] | None, TushareApiError | 
         return None, None  # 未配 token = 默认状态 · 不算 error
 
     ensure_dirs()
-    cache = BOARDS_DIR / "catalog_tushare_ths_I.json"
+    # N=概念指数；I=行业指数。缓存名包含口径，避免旧 I 类行业缓存被误当题材。
+    cache = BOARDS_DIR / "catalog_tushare_ths_N.json"
     if _cache_fresh(cache, _THEME_CATALOG_TTL):
         try:
             data = json.loads(cache.read_text(encoding="utf-8"))
@@ -84,8 +85,8 @@ def tushare_load_theme_catalog() -> tuple[list[Theme] | None, TushareApiError | 
     data, err = _post_tushare_api(
         endpoint, token,
         api_name="ths_index",
-        params={"type": "I", "exchange": "A"},
-        fields="ts_code,name,count,exchange",
+        params={"type": "N", "exchange": "A"},
+        fields="ts_code,name,count,exchange,type",
     )
     if data is None:
         return None, err
@@ -104,6 +105,13 @@ def tushare_load_theme_catalog() -> tuple[list[Theme] | None, TushareApiError | 
         rec = dict(zip(fields, row, strict=False))
         ts_code = str(rec.get("ts_code") or "").strip()
         name = str(rec.get("name") or "").strip()
+        row_type = str(rec.get("type") or "").strip()
+        exchange = str(rec.get("exchange") or "").strip()
+        # 兼容端点可能忽略请求过滤条件；返回中带口径字段时再次本地收窄。
+        if row_type and row_type != "N":
+            continue
+        if exchange and exchange != "A":
+            continue
         if not ts_code or not name:
             continue
         size_raw = rec.get("count")
@@ -121,7 +129,10 @@ def tushare_load_theme_catalog() -> tuple[list[Theme] | None, TushareApiError | 
     if not themes:
         return None, TushareApiError(
             code=0,
-            msg=f"所有 row 解析失败 · raw items={len(items)} 但 ts_code/name 都空",
+            msg=(
+                "概念题材口径过滤后无数据"
+                f" · raw items={len(items)} · 期望 exchange=A,type=N"
+            ),
             api_name="ths_index",
         )
 

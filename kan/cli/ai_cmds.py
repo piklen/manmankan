@@ -63,6 +63,11 @@ _EXAMPLES = [
         "返回多周期位置、今日资金流拆分、连续净流入天数、涨跌停详情等事实。",
     ),
     (
+        "板块连续涨跌",
+        "kan board trend --kind industry --up 3 --format json",
+        "把申万行业指数当作 OHLC 序列，返回连续上涨不少于 3 天的客观结果。",
+    ),
+    (
         "预览 MCP 注册",
         "kan mcp install --dry-run",
         "预览写入哪些本机 AI 客户端配置；确认后再去掉 --dry-run。",
