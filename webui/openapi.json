@@ -307,6 +307,137 @@
         }
       }
     },
+    "/api/v1/board-reviews": {
+      "post": {
+        "tags": [
+          "v1"
+        ],
+        "summary": "Create Board Review",
+        "description": "\u4fdd\u5b58\u884c\u4e1a\u4e0e\u9898\u6750\u6700\u65b0\u8d8b\u52bf\u4e8b\u5b9e\uff0c\u5e76\u4e0e\u4e0a\u4e00\u4efd\u540c\u53e3\u5f84\u8bb0\u5f55\u6bd4\u8f83\u3002",
+        "operationId": "create_board_review_api_v1_board_reviews_post",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/BoardDailyReviewRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BoardDailyReview"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "get": {
+        "tags": [
+          "v1"
+        ],
+        "summary": "Board Reviews",
+        "operationId": "board_reviews_api_v1_board_reviews_get",
+        "parameters": [
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "maximum": 200,
+              "minimum": 1,
+              "default": 30,
+              "title": "Limit"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/BoardDailyReviewSummary"
+                  },
+                  "title": "Response Board Reviews Api V1 Board Reviews Get"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/board-reviews/{review_id}": {
+      "get": {
+        "tags": [
+          "v1"
+        ],
+        "summary": "Board Review",
+        "operationId": "board_review_api_v1_board_reviews__review_id__get",
+        "parameters": [
+          {
+            "name": "review_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Review Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BoardDailyReview"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/stocks/{symbol}": {
       "get": {
         "tags": [
@@ -1705,6 +1836,181 @@
         ],
         "title": "BoardDailyChange"
       },
+      "BoardDailyReview": {
+        "properties": {
+          "schema_version": {
+            "type": "integer",
+            "title": "Schema Version",
+            "default": 1
+          },
+          "review_id": {
+            "type": "string",
+            "title": "Review Id"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Created At"
+          },
+          "mode": {
+            "$ref": "#/components/schemas/BoardTrendMode"
+          },
+          "industry_level": {
+            "type": "integer",
+            "title": "Industry Level"
+          },
+          "result_hash": {
+            "type": "string",
+            "title": "Result Hash"
+          },
+          "previous_review_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Previous Review Id"
+          },
+          "partial": {
+            "type": "boolean",
+            "title": "Partial",
+            "default": false
+          },
+          "sections": {
+            "items": {
+              "$ref": "#/components/schemas/BoardReviewSection"
+            },
+            "type": "array",
+            "maxItems": 2,
+            "minItems": 2,
+            "title": "Sections"
+          },
+          "changes": {
+            "items": {
+              "$ref": "#/components/schemas/BoardReviewChange"
+            },
+            "type": "array",
+            "title": "Changes"
+          },
+          "change_counts": {
+            "$ref": "#/components/schemas/BoardReviewChangeCounts"
+          },
+          "warnings": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Warnings"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "review_id",
+          "created_at",
+          "mode",
+          "industry_level",
+          "result_hash",
+          "sections"
+        ],
+        "title": "BoardDailyReview",
+        "description": "\u4e00\u6b21\u4e0d\u53ef\u53d8\u7684\u884c\u4e1a + \u9898\u6750\u65e5\u7ebf\u8d8b\u52bf\u590d\u770b\u3002"
+      },
+      "BoardDailyReviewRequest": {
+        "properties": {
+          "mode": {
+            "$ref": "#/components/schemas/BoardTrendMode",
+            "default": "close"
+          },
+          "industry_level": {
+            "type": "integer",
+            "maximum": 3.0,
+            "minimum": 1.0,
+            "title": "Industry Level",
+            "default": 1
+          },
+          "force": {
+            "type": "boolean",
+            "title": "Force",
+            "default": false
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "title": "BoardDailyReviewRequest",
+        "description": "\u521b\u5efa\u6bcf\u65e5\u590d\u770b\u7684\u8f93\u5165\uff1b\u4e0d\u5305\u542b\u7b56\u7565\u9608\u503c\u6216\u9690\u85cf\u8bc4\u5206\u3002"
+      },
+      "BoardDailyReviewSummary": {
+        "properties": {
+          "schema_version": {
+            "type": "integer",
+            "title": "Schema Version",
+            "default": 1
+          },
+          "review_id": {
+            "type": "string",
+            "title": "Review Id"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Created At"
+          },
+          "mode": {
+            "$ref": "#/components/schemas/BoardTrendMode"
+          },
+          "industry_level": {
+            "type": "integer",
+            "title": "Industry Level"
+          },
+          "result_hash": {
+            "type": "string",
+            "title": "Result Hash"
+          },
+          "previous_review_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Previous Review Id"
+          },
+          "partial": {
+            "type": "boolean",
+            "title": "Partial",
+            "default": false
+          },
+          "sections": {
+            "items": {
+              "$ref": "#/components/schemas/BoardReviewSectionSummary"
+            },
+            "type": "array",
+            "maxItems": 2,
+            "minItems": 2,
+            "title": "Sections"
+          },
+          "change_counts": {
+            "$ref": "#/components/schemas/BoardReviewChangeCounts"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "review_id",
+          "created_at",
+          "mode",
+          "industry_level",
+          "result_hash",
+          "sections"
+        ],
+        "title": "BoardDailyReviewSummary"
+      },
       "BoardKind": {
         "type": "string",
         "enum": [
@@ -1914,6 +2220,250 @@
         ],
         "title": "BoardPulseSnapshot",
         "description": "\u677f\u5757\u6210\u5206\u80a1\u540c\u4e00\u4ea4\u6613\u65e5\u7684\u6da8\u8dcc\u5206\u5e03\uff0c\u4e0d\u8868\u793a\u6743\u91cd\u8d21\u732e\u6216\u65b0\u95fb\u56e0\u679c\u3002"
+      },
+      "BoardReviewChange": {
+        "properties": {
+          "kind": {
+            "$ref": "#/components/schemas/BoardKind"
+          },
+          "code": {
+            "type": "string",
+            "title": "Code"
+          },
+          "name": {
+            "type": "string",
+            "title": "Name"
+          },
+          "change_type": {
+            "$ref": "#/components/schemas/BoardReviewChangeType"
+          },
+          "previous_streak": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Previous Streak"
+          },
+          "current_streak": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Current Streak"
+          },
+          "previous_rank": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Previous Rank"
+          },
+          "current_rank": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Current Rank"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "kind",
+          "code",
+          "name",
+          "change_type"
+        ],
+        "title": "BoardReviewChange"
+      },
+      "BoardReviewChangeCounts": {
+        "properties": {
+          "data_appeared": {
+            "type": "integer",
+            "title": "Data Appeared",
+            "default": 0
+          },
+          "data_unavailable": {
+            "type": "integer",
+            "title": "Data Unavailable",
+            "default": 0
+          },
+          "direction_changed": {
+            "type": "integer",
+            "title": "Direction Changed",
+            "default": 0
+          },
+          "streak_extended": {
+            "type": "integer",
+            "title": "Streak Extended",
+            "default": 0
+          },
+          "streak_shortened": {
+            "type": "integer",
+            "title": "Streak Shortened",
+            "default": 0
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "title": "BoardReviewChangeCounts"
+      },
+      "BoardReviewChangeType": {
+        "type": "string",
+        "enum": [
+          "data_appeared",
+          "data_unavailable",
+          "direction_changed",
+          "streak_extended",
+          "streak_shortened"
+        ],
+        "title": "BoardReviewChangeType",
+        "description": "\u4e24\u4efd\u540c\u53e3\u5f84\u677f\u5757\u8d8b\u52bf\u5feb\u7167\u4e4b\u95f4\u7684\u5ba2\u89c2\u53d8\u5316\u3002"
+      },
+      "BoardReviewSection": {
+        "properties": {
+          "kind": {
+            "$ref": "#/components/schemas/BoardKind"
+          },
+          "snapshot": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/BoardTrendSnapshot"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "error_code": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Error Code"
+          },
+          "error_message": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Error Message"
+          },
+          "error_hint": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Error Hint"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "kind"
+        ],
+        "title": "BoardReviewSection",
+        "description": "\u4e00\u4e2a\u677f\u5757\u7c7b\u578b\u7684\u8d8b\u52bf\u4e8b\u5b9e\uff0c\u6216\u8be5\u7c7b\u578b\u7684\u660e\u786e\u5931\u8d25\u3002"
+      },
+      "BoardReviewSectionSummary": {
+        "properties": {
+          "kind": {
+            "$ref": "#/components/schemas/BoardKind"
+          },
+          "source": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Source"
+          },
+          "data_cutoff": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Data Cutoff"
+          },
+          "partial": {
+            "type": "boolean",
+            "title": "Partial",
+            "default": false
+          },
+          "total": {
+            "type": "integer",
+            "title": "Total",
+            "default": 0
+          },
+          "evaluated": {
+            "type": "integer",
+            "title": "Evaluated",
+            "default": 0
+          },
+          "error_code": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Error Code"
+          },
+          "error_message": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Error Message"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "kind"
+        ],
+        "title": "BoardReviewSectionSummary"
       },
       "BoardTrendCoverage": {
         "properties": {

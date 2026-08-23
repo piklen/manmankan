@@ -21,6 +21,11 @@ from kan.domain.board import (
     BoardTrendSnapshot,
     BoardTrendSort,
 )
+from kan.domain.board_review import (
+    BoardDailyReview,
+    BoardDailyReviewRequest,
+    BoardDailyReviewSummary,
+)
 from kan.domain.job import MarketRefreshRequest, WorkspaceJob
 from kan.domain.screen import (
     Candidate,
@@ -30,7 +35,7 @@ from kan.domain.screen import (
     ScreenRun,
     ScreenVersion,
 )
-from kan.service import board_service, job_service, screen_service
+from kan.service import board_review_service, board_service, job_service, screen_service
 from kan.service.hold_service import build_hold_summary
 from kan.service.info_service import InfoDataUnavailableError, InfoRequest, get_stock_info
 from kan.service.market_service import get_market_sentiment, serialize_market_sentiment
@@ -83,6 +88,14 @@ def _board_error(exc: board_service.BoardServiceError) -> NoReturn:
     ) from exc
 
 
+def _board_review_error(exc: board_review_service.BoardReviewServiceError) -> NoReturn:
+    status = 404 if exc.code == "review_not_found" else 503
+    raise HTTPException(
+        status_code=status,
+        detail={"code": exc.code, "message": exc.message, "hint": exc.hint},
+    ) from exc
+
+
 @router.get("/health", response_model=HealthResponse)
 def health() -> HealthResponse:
     return HealthResponse()
@@ -96,6 +109,7 @@ def meta() -> ApiMeta:
             "screens",
             "board-trends",
             "board-pulse",
+            "board-daily-reviews",
             "immutable-runs",
             "candidate-lists",
             "compare-sets",
@@ -169,6 +183,31 @@ def board_pulse(
         _board_error(exc)
     except ValueError as exc:
         _value_error(exc)
+
+
+@router.post("/board-reviews", response_model=BoardDailyReview, status_code=201)
+def create_board_review(payload: BoardDailyReviewRequest) -> BoardDailyReview:
+    """保存行业与题材最新趋势事实，并与上一份同口径记录比较。"""
+
+    try:
+        return board_review_service.create_board_review(payload)
+    except board_review_service.BoardReviewServiceError as exc:
+        _board_review_error(exc)
+
+
+@router.get("/board-reviews", response_model=list[BoardDailyReviewSummary])
+def board_reviews(
+    limit: Annotated[int, Query(ge=1, le=200)] = 30,
+) -> list[BoardDailyReviewSummary]:
+    return board_review_service.list_board_reviews(limit=limit)
+
+
+@router.get("/board-reviews/{review_id}", response_model=BoardDailyReview)
+def board_review(review_id: str) -> BoardDailyReview:
+    try:
+        return board_review_service.get_board_review(review_id)
+    except board_review_service.BoardReviewServiceError as exc:
+        _board_review_error(exc)
 
 
 @router.get("/stocks/{symbol}", response_model=StockResearchResponse)

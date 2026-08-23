@@ -803,9 +803,13 @@ def interrupt_incomplete_jobs() -> int:
         return cursor.rowcount
 
 
-def get_state(namespace: str) -> dict[str, object] | None:
-    with contextlib.closing(_connect()) as conn:
-        row = conn.execute(
+def get_state(
+    namespace: str,
+    *,
+    conn: sqlite3.Connection | None = None,
+) -> dict[str, object] | None:
+    def read(active: sqlite3.Connection) -> dict[str, object] | None:
+        row = active.execute(
             "SELECT payload_json FROM workspace_state WHERE namespace = ?",
             (namespace,),
         ).fetchone()
@@ -815,6 +819,11 @@ def get_state(namespace: str) -> dict[str, object] | None:
         if not isinstance(payload, dict):
             raise RuntimeError(f"工作台状态 {namespace} 不是 JSON object")
         return payload
+
+    if conn is not None:
+        return read(conn)
+    with contextlib.closing(_connect()) as owned:
+        return read(owned)
 
 
 def put_state(

@@ -58,4 +58,29 @@ describe("API client", () => {
       "/api/v1/boards/theme/AI%20%E5%BA%94%E7%94%A8/pulse?level=1&limit=3",
     );
   });
+
+  it("creates a typed daily board review without hidden thresholds", async () => {
+    const fetchMock = vi.fn().mockResolvedValue(
+      new Response(JSON.stringify({}), {
+        status: 201,
+        headers: { "Content-Type": "application/json" },
+      }),
+    );
+    vi.stubGlobal("fetch", fetchMock);
+
+    await api.createBoardReview({
+      mode: "close",
+      industry_level: 1,
+      force: false,
+    });
+
+    const [path, init] = fetchMock.mock.calls[0] as [string, RequestInit];
+    expect(path).toBe("/api/v1/board-reviews");
+    expect(init.method).toBe("POST");
+    expect(JSON.parse(String(init.body))).toEqual({
+      mode: "close",
+      industry_level: 1,
+      force: false,
+    });
+  });
 });

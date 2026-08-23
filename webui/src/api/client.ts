@@ -22,6 +22,10 @@ export type BoardTrendSnapshot = components["schemas"]["BoardTrendSnapshot"];
 export type BoardTrendRow = components["schemas"]["BoardTrendRow"];
 export type BoardPulseSnapshot = components["schemas"]["BoardPulseSnapshot"];
 export type BoardPulseMember = components["schemas"]["BoardPulseMember"];
+export type BoardDailyReview = components["schemas"]["BoardDailyReview"];
+export type BoardDailyReviewSummary = components["schemas"]["BoardDailyReviewSummary"];
+export type BoardDailyReviewRequest = components["schemas"]["BoardDailyReviewRequest"];
+export type BoardReviewChange = components["schemas"]["BoardReviewChange"];
 
 export interface BoardTrendParams {
   kind: "industry" | "theme";
@@ -133,6 +137,17 @@ export const api = {
       `/api/v1/boards/${kind}/${encodeURIComponent(value)}/pulse?${params}`,
     );
   },
+  boardReviews: (limit = 30) =>
+    request<BoardDailyReviewSummary[]>(`/api/v1/board-reviews?limit=${limit}`),
+  boardReview: (reviewId: string) =>
+    request<BoardDailyReview>(
+      `/api/v1/board-reviews/${encodeURIComponent(reviewId)}`,
+    ),
+  createBoardReview: (payload: BoardDailyReviewRequest) =>
+    request<BoardDailyReview>("/api/v1/board-reviews", {
+      method: "POST",
+      body: json(payload),
+    }),
   market: () => request<MarketOverview>("/api/v1/market"),
   portfolio: () => request<Portfolio>("/api/v1/portfolio"),
   updateCash: (cash: number) =>

@@ -9,7 +9,7 @@
 ## 工具概述
 
 **manmankan** (`kan`) 是一个本地优先的 A 股选股研究工作台。
-它提供 React Web、CLI、Python API、typed HTTP 和 MCP，但不内置 LLM；板块趋势由统一 `BoardTrendQuery → BoardTrendSnapshot` 服务计算，股票筛选由统一 `ScreenSpec → ScreenRun` 服务计算。AI 只能整理明确查询/Screen、执行确定性服务和引用已保存证据。
+它提供 React Web、CLI、Python API、typed HTTP 和 MCP，但不内置 LLM；板块趋势由统一 `BoardTrendQuery → BoardTrendSnapshot` 服务计算，跨日事实由 `BoardDailyReview` 保存，股票筛选由统一 `ScreenSpec → ScreenRun` 服务计算。AI 只能整理明确查询/Screen、执行确定性服务和引用已保存证据。
 
 **命令入口**：终端执行 `kan <command> [options]`
 **安装**：`uv tool install manmankan`
@@ -93,7 +93,7 @@
 | `kan index [sh sz cyb hs300] --format json` | 常用指数日线位置参照 | 补大盘基准 |
 | `kan low N` / `kan high N` | N 日新低/新高 | 极端位置发现；支持 `--all` 全市场池 |
 
-板块趋势的 Python/HTTP 稳定入口分别是 `kan.api.query_board_trends(BoardTrendQuery(...))` 和 `GET /api/v1/boards/trends`。成员结构使用 `query_board_pulse(BoardPulseQuery(...))` 或 `GET /api/v1/boards/{kind}/{value}/pulse`；它只描述成员涨跌家数、中位涨跌和靠前成员，不表示指数权重贡献或事件因果。Web 趋势页也消费同一 snapshot；从板块下钻 Screen 时只带入 `universe.kind/value`，不得假设网页已经替用户添加筛选条件。
+板块趋势的 Python/HTTP 稳定入口分别是 `kan.api.query_board_trends(BoardTrendQuery(...))` 和 `GET /api/v1/boards/trends`。成员结构使用 `query_board_pulse(BoardPulseQuery(...))` 或 `GET /api/v1/boards/{kind}/{value}/pulse`；它只描述成员涨跌家数、中位涨跌和靠前成员，不表示指数权重贡献或事件因果。每日复看使用 `create_board_review(BoardDailyReviewRequest(...))` 或 `POST /api/v1/board-reviews`；`streak_extended / shortened / direction_changed / data_*` 都是事实 delta，不能翻译成强弱评级。Web 趋势页与每日复看页也消费同一 typed model；从板块下钻 Screen 时只带入 `universe.kind/value`，不得假设网页已经替用户添加筛选条件。
 
 ### 5. 真实持仓
 

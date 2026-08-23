@@ -1,5 +1,15 @@
 """ManManKan 稳定领域契约。"""
 
+from kan.domain.board_review import (
+    BoardDailyReview,
+    BoardDailyReviewRequest,
+    BoardDailyReviewSummary,
+    BoardReviewChange,
+    BoardReviewChangeCounts,
+    BoardReviewChangeType,
+    BoardReviewSection,
+    BoardReviewSectionSummary,
+)
 from kan.domain.job import (
     JobStatus,
     MarketRefreshRequest,
@@ -36,6 +46,14 @@ from kan.domain.screen import (
 
 __all__ = [
     "AsOfSpec",
+    "BoardDailyReview",
+    "BoardDailyReviewRequest",
+    "BoardDailyReviewSummary",
+    "BoardReviewChange",
+    "BoardReviewChangeCounts",
+    "BoardReviewChangeType",
+    "BoardReviewSection",
+    "BoardReviewSectionSummary",
     "Candidate",
     "CandidateList",
     "CandidateStatus",

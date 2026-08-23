@@ -94,6 +94,10 @@ def test_api_all_lists_match_actual_exports():
         "BoardPulseCoverage", "BoardPulseMember", "BoardPulseQuery",
         "BoardPulseServiceError", "BoardPulseSnapshot", "BoardServiceError",
         "query_board_pulse",
+        "BoardDailyReview", "BoardDailyReviewRequest", "BoardDailyReviewSummary",
+        "BoardReviewChange", "BoardReviewChangeCounts", "BoardReviewChangeType",
+        "BoardReviewSection", "BoardReviewSectionSummary", "BoardReviewServiceError",
+        "create_board_review", "get_board_review", "list_board_reviews",
         # vNext Screen application service
         "CandidateList", "CompareSet", "SavedScreen", "ScreenRun", "ScreenSpec",
         "ScreenExplainInput", "ScreenParseInput", "ScreenPlanInput",
@@ -111,11 +115,16 @@ def test_api_exports_board_trend_application_service():
 
     query = api.BoardTrendQuery(kind=api.BoardKind.INDUSTRY, up=3)
     pulse = api.BoardPulseQuery(kind=api.BoardKind.INDUSTRY, value="电子")
+    review = api.BoardDailyReviewRequest()
 
     assert query.up == 3
     assert pulse.value == "电子"
+    assert review.industry_level == 1
     assert callable(api.query_board_trends)
     assert callable(api.query_board_pulse)
+    assert callable(api.create_board_review)
+    assert callable(api.get_board_review)
+    assert callable(api.list_board_reviews)
 
 
 def test_api_exports_vnext_screen_application_service():

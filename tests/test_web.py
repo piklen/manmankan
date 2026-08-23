@@ -95,6 +95,7 @@ def test_index_serves_compiled_spa_shell() -> None:
     assert response.status_code == 200
     assert '<div id="root"></div>' in response.text
     assert "/assets/index-" in response.text
+    assert 'rel="icon"' in response.text
     assert 'name="kan-session" content="test-session-token"' in response.text
     assert "jinja" not in response.text.lower()
 
