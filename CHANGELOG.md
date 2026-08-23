@@ -15,10 +15,12 @@ explicitly approves a larger bump.
 - 新增严格 `BoardTrendQuery / BoardTrendSnapshot` 领域模型与共享 application service，并从 `kan.api` 和 `GET /api/v1/boards/trends` 暴露；CLI `kan board trend` 改为调用同一服务。
 - 新增 `BoardPulseQuery / BoardPulseSnapshot` 成员结构服务与 `GET /api/v1/boards/{kind}/{value}/pulse`：按同一最新完整交易日统计上涨/下跌/平盘家数、中位涨跌、覆盖率和涨跌靠前成员；缺行只进入 `missing`，不当作 0。
 - 新增 Web“每日复看”与 `BoardDailyReview`：保存行业/题材 latest-complete 趋势事实，跨日区分连续天数延长/缩短、方向切换和数据可用性变化；相同 result hash 幂等复用。页面同时复用现有 ScreenRun diff 与候选备注，不自动改写规则或候选状态。
+- 新增 Web“板块历史复核”与 `BoardHistoryStudy`：按用户显式设置的连续口径、方向、天数、未来窗口、历史范围和样本规则，复核板块原生指数的历史事件分布，并与沪深 300 精确同日比较；不使用当前成分股回填过去，也不自动寻找最优参数。
 
 ### Changed
 
 - Web 视觉统一为苹果式黑白灰界面，颜色只保留在价格/板块走势和涨跌图形等需要区分的数据可视化中；桌面与窄屏导航、趋势表和下钻卡片同步适配。
+- 趋势详情新增“历史复核”和“用本板块选股”两个独立出口；历史页展示样本散点、分布统计、逐事件证据与 point-in-time 边界，桌面和手机均使用同一黑白灰视觉系统。
 - 从趋势页进入 Screen 时只预填 `universe.kind/value`，不预置阈值、排除项或排序；用户添加明确规则前仍不可保存或运行。
 
 ## [0.0.6.9.35] - 2026-08-23

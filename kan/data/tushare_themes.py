@@ -27,6 +27,7 @@ from __future__ import annotations
 
 import json
 import time
+from datetime import timedelta
 from typing import TYPE_CHECKING
 
 from kan.core.models import Theme
@@ -250,6 +251,96 @@ def tushare_load_theme_klines(
         debug_log(__name__, "tushare klines cache 落 parquet 失败 · 不影响本次结果", e)
 
     return _group_klines_by_code(big_df, target_codes), None
+
+
+def tushare_load_theme_history(
+    theme: Theme,
+    *,
+    lookback_years: int,
+    force: bool = False,
+) -> tuple[pd.DataFrame | None, TushareApiError | None]:
+    """按单个 THS 概念代码读取原生历史，供显式历史复核使用。
+
+    与全榜按交易日 batch 的 ``tushare_load_theme_klines`` 不同，这里按
+    ``ts_code + start/end`` 一次读取一个板块。单次最多 3000 行；如果用户选择
+    15 年而源只返回最近 3000 行，调用方以实际 data_start 诚实展示，不拼假数据。
+    """
+    import pandas as pd
+
+    from kan.core.trading_calendar import latest_trade_date
+    from kan.storage.paths import atomic_write_parquet
+
+    token, endpoint = _resolve_config()
+    if not token or theme.source != "tushare":
+        return None, None
+    ensure_dirs()
+    cache = BOARDS_DIR / f"history_tushare_{theme.code}_{lookback_years}y.parquet"
+    if not force and _cache_fresh(cache, _THEME_KLINES_TTL):
+        try:
+            frame = pd.read_parquet(cache)
+            if not frame.empty:
+                return frame, None
+        except Exception as exc:
+            debug_log(__name__, f"tushare theme history cache {cache.name} 损坏", exc)
+
+    end = latest_trade_date()
+    start = end - timedelta(days=lookback_years * 366 + 90)
+    data, error = _post_tushare_api(
+        endpoint,
+        token,
+        api_name="ths_daily",
+        params={
+            "ts_code": f"{theme.code}.TI",
+            "start_date": start.strftime("%Y%m%d"),
+            "end_date": end.strftime("%Y%m%d"),
+        },
+        fields="ts_code,trade_date,open,high,low,close,vol",
+    )
+    if data is None:
+        return None, error
+    fields = data.get("fields") or []
+    items = data.get("items") or []
+    if not fields or not items:
+        return None, TushareApiError(
+            code=0,
+            msg="板块指数历史返回空数据",
+            api_name="ths_daily",
+        )
+    frame = pd.DataFrame(items, columns=fields).rename(
+        columns={"trade_date": "date", "vol": "volume"}
+    )
+    required = ["date", "open", "high", "low", "close"]
+    if not set(required).issubset(frame.columns):
+        return None, TushareApiError(
+            code=0,
+            msg=f"板块指数历史字段不完整: {sorted(frame.columns)}",
+            api_name="ths_daily",
+        )
+    frame["date"] = pd.to_datetime(frame["date"], format="%Y%m%d", errors="coerce").dt.date
+    for column in ("open", "high", "low", "close", "volume"):
+        if column in frame.columns:
+            frame[column] = pd.to_numeric(frame[column], errors="coerce")
+    if "volume" not in frame.columns:
+        frame["volume"] = float("nan")
+    frame["amount"] = float("nan")
+    frame = (
+        frame[["date", "open", "high", "low", "close", "volume", "amount"]]
+        .dropna(subset=required)
+        .sort_values("date")
+        .drop_duplicates(subset=["date"], keep="last")
+        .reset_index(drop=True)
+    )
+    if frame.empty:
+        return None, TushareApiError(
+            code=0,
+            msg="板块指数历史清洗后为空",
+            api_name="ths_daily",
+        )
+    try:
+        atomic_write_parquet(frame, cache)
+    except Exception as exc:
+        debug_log(__name__, "tushare theme history cache 写入失败", exc)
+    return frame, None
 
 
 def _group_klines_by_code(

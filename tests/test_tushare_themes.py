@@ -4,6 +4,7 @@
 - tushare_token_configured · token / endpoint 解析
 - tushare_load_theme_catalog · API 成功 / 失败 / 数据空 / cache 命中
 - tushare_load_theme_klines · batch 拉历史 + group by · 部分天失败容忍
+- tushare_load_theme_history · 单个题材原生历史 / cache / 失败边界
 - load_theme_leaderboard TuShare 路径分支 · token 配了走 tushare · 没配走 em
 """
 from __future__ import annotations
@@ -275,6 +276,238 @@ def test_klines_no_trading_days_returns_error(monkeypatch):
     assert err is not None
     assert err.code == 0
     assert "trading_calendar" in err.msg
+
+
+# ── tushare_load_theme_history(single-board history) ──────────────────
+
+
+def test_theme_history_returns_none_without_token_or_wrong_source(monkeypatch):
+    from kan.data import tushare_themes
+
+    monkeypatch.setattr(
+        "kan.data.tushare_themes._resolve_config", lambda: (None, "http://e"),
+    )
+    frame, err = tushare_themes.tushare_load_theme_history(
+        Theme(code="885781", name="石墨电极", source="tushare"),
+        lookback_years=5,
+    )
+    assert frame is None
+    assert err is None
+
+    monkeypatch.setattr(
+        "kan.data.tushare_themes._resolve_config", lambda: ("tok", "http://e"),
+    )
+    frame, err = tushare_themes.tushare_load_theme_history(
+        Theme(code="BK1234", name="石墨电极", source="em"),
+        lookback_years=5,
+    )
+    assert frame is None
+    assert err is None
+
+
+def test_theme_history_requests_one_code_and_normalizes_rows(monkeypatch):
+    from datetime import date
+
+    from kan.data import tushare_themes
+
+    captured = {}
+    monkeypatch.setattr(
+        "kan.data.tushare_themes._resolve_config", lambda: ("tok", "http://e"),
+    )
+    monkeypatch.setattr(
+        "kan.core.trading_calendar.latest_trade_date", lambda: date(2026, 8, 21),
+    )
+
+    def fake_post(endpoint, token, *, api_name, params, fields):
+        captured.update(
+            endpoint=endpoint,
+            token=token,
+            api_name=api_name,
+            params=params,
+            fields=fields,
+        )
+        return (
+            {
+                "fields": [
+                    "ts_code", "trade_date", "open", "high", "low", "close", "vol",
+                ],
+                "items": [
+                    ["885781.TI", "20260821", "102", "105", "101", "104", "900"],
+                    ["885781.TI", "20260820", "100", "103", "99", "102", "800"],
+                ],
+            },
+            None,
+        )
+
+    monkeypatch.setattr("kan.data.tushare_themes._post_tushare_api", fake_post)
+    writes = []
+    monkeypatch.setattr(
+        "kan.storage.paths.atomic_write_parquet",
+        lambda frame, path: writes.append((frame.copy(), path)),
+    )
+
+    frame, err = tushare_themes.tushare_load_theme_history(
+        Theme(code="885781", name="石墨电极", source="tushare"),
+        lookback_years=5,
+        force=True,
+    )
+
+    assert err is None
+    assert frame is not None
+    assert captured["api_name"] == "ths_daily"
+    assert captured["params"]["ts_code"] == "885781.TI"
+    assert captured["params"]["end_date"] == "20260821"
+    assert captured["params"]["start_date"] == "20210519"
+    assert list(frame.columns) == [
+        "date", "open", "high", "low", "close", "volume", "amount",
+    ]
+    assert list(frame["date"]) == [date(2026, 8, 20), date(2026, 8, 21)]
+    assert list(frame["close"]) == [102, 104]
+    assert frame["amount"].isna().all()
+    assert len(writes) == 1
+
+
+def test_theme_history_uses_fresh_cache(monkeypatch, tmp_path):
+    from datetime import date
+
+    import pandas as pd
+
+    from kan.data import tushare_themes
+
+    monkeypatch.setattr(
+        "kan.data.tushare_themes._resolve_config", lambda: ("tok", "http://e"),
+    )
+    cache = tmp_path / "boards" / "history_tushare_885781_3y.parquet"
+    cache.touch()
+    cached = pd.DataFrame(
+        {
+            "date": [date(2026, 8, 20), date(2026, 8, 21)],
+            "open": [100.0, 102.0],
+            "high": [103.0, 105.0],
+            "low": [99.0, 101.0],
+            "close": [102.0, 104.0],
+            "volume": [800.0, 900.0],
+            "amount": [float("nan"), float("nan")],
+        }
+    )
+    monkeypatch.setattr("pandas.read_parquet", lambda path: cached)
+    monkeypatch.setattr(
+        "kan.data.tushare_themes._post_tushare_api",
+        lambda *args, **kwargs: (_ for _ in ()).throw(AssertionError("不应回源")),
+    )
+
+    frame, err = tushare_themes.tushare_load_theme_history(
+        Theme(code="885781", name="石墨电极", source="tushare"),
+        lookback_years=3,
+    )
+
+    assert err is None
+    assert frame is cached
+
+
+def test_theme_history_transmits_provider_error(monkeypatch):
+    from kan.data import tushare_themes
+    from kan.data.tushare import TushareApiError
+
+    monkeypatch.setattr(
+        "kan.data.tushare_themes._resolve_config", lambda: ("tok", "http://e"),
+    )
+    provider_error = TushareApiError(
+        code=40203,
+        msg="接口频率超限",
+        api_name="ths_daily",
+    )
+    monkeypatch.setattr(
+        "kan.data.tushare_themes._post_tushare_api",
+        lambda *args, **kwargs: (None, provider_error),
+    )
+
+    frame, err = tushare_themes.tushare_load_theme_history(
+        Theme(code="885781", name="石墨电极", source="tushare"),
+        lookback_years=5,
+        force=True,
+    )
+
+    assert frame is None
+    assert err is provider_error
+
+
+@pytest.mark.parametrize(
+    ("payload", "message"),
+    [
+        ({"fields": ["trade_date", "close"], "items": []}, "返回空数据"),
+        (
+            {
+                "fields": ["ts_code", "trade_date", "close"],
+                "items": [["885781.TI", "20260821", 104]],
+            },
+            "字段不完整",
+        ),
+        (
+            {
+                "fields": ["ts_code", "trade_date", "open", "high", "low", "close"],
+                "items": [["885781.TI", "bad-date", 100, 105, 99, 104]],
+            },
+            "清洗后为空",
+        ),
+    ],
+)
+def test_theme_history_rejects_empty_incomplete_or_invalid_provider_rows(
+    monkeypatch,
+    payload,
+    message,
+):
+    from kan.data import tushare_themes
+
+    monkeypatch.setattr(
+        "kan.data.tushare_themes._resolve_config", lambda: ("tok", "http://e"),
+    )
+    monkeypatch.setattr(
+        "kan.data.tushare_themes._post_tushare_api",
+        lambda *args, **kwargs: (payload, None),
+    )
+
+    frame, err = tushare_themes.tushare_load_theme_history(
+        Theme(code="885781", name="石墨电极", source="tushare"),
+        lookback_years=5,
+        force=True,
+    )
+
+    assert frame is None
+    assert err is not None
+    assert message in err.msg
+
+
+def test_theme_history_tolerates_missing_volume_and_cache_write_failure(monkeypatch):
+    from kan.data import tushare_themes
+
+    monkeypatch.setattr(
+        "kan.data.tushare_themes._resolve_config", lambda: ("tok", "http://e"),
+    )
+    monkeypatch.setattr(
+        "kan.data.tushare_themes._post_tushare_api",
+        lambda *args, **kwargs: (
+            {
+                "fields": ["ts_code", "trade_date", "open", "high", "low", "close"],
+                "items": [["885781.TI", "20260821", 100, 105, 99, 104]],
+            },
+            None,
+        ),
+    )
+    monkeypatch.setattr(
+        "kan.storage.paths.atomic_write_parquet",
+        lambda *args, **kwargs: (_ for _ in ()).throw(OSError("disk full")),
+    )
+
+    frame, err = tushare_themes.tushare_load_theme_history(
+        Theme(code="885781", name="石墨电极", source="tushare"),
+        lookback_years=5,
+        force=True,
+    )
+
+    assert err is None
+    assert frame is not None
+    assert frame["volume"].isna().all()
 
 
 # ── load_theme_leaderboard 数据源 dispatch ─────────────────────────────

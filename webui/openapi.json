@@ -438,6 +438,48 @@
         }
       }
     },
+    "/api/v1/board-history-studies": {
+      "post": {
+        "tags": [
+          "v1"
+        ],
+        "summary": "Board History Study",
+        "description": "\u590d\u6838\u5355\u4e2a\u677f\u5757\u6307\u6570\u5386\u53f2\u4e8b\u4ef6\uff0c\u4e0d\u8bfb\u53d6\u5f53\u524d\u6210\u5206\u80a1\u3002",
+        "operationId": "board_history_study_api_v1_board_history_studies_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/BoardHistoryStudyQuery"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BoardHistoryStudy"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/stocks/{symbol}": {
       "get": {
         "tags": [
@@ -2011,6 +2053,282 @@
         ],
         "title": "BoardDailyReviewSummary"
       },
+      "BoardHistoryCoverage": {
+        "properties": {
+          "observations": {
+            "type": "integer",
+            "title": "Observations"
+          },
+          "first_hits": {
+            "type": "integer",
+            "title": "First Hits"
+          },
+          "selected": {
+            "type": "integer",
+            "title": "Selected"
+          },
+          "completed": {
+            "type": "integer",
+            "title": "Completed"
+          },
+          "censored": {
+            "type": "integer",
+            "title": "Censored"
+          },
+          "benchmark_aligned": {
+            "type": "integer",
+            "title": "Benchmark Aligned"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "observations",
+          "first_hits",
+          "selected",
+          "completed",
+          "censored",
+          "benchmark_aligned"
+        ],
+        "title": "BoardHistoryCoverage"
+      },
+      "BoardHistoryEvent": {
+        "properties": {
+          "event_date": {
+            "type": "string",
+            "title": "Event Date"
+          },
+          "forward_date": {
+            "type": "string",
+            "title": "Forward Date"
+          },
+          "streak": {
+            "type": "integer",
+            "title": "Streak"
+          },
+          "event_close": {
+            "type": "number",
+            "title": "Event Close"
+          },
+          "forward_close": {
+            "type": "number",
+            "title": "Forward Close"
+          },
+          "return_pct": {
+            "type": "number",
+            "title": "Return Pct"
+          },
+          "benchmark_return_pct": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Benchmark Return Pct"
+          },
+          "relative_return_pct": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Relative Return Pct"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "event_date",
+          "forward_date",
+          "streak",
+          "event_close",
+          "forward_close",
+          "return_pct"
+        ],
+        "title": "BoardHistoryEvent"
+      },
+      "BoardHistoryStudy": {
+        "properties": {
+          "schema_version": {
+            "type": "integer",
+            "title": "Schema Version",
+            "default": 1
+          },
+          "query": {
+            "$ref": "#/components/schemas/BoardHistoryStudyQuery"
+          },
+          "board_code": {
+            "type": "string",
+            "title": "Board Code"
+          },
+          "board_name": {
+            "type": "string",
+            "title": "Board Name"
+          },
+          "source": {
+            "type": "string",
+            "title": "Source"
+          },
+          "benchmark_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Benchmark Name"
+          },
+          "benchmark_source": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Benchmark Source"
+          },
+          "data_start": {
+            "type": "string",
+            "title": "Data Start"
+          },
+          "data_cutoff": {
+            "type": "string",
+            "title": "Data Cutoff"
+          },
+          "coverage": {
+            "$ref": "#/components/schemas/BoardHistoryCoverage"
+          },
+          "events": {
+            "items": {
+              "$ref": "#/components/schemas/BoardHistoryEvent"
+            },
+            "type": "array",
+            "title": "Events"
+          },
+          "raw_distribution": {
+            "$ref": "#/components/schemas/ReturnDistribution"
+          },
+          "benchmark_distribution": {
+            "$ref": "#/components/schemas/ReturnDistribution"
+          },
+          "relative_distribution": {
+            "$ref": "#/components/schemas/ReturnDistribution"
+          },
+          "audit": {
+            "$ref": "#/components/schemas/PointInTimeAudit"
+          },
+          "warnings": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Warnings"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "query",
+          "board_code",
+          "board_name",
+          "source",
+          "data_start",
+          "data_cutoff",
+          "coverage",
+          "raw_distribution",
+          "benchmark_distribution",
+          "relative_distribution"
+        ],
+        "title": "BoardHistoryStudy"
+      },
+      "BoardHistoryStudyQuery": {
+        "properties": {
+          "kind": {
+            "$ref": "#/components/schemas/BoardKind"
+          },
+          "value": {
+            "type": "string",
+            "maxLength": 80,
+            "minLength": 1,
+            "title": "Value"
+          },
+          "level": {
+            "type": "integer",
+            "maximum": 3.0,
+            "minimum": 1.0,
+            "title": "Level",
+            "default": 1
+          },
+          "mode": {
+            "$ref": "#/components/schemas/BoardTrendMode"
+          },
+          "direction": {
+            "$ref": "#/components/schemas/BoardStudyDirection"
+          },
+          "min_streak": {
+            "type": "integer",
+            "maximum": 30.0,
+            "minimum": 2.0,
+            "title": "Min Streak"
+          },
+          "forward_days": {
+            "type": "integer",
+            "maximum": 60.0,
+            "minimum": 1.0,
+            "title": "Forward Days"
+          },
+          "lookback_years": {
+            "type": "integer",
+            "maximum": 15.0,
+            "minimum": 1.0,
+            "title": "Lookback Years"
+          },
+          "sample_policy": {
+            "$ref": "#/components/schemas/BoardStudySamplePolicy"
+          },
+          "benchmark_code": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Benchmark Code",
+            "default": "000300.SH"
+          },
+          "force": {
+            "type": "boolean",
+            "title": "Force",
+            "default": false
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "kind",
+          "value",
+          "mode",
+          "direction",
+          "min_streak",
+          "forward_days",
+          "lookback_years",
+          "sample_policy"
+        ],
+        "title": "BoardHistoryStudyQuery",
+        "description": "\u7528\u6237\u663e\u5f0f\u9009\u62e9\u7684\u5386\u53f2\u4e8b\u4ef6\u5b9a\u4e49\uff0c\u4e0d\u542b\u81ea\u52a8\u4f18\u5316\u53c2\u6570\u3002"
+      },
       "BoardKind": {
         "type": "string",
         "enum": [
@@ -2464,6 +2782,22 @@
           "kind"
         ],
         "title": "BoardReviewSectionSummary"
+      },
+      "BoardStudyDirection": {
+        "type": "string",
+        "enum": [
+          "up",
+          "down"
+        ],
+        "title": "BoardStudyDirection"
+      },
+      "BoardStudySamplePolicy": {
+        "type": "string",
+        "enum": [
+          "first_hit",
+          "non_overlapping"
+        ],
+        "title": "BoardStudySamplePolicy"
       },
       "BoardTrendCoverage": {
         "properties": {
@@ -3351,6 +3685,50 @@
         ],
         "title": "NullPolicy"
       },
+      "PointInTimeAudit": {
+        "properties": {
+          "scope": {
+            "type": "string",
+            "const": "provider_board_index_series",
+            "title": "Scope",
+            "default": "provider_board_index_series"
+          },
+          "uses_current_constituents": {
+            "type": "boolean",
+            "const": false,
+            "title": "Uses Current Constituents",
+            "default": false
+          },
+          "reconstructs_historical_stock_pool": {
+            "type": "boolean",
+            "const": false,
+            "title": "Reconstructs Historical Stock Pool",
+            "default": false
+          },
+          "provider_vintage_archive": {
+            "type": "boolean",
+            "const": false,
+            "title": "Provider Vintage Archive",
+            "default": false
+          },
+          "benchmark_exact_date_alignment": {
+            "type": "boolean",
+            "const": true,
+            "title": "Benchmark Exact Date Alignment",
+            "default": true
+          },
+          "notes": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Notes"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "title": "PointInTimeAudit"
+      },
       "PortfolioAccountResponse": {
         "properties": {
           "cash": {
@@ -3764,6 +4142,112 @@
           "delta"
         ],
         "title": "RankChange"
+      },
+      "ReturnDistribution": {
+        "properties": {
+          "count": {
+            "type": "integer",
+            "title": "Count"
+          },
+          "positive": {
+            "type": "integer",
+            "title": "Positive"
+          },
+          "negative": {
+            "type": "integer",
+            "title": "Negative"
+          },
+          "flat": {
+            "type": "integer",
+            "title": "Flat"
+          },
+          "positive_ratio_pct": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Positive Ratio Pct"
+          },
+          "mean_pct": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Mean Pct"
+          },
+          "median_pct": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Median Pct"
+          },
+          "p25_pct": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "P25 Pct"
+          },
+          "p75_pct": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "P75 Pct"
+          },
+          "min_pct": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Min Pct"
+          },
+          "max_pct": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Max Pct"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "count",
+          "positive",
+          "negative",
+          "flat"
+        ],
+        "title": "ReturnDistribution"
       },
       "SavedScreen": {
         "properties": {

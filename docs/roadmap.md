@@ -13,6 +13,7 @@
 - OpenAPI 生成 TypeScript 类型；旧 Jinja 和手写业务 JavaScript 已删除。
 - 工作台关系状态使用 SQLite WAL；旧配置、自选、持仓和现金可备份迁移、幂等重跑和导出回滚。
 - Screen 与行情刷新任务持久化，支持 `queued / running / succeeded / partial / failed / interrupted` 和 SSE。
+- 行业/题材趋势、最新成员结构、跨日事实复看和板块原生指数历史事件复核已经贯通 Web 与 typed application service；历史复核不使用当前成分股重造过去。
 
 ## P0：真实使用质量
 

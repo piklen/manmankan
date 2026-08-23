@@ -26,6 +26,10 @@ export type BoardDailyReview = components["schemas"]["BoardDailyReview"];
 export type BoardDailyReviewSummary = components["schemas"]["BoardDailyReviewSummary"];
 export type BoardDailyReviewRequest = components["schemas"]["BoardDailyReviewRequest"];
 export type BoardReviewChange = components["schemas"]["BoardReviewChange"];
+export type BoardHistoryStudy = components["schemas"]["BoardHistoryStudy"];
+export type BoardHistoryStudyQuery = components["schemas"]["BoardHistoryStudyQuery"];
+export type BoardHistoryEvent = components["schemas"]["BoardHistoryEvent"];
+export type ReturnDistribution = components["schemas"]["ReturnDistribution"];
 
 export interface BoardTrendParams {
   kind: "industry" | "theme";
@@ -145,6 +149,11 @@ export const api = {
     ),
   createBoardReview: (payload: BoardDailyReviewRequest) =>
     request<BoardDailyReview>("/api/v1/board-reviews", {
+      method: "POST",
+      body: json(payload),
+    }),
+  studyBoardHistory: (payload: BoardHistoryStudyQuery) =>
+    request<BoardHistoryStudy>("/api/v1/board-history-studies", {
       method: "POST",
       body: json(payload),
     }),
