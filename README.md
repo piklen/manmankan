@@ -1,6 +1,6 @@
 # 慢慢看 · manmankan
 
-> **先定义规则，再复跑证据。A 股选股研究工作台。**
+> **先看趋势，再定义规则，再复跑证据。A 股选股研究工作台。**
 >
 > 散户看得清，AI 调得动。只给数据，不给答案。
 
@@ -12,9 +12,9 @@
 [![Local-first](https://img.shields.io/badge/local--first-no_telemetry-green.svg)](docs/compliance.md)
 [![Local Web](https://img.shields.io/badge/default-local_Web-0f766e.svg)](docs/china-quickstart.md)
 
-![慢慢看选股工作台：规则构建、运行结果与逐条件证据](docs/assets/readme-selection-workbench.png)
+![慢慢看趋势发现：行业题材趋势榜、走势复核与成分股下钻](docs/assets/readme-trend-discovery.png)
 
-慢慢看是一个给普通 A 股用户使用的本地优先选股研究工作台。它把“股票池、客观阈值、排序、运行结果、候选研究和横向对比”连成一条可复跑流水线，重点回答三个问题：**这次哪些股票符合我写下的规则、为什么符合、与上次运行相比发生了什么变化**。
+慢慢看是一个给普通 A 股用户使用的本地优先趋势选股研究工作台。它把“行业/题材趋势发现、成分股下钻、客观阈值、运行结果、候选研究和横向对比”连成一条可复跑流水线，重点回答四个问题：**哪里正在形成趋势、板块里哪些股票符合我写下的规则、为什么符合、与上次运行相比发生了什么变化**。
 
 ```bash
 uv tool install manmankan
@@ -23,6 +23,8 @@ kan web
 
 浏览器会打开只监听本机的 React + TypeScript 工作台。每次启动都会生成一条仅本次有效的随机会话链接；如果浏览器没有自动打开，请使用终端刚打印的完整地址。你可以直接在网页里：
 
+- 把申万行业或概念题材指数当作 OHLC 标的，按连续涨跌、连续阳线/阴线、最新涨幅或主力净额发现趋势。
+- 复核板块近日日涨跌轨迹，再把所选板块一键带入 Screen；系统只带入股票池，不偷加选股条件。
 - 从自选、持仓、全市场、行业、题材或自定义代码池建立 `Screen`。
 - 组合 27 类中文条件、AND / OR、最多三层排序、结果字段和缺失值策略；全市场按数据能力开放其中 23 类。
 - 保存并版本化规则，形成不可变 `ScreenRun`，查看数据截止日、覆盖率、逐条件实际值与来源。
@@ -36,17 +38,17 @@ kan web
 
 ## 普通用户从这里开始
 
-### 1. 打开选股工作台
+### 1. 先看板块趋势
 
 ```bash
 kan web
 ```
 
-默认页就是 Screen 工作台，不需要先学 CLI 或筛选 DSL。新规则不预置条件、排除项或排序，必须由用户明确选择后才能保存/运行；左侧管理规则，中间定义股票池、条件、排序和结果字段，右侧查看运行证据与历史变化。
+默认页是“趋势发现”：先切换行业/题材、收盘连续/阳线连续、方向与天数，再复核板块近日日涨跌。点击“用本板块选股”只会把板块成分股带入 Screen，不预置阈值、排除项或排序。
 
 ### 2. 写下规则并保存运行
 
-先选股票池，再用“添加条件”组合客观阈值。点击“保存并运行”后，规则版本和运行结果都会写入本机；同一规则、同一数据产生稳定的 `spec_hash` / `result_hash`，每次运行仍有独立 `run_id`。
+可以从趋势板块下钻，也可以直接打开“选股工作台”选择股票池。再用“添加条件”组合客观阈值；新规则至少由用户添加一个条件或勾选一个排除项后才允许保存/运行。点击“保存并运行”后，规则版本和运行结果都会写入本机；同一规则、同一数据产生稳定的 `spec_hash` / `result_hash`，每次运行仍有独立 `run_id`。
 
 ### 3. 核对覆盖率与逐条件证据
 
@@ -68,7 +70,7 @@ kan daily
 
 ## 进阶用户：CLI、JSON 与 AI
 
-Web、CLI、Python API、HTTP 和 MCP 共用同一套 `ScreenSpec → ScreenRun` application service。React 只负责交互和展示，不在浏览器重算金融事实；既有 `kan find` JSON 契约继续兼容。
+Web、CLI、Python API 和 HTTP 共用同一套 `BoardTrendQuery → BoardTrendSnapshot` 服务；Web、CLI、Python API、HTTP 和 MCP 也共用同一套 `ScreenSpec → ScreenRun` 服务。React 只负责交互和展示，不在浏览器重算金融事实；既有 `kan find` JSON 契约继续兼容。
 
 ```bash
 kan screen filters --format json
@@ -88,7 +90,7 @@ kan mcp http --host localhost --port 8765
 
 | 你是谁 | 先跑 / 先读 |
 |---|---|
-| 普通 A 股用户 | `kan web`：Screen、运行证据、候选、对比、研究、数据和持仓 |
+| 普通 A 股用户 | `kan web`：趋势发现、Screen、运行证据、候选、对比、研究、数据和持仓 |
 | 中国用户 / 开发者 | [`docs/china-quickstart.md`](docs/china-quickstart.md)：安装、行情源网络、TuShare、代理和 Windows / PowerShell |
 | CLI / Python / HTTP 开发者 | [`docs/selection-workbench.md`](docs/selection-workbench.md)：同源领域模型、命令、Python API 与 `/api/v1` |
 | AI agent / 自动化脚本 | `kan_screen_plan` + [`docs/ai-quickstart.md`](docs/ai-quickstart.md) + [`docs/mcp.md`](docs/mcp.md) |
@@ -97,7 +99,7 @@ kan mcp http --host localhost --port 8765
 <details>
 <summary><b>English summary</b></summary>
 
-**manmankan** (*"take your time, see clearly"*) is a local-first A-share screening and research workbench. Its default React Web UI turns explicit rules into versioned Screens, immutable auditable runs, independent candidate lists, and saved comparisons. The Python application service is shared by Web, CLI, public Python API, HTTP, and MCP.
+**manmankan** (*"take your time, see clearly"*) is a local-first A-share trend screening and research workbench. Its default React Web UI discovers objective industry/theme trends, drills into constituents, and turns explicit user rules into versioned Screens, immutable auditable runs, independent candidate lists, and saved comparisons. Python application services are shared by Web, CLI, public Python API, HTTP, and MCP.
 
 Data, not decisions: no buy/sell advice, no ratings, no price targets. Python 3.11+ · local-first · A-share (architecture designed for multi-market extension) · [GNU AGPL-3.0](LICENSE).
 </details>
@@ -108,7 +110,7 @@ Data, not decisions: no buy/sell advice, no ratings, no price targets. Python 3.
 
 慢慢看把这些输入统一成一个可复核的数据层，并按用户优先级提供两种出口：
 
-- **第一出口，给普通用户**：Web 完成规则构建、版本、运行证据、候选研究、横向对比、数据更新和持仓闭环。
+- **第一出口，给普通用户**：Web 完成板块趋势发现、成分股下钻、规则构建、运行证据、候选研究、横向对比、数据更新和持仓闭环。
 - **第二出口，给 AI / 开发者**：CLI、Python API、typed HTTP 和 MCP 执行相同 Screen 契约。
 
 如果你要让 AI 参与候选筛选，慢慢看的角色是提供可审计输入：它负责把"坐标"和"条件命中"说清楚，不负责替你下结论。

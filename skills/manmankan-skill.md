@@ -9,7 +9,7 @@
 ## 工具概述
 
 **manmankan** (`kan`) 是一个本地优先的 A 股选股研究工作台。
-它提供 React Web、CLI、Python API、typed HTTP 和 MCP，但不内置 LLM；AI 只能整理明确 Screen、执行确定性服务和引用已保存证据。
+它提供 React Web、CLI、Python API、typed HTTP 和 MCP，但不内置 LLM；板块趋势由统一 `BoardTrendQuery → BoardTrendSnapshot` 服务计算，股票筛选由统一 `ScreenSpec → ScreenRun` 服务计算。AI 只能整理明确查询/Screen、执行确定性服务和引用已保存证据。
 
 **命令入口**：终端执行 `kan <command> [options]`
 **安装**：`uv tool install manmankan`
@@ -92,6 +92,8 @@
 | `kan board trend --kind theme --up 3 --candle --format json` | 概念题材连续阳线 | `--candle` 按当日 close 与 open；不要与收盘连续上涨混称 |
 | `kan index [sh sz cyb hs300] --format json` | 常用指数日线位置参照 | 补大盘基准 |
 | `kan low N` / `kan high N` | N 日新低/新高 | 极端位置发现；支持 `--all` 全市场池 |
+
+板块趋势的 Python/HTTP 稳定入口分别是 `kan.api.query_board_trends(BoardTrendQuery(...))` 和 `GET /api/v1/boards/trends`。Web 趋势页也消费同一 snapshot；从板块下钻 Screen 时只带入 `universe.kind/value`，不得假设网页已经替用户添加筛选条件。
 
 ### 5. 真实持仓
 

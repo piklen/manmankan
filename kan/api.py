@@ -197,12 +197,27 @@ from kan.data.theme_constituents import (
 from kan.data.theme_constituents import (
     default_theme_constituent_chain as theme_constituent_chain,
 )
+from kan.domain.board import (
+    BoardDailyChange,
+    BoardKind,
+    BoardTrendCoverage,
+    BoardTrendFailure,
+    BoardTrendMode,
+    BoardTrendQuery,
+    BoardTrendRow,
+    BoardTrendSnapshot,
+    BoardTrendSort,
+)
 from kan.domain.screen import (
     CandidateList,
     CompareSet,
     SavedScreen,
     ScreenRun,
     ScreenSpec,
+)
+from kan.service.board_service import (
+    BoardTrendServiceError,
+    query_board_trends,
 )
 from kan.service.screen_ai import (
     ScreenExplainInput,
@@ -229,6 +244,16 @@ from kan.service.screen_service import (
 )
 
 __all__ = [
+    "BoardDailyChange",
+    "BoardKind",
+    "BoardTrendCoverage",
+    "BoardTrendFailure",
+    "BoardTrendMode",
+    "BoardTrendQuery",
+    "BoardTrendRow",
+    "BoardTrendServiceError",
+    "BoardTrendSnapshot",
+    "BoardTrendSort",
     "CandidateList",
     "CompareSet",
     "HoldingsSet",
@@ -264,6 +289,7 @@ __all__ = [
     "low",
     "parse_screen_text",
     "plan_screen",
+    "query_board_trends",
     "register_kline_source",
     "register_theme_constituent_source",
     "remove_candidate",

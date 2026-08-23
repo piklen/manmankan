@@ -197,6 +197,8 @@ kan find --codes 600519,000858 --roe gt:10 --fields @core,@fundamentals --format
 
 `kan board trend` 把板块指数作为 OHLC 序列计算：默认比较“今日收盘与前日收盘”，`--candle` 改为比较“当日收盘与当日开盘”。因此“连续上涨 3 天”和“连续 3 根阳线”是两个不同口径；读取 JSON 的 `mode` 后再解释 `streak`。
 
+需要进程内 typed 调用时，使用 `from kan.api import BoardTrendQuery, query_board_trends`；HTTP 客户端使用 `GET /api/v1/boards/trends`。CLI、Python、HTTP 与 Web 趋势页共享同一 `BoardTrendSnapshot`，不要在 agent 内重新计算或重新排序板块结果。从 Web 板块下钻只代表 Screen 股票池已填入，不代表存在任何选股条件。
+
 字段和 preset 以命令输出为准：
 
 ```bash

@@ -9,10 +9,12 @@ import {
   Search,
   Settings,
   Sparkles,
+  TrendingUp,
 } from "lucide-react";
 import { NavLink, Outlet } from "react-router-dom";
 
 const navigation = [
+  { to: "/trends", label: "趋势发现", icon: TrendingUp },
   { to: "/screen", label: "选股工作台", icon: CircleDotDashed },
   { to: "/candidates", label: "研究候选", icon: LibraryBig },
   { to: "/compare", label: "横向对比", icon: GitCompareArrows },
@@ -26,7 +28,7 @@ export function AppShell() {
   return (
     <div className="app-shell">
       <aside className="sidebar">
-        <NavLink to="/screen" className="brand" aria-label="慢慢看首页">
+        <NavLink to="/trends" className="brand" aria-label="慢慢看首页">
           <span className="brand__mark" aria-hidden="true">
             <span />
             <span />
@@ -40,7 +42,7 @@ export function AppShell() {
 
         <nav className="sidebar__nav" aria-label="主导航">
           <p className="nav-label">研究工作流</p>
-          {navigation.slice(0, 4).map(({ to, label, icon: Icon }) => (
+          {navigation.slice(0, 5).map(({ to, label, icon: Icon }) => (
             <NavLink key={to} to={to} className="nav-item">
               <Icon size={18} strokeWidth={1.8} />
               <span>{label}</span>
@@ -48,7 +50,7 @@ export function AppShell() {
             </NavLink>
           ))}
           <p className="nav-label nav-label--spaced">账户与数据</p>
-          {navigation.slice(4).map(({ to, label, icon: Icon }) => (
+          {navigation.slice(5).map(({ to, label, icon: Icon }) => (
             <NavLink key={to} to={to} className="nav-item">
               <Icon size={18} strokeWidth={1.8} />
               <span>{label}</span>

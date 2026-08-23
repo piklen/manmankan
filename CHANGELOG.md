@@ -9,6 +9,16 @@ explicitly approves a larger bump.
 
 ## [Unreleased]
 
+### Added
+
+- 新增 Web“趋势发现”首页：行业/题材、收盘连续/阳线连续、方向、天数与排序共用板块趋势契约；支持近日日涨跌轨迹复核，并把选中板块的成分股池带入 Screen。
+- 新增严格 `BoardTrendQuery / BoardTrendSnapshot` 领域模型与共享 application service，并从 `kan.api` 和 `GET /api/v1/boards/trends` 暴露；CLI `kan board trend` 改为调用同一服务。
+
+### Changed
+
+- Web 视觉统一为苹果式黑白灰界面，颜色只保留在价格/板块走势和涨跌图形等需要区分的数据可视化中；桌面与窄屏导航、趋势表和下钻卡片同步适配。
+- 从趋势页进入 Screen 时只预填 `universe.kind/value`，不预置阈值、排除项或排序；用户添加明确规则前仍不可保存或运行。
+
 ## [0.0.6.9.35] - 2026-08-23
 
 ### Added

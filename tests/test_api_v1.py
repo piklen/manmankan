@@ -35,12 +35,77 @@ def test_openapi_only_exposes_typed_v1_contract(client: TestClient) -> None:
     assert response.status_code == 200
     schema = response.json()
     assert "/api/v1/screens" in schema["paths"]
+    assert "/api/v1/boards/trends" in schema["paths"]
     assert "/api/v1/portfolio" in schema["paths"]
     assert "/api/v1/jobs/screen-runs" in schema["paths"]
     assert "/api/v1/jobs/market-refresh" in schema["paths"]
     assert "/api/find" not in schema["paths"]
     assert "ScreenSpec" in schema["components"]["schemas"]
     assert "ScreenRun" in schema["components"]["schemas"]
+    assert "BoardTrendSnapshot" in schema["components"]["schemas"]
+
+
+def test_board_trends_uses_shared_typed_query(
+    client: TestClient,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    captured: dict[str, object] = {}
+
+    def fake_query(query):
+        captured["query"] = query
+        return {
+            "query": query.model_dump(mode="json"),
+            "source": "sw",
+            "data_cutoff": "2026-08-21",
+            "partial": False,
+            "coverage": {
+                "total": 31,
+                "evaluated": 31,
+                "matched": 1,
+                "returned": 1,
+                "errors": 0,
+            },
+            "rows": [
+                {
+                    "rank": 1,
+                    "kind": "industry",
+                    "code": "801080",
+                    "name": "电子",
+                    "current_price": 5123.4,
+                    "streak": 3,
+                    "streak_pct": 4.2,
+                    "direction": "涨3天",
+                    "latest_change_pct": 1.1,
+                    "daily_changes": [
+                        {"date": "2026-08-21", "change_pct": 1.1}
+                    ],
+                }
+            ],
+        }
+
+    monkeypatch.setattr(
+        "kan.web.api_v1.board_service.query_board_trends",
+        fake_query,
+    )
+
+    response = client.get(
+        "/api/v1/boards/trends?kind=industry&mode=close&up=3&sort=latest&limit=12"
+    )
+
+    assert response.status_code == 200
+    assert response.json()["rows"][0]["latest_change_pct"] == 1.1
+    query = captured["query"]
+    assert query.kind.value == "industry"
+    assert query.up == 3
+    assert query.sort.value == "latest"
+    assert query.limit == 12
+
+
+def test_board_trends_rejects_conflicting_directions(client: TestClient) -> None:
+    response = client.get("/api/v1/boards/trends?up=3&down=3")
+
+    assert response.status_code == 400
+    assert response.json()["detail"]["code"] == "invalid_request"
 
 
 def test_screen_crud_and_meta_round_trip(client: TestClient) -> None:

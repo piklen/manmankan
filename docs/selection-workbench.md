@@ -1,19 +1,20 @@
 # vNext 选股工作台
 
-> 当前实现 SOT。这里描述已经交付的 Screen 工作流；一次性 `kan find` 的兼容契约继续见 [`find.md`](find.md)。
+> 当前实现 SOT。这里描述已经交付的板块趋势发现与 Screen 工作流；一次性 `kan find` 的兼容契约继续见 [`find.md`](find.md)。
 
 ## 1. 产品心智模型
 
-慢慢看把选股拆成四个彼此独立的对象：
+慢慢看把趋势发现与选股拆成五个彼此独立的对象：
 
 | 对象 | 解决的问题 | 关键性质 |
 |---|---|---|
+| `BoardTrendSnapshot` | 哪些行业/题材正在连续上涨、下跌、收阳或收阴？ | 一次只读截面；保留查询口径、来源、截止日、覆盖率和部分失败；不是股票结果行 |
 | `Screen` | 我定义了什么股票池、阈值、排序和字段？ | 保存时生成内容哈希；内容变化才追加版本；历史版本不可变 |
 | `ScreenRun` | 这份规则在当时数据上得到什么结果？ | 每次运行不可变；固化规则、结果、覆盖率、证据、数据日和 diff |
 | `CandidateList` | 哪些对象由我保留继续核对？ | 与 Screen 解耦；人工状态、备注和来源运行不会被重跑覆盖 |
 | `CompareSet` | 哪几只股票需要放在同一口径下比较？ | 保存 3–10 个代码；只读取最近可追溯事实，不做综合评分 |
 
-一次 Screen 命中只是“符合用户写下的条件”，不是长期候选，也不是买卖信号。这个分离避免把某次截面结果误当成人工研究结论。
+板块趋势只回答“哪里正在形成连续走势”，选中板块只会填入 Screen 的 `universe.kind/value`；不会自动生成条件。一次 Screen 命中也只是“符合用户写下的条件”，不是长期候选或买卖信号。这个分离避免把板块走势或某次截面结果误当成人工研究结论。
 
 ## 2. 架构与数据流
 
@@ -91,16 +92,16 @@ flowchart LR
 
 ## 4. Web 主路径
 
-运行 `kan web` 后默认进入 `/screen`：
+运行 `kan web` 后默认进入 `/trends`：
 
-1. 新建或打开 Screen，设置股票池、条件、排除项、缺失策略、排序和结果列。
-2. “保存规则”只保存定义；“保存并运行”创建 SQLite 持久任务并生成不可变 ScreenRun。
-3. 结果表展示用户选择的字段；右侧显示逐条件阈值、实际值、来源、数据日和 evidence ref。
-4. 最近运行可切换查看；同一 Screen 重跑会记录 `added`、`removed` 和 `rank_changes`。
-5. 历史规则可预览，点击恢复时会追加一个新版本，不覆盖原版本。
-6. 结果可以进入独立候选池或 3–10 股对比组；候选备注和状态不随 Screen 重跑变化。
-7. “个股研究”页把本地行情、ScreenRun 命中证据、候选状态和历史位置放在一起；缺数据保持可见。
-8. “市场与数据”页可启动默认池或全市场刷新。任务状态持久化，页面重开后仍能看到进度与终态。
+1. 在趋势发现页选择行业/题材、收盘连续/阳线连续、方向、连续天数和排序，读取同一 `BoardTrendSnapshot`。
+2. 选中板块后复核近日日涨跌轨迹；点击“用本板块选股”只把行业/题材及名称带入一个空 Screen。
+3. 新建或打开 Screen，设置条件、排除项、缺失策略、排序和结果列。
+4. “保存规则”只保存定义；“保存并运行”创建 SQLite 持久任务并生成不可变 ScreenRun。
+5. 结果表展示用户选择的字段；右侧显示逐条件阈值、实际值、来源、数据日和 evidence ref。
+6. 最近运行可切换查看；同一 Screen 重跑会记录 `added`、`removed` 和 `rank_changes`；历史规则恢复会追加新版本。
+7. 结果可以进入独立候选池或 3–10 股对比组；候选备注和状态不随 Screen 重跑变化。
+8. “个股研究”与“市场与数据”页继续负责股票事实复核和持久行情刷新。
 
 新建 Screen 是空规则：不预置阈值、排除项或排序，至少由用户添加一个条件或勾选一个排除项后才允许保存/运行。新增条件行会显示可编辑起始值，用户应在执行前明确核对字段、比较符和阈值。
 
@@ -137,7 +138,19 @@ kan screen show-run <run_id> --format json
 稳定入口统一从 `kan.api` 导入：
 
 ```python
-from kan.api import ScreenSpec, get_run, run_screen, save_screen
+from kan.api import (
+    BoardKind,
+    BoardTrendQuery,
+    ScreenSpec,
+    get_run,
+    query_board_trends,
+    run_screen,
+    save_screen,
+)
+
+boards = query_board_trends(BoardTrendQuery(kind=BoardKind.INDUSTRY, up=3))
+for board in boards.rows:
+    print(board.name, board.streak, board.latest_change_pct)
 
 spec = ScreenSpec.model_validate_json(open("screen.json", encoding="utf-8").read())
 saved = save_screen(spec)
@@ -150,7 +163,7 @@ same_run = get_run(run.run_id)
 assert same_run.result_hash == run.result_hash
 ```
 
-公开 surface 还包括 Screen 列表、运行列表、候选增删、候选池列表、对比组、filter catalog、JSON Schema，以及 `parse_screen_text / plan_screen / explain_run` typed AI adapter。内部 `kan.storage` 和 `kan.service` 路径不作为用户脚本 contract。
+公开 surface 还包括板块趋势的 query/snapshot/row 类型、Screen 列表、运行列表、候选增删、候选池列表、对比组、filter catalog、JSON Schema，以及 `parse_screen_text / plan_screen / explain_run` typed AI adapter。内部 `kan.storage` 和 `kan.service` 路径不作为用户脚本 contract。
 
 ## 7. HTTP API 与 TypeScript
 
@@ -158,6 +171,7 @@ assert same_run.result_hash == run.result_hash
 
 | 资源 | 路径 |
 |---|---|
+| 行业/题材趋势 | `/boards/trends` |
 | Screen 与版本 | `/screens`、`/screens/{id}`、`/screens/{id}/versions`、`.../{version}/restore` |
 | ScreenRun | `/screens/{id}/runs`、`/runs`、`/runs/{id}` |
 | 候选池 | `/candidate-lists`、`/candidate-lists/{id}`、`.../candidates/{symbol}` |
