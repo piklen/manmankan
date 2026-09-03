@@ -36,6 +36,8 @@ from kan.core.scanner import TrendResult
         # 不带 --down/--up · 不动
         (["kan", "trend"], ["kan", "trend"]),
         (["kan", "trend", "--latest", "5"], ["kan", "trend", "--latest", "5"]),
+        # 其他命令的同名参数不属于连续涨跌短写，必须原样保留
+        (["kan", "range", "600519", "--down", "bad"], ["kan", "range", "600519", "--down", "bad"]),
         # --down 不带值 → 注入 3
         (["kan", "trend", "--down"], ["kan", "trend", "--down", "3"]),
         (["kan", "trend", "--up"], ["kan", "trend", "--up", "3"]),

@@ -32,6 +32,7 @@ else:
         info_cmds,
         meta_cmds,
         move_export_cmds,
+        range_cmds,
         scan_cmds,
         screen_cmds,
         status_cmds,

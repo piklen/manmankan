@@ -91,9 +91,12 @@
 | `kan board trend --kind theme --up 3 --format json` | 概念题材指数连续涨跌 | 题材使用 THS N 类概念指数；读取 `source` / `data_availability` |
 | `kan board trend --kind theme --up 3 --candle --format json` | 概念题材连续阳线 | `--candle` 按当日 close 与 open；不要与收盘连续上涨混称 |
 | `kan index [sh sz cyb hs300] --format json` | 常用指数日线位置参照 | 补大盘基准 |
+| `kan range <代码> [--format json]` | 历史日内下探、上冲范围与触及后收盘事实 | 基准为前收、只用完整日 K；默认 `--periods 5,15`、线性插值分位 `--levels 75,85,90,95`，并保留实际覆盖率 |
 | `kan low N` / `kan high N` | N 日新低/新高 | 极端位置发现；支持 `--all` 全市场池 |
 
 板块趋势的 Python/HTTP 稳定入口分别是 `kan.api.query_board_trends(BoardTrendQuery(...))` 和 `GET /api/v1/boards/trends`。成员结构使用 `query_board_pulse(BoardPulseQuery(...))` 或 `GET /api/v1/boards/{kind}/{value}/pulse`；它只描述成员涨跌家数、中位涨跌和靠前成员，不表示指数权重贡献或事件因果。每日复看使用 `create_board_review(BoardDailyReviewRequest(...))` 或 `POST /api/v1/board-reviews`；`streak_extended / shortened / direction_changed / data_*` 都是事实 delta，不能翻译成强弱评级。Web 趋势页与每日复看页也消费同一 typed model；从板块下钻 Screen 时只带入 `universe.kind/value`，不得假设网页已经替用户添加筛选条件。
+
+`kan range <代码> --down 3 --up 7` 可复核用户明确给出的 `-3%` 下探和 `+7%` 上冲阈值。AI 必须保留 5/15 日短窗口的实际样本数，只把结果解释为历史范围和触及后的收盘事实；不得输出止损/止盈推荐、最佳阈值或涨跌预测。
 
 ### 5. 真实持仓
 
@@ -160,6 +163,7 @@ Web 的“市场与数据”页还可启动 SQLite 持久刷新任务。终态�
 - **查询计划**：`kan find ... --dry-run` 只返回数据源和字段计划，不取数
 - **会话 delta**：`kan find ... --snapshot` / `--since <snapshot_id>` 显式保存和比较结构化结果
 - **Screen evidence**：只使用 `ScreenRun.rows[].evidence[]` 中存在的 ref、阈值、实际值、来源和数据日
+- **日内范围**：`kan range <代码> --format json` 保留默认 5/15 日的样本数和 75/85/90/95 四档；用户给出 `--down/--up` 时只复核该阈值
 
 ### MCP Screen tools
 
@@ -309,4 +313,4 @@ Agent 可以通过以下方式发现 manmankan 的能力：
 
 ---
 
-*维护：manmankan 能力变更时同步更新本文件 · 最后更新：2026-08-23*
+*维护：manmankan 能力变更时同步更新本文件 · 最后更新：2026-09-04*
