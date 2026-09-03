@@ -103,6 +103,19 @@ def test_schema_command_json_is_machine_readable() -> None:
     assert "agent_summary" in payload["find"]["result_schemas"]
     assert "delta" in payload["find"]["result_schemas"]
     assert payload["errors"]["json_error_envelope"]["ok"] is False
+    range_schema = next(
+        item for item in payload["commands"] if item["name"] == "range"
+    )
+    common = {
+        "ok", "schema_version", "command", "query_time", "stats", "disclaimer",
+    }
+    assert set(range_schema["success_keys"]) == common
+    variants = range_schema["success_variants"]
+    assert set(variants["single"]["required_keys"]) == common | {"study"}
+    assert set(variants["batch"]["required_keys"]) == common | {
+        "studies", "errors", "partial",
+    }
+    assert variants["batch"]["error_required_when"] == "errors is non-empty"
 
 
 def test_schema_command_section_and_compact_reduce_payload() -> None:

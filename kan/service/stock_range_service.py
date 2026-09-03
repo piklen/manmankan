@@ -8,6 +8,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from datetime import date
+from decimal import ROUND_HALF_UP, Decimal
 from math import ceil, floor, isfinite
 from statistics import median
 from typing import TYPE_CHECKING, Any, Literal
@@ -92,6 +93,15 @@ def _resolve_stock_name(symbol: str) -> str:
 def _round4(value: float) -> float:
     rounded = round(value, 4)
     return 0.0 if rounded == 0 else rounded
+
+
+def _tick_reference_price(reference_close: float, threshold_pct: float) -> float:
+    """把理论阈值价按 A 股 0.01 元价格档做十进制四舍五入。"""
+
+    close = Decimal(str(reference_close))
+    threshold = Decimal(str(threshold_pct))
+    price = close * (Decimal("1") + threshold / Decimal("100"))
+    return float(price.quantize(Decimal("0.01"), rounding=ROUND_HALF_UP))
 
 
 def _ratio(numerator: int, denominator: int) -> float | None:
@@ -289,10 +299,13 @@ def _downside_study(
     observations: list[_Observation],
     *,
     magnitude_pct: float,
+    reference_close: float,
     basis: Literal["empirical_level", "custom"],
     level_pct: float | None,
 ) -> DownsideThresholdStudy:
-    threshold = -magnitude_pct
+    # 阈值以公开的 4 位精度分类，保证 JSON/终端显示值原样作为 --down
+    # 回传时得到相同证据；分位本身仍先用全精度计算。
+    threshold = _round4(-magnitude_pct)
     triggered = [
         item
         for item in observations
@@ -317,7 +330,8 @@ def _downside_study(
     return DownsideThresholdStudy(
         basis=basis,
         level_pct=None if level_pct is None else _round4(level_pct),
-        threshold_pct=_round4(threshold),
+        threshold_pct=threshold,
+        reference_price=_tick_reference_price(reference_close, threshold),
         actual_coverage_pct=_ratio(covered_count, len(observations)),
         trigger_count=trigger_count,
         trigger_ratio_pct=_ratio(trigger_count, len(observations)),
@@ -340,10 +354,12 @@ def _upside_study(
     observations: list[_Observation],
     *,
     magnitude_pct: float,
+    reference_close: float,
     basis: Literal["empirical_level", "custom"],
     level_pct: float | None,
 ) -> UpsideThresholdStudy:
-    threshold = magnitude_pct
+    # 同下行：统计证据必须与公开阈值可 round-trip，不能用隐藏小数分类。
+    threshold = _round4(magnitude_pct)
     triggered = [
         item
         for item in observations
@@ -369,7 +385,8 @@ def _upside_study(
     return UpsideThresholdStudy(
         basis=basis,
         level_pct=None if level_pct is None else _round4(level_pct),
-        threshold_pct=_round4(threshold),
+        threshold_pct=threshold,
+        reference_price=_tick_reference_price(reference_close, threshold),
         actual_coverage_pct=_ratio(covered_count, len(observations)),
         trigger_count=trigger_count,
         trigger_ratio_pct=_ratio(trigger_count, len(observations)),
@@ -396,6 +413,7 @@ def _window(
     *,
     period: int,
     levels: tuple[float, ...],
+    reference_close: float,
     down_pct: float | None,
     up_pct: float | None,
 ) -> StockRangeWindow:
@@ -407,6 +425,7 @@ def _window(
         _downside_study(
             observations,
             magnitude_pct=_linear_percentile(downside_excursions, level),
+            reference_close=reference_close,
             basis="empirical_level",
             level_pct=level,
         )
@@ -416,6 +435,7 @@ def _window(
         _upside_study(
             observations,
             magnitude_pct=_linear_percentile(upside_excursions, level),
+            reference_close=reference_close,
             basis="empirical_level",
             level_pct=level,
         )
@@ -435,6 +455,7 @@ def _window(
             else _downside_study(
                 observations,
                 magnitude_pct=down_pct,
+                reference_close=reference_close,
                 basis="custom",
                 level_pct=None,
             )
@@ -445,6 +466,7 @@ def _window(
             else _upside_study(
                 observations,
                 magnitude_pct=up_pct,
+                reference_close=reference_close,
                 basis="custom",
                 level_pct=None,
             )
@@ -500,11 +522,14 @@ def study_stock_range(request: StockRangeRequest) -> StockRangeStudy:
             hint="刷新该股票日 K 或缩短查询周期后重试",
         )
 
+    # reference_price 只依赖同一 JSON 中公开的 reference_close 与 threshold_pct。
+    reference_close = _round4(float(prepared.frame.iloc[-1]["close"]))
     windows = [
         _window(
             observations,
             period=period,
             levels=request.levels,
+            reference_close=reference_close,
             down_pct=request.down_pct,
             up_pct=request.up_pct,
         )
@@ -545,7 +570,7 @@ def study_stock_range(request: StockRangeRequest) -> StockRangeStudy:
         data_start=observations[0].date.isoformat(),
         data_cutoff=data_cutoff.isoformat(),
         latest_complete_cutoff=latest_complete_cutoff.isoformat(),
-        reference_close=_round4(float(prepared.frame.iloc[-1]["close"])),
+        reference_close=reference_close,
         coverage=prepared.coverage,
         windows=windows,
         warnings=warnings,

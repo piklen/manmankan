@@ -92,6 +92,15 @@ def test_request_is_strict_and_limits_periods() -> None:
     )
     assert request.periods == (5, 15)
     assert request.levels == (75.0, 85.0, 90.0, 95.0)
+    zero = StockRangeRequest(
+        symbol="600519",
+        periods=[5],
+        levels=[95],
+        down_pct=0,
+        up_pct=0,
+    )
+    assert zero.down_pct == 0
+    assert zero.up_pct == 0
 
     with pytest.raises(ValidationError):
         StockRangeRequest(
@@ -118,6 +127,13 @@ def test_request_is_strict_and_limits_periods() -> None:
             "levels": [75],
             "unknown": True,
         })
+    with pytest.raises(ValidationError):
+        StockRangeRequest(
+            symbol="600519",
+            periods=[5],
+            levels=[95],
+            down_pct=-0.0001,
+        )
 
 
 def test_study_uses_linear_levels_and_computes_trigger_outcomes(
@@ -164,6 +180,10 @@ def test_study_uses_linear_levels_and_computes_trigger_outcomes(
     assert down.basis == "custom"
     assert down.level_pct is None
     assert down.threshold_pct == -3.0
+    assert down.reference_price == stock_range_service._tick_reference_price(
+        study.reference_close,
+        -3.0,
+    )
     assert down.actual_coverage_pct == 60.0
     assert down.trigger_count == 3
     assert down.trigger_ratio_pct == 60.0
@@ -181,6 +201,10 @@ def test_study_uses_linear_levels_and_computes_trigger_outcomes(
     up = window.custom_upside
     assert up is not None
     assert up.threshold_pct == 3.0
+    assert up.reference_price == stock_range_service._tick_reference_price(
+        study.reference_close,
+        3.0,
+    )
     assert up.actual_coverage_pct == 60.0
     assert up.trigger_count == 3
     assert up.close_at_or_above_count == 1
@@ -234,6 +258,70 @@ def test_custom_threshold_without_triggers_keeps_conditional_ratios_null(
     assert up.close_median_pct is None
     assert up.pullback_median_pct is None
     assert sum("触及后比例为空" in warning for warning in study.warnings) == 2
+
+
+def test_published_threshold_drives_evidence_and_round_trips(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    ordinary = [(0.0, -1.0, 1.0, 0.0)] * 56
+    near_limit = [
+        (0.0, -1.0, 10.000028661754069, 0.0),
+        (0.0, -1.0, 10.000046907010374, 0.0),
+        (0.0, -1.0, 10.005350454788653, 0.0),
+        (0.0, -1.0, 10.024087162793327, 0.0),
+    ]
+    frame = _returns_frame(ordinary + near_limit)
+    _patch_boundaries(monkeypatch, frame)
+
+    study = stock_range_service.study_stock_range(StockRangeRequest(
+        symbol="600519",
+        periods=[60],
+        levels=[95],
+        up_pct=10.0,
+    ))
+
+    window = study.windows[0]
+    empirical = window.upside[0]
+    custom = window.custom_upside
+    assert custom is not None
+    assert empirical.threshold_pct == 10.0
+    assert empirical.reference_price == 110.0
+    assert empirical.trigger_count == 4
+    assert empirical.actual_coverage_pct == pytest.approx(93.3333)
+    assert custom.threshold_pct == empirical.threshold_pct
+    assert custom.reference_price == empirical.reference_price
+    assert custom.trigger_count == empirical.trigger_count
+    assert custom.actual_coverage_pct == empirical.actual_coverage_pct
+
+
+def test_reference_price_uses_cent_tick_and_round_half_up() -> None:
+    assert stock_range_service._tick_reference_price(100.0, 0.005) == 100.01
+    assert stock_range_service._tick_reference_price(20.0, -2.0) == 19.60
+
+
+def test_zero_empirical_threshold_round_trips_as_explicit_custom_threshold(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    frame = _returns_frame([(0.0, 0.0, 0.0, 0.0)] * 5)
+    _patch_boundaries(monkeypatch, frame)
+
+    study = stock_range_service.study_stock_range(StockRangeRequest(
+        symbol="600519",
+        periods=[5],
+        levels=[95],
+        down_pct=0,
+        up_pct=0,
+    ))
+
+    window = study.windows[0]
+    assert window.custom_downside is not None
+    assert window.custom_upside is not None
+    assert window.downside[0].threshold_pct == 0
+    assert window.upside[0].threshold_pct == 0
+    assert window.custom_downside.threshold_pct == 0
+    assert window.custom_upside.threshold_pct == 0
+    assert window.custom_downside.trigger_count == window.downside[0].trigger_count == 5
+    assert window.custom_upside.trigger_count == window.upside[0].trigger_count == 5
 
 
 def test_normalization_does_not_bridge_across_an_invalid_existing_bar(

@@ -56,6 +56,7 @@ jobs:
           test "$(wc -l < /tmp/kan-start.txt)" -lt 40
           /tmp/manmankan-macos-smoke/bin/kan screen --help
           /tmp/manmankan-macos-smoke/bin/kan workspace --help
+          /tmp/manmankan-macos-smoke/bin/kan range --help
 
   build-and-publish:
     name: Build and publish to PyPI
@@ -158,6 +159,7 @@ jobs:
           HOME="$(mktemp -d)" XDG_DATA_HOME="$(mktemp -d)" /tmp/manmankan-release-smoke/bin/kan board rank --help
           HOME="$(mktemp -d)" XDG_DATA_HOME="$(mktemp -d)" /tmp/manmankan-release-smoke/bin/kan board trend --help
           HOME="$(mktemp -d)" XDG_DATA_HOME="$(mktemp -d)" /tmp/manmankan-release-smoke/bin/kan history --help
+          HOME="$(mktemp -d)" XDG_DATA_HOME="$(mktemp -d)" /tmp/manmankan-release-smoke/bin/kan range --help
           FIND_JSON="$(mktemp)"
           FIND_ERR="$(mktemp)"
           export FIND_JSON
@@ -275,3 +277,4 @@ jobs:
           KAN_NO_UPDATE_CHECK=1 kan trend --help
           KAN_NO_UPDATE_CHECK=1 kan info --help
           KAN_NO_UPDATE_CHECK=1 kan history --help
+          KAN_NO_UPDATE_CHECK=1 kan range --help

@@ -9,6 +9,13 @@ explicitly approves a larger bump.
 
 ## [Unreleased]
 
+## [0.0.6.9.37] - 2026-09-04
+
+### Added
+
+- 新增 `kan range <股票代码>` 个股日内范围复核：以前收为基准，默认展示近 5/15 个完整交易日的 75/85/90/95 四档上下行经验边界，并区分触及、收回、收正、收盘站在线上/线下、跳空和冲高回吐等历史事实；支持 terminal / JSON 与用户显式 `--down`、`--up` 阈值。
+- 新增 `kan range --codes <代码列表>` 批量横向复核；每条阈值同时返回按 A 股 0.01 元价位、十进制四舍五入得到的 `reference_price`。经验档的触及与覆盖统一按公开四位阈值计算，使 JSON 阈值原样传给 `--down` / `--up` 时证据可稳定复现。
+
 ## [0.0.6.9.36] - 2026-08-24
 
 ### Added
@@ -696,7 +703,8 @@ explicitly approves a larger bump.
 - **Shell 补全** · zsh / bash / fish / powershell
 - **合规与隐私** · 强制风险提示 + 关键词黑名单（无买卖建议 / 无目标价 / 无评级）· 数据全本地
 
-[Unreleased]: https://github.com/piklen/manmankan/compare/v0.0.6.9.36...HEAD
+[Unreleased]: https://github.com/piklen/manmankan/compare/v0.0.6.9.37...HEAD
+[0.0.6.9.37]: https://github.com/piklen/manmankan/compare/v0.0.6.9.36...v0.0.6.9.37
 [0.0.6.9.36]: https://github.com/piklen/manmankan/compare/v0.0.6.9.35...v0.0.6.9.36
 [0.0.6.9.35]: https://github.com/piklen/manmankan/compare/v0.0.6.9.34...v0.0.6.9.35
 [0.0.6.9.34]: https://github.com/piklen/manmankan/compare/v0.0.6.9.33...v0.0.6.9.34

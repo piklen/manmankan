@@ -119,14 +119,38 @@ def _command_schemas(*, compact: bool) -> list[dict[str, Any]]:
         },
         {
             "name": "range",
-            "purpose": "Return one stock's historical intraday ranges and close outcomes after threshold touches.",
+            "purpose": "Return one or up to 20 stocks' historical intraday ranges and close outcomes after threshold touches.",
             "formats": ["terminal", "json"],
             "success_keys": [
-                "ok", "schema_version", "command", "query_time", "study",
+                "ok", "schema_version", "command", "query_time", "stats", "disclaimer",
             ],
+            "success_variants": {
+                "single": {
+                    "required_keys": [
+                        "ok", "schema_version", "command", "query_time", "stats",
+                        "disclaimer", "study",
+                    ],
+                },
+                "batch": {
+                    "required_keys": [
+                        "ok", "schema_version", "command", "query_time", "stats",
+                        "disclaimer", "studies", "errors", "partial",
+                    ],
+                    "error_required_when": "errors is non-empty",
+                },
+            },
             "examples": [
                 "kan range 600519 --format json",
+                "kan range --codes 600519,000858 --format json",
                 "kan range 600519 --down 3 --up 7 --format json",
+            ],
+            "notes": [
+                "Single-stock JSON uses study; --codes JSON uses studies/errors/partial.",
+                "Batch responses include top-level error whenever per-stock errors is non-empty.",
+                (
+                    "threshold_pct is the 4-decimal classification value; "
+                    "reference_price is a 0.01 CNY ROUND_HALF_UP projection."
+                ),
             ],
         },
         {
