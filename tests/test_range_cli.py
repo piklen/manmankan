@@ -137,6 +137,35 @@ def _stub_service(monkeypatch):
     return captured
 
 
+def _evidence_cells(output: str) -> list[tuple[list[str], list[str]]]:
+    """成对读取数据行及其比例行，避免导语或脚注满足证据断言。"""
+
+    lines = unstyle(output).splitlines()
+    rows = []
+    for index, line in enumerate(lines[:-1]):
+        cells = [cell.strip() for cell in line.split("│")[1:-1]]
+        if len(cells) == 6 and cells[0].endswith("%档"):
+            details = [cell.strip() for cell in lines[index + 1].split("│")[1:-1]]
+            rows.append((cells, details))
+    return rows
+
+
+def _render_study(study: StockRangeStudy, *, batch: bool) -> str:
+    from io import StringIO
+
+    from rich.console import Console
+
+    from kan.render.terminal_range import render_stock_range, render_stock_range_batch
+
+    output = StringIO()
+    console = Console(file=output, width=80, color_system=None)
+    if batch:
+        render_stock_range_batch(console, [study], failures=[])
+    else:
+        render_stock_range(console, study)
+    return output.getvalue()
+
+
 def test_range_defaults_are_exact_user_contract(monkeypatch) -> None:
     captured = _stub_service(monkeypatch)
 
@@ -165,11 +194,181 @@ def test_range_terminal_shows_windows_outcomes_and_disclaimer(monkeypatch) -> No
     assert "近 5 个完整交易日" in result.output
     assert "近 15 个完整交易日" in result.output
     assert "75%档" in result.output
-    assert "实80%" in result.output
-    assert "收回线" in result.output
-    assert "收盘线下" in result.output
+    assert "未越80%" in result.output
+    assert "收回/到过" in result.output
+    assert "收涨/到过" in result.output
+    assert "未守住/到过" in result.output
+    assert "守住/到过" in result.output
     assert "创新低" in result.output
     assert "…" not in result.output
+
+
+@pytest.mark.parametrize(
+    ("target", "stock_count"),
+    [(["600519"], 1), (["--codes", "600519,000858"], 2)],
+)
+def test_terminal_keeps_all_levels_adjacent_periods_and_conditional_evidence(
+    monkeypatch, target: list[str], stock_count: int,
+) -> None:
+    _stub_service(monkeypatch)
+
+    result = CliRunner().invoke(app, ["range", *target])
+
+    assert result.exit_code == 0, result.output
+    rows = _evidence_cells(result.output)
+    expected_order = [
+        (f"{level}%档", f"{period}日")
+        for level in (75, 85, 90, 95)
+        for period in (5, 15)
+    ]
+    assert [(cells[0], cells[1]) for cells, _ in rows] == expected_order * 2 * stock_count
+    for cells, details in rows:
+        period = cells[1].removesuffix("日")
+        assert cells[3] == f"2/{period}天"
+        assert cells[4:] == ["1/2次", "1/2次"]
+        assert details[4:] == ["50%", "50%"]
+    output = unstyle(result.output)
+    assert output.index("5 日窗口只有 5 个样本") < output.index("历史幅度对照")
+    assert "日涨跌幅相对前收，不是持仓盈亏" in output
+    assert "不是未来有95%的把握" in output
+    if stock_count == 2:
+        assert output.index("示例股份 600519") < output.index("示例二号 000858")
+        assert output.count("读法：") == 1
+        assert output.count("5 日窗口只有 5 个样本") == 1
+        assert output.count("历史价格不预示未来") == 1
+
+
+@pytest.mark.parametrize("target", [["600519"], ["--codes", "600519,000858"]])
+def test_custom_summary_answers_before_each_stocks_history_tables(
+    monkeypatch, target: list[str],
+) -> None:
+    _stub_service(monkeypatch)
+
+    result = CliRunner().invoke(app, ["range", *target, "--down", "3", "--up", "7"])
+
+    assert result.exit_code == 0, result.output
+    output = unstyle(result.output)
+    assert output.index("5 日窗口只有 5 个样本") < output.index("你输入的幅度")
+    summaries = output.split("你输入的幅度")[1:]
+    assert len(summaries) == (2 if "--codes" in target else 1)
+    for stock in summaries:
+        summary, _tables = stock.split("历史幅度对照", 1)
+        assert summary.index("下跌 -3%") < summary.index("上涨 +7%")
+        assert "按本次参考收盘折算 19.40 元" in summary
+        assert "按本次参考收盘折算 21.40 元" in summary
+        for period in (5, 15):
+            assert (
+                f"近 {period} 日：2/{period} 天到过；"
+                "收盘收回 1/2 次（50%）；收盘上涨 1/2 次（50%）"
+            ) in summary
+            assert (
+                f"近 {period} 日：2/{period} 天到过；"
+                "收盘未守住 1/2 次（50%）；守住 1/2 次（50%）"
+            ) in summary
+
+
+@pytest.mark.parametrize("batch", [False, True])
+def test_zero_touches_are_no_samples_not_zero_probability(batch: bool) -> None:
+    request = StockRangeRequest(
+        symbol="600519", periods=[5], levels=[75, 85, 90, 95], down_pct=3, up_pct=7,
+    )
+    base = _study(request)
+    common = {
+        "actual_coverage_pct": 100,
+        "trigger_count": 0,
+        "trigger_ratio_pct": 0,
+        "close_positive_count": 0,
+        "close_positive_ratio_pct": None,
+        "gap_trigger_count": 0,
+        "gap_trigger_ratio_pct": None,
+        "intraday_trigger_count": 0,
+        "close_median_pct": None,
+    }
+    down = {
+        **common,
+        "close_above_count": 0,
+        "close_above_ratio_pct": None,
+        "close_at_or_below_count": 0,
+        "close_at_or_below_ratio_pct": None,
+    }
+    up = {
+        **common,
+        "close_below_count": 0,
+        "close_below_ratio_pct": None,
+        "close_at_or_above_count": 0,
+        "close_at_or_above_ratio_pct": None,
+        "pullback_median_pct": None,
+    }
+    window = base.windows[0]
+    assert window.custom_downside is not None
+    assert window.custom_upside is not None
+    study = base.model_copy(update={
+        "windows": [window.model_copy(update={
+            "downside": [row.model_copy(update=down) for row in window.downside],
+            "upside": [row.model_copy(update=up) for row in window.upside],
+            "custom_downside": window.custom_downside.model_copy(update=down),
+            "custom_upside": window.custom_upside.model_copy(update=up),
+        })],
+    })
+
+    output = _render_study(study, batch=batch)
+
+    summary = output.split("你输入的幅度", 1)[1].split("历史幅度对照", 1)[0]
+    assert summary.count("0/5 天到过；无触及样本") == 2
+    assert "0%" not in summary
+    rows = _evidence_cells(output)
+    assert len(rows) == 8
+    for cells, details in rows:
+        assert cells[3:] == ["0/5天", "无样本", "无样本"]
+        assert details[3] == "0%"
+        assert details[4:] == ["", ""]
+    assert "0/0" not in output
+
+
+@pytest.mark.parametrize("batch", [False, True])
+def test_one_touch_keeps_denominator_alongside_hundred_percent(batch: bool) -> None:
+    request = StockRangeRequest(symbol="600519", periods=[5], levels=[75, 85, 90, 95])
+    base = _study(request)
+    common = {
+        "actual_coverage_pct": 80,
+        "trigger_count": 1,
+        "trigger_ratio_pct": 20,
+        "close_positive_count": 1,
+        "close_positive_ratio_pct": 100,
+        "gap_trigger_count": 0,
+        "gap_trigger_ratio_pct": 0,
+        "intraday_trigger_count": 1,
+        "close_median_pct": 1,
+    }
+    study = base.model_copy(update={
+        "windows": [window.model_copy(update={
+            "downside": [row.model_copy(update={
+                **common,
+                "close_above_count": 1,
+                "close_above_ratio_pct": 100,
+                "close_at_or_below_count": 0,
+                "close_at_or_below_ratio_pct": 0,
+            }) for row in window.downside],
+            "upside": [row.model_copy(update={
+                **common,
+                "close_below_count": 1,
+                "close_below_ratio_pct": 100,
+                "close_at_or_above_count": 0,
+                "close_at_or_above_ratio_pct": 0,
+                "pullback_median_pct": 1.5,
+            }) for row in window.upside],
+        }) for window in base.windows],
+    })
+
+    rows = _evidence_cells(_render_study(study, batch=batch))
+
+    assert len(rows) == 8
+    for index, (cells, details) in enumerate(rows):
+        assert cells[3] == "1/5天"
+        assert cells[4] == "1/1次"
+        assert details[4] == "100%"
+        assert cells[5] == ("1/1次" if index < 4 else "0/1次")
+        assert details[5] == ("100%" if index < 4 else "0%")
 
 
 def test_range_custom_periods_levels_and_thresholds(monkeypatch) -> None:
@@ -296,7 +495,7 @@ def test_range_codes_normalizes_exchange_affixes_and_empty_edge_tokens(
     assert [request.symbol for request in captured] == ["600519", "000858"]
 
 
-def test_range_codes_terminal_is_compact_and_deduplicates_common_warnings(
+def test_range_codes_terminal_is_complete_and_deduplicates_common_warnings(
     monkeypatch,
 ) -> None:
     _stub_service(monkeypatch)
@@ -308,26 +507,21 @@ def test_range_codes_terminal_is_compact_and_deduplicates_common_warnings(
 
     assert result.exit_code == 0, result.output
     output = unstyle(result.output)
-    assert "多股日内上下行范围" in output
+    assert "多股日涨跌幅历史复核" in output
     assert "示例股份" in output and "600519" in output
     assert "示例二号" in output and "000858" in output
-    assert "下90" in output
-    assert "上95" in output
+    assert "75%档" in output and "85%档" in output
+    assert "90%档" in output and "95%档" in output
     assert "-2%" in output and "19.60元" in output
-    assert "实80%" in output and "触2/5" in output
+    assert "未越80%" in output and "2/5天" in output
     assert output.count("5 日窗口只有 5 个样本") == 1
     assert "共同提示" in output
     assert "创新低" in output
     assert "…" not in output
 
 
-def test_batch_renderer_keeps_long_period_evidence_at_width_80() -> None:
-    from io import StringIO
-
-    from rich.console import Console
-
-    from kan.render.terminal_range import render_stock_range_batch
-
+@pytest.mark.parametrize("batch", [False, True])
+def test_renderer_keeps_long_period_evidence_at_width_80(batch: bool) -> None:
     request = StockRangeRequest(
         symbol="600519",
         periods=[60, 250],
@@ -338,10 +532,31 @@ def test_batch_renderer_keeps_long_period_evidence_at_width_80() -> None:
         "warnings": [],
         "windows": [
             window.model_copy(update={
+                "downside": [
+                    row.model_copy(update={
+                        "trigger_count": window.period,
+                        "trigger_ratio_pct": 100,
+                        "close_above_count": window.period // 2,
+                        "close_at_or_below_count": window.period // 2,
+                        "close_positive_count": window.period // 2,
+                        "actual_coverage_pct": 0,
+                        "intraday_trigger_count": window.period,
+                    })
+                    for row in window.downside
+                ],
                 "upside": [
                     row.model_copy(update={
                         "threshold_pct": 10.0001,
                         "reference_price": 22.0,
+                        "trigger_count": window.period,
+                        "trigger_ratio_pct": 100,
+                        "close_below_count": window.period // 2,
+                        "close_at_or_above_count": window.period // 2,
+                        "close_positive_count": window.period,
+                        "actual_coverage_pct": 0,
+                        "gap_trigger_count": 0,
+                        "gap_trigger_ratio_pct": 0,
+                        "intraday_trigger_count": window.period,
                     })
                     for row in window.upside
                 ],
@@ -349,21 +564,21 @@ def test_batch_renderer_keeps_long_period_evidence_at_width_80() -> None:
             for window in base_study.windows
         ],
     })
-    output = StringIO()
-
-    render_stock_range_batch(
-        Console(file=output, width=80, color_system=None),
-        [study],
-        failures=[],
-    )
-
-    rendered = output.getvalue()
+    rendered = _render_study(study, batch=batch)
     assert "60/60" in rendered
     assert "250/250" in rendered
-    assert "触2/60" in rendered
-    assert "触2/250" in rendered
+    assert "60/60天" in rendered
+    assert "250/250天" in rendered
     assert "+10.0001%" in rendered
     assert "…" not in rendered
+    rows = _evidence_cells(rendered)
+    assert len(rows) == 16
+    for cells, details in rows:
+        period = int(cells[1].removesuffix("日"))
+        assert cells[4:] == [f"{period // 2}/{period}次"] * 2
+        assert details[4:] == ["50%", "50%"]
+        if cells[2].startswith("+"):
+            assert cells[2] == "+10.0001%"
 
 
 def test_terminal_threshold_precision_is_consistent_for_single_and_batch(
@@ -421,12 +636,15 @@ def test_range_codes_terminal_shows_custom_thresholds_and_stock_warnings(
 
     assert result.exit_code == 0, result.output
     output = unstyle(result.output)
-    assert "下75" in output and "下85" in output
-    assert "用户指定幅度复核" in output
+    assert "75%档" in output and "85%档" in output
+    assert "你输入的幅度" in output
     assert "-3%" in output
     assert "共同提示：共同样本提示" in output
     assert "示例股份 600519：第一只数据提示" in output
     assert "示例二号 000858：第二只数据提示" in output
+    first_table = output.index("历史幅度对照")
+    for warning in ("共同样本提示", "第一只数据提示", "第二只数据提示"):
+        assert output.index(warning) < first_table
 
 
 @pytest.mark.parametrize(
@@ -666,5 +884,10 @@ def test_range_help_exposes_defaults() -> None:
     assert "--up" in output
     assert "--codes" in output
     assert "20" in output
-    assert "0/3" in output
-    assert "0/7" in output
+    assert "填3表示相对前收下跌3%" in output
+    assert "填7表示相对前收上涨7%" in output
+    assert "可填0" in output
+    assert "无需先填阈值" in output
+    assert "不是持仓盈亏" in output
+    assert "非未来概率" in output
+    assert "…" not in output

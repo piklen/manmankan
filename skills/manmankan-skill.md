@@ -92,12 +92,12 @@
 | `kan board trend --kind theme --up 3 --candle --format json` | 概念题材连续阳线 | `--candle` 按当日 close 与 open；不要与收盘连续上涨混称 |
 | `kan index [sh sz cyb hs300] --format json` | 常用指数日线位置参照 | 补大盘基准 |
 | `kan range <代码> [--format json]` | 历史日内下探、上冲范围与触及后收盘事实 | 基准为前收、只用完整日 K；默认 `--periods 5,15`、线性插值分位 `--levels 75,85,90,95`，并保留实际覆盖率 |
-| `kan range --codes 600519,000858 [--format json]` | 最多 20 只股票的日内范围横向复核 | 代码不重复、保持输入顺序；终端紧凑展示，JSON 读取 `studies/errors/partial`，不按幅度排序 |
+| `kan range --codes 600519,000858 [--format json]` | 最多 20 只股票的日内范围复核 | 代码不重复、保持输入顺序；终端逐股保留全部档位及条件结果，JSON 读取 `studies/errors/partial`，不按幅度排序 |
 | `kan low N` / `kan high N` | N 日新低/新高 | 极端位置发现；支持 `--all` 全市场池 |
 
 板块趋势的 Python/HTTP 稳定入口分别是 `kan.api.query_board_trends(BoardTrendQuery(...))` 和 `GET /api/v1/boards/trends`。成员结构使用 `query_board_pulse(BoardPulseQuery(...))` 或 `GET /api/v1/boards/{kind}/{value}/pulse`；它只描述成员涨跌家数、中位涨跌和靠前成员，不表示指数权重贡献或事件因果。每日复看使用 `create_board_review(BoardDailyReviewRequest(...))` 或 `POST /api/v1/board-reviews`；`streak_extended / shortened / direction_changed / data_*` 都是事实 delta，不能翻译成强弱评级。Web 趋势页与每日复看页也消费同一 typed model；从板块下钻 Screen 时只带入 `universe.kind/value`，不得假设网页已经替用户添加筛选条件。
 
-`kan range <代码> --down 3 --up 7` 可复核用户明确给出的 `-3%` 下探和 `+7%` 上冲阈值；显式 `0` 是有效零幅度线，只有参数省略才表示未请求。单股参数与 `--codes` 二选一；批量存在逐股失败时读取统一顶层 `error`、成功的 `studies` 和逐股 `errors`，同时保留 `partial` 与非零退出码。阈值内的 `reference_price` 是当前参考收盘按 0.01 元价格档 `ROUND_HALF_UP` 得到的两位折算价，不是历史事件价；`threshold_pct` 是证据分类实际采用的 4 位公开阈值，可原样回传复核。AI 必须保留 5/15 日短窗口的实际样本数，只把结果解释为历史范围和触及后的收盘事实；不得输出止损/止盈推荐、最佳阈值或涨跌预测。
+`kan range <代码> --down 3 --up 7` 可复核用户明确给出的 `-3%` 下探和 `+7%` 上冲阈值；显式 `0` 是有效零幅度线，只有参数省略才表示未请求。终端先回答自定幅度，再按方向分组、同档各周期相邻展示；单股与批量均保留全部请求档位和触及后的收盘次数。单股参数与 `--codes` 二选一；批量存在逐股失败时读取统一顶层 `error`、成功的 `studies` 和逐股 `errors`，同时保留 `partial` 与非零退出码。阈值内的 `reference_price` 是当前参考收盘按 0.01 元价格档 `ROUND_HALF_UP` 得到的两位折算价，不是历史事件价或实时价；`threshold_pct` 是证据分类实际采用的 4 位公开阈值，可原样回传复核。AI 必须保留实际样本数和条件结果的分子/分母，不能把 `1/1` 只写成 `100%`，零触及不能当零概率；短窗口包含在长窗口内，并非独立样本。日涨跌幅相对前收而非持仓盈亏，日 K 不能统计水下时长。只把结果解释为历史范围和触及后的收盘事实；不得输出止损/止盈推荐、最佳阈值或涨跌预测。
 
 ### 5. 真实持仓
 
