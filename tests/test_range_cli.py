@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 
+from click import unstyle
 from typer.testing import CliRunner
 
 from kan.cli import app
@@ -218,9 +219,10 @@ def test_range_invalid_lists_keep_json_error_envelope() -> None:
 
 def test_range_help_exposes_defaults() -> None:
     result = CliRunner().invoke(app, ["range", "--help"])
+    output = unstyle(result.output)
 
     assert result.exit_code == 0
-    assert "5,15" in result.output
-    assert "75,85,90,95" in result.output
-    assert "--down" in result.output
-    assert "--up" in result.output
+    assert "5,15" in output
+    assert "75,85,90,95" in output
+    assert "--down" in output
+    assert "--up" in output
