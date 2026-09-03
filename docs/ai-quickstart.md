@@ -152,6 +152,7 @@ AI 处理规则：
 ```bash
 kan range 600519 --format json
 kan range 600519 --down 3 --up 7 --format json
+kan range --codes 600519,000858 --format json
 ```
 
 AI 处理规则：
@@ -159,6 +160,11 @@ AI 处理规则：
 - 每日涨跌都以前一交易日收盘为基准，只使用完整日 K。
 - 默认比较 `--periods 5,15` 两个短窗口，并展示 `--levels 75,85,90,95` 四档线性插值分位；读取结果时同时保留实际覆盖率与样本数。
 - `--down 3 --up 7` 只复核用户明确给出的 `-3%` 下探与 `+7%` 上冲，不代表工具替用户选择阈值。
+- `--down/--up` 接受非负值；显式 `0` 会复核零幅度线，省略参数才表示不请求该方向的自定义阈值。
+- 单股参数与 `--codes` 二选一；`--codes` 只接受最多 20 个不重复的 6 位代码，并保持输入顺序。
+- 批量 JSON 读取 `studies`、`errors` 与 `partial`；只要 `errors` 非空，顶层同时存在统一 `error`。`partial=true` 时成功股票仍在 `studies`，命令同时以非零码退出。单股 JSON 仍读取 `study`。
+- 每条上下行阈值的 `reference_price` 是用该股票当前参考收盘折算后，按 0.01 元价格档 `ROUND_HALF_UP` 得到的两位价格；不要把它当作历史事件日价格。
+- `threshold_pct` 是统计实际采用的 4 位小数公开阈值，可原样传给 `--down/--up` 得到相同触及与覆盖证据；不要用未公开的隐藏小数重算分类。
 - 只能把结果解释为历史日内范围和触及后收盘事实；不得改写成止损/止盈推荐、最佳参数或未来涨跌概率。
 
 ## 3. 可复制提示词
@@ -206,6 +212,7 @@ kan find --codes 600519,688981 --format json --agent-summary
 kan find --all --pe lt:20 --format json --compact --no-compact-context
 kan scan --all --periods 20,60,180 --format json
 kan range 600519 --periods 5,15 --levels 75,85,90,95 --format json
+kan range --codes 600519,000858 --format json
 kan trend --all --down 3 --format json
 kan board trend --kind industry --up 3 --format json
 kan board trend --kind theme --up 3 --candle --format json

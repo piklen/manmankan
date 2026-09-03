@@ -282,6 +282,7 @@ jobs:
           "$SMOKE_VENV/bin/kan" workspace --help
           "$SMOKE_VENV/bin/kan" scan --help
           "$SMOKE_VENV/bin/kan" find --help
+          "$SMOKE_VENV/bin/kan" range --help
           HOME="$(mktemp -d "$RUNNER_TEMP/kan-home-XXXXXX")" XDG_DATA_HOME="$(mktemp -d "$RUNNER_TEMP/kan-xdg-XXXXXX")" NO_COLOR=1 "$SMOKE_VENV/bin/kan" find --codes 600519,000858 --format json --dry-run > "$SMOKE_JSON"
           NO_COLOR=1 "$SMOKE_VENV/bin/kan" find --help > "$SMOKE_HELP"
           python3 - <<'PY'

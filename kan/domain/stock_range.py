@@ -27,8 +27,8 @@ class StockRangeRequest(StockRangeModel):
     symbol: Annotated[str, Field(pattern=r"^\d{6}$")]
     periods: Annotated[tuple[Period, ...], Field(min_length=1, max_length=12)]
     levels: Annotated[tuple[Level, ...], Field(min_length=1, max_length=12)]
-    down_pct: Annotated[float | None, Field(gt=0, le=100)] = None
-    up_pct: Annotated[float | None, Field(gt=0, le=1000)] = None
+    down_pct: Annotated[float | None, Field(ge=0, le=100)] = None
+    up_pct: Annotated[float | None, Field(ge=0, le=1000)] = None
     force: bool = False
 
     @model_validator(mode="after")
@@ -62,6 +62,10 @@ class DownsideThresholdStudy(StockRangeModel):
     basis: Literal["empirical_level", "custom"]
     level_pct: float | None = None
     threshold_pct: float = Field(le=0)
+    reference_price: float = Field(
+        ge=0,
+        description="当前参考收盘折算到 0.01 元价格档，使用 ROUND_HALF_UP",
+    )
     actual_coverage_pct: float | None = Field(default=None, ge=0, le=100)
     trigger_count: int = Field(ge=0)
     trigger_ratio_pct: float | None = Field(default=None, ge=0, le=100)
@@ -83,6 +87,10 @@ class UpsideThresholdStudy(StockRangeModel):
     basis: Literal["empirical_level", "custom"]
     level_pct: float | None = None
     threshold_pct: float = Field(ge=0)
+    reference_price: float = Field(
+        ge=0,
+        description="当前参考收盘折算到 0.01 元价格档，使用 ROUND_HALF_UP",
+    )
     actual_coverage_pct: float | None = Field(default=None, ge=0, le=100)
     trigger_count: int = Field(ge=0)
     trigger_ratio_pct: float | None = Field(default=None, ge=0, le=100)
