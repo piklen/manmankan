@@ -80,6 +80,7 @@ def root_help_text() -> str:
 
 [bold cyan]单只详情 / 多股对比 / 历史回溯[/bold cyan]
   kan info 600519                    单只股票全周期位置 + 涨跌 + 共振
+  kan range 600519                   日内上下行范围（默认 5/15 日 · 75/85/90/95 分位档）
   kan compare 600519 000858          多股横向对比（2-30 只 · 终端自动分页）
   kan history 600519                 位置历史回溯（-p 切周期 · 纯离线读每日快照）
   kan history --pool                 池级位置趋势（中位/低位/高位 · 纯离线聚合）
@@ -157,7 +158,7 @@ def root_help_text() -> str:
   kan board rank --kind industry --by gain --format json
   kan board trend --kind theme --up 3 --format json
 
-  [dim]--format 适用 scan / low / high / info / trend / compare / history / find / hold / board rank / board trend[/dim]
+  [dim]--format 适用 scan / low / high / info / range / trend / compare / history / find / hold / board rank / board trend[/dim]
 
 [bold cyan]数据管理[/bold cyan]
   kan fetch                 拉取数据（通常不需要，scan 自动更新）

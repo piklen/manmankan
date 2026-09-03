@@ -67,6 +67,7 @@ def test_root_help_returns_chinese_cheatsheet() -> None:
     assert "命令速记" in result_help_dash.stdout
     assert "普通用户先从这里开始" in result_help_dash.stdout
     assert "kan web" in result_help_dash.stdout
+    assert "kan range 600519" in result_help_dash.stdout
 
 
 def test_no_args_shows_short_retail_start_instead_of_full_reference() -> None:

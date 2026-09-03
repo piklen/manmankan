@@ -86,6 +86,7 @@ kan screen run <screen_id> --format json
 kan screen versions <screen_id> --format json
 kan screen runs <screen_id> --format json
 kan scan --codes 600519,000858 --periods 30,60,180 --format json
+kan range 600519 --format json
 kan find --codes 600519,000858 --format json --fields @core,@valuation,@moneyflow,@technical
 kan mcp install --dry-run --format json
 kan mcp http --host localhost --port 8765
@@ -176,6 +177,8 @@ kan scan --exclude-star --exclude-bj          # 排除科创板 / 北交所
 kan scan --codes 600519,000858               # 扫外部候选代码池
 kan scan --periods 5,20,60,180 --wide         # 自定义 2-360 周期并全量展示
 kan info 600519                               # 单股详情 + 所属行业位置均值/排名对照
+kan range 600519                              # 复核历史日内上下行范围，默认看 5/15 日与四档分位
+kan range 600519 --down 3 --up 7              # 复核用户明确给出的 -3% / +7% 阈值
 kan find --codes 600519,000858 --format json --dry-run # 不取数的查询计划 smoke
 kan find --codes 600519,688981 --format json --fields @core,@retail
 kan find --codes 600519,688981 --format json --fields @core,@valuation,@moneyflow,@technical
@@ -197,6 +200,8 @@ kan history 600519 --format json
 板块趋势有两个明确口径：默认“今日收盘 > 前日收盘”计连续上涨，`--candle` 则按“当日收盘 > 当日开盘”计连续阳线。`kan theme trend` 继续作为旧题材入口兼容；新脚本统一使用 `kan board trend --kind industry|theme`。
 
 `kan scan` / `kan daily` 面向终端阅读；`kan find --format json`、`kan hold --format json` 和 MCP 面向脚本与 AI 消费。
+
+`kan range <股票代码>` 以前一交易日收盘为基准，只使用完整日 K，展示历史日内下探、上冲范围及触及后收盘事实。默认周期是 `--periods 5,15`，线性插值分位档位是 `--levels 75,85,90,95`；终端会同时展示当前样本的实际覆盖率与样本数。它不输出止损/止盈推荐，也不预测未来涨跌；脚本或 AI 可加 `--format json` 读取同一结果。
 
 ## 数据契约
 

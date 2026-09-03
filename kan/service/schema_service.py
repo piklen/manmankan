@@ -118,6 +118,18 @@ def _command_schemas(*, compact: bool) -> list[dict[str, Any]]:
             "examples": ["kan info 600519 --format json"],
         },
         {
+            "name": "range",
+            "purpose": "Return one stock's historical intraday ranges and close outcomes after threshold touches.",
+            "formats": ["terminal", "json"],
+            "success_keys": [
+                "ok", "schema_version", "command", "query_time", "study",
+            ],
+            "examples": [
+                "kan range 600519 --format json",
+                "kan range 600519 --down 3 --up 7 --format json",
+            ],
+        },
+        {
             "name": "history",
             "purpose": "Return local scan snapshot history for one stock.",
             "formats": ["terminal", "md", "json"],

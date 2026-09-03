@@ -272,6 +272,8 @@ def _normalize_streak_args() -> None:
     import sys
 
     args = sys.argv
+    if len(args) < 2 or args[1] != "trend":
+        return
     for i in range(len(args) - 1, -1, -1):
         if args[i] not in ("--down", "--up"):
             continue

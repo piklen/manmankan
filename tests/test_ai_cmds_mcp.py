@@ -45,6 +45,7 @@ def test_examples_command_json_is_machine_readable() -> None:
     assert payload["command"] == "examples"
     assert payload["examples"][0]["command"] == "kan find --codes 600519,000858 --format json --dry-run"
     assert all(item["command"].startswith("kan ") for item in payload["examples"])
+    assert any(item["command"] == "kan range 600519 --format json" for item in payload["examples"])
 
 
 def test_examples_command_markdown_is_copyable() -> None:
@@ -52,7 +53,7 @@ def test_examples_command_markdown_is_copyable() -> None:
     assert result.exit_code == 0
     assert result.output.startswith("# manmankan 工作流示例")
     assert "```bash\nkan find --codes 600519,000858 --format json --dry-run\n```" in result.output
-    assert "## 9. 预览 MCP 注册" in result.output
+    assert "## 10. 预览 MCP 注册" in result.output
 
 
 def test_example_find_commands_do_not_use_impossible_field_combinations() -> None:
@@ -89,7 +90,9 @@ def test_schema_command_json_is_machine_readable() -> None:
     assert payload["command"] == "schema"
     assert payload["schema_version"] == 1
     assert payload["section"] == "all"
-    assert {item["name"] for item in payload["commands"]} >= {"schema", "find", "scan"}
+    assert {item["name"] for item in payload["commands"]} >= {
+        "schema", "find", "scan", "range",
+    }
     assert any(item["name"] == "pe" and item["flag"] == "--pe" for item in payload["find"]["filters"])
     assert "@valuation" in payload["find"]["field_presets"]
     assert "valuation.pe_ttm" in {item["path"] for item in payload["find"]["fields"]}
@@ -134,6 +137,7 @@ def test_schema_command_commands_compact_is_low_context() -> None:
     assert "purpose" not in schema_cmd
     commands = {item["name"]: item for item in payload["commands"]}
     assert commands["mcp install"]["example"] == "kan mcp install --dry-run --format json"
+    assert commands["range"]["example"] == "kan range 600519 --format json"
 
 
 def test_schema_command_mcp_compact_preserves_required_fields() -> None:

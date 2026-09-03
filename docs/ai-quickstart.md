@@ -145,6 +145,22 @@ AI 处理规则：
 - `low_resonance` / `high_resonance` 是多个周期同时触及阈值的计数，不是行动信号。
 - `null` 表示该维度没有可用数据；不要把它当作 `0`。
 
+### 日内范围与明确阈值复核
+
+用于查看单只股票过去完整交易日的日内下探、上冲范围，以及触及某一幅度后的收盘事实：
+
+```bash
+kan range 600519 --format json
+kan range 600519 --down 3 --up 7 --format json
+```
+
+AI 处理规则：
+
+- 每日涨跌都以前一交易日收盘为基准，只使用完整日 K。
+- 默认比较 `--periods 5,15` 两个短窗口，并展示 `--levels 75,85,90,95` 四档线性插值分位；读取结果时同时保留实际覆盖率与样本数。
+- `--down 3 --up 7` 只复核用户明确给出的 `-3%` 下探与 `+7%` 上冲，不代表工具替用户选择阈值。
+- 只能把结果解释为历史日内范围和触及后收盘事实；不得改写成止损/止盈推荐、最佳参数或未来涨跌概率。
+
 ## 3. 可复制提示词
 
 把 `kan find --codes ... --format json` 或 `kan scan --codes ... --format json` 的输出粘给外部 AI 时，可以直接用下面的提示词。提示词只让 AI 解释和整理数据，不让 AI 给交易结论。
@@ -189,6 +205,7 @@ kan find --codes 600519,688981 --format json --fields @core,@retail
 kan find --codes 600519,688981 --format json --agent-summary
 kan find --all --pe lt:20 --format json --compact --no-compact-context
 kan scan --all --periods 20,60,180 --format json
+kan range 600519 --periods 5,15 --levels 75,85,90,95 --format json
 kan trend --all --down 3 --format json
 kan board trend --kind industry --up 3 --format json
 kan board trend --kind theme --up 3 --candle --format json
