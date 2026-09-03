@@ -218,19 +218,19 @@ def range_command(
     ] = None,
     periods: Annotated[
         str,
-        typer.Option("--periods", "-p", help="对照周期，逗号分隔（2-360）"),
+        typer.Option("--periods", "-p", help="回看多少个完整交易日，逗号分隔（2-360）"),
     ] = "5,15",
     levels: Annotated[
         str,
-        typer.Option("--levels", help="历史分位档位，逗号分隔（0-100）"),
+        typer.Option("--levels", help="历史分位档（0<x<100），非未来概率"),
     ] = "75,85,90,95",
     down: Annotated[
         str | None,
-        typer.Option("--down", help="复核下探幅度（非负，如 0/3）"),
+        typer.Option("--down", help="核对跌幅：填3表示相对前收下跌3%，可填0"),
     ] = None,
     up: Annotated[
         str | None,
-        typer.Option("--up", help="复核上冲幅度（非负，如 0/7）"),
+        typer.Option("--up", help="核对涨幅：填7表示相对前收上涨7%，可填0"),
     ] = None,
     force: Annotated[
         bool,
@@ -241,7 +241,11 @@ def range_command(
         typer.Option("--format", help="输出格式：terminal（默认）/ json"),
     ] = RangeOutputFormat.terminal,
 ) -> None:
-    """查看单股或明确代码池的历史日内范围与触及后收盘事实。"""
+    """日涨跌幅历史复核：到了某个幅度，有几天收回或守住？\n\n
+    默认看近5/15个完整交易日、75/85/90/95四档，无需先填阈值。
+    日涨跌幅相对前收，不是持仓盈亏。
+    例：kan range 600519 --down 3 --up 7（仅演示输入）。
+    """
 
     parsed_periods = _parse_periods(periods, fmt)
     parsed_levels = _parse_levels(levels, fmt)
