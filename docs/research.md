@@ -10,9 +10,10 @@ kan research 600519 000858 --format json
 kan research 600519 --dimensions market,valuation,technical --format json
 kan research 600519 --dimensions market --format json
 kan research 600519 --dimensions fundamentals --refresh --format json
+kan research 600519 --dimensions income,balancesheet,cashflow --refresh --format json
 ```
 
-一次接受 1–20 个明确代码，保持输入顺序；重复代码归一化后去重。默认请求 `market,valuation,fundamentals`，另有 `moneyflow,technical,sentiment,chip,shareholder`。各维度独立按需取数：单独请求 `fundamentals` 不拉行情，请求 `market` 才获取历史行情并输出 20/60/180 日位置与区间涨跌；不足窗口返回 `null`。
+一次接受 1–20 个明确代码，保持输入顺序；重复代码归一化后去重。默认请求 `market,valuation,fundamentals`，另有 `income,balancesheet,cashflow,moneyflow,technical,sentiment,chip,shareholder`。各维度独立按需取数：单独请求财务不拉行情，请求 `market` 才获取历史行情并输出 20/60/180 日位置与区间涨跌；不足窗口返回 `null`。
 
 `--refresh` 跳过所请求维度的缓存，重新获取数据。财务缓存最多复用24小时，过期后下次查询自动检查来源；旧缓存首次使用时补取公告日。同一报告期存在多次披露时取公告日最新的一条。该机制按查询触发，不需要后台调度。
 
@@ -29,6 +30,20 @@ print(bundle.model_dump_json())
 
 MCP 工具 `kan_research` 使用相同请求字段，并发布严格的 `ResearchRequest` / `ResearchBundle` schema。通过 `kan schema --section commands --format json` 和 MCP `tools/list` 发现入口。
 
+## 财报三表
+
+三表使用现有 TuShare 配置，按代码、按表获取，逐表缓存24小时；`--refresh` 跳过请求表的缓存。仅选择 `report_type=1` 的合并报表，先取最新报告期，再按实际公告日（缺失时用公告日）及 `update_flag` 选取更新版本。JSON 金额保留来源的元单位，不做万元放大；终端对大金额换算显示为万元/亿元，并逐项标明单位。
+
+| 维度 | 主要科目 | 时间口径 |
+|---|---|---|
+| `income` | 营业收入、成本、营业利润、所得税、净利润、归母净利润等8项 | 年初至报告期累计 |
+| `balancesheet` | 货币资金、应收、存货、资产、负债、股东权益等11项 | 报告期末余额 |
+| `cashflow` | 经营/投资/筹资现金净额、购建长期资产现金、现金余额等9项 | 流量为年初累计；期初/期末项为余额 |
+
+三表分别形成证据，保留各自的报告期、公告日和实际公告日。跨表比较须先核对报告期；本入口不将半年累计值当作第二季度单季值，也不恢复历史时点可得报表。行业不适用或来源缺失的科目保留 `null`。一张表取数失败时，其他表仍可返回，错误的 `dimension` 标明失败表。
+
+来源定义：[TuShare 利润表](https://tushare.pro/document/2?doc_id=33)、[资产负债表](https://tushare.pro/document/2?doc_id=36)、[现金流量表](https://tushare.pro/document/2?doc_id=44)。当前入口返回关键数值科目，不含 PDF 正文或附注。
+
 ## 证据与状态
 
 | 字段 | 语义 |
@@ -41,12 +56,14 @@ MCP 工具 `kan_research` 使用相同请求字段，并发布严格的 `Researc
 | `data_date` | 该维度真实数据日，不用包的生成时间填充 |
 | `report_period` | 财务报告期；不是公告日 |
 | `announcement_date` | 财务来源返回的公告日；未取得时为 `null` |
+| `actual_announcement_date` | 三表来源的 `f_ann_date` 实际公告日；与公告日分别保留 |
+| `report_type` / `period_basis` | 三表的合并报表类型，以及累计或期末口径；其他维度为 `null` |
 | `fetched_at` | 财务使用本地缓存成功写入的 UTC 时间，命中缓存不更新；行情沿用现有缓存时间标记，其他维度未保留时为 `null` |
 | `facts` | 明确字段、中文名称、值、单位、必要的交易日窗口 |
 | `missing_fields` | 请求字段中没有有效值的项目；0 和缺失有不同含义 |
 | `errors` | 股票取数或指标补充失败；只描述失败阶段，不返回原始异常或凭据 |
 
-新鲜度分为 `fresh / stale / unknown / unavailable`。日频数据的 `fresh` 表示有来源且数据日与预期一致。财务的 `fresh` 表示来源在24小时内检查过，且报告期、公告日均已取得；它不表示今天披露，也不能证明上游没有漏掉新公告。缺少披露时间的财务和股东数据保留 `unknown`。终端统一显示“已核对”，并列出各自时间口径。
+新鲜度分为 `fresh / stale / unknown / unavailable`。日频数据的 `fresh` 表示有来源且数据日与预期一致。财务的 `fresh` 表示来源在24小时内检查过，且报告期及至少一种公告日期已取得；它不表示今天披露，也不能证明上游没有漏掉新公告。缺少披露时间的财务和股东数据保留 `unknown`。终端统一显示“已核对”，并列出各自时间口径。
 
 没有源交易日的日频指标行不进入证据，避免旧转换器把查询日补成数据日。新鲜度不能证明数值、复权基准或模型结论正确。
 
@@ -61,6 +78,6 @@ MCP 工具 `kan_research` 使用相同请求字段，并发布严格的 `Researc
 3. 引用包内证据时使用原始 `evidence_ref`；不能把“引用存在”当成“它证明了某个判断”。
 4. 保留事实与解释的区别；没有对应证据时明确缺口，不用模型补造数值或替换计算。
 
-本入口尚未接入公告正文、新闻、现金流量表、完整研究会话或成交复盘。财务已支持公告日与按需刷新；股东数据仍沿用90日缓存，可显式刷新。行情沿用现有前复权缓存，尚未在本入口验证跨除权基准一致性。上游缺数和历史复权仍是后续数据建设事项。
+本入口尚未接入公告正文、新闻、完整研究会话或成交复盘。财务指标和三表关键科目已支持公告日与按需刷新；股东数据仍沿用90日缓存，可显式刷新。行情沿用现有前复权缓存，尚未在本入口验证跨除权基准一致性。上游缺数和历史复权仍是后续数据建设事项。
 
 研究包不自动保存、不调用 LLM，不等于完成了 AI 判断或交易计划。`kan find` / `kan screen` 负责条件执行，`kan range` 提供历史日内范围事实；这些入口的计算继续由各自已有服务负责。
