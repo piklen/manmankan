@@ -234,7 +234,7 @@ def _run_engine(spec: ScreenSpec) -> tuple[list[tuple[object, tuple[TriggeredFil
             else 0,
             stale=kline_result.ctx.freshness.is_stale,
             data_cutoff=kline_result.ctx.freshness.data_cutoff,
-            missing_by_field=_missing_by_field(kline_result.ctx.results, spec),
+            missing_by_field=_missing_by_field(kline_result.pool_results, spec),
         )
         return matches, coverage
     except FindServiceError as exc:

@@ -232,6 +232,7 @@ from kan.domain.board_review import (
     BoardReviewSection,
     BoardReviewSectionSummary,
 )
+from kan.domain.research import ResearchBundle, ResearchRequest
 from kan.domain.screen import (
     CandidateList,
     CompareSet,
@@ -256,6 +257,7 @@ from kan.service.board_service import (
     query_board_pulse,
     query_board_trends,
 )
+from kan.service.research_service import build_research_bundle
 from kan.service.screen_ai import (
     ScreenExplainInput,
     ScreenParseInput,
@@ -320,6 +322,8 @@ __all__ = [
     "IndustrySet",
     "KlineSource",
     "PointInTimeAudit",
+    "ResearchBundle",
+    "ResearchRequest",
     "ReturnDistribution",
     "SavedScreen",
     "ScreenExplainInput",
@@ -333,6 +337,7 @@ __all__ = [
     "WatchlistHoldingsSet",
     "WatchlistSet",
     "add_candidate",
+    "build_research_bundle",
     "clear_user_kline_sources",
     "clear_user_theme_constituent_sources",
     "create_board_review",

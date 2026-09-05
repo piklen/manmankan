@@ -92,7 +92,7 @@ kan screen runs <screen_id> --format json
 
 MCP agent 的等价路径是：
 
-1. `kan_screen_parse` 整理明确表达；检查 `ignored_text / errors / executable`。
+1. `kan_screen_parse` 整理明确表达；检查 `ignored_text / errors / executable`。部分解析、有错误或引擎不支持时 `executable=false`，保留草稿供补充，不能直接执行。
 2. `kan_screen_plan` 核对执行路径、数据源、限制和 canonical hash。
 3. 只有 `executable=true` 才调用 `kan_screen_run`。
 4. 后续用 `kan_screen_get` 取不可变 run，用 `kan_screen_explain` 基于持久 evidence 解释。
