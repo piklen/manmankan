@@ -82,6 +82,11 @@ _EXAMPLES = [
         "kan schema --format json --section find --compact",
         "低上下文查看 CLI JSON、find DSL、MCP tools 和错误 envelope 契约。",
     ),
+    (
+        "个股研究证据包",
+        "kan research 600519 --format json",
+        "按请求维度整理市场、估值、财务等事实，保留来源、各自日期、单位和缺口；不调用模型。",
+    ),
 ]
 
 

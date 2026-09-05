@@ -271,7 +271,11 @@ def parse_screen_text(request: ScreenParseInput) -> ScreenParseResult:
         matched_expressions=matched,
         ignored_text=ignored,
         errors=errors,
-        executable=spec is not None,
+        executable=(
+            spec is not None
+            and confidence is ParseConfidence.EXACT
+            and plan_screen(spec).executable
+        ),
     )
 
 

@@ -23,6 +23,44 @@ from kan.service import screen_service
 from kan.storage import paths
 
 
+@pytest.mark.parametrize("policy", ["exclude", "fail"])
+def test_coverage_uses_enriched_pool_before_filtering(monkeypatch, policy):
+    from types import SimpleNamespace
+
+    from kan.core.models import StockScanResult
+    from kan.core.pipeline import DataCtx, Freshness
+    from kan.service import find_service
+
+    day = date(2026, 9, 4)
+    bases = [StockScanResult(
+        symbol=symbol, name="合成股份", current_price=100, scan_date=day,
+        periods=[], low_resonance=0, high_resonance=0,
+    ) for symbol in ("600001", "600002")]
+    enriched = [EnrichedResult(**base.model_dump(), valuation=ValuationMetrics(
+        trade_date=day, pe_ttm=pe, source="fixture",
+    )) for base, pe in zip(bases, (10, 30), strict=True)]
+    ctx = DataCtx(targets=[(base.symbol, base.name) for base in bases], meta=None, results=bases,
+                  freshness=Freshness(data_cutoff=day, fetched_at="2026-09-04", expected_cutoff=day, is_stale=False, phase="closed"))
+    monkeypatch.setattr(find_service, "run_data_pipeline", lambda *args, **kwargs: ctx)
+    monkeypatch.setattr("kan.core.enrich.enrich_results", lambda *args, **kwargs: enriched)
+    monkeypatch.setattr("kan.storage.positions.load_positions", lambda: SimpleNamespace(cash=None))
+    monkeypatch.setattr(screen_service, "_normalize_codes", lambda codes: ctx.targets)
+    spec = ScreenSpec.model_validate({
+        "universe": {"kind": "codes", "codes": ["600001", "600002"]},
+        "conditions": [{"type": "pe", "operator": "lt", "value": 20, "null_policy": policy}],
+    })
+    run = screen_service.run_screen(spec, persist=False)
+    assert len(run.rows) == 1 and run.coverage.evaluated == 2
+    assert run.coverage.missing_by_field == {}
+    enriched[1] = EnrichedResult(**bases[1].model_dump())
+    if policy == "fail":
+        with pytest.raises(screen_service.ScreenServiceError, match="pe 缺 1"):
+            screen_service.run_screen(spec, persist=False)
+    else:
+        run = screen_service.run_screen(spec, persist=False)
+        assert len(run.rows) == 1 and run.coverage.missing_by_field == {"pe": 1}
+
+
 @pytest.fixture
 def isolated_workspace(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(paths, "BASE_DIR", tmp_path)

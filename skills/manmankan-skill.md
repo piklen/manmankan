@@ -22,6 +22,10 @@
 
 ## 命令族
 
+### 研究证据包
+
+`kan research 600519 --format json` 或 MCP `kan_research` 按明确代码生成同一份研究事实。默认维度为 `market,valuation,fundamentals`，最多20个代码；`--dimensions` 按需加入资金、技术、情绪、筹码和股东维度，必须包含 market。先检查 `status / coverage / errors`，再核对每份 evidence 的来源、日期、单位及缺失。`ok=true` 仅表示没有执行错误，不等于资料完整；季度报告期不是公告日。引用指向包内证据，不代表推断获得证明。完整契约见 `docs/research.md`。
+
 ### 0. 可复跑 Screen
 
 | 命令 | 用途 | AI 使用规则 |
@@ -170,7 +174,7 @@ Web 的“市场与数据”页还可启动 SQLite 持久刷新任务。终态�
 
 | Tool | 行为 |
 |---|---|
-| `kan_screen_parse` | 只解析明确股票池、字段、比较符和数值；未知内容放入 `ignored_text` |
+| `kan_screen_parse` | 只解析明确股票池、字段、比较符和数值；未知内容放入 `ignored_text`，部分解析或引擎不支持时不可执行 |
 | `kan_screen_plan` | 返回执行路径、依赖、限制与 `executable`，不取数 |
 | `kan_screen_run` | 按 spec 或 screen ID 调同一 Python application service |
 | `kan_screen_get` | 获取已保存 Screen 或不可变 ScreenRun |

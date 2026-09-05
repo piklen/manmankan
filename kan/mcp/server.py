@@ -18,6 +18,7 @@ from pydantic import BaseModel
 from typer.testing import CliRunner
 
 from kan import __version__
+from kan.domain.research import ResearchBundle, ResearchRequest
 from kan.domain.screen import ScreenRun
 from kan.infra.log import redact_text
 from kan.service.screen_ai import (
@@ -236,6 +237,15 @@ def _kan_screen_parse(payload: dict[str, Any]) -> dict[str, Any]:
     return _model_result(parse_screen_text(ScreenParseInput.model_validate(payload)))
 
 
+def _kan_research(payload: dict[str, Any]) -> dict[str, Any]:
+    from kan.service.research_service import build_research_bundle
+
+    bundle = build_research_bundle(ResearchRequest.model_validate(payload))
+    result = _model_result(bundle)
+    result["exit_code"] = 0 if bundle.ok else 1
+    return result
+
+
 def _kan_screen_plan(payload: dict[str, Any]) -> dict[str, Any]:
     request = ScreenPlanInput.model_validate(payload)
     return _model_result(plan_screen(request.spec))
@@ -292,6 +302,13 @@ def _kan_hold(payload: dict[str, Any]) -> dict[str, Any]:
 
 
 TOOLS = {
+    "kan_research": ToolSpec(
+        name="kan_research",
+        description="Build a bounded stock research evidence bundle with per-dimension dates, sources, units and explicit gaps. Does not call an LLM or read holdings.",
+        input_schema=ResearchRequest.model_json_schema(),
+        handler=_kan_research,
+        output_schema=ResearchBundle.model_json_schema(),
+    ),
     "kan_scan": ToolSpec(
         name="kan_scan",
         description="Scan watchlist, code pool, industry, theme, or hot list positions.",

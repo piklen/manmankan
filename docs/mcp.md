@@ -6,6 +6,8 @@ MCP `tools/list` 会返回每个工具的 `inputSchema` 和 `outputSchema`。`to
 
 ## Screen 生命周期 tools
 
+研究事实入口 `kan_research` 使用 `ResearchRequest → ResearchBundle`，直接调用共享 Python 服务。示例参数为 `{"codes":["600519"],"dimensions":["market","valuation","fundamentals"]}`。逐维度日期、来源、单位、缺失与引用在同一个包中返回；不调用模型、不读取持仓。`ok=true,status=partial` 表示执行成功但材料质量不完整；实际取数失败通过 `isError=true` 报告并保留成功部分。完整契约见 [`research.md`](research.md)。
+
 vNext 新增五个不经过 shell/CLI 的复合工具：
 
 | Tool | 输入/输出 | 行为边界 |
@@ -17,6 +19,8 @@ vNext 新增五个不经过 shell/CLI 的复合工具：
 | `kan_screen_explain` | `ScreenExplainInput → ScreenExplanation` | 只用持久运行中的阈值、实际值、日期、来源、coverage 和 diff 解释 |
 
 示例意图 `600519 000858 180日位置<30 pe<35 排除ST` 可以自动形成可执行 ScreenSpec。`低估、强势、近期` 等没有显式定义的文字不会被偷偷换成阈值；agent 应先展示 `ignored_text / errors / executable`，再补充明确条件。
+
+只有完整解析、无错误且执行引擎支持时，解析结果才为 `executable=true`。未识别的“或”、排序意图或其他文字会保留在 `ignored_text`，同时阻止直接执行；调用方不得丢弃这些文字后仅根据草稿重新计划执行。
 
 完整领域说明见 [`selection-workbench.md`](selection-workbench.md)。
 

@@ -221,6 +221,8 @@ CI 会重新生成并检查 drift，防止 Python 与 TypeScript 各自维护一
 
 模型不获得任意 SQL、Pandas 或 provider 直连入口。像“低估”“强势”“近期”这类没有显式阈值的文字不会被静默编译成规则；调用方应展示 `ignored_text / assumptions / executable`，再由用户补充定义。
 
+`kan_screen_parse.executable` 要求完整解析、无错误且引擎支持。草稿存在不等于可执行；部分表达中的连接词、排序和不支持的条件不得被删除后继续运行。
+
 ## 9. 运行证据与任务状态
 
 `ScreenRun` 至少固化：

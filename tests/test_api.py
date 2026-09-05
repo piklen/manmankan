@@ -109,6 +109,7 @@ def test_api_all_lists_match_actual_exports():
         "list_candidate_lists", "add_candidate", "remove_candidate",
         "save_compare_set", "list_compare_sets", "filter_catalog", "screen_schema",
         "parse_screen_text", "plan_screen", "explain_run",
+        "ResearchRequest", "ResearchBundle", "build_research_bundle",
     }
     assert declared == expected, f"kan.api.__all__ 与预期 surface 不符: 多={declared-expected} · 少={expected-declared}"
 

@@ -39,6 +39,17 @@ kan web
 
 所有自选、持仓、缓存和 token 都保存在本机；不登录 manmankan 服务、不做云同步或遥测。查询行情时会向所选数据源发送股票代码；配置 TuShare 时，token 只发送到你配置的数据源。持仓成本、股数和现金不会发送。
 
+## 终端与 AI：按需获取研究证据
+
+源码新增 `kan research`，将明确股票代码的事实整理为同一份终端／JSON／MCP 研究包：
+
+```bash
+kan research 600519
+kan research 600519 000858 --dimensions market,valuation,technical --format json
+```
+
+默认提供市场、估值、财务三个维度；来源、逐维度日期、单位、缺失和引用与数值一起返回。财务报告期不当作公告日，生成时间不当作数据日；不调用模型，也不读取个人持仓。Python 使用 `build_research_bundle`，MCP 使用 `kan_research`。完整范围、部分失败与日期边界见 [`docs/research.md`](docs/research.md)。合并源码不等于已发布 PyPI，新命令在包含该功能的版本中提供。
+
 ## 普通用户从这里开始
 
 ### 1. 先看板块趋势

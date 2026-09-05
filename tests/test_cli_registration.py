@@ -33,6 +33,7 @@ REPO_ROOT = Path(__file__).resolve().parents[1]
 # - cli_find_cmds (1):      find             (历史背景选股 DSL)
 # - cli_history_cmds (1):   history          (位置历史回溯)
 # - cli_range_cmds (1):     range            (日内范围复核)
+# - cli_research_cmds (1):  research         (研究证据包)
 # - cli_status_cmds (1):    status           (本地数据状态)
 # - cli_web_cmds (1):       web              (本地 Web 看盘台)
 # 注:`kan group`/`kan config`/`kan theme`/`kan fields`/`kan mcp`/`kan hold` 是 sub-Typer
@@ -52,6 +53,7 @@ _EXPECTED_COMMANDS = {
     "compare",
     "history",
     "range",
+    "research",
     "trend",
     "status",
     "update",

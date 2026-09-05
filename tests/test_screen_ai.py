@@ -58,6 +58,18 @@ def test_parse_requires_period_for_period_filter() -> None:
     assert result.errors
 
 
+@pytest.mark.parametrize("text", [
+    "全市场 市盈率低于20 或 市净率低于1",
+    "全市场 pe<20 按市值倒序",
+    "全市场 pe<20 pos<10",
+    "全市场 roe>10",
+])
+def test_partial_or_unsupported_parse_is_not_executable(text: str) -> None:
+    result = screen_ai.parse_screen_text(screen_ai.ScreenParseInput(text=text))
+    assert result.spec is not None
+    assert result.executable is False
+
+
 def test_plan_reports_engine_dependencies_and_unsupported_all_filter() -> None:
     spec = ScreenSpec(
         name="全市场测试",

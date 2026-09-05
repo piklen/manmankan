@@ -79,6 +79,8 @@ def root_help_text() -> str:
   kan high 30 --all         全市场 30 日高点
 
 [bold cyan]单只详情 / 多股对比 / 历史回溯[/bold cyan]
+  kan research 600519               研究证据包：来源 / 日期 / 单位 / 缺口
+  kan research 600519 --format json  同一份研究事实供 AI 调用
   kan info 600519                    单只股票全周期位置 + 涨跌 + 共振
   kan range 600519                   日内上下行范围（默认 5/15 日 · 75/85/90/95 分位档）
   kan range --codes 600519,000858    多股日内范围紧凑对照（最多 20 只 · 保持输入顺序）
