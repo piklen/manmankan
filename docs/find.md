@@ -90,7 +90,7 @@ kan find --codes 600519,000858 --format json \
 | `@context` | `context.positions` / `context.low_resonance` / `context.high_resonance` |
 | `@valuation` | `valuation.*` 常用估值、量价、市值字段 |
 | `@valuation_context` | 行业、行业样本、PE/PB 行业内分位和中位 |
-| `@fundamentals` | ROE、净利润同比、营收同比等逐股报告期字段；`--all` 不支持 |
+| `@fundamentals` | ROE、净利润同比、营收同比、报告期 `end_date`、公告日 `ann_date`、来源检查时间 `fetched_at`；`--all` 不支持 |
 | `@moneyflow` | 主力净额和大单/超大单字段 |
 | `@technical` | RSI、MACD、KDJ、均线、ATR%、乖离率字段 |
 | `@sentiment` | 连板/开板/涨跌停事件字段 |

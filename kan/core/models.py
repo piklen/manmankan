@@ -164,6 +164,8 @@ class FundamentalMetrics(BaseModel):
     """
 
     end_date: date | None = None        # 报告期 (季度末日期)
+    ann_date: date | None = None        # 该报告的公告日
+    fetched_at: str | None = None       # 数据源检查/缓存写入时间（UTC）
     roe: float | None = None            # 净资产收益率 (%)
     netprofit_yoy: float | None = None  # 净利润同比增速 (%)
     or_yoy: float | None = None         # 营业收入同比增速 (%)

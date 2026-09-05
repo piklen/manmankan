@@ -72,8 +72,13 @@ def _row_to_fundamentals(row: pd.Series) -> FundamentalMetrics:
     end_date = row.get("end_date")
     if end_date is None or (not hasattr(end_date, "isoformat")) or pd.isna(end_date):
         end_date = None
+    ann_date = row.get("ann_date")
+    if ann_date is None or (not hasattr(ann_date, "isoformat")) or pd.isna(ann_date):
+        ann_date = None
     return FundamentalMetrics(
         end_date=end_date,
+        ann_date=ann_date,
+        fetched_at=row.get("fetched_at") if isinstance(row.get("fetched_at"), str) else None,
         roe=_opt_float(row.get("roe")),
         netprofit_yoy=_opt_float(row.get("netprofit_yoy")),
         or_yoy=_opt_float(row.get("or_yoy")),

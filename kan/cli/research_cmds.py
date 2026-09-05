@@ -22,8 +22,9 @@ class ResearchFormat(StrEnum):
 def research(
     codes: Annotated[list[str], typer.Argument(help="1–20 个明确股票代码，可空格分隔")],
     dimensions: Annotated[str, typer.Option(
-        "--dimensions", help="逗号分隔：market（必含）、valuation、fundamentals、moneyflow、technical、sentiment、chip、shareholder",
+        "--dimensions", help="按需选择，逗号分隔：market、valuation、fundamentals、moneyflow、technical、sentiment、chip、shareholder",
     )] = "market,valuation,fundamentals",
+    refresh: Annotated[bool, typer.Option("--refresh", help="重新获取所请求维度的数据")] = False,
     fmt: Annotated[ResearchFormat, typer.Option("--format", help="terminal / json")] = ResearchFormat.TERMINAL,
 ) -> None:
     """按需整理有来源、日期、单位和缺口的研究事实，供终端与 AI 共同使用。"""
@@ -31,10 +32,10 @@ def research(
 
     try:
         request = ResearchRequest.model_validate({
-            "codes": codes, "dimensions": [part.strip() for part in dimensions.split(",")],
+            "codes": codes, "dimensions": [part.strip() for part in dimensions.split(",")], "refresh": refresh,
         })
     except ValidationError:
-        message = "请提供1–20个股票代码及有效维度，dimensions 必须包含 market；参见 kan research --help"
+        message = "请提供1–20个股票代码及有效维度；参见 kan research --help"
         if fmt is ResearchFormat.JSON:
             typer.echo(export.to_json(export.error_payload("research", code="invalid_params", message=message)))
         else:

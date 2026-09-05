@@ -2,6 +2,14 @@
 
 `manmankan` 给外部 AI agent 提供可审计的 A 股数据输入：typed Screen、CLI、JSON、字段白名单和本地 MCP。工具不内置 LLM；自然语言 parser 只整理明确阈值，最终仍由确定性 Python application service 计算用户规则命中与证据。
 
+源码的 `kan research` 可直接取得个股研究事实。默认包含行情、估值、财务，也可只查需要的维度：
+
+```bash
+kan research 600519 --dimensions fundamentals --refresh --format json
+```
+
+这条命令只刷新财务，返回报告期、公告日和来源检查时间，不要求先拉 K 线。CLI、Python 和 MCP 共用 [`research.md`](research.md) 的请求与证据契约。
+
 ## 1. 安装和发现
 
 ```bash
@@ -236,7 +244,7 @@ kan fields list --format json
 
 `--all` 可作为完整上市 A 股（含北交所 / ST）股票池 selector 用在 `find`、`scan`、`trend`、`low`、`high`、`fetch`。`find --all` 走截面数据；`scan/trend/low/high/fetch --all` 走全市场 K 线池。`kan fetch --all` 按交易日批量并发拉取并拆分逐股缓存，默认 360 个交易日；`--workers/-j 1..32` 可设硬上限，其中全市场大响应网络链路最多使用 12 路。若批量源不可用，命令会快速失败而不会静默退化成数千次串行请求。若上游全市场响应明显不完整，会返回 `tushare_data_contract_error` 且不缓存该响应；这表示当前配置的 TuShare endpoint 偏离官方接口语义，不是筛选结果为空。
 
-`@fundamentals` 是 ROE、净利润同比、营收同比等逐股报告期字段；全市场模式不支持这类逐股高成本维度，先用 `--codes`、`--industry` 或 `--theme` 缩小候选池。
+`@fundamentals` 包含 ROE、净利润同比、营收同比，以及报告期 `end_date`、公告日 `ann_date` 和来源检查时间 `fetched_at`；缓存最多复用24小时。全市场模式不支持这类逐股高成本维度，先用 `--codes`、`--industry` 或 `--theme` 缩小候选池。
 
 `--agent-summary` 只返回字段覆盖、缺数、分布和少量样本，适合大池首轮读取；明细再用 `--limit/--offset` 分页取。
 

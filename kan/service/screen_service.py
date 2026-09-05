@@ -280,7 +280,7 @@ _DIMENSION_FIELDS = {
         "close", "pe_ttm", "pb", "ps_ttm", "dv_ttm", "turnover_rate",
         "volume_ratio", "total_mv", "circ_mv", "trade_date",
     ),
-    "fundamentals": ("roe", "netprofit_yoy", "or_yoy", "end_date"),
+    "fundamentals": ("roe", "netprofit_yoy", "or_yoy", "end_date", "ann_date"),
     "moneyflow": (
         "net_amount", "net_amount_5d", "buy_elg_amount", "buy_lg_amount",
         "inflow_days", "outflow_days", "trade_date",

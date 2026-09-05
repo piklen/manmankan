@@ -4,11 +4,9 @@
 
 This file applies to the whole `manmankan` repository.
 
-`manmankan` is a local-first China A-share screening and research workbench. Ordinary
-retail users are the primary users: the local Web experience owns first-run, versioned
-Screens, auditable runs, candidate research, comparisons, holdings, and data recovery.
-AI agents and developers are secondary users served through the same stable CLI, JSON,
-Python API, typed HTTP, and MCP contracts.
+`manmankan` 是面向散户的本地 A 股研究工具。当前演进以 CLI 和可供 AI 调用的共享
+Python 服务为主，按真实研究问题补数据。保留模块化单体、SQLite 和 Parquet；Web
+提供图表、比较和人工编辑。CLI、JSON、Python API、HTTP 与 MCP 复用同一套计算。
 
 The tool stops at data facts. It must not produce buy/sell actions, ratings, price
 targets, stock picks, strategy conclusions, or hosted advisory workflows.
@@ -18,6 +16,7 @@ targets, stock picks, strategy conclusions, or hosted advisory workflows.
 - For ordinary-user first-run and daily workflows, read `README.md` and `docs/china-quickstart.md`.
 - For using the CLI as an AI agent, read `skills/manmankan-skill.md` and `docs/ai-quickstart.md`.
 - For JSON contracts, read `docs/find.md`.
+- For the CLI / AI research evidence contract, read `docs/research.md`.
 - For the vNext domain and adapter contract, read `docs/selection-workbench.md`.
 - For local-state migration and rollback, read `docs/workspace-migration.md`.
 - For compliance language, read `docs/compliance.md`.
@@ -41,6 +40,9 @@ Maintainer-local endpoint mapping lives outside this public repository. Daily lo
 
 Use Python 3.11+ and `uv`.
 
+下面是可用命令，不是每次变更都要跑的清单。先验证改动主路径和已经发现的回归；
+已有 CI 覆盖的完整矩阵无需在本地重复执行。只有新变更、失败或未解决疑点才追加检查。
+
 ```bash
 uv sync
 uv lock --check
@@ -54,15 +56,13 @@ npm --prefix webui run build
 bash scripts/check-privacy-leaks.sh
 ```
 
-Before changing user-visible CLI behavior, run at least one real CLI smoke:
+CLI 行为改变时，实际运行受影响命令。例如财务研究入口：
 
 ```bash
-KAN_NO_UPDATE_CHECK=1 uv run kan --help
-KAN_NO_UPDATE_CHECK=1 uv run kan examples
-KAN_NO_UPDATE_CHECK=1 uv run kan find --codes 600519,000858 --format json
+KAN_NO_UPDATE_CHECK=1 uv run kan research 600519 --dimensions fundamentals --format json
 ```
 
-When changing packaging, installation, MCP, public docs, or release surfaces, also run:
+打包或安装行为改变时检查构建；MCP 注册行为改变时检查安装预演。普通文档或业务参数变化不触发这两项：
 
 ```bash
 uv build --clear
@@ -81,6 +81,7 @@ KAN_NO_UPDATE_CHECK=1 uv run kan mcp install --dry-run
 ## Code Boundaries
 
 - Use existing CLI/service/data/render/storage boundaries while they remain the clearest route to the objective; refactor or replace them when evidence shows a correctness, performance, or maintainability ceiling.
+- 保持最小充分实现：复用已有函数和契约，不为假想需求新增服务、通用框架、兼容层或门禁。输入校验放在外部边界；内部按既有契约调用，不逐层重复防御。仅处理已发现或直接影响主路径的失败。
 - `kan/cli/` owns argument parsing and user-facing command orchestration.
 - `kan/service/` owns reusable business logic shared by Web, CLI, MCP, and Python API.
 - `kan/data/` owns provider adapters and fallback chains.
@@ -88,8 +89,7 @@ KAN_NO_UPDATE_CHECK=1 uv run kan mcp install --dry-run
   rollback, and export payloads.
 - `kan/render/` owns terminal rendering only.
 - MCP tools should wrap CLI/service behavior; do not create a second business contract there.
-- Do not let an AI/developer feature displace the ordinary-user Web path or introduce
-  different calculations for the same fact.
+- CLI 与 Web 的相同事实必须来自共享计算，不为不同入口维护两套业务规则。
 
 ## Change Discipline
 

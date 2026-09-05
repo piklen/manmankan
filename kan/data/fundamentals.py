@@ -4,13 +4,14 @@
 industry_map 单源降级。fina_indicator 按 ts_code 逐股 (全市场逐股代价高) ·
 只在 K 线池 / 小池按需拉 (find --roe · 全市场 --all 不支持)。
 
-每股缓存全历史报告期 · 读时取最新一期 (max end_date)。TTL 90d (季报季度更新)。
+每股缓存全历史报告期，保留公告日；24小时内复用，读时取最新报告期的最新披露。
 原始指标值 (compliance §6/§7 · 命名中性)。
 """
 from __future__ import annotations
 
 import re
 import time
+from datetime import UTC, datetime
 from functools import partial
 from pathlib import Path
 from typing import TYPE_CHECKING
@@ -30,13 +31,13 @@ if TYPE_CHECKING:
 
     from kan.infra.lifecycle import OperationLifecycle
 
-_FUNDAMENTALS_COLUMNS = ["end_date", "roe", "netprofit_yoy", "or_yoy"]
+_FUNDAMENTALS_COLUMNS = ["end_date", "ann_date", "roe", "netprofit_yoy", "or_yoy"]
 _FUNDAMENTALS_NUMERIC = ["roe", "netprofit_yoy", "or_yoy"]
 _SYMBOL_PATTERN = re.compile(r"^\d{6}$")
-_FUNDAMENTALS_TTL = 90 * 24 * 3600
-"""季报季度更新 · 90d 长缓存 (逐股 HTTP 贵 · 长缓存复用)。"""
+_FUNDAMENTALS_TTL = 24 * 3600
+"""按需每日检查新披露；用户可显式强制刷新。"""
 
-_TUSHARE_FUNDAMENTALS_FIELDS = "end_date,roe,netprofit_yoy,or_yoy"
+_TUSHARE_FUNDAMENTALS_FIELDS = "end_date,ann_date,roe,netprofit_yoy,or_yoy"
 """fina_indicator 拉取字段 · 净资产收益率 ROE + 净利同比 + 营收同比增速 (%)."""
 
 _TUSHARE_FINA_CAPABILITIES = ProviderCapabilities(
@@ -70,6 +71,7 @@ def _normalize(df: pd.DataFrame) -> pd.DataFrame:
             df[col] = float("nan")
     df = df[_FUNDAMENTALS_COLUMNS].copy()
     df["end_date"] = pd.to_datetime(df["end_date"], errors="coerce").dt.date
+    df["ann_date"] = pd.to_datetime(df["ann_date"], errors="coerce").dt.date
     for col in _FUNDAMENTALS_NUMERIC:
         df[col], _bad = to_numeric_checked(df[col])
     return df.dropna(subset=["end_date"]).reset_index(drop=True)
@@ -174,7 +176,9 @@ def _fresh_cache(symbol: str, *, force: bool) -> pd.DataFrame | None:
     cache = _cache_path(symbol)
     if not cache.exists() or (time.time() - cache.stat().st_mtime) >= _FUNDAMENTALS_TTL:
         return None
-    return _load_cache(cache)
+    loaded = _load_cache(cache)
+    # 旧缓存没有公告日字段，首次使用时补取一次。
+    return loaded if loaded is not None and "ann_date" in loaded else None
 
 
 def _fetch_one(symbol: str, force: bool = False) -> pd.DataFrame:
@@ -198,11 +202,15 @@ def _fetch_one(symbol: str, force: bool = False) -> pd.DataFrame:
 
 
 def _latest_row(df: pd.DataFrame) -> pd.Series | None:
-    """取最新一期报告 (max end_date) · 空 df → None。"""
+    """先取最新报告期，同报告期按公告日取最新披露。"""
     if df is None or df.empty:
         return None
-    idx = df["end_date"].idxmax()
-    return df.loc[idx]
+    order = ["end_date", "ann_date"] if "ann_date" in df else ["end_date"]
+    return df.sort_values(order, na_position="first").iloc[-1].copy()
+
+
+def _fetched_at(symbol: str) -> str:
+    return datetime.fromtimestamp(_cache_path(symbol).stat().st_mtime, UTC).isoformat()
 
 
 def fetch_fundamentals(
@@ -214,7 +222,7 @@ def fetch_fundamentals(
 ) -> dict[str, pd.Series]:
     """逐股拉财务指标 · 返回 {symbol: 最新一期 Series} (估值/质量/资金维度 · ROE/增速)。
 
-    逐股 HTTP (全市场代价高 · 只在小池 / K 线池按需调) · 每股 90d parquet 缓存。
+    逐股 HTTP (全市场代价高 · 只在小池 / K 线池按需调) · 每股24小时 parquet 缓存。
     无 token / 失败 → 该股不入 dict (caller .get(symbol) → None · 优雅降级)。
 
     Args:
@@ -222,7 +230,8 @@ def fetch_fundamentals(
         force: 跳缓存强制重拉
 
     Returns:
-        {symbol: pd.Series (end_date / roe / netprofit_yoy / or_yoy)} · 仅含有数据的股。
+        {symbol: pd.Series (end_date / ann_date / fetched_at / roe / netprofit_yoy / or_yoy)}。
+        仅含有数据的股，fetched_at 是本地缓存成功写入时间 (UTC)。
         空 symbols → 空 dict (不触网)。
     """
     from kan.data.provider_batch import ProviderJob, run_provider_jobs
@@ -239,6 +248,7 @@ def fetch_fundamentals(
         cached = _fresh_cache(symbol, force=force)
         row = _latest_row(cached) if cached is not None else None
         if row is not None:
+            row["fetched_at"] = _fetched_at(symbol)
             out[symbol] = row
         else:
             pending.append(symbol)
@@ -302,6 +312,7 @@ def fetch_fundamentals(
         if row is None:
             continue
         atomic_write_parquet(df, _cache_path(symbol))
+        row["fetched_at"] = _fetched_at(symbol)
         out[symbol] = row
     if failures and lifecycle is not None:
         lifecycle.degraded(

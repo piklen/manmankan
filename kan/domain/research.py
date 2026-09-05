@@ -24,6 +24,7 @@ class ResearchDimension(StrEnum):
 
 class ResearchRequest(StrictModel):
     codes: list[str] = Field(min_length=1, max_length=20)
+    refresh: bool = Field(default=False, description="跳过所请求维度的缓存，重新检查数据源。")
     dimensions: list[ResearchDimension] = Field(
         default_factory=lambda: [
             ResearchDimension.MARKET,
@@ -32,7 +33,7 @@ class ResearchRequest(StrictModel):
         ],
         min_length=1,
         max_length=8,
-        description="请求的事实维度；市场行情是研究包必选基线。",
+        description="按需选择事实维度，单独研究财务或其他指标不依赖行情。",
     )
 
     @field_validator("codes")
@@ -45,8 +46,6 @@ class ResearchRequest(StrictModel):
     @field_validator("dimensions")
     @classmethod
     def validate_dimensions(cls, values: list[ResearchDimension]) -> list[ResearchDimension]:
-        if ResearchDimension.MARKET not in values:
-            raise ValueError("dimensions 必须包含 market 行情基线")
         return list(dict.fromkeys(values))
 
 

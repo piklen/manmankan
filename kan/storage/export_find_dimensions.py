@@ -53,6 +53,8 @@ def _fundamentals_public_dict(f: FundamentalMetrics | None) -> dict | None:
         return None
     return {
         "end_date": f.end_date.isoformat() if f.end_date else None,
+        "ann_date": f.ann_date.isoformat() if f.ann_date else None,
+        "fetched_at": f.fetched_at,
         "roe": f.roe,
         "netprofit_yoy": f.netprofit_yoy,
         "or_yoy": f.or_yoy,

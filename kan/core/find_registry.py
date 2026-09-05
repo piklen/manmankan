@@ -415,7 +415,7 @@ _VALUATION_CONTEXT_FIELDS = (
     "industry", "lookback_days", "industry_sample", "pe_pct_rank", "pb_pct_rank",
     "pe_industry_pct", "pb_industry_pct", "pe_industry_median", "pb_industry_median",
 )
-_FUNDAMENTALS_FIELDS = ("end_date", "roe", "netprofit_yoy", "or_yoy", "source")
+_FUNDAMENTALS_FIELDS = ("end_date", "ann_date", "fetched_at", "roe", "netprofit_yoy", "or_yoy", "source")
 _MONEYFLOW_FIELDS = (
     "trade_date", "net_amount", "buy_elg_amount", "buy_lg_amount",
     "buy_md_amount", "buy_sm_amount", "inflow_days", "outflow_days",
@@ -516,6 +516,7 @@ FIND_FIELD_PRESETS = {
     "@fundamentals": (
         "fundamentals.end_date", "fundamentals.roe", "fundamentals.netprofit_yoy",
         "fundamentals.or_yoy", "fundamentals.source",
+        "fundamentals.ann_date", "fundamentals.fetched_at",
     ),
     "@moneyflow": (
         "moneyflow.trade_date", "moneyflow.net_amount", "moneyflow.buy_elg_amount",

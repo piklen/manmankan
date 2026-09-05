@@ -58,7 +58,7 @@ _NORTH_NOMINEE = "香港中央结算"
 """北向名义持有人 (子串匹配 · 防全称 / 空格差异 · 不误匹配"中国证券登记结算")。"""
 
 _SH_TTL = 90 * 24 * 3600
-"""季度披露 · 90d 长缓存 (逐股 HTTP 贵 · 同 fundamentals · 季报季度更新)。"""
+"""季度披露 · 90d 长缓存 (逐股 HTTP 贵)；可通过 force 显式刷新。"""
 _SH_SOURCE = "tushare_shareholder"
 _HOLDERNUM_FIELDS = "ann_date,end_date,holder_num"
 _TOP10FLOAT_FIELDS = "end_date,holder_name,hold_ratio"
