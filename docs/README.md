@@ -12,7 +12,7 @@
 | [`compliance.md`](compliance.md) | 合规红线 / 关键词黑名单 / 强制文案(贡献代码前必读) |
 | [`cli-errors.md`](cli-errors.md) | CLI 用户面错误格式 / `例:` 可复制命令契约 |
 | [`find.md`](find.md) | `kan find` 数据来源 / JSON schema / 缺数据语义 |
-| [`ai-quickstart.md`](ai-quickstart.md) | 第二入口:AI agent 首用路径 / JSON / MCP 消费规则 |
+| [`ai-quickstart.md`](ai-quickstart.md) | CLI / AI agent 首用路径、JSON / MCP 消费规则 |
 | [`mcp.md`](mcp.md) | 第二入口:MCP 支持客户端 / dry-run / 写入规则 / agent 解释边界 |
 | [`reviews/`](reviews/) | 用户视角的版本回顾(每版新增 / 修复 / 使用示例) |
 

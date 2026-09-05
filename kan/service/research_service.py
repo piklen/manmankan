@@ -95,7 +95,8 @@ def _date(value: Any) -> date | None:
 def _evidence(
     *, symbol: str, dimension: ResearchDimension, source: str | None,
     expected: date, facts: list[ResearchFact], data_date: date | None = None,
-    report_period: date | None = None, fetched_at: str | None = None,
+    report_period: date | None = None, announcement_date: date | None = None,
+    fetched_at: str | None = None,
     notes: list[str] | None = None,
 ) -> ResearchEvidence:
     missing = [fact.field_id for fact in facts if fact.value is None]
@@ -103,6 +104,9 @@ def _evidence(
     freshness: Any = "unknown"
     if len(missing) == len(facts):
         freshness = "unavailable"
+    elif dimension is ResearchDimension.FUNDAMENTALS and report_period and announcement_date and fetched_at and source:
+        # 财务服务只返回24小时内检查过的缓存；公告日不需要等于行情交易日。
+        freshness = "fresh"
     elif data_date is not None and data_date < expected:
         freshness = "stale"
         messages.append("该维度早于最新完整交易日")
@@ -115,6 +119,7 @@ def _evidence(
     section = ResearchEvidence(
         evidence_ref="", symbol=symbol, dimension=dimension, source=source,
         data_date=data_date, report_period=report_period, fetched_at=fetched_at,
+        announcement_date=announcement_date,
         adjustment="qfq" if dimension in (ResearchDimension.MARKET, ResearchDimension.TECHNICAL) else None,
         freshness=freshness, facts=facts, missing_fields=missing, notes=messages,
     )
@@ -150,8 +155,7 @@ def _market_evidence(
     )
 
 
-def _metric_evidence(result: Any, dimension: ResearchDimension, expected: date) -> ResearchEvidence:
-    holder = getattr(result, dimension.value, None)
+def _metric_evidence(symbol: str, holder: Any, dimension: ResearchDimension, expected: date) -> ResearchEvidence:
     facts = []
     for field, label, unit, multiplier in _FIELDS[dimension.value]:
         value = getattr(holder, field, None)
@@ -164,8 +168,11 @@ def _metric_evidence(result: Any, dimension: ResearchDimension, expected: date) 
         ))
     notes: list[str] = []
     report_period = _date(getattr(holder, "end_date", None))
+    announcement_date = _date(getattr(holder, "ann_date", None))
     if dimension is ResearchDimension.FUNDAMENTALS:
-        notes.append("报告期不是公告日；当前接口未保留公告日，90日财务缓存可能尚未更新新披露")
+        notes.append("报告期、公告日和数据源检查时间分别记录；财务按需每日检查，可用 --refresh 立即更新")
+        if announcement_date is None:
+            notes.append("数据源未提供公告日，不用报告期推断发布时间")
     elif dimension is ResearchDimension.SHAREHOLDER:
         # 两种报告期可能不同，不能把它们合成一个看似统一的截止日。
         for name in ("holder_end_date", "top10_end_date"):
@@ -183,15 +190,16 @@ def _metric_evidence(result: Any, dimension: ResearchDimension, expected: date) 
     elif dimension is ResearchDimension.CHIP:
         notes.append("筹码成本为上游估算口径，不代表真实账户持仓成本")
     return _evidence(
-        symbol=result.symbol, dimension=dimension, source=getattr(holder, "source", None),
+        symbol=symbol, dimension=dimension, source=getattr(holder, "source", None),
         expected=expected, facts=facts, data_date=_date(getattr(holder, "trade_date", None)),
-        report_period=report_period, notes=notes,
+        report_period=report_period, announcement_date=announcement_date,
+        fetched_at=getattr(holder, "fetched_at", None), notes=notes,
     )
 
 
 def build_research_bundle(request: ResearchRequest) -> ResearchBundle:
     """生成不含个人持仓的研究包；只补请求维度，缺口不会被填成零。"""
-    from kan.core.enrich import enrich_results
+    from kan.core.enrich import fetch_enrichments
     from kan.core.scanner import scan_stock
     from kan.core.trading_calendar import latest_trade_date
     from kan.data.fetcher import DEFAULT_KLINE_DAYS, cache_age, fetch_batch
@@ -199,60 +207,53 @@ def build_research_bundle(request: ResearchRequest) -> ResearchBundle:
     from kan.storage.watchlist import load_stock_names_cache
 
     expected = latest_trade_date()
-    try:
-        # 180日涨幅需要181根日K，同时保留共享缓存的默认历史深度。
-        frames, fetch_errors = fetch_batch(request.codes, days=max(181, DEFAULT_KLINE_DAYS))
-    except Exception:
-        frames, fetch_errors = {}, dict.fromkeys(request.codes, "data_unavailable")
+    frames: dict[str, Any] = {}
+    fetch_errors: dict[str, str] = {}
+    if ResearchDimension.MARKET in request.dimensions:
+        try:
+            # 180日涨幅需要181根日K，同时保留共享缓存的默认历史深度。
+            frames, fetch_errors = fetch_batch(
+                request.codes, days=max(181, DEFAULT_KLINE_DAYS), force=request.refresh,
+            )
+        except Exception:
+            fetch_errors = dict.fromkeys(request.codes, "data_unavailable")
     try:
         names = load_stock_names_cache(allow_stale=True) or {}
     except Exception:
         names = {}
     errors: list[ResearchFailure] = []
-    bases: list[StockScanResult] = []
     evidence: list[ResearchEvidence] = []
-    for symbol in request.codes:
-        frame = frames.get(symbol)
-        if symbol in fetch_errors or frame is None or frame.empty:
-            errors.append(ResearchFailure(
-                symbol=symbol, code="data_unavailable", message="未取得可用历史行情，可用 kan fetch 对该代码重试",
-            ))
-            continue
+    dimensions = {item.value for item in request.dimensions if item is not ResearchDimension.MARKET}
+    metrics: dict[str, dict[str, Any]] = {}
+    if dimensions:
         try:
-            result = scan_stock(frame, symbol, names.get(symbol, symbol), periods=[20, 60, 180])
-            section = _market_evidence(result, frame, expected, cache_age(symbol))
-        except (ValueError, KeyError, TypeError, IndexError):
-            errors.append(ResearchFailure(symbol=symbol, code="invalid_market_data", message="历史行情无法形成研究事实"))
-            continue
-        bases.append(result)
-        evidence.append(section)
-    dimensions = set(request.dimensions) - {ResearchDimension.MARKET}
-    enriched: list[Any] = list(bases)
-    if dimensions and bases:
-        try:
-            enriched = enrich_results(
-                bases,
-                need_valuation=ResearchDimension.VALUATION in dimensions,
-                require_source_dates=True,
-                need_fundamentals=ResearchDimension.FUNDAMENTALS in dimensions,
-                need_moneyflow=ResearchDimension.MONEYFLOW in dimensions,
-                need_technical=ResearchDimension.TECHNICAL in dimensions,
-                need_sentiment=ResearchDimension.SENTIMENT in dimensions,
-                need_chip=ResearchDimension.CHIP in dimensions,
-                need_shareholder=ResearchDimension.SHAREHOLDER in dimensions,
+            metrics = fetch_enrichments(
+                request.codes, dimensions=dimensions, force=request.refresh, require_source_dates=True,
             )
         except Exception:
-            # 上游异常正文可能含端点或凭据；公开错误只描述失败阶段。
-            errors.append(ResearchFailure(code="enrichment_unavailable", message="指标补充失败，已保留行情事实"))
-    by_symbol = {result.symbol: result for result in enriched}
-    for base in bases:
+            errors.append(ResearchFailure(code="enrichment_unavailable", message="指标补充失败，已保留其他可用事实"))
+    subjects: list[ResearchSubject] = []
+    for symbol in request.codes:
+        sections = []
         for dimension in request.dimensions:
-            if dimension is not ResearchDimension.MARKET:
-                evidence.append(_metric_evidence(by_symbol.get(base.symbol, base), dimension, expected))
-    subjects = [ResearchSubject(
-        symbol=result.symbol, name=result.name,
-        evidence_refs=[item.evidence_ref for item in evidence if item.symbol == result.symbol],
-    ) for result in bases]
+            if dimension is ResearchDimension.MARKET:
+                frame = frames.get(symbol)
+                if symbol in fetch_errors or frame is None or frame.empty:
+                    errors.append(ResearchFailure(symbol=symbol, code="data_unavailable", message="未取得可用历史行情"))
+                    continue
+                try:
+                    result = scan_stock(frame, symbol, names.get(symbol, symbol), periods=[20, 60, 180])
+                    sections.append(_market_evidence(result, frame, expected, cache_age(symbol)))
+                except (ValueError, KeyError, TypeError, IndexError):
+                    errors.append(ResearchFailure(symbol=symbol, code="invalid_market_data", message="历史行情无法形成研究事实"))
+            else:
+                sections.append(_metric_evidence(symbol, metrics.get(symbol, {}).get(dimension.value), dimension, expected))
+        evidence.extend(sections)
+        if any(item.freshness != "unavailable" for item in sections):
+            subjects.append(ResearchSubject(
+                symbol=symbol, name=names.get(symbol, symbol),
+                evidence_refs=[item.evidence_ref for item in sections],
+            ))
     available = sum(item.freshness != "unavailable" for item in evidence)
     fresh = sum(item.freshness == "fresh" for item in evidence)
     missing = sum(len(item.missing_fields) for item in evidence)
@@ -260,6 +261,8 @@ def build_research_bundle(request: ResearchRequest) -> ResearchBundle:
     status: Any = "complete" if fresh == requested and not missing and not errors else "partial"
     if not subjects:
         status = "unavailable"
+        if not errors:
+            errors.append(ResearchFailure(code="data_unavailable", message="所请求维度暂无可用数据"))
     identity = {"request": request.model_dump(mode="json"), "evidence": [item.evidence_ref for item in evidence]}
     return ResearchBundle(
         ok=not errors, bundle_id=f"research:{_hash(identity)}", generated_at=datetime.now(UTC),
@@ -272,7 +275,7 @@ def build_research_bundle(request: ResearchRequest) -> ResearchBundle:
         limitations=[
             "这是事实包，没有调用模型；引用可定位证据，不代表证据已支持任何投资结论",
             "未请求的维度不在本包范围；公告、新闻、现金流量表和交易复盘尚未接入本入口",
-            "生成时间不是数据时间；fresh 只表示该维度日期与预期交易日一致，不证明数值或复权基准无误",
+            "生成时间不是数据时间；fresh 表示日频日期一致或财务来源近期已检查，不证明数值或复权基准无误",
             "没有源交易日的日频指标行不进入事实包，避免用查询日期补成最新数据",
         ],
         disclaimer=DISCLAIMER,

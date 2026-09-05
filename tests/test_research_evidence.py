@@ -14,7 +14,6 @@ from typer.testing import CliRunner
 from kan.cli import app
 from kan.core.models import (
     ChipMetrics,
-    EnrichedResult,
     FundamentalMetrics,
     MoneyflowMetrics,
     SentimentMetrics,
@@ -39,31 +38,30 @@ def research_io(monkeypatch):
         "_source": ["fixture"] * 361,
     })
     fetch = Mock(return_value=({"600519": frame, "000858": frame.copy()}, {}))
-    enrich = Mock(side_effect=lambda rows, **kwargs: [EnrichedResult(
-        **row.model_dump(),
-        valuation=ValuationMetrics(
+    enrich = Mock(side_effect=lambda codes, **kwargs: {symbol: {
+        "valuation": ValuationMetrics(
             trade_date=date(2026, 6, 1), pe_ttm=10, pb=2, total_mv=12345.5,
             source="fixture_valuation",
         ),
-        fundamentals=FundamentalMetrics(
+        "fundamentals": FundamentalMetrics(
             end_date=date(2026, 6, 30), roe=15, netprofit_yoy=0,
             or_yoy=-5, source="fixture_fundamentals",
         ),
-        technical=TechnicalMetrics(trade_date=DAY, close=100, atr=2, source="fixture_technical"),
-        moneyflow=MoneyflowMetrics(trade_date=DAY, net_amount=-2.5, source="fixture_moneyflow"),
-        sentiment=SentimentMetrics(trade_date=DAY, fd_amount=2000, open_times=2, limit="D", source="fixture_limit"),
-        chip=ChipMetrics(trade_date=DAY, winner_rate=5, source="fixture_chip"),
-        shareholder=ShareholderMetrics(
+        "technical": TechnicalMetrics(trade_date=DAY, close=100, atr=2, source="fixture_technical"),
+        "moneyflow": MoneyflowMetrics(trade_date=DAY, net_amount=-2.5, source="fixture_moneyflow"),
+        "sentiment": SentimentMetrics(trade_date=DAY, fd_amount=2000, open_times=2, limit="D", source="fixture_limit"),
+        "chip": ChipMetrics(trade_date=DAY, winner_rate=5, source="fixture_chip"),
+        "shareholder": ShareholderMetrics(
             holder_end_date=date(2026, 6, 30), top10_end_date=date(2026, 3, 31),
             holder_num=1234, north_hold_ratio=0, source="fixture_shareholder",
         ),
-    ) for row in rows])
+    } for symbol in codes})
     holdings = Mock(side_effect=AssertionError("研究不应读取个人账本"))
     monkeypatch.setattr("kan.data.fetcher.fetch_batch", fetch)
     monkeypatch.setattr("kan.data.fetcher.cache_age", lambda code: "2026-09-04 20:00")
     monkeypatch.setattr("kan.storage.watchlist.load_stock_names_cache", lambda **kwargs: {"600519": "样例股份"})
     monkeypatch.setattr("kan.core.trading_calendar.latest_trade_date", lambda: DAY)
-    monkeypatch.setattr("kan.core.enrich.enrich_results", enrich)
+    monkeypatch.setattr("kan.core.enrich.fetch_enrichments", enrich)
     monkeypatch.setattr("kan.storage.positions.load_positions", holdings)
     return fetch, enrich, holdings, frame
 
@@ -96,8 +94,7 @@ def test_bundle_keeps_dimension_dates_units_and_resolvable_references(research_i
     assert not financial.missing_fields
     assert "cash" not in first.model_dump_json()
     holdings.assert_not_called()
-    assert enrich.call_args.kwargs["need_fundamentals"] is True
-    assert enrich.call_args.kwargs["need_technical"] is False
+    assert enrich.call_args.kwargs["dimensions"] == {"valuation", "fundamentals"}
     from kan.data.fetcher import DEFAULT_KLINE_DAYS
     assert fetch.call_args.kwargs["days"] >= max(181, DEFAULT_KLINE_DAYS)
 
@@ -130,9 +127,46 @@ def test_requested_dimensions_do_not_enable_unrequested_metrics(research_io):
     _, enrich, _, _ = research_io
     bundle = build_research_bundle(ResearchRequest(codes=["600519"], dimensions=["market", "technical"]))
     assert [item.dimension.value for item in bundle.evidence] == ["market", "technical"]
-    assert enrich.call_args.kwargs["need_valuation"] is False
-    assert enrich.call_args.kwargs["need_technical"] is True
+    assert enrich.call_args.kwargs["dimensions"] == {"technical"}
     assert enrich.call_args.kwargs["require_source_dates"] is True
+
+
+def test_financial_refresh_is_independent_of_market_and_shared_by_cli_mcp(research_io):
+    fetch, enrich, holdings, _ = research_io
+    enrich.side_effect = None
+    enrich.return_value = {"600519": {"fundamentals": FundamentalMetrics(
+        end_date=date(2026, 6, 30), ann_date=date(2026, 8, 28),
+        fetched_at="2026-09-05T01:00:00+00:00", roe=15, netprofit_yoy=0, or_yoy=-5,
+        source="fixture_fundamentals",
+    )}}
+    payload = {"codes": ["600519"], "dimensions": ["fundamentals"], "refresh": True}
+    bundle = build_research_bundle(ResearchRequest.model_validate(payload))
+    cli = CliRunner().invoke(app, ["research", "600519", "--dimensions", "fundamentals", "--refresh", "--format", "json"])
+    mcp = server._handle_request({"jsonrpc": "2.0", "id": 3, "method": "tools/call", "params": {"name": "kan_research", "arguments": payload}})
+    assert cli.exit_code == 0 and not mcp["result"]["isError"]
+    assert json.loads(cli.stdout)["evidence"] == bundle.model_dump(mode="json")["evidence"] == mcp["result"]["structuredContent"]["evidence"]
+    assert bundle.status == "complete"
+    financial = bundle.evidence[0]
+    assert financial.report_period == date(2026, 6, 30)
+    assert financial.announcement_date == date(2026, 8, 28)
+    assert financial.fetched_at == "2026-09-05T01:00:00+00:00"
+    assert financial.freshness == "fresh"
+    assert enrich.call_args.args == (["600519"],)
+    assert enrich.call_args.kwargs["dimensions"] == {"fundamentals"}
+    assert enrich.call_args.kwargs["force"] is True
+    fetch.assert_not_called()
+    holdings.assert_not_called()
+
+
+def test_unavailable_requested_metrics_are_reported_without_fetching_market(research_io):
+    fetch, enrich, _, _ = research_io
+    enrich.side_effect = None
+    enrich.return_value = {}
+    bundle = build_research_bundle(ResearchRequest(codes=["600519"], dimensions=["fundamentals"]))
+    assert bundle.status == "unavailable" and not bundle.ok
+    assert bundle.evidence[0].freshness == "unavailable"
+    assert bundle.coverage.available_symbols == 0 and not bundle.subjects
+    fetch.assert_not_called()
 
 
 def test_core_enrichment_can_skip_valuation(monkeypatch):
@@ -222,8 +256,10 @@ def test_dependency_failure_is_structured_without_raw_exception(research_io, mon
     bundle = build_research_bundle(ResearchRequest(codes=["600519"]))
     assert "SECRET" not in bundle.model_dump_json()
     if failure in ("fetch", "invalid"):
-        assert bundle.status == "unavailable" and not bundle.ok
-        assert not bundle.evidence
+        assert bundle.status == "partial" and not bundle.ok
+        assert bundle.subjects[0].symbol == "600519"
+        assert _section(bundle, "fundamentals").facts[0].value == 15
+        assert bundle.coverage.available_sections == 2
     elif failure == "enrich":
         assert bundle.status == "partial" and not bundle.ok
         assert _section(bundle, "market").facts[0].value == 100
@@ -234,7 +270,6 @@ def test_dependency_failure_is_structured_without_raw_exception(research_io, mon
 
 @pytest.mark.parametrize("payload", [
     {"codes": []}, {"codes": ["all"]}, {"codes": ["600519"] * 21},
-    {"codes": ["600519"], "dimensions": ["valuation"]},
     {"codes": ["600519"], "dimensions": ["market", "unknown"]},
     {"codes": ["600519"], "unexpected": True},
 ])

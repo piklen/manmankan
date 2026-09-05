@@ -46,9 +46,10 @@ kan web
 ```bash
 kan research 600519
 kan research 600519 000858 --dimensions market,valuation,technical --format json
+kan research 600519 --dimensions fundamentals --refresh --format json
 ```
 
-默认提供市场、估值、财务三个维度；来源、逐维度日期、单位、缺失和引用与数值一起返回。财务报告期不当作公告日，生成时间不当作数据日；不调用模型，也不读取个人持仓。Python 使用 `build_research_bundle`，MCP 使用 `kan_research`。完整范围、部分失败与日期边界见 [`docs/research.md`](docs/research.md)。合并源码不等于已发布 PyPI，新命令在包含该功能的版本中提供。
+默认提供市场、估值、财务三个维度，也可独立查询任一维度；只查财务不拉行情。财务缓存最多复用24小时，`--refresh` 立即检查来源，并分别返回报告期、公告日和检查时间。来源、单位、缺失和引用与数值一起返回；不调用模型，也不读取个人持仓。Python 使用 `build_research_bundle`，MCP 使用 `kan_research`。完整范围、部分失败与日期边界见 [`docs/research.md`](docs/research.md)。合并源码不等于已发布 PyPI，新命令在包含该功能的版本中提供。
 
 ## 普通用户从这里开始
 
@@ -128,17 +129,17 @@ Data, not decisions: no buy/sell advice, no ratings, no price targets. Python 3.
 
 很多选股流程的问题不在于缺少观点，而在于输入太散：自选股、行业成分、题材池、热榜、全市场截面、外部候选代码各有入口；行情位置、估值裸值、资金、技术指标、缺数据状态又分散在不同地方。
 
-慢慢看把这些输入统一成一个可复核的数据层，并按用户优先级提供两种出口：
+慢慢看把这些输入统一成一个可复核的数据层，并提供共用计算的研究入口：
 
-- **第一出口，给普通用户**：Web 完成板块趋势发现、跨日复看、成分股下钻、规则构建、运行证据、候选研究、横向对比、数据更新和持仓闭环。
-- **第二出口，给 AI / 开发者**：CLI、Python API、typed HTTP 和 MCP 执行相同 Screen 契约。
+- **CLI 与 AI 工具**：当前迭代主线，按问题取得研究证据、运行用户规则；JSON、Python API 和 MCP 调用共享服务。
+- **Web 可视化**：提供板块趋势、成分股下钻、规则编辑、运行证据、候选研究、横向对比、数据更新和持仓视图。
 
 如果你要让 AI 参与候选筛选，慢慢看的角色是提供可审计输入：它负责把"坐标"和"条件命中"说清楚，不负责替你下结论。
 
 <details>
 <summary><b>AI / 开发者能力</b></summary>
 
-AI / 开发者是第二用户，但机器契约仍是一等工程能力：
+AI 与脚本通过稳定的机器契约取得和处理事实：
 
 | 设计决策 | 说明 |
 |----------|------|

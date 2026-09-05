@@ -6,7 +6,7 @@ MCP `tools/list` 会返回每个工具的 `inputSchema` 和 `outputSchema`。`to
 
 ## Screen 生命周期 tools
 
-研究事实入口 `kan_research` 使用 `ResearchRequest → ResearchBundle`，直接调用共享 Python 服务。示例参数为 `{"codes":["600519"],"dimensions":["market","valuation","fundamentals"]}`。逐维度日期、来源、单位、缺失与引用在同一个包中返回；不调用模型、不读取持仓。`ok=true,status=partial` 表示执行成功但材料质量不完整；实际取数失败通过 `isError=true` 报告并保留成功部分。完整契约见 [`research.md`](research.md)。
+研究事实入口 `kan_research` 使用 `ResearchRequest → ResearchBundle`，直接调用共享 Python 服务。示例参数为 `{"codes":["600519"],"dimensions":["fundamentals"],"refresh":true}`，只刷新财务，不依赖行情。默认维度为市场、估值、财务；逐维度日期、来源、单位、缺失与引用在同一个包中返回。财务分别记录报告期、公告日和来源检查时间；不调用模型、不读取持仓。`ok=true,status=partial` 表示执行成功但材料质量不完整；实际取数失败通过 `isError=true` 报告并保留成功部分。完整契约见 [`research.md`](research.md)。
 
 vNext 新增五个不经过 shell/CLI 的复合工具：
 

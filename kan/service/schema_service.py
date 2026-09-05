@@ -63,7 +63,7 @@ def _command_schemas(*, compact: bool) -> list[dict[str, Any]]:
             "formats": ["terminal", "json"],
             "schema_version": 1,
             "success_keys": ["ok", "command", "bundle_id", "request", "status", "subjects", "evidence", "coverage", "errors"],
-            "examples": ["kan research 600519 --format json", "kan research 600519 000858 --dimensions market,valuation,technical --format json"],
+            "examples": ["kan research 600519 --format json", "kan research 600519 --dimensions fundamentals --refresh --format json"],
         },
         {
             "name": "examples",

@@ -117,7 +117,7 @@ class TestEnrichResults:
         )
         monkeypatch.setattr(
             "kan.data.shareholder.fetch_shareholder",
-            lambda _symbols: {
+            lambda _symbols, **_kw: {
                 "600519": pd.Series({
                     "holder_end_date": datetime.date(2026, 3, 31),
                     "holder_num": 1000,

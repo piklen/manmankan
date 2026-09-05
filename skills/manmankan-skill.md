@@ -24,7 +24,7 @@
 
 ### 研究证据包
 
-`kan research 600519 --format json` 或 MCP `kan_research` 按明确代码生成同一份研究事实。默认维度为 `market,valuation,fundamentals`，最多20个代码；`--dimensions` 按需加入资金、技术、情绪、筹码和股东维度，必须包含 market。先检查 `status / coverage / errors`，再核对每份 evidence 的来源、日期、单位及缺失。`ok=true` 仅表示没有执行错误，不等于资料完整；季度报告期不是公告日。引用指向包内证据，不代表推断获得证明。完整契约见 `docs/research.md`。
+`kan research 600519 --format json` 或 MCP `kan_research` 按明确代码生成同一份研究事实。默认维度为 `market,valuation,fundamentals`，最多20个代码；各维度可独立请求。`kan research 600519 --dimensions fundamentals --refresh --format json` 只刷新财务，不拉行情；MCP 对应 `refresh:true`。财务按需每日检查来源，分别记录报告期、公告日与检查时间。先检查 `status / coverage / errors`，再核对每份 evidence 的来源、日期、单位及缺失。`ok=true` 仅表示没有执行错误，不等于资料完整；财务 `fresh` 表示近期检查过来源，不等于当日披露。引用指向包内证据，不代表推断获得证明。完整契约见 `docs/research.md`。
 
 ### 0. 可复跑 Screen
 

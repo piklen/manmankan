@@ -122,7 +122,7 @@ SCREEN_STATIC_FIELD_IDS = {
                 "close", "pe_ttm", "pb", "ps_ttm", "dv_ttm", "turnover_rate",
                 "volume_ratio", "total_mv", "circ_mv", "trade_date", "source",
             ),
-            "fundamentals": ("roe", "netprofit_yoy", "or_yoy", "end_date", "source"),
+            "fundamentals": ("roe", "netprofit_yoy", "or_yoy", "end_date", "ann_date", "source"),
             "moneyflow": (
                 "net_amount", "net_amount_5d", "buy_elg_amount", "buy_lg_amount",
                 "inflow_days", "outflow_days", "trade_date", "source",

@@ -1,7 +1,7 @@
 """把 scan 结果按需 enrich 多维指标。
 
 `StockScanResult` (K 线衍生位置 / 共振) + 按需挂载的截面/财务子对象 → `EnrichedResult`:
-- valuation (daily_basic 截面 · 总挂 · 一次 HTTP 拉全市场切子集)
+- valuation (daily_basic 截面 · 扫描默认挂载，研究按需请求)
 - moneyflow (moneyflow_dc 截面 · need_moneyflow · 同截面廉价)
 - fundamentals (fina_indicator 逐股 · need_fundamentals · 逐股 HTTP 贵 · 严格按需)
 
@@ -32,7 +32,7 @@ from kan.core.enrich_relative_strength import (
     attach_relative_strength,
     attach_relative_strength_cross_section,
 )
-from kan.core.enrich_results import enrich_results
+from kan.core.enrich_results import enrich_results, fetch_enrichments
 from kan.core.enrich_rows import (
     _opt_float,
     _row_to_chip,
@@ -56,4 +56,5 @@ __all__ = [
     "attach_relative_strength_cross_section",
     "enrich_results",
     "enrich_scan_rows",
+    "fetch_enrichments",
 ]
