@@ -71,6 +71,12 @@ def _section(bundle, dimension):
     return next(item for item in bundle.evidence if item.dimension == dimension)
 
 
+def test_research_help_shows_statement_dimensions_in_narrow_terminal():
+    result = CliRunner().invoke(app, ["research", "--help"], env={"COLUMNS": "80", "TERM": "dumb", "NO_COLOR": "1"})
+    assert result.exit_code == 0
+    assert all(name in result.output for name in ("income", "balancesheet", "cashflow", "shareholder"))
+
+
 def test_bundle_keeps_dimension_dates_units_and_resolvable_references(research_io):
     fetch, enrich, holdings, _ = research_io
     request = ResearchRequest(codes=["SH.600519"])
