@@ -2,7 +2,7 @@
 
 `manmankan` 给外部 AI agent 提供可审计的 A 股数据输入：typed Screen、CLI、JSON、字段白名单和本地 MCP。工具不内置 LLM；自然语言 parser 只整理明确阈值，最终仍由确定性 Python application service 计算用户规则命中与证据。
 
-源码的 `kan research` 可直接取得个股研究事实。默认包含行情、估值、财务，也可只查需要的维度：
+`kan research` 可直接取得个股研究事实。默认包含行情、估值、财务，也可只查需要的维度：
 
 ```bash
 kan research 600519 --dimensions fundamentals --refresh --format json

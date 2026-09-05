@@ -9,11 +9,25 @@ explicitly approves a larger bump.
 
 ## [Unreleased]
 
+## [0.0.6.9.38] - 2026-09-05
+
+### Added
+
+- 新增 `kan research`、公开 Python `ResearchRequest → ResearchBundle` 和 MCP `kan_research`：按明确代码与所选维度组织来源、日期、单位、缺失和可引用事实，支持部分失败保留，不读取个人持仓、不调用模型。
+- 新增 `income,balancesheet,cashflow` 三表研究维度，按需获取28个关键金额科目，分别保留报告期、公告日、实际公告日和合并报表口径；区分年初累计与期末余额。JSON 使用元，终端大金额标注万元/亿元。
+
 ### Changed
 
+- 财务指标缓存由90天改为按查询触发的24小时检查，并保留公告日与来源检查时间；`research --refresh` 可重新获取请求维度，单独研究财务不依赖历史行情。`find @fundamentals` 同步返回时间信息。
 - `kan range` 改为按下跌/上涨分组、同档位各周期相邻的历史证据表；指定 `--down/--up` 时，先用文字回答到过多少天、收盘收回/收涨或守住/未守住多少次。条件比例同时保留分子/分母，零触及明确标为无样本。
 - 批量终端按输入顺序逐股保留全部请求档位和收盘结果，修复旧紧凑表隐藏 75/85 档、遗漏条件结果的问题；公共说明与小样本提示只显示一次。计算与 JSON 契约不变。
 - 日涨跌幅、折算基准、短窗口重叠与样本边界改用直接说明；帮助页和中国用户快速开始补齐读表路径。收盘中位和最高至收盘回落等诊断明细保留在 JSON。
+
+### Fixed
+
+- 修复 Screen 补充指标后仍被统计为缺失的问题，以及自然语言部分解析结果仍可执行的问题。
+- 研究入口不再额外获取未请求的估值；缺少源交易日的日频指标不补造查询日期，行情失败仍保留其他可用研究材料。
+- 研究帮助页的维度列表支持窄终端换行，避免三表等可选维度被截断。
 
 ## [0.0.6.9.37] - 2026-09-04
 
@@ -709,7 +723,8 @@ explicitly approves a larger bump.
 - **Shell 补全** · zsh / bash / fish / powershell
 - **合规与隐私** · 强制风险提示 + 关键词黑名单（无买卖建议 / 无目标价 / 无评级）· 数据全本地
 
-[Unreleased]: https://github.com/piklen/manmankan/compare/v0.0.6.9.37...HEAD
+[Unreleased]: https://github.com/piklen/manmankan/compare/v0.0.6.9.38...HEAD
+[0.0.6.9.38]: https://github.com/piklen/manmankan/compare/v0.0.6.9.37...v0.0.6.9.38
 [0.0.6.9.37]: https://github.com/piklen/manmankan/compare/v0.0.6.9.36...v0.0.6.9.37
 [0.0.6.9.36]: https://github.com/piklen/manmankan/compare/v0.0.6.9.35...v0.0.6.9.36
 [0.0.6.9.35]: https://github.com/piklen/manmankan/compare/v0.0.6.9.34...v0.0.6.9.35

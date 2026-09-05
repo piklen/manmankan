@@ -57,6 +57,7 @@ jobs:
           /tmp/manmankan-macos-smoke/bin/kan screen --help
           /tmp/manmankan-macos-smoke/bin/kan workspace --help
           /tmp/manmankan-macos-smoke/bin/kan range --help
+          /tmp/manmankan-macos-smoke/bin/kan research --help
 
   build-and-publish:
     name: Build and publish to PyPI
@@ -160,6 +161,7 @@ jobs:
           HOME="$(mktemp -d)" XDG_DATA_HOME="$(mktemp -d)" /tmp/manmankan-release-smoke/bin/kan board trend --help
           HOME="$(mktemp -d)" XDG_DATA_HOME="$(mktemp -d)" /tmp/manmankan-release-smoke/bin/kan history --help
           HOME="$(mktemp -d)" XDG_DATA_HOME="$(mktemp -d)" /tmp/manmankan-release-smoke/bin/kan range --help
+          XDG_DATA_HOME="$(mktemp -d)" /tmp/manmankan-release-smoke/bin/kan research --help
           FIND_JSON="$(mktemp)"
           FIND_ERR="$(mktemp)"
           export FIND_JSON
@@ -278,3 +280,4 @@ jobs:
           KAN_NO_UPDATE_CHECK=1 kan info --help
           KAN_NO_UPDATE_CHECK=1 kan history --help
           KAN_NO_UPDATE_CHECK=1 kan range --help
+          KAN_NO_UPDATE_CHECK=1 kan research --help
