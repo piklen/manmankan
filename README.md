@@ -47,9 +47,12 @@ kan web
 kan research 600519
 kan research 600519 000858 --dimensions market,valuation,technical --format json
 kan research 600519 --dimensions fundamentals --refresh --format json
+kan research 600519 --dimensions income,balancesheet,cashflow --format json
 ```
 
 默认提供市场、估值、财务三个维度，也可独立查询任一维度；只查财务不拉行情。财务缓存最多复用24小时，`--refresh` 立即检查来源，并分别返回报告期、公告日和检查时间。来源、单位、缺失和引用与数值一起返回；不调用模型，也不读取个人持仓。Python 使用 `build_research_bundle`，MCP 使用 `kan_research`。完整范围、部分失败与日期边界见 [`docs/research.md`](docs/research.md)。合并源码不等于已发布 PyPI，新命令在包含该功能的版本中提供。
+
+按需加入 `income,balancesheet,cashflow` 可取得财报三表的28个关键金额科目，用于查看收入与利润、资产负债和现金流。三表分别保留日期，区分年初累计与期末余额；一张表缺失时仍保留其他表的材料。
 
 ## 普通用户从这里开始
 

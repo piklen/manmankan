@@ -62,6 +62,7 @@ def research_io(monkeypatch):
     monkeypatch.setattr("kan.storage.watchlist.load_stock_names_cache", lambda **kwargs: {"600519": "样例股份"})
     monkeypatch.setattr("kan.core.trading_calendar.latest_trade_date", lambda: DAY)
     monkeypatch.setattr("kan.core.enrich.fetch_enrichments", enrich)
+    monkeypatch.setattr("kan.data.financial_statements.fetch_financial_statements", Mock(return_value=({}, {})))
     monkeypatch.setattr("kan.storage.positions.load_positions", holdings)
     return fetch, enrich, holdings, frame
 

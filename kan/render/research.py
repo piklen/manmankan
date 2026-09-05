@@ -5,13 +5,14 @@ from __future__ import annotations
 from rich.console import Console
 from rich.table import Table
 
-from kan.domain.research import ResearchBundle
+from kan.domain.research import STATEMENT_FIELDS, ResearchBundle
 
 
 def print_research_bundle(bundle: ResearchBundle) -> None:
     console = Console()
     labels = {"complete": "所请求字段完整且已核对", "partial": "存在缺口或待核对日期", "unavailable": "暂无可用数据"}
     freshness = {"fresh": "已核对", "stale": "陈旧", "unknown": "待核对", "unavailable": "不可用"}
+    statement_names = {"income": "利润表", "balancesheet": "资产负债表", "cashflow": "现金流量表"}
     console.print(f"慢慢看 · 研究证据包 · {labels[bundle.status]}", markup=False)
     console.print(f"预期交易日 {bundle.expected_trade_date} · 覆盖 {bundle.coverage.available_symbols}/{bundle.coverage.requested_symbols} 只", markup=False)
     by_ref = {item.evidence_ref: item for item in bundle.evidence}
@@ -20,17 +21,26 @@ def print_research_bundle(bundle: ResearchBundle) -> None:
         for ref in subject.evidence_refs:
             section = by_ref[ref]
             date_text = section.data_date or section.report_period or "未知"
-            console.print(f"{section.dimension} · {section.source or '来源未知'} · {date_text} · {freshness[section.freshness]}", markup=False)
+            title = statement_names.get(section.dimension, section.dimension)
+            console.print(f"{title} · {section.source or '来源未知'} · {date_text} · {freshness[section.freshness]}", markup=False)
             if section.announcement_date is not None:
                 console.print(f"公告日 {section.announcement_date} · 数据源检查 {section.fetched_at or '未知'}", markup=False)
+            if section.actual_announcement_date is not None and section.actual_announcement_date != section.announcement_date:
+                console.print(f"实际公告日 {section.actual_announcement_date}", markup=False)
             table = Table(show_header=True, box=None, padding=(0, 1))
             table.add_column("事实", no_wrap=True)
             table.add_column("数值", justify="right")
             table.add_column("单位")
             for fact in section.facts:
                 value = fact.value
+                unit = fact.unit
+                if section.dimension in STATEMENT_FIELDS and isinstance(value, float):
+                    for scale, display_unit in ((100_000_000, "亿元"), (10_000, "万元")):
+                        if abs(value) >= scale:
+                            value, unit = value / scale, display_unit
+                            break
                 text = "缺失" if value is None else (value if isinstance(value, str) else f"{value:,.4f}".rstrip("0").rstrip("."))
-                table.add_row(fact.label, text, fact.unit)
+                table.add_row(fact.label, text, unit)
             console.print(table)
             for note in section.notes:
                 console.print(f"  {note}", markup=False)

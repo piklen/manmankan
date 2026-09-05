@@ -24,6 +24,8 @@
 
 ### 研究证据包
 
+`kan research 600519 --dimensions income,balancesheet,cashflow --format json` 获取三表28个关键金额科目。按表核对 `report_period / announcement_date / actual_announcement_date / report_type / period_basis`：利润与现金流量为年初累计（现金余额项除外），资产负债为期末余额；不能直接把累计值当作单季值。一张表失败时查看 `errors[].dimension`，其余证据仍可用；可加 `--refresh` 更新。
+
 `kan research 600519 --format json` 或 MCP `kan_research` 按明确代码生成同一份研究事实。默认维度为 `market,valuation,fundamentals`，最多20个代码；各维度可独立请求。`kan research 600519 --dimensions fundamentals --refresh --format json` 只刷新财务，不拉行情；MCP 对应 `refresh:true`。财务按需每日检查来源，分别记录报告期、公告日与检查时间。先检查 `status / coverage / errors`，再核对每份 evidence 的来源、日期、单位及缺失。`ok=true` 仅表示没有执行错误，不等于资料完整；财务 `fresh` 表示近期检查过来源，不等于当日披露。引用指向包内证据，不代表推断获得证明。完整契约见 `docs/research.md`。
 
 ### 0. 可复跑 Screen

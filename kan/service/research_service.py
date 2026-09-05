@@ -6,10 +6,11 @@ import hashlib
 import json
 import math
 from datetime import UTC, date, datetime
-from typing import Any
+from typing import Any, Literal
 
 from kan.core.models import StockScanResult
 from kan.domain.research import (
+    STATEMENT_FIELDS,
     ResearchBundle,
     ResearchCoverage,
     ResearchDimension,
@@ -89,13 +90,17 @@ def _number(value: Any, multiplier: float = 1) -> float | None:
 
 
 def _date(value: Any) -> date | None:
-    return value if isinstance(value, date) else None
+    import pandas as pd
+
+    return value if isinstance(value, date) and not pd.isna(value) else None
 
 
 def _evidence(
     *, symbol: str, dimension: ResearchDimension, source: str | None,
     expected: date, facts: list[ResearchFact], data_date: date | None = None,
     report_period: date | None = None, announcement_date: date | None = None,
+    actual_announcement_date: date | None = None, report_type: str | None = None,
+    period_basis: Literal["year_to_date", "period_end"] | None = None,
     fetched_at: str | None = None,
     notes: list[str] | None = None,
 ) -> ResearchEvidence:
@@ -104,7 +109,7 @@ def _evidence(
     freshness: Any = "unknown"
     if len(missing) == len(facts):
         freshness = "unavailable"
-    elif dimension is ResearchDimension.FUNDAMENTALS and report_period and announcement_date and fetched_at and source:
+    elif (dimension is ResearchDimension.FUNDAMENTALS or dimension in STATEMENT_FIELDS) and report_period and (announcement_date or actual_announcement_date) and fetched_at and source:
         # 财务服务只返回24小时内检查过的缓存；公告日不需要等于行情交易日。
         freshness = "fresh"
     elif data_date is not None and data_date < expected:
@@ -120,6 +125,8 @@ def _evidence(
         evidence_ref="", symbol=symbol, dimension=dimension, source=source,
         data_date=data_date, report_period=report_period, fetched_at=fetched_at,
         announcement_date=announcement_date,
+        actual_announcement_date=actual_announcement_date, report_type=report_type,
+        period_basis=period_basis,
         adjustment="qfq" if dimension in (ResearchDimension.MARKET, ResearchDimension.TECHNICAL) else None,
         freshness=freshness, facts=facts, missing_fields=missing, notes=messages,
     )
@@ -197,6 +204,28 @@ def _metric_evidence(symbol: str, holder: Any, dimension: ResearchDimension, exp
     )
 
 
+def _statement_evidence(symbol: str, row: Any, dimension: ResearchDimension, expected: date) -> ResearchEvidence:
+    """三表保留各自报告期与累计/期末口径，不跨表拼成一个假定的共同报告期。"""
+    values = {} if row is None else row
+    basis: Literal["year_to_date", "period_end"] = "period_end" if dimension is ResearchDimension.BALANCESHEET else "year_to_date"
+    notes = [
+        "合并报表；资产负债科目为报告期末余额" if basis == "period_end"
+        else "合并报表；流量科目为年初至报告期累计，现金期初/期末项为余额，不是单季报表",
+        "使用来源最新可得报告；跨表比较须核对报告期，不代表历史时点可得数据",
+    ]
+    return _evidence(
+        symbol=symbol, dimension=dimension, expected=expected,
+        source=f"tushare_{dimension.value}" if row is not None else None,
+        facts=[ResearchFact(field_id=f"{dimension.value}.{field}", label=label,
+                            value=_number(values.get(field)), unit="元")
+               for field, label in STATEMENT_FIELDS[dimension]],
+        report_period=_date(values.get("end_date")), announcement_date=_date(values.get("ann_date")),
+        actual_announcement_date=_date(values.get("f_ann_date")),
+        report_type=values.get("report_type"), period_basis=basis,
+        fetched_at=values.get("fetched_at"), notes=notes,
+    )
+
+
 def build_research_bundle(request: ResearchRequest) -> ResearchBundle:
     """生成不含个人持仓的研究包；只补请求维度，缺口不会被填成零。"""
     from kan.core.enrich import fetch_enrichments
@@ -223,7 +252,8 @@ def build_research_bundle(request: ResearchRequest) -> ResearchBundle:
         names = {}
     errors: list[ResearchFailure] = []
     evidence: list[ResearchEvidence] = []
-    dimensions = {item.value for item in request.dimensions if item is not ResearchDimension.MARKET}
+    dimensions = {item.value for item in request.dimensions
+                  if item is not ResearchDimension.MARKET and item not in STATEMENT_FIELDS}
     metrics: dict[str, dict[str, Any]] = {}
     if dimensions:
         try:
@@ -232,6 +262,18 @@ def build_research_bundle(request: ResearchRequest) -> ResearchBundle:
             )
         except Exception:
             errors.append(ResearchFailure(code="enrichment_unavailable", message="指标补充失败，已保留其他可用事实"))
+    statement_rows: dict[tuple[str, ResearchDimension], Any] = {}
+    statement_dimensions = set(request.dimensions) & STATEMENT_FIELDS.keys()
+    if statement_dimensions:
+        from kan.data.financial_statements import fetch_financial_statements
+
+        statement_rows, failures = fetch_financial_statements(
+            request.codes, dimensions=statement_dimensions, force=request.refresh,
+        )
+        errors.extend(ResearchFailure(
+            symbol=symbol, dimension=dimension, code=failure.kind.value,
+            message=f"未取得 {dimension.value} 报表数据",
+        ) for (symbol, dimension), failure in failures.items())
     subjects: list[ResearchSubject] = []
     for symbol in request.codes:
         sections = []
@@ -246,6 +288,8 @@ def build_research_bundle(request: ResearchRequest) -> ResearchBundle:
                     sections.append(_market_evidence(result, frame, expected, cache_age(symbol)))
                 except (ValueError, KeyError, TypeError, IndexError):
                     errors.append(ResearchFailure(symbol=symbol, code="invalid_market_data", message="历史行情无法形成研究事实"))
+            elif dimension in STATEMENT_FIELDS:
+                sections.append(_statement_evidence(symbol, statement_rows.get((symbol, dimension)), dimension, expected))
             else:
                 sections.append(_metric_evidence(symbol, metrics.get(symbol, {}).get(dimension.value), dimension, expected))
         evidence.extend(sections)
@@ -274,7 +318,7 @@ def build_research_bundle(request: ResearchRequest) -> ResearchBundle:
         errors=errors,
         limitations=[
             "这是事实包，没有调用模型；引用可定位证据，不代表证据已支持任何投资结论",
-            "未请求的维度不在本包范围；公告、新闻、现金流量表和交易复盘尚未接入本入口",
+            "未请求的维度不在本包范围；公告正文、新闻和交易复盘尚未接入本入口",
             "生成时间不是数据时间；fresh 表示日频日期一致或财务来源近期已检查，不证明数值或复权基准无误",
             "没有源交易日的日频指标行不进入事实包，避免用查询日期补成最新数据",
         ],

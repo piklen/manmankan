@@ -6,9 +6,10 @@
 
 ```bash
 kan research 600519 --dimensions fundamentals --refresh --format json
+kan research 600519 --dimensions income,balancesheet,cashflow --format json
 ```
 
-这条命令只刷新财务，返回报告期、公告日和来源检查时间，不要求先拉 K 线。CLI、Python 和 MCP 共用 [`research.md`](research.md) 的请求与证据契约。
+这些命令只取请求的财务材料，不要求先拉 K 线。三表额外返回实际公告日、报表类型及累计/期末口径，跨表比较先核对报告期，不能把累计值当成单季值。CLI、Python 和 MCP 共用 [`research.md`](research.md) 的请求与证据契约。
 
 ## 1. 安装和发现
 
