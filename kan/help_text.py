@@ -22,6 +22,7 @@ def root_help_text() -> str:
 
 [bold cyan]可复跑选股规则[/bold cyan]
   kan screen filters                    查看 27 类条件与数据边界
+  kan screen ohlc --help                 显式日线交集、近期区间低点与复权证据
   kan screen save screen.json           保存规则；内容变化时追加版本
   kan screen run <screen_id>             运行并保存不可变 ScreenRun
   kan screen versions <screen_id>        查看规则版本

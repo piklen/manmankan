@@ -58,6 +58,14 @@ def _command_schemas(*, compact: bool) -> list[dict[str, Any]]:
             ],
         },
         {
+            "name": "screen ohlc",
+            "purpose": "Evaluate explicit joint candle/close and recent range-low rules with a fixed adjustment basis.",
+            "formats": ["json"],
+            "schema_version": 1,
+            "success_keys": ["ok", "command", "request", "as_of", "adjustment", "sources", "coverage", "rows", "evaluated_rows", "excluded"],
+            "examples": ["kan screen ohlc --help"],
+        },
+        {
             "name": "research",
             "purpose": "Build an evidence bundle with per-dimension dates, sources, units and explicit gaps.",
             "formats": ["terminal", "json"],
