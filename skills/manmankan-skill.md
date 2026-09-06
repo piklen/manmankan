@@ -8,6 +8,10 @@
 
 ## 工具概述
 
+用户明确要求“连续同时收阳与收盘上涨＋区间低点日期/位置”时，使用
+`kan screen ohlc --help` 核对显式参数，按 [`docs/ohlc-screen.md`](../docs/ohlc-screen.md)
+执行。该入口固定前复权基准；不要拼接旧 qfq 缓存重算，不把收盘连续或阳线连续替代交集。
+
 **manmankan** (`kan`) 是一个本地优先的 A 股选股研究工作台。
 它提供 React Web、CLI、Python API、typed HTTP 和 MCP，但不内置 LLM；板块趋势由统一 `BoardTrendQuery → BoardTrendSnapshot` 服务计算，跨日事实由 `BoardDailyReview` 保存，股票筛选由统一 `ScreenSpec → ScreenRun` 服务计算。AI 只能整理明确查询/Screen、执行确定性服务和引用已保存证据。
 

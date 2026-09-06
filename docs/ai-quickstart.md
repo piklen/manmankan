@@ -13,6 +13,11 @@ kan research 600519 --dimensions income,balancesheet,cashflow --format json
 
 ## 1. 安装和发现
 
+日线条件同时涉及阳线、相对前收上涨、区间低点日期时，先运行 `kan screen ohlc --help`，
+再传入用户已明确的全部参数。该入口固定复权基准并返回逐日证据，详见
+[`ohlc-screen.md`](ohlc-screen.md)；不能把 `trend --up`、`trend --candle` 或 `find --up-days`
+中的某一个口径当成两者交集。
+
 ```bash
 uv tool install manmankan
 kan --version

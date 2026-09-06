@@ -9,6 +9,11 @@ explicitly approves a larger bump.
 
 ## [Unreleased]
 
+### Added
+
+- 新增 `kan screen ohlc`：按用户显式指定的沪深主板范围、区间、低点日期窗口、位置上限及连续天数，计算每一天同时 `close > open` 且 `close > previous_close` 的交集。平盘、缺行和无效因子不穿透，结果保留完整匹配列表、覆盖率、未达标事实与逐日证据。
+- 日线证据使用 `daily × adj_factor / 截止日 adj_factor` 固定前复权基准，缓存原始事实，避免把不同时间生成的历史 qfq 截面直接拼接。该入口不复用旧位置缓存，不内置阈值、综合分或默认策略；当前支持最近完整交易日，历史时点股票池暂不支持。
+
 ## [0.0.6.9.38] - 2026-09-05
 
 ### Added
