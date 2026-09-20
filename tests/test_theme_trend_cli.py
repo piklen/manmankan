@@ -341,6 +341,33 @@ def test_trend_failure_diagnosis_passes_server_msg_through(monkeypatch):
     assert "***3835" in result.output
 
 
+@pytest.mark.parametrize("message,permission_denied", [
+    ("无该接口权限", True),
+    ("抱歉，您没有访问该接口的权限", True),
+    ("频率超限，接口权限详情请查看权限说明", False),
+])
+def test_trend_failure_diagnosis_distinguishes_40203_messages(
+    monkeypatch, message, permission_denied,
+):
+    from kan.data.theme_leaderboard import LeaderboardDiagnosis
+    from kan.data.tushare import DEFAULT_ENDPOINT
+
+    diagnosis = LeaderboardDiagnosis(
+        tushare_attempted=True,
+        tushare_failed_at="catalog",
+        tushare_endpoint=DEFAULT_ENDPOINT,
+        tushare_error_code=40203,
+        tushare_error_msg=message,
+    )
+    _stub_leaderboard(monkeypatch, results=[], diagnosis=diagnosis)
+    result = CliRunner().invoke(app, ["theme", "trend"])
+    assert result.exit_code == 1
+    assert message in result.output
+    assert "code=40203" in result.output
+    assert ("当前账号无该接口权限" in result.output) == permission_denied
+    assert ("频率超限 · 频次表见" in result.output) != permission_denied
+
+
 def test_trend_failure_diagnosis_token_invalid(monkeypatch):
     """code=40101 token 不对 → 推 token 重复制(不推切端点)。"""
     from kan.data.theme_leaderboard import LeaderboardDiagnosis

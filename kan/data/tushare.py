@@ -45,7 +45,7 @@ class TushareApiError:
     """TuShare API 失败的结构化错误 · 让上层 caller(diagnosis 渲染)能拿到真实 server msg。
 
     Fields:
-      code:     TuShare 业务码 (40101 token 不对 / 40203 频率超限 / 40004 积分不足 /
+      code:     TuShare 业务码 (40101 token 不对 / 40203 限频或接口无权限 / 40004 积分不足 /
                 负数 = 客户端层失败: -1 网络 · -2 HTTP 非 2xx · -3 response 非 JSON)
       msg:      sanitized server msg (经 redact_text 处理 · token-like pattern → ***)·
                 直接给用户看是安全的
@@ -69,12 +69,20 @@ class TushareApiError:
 _DATA_HUB_RETRYABLE_CODES = {40203, 50002, 50003, 50004}
 """data-hub/TuShare 兼容协议里的可重试业务错误。
 
-这些错误说明当前请求被限流、排队、超时或回源背压；它们不等价于
-TuShare 源全局不可用，不能写入 manmankan 本地 5 分钟熔断。
+这些错误通常表示当前请求被限流、排队、超时或回源背压；40203 也可能
+表示接口无权限，须优先检查消息。它们不等价于 TuShare 源全局不可用。
 """
 
 _DATA_HUB_RETRYABLE_HEADER = "X-Data-Hub-Error-Retryable"
 _DATA_HUB_RETRY_AFTER_HEADER = "X-Data-Hub-Retry-After"
+
+
+def is_tushare_permission_denied(code: int | str | None, msg: str | None) -> bool:
+    """40203 同时用于限频和权限拒绝，仅按明确拒绝语句区分。"""
+    return str(code) == "40203" and any(
+        marker in (msg or "")
+        for marker in ("无该接口权限", "没有访问该接口的权限")
+    )
 
 
 def _make_session(*, retries: int = 1) -> requests.Session:
@@ -222,7 +230,7 @@ def _post_tushare_api(
     - code=-1: 网络异常 / DNS / 超时
     - code=-2: HTTP 非 2xx
     - code=-3: response 非 JSON
-    - code>0:  TuShare 业务码 (40101 token 不对 / 40203 频率超限 / 40004 积分不足 ...)
+    - code>0:  TuShare 业务码 (40101 token 不对 / 40203 限频或接口无权限 ...)
 
     关键不变量:
     - token 永不进入 logs / exceptions / 返回的 error.msg
@@ -312,7 +320,12 @@ def _post_tushare_api(
         retry_after = _parse_retry_after(headers.get(_DATA_HUB_RETRY_AFTER_HEADER))
         if retry_after is None:
             retry_after = _parse_retry_after(headers.get("Retry-After"))
-        if numeric_code == 40203:
+        if is_tushare_permission_denied(numeric_code, sanitized_msg):
+            # 明确权限拒绝不能因通用业务码或重试头被当作暂时限流。
+            retryable = False
+            retry_after = None
+            failure_kind = FetchFailureKind.PERMANENT
+        elif numeric_code == 40203:
             failure_kind = FetchFailureKind.RATE_LIMIT
         elif retryable:
             failure_kind = FetchFailureKind.TRANSPORT
@@ -382,9 +395,8 @@ def _api_error_to_failure(err: TushareApiError | None) -> FetchFailure:
 def _should_trip_tushare_circuit(err: TushareApiError | None) -> bool:
     """哪些错误应让本地 tushare 源进入 down 窗口。
 
-    data-hub 的 40203/50002/50003/50004 是请求级背压 / 限流 / 排队，
-    上游和 endpoint 仍可能健康；让它们触发 5 分钟整源熔断会把后续
-    股票全部误降级到 baostock。
+    40203 的接口权限拒绝，以及 data-hub 的请求级背压 / 限流 / 排队，
+    均不表示其他接口不可用；不能让它们触发 5 分钟整源熔断。
     """
     # 可重试错误只属于当前请求：批量任务里一次网络抖动会同时产生多个失败，
     # 若把第一条写入跨进程 5 分钟熔断，剩余数千任务会全部误判主源不可用。

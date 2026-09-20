@@ -9,6 +9,12 @@ explicitly approves a larger bump.
 
 ## [Unreleased]
 
+## [0.0.6.9.39] - 2026-09-21
+
+### Fixed
+
+- TuShare `40203` 同时用于限频和接口权限拒绝；明确无权限时保留原始错误，但不再重试、冷却或降低批量并发，也不影响其他接口。题材 CLI 同步显示权限原因，真实限频仍按原有退避处理。
+
 ### Added
 
 - 新增 `kan screen ohlc`：按用户显式指定的沪深主板范围、区间、低点日期窗口、位置上限及连续天数，计算每一天同时 `close > open` 且 `close > previous_close` 的交集。平盘、缺行和无效因子不穿透，结果保留完整匹配列表、覆盖率、未达标事实与逐日证据。
@@ -728,7 +734,8 @@ explicitly approves a larger bump.
 - **Shell 补全** · zsh / bash / fish / powershell
 - **合规与隐私** · 强制风险提示 + 关键词黑名单（无买卖建议 / 无目标价 / 无评级）· 数据全本地
 
-[Unreleased]: https://github.com/piklen/manmankan/compare/v0.0.6.9.38...HEAD
+[Unreleased]: https://github.com/piklen/manmankan/compare/v0.0.6.9.39...HEAD
+[0.0.6.9.39]: https://github.com/piklen/manmankan/compare/v0.0.6.9.38...v0.0.6.9.39
 [0.0.6.9.38]: https://github.com/piklen/manmankan/compare/v0.0.6.9.37...v0.0.6.9.38
 [0.0.6.9.37]: https://github.com/piklen/manmankan/compare/v0.0.6.9.36...v0.0.6.9.37
 [0.0.6.9.36]: https://github.com/piklen/manmankan/compare/v0.0.6.9.35...v0.0.6.9.36
