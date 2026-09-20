@@ -74,11 +74,13 @@ def _render_failure_diagnosis(diagnosis) -> list[str]:
     lines.append("")
     lines.append("可能修复:")
     if diagnosis.tushare_attempted and diagnosis.tushare_failed_at:
-        from kan.data.tushare import DEFAULT_ENDPOINT
+        from kan.data.tushare import DEFAULT_ENDPOINT, is_tushare_permission_denied
 
         code = diagnosis.tushare_error_code
-        # 按 server 实际 code 给精准建议 · 替代之前的脑补文案
-        if code == 40101:
+        # 40203 可能复用于权限拒绝，明确消息优先于通用码。
+        if is_tushare_permission_denied(code, diagnosis.tushare_error_msg):
+            lines.append("  · 当前账号无该接口权限 · 请核对该接口的权限要求，等待不会自动恢复权限")
+        elif code == 40101:
             # token 不对
             lines.append("  · token 无效 · 检查 https://tushare.pro/user/token 重新复制完整 token")
         elif code == 40203:

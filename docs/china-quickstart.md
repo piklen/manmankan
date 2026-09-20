@@ -181,6 +181,8 @@ TUSHARE_TOKEN=<你的_token> kan find --all --pe lt:20 --format json --compact
 
 不要把 token 贴到 issue、日志、截图或文档里。`kan config get` 会 mask token；`KAN_DEBUG=1` 也会做脱敏，但公开反馈前仍应人工检查。
 
+TuShare 业务码 `40203` 可能表示限频，也可能表示接口无权限，应结合原始消息判断。明确返回“无该接口权限”时，工具不会自动重试或降低批量并发；请核对该接口的权限要求。真正的频率超限仍会退避，不能靠等待解决权限缺失。
+
 ## 6. 读懂 `data_unavailable`
 
 `data_unavailable` 表示当前命令依赖的数据维度没有形成可用证据。它不是安装失败，也不是“没有符合条件的股票”。先看 `error.message` 判断缺的是哪类数据，再决定是配置 TuShare、换更小的代码池，还是去掉对应 filter。
