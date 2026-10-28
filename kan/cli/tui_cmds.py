@@ -11,15 +11,15 @@ from kan.app import app
 
 @app.command()
 def tui() -> None:
-    """打开键盘工作台：我的关注、行情变化、证据与观察笔记。"""
+    """打开键盘工作台：已保存研究、同条件重跑、当前匹配与历史证据。"""
     if not sys.stdin.isatty() or not sys.stdout.isatty():
         typer.echo(
             "kan tui 需要交互终端。请在终端直接运行；"
-            "脚本可用 kan daily --format json，网页使用 kan web。",
+            "脚本可用 kan study --help，网页使用 kan web。",
             err=True,
         )
         raise typer.Exit(2)
 
-    from kan.tui.app import FocusApp
+    from kan.tui.app import StudyApp
 
-    FocusApp().run()
+    StudyApp().run()

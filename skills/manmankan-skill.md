@@ -1,6 +1,7 @@
 # manmankan Skill · AI Agent 能力清单
 
-个人日常入口是 `kan web` 和交互式 `kan tui`：关注对象、缓存行情、笔记与复看共用 `kan.service.focus_service`。自动化不要启动 TUI，继续使用本文的 CLI/JSON/MCP 契约。关注工作台的日期与复看口径见 [`docs/focus-workspace.md`](../docs/focus-workspace.md)。
+当前主线是趋势搜索与定位。Web/TUI 提供地图与样本交互；AI 用 `kan study schema`、`kan study catalog` 发现确定性条件契约，用 `kan study run query.json --format json` 同时取得当前匹配、历史事件和完整分母，用 `rerun <id> --latest` 显式推进数据日。价格/位置/形态距离共用计算，不由模型另算；公开接口按当前契约使用，不做历史兼容。
+
 
 > 本文件是给 AI Agent 读的"说明书"。
 > 当 Agent 读到本文件时，它应该能够自主发现 manmankan 的全部能力、命令语法、输出格式和错误处理方式。

@@ -15,11 +15,18 @@ def root_help_text() -> str:
     return f"""[bold]慢慢看 · 命令速记[/bold]
 
 [bold cyan]普通用户先从这里开始[/bold cyan]
-  kan tui                   键盘工作台：我的关注 / 看变化 / 记观察
-  kan web                   打开选股工作台：规则 / 运行 / 候选 / 对比 / 数据
+  kan tui                   键盘研究：已存条件 / 重跑 / 当前匹配 / 历史证据
+  kan web                   趋势地图 / 多周期位置 / 形态搜索 / 历史证据
   kan daily                 在终端查看一日事实概览
   kan guide                 只看最常用的下一步
   kan help                  查看这份完整命令表
+
+[bold cyan]趋势与历史研究[/bold cyan]
+  kan study catalog                      查看条件字段、定义和单位
+  kan study schema                       查看研究输入格式
+  kan study run query.json --format json  执行明确条件并保存图证
+  kan study list --format json            读取已保存研究
+  kan study rerun <study_id> --latest     推进到最近收盘并比较变化
 
 [bold cyan]可复跑选股规则[/bold cyan]
   kan screen filters                    查看 27 类条件与数据边界
@@ -183,8 +190,8 @@ def root_help_text() -> str:
   kan config unset tushare-token              清凭证
   kan status                                  本地数据状态（缓存/新鲜度/凭证/熔断 · 不联网）
 
-[bold cyan]本地选股工作台 (Web)[/bold cyan]
-  kan web                   浏览器打开 Screen / 候选 / 对比 / 研究 / 数据 / 持仓
+[bold cyan]本地趋势研究 (Web)[/bold cyan]
+  kan web                   浏览器打开趋势发现、研究记录与数据工具
   kan web --port 8876 --no-open  指定端口 · 不自动开浏览器（仅监听本机回环）
 
 [bold cyan]版本管理[/bold cyan]
@@ -220,11 +227,11 @@ def print_root_help() -> None:
 
 def start_help_text() -> str:
     """无参数启动时只展示普通散户的最短路径。"""
-    return """[bold]慢慢看 · 看清变化，留下观察[/bold]
+    return """[bold]慢慢看 · 找趋势，核对位置与历史[/bold]
 
-  kan web       浏览器工作台：关注、变化与研究
-  kan tui       键盘工作台：方向键选择，回车查看，随手记观察
-  kan daily     一次输出关注池事实，支持 --format json
+  kan web       浏览器研究台：趋势、位置与条件验证
+  kan tui       键盘研究台：方向键选择，回车查证，r 重跑
+  kan study     可编排研究入口，支持 --format json
   kan help      完整 CLI 命令与自动化入口
 
 [dim]数据保存在本机 · 不登录 manmankan 服务 · 不云同步 / 遥测[/dim]

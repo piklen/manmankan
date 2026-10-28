@@ -179,6 +179,8 @@ def test_market_refresh_single_worker_success_and_failures(
     first = job_service.start_market_refresh_job(request)
     duplicate = job_service.start_market_refresh_job(request)
     assert duplicate.job_id == first.job_id
+    with pytest.raises(ValueError, match="另一份行情更新"):
+        job_service.start_market_refresh_job(MarketRefreshRequest(scope="codes", codes=["000001"]))
 
     workspace_db.update_job(first.job_id, status=JobStatus.SUCCEEDED)
     replacement = job_service.start_market_refresh_job(request)

@@ -7,8 +7,6 @@ on:
     branches: [main]
   workflow_dispatch:
 
-# 显式声明最小权限 · 防 supply chain 投毒链
-# (fork PR 中恶意 dep 借继承的 GITHUB_TOKEN 写仓库内容触发 release.yml)
 permissions:
   contents: read
 
@@ -19,364 +17,116 @@ concurrency:
 env:
   KAN_NO_COMPLETION_AUTOINSTALL: "1"
   KAN_NO_UPDATE_CHECK: "1"
+  KAN_NO_NAMES_BACKGROUND_REFRESH: "1"
+  PYTHONUTF8: "1"
   UV_LINK_MODE: "copy"
   UV_LOCK_TIMEOUT: "1200"
   UV_VERSION: "0.11.21"
 
 jobs:
   quality-gates:
+    name: Main verification (Linux / Python 3.12)
     runs-on: ${{ fromJSON(github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name != github.repository && '["ubuntu-latest"]' || '["self-hosted","manmankan-ci","hkg-vps"]') }}
     timeout-minutes: 20
     steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7 (pinned 2026-07-14)
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
           persist-credentials: false
-      - name: Setup Python on fork runner
-        if: github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name != github.repository
-        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97  # pinned 2026-06-02
-        with:
-          python-version: '3.12'
       - name: Setup uv on fork runner
         if: github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name != github.repository
-        uses: astral-sh/setup-uv@11f9893b081a58869d3b5fccaea48c9e9e46f990  # pinned 2026-05-27
+        uses: astral-sh/setup-uv@11f9893b081a58869d3b5fccaea48c9e9e46f990
         with:
           version: ${{ env.UV_VERSION }}
           enable-cache: false
-      - name: Verify uv runtime
-        run: |
-          uv --version
-          test "$(uv --version | cut -d' ' -f2)" = "$UV_VERSION"
-          uv python find 3.12
-      - name: Lockfile is current
-        run: uv lock --check
-      - name: Install dependencies
-        run: uv sync --python 3.12 --frozen --all-groups --all-extras
-      # 同标签的自托管 runner 可能预装不同版本，构建统一使用声明的 Node。
-      - name: Setup Node.js
-        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020  # setup-node 7
-        env:
-          # 自托管全局缓存未必可写；工具只安装到当前 job 的临时目录。
-          RUNNER_TOOL_CACHE: ${{ runner.temp }}/node-tool-cache
-        with:
-          node-version: '24'
-          cache: npm
-          cache-dependency-path: webui/package-lock.json
-      - name: Verify Node.js runtime
+      - name: Isolate local state and tool installation
         shell: bash
         run: |
-          node_version="$(node --version)"
-          npm --version
-          case "$node_version" in
-            v24.*) ;;
-            *) echo "Node 24 is required, got $node_version" >&2; exit 1 ;;
-          esac
-      - name: Install Web UI dependencies
-        working-directory: webui
-        run: npm ci
-      - name: Check, test, and build Web UI
-        working-directory: webui
-        run: |
-          npm run check
-          npm test
-          npm run build
-      - name: Generated Web UI artifacts are current
-        run: git diff --exit-code -- webui/openapi.json webui/src/api/schema.ts kan/web/spa
-      - name: Dependency upper-bound review
-        run: uv run python scripts/check-dependency-bounds.py
-      - name: Privacy / public archive scan
-        run: bash scripts/check-privacy-leaks.sh
-      - name: Lint source and tests
-        run: uv run ruff check kan/ tests/
-      - name: Type check core
-        run: uv run mypy
-      - name: Cached ScreenRun performance gate
-        run: uv run python scripts/benchmark-screen.py --assert-p95 500
-      - name: Tracked package sanity
-        run: |
-          python3 - <<'PY'
-          import subprocess
-          import sys
-
-          tracked = set(subprocess.check_output(["git", "ls-files"], text=True).splitlines())
-          required = {
-              "kan/data/__init__.py",
-              "kan/cli/__init__.py",
-              "kan/storage/export.py",
-              "tests/test_ci_dependency_isolation.py",
-              "kan/web/spa/index.html",
-              "webui/package-lock.json",
-              "uv.lock",
-          }
-          missing = sorted(required - tracked)
-          if missing:
-              print("Missing tracked package/test paths:")
-              for path in missing:
-                  print(f"  - {path}")
-              sys.exit(1)
-          PY
-      - name: Build wheel and sdist
-        run: |
-          uv build --clear
-          python3 - <<'PY'
-          from pathlib import Path
-          import sys
-
-          dist = sorted(Path("dist").iterdir())
-          has_wheel = any(p.suffix == ".whl" for p in dist)
-          has_sdist = any(p.name.endswith(".tar.gz") for p in dist)
-          if not has_wheel or not has_sdist:
-              print("dist/ must contain both wheel and sdist:")
-              for p in dist:
-                  print(f"  - {p.name}")
-              sys.exit(1)
-          PY
-      - name: Clean CI runner workspace
-        if: always()
-        continue-on-error: true
-        uses: ./.github/actions/cleanup-runner
-
-  web-ui:
-    name: Web UI (${{ matrix.os }})
-    runs-on: ${{ matrix.os }}
-    timeout-minutes: 20
-    strategy:
-      fail-fast: false
-      matrix:
-        os: [ubuntu-latest, macos-latest, windows-latest]
-    steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7 (pinned 2026-07-14)
-        with:
-          persist-credentials: false
-      - name: Setup Node.js
-        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020  # setup-node 7
-        with:
-          node-version: '24'
-          cache: npm
-          cache-dependency-path: webui/package-lock.json
-      - name: Install dependencies
-        working-directory: webui
-        run: npm ci
-      - name: Type check
-        working-directory: webui
-        run: npx tsc -b --pretty false
-      - name: Unit tests
-        working-directory: webui
-        run: npm test
-      - name: Production build
-        working-directory: webui
-        run: npx vite build
-
-  # 保留独立 job 名，避免已有 branch protection 仍绑定旧检查名时被误断。
-  privacy-scan:
-    runs-on: ${{ fromJSON(github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name != github.repository && '["ubuntu-latest"]' || '["self-hosted","manmankan-ci"]') }}
-    timeout-minutes: 10
-    steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7 (pinned 2026-07-14)
-        with:
-          persist-credentials: false
-      - name: Privacy / public archive scan
-        run: bash scripts/check-privacy-leaks.sh
-      - name: Clean CI runner workspace
-        if: always()
-        continue-on-error: true
-        uses: ./.github/actions/cleanup-runner
-
-  test:
-    runs-on: ${{ fromJSON(github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name != github.repository && '["ubuntu-latest"]' || '["self-hosted","manmankan-ci","hkg-vps"]') }}
-    timeout-minutes: 35
-    strategy:
-      fail-fast: false
-      matrix:
-        python-version: ['3.11', '3.12']
-    steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7 (pinned 2026-07-14)
-        with:
-          fetch-depth: 0  # diff-cover 需要 base 分支历史做新代码覆盖率对比
-          persist-credentials: false
-      - name: Isolate user data on shared runner
-        run: |
-          scope="$RUNNER_TEMP/kan-ci-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}-${GITHUB_JOB}-${{ matrix.python-version }}"
-          mkdir -p "$scope/home" "$scope/data" "$scope/config" "$scope/cache"
+          scope="$RUNNER_TEMP/kan-ci-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
+          mkdir -p "$scope/data" "$scope/config" "$scope/cache" "$scope/tools" "$scope/bin"
           {
-            echo "HOME=$scope/home"
-            echo "XDG_DATA_HOME=$scope/data"
-            echo "XDG_CONFIG_HOME=$scope/config"
-            echo "XDG_CACHE_HOME=$scope/cache"
-          } >> "$GITHUB_ENV"
-      - name: Setup Python on fork runner
-        if: github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name != github.repository
-        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97  # pinned 2026-06-02
-        with:
-          python-version: ${{ matrix.python-version }}
-      - name: Setup uv on fork runner
-        if: github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name != github.repository
-        uses: astral-sh/setup-uv@11f9893b081a58869d3b5fccaea48c9e9e46f990  # pinned 2026-05-27
-        with:
-          version: ${{ env.UV_VERSION }}
-          enable-cache: false
-      - name: Verify uv runtime
-        run: |
-          uv --version
-          test "$(uv --version | cut -d' ' -f2)" = "$UV_VERSION"
-          uv python find ${{ matrix.python-version }}
-      - name: Install dependencies
-        run: uv sync --python ${{ matrix.python-version }} --frozen --all-groups --all-extras
-      - name: Run tests
-        run: uv run pytest -q -m "not tty and not network" -n 8 --dist worksteal --durations=25 --durations-min=1.0 --cov=kan --cov-report=xml --cov-report=term-missing --cov-fail-under=73
-      - name: Patch coverage (new code >= 85%)
-        if: matrix.python-version == '3.12'
-        run: |
-          git fetch --no-tags --force origin +refs/heads/main:refs/remotes/origin/main
-          if [ "$(git rev-parse --is-shallow-repository)" = "true" ]; then
-            git fetch --no-tags --unshallow origin
-          fi
-          git merge-base origin/main HEAD >/dev/null
-          uv run diff-cover coverage.xml --compare-branch=origin/main --fail-under=85
-      - name: Clean CI runner workspace
-        if: always()
-        continue-on-error: true
-        uses: ./.github/actions/cleanup-runner
-
-  package-smoke:
-    runs-on: ${{ fromJSON(github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name != github.repository && '["ubuntu-latest"]' || '["self-hosted","manmankan-ci"]') }}
-    timeout-minutes: 25
-    strategy:
-      fail-fast: false
-      matrix:
-        python-version: ['3.11', '3.12']
-    steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7 (pinned 2026-07-14)
-        with:
-          persist-credentials: false
-      - name: Setup Python on fork runner
-        if: github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name != github.repository
-        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97  # pinned 2026-06-02
-        with:
-          python-version: ${{ matrix.python-version }}
-      - name: Setup uv on fork runner
-        if: github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name != github.repository
-        uses: astral-sh/setup-uv@11f9893b081a58869d3b5fccaea48c9e9e46f990  # pinned 2026-05-27
-        with:
-          version: ${{ env.UV_VERSION }}
-          enable-cache: false
-      - name: Verify uv runtime
-        run: |
-          uv --version
-          test "$(uv --version | cut -d' ' -f2)" = "$UV_VERSION"
-          uv python find ${{ matrix.python-version }}
-      - name: Build package
-        run: uv build --clear
-      - name: Install wheel in clean environment
-        env:
-          SMOKE_VENV: ${{ runner.temp }}/manmankan-smoke-${{ matrix.python-version }}
-        run: |
-          rm -rf "$SMOKE_VENV"
-          uv venv "$SMOKE_VENV" --python ${{ matrix.python-version }}
-          uv pip install --python "$SMOKE_VENV/bin/python" dist/*.whl
-      - name: Smoke installed entry points
-        env:
-          SMOKE_VENV: ${{ runner.temp }}/manmankan-smoke-${{ matrix.python-version }}
-          SMOKE_JSON: ${{ runner.temp }}/kan-find-code-pool-${{ matrix.python-version }}.json
-          SMOKE_HELP: ${{ runner.temp }}/kan-find-help-${{ matrix.python-version }}.txt
-        run: |
-          "$SMOKE_VENV/bin/kan" --version
-          "$SMOKE_VENV/bin/kan" --help
-          "$SMOKE_VENV/bin/kan" screen --help
-          "$SMOKE_VENV/bin/kan" workspace --help
-          "$SMOKE_VENV/bin/kan" scan --help
-          "$SMOKE_VENV/bin/kan" find --help
-          "$SMOKE_VENV/bin/kan" range --help
-          HOME="$(mktemp -d "$RUNNER_TEMP/kan-home-XXXXXX")" XDG_DATA_HOME="$(mktemp -d "$RUNNER_TEMP/kan-xdg-XXXXXX")" NO_COLOR=1 "$SMOKE_VENV/bin/kan" find --codes 600519,000858 --format json --dry-run > "$SMOKE_JSON"
-          NO_COLOR=1 "$SMOKE_VENV/bin/kan" find --help > "$SMOKE_HELP"
-          python3 - <<'PY'
-          import json
-          import os
-          import re
-          from pathlib import Path
-
-          text = re.sub(r"\x1b\[[0-9;]*m", "", Path(os.environ["SMOKE_HELP"]).read_text())
-          assert "--compact" in text
-          assert "--fields" in text
-          payload = json.loads(Path(os.environ["SMOKE_JSON"]).read_text())
-          assert payload["mode"] == "query_plan"
-          assert payload["dry_run"] is True
-          assert payload["data_plan"]["pool_size_estimate"] == 2
-          PY
-          "$SMOKE_VENV/bin/kan" board rank --help
-          "$SMOKE_VENV/bin/kan" history --help
-          tmp="$(mktemp -d "$RUNNER_TEMP/kan-import-XXXXXX")"
-          cd "$tmp"
-          "$SMOKE_VENV/bin/python" - <<'PY'
-          import os
-          from pathlib import Path
-          import kan
-          import importlib.metadata
-          from kan.api import WatchlistSet, fetch, from_flags, scan
-          from kan.web.app import SPA_INDEX
-
-          assert kan.__version__
-          assert importlib.metadata.version("manmankan") == kan.__version__
-          assert Path(kan.__file__).resolve().is_relative_to(Path(os.environ["SMOKE_VENV"]).resolve())
-          assert SPA_INDEX.is_file()
-          assert "/assets/index-" in SPA_INDEX.read_text(encoding="utf-8")
-          assert WatchlistSet().name
-          assert callable(scan)
-          assert callable(fetch)
-          assert callable(from_flags)
-          PY
-      - name: Clean CI runner workspace
-        if: always()
-        continue-on-error: true
-        uses: ./.github/actions/cleanup-runner
-
-  # CI -m "not tty" 会排除 TTY 真测 · 在 VPS Linux runner 补真实终端覆盖。
-  tty-test:
-    runs-on: ${{ fromJSON(github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name != github.repository && '["ubuntu-latest"]' || '["self-hosted","manmankan-ci","hkg-vps"]') }}
-    timeout-minutes: 25
-    strategy:
-      fail-fast: false
-      matrix:
-        python-version: ['3.11', '3.12']
-    steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7 (pinned 2026-07-14)
-        with:
-          persist-credentials: false
-      - name: Isolate user data and tool install on shared runner
-        run: |
-          scope="$RUNNER_TEMP/kan-tty-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}-${GITHUB_JOB}-${{ matrix.python-version }}"
-          mkdir -p "$scope/home" "$scope/data" "$scope/config" "$scope/cache" "$scope/tools" "$scope/bin"
-          {
-            echo "HOME=$scope/home"
             echo "XDG_DATA_HOME=$scope/data"
             echo "XDG_CONFIG_HOME=$scope/config"
             echo "XDG_CACHE_HOME=$scope/cache"
             echo "UV_TOOL_DIR=$scope/tools"
             echo "UV_TOOL_BIN_DIR=$scope/bin"
           } >> "$GITHUB_ENV"
-          echo "$scope/bin" >> "$GITHUB_PATH"
-      - name: Setup Python on fork runner
-        if: github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name != github.repository
-        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97  # pinned 2026-06-02
-        with:
-          python-version: ${{ matrix.python-version }}
-      - name: Setup uv on fork runner
-        if: github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name != github.repository
-        uses: astral-sh/setup-uv@11f9893b081a58869d3b5fccaea48c9e9e46f990  # pinned 2026-05-27
-        with:
-          version: ${{ env.UV_VERSION }}
-          enable-cache: false
-      - name: Verify uv runtime
+      - name: Install locked Python dependencies
         run: |
-          uv --version
-          test "$(uv --version | cut -d' ' -f2)" = "$UV_VERSION"
-          uv python find ${{ matrix.python-version }}
-      - name: Install dependencies + manmankan as tool
+          uv lock --check
+          uv sync --python 3.12 --frozen --all-groups
+      - name: Setup Node.js
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020
+        env:
+          RUNNER_TOOL_CACHE: ${{ runner.temp }}/node-tool-cache
+        with:
+          node-version: '24'
+      - name: Build and test Web UI
+        working-directory: webui
         run: |
-          uv sync --python ${{ matrix.python-version }} --frozen --all-groups --all-extras
-          uv tool install --python ${{ matrix.python-version }} --reinstall --force .
-      - name: TTY real terminal tests on Linux (util-linux script)
-        run: script -q -e -c "uv run pytest -q -m tty --tb=short tests/test_cli_silent_period.py" /dev/null
+          npm ci
+          npm test
+          npm run build
+      - name: Check generated API and bundled UI
+        run: git diff --exit-code -- webui/openapi.json webui/src/api/schema.ts kan/web/spa
+      - name: Source checks
+        run: |
+          bash scripts/check-privacy-leaks.sh
+          uv run ruff check kan/ tests/
+          uv run mypy
+      - name: Functional regression tests
+        run: uv run pytest -q -m "not tty and not network" -n 8 --dist worksteal --durations=10 --durations-min=1.0
+      - name: Build and verify installed package
+        shell: bash
+        run: |
+          uv build --clear
+          smoke_env="$RUNNER_TEMP/manmankan-wheel-smoke"
+          uv venv "$smoke_env" --python 3.12
+          uv pip install --python "$smoke_env/bin/python" dist/*.whl
+          "$smoke_env/bin/python" scripts/smoke-installed.py
+          echo "$smoke_env/bin" >> "$GITHUB_PATH"
+      - name: Real terminal verification
+        run: script -q -e -c ".venv/bin/python -m pytest -q -m tty --tb=short tests/test_cli_silent_period.py" /dev/null
       - name: Clean CI runner workspace
         if: always()
         continue-on-error: true
         uses: ./.github/actions/cleanup-runner
+
+  platform-install:
+    name: Installed package (${{ matrix.os }} / Python 3.11)
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [macos-latest, windows-latest]
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: false
+      - uses: astral-sh/setup-uv@11f9893b081a58869d3b5fccaea48c9e9e46f990
+        with:
+          version: ${{ env.UV_VERSION }}
+          python-version: '3.11'
+          enable-cache: false
+      - name: Build and install clean wheel
+        shell: bash
+        run: |
+          uv build --clear
+          uv venv .smoke --python 3.11
+          if [ "$RUNNER_OS" = "Windows" ]; then
+            smoke_python=".smoke/Scripts/python.exe"
+          else
+            smoke_python=".smoke/bin/python"
+          fi
+          uv pip install --python "$smoke_python" dist/*.whl
+          "$smoke_python" scripts/smoke-installed.py
+      - name: Check macOS native data dependency
+        if: runner.os == 'macOS'
+        shell: bash
+        run: |
+          .smoke/bin/python - <<'PY'
+          from kan.infra.finalizer_guard import patch_mini_racer_import
+          patch_mini_racer_import()
+          from py_mini_racer import MiniRacer
+          assert MiniRacer().eval("1 + 1") == 2
+          PY

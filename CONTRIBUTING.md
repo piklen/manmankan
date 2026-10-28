@@ -19,13 +19,12 @@ git config core.hooksPath .githooks
 ```
 
 > ⚠️ 必须设 `core.hooksPath .githooks` 才能跑本地 pre-commit hook（隐私词扫描 + ruff lint）。
-> CI 也会兜底跑（`.github/workflows/test.yml` privacy-scan job），但本地拦截能省一次 push 失败。
+> CI 也会兜底跑（`.github/workflows/test.yml` 主检查），但本地拦截能省一次 push 失败。
 
 ## 运行测试
 
 ```bash
 uv run pytest
-uv run pytest --cov=kan          # 带覆盖率
 npm --prefix webui run check     # OpenAPI 生成 + TypeScript
 npm --prefix webui test
 npm --prefix webui run build     # 输出到 kan/web/spa

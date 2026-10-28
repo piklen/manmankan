@@ -1,4 +1,4 @@
-"""web · 本地选股研究工作台。"""
+"""web · 本地趋势搜索与定位。"""
 from __future__ import annotations
 
 from typing import Annotated
@@ -22,7 +22,7 @@ def web(
         typer.Option("--no-open", help="启动后不自动打开浏览器"),
     ] = False,
 ) -> None:
-    """启动本地私有选股研究工作台。"""
+    """启动本地趋势地图与历史研究。"""
     from kan.web.server import run_server
 
     try:

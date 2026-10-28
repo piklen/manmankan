@@ -9,7 +9,6 @@ from kan.core.models import PeriodResult, StockScanResult
 from kan.core.pipeline import DataCtx, Freshness
 from kan.service.daily_service import _period_matches, build_daily_overview
 from kan.service.scan_service import ScanServiceResult
-from kan.web.serialize import serialize_daily_overview, serialize_scan
 
 
 def _row(symbol: str, name: str, position: float) -> StockScanResult:
@@ -66,27 +65,14 @@ def test_daily_overview_counts_extremes_and_previous_day_changes() -> None:
         previous_snapshot=previous,
         comparison_date=date(2026, 7, 8),
     )
-    payload = serialize_daily_overview(overview)
-
-    assert payload["low_180_count"] == 1
-    assert payload["high_180_count"] == 1
-    assert payload["low_resonance_count"] == 1
-    assert payload["high_resonance_count"] == 1
-    assert payload["comparison_date"] == "2026-07-08"
-    assert payload["change_count"] == 1
-    assert payload["changes"][0]["description"] == "新进入 180 日接近低位 [3%]"
-    assert payload["low_180"][0]["name"] == "贵州茅台"
-
-
-def test_scan_freshness_explains_current_and_stale_data() -> None:
-    current = serialize_scan(_result())
-    stale = serialize_scan(_result(stale=True))
-
-    assert current["freshness"]["status"] == "current"
-    assert "2026-07-09" in current["freshness"]["title"]
-    assert stale["freshness"]["status"] == "stale"
-    assert "正常应至少到 2026-07-10" in stale["freshness"]["detail"]
-    assert stale["freshness"]["action_label"] == "立即更新"
+    assert len(overview.low_180) == 1
+    assert len(overview.high_180) == 1
+    assert overview.low_resonance_count == 1
+    assert overview.high_resonance_count == 1
+    assert overview.comparison_date == date(2026, 7, 8)
+    assert len(overview.changes) == 1
+    assert overview.changes[0].description == "新进入 180 日接近低位 [3%]"
+    assert overview.changes[0].name == "贵州茅台"
 
 
 def test_period_matches_applies_both_bounds() -> None:
@@ -97,21 +83,3 @@ def test_period_matches_applies_both_bounds() -> None:
     assert [row.symbol for row in matches] == ["000858"]
     with pytest.raises(ValueError, match="至少提供一个"):
         _period_matches(rows, period=180)
-
-
-def test_web_daily_snapshot_failure_does_not_hide_scan(monkeypatch) -> None:
-    from kan.web.routes_api import default_scan_payload
-
-    monkeypatch.setattr("kan.web.routes_api.run_scan", lambda _request: _result())
-    monkeypatch.setattr(
-        "kan.web.routes_api.load_previous_web_daily_snapshot", lambda _before: None
-    )
-    monkeypatch.setattr(
-        "kan.web.routes_api.save_web_daily_snapshot",
-        lambda *_args, **_kwargs: (_ for _ in ()).throw(OSError("disk full")),
-    )
-
-    payload = default_scan_payload()
-
-    assert payload["ok"] is True
-    assert payload["overview"]["scanned_count"] == 2

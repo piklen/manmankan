@@ -57,11 +57,6 @@ def _cache_path(symbol: str) -> Path:
     return DATA_DIR / f"fundamentals_{symbol}.parquet"
 
 
-def _empty_df() -> pd.DataFrame:
-    import pandas as pd
-    return pd.DataFrame(columns=_FUNDAMENTALS_COLUMNS)
-
-
 def _normalize(df: pd.DataFrame) -> pd.DataFrame:
     """归一化单股财务时序:补缺列 + end_date → date + 数值清洗 + 去无效行。"""
     import pandas as pd
@@ -148,27 +143,6 @@ def _fetch_tushare_fundamentals_detailed(
     )
 
 
-def _fetch_tushare_fundamentals(symbol: str) -> pd.DataFrame | None:
-    """兼容旧单股 adapter。"""
-    return _fetch_tushare_fundamentals_detailed(symbol).data
-
-
-_ORIGINAL_FETCH_TUSHARE_FUNDAMENTALS = _fetch_tushare_fundamentals
-
-
-def _fetch_fundamentals_job(symbol: str) -> ProviderFetchResult[pd.DataFrame]:
-    """生产走结构化 adapter；测试/兼容 monkeypatch 仍可替换旧 seam。"""
-    if _fetch_tushare_fundamentals is _ORIGINAL_FETCH_TUSHARE_FUNDAMENTALS:
-        return _fetch_tushare_fundamentals_detailed(symbol)
-    data = _fetch_tushare_fundamentals(symbol)
-    if data is None or data.empty:
-        return ProviderFetchResult.failed(FetchFailure(
-            FetchFailureKind.EMPTY,
-            message="fina_indicator returned no data",
-        ))
-    return ProviderFetchResult.succeeded(data)
-
-
 def _fresh_cache(symbol: str, *, force: bool) -> pd.DataFrame | None:
     """读取仍在 TTL 内的缓存；未命中返回 None。"""
     if force:
@@ -179,26 +153,6 @@ def _fresh_cache(symbol: str, *, force: bool) -> pd.DataFrame | None:
     loaded = _load_cache(cache)
     # 旧缓存没有公告日字段，首次使用时补取一次。
     return loaded if loaded is not None and "ann_date" in loaded else None
-
-
-def _fetch_one(symbol: str, force: bool = False) -> pd.DataFrame:
-    """单股财务时序 (全报告期) · 逐股 parquet 缓存 · 无 token/失败 → 空 df。"""
-    if not _SYMBOL_PATTERN.match(symbol):
-        return _empty_df()
-    ensure_dirs()
-    cache = _cache_path(symbol)
-    loaded = _fresh_cache(symbol, force=force)
-    if loaded is not None:
-        return loaded
-
-    raw = _fetch_tushare_fundamentals(symbol)
-    if raw is None or raw.empty:
-        return _empty_df()
-    df = _normalize(raw)
-    if df.empty:
-        return _empty_df()
-    atomic_write_parquet(df, cache)
-    return df
 
 
 def _latest_row(df: pd.DataFrame) -> pd.Series | None:
@@ -291,7 +245,7 @@ def fetch_fundamentals(
         ProviderJob(
             key=symbol,
             provider="tushare_fina",
-            call=partial(_fetch_fundamentals_job, symbol),
+            call=partial(_fetch_tushare_fundamentals_detailed, symbol),
             capabilities=_TUSHARE_FINA_CAPABILITIES,
         )
         for symbol in pending

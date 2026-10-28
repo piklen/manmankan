@@ -75,7 +75,6 @@ def session_allowed(request: Request, session_token: str) -> bool:
     query = request.query_params.get(SESSION_QUERY_NAME)
     query_allowed = (
         not request.url.path.startswith("/api/")
-        or request.url.path == "/api/fetch/events"
         or (
             request.url.path.startswith("/api/v1/jobs/")
             and request.url.path.endswith("/events")

@@ -299,7 +299,8 @@ if [ -n "$CHANGELOG_LINK_ERRORS" ]; then
 fi
 
 VERSION_PATTERN='v0\.[123456789]|v[1-9]\.[0-9]'
-VERSION_LEAKS=$(scan_files_z | xargs -0 grep -nEH "$VERSION_PATTERN" 2>/dev/null \
+# 版本引用只检查文本；压缩图片的随机字节不是文档版本号。
+VERSION_LEAKS=$(scan_files_z | xargs -0 grep -InEH "$VERSION_PATTERN" 2>/dev/null \
   | grep -v '^scripts/check-privacy-leaks\.sh:' \
   | grep -v '^scripts/check-version-bump\.sh:' \
   | grep -v '^tests/test_check_version_bump\.py:' \

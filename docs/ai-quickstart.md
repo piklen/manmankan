@@ -1,6 +1,7 @@
 # AI agent 快速开始
 
-个人日常入口是 `kan web` 和交互式 `kan tui`：关注对象、缓存行情、笔记与复看共用 `kan.service.focus_service`。自动化不要启动 TUI，继续使用本文的 CLI/JSON/MCP 契约。关注工作台的日期与复看口径见 [`focus-workspace.md`](focus-workspace.md)。
+当前主线是趋势搜索与定位。Web/TUI 提供地图与样本交互；AI 用 `kan study schema`、`kan study catalog` 发现确定性条件契约，用 `kan study run query.json --format json` 同时取得当前匹配、历史事件和完整分母，用 `rerun <id> --latest` 显式推进数据日。价格/位置/形态距离共用计算，不由模型另算；公开接口按当前契约使用，不做历史兼容。
+
 
 `manmankan` 给外部 AI agent 提供可审计的 A 股数据输入：typed Screen、CLI、JSON、字段白名单和本地 MCP。工具不内置 LLM；自然语言 parser 只整理明确阈值，最终仍由确定性 Python application service 计算用户规则命中与证据。
 

@@ -1,14 +1,13 @@
 """kan.cli · CLI 包入口。
 
-- 暴露 cli_main (pyproject `kan = "kan.cli:cli_main"` script 入口)
+- 暴露 cli_main，实际 console-script 从 kan._entry 进入
 - 暴露 app (typer.Typer 单例 · 跨子模块共享)
-- 暴露 _maybe_print_boot_banner (compat for tests; implementation lives in kan._entry)
 - 模块顶部 import 所有 *_cmds 触发 @app.command() 装饰器装命令到 app
-  (不能省 · pytest collect 阶段就会校验命令是否注册)
+  命令由共享 Typer 实例统一收集
 """
 
 # ruff: noqa: F401 — 这些 import 的副作用就是注册命令 · ruff 不识别
-from kan._entry import _fast_subcommand_help_command, _maybe_print_boot_banner
+from kan._entry import _fast_subcommand_help_command
 from kan.app import app
 
 if _fast_subcommand_help_command() == "find":
@@ -37,6 +36,7 @@ else:
         scan_cmds,
         screen_cmds,
         status_cmds,
+        study_cmds,
         theme_cmds,
         trend_cmds,
         tui_cmds,

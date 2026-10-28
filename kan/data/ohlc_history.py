@@ -1,6 +1,7 @@
 """固定截止日的日线证据：原始 OHLC × 当日因子 / 截止日因子。"""
 from __future__ import annotations
 
+from collections.abc import Callable
 from concurrent.futures import ThreadPoolExecutor
 from datetime import date, timedelta
 
@@ -11,6 +12,7 @@ from kan.storage.paths import DATA_DIR, atomic_write_parquet
 
 RAW_FIELDS = "ts_code,trade_date,open,high,low,close,pre_close,pct_chg,vol,amount"
 FACTOR_FIELDS = "ts_code,trade_date,adj_factor"
+PRICE_BASIS = "raw_adj_factor_v1"
 
 
 def _query(api: str, params: dict, fields: str) -> pd.DataFrame:
@@ -83,10 +85,17 @@ def _daily_evidence(td: str, *, refresh: bool) -> pd.DataFrame:
     return merged
 
 
-def load_adjusted_history(dates: list[str], *, refresh: bool = False) -> pd.DataFrame:
-    """按日期批量拉全市场，避免逐股请求；缺因子保留 NaN，由评估层排除。"""
-    with ThreadPoolExecutor(max_workers=8) as executor:
-        frames = list(executor.map(lambda td: _daily_evidence(td, refresh=refresh), dates))
+def load_adjusted_history(
+    dates: list[str], *, refresh: bool = False, max_workers: int = 8,
+    on_progress: Callable[[int, int, str, int], None] | None = None,
+) -> pd.DataFrame:
+    """复用原始日线与因子缓存，整个窗口只使用截止日的一个分母。"""
+    frames = []
+    with ThreadPoolExecutor(max_workers=max_workers) as executor:
+        for completed, frame in enumerate(executor.map(lambda td: _daily_evidence(td, refresh=refresh), dates), 1):
+            frames.append(frame)
+            if on_progress is not None:
+                on_progress(completed, len(dates), dates[completed - 1], len(frame))
     return adjust_history(pd.concat(frames, ignore_index=True), dates[-1])
 
 
@@ -102,4 +111,6 @@ def adjust_history(raw: pd.DataFrame, as_of: str) -> pd.DataFrame:
     for col in ("open", "high", "low", "close"):
         df[f"raw_{col}"] = df[col]
         df[col] = (df[col] * df["adj_factor"]).round(10) / df["base_factor"]
-    return df.sort_values(["symbol", "date"]).reset_index(drop=True)
+    df = df.sort_values(["symbol", "date"]).reset_index(drop=True)
+    df.attrs.update(price_basis=PRICE_BASIS, price_basis_date=date.fromisoformat(as_of).isoformat())
+    return df

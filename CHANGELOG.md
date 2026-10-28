@@ -9,6 +9,25 @@ explicitly approves a larger bump.
 
 ## [Unreleased]
 
+## [0.0.6.9.41] - 2026-10-29
+
+### Changed
+
+- 产品主线改为趋势搜索与定位：同日趋势地图、多周期轨迹、行业分布、区域选择与历史验证连贯操作；重做 Web 与终端研究界面。
+- 开发不做历史兼容，删除旧页面、旧 HTTP 栈、第二套内存任务及仅服务旧测试的适配分支。
+- CI 收敛为一次主环境功能回归与两平台安装检查，移除硬覆盖率、纯文件形状门禁和重复矩阵；发布共用真实安装检查。
+
+### Added
+
+- 共享研究引擎与 `kan study`：同一明确条件计算当前匹配与历史事件，分别统计完整、未成熟与缺行情样本，支持逐事件冻结图证、分页、保存及显式最新重跑。
+- 基于实际参照窗口的形态距离检索，保存归一化距离、参照事实和自匹配排除；历史相似检索明确为事后研究。
+- 地图坐标与历史条件共用指标，常用周期一次计算后切换显示；优化实际全池路径的重复数据对象构造。
+
+### Fixed
+
+- TuShare 时序改用原始日线与复权因子统一计算，停止拼接缺少统一基准的逐日前复权截面；旧的未验证行情缓存显式失效，更新后重建。
+- 同条件重跑固定形态参照，按原日期复算绑定实际原日期；修正长连续条件预热不足、自匹配占用采样间隔及移出股票池被误判为条件失效的问题。
+
 ## [0.0.6.9.40] - 2026-10-29
 
 ### Added
@@ -747,7 +766,8 @@ explicitly approves a larger bump.
 - **Shell 补全** · zsh / bash / fish / powershell
 - **合规与隐私** · 强制风险提示 + 关键词黑名单（无买卖建议 / 无目标价 / 无评级）· 数据全本地
 
-[Unreleased]: https://github.com/piklen/manmankan/compare/v0.0.6.9.40...HEAD
+[Unreleased]: https://github.com/piklen/manmankan/compare/v0.0.6.9.41...HEAD
+[0.0.6.9.41]: https://github.com/piklen/manmankan/compare/v0.0.6.9.40...v0.0.6.9.41
 [0.0.6.9.40]: https://github.com/piklen/manmankan/compare/v0.0.6.9.39...v0.0.6.9.40
 [0.0.6.9.39]: https://github.com/piklen/manmankan/compare/v0.0.6.9.38...v0.0.6.9.39
 [0.0.6.9.38]: https://github.com/piklen/manmankan/compare/v0.0.6.9.37...v0.0.6.9.38

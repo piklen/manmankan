@@ -76,7 +76,7 @@ def test_no_args_shows_short_retail_start_instead_of_full_reference() -> None:
     result = runner.invoke(app, [])
 
     assert result.exit_code == 0
-    assert "慢慢看 · 看清变化，留下观察" in result.stdout
+    assert "慢慢看 · 找趋势，核对位置与历史" in result.stdout
     assert "kan web" in result.stdout
     assert "kan tui" in result.stdout
     assert "数据保存在本机" in result.stdout
@@ -300,7 +300,7 @@ def test_maybe_print_boot_banner(
     """
     import io
 
-    from kan.cli import _maybe_print_boot_banner
+    from kan._entry import _maybe_print_boot_banner
 
     # 构造 sys.argv
     argv = ["kan", command, *extra_args]

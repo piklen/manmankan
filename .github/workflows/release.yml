@@ -51,13 +51,7 @@ jobs:
           assert MiniRacer().eval("1 + 1") == 2
           assert callable(akshare.tool_trade_date_hist_sina)
           PY
-          /tmp/manmankan-macos-smoke/bin/kan > /tmp/kan-start.txt
-          grep "慢慢看 · 从一条明确规则开始" /tmp/kan-start.txt
-          test "$(wc -l < /tmp/kan-start.txt)" -lt 40
-          /tmp/manmankan-macos-smoke/bin/kan screen --help
-          /tmp/manmankan-macos-smoke/bin/kan workspace --help
-          /tmp/manmankan-macos-smoke/bin/kan range --help
-          /tmp/manmankan-macos-smoke/bin/kan research --help
+          /tmp/manmankan-macos-smoke/bin/python scripts/smoke-installed.py
 
   build-and-publish:
     name: Build and publish to PyPI

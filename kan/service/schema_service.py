@@ -58,6 +58,13 @@ def _command_schemas(*, compact: bool) -> list[dict[str, Any]]:
             ],
         },
         {
+            "name": "study",
+            "purpose": "Run explicit daily conditions across current matches and historical events; inspect full denominators and frozen evidence.",
+            "formats": ["terminal", "json"],
+            "success_keys": ["study_id", "run_id", "query", "as_of", "coverage", "distribution", "current_matches", "events", "events_total", "diff"],
+            "examples": ["kan study schema", "kan study catalog", "kan study run query.json --format json", "kan study list --format json"],
+        },
+        {
             "name": "screen ohlc",
             "purpose": "Evaluate explicit joint candle/close and recent range-low rules with a fixed adjustment basis.",
             "formats": ["json"],

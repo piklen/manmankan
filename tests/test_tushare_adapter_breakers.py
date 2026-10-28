@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from kan.data import fundamentals, shareholder
+from kan.data.provider_contracts import FetchFailureKind
 
 
 def _fail_post(*_args, **_kwargs):
@@ -13,7 +14,7 @@ def test_fundamentals_breaker_fast_fails(monkeypatch, isolated_breaker) -> None:
 
     isolated_breaker.record("tushare_fina", ok=False)
 
-    assert fundamentals._fetch_tushare_fundamentals("600519") is None
+    assert fundamentals._fetch_tushare_fundamentals_detailed("600519").failure.kind is FetchFailureKind.CIRCUIT_OPEN
 
 
 def test_shareholder_holdernumber_breaker_fast_fails(monkeypatch, isolated_breaker) -> None:
@@ -22,7 +23,11 @@ def test_shareholder_holdernumber_breaker_fast_fails(monkeypatch, isolated_break
 
     isolated_breaker.record("tushare_holdernum", ok=False)
 
-    assert shareholder._fetch_tushare_holdernumber("600519") is None
+    result = shareholder._fetch_tushare_table_detailed(
+        "600519", provider="tushare_holdernum", api_name="stk_holdernumber",
+        fields_text=shareholder._HOLDERNUM_FIELDS,
+    )
+    assert result.failure.kind is FetchFailureKind.CIRCUIT_OPEN
 
 
 def test_shareholder_top10_breaker_fast_fails(monkeypatch, isolated_breaker) -> None:
@@ -31,4 +36,8 @@ def test_shareholder_top10_breaker_fast_fails(monkeypatch, isolated_breaker) -> 
 
     isolated_breaker.record("tushare_top10float", ok=False)
 
-    assert shareholder._fetch_tushare_top10float("600519") is None
+    result = shareholder._fetch_tushare_table_detailed(
+        "600519", provider="tushare_top10float", api_name="top10_floatholders",
+        fields_text=shareholder._TOP10FLOAT_FIELDS,
+    )
+    assert result.failure.kind is FetchFailureKind.CIRCUIT_OPEN

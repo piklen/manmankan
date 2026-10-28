@@ -25,9 +25,9 @@ kan screen ohlc --market mainboard --as-of YYYY-MM-DD \
 
 价格来自 TuShare `daily`，复权因子来自 `adj_factor`，统一计算
 `raw_price × 当日因子 / 截止日因子`。原始 OHLC 和因子随证据保留。历史 qfq
-截面可能由不同时间的分母生成，直接拼接可能改变区间低点日期；本入口独立读取原始事实，
-不复用旧 `find` / `trend` 的 qfq 截面缓存。原有这些入口的缓存不在本次变更中迁移，
-需要严格一致基准的这类条件请使用本入口。
+截面可能由不同时间的分母生成，直接拼接可能改变区间低点日期，因此计算读取原始事实。
+当前 TuShare 单股、全市场缓存与时序扫描也使用原始日线和因子统一基准；
+没有基准证据的旧 qfq 缓存不可用，显式更新后重建。本入口继续提供主板交集及原价、因子的逐日证据。
 
 JSON 顶层包含 `request`、`as_of`、`window_start`、`previous_session`、`sources`、
 `queried_at`、`adjustment`、`coverage` 与 `disclaimer`。其中：

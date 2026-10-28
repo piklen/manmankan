@@ -1,7 +1,7 @@
 [project]
 name = "manmankan"
-version = "0.0.6.9.40"
-description = "本地优先的 A 股个人研究工作台 · 关注变化、观察笔记、连续复看与证据"
+version = "0.0.6.9.41"
+description = "A 股趋势搜索与定位 · 多周期地图、形态检索与历史证据"
 requires-python = ">=3.11"
 license = { file = "LICENSE" }
 authors = [
@@ -57,11 +57,9 @@ kan-mcp = "kan.mcp.server:main"
 
 [dependency-groups]
 dev = [
-    "diff-cover>=9.0",
     "httpx>=0.28,<0.29",  # FastAPI TestClient 依赖 · Web 层只跑本地测试
     "mypy>=2.1.0,<3",
     "pytest>=9.1.0",
-    "pytest-cov>=7.1.0",
     "pytest-xdist>=3.8,<4",
     "ruff>=0.15.17",
 ]
@@ -98,18 +96,6 @@ testpaths = ["tests"]
 markers = [
     "tty: true terminal PTY tests for Rich spinner/progress first-frame SLO",
     "network: 真网络冒烟 case · 默认 CI 跳 · 用 -m network 单独跑",
-]
-
-[tool.coverage.run]
-source = ["kan"]
-omit = ["tests/*"]
-
-[tool.coverage.report]
-exclude_lines = [
-    "pragma: no cover",
-    "if __name__ == .__main__.:",
-    "raise NotImplementedError",
-    "if TYPE_CHECKING:",
 ]
 
 [tool.hatch.build.targets.wheel]
