@@ -1,11 +1,8 @@
 # 慢慢看 · manmankan
 
-需要核对用户明确的日线交集和区间低点日期，可使用
-[`kan screen ohlc`](docs/ohlc-screen.md)，保留统一复权基准、覆盖率及逐日证据。
-
-> **先看趋势，再定义规则，再复跑证据。A 股选股研究工作台。**
+> **从变化开始，把观察留下来。A 股个人研究工作台。**
 >
-> 散户看得清，AI 调得动。只给数据，不给答案。
+> 我的关注 → 核对变化 → 保存观察 → 连续复看。
 
 [![License: AGPL v3](https://img.shields.io/badge/License-AGPL_v3-blue.svg)](https://www.gnu.org/licenses/agpl-3.0)
 [![Python 3.11+](https://img.shields.io/badge/python-3.11+-blue.svg)](https://www.python.org/downloads/)
@@ -62,6 +59,8 @@ kan research 600519 --dimensions income,balancesheet,cashflow --format json
 完整的数据口径、复看行为和操作说明见 [`个人研究工作台`](docs/focus-workspace.md)。
 
 ## 进阶用户：CLI、JSON 与 AI
+
+需要核对明确的日线交集和区间低点日期，可使用 [`kan screen ohlc`](docs/ohlc-screen.md)，保留统一复权基准、覆盖率及逐日证据。
 
 Web、CLI、Python API 和 HTTP 共用 `BoardTrendQuery → BoardTrendSnapshot`；Web、Python API 和 HTTP 还共用 `BoardPulseQuery → BoardPulseSnapshot` 成员结构、`BoardDailyReview` 跨日复看和 `BoardHistoryStudy` 板块指数历史复核服务。Web、CLI、Python API、HTTP 和 MCP 也共用同一套 `ScreenSpec → ScreenRun` 服务。React 只负责交互和展示，不在浏览器重算金融事实；既有 `kan find` JSON 契约继续兼容。
 
@@ -190,11 +189,11 @@ kan history 600519 --format json
 
 `kan scan` / `kan daily` 面向终端阅读；`kan find --format json`、`kan hold --format json` 和 MCP 面向脚本与 AI 消费。
 
-`kan range <股票代码>` 回答：过去有几天到过某个相邻行情涨跌幅，到过之后收盘有没有收回或守住？无需先填写幅度，默认比较近 **5/15 个完整交易日**、**75/85/90/95 四档**。终端按下跌、上涨分为两表，同档的 5 日与 15 日相邻；每行依次是幅度与折算价、到过天数/窗口样本、触及后的收盘次数与比例。`1/1 次（100%）` 只是一例，不代表未来把握；没有触及则明确显示无样本，不当作零概率。
+`kan range <股票代码>` 回答：过去有几天到过某个日涨跌幅，到过之后收盘有没有收回或守住？无需先填写幅度，默认比较近 **5/15 个完整交易日**、**75/85/90/95 四档**。终端按下跌、上涨分为两表，同档的 5 日与 15 日相邻；每行依次是幅度与折算价、到过天数/窗口样本、触及后的收盘次数与比例。`1/1 次（100%）` 只是一例，不代表未来把握；没有触及则明确显示无样本，不当作零概率。
 
-已经有想核对的幅度时，运行 `kan range 600519 --down 3 --up 7`：开头先逐窗口回答用户输入的 `-3%/+7%`，再给完整四档对照。3/7 仅演示参数写法，不是工具选择的阈值；可填 `0`，省略表示不请求该方向。相邻行情涨跌幅相对每日前收，不是持仓盈亏。
+已经有想核对的幅度时，运行 `kan range 600519 --down 3 --up 7`：开头先逐窗口回答用户输入的 `-3%/+7%`，再给完整四档对照。3/7 仅演示参数写法，不是工具选择的阈值；可填 `0`，省略表示不请求该方向。日涨跌幅相对每日前收，不是持仓盈亏。
 
-`kan range --codes 600519,000858` 可一次复核最多 20 只股票，按输入顺序逐股展示**全部请求档位、周期与收盘结果**，不再隐藏 75/85 档或批量的条件结果；公共读法与小样本提示只显示一次。批量也可以加 `--down/--up`，无需逐股重跑。完整阅读示例见[中国用户快速开始](docs/china-quickstart.md#相邻行情涨跌幅历史复核)。
+`kan range --codes 600519,000858` 可一次复核最多 20 只股票，按输入顺序逐股展示**全部请求档位、周期与收盘结果**，不再隐藏 75/85 档或批量的条件结果；公共读法与小样本提示只显示一次。批量也可以加 `--down/--up`，无需逐股重跑。完整阅读示例见[中国用户快速开始](docs/china-quickstart.md#日涨跌幅历史复核)。
 
 口径：下跌线的“收回”是收盘高于该线，“收涨”是收盘高于当日前收，二者有重叠；上涨线的“守住”含收盘等于该线，“未守住”是收盘低于该线。档位是线性插值分位，“未越”是没有越过幅度的样本比例；恰好到线同时计入未越和触及，两者不一定互补。短窗口包含在长窗口内，不是独立样本。日 K 不能还原盘中先后或水下时长。
 

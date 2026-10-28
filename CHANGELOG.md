@@ -45,7 +45,7 @@ explicitly approves a larger bump.
 - 财务指标缓存由90天改为按查询触发的24小时检查，并保留公告日与来源检查时间；`research --refresh` 可重新获取请求维度，单独研究财务不依赖历史行情。`find @fundamentals` 同步返回时间信息。
 - `kan range` 改为按下跌/上涨分组、同档位各周期相邻的历史证据表；指定 `--down/--up` 时，先用文字回答到过多少天、收盘收回/收涨或守住/未守住多少次。条件比例同时保留分子/分母，零触及明确标为无样本。
 - 批量终端按输入顺序逐股保留全部请求档位和收盘结果，修复旧紧凑表隐藏 75/85 档、遗漏条件结果的问题；公共说明与小样本提示只显示一次。计算与 JSON 契约不变。
-- 相邻行情涨跌幅、折算基准、短窗口重叠与样本边界改用直接说明；帮助页和中国用户快速开始补齐读表路径。收盘中位和最高至收盘回落等诊断明细保留在 JSON。
+- 日涨跌幅、折算基准、短窗口重叠与样本边界改用直接说明；帮助页和中国用户快速开始补齐读表路径。收盘中位和最高至收盘回落等诊断明细保留在 JSON。
 
 ### Fixed
 
@@ -64,7 +64,7 @@ explicitly approves a larger bump.
 
 ### Added
 
-- 新增 Web“趋势发现”首页：行业/题材、收盘连续/阳线连续、方向、天数与排序共用板块趋势契约；支持近日相邻行情涨跌轨迹复核，并把选中板块的成分股池带入 Screen。
+- 新增 Web“趋势发现”首页：行业/题材、收盘连续/阳线连续、方向、天数与排序共用板块趋势契约；支持近日日涨跌轨迹复核，并把选中板块的成分股池带入 Screen。
 - 新增严格 `BoardTrendQuery / BoardTrendSnapshot` 领域模型与共享 application service，并从 `kan.api` 和 `GET /api/v1/boards/trends` 暴露；CLI `kan board trend` 改为调用同一服务。
 - 新增 `BoardPulseQuery / BoardPulseSnapshot` 成员结构服务与 `GET /api/v1/boards/{kind}/{value}/pulse`：按同一最新完整交易日统计上涨/下跌/平盘家数、中位涨跌、覆盖率和涨跌靠前成员；缺行只进入 `missing`，不当作 0。
 - 新增 Web“每日复看”与 `BoardDailyReview`：保存行业/题材 latest-complete 趋势事实，跨日区分连续天数延长/缩短、方向切换和数据可用性变化；相同 result hash 幂等复用。页面同时复用现有 ScreenRun diff 与候选备注，不自动改写规则或候选状态。
