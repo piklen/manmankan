@@ -120,7 +120,7 @@ describe("TrendDiscoveryPage", () => {
     renderPage();
 
     expect(
-      await screen.findByText("先找正在形成趋势的板块，再看板块里的股票"),
+      await screen.findByText("行业与题材"),
     ).toBeInTheDocument();
     expect((await screen.findAllByText("电子")).length).toBeGreaterThanOrEqual(2);
     expect(screen.getByText("已评估 31/31 个 · 命中 2 个")).toBeInTheDocument();

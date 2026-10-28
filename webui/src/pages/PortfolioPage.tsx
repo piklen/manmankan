@@ -58,8 +58,8 @@ export function PortfolioPage() {
     <div>
       <PageHeader
         eyebrow="Portfolio facts"
-        title="持仓页只负责把账户事实算清楚"
-        description="成本、数量、现金与本地价格共同形成账户快照；这里不替你决定买卖。"
+        title="持仓事实"
+        description="记录成本、数量与现金，查看基于本地价格的账户快照。"
         actions={
           <>
             {notice ? <span className="notice-pill">{notice}</span> : null}

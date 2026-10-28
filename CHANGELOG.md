@@ -9,6 +9,19 @@ explicitly approves a larger bump.
 
 ## [Unreleased]
 
+## [0.0.6.9.40] - 2026-10-29
+
+### Added
+
+- 个人关注快照合并已有自选、持仓和人工候选，显示缓存日期、相邻行情涨跌、多周期位置及较上一条行情的变化；首屏不联网，按关注池更新复用持久任务。
+- 观察笔记复用候选记录，复看保存当时的数据日、价格、位置和笔记；同日相同内容幂等，新数据日重新待复看。
+- 新增 `kan tui` 键盘工作台，支持关注搜索、添加、详情、笔记、复看、显式更新与帮助；脚本模式保留原 CLI/JSON。
+
+### Changed
+
+- Web 默认进入“我的关注”，采用列表与详情并列的研究桌面；发现、条件筛选和板块复看归入二级研究入口，账户与数据保留独立入口。
+- 全站统一清晰的文字层级、留白、交互反馈与窄屏导航，补齐个股研究加入关注反馈及观察入口。
+
 ## [0.0.6.9.39] - 2026-09-21
 
 ### Fixed
@@ -734,7 +747,8 @@ explicitly approves a larger bump.
 - **Shell 补全** · zsh / bash / fish / powershell
 - **合规与隐私** · 强制风险提示 + 关键词黑名单（无买卖建议 / 无目标价 / 无评级）· 数据全本地
 
-[Unreleased]: https://github.com/piklen/manmankan/compare/v0.0.6.9.39...HEAD
+[Unreleased]: https://github.com/piklen/manmankan/compare/v0.0.6.9.40...HEAD
+[0.0.6.9.40]: https://github.com/piklen/manmankan/compare/v0.0.6.9.39...v0.0.6.9.40
 [0.0.6.9.39]: https://github.com/piklen/manmankan/compare/v0.0.6.9.38...v0.0.6.9.39
 [0.0.6.9.38]: https://github.com/piklen/manmankan/compare/v0.0.6.9.37...v0.0.6.9.38
 [0.0.6.9.37]: https://github.com/piklen/manmankan/compare/v0.0.6.9.36...v0.0.6.9.37

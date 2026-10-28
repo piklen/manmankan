@@ -378,8 +378,8 @@ export function TrendDiscoveryPage() {
     <div className="trend-page">
       <PageHeader
         eyebrow="Trend discovery"
-        title="先找正在形成趋势的板块，再看板块里的股票"
-        description="行业和题材指数按同一套连续涨跌口径排序。选中板块后只带入股票池，具体选股条件仍由你决定。"
+        title="行业与题材"
+        description="查看板块的连续涨跌、成员分布与历史事实。"
         actions={
           <>
             <Badge tone="neutral">{source}</Badge>

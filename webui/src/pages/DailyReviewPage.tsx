@@ -382,8 +382,8 @@ export function DailyReviewPage() {
     <div className="daily-review-page">
       <PageHeader
         eyebrow="Daily review"
-        title="把今天看到的变化，留给明天复核"
-        description="保存行业与题材趋势事实，比较连续天数和数据可用性；再顺序重跑你已经写好的 Screen，复看候选备注。"
+        title="板块复看"
+        description="保存行业与题材的每日事实，比较变化，重跑已保存的条件。"
         actions={
           <>
             {notice ? <span className="notice-pill">{notice}</span> : null}

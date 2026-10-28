@@ -60,7 +60,7 @@ def start_market_refresh_job(request: MarketRefreshRequest) -> WorkspaceJob:
             if current is not None and current.status not in TERMINAL_STATUSES:
                 return current
             _ACTIVE_REFRESH_JOB_ID = None
-        label = "全市场" if request.scope is MarketRefreshScope.ALL else "默认池"
+        label = _refresh_label(request.scope)
         job = workspace_db.create_job(
             f"market_refresh:{request.scope.value}",
             message=f"{label}行情刷新已排队",
@@ -122,6 +122,10 @@ def _execute_screen_run(job_id: str, request: ScreenRunInput) -> None:
 
 
 def _resolve_refresh_targets(request: MarketRefreshRequest) -> list[str]:
+    if request.scope is MarketRefreshScope.FOCUS:
+        from kan.service.focus_service import focus_symbols
+
+        return focus_symbols()
     from kan.core.pipeline import resolve_stock_set
     from kan.core.stock_set import from_flags
 
@@ -133,10 +137,14 @@ def _resolve_refresh_targets(request: MarketRefreshRequest) -> list[str]:
     return list(dict.fromkeys(symbol for symbol, _name in pairs))
 
 
+def _refresh_label(scope: MarketRefreshScope) -> str:
+    return {MarketRefreshScope.ALL: "全市场", MarketRefreshScope.DEFAULT: "默认池", MarketRefreshScope.FOCUS: "我的关注"}[scope]
+
+
 def _execute_market_refresh(job_id: str, request: MarketRefreshRequest) -> None:
     """刷新缓存并把稀疏进度写入 SQLite；重新发起会复用已落盘缓存。"""
     global _ACTIVE_REFRESH_JOB_ID
-    label = "全市场" if request.scope is MarketRefreshScope.ALL else "默认池"
+    label = _refresh_label(request.scope)
     try:
         workspace_db.update_job(
             job_id,

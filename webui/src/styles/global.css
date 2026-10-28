@@ -5,36 +5,36 @@
     "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", sans-serif;
   font-synthesis: none;
   text-rendering: optimizeLegibility;
-  --canvas: #f5f5f7;
+  --canvas: #ffffff;
   --surface: #ffffff;
-  --surface-soft: #f2f2f4;
-  --surface-warm: #fafafa;
-  --ink: #1d1d1f;
-  --ink-soft: #636366;
-  --ink-faint: #8e8e93;
-  --line: #e5e5e7;
-  --line-strong: #d1d1d6;
-  --brand: #1d1d1f;
-  --brand-deep: #000000;
-  --brand-soft: #ececef;
-  --accent: #1d1d1f;
+  --surface-soft: #f4f7f6;
+  --surface-warm: #f7f9f8;
+  --ink: #182824;
+  --ink-soft: #5e6c68;
+  --ink-faint: #74817d;
+  --line: #e4eae7;
+  --line-strong: #cbd6d1;
+  --brand: #246b58;
+  --brand-deep: #1a5142;
+  --brand-soft: #e8f2ee;
+  --accent: #246b58;
   --accent-ink: #ffffff;
-  --warning: #636366;
-  --warning-soft: #f2f2f4;
-  --danger: #1d1d1f;
-  --danger-soft: #eeeeef;
-  --info: #48484a;
-  --info-soft: #f2f2f4;
+  --warning: #8a6327;
+  --warning-soft: #fff5e4;
+  --danger: #ac4242;
+  --danger-soft: #fceeee;
+  --info: #42645a;
+  --info-soft: #edf4f1;
   --chart-price: #007aff;
   --chart-ma: #ff9f0a;
   --chart-board: #5e5ce6;
   --chart-enter: #34c759;
   --chart-exit: #ff3b30;
-  --shadow-sm: 0 1px 2px rgb(0 0 0 / 4%), 0 6px 20px rgb(0 0 0 / 4%);
+  --shadow-sm: 0 1px 2px rgb(24 40 36 / 2%);
   --shadow-md: 0 2px 4px rgb(0 0 0 / 4%), 0 16px 44px rgb(0 0 0 / 8%);
   --radius-sm: 10px;
-  --radius: 16px;
-  --radius-lg: 22px;
+  --radius: 14px;
+  --radius-lg: 16px;
 }
 
 * {
@@ -88,7 +88,7 @@ a:focus-visible,
 input:focus-visible,
 select:focus-visible,
 textarea:focus-visible {
-  outline: 3px solid rgb(0 0 0 / 18%);
+  outline: 3px solid rgb(36 107 88 / 24%);
   outline-offset: 2px;
 }
 
@@ -114,7 +114,7 @@ input:focus,
 select:focus,
 textarea:focus {
   border-color: var(--brand);
-  box-shadow: 0 0 0 3px rgb(0 0 0 / 7%);
+  box-shadow: 0 0 0 3px rgb(36 107 88 / 10%);
   outline: none;
 }
 
@@ -144,7 +144,7 @@ input[type="checkbox"] {
 .app-shell {
   min-height: 100vh;
   display: grid;
-  grid-template-columns: 238px minmax(0, 1fr);
+  grid-template-columns: 216px minmax(0, 1fr);
 }
 
 .sidebar {
@@ -154,9 +154,9 @@ input[type="checkbox"] {
   height: 100vh;
   display: flex;
   flex-direction: column;
-  padding: 24px 18px 18px;
+  padding: 32px 16px 22px;
   color: var(--ink);
-  background: #f5f5f7;
+  background: #f0f5f3;
   border-right: 1px solid var(--line);
 }
 
@@ -206,7 +206,7 @@ input[type="checkbox"] {
 .brand small {
   margin-top: 2px;
   color: var(--ink-faint);
-  font-size: 10px;
+  font-size: 12px;
   letter-spacing: 0.14em;
   text-transform: uppercase;
 }
@@ -219,7 +219,7 @@ input[type="checkbox"] {
 .nav-label {
   margin: 0 10px 9px;
   color: var(--ink-faint);
-  font-size: 10px;
+  font-size: 12px;
   font-weight: 700;
   letter-spacing: 0.14em;
   text-transform: uppercase;
@@ -231,7 +231,7 @@ input[type="checkbox"] {
 
 .nav-item {
   display: grid;
-  grid-template-columns: 22px 1fr 14px;
+  grid-template-columns: 22px 1fr;
   align-items: center;
   gap: 10px;
   min-height: 43px;
@@ -246,13 +246,13 @@ input[type="checkbox"] {
 
 .nav-item:hover {
   color: var(--ink);
-  background: #ececef;
+  background: #e5ede9;
 }
 
 .nav-item.active {
   color: var(--ink);
-  background: #e5e5ea;
-  box-shadow: inset 3px 0 0 var(--ink);
+  background: #dcebe5;
+  box-shadow: none;
 }
 
 .nav-item__arrow {
@@ -285,12 +285,12 @@ input[type="checkbox"] {
 
 .sidebar__footer strong {
   color: var(--ink);
-  font-size: 11px;
+  font-size: 13px;
 }
 
 .sidebar__footer span {
   margin-top: 2px;
-  font-size: 9px;
+  font-size: 12px;
 }
 
 .status-dot {
@@ -316,7 +316,7 @@ input[type="checkbox"] {
   background: rgb(255 255 255 / 84%);
   border-bottom: 1px solid var(--line);
   backdrop-filter: blur(14px);
-  font-size: 11px;
+  font-size: 13px;
 }
 
 .utility-bar__trail,
@@ -335,7 +335,7 @@ input[type="checkbox"] {
   color: var(--accent-ink);
   background: var(--accent);
   border-radius: 5px;
-  font-size: 8px;
+  font-size: 12px;
   font-weight: 800;
   letter-spacing: 0.12em;
 }
@@ -344,7 +344,7 @@ input[type="checkbox"] {
   width: 100%;
   max-width: 1880px;
   margin: 0 auto;
-  padding: 32px 30px 60px;
+  padding: 36px 30px 40px;
 }
 
 .product-disclaimer {
@@ -355,14 +355,14 @@ input[type="checkbox"] {
   background: rgb(255 255 255 / 48%);
   border: 1px solid rgb(209 209 214 / 65%);
   border-radius: 12px;
-  font-size: 8px;
+  font-size: 12px;
   line-height: 1.6;
 }
 
 .page-header {
   min-height: 74px;
   display: flex;
-  align-items: flex-end;
+  align-items: flex-start;
   justify-content: space-between;
   gap: 24px;
   margin-bottom: 25px;
@@ -371,9 +371,9 @@ input[type="checkbox"] {
 .page-header h1 {
   margin: 3px 0 7px;
   max-width: 900px;
-  font-size: clamp(25px, 2.2vw, 37px);
+  font-size: clamp(26px, 2.3vw, 34px);
   line-height: 1.18;
-  letter-spacing: -0.035em;
+  letter-spacing: -0.025em;
 }
 
 .page-header p {
@@ -395,7 +395,7 @@ input[type="checkbox"] {
 .eyebrow,
 .panel-kicker {
   color: var(--brand);
-  font-size: 9px;
+  font-size: 12px;
   font-weight: 800;
   letter-spacing: 0.16em;
   text-transform: uppercase;
@@ -433,12 +433,12 @@ input[type="checkbox"] {
 .button--primary {
   color: white;
   background: var(--brand);
-  box-shadow: 0 5px 14px rgb(0 0 0 / 12%);
+  box-shadow: none;
 }
 
 .button--primary:hover:not(:disabled) {
   background: var(--brand-deep);
-  box-shadow: 0 8px 20px rgb(0 0 0 / 16%);
+  box-shadow: none;
 }
 
 .button--secondary {
@@ -471,7 +471,7 @@ input[type="checkbox"] {
 .button--sm {
   min-height: 32px;
   padding: 0 11px;
-  font-size: 11px;
+  font-size: 13px;
   border-radius: 9px;
 }
 
@@ -491,7 +491,7 @@ input[type="checkbox"] {
   min-height: 22px;
   padding: 3px 8px;
   border-radius: 999px;
-  font-size: 9px;
+  font-size: 12px;
   font-weight: 760;
   line-height: 1;
   white-space: nowrap;
@@ -529,7 +529,7 @@ input[type="checkbox"] {
   color: var(--brand-deep);
   background: var(--brand-soft);
   border-radius: 10px;
-  font-size: 10px;
+  font-size: 12px;
   font-weight: 650;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -584,14 +584,14 @@ input[type="checkbox"] {
   max-width: 430px;
   margin-bottom: 15px;
   color: var(--ink-soft);
-  font-size: 11px;
+  font-size: 13px;
   line-height: 1.6;
 }
 
 .muted-copy,
 .inspector-hint {
   color: var(--ink-soft);
-  font-size: 11px;
+  font-size: 13px;
   line-height: 1.65;
 }
 
@@ -633,7 +633,7 @@ input[type="checkbox"] {
   border: 0;
   border-radius: 8px;
   cursor: pointer;
-  font-size: 10px;
+  font-size: 12px;
   font-weight: 660;
   white-space: nowrap;
 }
@@ -702,13 +702,13 @@ input[type="checkbox"] {
 }
 
 .new-screen-card strong {
-  font-size: 11px;
+  font-size: 13px;
 }
 
 .new-screen-card small {
   margin-top: 3px;
   color: var(--ink-soft);
-  font-size: 9px;
+  font-size: 12px;
 }
 
 .library-list {
@@ -758,7 +758,7 @@ input[type="checkbox"] {
 
 .library-item__body strong {
   overflow: hidden;
-  font-size: 10px;
+  font-size: 12px;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
@@ -767,7 +767,7 @@ input[type="checkbox"] {
 .library-item__time {
   margin-top: 3px;
   color: var(--ink-faint);
-  font-size: 8px;
+  font-size: 12px;
 }
 
 .library-item__time {
@@ -795,7 +795,7 @@ input[type="checkbox"] {
 .library-note p,
 .candidate-sidebar__tip p {
   margin: 0;
-  font-size: 9px;
+  font-size: 12px;
   line-height: 1.6;
 }
 
@@ -845,7 +845,7 @@ input[type="checkbox"] {
   padding: 5px 24px 5px 8px;
   color: var(--ink-soft);
   background-color: var(--surface-soft);
-  font-size: 8px;
+  font-size: 12px;
 }
 
 .builder-stack {
@@ -877,7 +877,7 @@ input[type="checkbox"] {
   color: var(--brand);
   background: var(--brand-soft);
   border-radius: 9px;
-  font-size: 9px;
+  font-size: 12px;
   font-weight: 800;
 }
 
@@ -889,7 +889,7 @@ input[type="checkbox"] {
 .section-title p {
   margin: 0;
   color: var(--ink-soft);
-  font-size: 9px;
+  font-size: 12px;
 }
 
 .field-block {
@@ -904,7 +904,7 @@ input[type="checkbox"] {
   display: block;
   margin-bottom: 5px;
   color: var(--ink-soft);
-  font-size: 9px;
+  font-size: 12px;
   font-weight: 650;
 }
 
@@ -941,7 +941,7 @@ input[type="checkbox"] {
 .condition-row__grip {
   color: #8e8e93;
   cursor: grab;
-  font-size: 9px;
+  font-size: 12px;
   letter-spacing: -2px;
 }
 
@@ -949,7 +949,7 @@ input[type="checkbox"] {
 .condition-row select {
   min-height: 34px;
   padding: 7px 8px;
-  font-size: 10px;
+  font-size: 12px;
 }
 
 .condition-row__period,
@@ -968,7 +968,7 @@ input[type="checkbox"] {
   right: 9px;
   top: 50%;
   color: var(--ink-faint);
-  font-size: 8px;
+  font-size: 12px;
   transform: translateY(-50%);
   pointer-events: none;
 }
@@ -981,7 +981,7 @@ input[type="checkbox"] {
   align-items: center;
   gap: 4px;
   color: var(--ink-faint);
-  font-size: 8px;
+  font-size: 12px;
 }
 
 .builder-options {
@@ -1008,7 +1008,7 @@ input[type="checkbox"] {
   align-items: center;
   gap: 6px;
   color: var(--ink-soft);
-  font-size: 9px;
+  font-size: 12px;
   font-weight: 680;
 }
 
@@ -1034,7 +1034,7 @@ input[type="checkbox"] {
   color: var(--brand);
   background: var(--brand-soft);
   border-radius: 6px;
-  font-size: 8px;
+  font-size: 12px;
   font-weight: 800;
 }
 
@@ -1042,7 +1042,7 @@ input[type="checkbox"] {
 .limit-field input {
   min-height: 32px;
   padding: 6px 8px;
-  font-size: 9px;
+  font-size: 12px;
 }
 
 .limit-field {
@@ -1056,7 +1056,7 @@ input[type="checkbox"] {
 .limit-field > span,
 .column-config > span {
   color: var(--ink-soft);
-  font-size: 9px;
+  font-size: 12px;
   font-weight: 650;
 }
 
@@ -1096,7 +1096,7 @@ input[type="checkbox"] {
   border: 1px solid var(--line);
   border-radius: 8px;
   cursor: pointer;
-  font-size: 8px;
+  font-size: 12px;
 }
 
 .column-chip input:checked + span {
@@ -1135,7 +1135,7 @@ input[type="checkbox"] {
   border: 1px solid var(--line);
   border-radius: 9px;
   cursor: pointer;
-  font-size: 9px;
+  font-size: 12px;
   font-weight: 650;
 }
 
@@ -1169,7 +1169,7 @@ input[type="checkbox"] {
 .sort-row input {
   min-height: 32px;
   padding: 6px 8px;
-  font-size: 9px;
+  font-size: 12px;
 }
 
 .results-card {
@@ -1186,7 +1186,7 @@ input[type="checkbox"] {
 .compare-board__heading p {
   margin: 4px 0 0;
   color: var(--ink-soft);
-  font-size: 9px;
+  font-size: 12px;
 }
 
 .results-heading__actions {
@@ -1205,7 +1205,7 @@ input[type="checkbox"] {
 .comparison-table {
   width: 100%;
   border-collapse: collapse;
-  font-size: 10px;
+  font-size: 12px;
 }
 
 .result-table th,
@@ -1222,7 +1222,7 @@ input[type="checkbox"] {
 .comparison-table thead th {
   color: var(--ink-faint);
   background: #fafafa;
-  font-size: 8px;
+  font-size: 12px;
   font-weight: 760;
   letter-spacing: 0.03em;
 }
@@ -1261,13 +1261,13 @@ input[type="checkbox"] {
 }
 
 .stock-cell strong {
-  font-size: 10px;
+  font-size: 12px;
 }
 
 .stock-cell span {
   margin-top: 2px;
   color: var(--ink-faint);
-  font-size: 8px;
+  font-size: 12px;
   font-variant-numeric: tabular-nums;
 }
 
@@ -1288,7 +1288,7 @@ input[type="checkbox"] {
   background: transparent;
   border: 0;
   cursor: pointer;
-  font-size: 10px;
+  font-size: 12px;
   font-weight: 700;
 }
 
@@ -1326,7 +1326,7 @@ input[type="checkbox"] {
 
 .inspector-placeholder p {
   margin: 0;
-  font-size: 9px;
+  font-size: 12px;
   line-height: 1.65;
 }
 
@@ -1349,7 +1349,7 @@ input[type="checkbox"] {
 
 .run-summary__title > span,
 .history-list h3 {
-  font-size: 10px;
+  font-size: 12px;
   font-weight: 740;
 }
 
@@ -1382,12 +1382,12 @@ input[type="checkbox"] {
 
 .metric-grid span {
   color: var(--ink-faint);
-  font-size: 8px;
+  font-size: 12px;
 }
 
 .metric-grid strong {
   margin-top: 4px;
-  font-size: 10px;
+  font-size: 12px;
 }
 
 .inline-warning {
@@ -1396,7 +1396,7 @@ input[type="checkbox"] {
   color: var(--warning);
   background: var(--warning-soft);
   border-radius: 8px;
-  font-size: 9px;
+  font-size: 12px;
   line-height: 1.5;
 }
 
@@ -1404,7 +1404,7 @@ input[type="checkbox"] {
 .evidence-panel h3,
 .history-list h3 {
   margin: 0 0 9px;
-  font-size: 10px;
+  font-size: 12px;
 }
 
 .diff-chips {
@@ -1415,7 +1415,7 @@ input[type="checkbox"] {
 
 .evidence-panel__stock > div span {
   color: var(--ink-faint);
-  font-size: 8px;
+  font-size: 12px;
 }
 
 .evidence-panel__stock h3 {
@@ -1442,24 +1442,24 @@ input[type="checkbox"] {
 
 .evidence-item__index {
   color: var(--brand);
-  font-size: 8px;
+  font-size: 12px;
   font-weight: 800;
 }
 
 .evidence-item strong {
-  font-size: 10px;
+  font-size: 12px;
 }
 
 .evidence-item p {
   margin: 4px 0 3px;
   color: var(--ink-soft);
-  font-size: 9px;
+  font-size: 12px;
   line-height: 1.45;
 }
 
 .evidence-item small {
   color: var(--ink-faint);
-  font-size: 8px;
+  font-size: 12px;
 }
 
 .inspector-hint {
@@ -1482,7 +1482,7 @@ input[type="checkbox"] {
   border: 0;
   border-bottom: 1px solid #eeeeef;
   cursor: pointer;
-  font-size: 8px;
+  font-size: 12px;
 }
 
 .history-list button:hover {
@@ -1530,7 +1530,7 @@ input[type="checkbox"] {
   border: 1px solid transparent;
   border-radius: 10px;
   cursor: pointer;
-  font-size: 10px;
+  font-size: 12px;
 }
 
 .candidate-list-tabs button:hover,
@@ -1548,7 +1548,7 @@ input[type="checkbox"] {
   text-align: center;
   background: var(--surface);
   border-radius: 7px;
-  font-size: 8px;
+  font-size: 12px;
 }
 
 .inline-create {
@@ -1570,13 +1570,13 @@ input[type="checkbox"] {
 .candidate-list-management input {
   min-height: 32px;
   padding: 6px 8px;
-  font-size: 9px;
+  font-size: 12px;
 }
 
 .inline-create input {
   min-height: 32px;
   padding: 6px 8px;
-  font-size: 9px;
+  font-size: 12px;
 }
 
 .candidate-main {
@@ -1607,7 +1607,7 @@ input[type="checkbox"] {
 
 .candidate-stats span {
   color: var(--ink-soft);
-  font-size: 9px;
+  font-size: 12px;
 }
 
 .candidate-stats strong {
@@ -1650,7 +1650,7 @@ input[type="checkbox"] {
   background: transparent;
   border: 0;
   box-shadow: none;
-  font-size: 10px;
+  font-size: 12px;
 }
 
 .manual-add {
@@ -1660,7 +1660,7 @@ input[type="checkbox"] {
 
 .manual-add input {
   width: 140px;
-  font-size: 10px;
+  font-size: 12px;
 }
 
 .candidate-cards {
@@ -1699,14 +1699,14 @@ input[type="checkbox"] {
 }
 
 .candidate-card__stock strong {
-  font-size: 11px;
+  font-size: 13px;
 }
 
 .candidate-card__stock span,
 .candidate-card__source {
   margin-top: 3px;
   color: var(--ink-faint);
-  font-size: 8px;
+  font-size: 12px;
 }
 
 .candidate-card__status select {
@@ -1716,7 +1716,7 @@ input[type="checkbox"] {
   background: transparent;
   border: 0;
   box-shadow: none;
-  font-size: 8px;
+  font-size: 12px;
 }
 
 .candidate-card__note {
@@ -1729,7 +1729,7 @@ input[type="checkbox"] {
 .candidate-card__note input {
   padding: 7px 8px;
   background: var(--surface);
-  font-size: 9px;
+  font-size: 12px;
 }
 
 .candidate-card__source span,
@@ -1752,13 +1752,13 @@ input[type="checkbox"] {
 }
 
 .compare-set-list button > span strong {
-  font-size: 10px;
+  font-size: 12px;
 }
 
 .compare-set-list button > span small {
   margin-top: 4px;
   color: var(--ink-faint);
-  font-size: 8px;
+  font-size: 12px;
 }
 
 .compare-create {
@@ -1773,7 +1773,7 @@ input[type="checkbox"] {
   align-items: center;
   gap: 6px;
   margin-bottom: 12px;
-  font-size: 11px;
+  font-size: 13px;
 }
 
 .compare-create label,
@@ -1785,7 +1785,7 @@ input[type="checkbox"] {
 .compare-create input,
 .compare-create textarea,
 .portfolio-editor input {
-  font-size: 9px;
+  font-size: 12px;
 }
 
 .compare-board {
@@ -1844,13 +1844,13 @@ input[type="checkbox"] {
 
 .comparison-table thead button strong {
   color: var(--ink);
-  font-size: 10px;
+  font-size: 12px;
 }
 
 .comparison-table thead button span {
   margin-top: 3px;
   color: var(--ink-faint);
-  font-size: 8px;
+  font-size: 12px;
 }
 
 .comparison-table tbody th {
@@ -1868,7 +1868,7 @@ input[type="checkbox"] {
   padding: 13px 18px;
   color: var(--ink-soft);
   background: var(--surface-soft);
-  font-size: 9px;
+  font-size: 12px;
   line-height: 1.55;
 }
 
@@ -1910,7 +1910,7 @@ input[type="checkbox"] {
 .research-recents > span {
   flex: 0 0 auto;
   color: var(--ink-faint);
-  font-size: 9px;
+  font-size: 12px;
 }
 
 .research-recents button {
@@ -1926,8 +1926,8 @@ input[type="checkbox"] {
   white-space: nowrap;
 }
 
-.research-recents button strong { font-size: 9px; }
-.research-recents button small { color: var(--ink-faint); font-size: 8px; }
+.research-recents button strong { font-size: 12px; }
+.research-recents button small { color: var(--ink-faint); font-size: 12px; }
 
 .compact-search {
   width: 160px;
@@ -1974,7 +1974,7 @@ input[type="checkbox"] {
 
 .stock-hero-card__price > span {
   color: var(--ink-soft);
-  font-size: 9px;
+  font-size: 12px;
 }
 
 .stock-hero-card__price > strong {
@@ -2007,7 +2007,7 @@ input[type="checkbox"] {
 
 .stock-hero-card__facts span {
   color: var(--ink-faint);
-  font-size: 8px;
+  font-size: 12px;
 }
 
 .stock-hero-card__facts strong {
@@ -2043,7 +2043,7 @@ input[type="checkbox"] {
   justify-content: space-between;
 }
 
-.position-band__label strong { font-size: 10px; }
+.position-band__label strong { font-size: 12px; }
 .position-band__label span { color: var(--brand); font-size: 14px; font-weight: 760; }
 
 .position-band__track {
@@ -2077,7 +2077,7 @@ input[type="checkbox"] {
 
 .position-band__range small {
   color: var(--ink-faint);
-  font-size: 7px;
+  font-size: 11px;
 }
 
 .history-chart {
@@ -2115,7 +2115,7 @@ input[type="checkbox"] {
   display: flex;
   justify-content: space-between;
   color: var(--ink-faint);
-  font-size: 8px;
+  font-size: 12px;
 }
 
 .chart-empty {
@@ -2126,7 +2126,7 @@ input[type="checkbox"] {
   color: var(--ink-faint);
   background: var(--surface-soft);
   border-radius: 12px;
-  font-size: 10px;
+  font-size: 12px;
 }
 
 .evidence-timeline {
@@ -2171,10 +2171,10 @@ input[type="checkbox"] {
   gap: 8px;
 }
 
-.timeline-head strong { font-size: 10px; }
-.timeline-head span { color: var(--ink-faint); font-size: 8px; }
+.timeline-head strong { font-size: 12px; }
+.timeline-head span { color: var(--ink-faint); font-size: 12px; }
 .timeline-evidence { display: flex; gap: 5px; flex-wrap: wrap; margin-top: 7px; }
-.timeline-evidence span { padding: 5px 7px; color: var(--ink-soft); background: var(--surface-soft); border-radius: 7px; font-size: 8px; }
+.timeline-evidence span { padding: 5px 7px; color: var(--ink-soft); background: var(--surface-soft); border-radius: 7px; font-size: 12px; }
 
 .research-status-card,
 .provenance-card {
@@ -2193,7 +2193,7 @@ input[type="checkbox"] {
 .research-status-card > span {
   margin-top: 12px;
   color: var(--ink-faint);
-  font-size: 8px;
+  font-size: 12px;
 }
 
 .research-status-card > strong {
@@ -2205,7 +2205,7 @@ input[type="checkbox"] {
 .provenance-card > p {
   margin: 9px 0 13px;
   color: var(--ink-soft);
-  font-size: 9px;
+  font-size: 12px;
   line-height: 1.6;
 }
 
@@ -2215,7 +2215,7 @@ input[type="checkbox"] {
   align-items: center;
   gap: 7px;
   margin-bottom: 13px;
-  font-size: 11px;
+  font-size: 13px;
 }
 
 .provenance-card dl,
@@ -2230,7 +2230,7 @@ input[type="checkbox"] {
   gap: 8px;
   padding: 8px 0;
   border-bottom: 1px solid #eeeeef;
-  font-size: 9px;
+  font-size: 12px;
 }
 
 .provenance-card dt {
@@ -2329,7 +2329,7 @@ input[type="checkbox"] {
 .settings-card p {
   margin: 0;
   color: var(--ink-soft);
-  font-size: 9px;
+  font-size: 12px;
   line-height: 1.55;
 }
 
@@ -2356,7 +2356,7 @@ input[type="checkbox"] {
 
 .market-metrics-card > div:nth-child(even) { border-right: 0; }
 .market-metrics-card > div:nth-last-child(-n + 2) { border-bottom: 0; }
-.market-metrics-card span { display: flex; align-items: center; gap: 6px; color: var(--ink-soft); font-size: 9px; }
+.market-metrics-card span { display: flex; align-items: center; gap: 6px; color: var(--ink-soft); font-size: 12px; }
 .market-metrics-card strong { margin-top: 7px; font-size: 19px; }
 
 .breadth-bar {
@@ -2388,7 +2388,7 @@ input[type="checkbox"] {
   color: var(--ink-soft);
   background: var(--surface-soft);
   border-radius: 9px;
-  font-size: 9px;
+  font-size: 12px;
 }
 
 .breadth-stats strong { color: var(--ink); font-size: 13px; }
@@ -2427,12 +2427,12 @@ input[type="checkbox"] {
   color: var(--brand);
   background: var(--brand-soft);
   border-radius: 8px;
-  font-size: 8px;
+  font-size: 12px;
   font-weight: 800;
 }
 
-.data-lineage-card strong { font-size: 10px; }
-.data-lineage-card p { margin: 4px 0 0; color: var(--ink-soft); font-size: 8px; line-height: 1.5; }
+.data-lineage-card strong { font-size: 12px; }
+.data-lineage-card p { margin: 4px 0 0; color: var(--ink-soft); font-size: 12px; line-height: 1.5; }
 
 /* 持仓 */
 .portfolio-metrics {
@@ -2451,7 +2451,7 @@ input[type="checkbox"] {
   align-items: center;
   gap: 6px;
   color: var(--ink-soft);
-  font-size: 9px;
+  font-size: 12px;
 }
 
 .portfolio-metrics strong,
@@ -2468,7 +2468,7 @@ input[type="checkbox"] {
 .portfolio-metrics small {
   margin-top: 4px;
   color: var(--ink-faint);
-  font-size: 8px;
+  font-size: 12px;
 }
 
 .portfolio-layout {
@@ -2505,7 +2505,7 @@ input[type="checkbox"] {
 .portfolio-editor p {
   margin: -5px 0 12px;
   color: var(--ink-soft);
-  font-size: 8px;
+  font-size: 12px;
   line-height: 1.5;
 }
 
@@ -2553,8 +2553,8 @@ input[type="checkbox"] {
   display: block;
 }
 
-.credential-status strong { color: var(--ink); font-size: 10px; }
-.credential-status span { margin-top: 3px; color: var(--ink-soft); font-size: 8px; }
+.credential-status strong { color: var(--ink); font-size: 12px; }
+.credential-status span { margin-top: 3px; color: var(--ink-soft); font-size: 12px; }
 
 .settings-list {
   margin: 0;
@@ -2569,7 +2569,7 @@ input[type="checkbox"] {
   gap: 7px;
   padding: 9px 0;
   border-bottom: 1px solid #eeeeef;
-  font-size: 9px;
+  font-size: 12px;
 }
 
 .capability-list {
@@ -2585,7 +2585,7 @@ input[type="checkbox"] {
   align-items: center;
   gap: 6px;
   color: var(--ink-soft);
-  font-size: 10px;
+  font-size: 12px;
   white-space: nowrap;
 }
 
@@ -2621,7 +2621,7 @@ input[type="checkbox"] {
   display: block;
   margin-bottom: 7px;
   color: var(--ink-soft);
-  font-size: 9px;
+  font-size: 12px;
   font-weight: 700;
 }
 
@@ -2637,7 +2637,7 @@ input[type="checkbox"] {
   display: block;
   margin-top: 7px;
   color: var(--ink-faint);
-  font-size: 8px;
+  font-size: 12px;
   line-height: 1.55;
 }
 
@@ -2666,7 +2666,7 @@ input[type="checkbox"] {
   top: 50%;
   right: 11px;
   color: var(--ink-faint);
-  font-size: 9px;
+  font-size: 12px;
   pointer-events: none;
   transform: translateY(-50%);
 }
@@ -2681,7 +2681,7 @@ input[type="checkbox"] {
   padding-top: 12px;
   color: var(--ink-faint);
   border-top: 1px solid var(--line);
-  font-size: 8px;
+  font-size: 12px;
   line-height: 1.65;
 }
 
@@ -2698,7 +2698,7 @@ input[type="checkbox"] {
 .trend-radar__heading p {
   margin: 5px 0 0;
   color: var(--ink-faint);
-  font-size: 9px;
+  font-size: 12px;
 }
 
 .trend-table-wrap {
@@ -2710,7 +2710,7 @@ input[type="checkbox"] {
   width: 100%;
   min-width: 600px;
   border-collapse: collapse;
-  font-size: 11px;
+  font-size: 13px;
 }
 
 .trend-table th,
@@ -2728,7 +2728,7 @@ input[type="checkbox"] {
   color: var(--ink-faint);
   background: rgb(250 250 250 / 94%);
   backdrop-filter: blur(10px);
-  font-size: 8px;
+  font-size: 12px;
   font-weight: 760;
   letter-spacing: 0.04em;
 }
@@ -2751,12 +2751,12 @@ input[type="checkbox"] {
 
 .trend-table tbody tr.is-selected {
   background: #f0f0f2;
-  box-shadow: inset 3px 0 0 var(--ink);
+  box-shadow: none;
 }
 
 .trend-rank {
   color: var(--ink-faint);
-  font-size: 9px;
+  font-size: 12px;
   font-variant-numeric: tabular-nums;
 }
 
@@ -2776,13 +2776,13 @@ input[type="checkbox"] {
 }
 
 .trend-board-name strong {
-  font-size: 11px;
+  font-size: 13px;
 }
 
 .trend-board-name small {
   margin-top: 4px;
   color: var(--ink-faint);
-  font-size: 8px;
+  font-size: 12px;
 }
 
 .trend-streak {
@@ -2793,7 +2793,7 @@ input[type="checkbox"] {
   color: var(--ink);
   background: #eeeeef;
   border-radius: 999px;
-  font-size: 9px;
+  font-size: 12px;
   font-weight: 720;
 }
 
@@ -2803,7 +2803,7 @@ input[type="checkbox"] {
   color: var(--ink-soft);
   background: var(--surface-soft);
   border-top: 1px solid var(--line);
-  font-size: 9px;
+  font-size: 12px;
 }
 
 .trend-detail {
@@ -2836,7 +2836,7 @@ input[type="checkbox"] {
 
 .trend-detail__metrics span {
   color: var(--ink-faint);
-  font-size: 8px;
+  font-size: 12px;
 }
 
 .trend-detail__metrics strong {
@@ -2856,7 +2856,7 @@ input[type="checkbox"] {
   display: grid;
   place-items: center;
   color: var(--ink-faint);
-  font-size: 10px;
+  font-size: 12px;
 }
 
 .trend-chart__heading {
@@ -2874,7 +2874,7 @@ input[type="checkbox"] {
 
 .trend-chart__heading span {
   color: var(--ink-soft);
-  font-size: 9px;
+  font-size: 12px;
 }
 
 .trend-chart__heading strong {
@@ -2886,7 +2886,7 @@ input[type="checkbox"] {
 .trend-chart__heading small,
 .trend-chart__dates {
   color: var(--ink-faint);
-  font-size: 8px;
+  font-size: 12px;
 }
 
 .trend-chart svg {
@@ -2959,7 +2959,7 @@ input[type="checkbox"] {
 .trend-pulse--error p {
   margin: 5px 0 0;
   color: var(--ink-soft);
-  font-size: 9px;
+  font-size: 12px;
 }
 
 .trend-pulse--error > div:last-child {
@@ -2983,7 +2983,7 @@ input[type="checkbox"] {
 .trend-pulse__heading p {
   margin: 0;
   color: var(--ink-faint);
-  font-size: 8px;
+  font-size: 12px;
 }
 
 .trend-pulse__metrics {
@@ -3012,7 +3012,7 @@ input[type="checkbox"] {
 
 .trend-pulse__metrics span {
   color: var(--ink-faint);
-  font-size: 8px;
+  font-size: 12px;
 }
 
 .trend-pulse__metrics strong {
@@ -3023,7 +3023,7 @@ input[type="checkbox"] {
 .trend-pulse__metrics small {
   margin-top: 2px;
   color: var(--ink-soft);
-  font-size: 8px;
+  font-size: 12px;
 }
 
 .trend-pulse__breadth {
@@ -3053,7 +3053,7 @@ input[type="checkbox"] {
   gap: 13px;
   margin-top: 7px;
   color: var(--ink-faint);
-  font-size: 8px;
+  font-size: 12px;
 }
 
 .trend-pulse__legend span {
@@ -3088,7 +3088,7 @@ input[type="checkbox"] {
   align-items: center;
   gap: 6px;
   margin: 0 0 8px;
-  font-size: 10px;
+  font-size: 12px;
 }
 
 .trend-pulse__movers > div:first-child h4 svg { color: var(--chart-enter); }
@@ -3122,7 +3122,7 @@ input[type="checkbox"] {
 
 .trend-pulse__movers li strong {
   overflow: hidden;
-  font-size: 9px;
+  font-size: 12px;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
@@ -3130,11 +3130,11 @@ input[type="checkbox"] {
 .trend-pulse__movers li small {
   margin-top: 2px;
   color: var(--ink-faint);
-  font-size: 7px;
+  font-size: 11px;
 }
 
 .trend-pulse__movers li b {
-  font-size: 9px;
+  font-size: 12px;
   font-variant-numeric: tabular-nums;
   white-space: nowrap;
 }
@@ -3142,7 +3142,7 @@ input[type="checkbox"] {
 .trend-pulse__movers > div > p {
   margin: 0;
   color: var(--ink-faint);
-  font-size: 9px;
+  font-size: 12px;
 }
 
 .trend-pulse__warning {
@@ -3151,7 +3151,7 @@ input[type="checkbox"] {
   color: var(--ink-soft);
   background: var(--surface-soft);
   border-radius: 9px;
-  font-size: 8px;
+  font-size: 12px;
 }
 
 .trend-pulse__boundary {
@@ -3160,7 +3160,7 @@ input[type="checkbox"] {
   gap: 7px;
   margin: 13px 0 0;
   color: var(--ink-faint);
-  font-size: 8px;
+  font-size: 12px;
   line-height: 1.55;
 }
 
@@ -3203,7 +3203,7 @@ input[type="checkbox"] {
 .trend-drilldown p {
   margin: 4px 0 0;
   color: var(--ink-soft);
-  font-size: 9px;
+  font-size: 12px;
   line-height: 1.55;
 }
 
@@ -3226,7 +3226,7 @@ input[type="checkbox"] {
 
 .trend-principle p {
   margin: 0;
-  font-size: 9px;
+  font-size: 12px;
   line-height: 1.65;
 }
 
@@ -3268,7 +3268,7 @@ input[type="checkbox"] {
 
 .history-board-strip span {
   color: #aeaeb2;
-  font-size: 8px;
+  font-size: 12px;
   font-weight: 700;
   letter-spacing: 0.09em;
   text-transform: uppercase;
@@ -3283,7 +3283,7 @@ input[type="checkbox"] {
 .history-board-strip small {
   margin-top: 3px;
   color: #aeaeb2;
-  font-size: 8px;
+  font-size: 12px;
 }
 
 .history-board-strip .badge {
@@ -3321,7 +3321,7 @@ input[type="checkbox"] {
   display: block;
   margin-bottom: 7px;
   color: var(--ink-soft);
-  font-size: 9px;
+  font-size: 12px;
   font-weight: 700;
 }
 
@@ -3337,7 +3337,7 @@ input[type="checkbox"] {
   display: block;
   margin-top: 6px;
   color: var(--ink-faint);
-  font-size: 8px;
+  font-size: 12px;
   line-height: 1.55;
 }
 
@@ -3358,7 +3358,7 @@ input[type="checkbox"] {
   padding-top: 12px;
   color: var(--ink-faint);
   border-top: 1px solid var(--line);
-  font-size: 8px;
+  font-size: 12px;
   line-height: 1.65;
 }
 
@@ -3383,13 +3383,13 @@ input[type="checkbox"] {
 .history-summary-card__heading h2 {
   margin: 5px 0 4px;
   font-size: 24px;
-  letter-spacing: -0.035em;
+  letter-spacing: -0.025em;
 }
 
 .history-summary-card__heading p {
   margin: 0;
   color: var(--ink-soft);
-  font-size: 10px;
+  font-size: 12px;
 }
 
 .history-summary-card__meta {
@@ -3398,7 +3398,7 @@ input[type="checkbox"] {
   flex-direction: column;
   gap: 6px;
   color: var(--ink-faint);
-  font-size: 8px;
+  font-size: 12px;
 }
 
 .history-summary-metrics {
@@ -3429,7 +3429,7 @@ input[type="checkbox"] {
 
 .history-summary-metrics span {
   color: var(--ink-faint);
-  font-size: 8px;
+  font-size: 12px;
 }
 
 .history-summary-metrics strong {
@@ -3444,7 +3444,7 @@ input[type="checkbox"] {
 .history-summary-metrics small {
   margin-top: 3px;
   color: var(--ink-soft);
-  font-size: 8px;
+  font-size: 12px;
 }
 
 .history-event-chart {
@@ -3460,7 +3460,7 @@ input[type="checkbox"] {
   display: grid;
   place-items: center;
   color: var(--ink-faint);
-  font-size: 10px;
+  font-size: 12px;
 }
 
 .history-event-chart__heading {
@@ -3477,7 +3477,7 @@ input[type="checkbox"] {
 
 .history-event-chart__heading span {
   color: var(--ink-faint);
-  font-size: 8px;
+  font-size: 12px;
 }
 
 .history-event-chart__heading strong {
@@ -3510,7 +3510,7 @@ input[type="checkbox"] {
 
 .history-event-chart svg text {
   fill: var(--ink-faint);
-  font-size: 9px;
+  font-size: 12px;
 }
 
 .history-event-chart__zero {
@@ -3551,7 +3551,7 @@ input[type="checkbox"] {
   margin-top: -5px;
   padding: 0 34px;
   color: var(--ink-faint);
-  font-size: 8px;
+  font-size: 12px;
 }
 
 .history-share-bar {
@@ -3571,7 +3571,7 @@ input[type="checkbox"] {
 .history-warning {
   margin: 8px 1px 0;
   color: var(--ink-faint);
-  font-size: 8px;
+  font-size: 12px;
   line-height: 1.55;
 }
 
@@ -3609,26 +3609,26 @@ input[type="checkbox"] {
 }
 
 .history-distribution-card span {
-  font-size: 11px;
+  font-size: 13px;
   font-weight: 750;
 }
 
 .history-distribution-card small {
   margin-top: 4px;
   color: var(--ink-faint);
-  font-size: 8px;
+  font-size: 12px;
 }
 
 .history-distribution-card > strong {
   margin-top: 14px;
   font-size: 24px;
-  letter-spacing: -0.035em;
+  letter-spacing: -0.025em;
 }
 
 .history-distribution-card > p {
   margin: 3px 0 13px;
   color: var(--ink-faint);
-  font-size: 8px;
+  font-size: 12px;
 }
 
 .history-distribution-card dl {
@@ -3647,12 +3647,12 @@ input[type="checkbox"] {
 
 .history-distribution-card dt {
   color: var(--ink-faint);
-  font-size: 8px;
+  font-size: 12px;
 }
 
 .history-distribution-card dd {
   margin: 0;
-  font-size: 9px;
+  font-size: 12px;
   font-weight: 700;
   font-variant-numeric: tabular-nums;
   text-align: right;
@@ -3680,7 +3680,7 @@ input[type="checkbox"] {
   width: 100%;
   min-width: 720px;
   border-collapse: collapse;
-  font-size: 10px;
+  font-size: 12px;
 }
 
 .history-events-table th,
@@ -3699,7 +3699,7 @@ input[type="checkbox"] {
   color: var(--ink-faint);
   background: rgb(250 250 250 / 94%);
   backdrop-filter: blur(10px);
-  font-size: 8px;
+  font-size: 12px;
 }
 
 .history-events-table th:first-child,
@@ -3740,7 +3740,7 @@ input[type="checkbox"] {
 .history-audit-card__heading p {
   margin: 0;
   color: var(--ink-faint);
-  font-size: 8px;
+  font-size: 12px;
 }
 
 .history-audit-grid {
@@ -3772,21 +3772,21 @@ input[type="checkbox"] {
 .history-audit-grid span {
   overflow: hidden;
   color: var(--ink-faint);
-  font-size: 8px;
+  font-size: 12px;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
 .history-audit-grid strong {
   margin-top: 4px;
-  font-size: 10px;
+  font-size: 12px;
 }
 
 .history-audit-card ul {
   margin: 15px 0 0;
   padding: 0 0 0 17px;
   color: var(--ink-soft);
-  font-size: 8px;
+  font-size: 12px;
   line-height: 1.8;
 }
 
@@ -3798,7 +3798,7 @@ input[type="checkbox"] {
   padding-top: 12px;
   color: var(--ink-faint);
   border-top: 1px solid var(--line);
-  font-size: 8px;
+  font-size: 12px;
   line-height: 1.55;
 }
 
@@ -3976,7 +3976,7 @@ input[type="checkbox"] {
     gap: 4px;
     color: #aeaeb2;
     border-radius: 11px;
-    font-size: 7px;
+    font-size: 11px;
   }
 
   .mobile-nav a.active {
@@ -4441,7 +4441,7 @@ input[type="checkbox"] {
 .daily-review-config label > span {
   margin-bottom: 5px;
   color: var(--ink-faint);
-  font-size: 10px;
+  font-size: 12px;
 }
 
 .daily-review-layout {
@@ -4463,7 +4463,7 @@ input[type="checkbox"] {
 .daily-candidates > .panel-heading p {
   margin: 5px 0 0;
   color: var(--ink-soft);
-  font-size: 11px;
+  font-size: 13px;
   line-height: 1.55;
 }
 
@@ -4495,7 +4495,7 @@ input[type="checkbox"] {
 
 .daily-review-sections article > div span {
   color: var(--ink-faint);
-  font-size: 10px;
+  font-size: 12px;
 }
 
 .daily-review-sections article > div strong {
@@ -4508,7 +4508,7 @@ input[type="checkbox"] {
   max-width: 78%;
   margin: 8px 0 0;
   color: var(--ink-soft);
-  font-size: 10px;
+  font-size: 12px;
   line-height: 1.45;
 }
 
@@ -4545,7 +4545,7 @@ input[type="checkbox"] {
 .daily-review-metrics span,
 .daily-review-metrics small {
   color: var(--ink-faint);
-  font-size: 10px;
+  font-size: 12px;
 }
 
 .daily-review-metrics strong {
@@ -4582,7 +4582,7 @@ input[type="checkbox"] {
   background: var(--surface-soft);
   border: 0;
   border-radius: 999px;
-  font-size: 10px;
+  font-size: 12px;
   cursor: pointer;
 }
 
@@ -4632,7 +4632,7 @@ input[type="checkbox"] {
 .daily-change-list__board small {
   grid-column: 2;
   color: var(--ink-faint);
-  font-size: 9px;
+  font-size: 12px;
 }
 
 .daily-change-list__streak {
@@ -4640,7 +4640,7 @@ input[type="checkbox"] {
   align-items: center;
   justify-content: center;
   gap: 8px;
-  font-size: 11px;
+  font-size: 13px;
   font-variant-numeric: tabular-nums;
   white-space: nowrap;
 }
@@ -4652,7 +4652,7 @@ input[type="checkbox"] {
 .daily-change-list article > p {
   margin: 0;
   color: var(--ink-soft);
-  font-size: 10px;
+  font-size: 12px;
   line-height: 1.45;
 }
 
@@ -4662,7 +4662,7 @@ input[type="checkbox"] {
   color: var(--ink-soft);
   background: var(--surface-soft);
   border-radius: 10px;
-  font-size: 10px;
+  font-size: 12px;
 }
 
 .daily-review-history {
@@ -4703,19 +4703,19 @@ input[type="checkbox"] {
 }
 
 .daily-history-list button strong {
-  font-size: 11px;
+  font-size: 13px;
 }
 
 .daily-history-list button small {
   margin-top: 2px;
   color: var(--ink-faint);
-  font-size: 9px;
+  font-size: 12px;
 }
 
 .daily-history-note {
   margin: 14px 2px 0;
   color: var(--ink-faint);
-  font-size: 9px;
+  font-size: 12px;
   line-height: 1.5;
 }
 
@@ -4739,7 +4739,7 @@ input[type="checkbox"] {
 
 .daily-screens__actions > span {
   color: var(--ink-soft);
-  font-size: 10px;
+  font-size: 12px;
 }
 
 .daily-screen-list {
@@ -4783,14 +4783,14 @@ input[type="checkbox"] {
 .daily-screen-row > button span {
   margin-top: 3px;
   color: var(--ink-faint);
-  font-size: 9px;
+  font-size: 12px;
 }
 
 .daily-screen-row__facts {
   display: flex;
   gap: 12px;
   color: var(--ink-soft);
-  font-size: 10px;
+  font-size: 12px;
   white-space: nowrap;
 }
 
@@ -4814,7 +4814,7 @@ input[type="checkbox"] {
 
 .daily-candidate-summary span {
   color: var(--ink-faint);
-  font-size: 10px;
+  font-size: 12px;
 }
 
 .daily-candidate-summary strong {
@@ -4836,19 +4836,19 @@ input[type="checkbox"] {
 }
 
 .daily-candidate-list article strong {
-  font-size: 11px;
+  font-size: 13px;
 }
 
 .daily-candidate-list article small {
   margin-top: 3px;
   color: var(--ink-faint);
-  font-size: 9px;
+  font-size: 12px;
 }
 
 .daily-candidate-list article p {
   margin: 0;
   color: var(--ink-soft);
-  font-size: 10px;
+  font-size: 12px;
   line-height: 1.5;
 }
 

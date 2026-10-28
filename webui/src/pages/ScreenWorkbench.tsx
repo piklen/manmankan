@@ -923,6 +923,7 @@ export function ScreenWorkbench() {
     onSuccess: (candidate) => {
       setNotice(`${candidate.name} 已加入研究候选`);
       void queryClient.invalidateQueries({ queryKey: ["candidate-lists"] });
+      void queryClient.invalidateQueries({ queryKey: ["focus"] });
     },
     onError: (error) => setNotice(errorMessage(error)),
   });
@@ -977,8 +978,8 @@ export function ScreenWorkbench() {
     <div className="screen-page">
       <PageHeader
         eyebrow="Selection workbench"
-        title="把选股变成一条可复跑的研究流水线"
-        description="先定义股票池与客观阈值，再运行、留证、进入候选与对比。每一步都能回看。"
+        title="条件筛选"
+        description="写下自己的条件，保存结果与证据，下次继续核对。"
         actions={
           <>
             {notice ? <span className="notice-pill">{notice}</span> : null}

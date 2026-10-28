@@ -4,15 +4,17 @@
 
 This file applies to the whole `manmankan` repository.
 
-`manmankan` 是面向散户的本地 A 股研究工具。当前演进以 CLI 和可供 AI 调用的共享
-Python 服务为主，按真实研究问题补数据。保留模块化单体、SQLite 和 Parquet；Web
-提供图表、比较和人工编辑。CLI、JSON、Python API、HTTP 与 MCP 复用同一套计算。
+`manmankan` 是面向散户的本地 A 股个人研究工作台。当前主线是“我的关注 →
+核对变化 → 保存观察 → 连续复看”，Web 和 TUI 共用个人关注服务。板块发现、
+显式条件筛选和 CLI / AI 研究作为延伸能力。保留 Python 模块化单体、SQLite 和
+Parquet；CLI、JSON、Python API、HTTP 与 MCP 复用同一套计算。
 
 The tool stops at data facts. It must not produce buy/sell actions, ratings, price
 targets, stock picks, strategy conclusions, or hosted advisory workflows.
 
 ## Start Here
 
+- For the personal workspace, cache/date semantics and TUI, read `docs/focus-workspace.md`.
 - For ordinary-user first-run and daily workflows, read `README.md` and `docs/china-quickstart.md`.
 - For using the CLI as an AI agent, read `skills/manmankan-skill.md` and `docs/ai-quickstart.md`.
 - For JSON contracts, read `docs/find.md`.

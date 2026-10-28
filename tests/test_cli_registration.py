@@ -69,6 +69,7 @@ _EXPECTED_COMMANDS = {
     "export",
     "find",
     "web",
+    "tui",
 }
 
 

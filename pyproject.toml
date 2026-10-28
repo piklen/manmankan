@@ -1,7 +1,7 @@
 [project]
 name = "manmankan"
-version = "0.0.6.9.39"
-description = "本地优先的 A 股趋势选股研究工作台 · 板块发现、可复跑规则、证据、候选与对比"
+version = "0.0.6.9.40"
+description = "本地优先的 A 股个人研究工作台 · 关注变化、观察笔记、连续复看与证据"
 requires-python = ">=3.11"
 license = { file = "LICENSE" }
 authors = [
@@ -42,6 +42,7 @@ dependencies = [
     "pyarrow>=15.0,<25",  # pandas 读写 parquet 的运行时依赖
     "baostock==0.9.3",  # 数据源 SDK 精确 pin · 降低上游 API 漂移面
     "numpy>=2.4.6,<2.5",  # 间接 → 直接依赖 · 控制版本面 · 防 macOS Gatekeeper .so 签名问题
+    "textual>=6,<7",
 ]
 
 [project.urls]

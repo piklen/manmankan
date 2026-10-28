@@ -78,8 +78,8 @@ export function MarketDataPage() {
     <div>
       <PageHeader
         eyebrow="Market & data"
-        title="先确认数据边界，再看任何筛选结果"
-        description="集中查看本地行情截止日、覆盖范围与全市场截面事实；不会在缺数时给出伪精确结论。"
+        title="数据管理"
+        description="查看本地数据截止日、覆盖范围与更新任务。"
         actions={
           <>
             {notice ? <span className="notice-pill">{notice}</span> : null}

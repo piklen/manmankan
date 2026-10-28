@@ -90,8 +90,8 @@ export function ComparePage() {
     <div>
       <PageHeader
         eyebrow="Compare set"
-        title="横向摆在一起，差异才真正可见"
-        description="对比组只保存研究对象；指标来自最近一次可追溯的 ScreenRun，不用填充出来的假数据补空白。"
+        title="横向对比"
+        description="把研究对象放在一起。指标来自最近一次筛选记录，缺失数据保留为空。"
         actions={notice ? <span className="notice-pill">{notice}</span> : undefined}
       />
 

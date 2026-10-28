@@ -87,7 +87,6 @@ export function PageHeader({
   return (
     <header className="page-header">
       <div>
-        {eyebrow ? <div className="eyebrow">{eyebrow}</div> : null}
         <h1>{title}</h1>
         <p>{description}</p>
       </div>

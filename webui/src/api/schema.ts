@@ -55,6 +55,58 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/focus": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Focus */
+        get: operations["focus_api_v1_focus_get"];
+        put?: never;
+        /** Add Focus */
+        post: operations["add_focus_api_v1_focus_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/focus/{symbol}/note": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /** Focus Note */
+        put: operations["focus_note_api_v1_focus__symbol__note_put"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/focus/{symbol}/review": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Review Focus */
+        post: operations["review_focus_api_v1_focus__symbol__review_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/boards/trends": {
         parameters: {
             query?: never;
@@ -1308,6 +1360,154 @@ export interface components {
             /** Deleted */
             deleted: boolean;
         };
+        /** FocusAddRequest */
+        FocusAddRequest: {
+            /** Symbol */
+            symbol: string;
+        };
+        /** FocusNoteRequest */
+        FocusNoteRequest: {
+            /** Note */
+            note: string;
+            /** List Id */
+            list_id?: string | null;
+        };
+        /** FocusPeriod */
+        FocusPeriod: {
+            /** Period */
+            period: number;
+            /** Position Pct */
+            position_pct?: number | null;
+            /** Previous Position Pct */
+            previous_position_pct?: number | null;
+            /** Change Pp */
+            change_pp?: number | null;
+            /** Low */
+            low?: number | null;
+            /** High */
+            high?: number | null;
+        };
+        /** FocusReviewEntry */
+        FocusReviewEntry: {
+            /**
+             * Reviewed At
+             * Format: date-time
+             */
+            reviewed_at: string;
+            /**
+             * Data Cutoff
+             * Format: date
+             */
+            data_cutoff: string;
+            /** Note */
+            note: string;
+            /** Price */
+            price: number;
+            /** Positions */
+            positions: {
+                [key: string]: number | null;
+            };
+            /**
+             * Data Hash
+             * @default
+             */
+            data_hash: string;
+            /** Candidate List Id */
+            candidate_list_id?: string | null;
+        };
+        /** FocusReviewRequest */
+        FocusReviewRequest: {
+            /** Expected Data Hash */
+            expected_data_hash?: string | null;
+            /** Expected Note */
+            expected_note?: string | null;
+        };
+        /** FocusRow */
+        FocusRow: {
+            /** Symbol */
+            symbol: string;
+            /** Name */
+            name: string;
+            /** Sources */
+            sources: string[];
+            /**
+             * Source
+             * @default local_cache
+             */
+            source: string;
+            /**
+             * Data Hash
+             * @default
+             */
+            data_hash: string;
+            /**
+             * Available
+             * @default false
+             */
+            available: boolean;
+            /** Message */
+            message?: string | null;
+            /** Price */
+            price?: number | null;
+            /** Change Pct */
+            change_pct?: number | null;
+            /** Data Cutoff */
+            data_cutoff?: string | null;
+            /** Previous Cutoff */
+            previous_cutoff?: string | null;
+            /** Fetched At */
+            fetched_at?: string | null;
+            /**
+             * Stale
+             * @default true
+             */
+            stale: boolean;
+            /** Periods */
+            periods?: components["schemas"]["FocusPeriod"][];
+            /** Streak */
+            streak?: number | null;
+            /**
+             * Note
+             * @default
+             */
+            note: string;
+            /** Candidate List Id */
+            candidate_list_id?: string | null;
+            candidate_status?: components["schemas"]["CandidateStatus"] | null;
+            /** Candidates */
+            candidates?: components["schemas"]["Candidate"][];
+            /**
+             * Reviewed
+             * @default false
+             */
+            reviewed: boolean;
+            /** Reviewed At */
+            reviewed_at?: string | null;
+            /** Reviewed Data Cutoff */
+            reviewed_data_cutoff?: string | null;
+            /** Review History */
+            review_history?: components["schemas"]["FocusReviewEntry"][];
+        };
+        /** FocusSnapshot */
+        FocusSnapshot: {
+            /**
+             * Generated At
+             * Format: date-time
+             */
+            generated_at: string;
+            /** Expected Cutoff */
+            expected_cutoff?: string | null;
+            /** Total */
+            total: number;
+            /** Available */
+            available: number;
+            /** Stale */
+            stale: number;
+            /** Rows */
+            rows: components["schemas"]["FocusRow"][];
+            /** Warnings */
+            warnings?: string[];
+        };
         /** HTTPValidationError */
         HTTPValidationError: {
             /** Detail */
@@ -1362,7 +1562,7 @@ export interface components {
          * MarketRefreshScope
          * @enum {string}
          */
-        MarketRefreshScope: "default" | "all";
+        MarketRefreshScope: "default" | "all" | "focus";
         /** MarketSentimentResponse */
         MarketSentimentResponse: {
             /** Ok */
@@ -1967,6 +2167,129 @@ export interface operations {
                     "application/json": {
                         [key: string]: unknown;
                     }[];
+                };
+            };
+        };
+    };
+    focus_api_v1_focus_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["FocusSnapshot"];
+                };
+            };
+        };
+    };
+    add_focus_api_v1_focus_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["FocusAddRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Candidate"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    focus_note_api_v1_focus__symbol__note_put: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                symbol: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["FocusNoteRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Candidate"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    review_focus_api_v1_focus__symbol__review_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                symbol: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "application/json": components["schemas"]["FocusReviewRequest"] | null;
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["FocusReviewEntry"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
                 };
             };
         };

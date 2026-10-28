@@ -1,11 +1,8 @@
 # 慢慢看 · manmankan
 
-需要核对用户明确的日线交集和区间低点日期，可使用
-[`kan screen ohlc`](docs/ohlc-screen.md)，保留统一复权基准、覆盖率及逐日证据。
-
-> **先看趋势，再定义规则，再复跑证据。A 股选股研究工作台。**
+> **从变化开始，把观察留下来。A 股个人研究工作台。**
 >
-> 散户看得清，AI 调得动。只给数据，不给答案。
+> 我的关注 → 核对变化 → 保存观察 → 连续复看。
 
 [![License: AGPL v3](https://img.shields.io/badge/License-AGPL_v3-blue.svg)](https://www.gnu.org/licenses/agpl-3.0)
 [![Python 3.11+](https://img.shields.io/badge/python-3.11+-blue.svg)](https://www.python.org/downloads/)
@@ -15,32 +12,24 @@
 [![Local-first](https://img.shields.io/badge/local--first-no_telemetry-green.svg)](docs/compliance.md)
 [![Local Web](https://img.shields.io/badge/default-local_Web-0f766e.svg)](docs/china-quickstart.md)
 
-![慢慢看趋势发现：行业题材趋势榜、走势复核与成分股下钻](docs/assets/readme-trend-discovery.png)
+![慢慢看个人研究工作台：我的关注、行情变化和连续观察](docs/assets/readme-focus-workspace.png)
 
-慢慢看是一个给普通 A 股用户使用的本地优先趋势选股研究工作台。它把“行业/题材趋势发现、历史复核、成分股下钻、客观阈值、运行结果、候选研究和横向对比”连成一条可复跑流水线，重点回答五个问题：**哪里正在形成趋势、同类趋势过去怎样分布、板块里哪些股票符合我写下的规则、为什么符合、与上次运行相比发生了什么变化**。
+慢慢看是一个**本地优先的 A 股个人研究工作台**。围绕一条日常路径组织功能：**看自己关注的对象有什么变化 → 核对数据 → 记下观察 → 下次继续复看**。
 
 ```bash
 uv tool install manmankan
-kan web
+kan web                 # 浏览器研究桌面
+kan tui                 # 键盘操作的终端工作台
 ```
 
-浏览器会打开只监听本机的 React + TypeScript 工作台。每次启动都会生成一条仅本次有效的随机会话链接；如果浏览器没有自动打开，请使用终端刚打印的完整地址。你可以直接在网页里：
+- **我的关注**：已有自选、持仓和人工候选汇集到一处；直接读取本地行情，显示数据日、相邻行情涨跌、30/60/180 日区间位置及较上一条行情的变化。
+- **连续观察**：选中对象即可保存笔记、标记已复看，回看当时的数据日、价格、位置和观察；筛选重跑不会冲掉人工记录。
+- **按需扩展研究**：从“发现与筛选”查看行业/题材、历史事实或运行自己明确的条件，再把对象留在研究队列里。
+- **同一份事实**：Web、TUI 和 Python 共用关注服务；原有 CLI、JSON、HTTP、MCP 继续用于精确查询、筛选和自动化。
 
-- 把申万行业或概念题材指数当作 OHLC 标的，按连续涨跌、连续阳线/阴线、最新涨幅或主力净额发现趋势。
-- 复核板块近日日涨跌轨迹和成分股内部结构：上涨/下跌家数、中位涨跌及涨跌靠前成员；这些事实不冒充指数权重贡献或新闻因果。
-- 从趋势详情进入“历史复核”：按你明确设置的连续条件查看板块指数未来区间分布、逐事件明细及相对沪深 300 的同日结果；不拿今天的成分股重造过去，也不遍历参数挑最好看的结果。
-- 保存行业与题材的每日趋势复看，跨日区分连续天数延长/缩短、方向切换和数据可用性变化；相同数据重复点击不会制造历史。
-- 把所选板块一键带入 Screen；系统只带入股票池，不偷加选股条件。
-- 从自选、持仓、全市场、行业、题材或自定义代码池建立 `Screen`。
-- 组合 27 类中文条件、AND / OR、最多三层排序、结果字段和缺失值策略；全市场按数据能力开放其中 23 类。
-- 保存并版本化规则，形成不可变 `ScreenRun`，查看数据截止日、覆盖率、逐条件实际值与来源。
-- 重跑同一规则，查看新增、移出和排名变化；历史规则可预览并恢复为新版本。
-- 把结果加入独立候选池，记录状态、来源运行和待验证问题；规则重跑不会冲掉人工研究进度。
-- 保存 3–10 只股票的对比组，横向查看最近一次可追溯运行中的位置、估值、资金和技术数据。
-- 在“市场与数据”页用 SQLite 持久任务更新默认池或全市场；部分失败、中断和恢复水位保持可见。
-- 录入、修改或删除持仓和现金，查看盈亏与仓位事实。
+首屏不自动抓取全市场。点击“更新关注数据”才会更新当前关注池；缺失、陈旧或无法确认新鲜度的数据会明确显示。空工作区从一个明确代码开始，不预置股票、条件或评分。
 
-所有自选、持仓、缓存和 token 都保存在本机；不登录 manmankan 服务、不做云同步或遥测。查询行情时会向所选数据源发送股票代码；配置 TuShare 时，token 只发送到你配置的数据源。持仓成本、股数和现金不会发送。
+所有自选、持仓、笔记和缓存都保存在本机，不登录 manmankan 服务，不做云同步或遥测。查询行情时会向所选数据源发送股票代码；配置 TuShare 时，token 只发送到配置的数据源。持仓成本、股数和现金不会发送。
 
 ## 终端与 AI：按需获取研究证据
 
@@ -57,43 +46,21 @@ kan research 600519 --dimensions income,balancesheet,cashflow --format json
 
 按需加入 `income,balancesheet,cashflow` 可取得财报三表的28个关键金额科目，用于查看收入与利润、资产负债和现金流。三表分别保留日期，区分年初累计与期末余额；一张表缺失时仍保留其他表的材料。
 
-## 普通用户从这里开始
+## 每天如何使用
 
-### 1. 先看板块趋势
+1. 打开 `kan web`，默认进入“我的关注”。已有对象直接出现；首次使用点击“添加关注”，填写明确股票代码。
+2. 需要新数据时点击“更新关注数据”。只刷新当前关注池，进度和失败保持可见。
+3. 选中一行，核对行情截止日、较上一条行情的区间位置变化；“完整研究”继续查看更多证据。
+4. 写下需要继续核对的事实并保存笔记，核对完后标记已复看。下一次数据更新到新交易日，会重新显示待复看；历史记录仍保留。
+5. 需要扩展范围时，进入“发现与筛选”。板块下钻只带入股票池，新建规则仍由你明确条件；筛选结果可保留为人工候选，也可建立横向对比。
 
-```bash
-kan web
-```
+终端使用 `kan tui`：方向键选择，`Enter` 查看详情，`/` 搜索，`a` 添加，`n` 写观察，`?` 查看全部快捷键，`Esc` 返回，`q` 退出。非交互脚本继续使用原有命令与 `--format json`。
 
-默认页是“趋势发现”：先切换行业/题材、收盘连续/阳线连续、方向与天数，再复核板块近日日涨跌和同一截止日的成员涨跌分布。成员涨跌靠前不等于指数贡献；点击“历史复核”会带入当前板块和连续条件，点击“用本板块选股”只会把板块成分股带入 Screen，不预置阈值、排除项或排序。
-
-### 2. 写下规则并保存运行
-
-可以从趋势板块下钻，也可以直接打开“选股工作台”选择股票池。再用“添加条件”组合客观阈值；新规则至少由用户添加一个条件或勾选一个排除项后才允许保存/运行。点击“保存并运行”后，规则版本和运行结果都会写入本机；同一规则、同一数据产生稳定的 `spec_hash` / `result_hash`，每次运行仍有独立 `run_id`。
-
-### 3. 核对覆盖率与逐条件证据
-
-结果不是一列代码：每一行都保留实际值、阈值、数据日、来源和证据引用。缺数据、陈旧数据和不支持的全市场字段不会被当成 `0`，也不会静默制造完整结果。
-
-### 4. 每日复看已有事实与规则
-
-“每日复看”会保存行业与题材的最新完整趋势事实；第一份只建立基线，后续同口径记录才显示连续天数和数据可用性变化。同一页可顺序重跑你已经保存的 Screen，并直接查看现有 `added / removed / rank_changes`；系统不会改写条件或候选状态。
-
-### 5. 进入候选与对比
-
-候选池是人工研究队列，不等于一次 Screen 命中。你可以保留备注和来源运行，再从结果或候选池建立 3–10 股对比；下次重跑 Screen 时，候选状态不会被覆盖。
-
-### 6. 更新数据或使用 CLI
-
-“市场与数据”页可以更新默认池或全市场，并持久显示 `queued / running / succeeded / partial / failed / interrupted`。不想打开浏览器时，仍可在终端运行：
-
-```bash
-kan screen filters
-kan screen list
-kan daily
-```
+完整的数据口径、复看行为和操作说明见 [`个人研究工作台`](docs/focus-workspace.md)。
 
 ## 进阶用户：CLI、JSON 与 AI
+
+需要核对明确的日线交集和区间低点日期，可使用 [`kan screen ohlc`](docs/ohlc-screen.md)，保留统一复权基准、覆盖率及逐日证据。
 
 Web、CLI、Python API 和 HTTP 共用 `BoardTrendQuery → BoardTrendSnapshot`；Web、Python API 和 HTTP 还共用 `BoardPulseQuery → BoardPulseSnapshot` 成员结构、`BoardDailyReview` 跨日复看和 `BoardHistoryStudy` 板块指数历史复核服务。Web、CLI、Python API、HTTP 和 MCP 也共用同一套 `ScreenSpec → ScreenRun` 服务。React 只负责交互和展示，不在浏览器重算金融事实；既有 `kan find` JSON 契约继续兼容。
 
@@ -117,7 +84,7 @@ kan mcp http --host localhost --port 8765
 
 | 你是谁 | 先跑 / 先读 |
 |---|---|
-| 普通 A 股用户 | `kan web`：趋势发现、每日复看、Screen、运行证据、候选、对比、研究、数据和持仓 |
+| 普通 A 股用户 | `kan web` / `kan tui`：个人关注、核对变化、观察笔记和连续复看 |
 | 中国用户 / 开发者 | [`docs/china-quickstart.md`](docs/china-quickstart.md)：安装、行情源网络、TuShare、代理和 Windows / PowerShell |
 | CLI / Python / HTTP 开发者 | [`docs/selection-workbench.md`](docs/selection-workbench.md)：同源领域模型、命令、Python API 与 `/api/v1` |
 | AI agent / 自动化脚本 | `kan_screen_plan` + [`docs/ai-quickstart.md`](docs/ai-quickstart.md) + [`docs/mcp.md`](docs/mcp.md) |
@@ -126,7 +93,7 @@ kan mcp http --host localhost --port 8765
 <details>
 <summary><b>English summary</b></summary>
 
-**manmankan** (*"take your time, see clearly"*) is a local-first A-share trend screening and research workbench. Its default React Web UI discovers objective industry/theme trends, saves factual daily changes, drills into constituents, and turns explicit user rules into versioned Screens, immutable auditable runs, independent candidate lists, and saved comparisons. Python application services are shared by Web, CLI, public Python API, HTTP, and MCP.
+**manmankan** (*"take your time, see clearly"*) is a local-first personal A-share research workspace. Web and keyboard-driven TUI bring watchlists, holdings and manually retained candidates together with dated market facts, observation notes and review history. Industry discovery, explicit screening rules, immutable evidence and comparisons remain available. Shared Python services keep calculations consistent across interfaces.
 
 Data, not decisions: no buy/sell advice, no ratings, no price targets. Python 3.11+ · local-first · A-share (architecture designed for multi-market extension) · [GNU AGPL-3.0](LICENSE).
 </details>
@@ -137,7 +104,8 @@ Data, not decisions: no buy/sell advice, no ratings, no price targets. Python 3.
 
 慢慢看把这些输入统一成一个可复核的数据层，并提供共用计算的研究入口：
 
-- **CLI 与 AI 工具**：当前迭代主线，按问题取得研究证据、运行用户规则；JSON、Python API 和 MCP 调用共享服务。
+- **个人研究桌面与终端**：从关注对象的变化进入研究，保存观察并持续复看。
+- **CLI 与 AI 工具**：按问题取得研究证据、运行用户规则；JSON、Python API 和 MCP 调用共享服务。
 - **Web 可视化**：提供板块趋势、成分股下钻、规则编辑、运行证据、候选研究、横向对比、数据更新和持仓视图。
 
 如果你要让 AI 参与候选筛选，慢慢看的角色是提供可审计输入：它负责把"坐标"和"条件命中"说清楚，不负责替你下结论。

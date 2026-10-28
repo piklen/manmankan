@@ -122,7 +122,10 @@ export function CandidatesPage() {
     );
   }, [activeList, search]);
 
-  const invalidate = () => queryClient.invalidateQueries({ queryKey: ["candidate-lists"] });
+  const invalidate = () => Promise.all([
+    queryClient.invalidateQueries({ queryKey: ["candidate-lists"] }),
+    queryClient.invalidateQueries({ queryKey: ["focus"] }),
+  ]);
   const createList = useMutation({
     mutationFn: () => api.createCandidateList(newListName),
     onSuccess: (list) => {
@@ -197,8 +200,8 @@ export function CandidatesPage() {
     <div>
       <PageHeader
         eyebrow="Candidate research"
-        title="候选不是结论，而是下一步研究队列"
-        description="把筛选结果独立保存，记录状态、来源与待验证问题。Screen 变化不会冲掉你的研究进度。"
+        title="研究笔记"
+        description="按研究列表整理观察、问题与状态；已保存的笔记不会随筛选结果变化。"
         actions={
           <>
             {notice ? <span className="notice-pill">{notice}</span> : null}

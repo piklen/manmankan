@@ -218,7 +218,7 @@ export function BoardHistoryPage() {
     <div className="board-history-page">
       <PageHeader
         eyebrow="Historical review"
-        title="把一次趋势，放回历史里看"
+        title="板块历史复核"
         description="按你明确选择的连续条件，统计板块指数在历史上首次达到条件后，未来若干交易日的实际涨跌分布。这里不预测，也不自动寻找最优参数。"
         actions={
           <Button variant="ghost" onClick={() => navigate("/trends")}>

@@ -21,11 +21,15 @@ def cli_main() -> None:
         from kan.cli.helpers import _normalize_help_args, _normalize_streak_args
         from kan.storage.stock_names_refresh import maybe_start_stock_names_refresh
 
-        maybe_start_stock_names_refresh()
+        # TUI 首屏只读本机缓存，联网更新由用户在界面中显式触发。
+        interactive_workbench = _sys.argv[1:2] == ["tui"]
+        if not interactive_workbench:
+            maybe_start_stock_names_refresh()
         _normalize_help_args()
         _normalize_streak_args()
         # 环境设置只由 kan setup / completion / mcp install 主动触发。
-        atexit.register(_check_updates_atexit)
+        if not interactive_workbench:
+            atexit.register(_check_updates_atexit)
         try:
             app()
         except Exception as e:

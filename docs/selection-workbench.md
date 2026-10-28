@@ -98,7 +98,7 @@ flowchart LR
 
 ## 4. Web 主路径
 
-运行 `kan web` 后默认进入 `/trends`：
+运行 `kan web` 后默认进入 `/focus`，个人关注、笔记和复看见 [`focus-workspace.md`](focus-workspace.md)。需要扩展研究时，从“发现与筛选”进入 `/trends`：
 
 1. 在趋势发现页选择行业/题材、收盘连续/阳线连续、方向、连续天数和排序，读取同一 `BoardTrendSnapshot`。
 2. 选中板块后复核近日日涨跌轨迹和同一截止日的成员涨跌分布；停牌或缺行成员进入 `missing`，不当作平盘。

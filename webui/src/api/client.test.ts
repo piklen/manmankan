@@ -113,4 +113,15 @@ describe("API client", () => {
     expect(init.method).toBe("POST");
     expect(JSON.parse(String(init.body))).toEqual(payload);
   });
+  it("guards a review with the data and note the user actually saw", async () => {
+    const fetchMock = vi.fn().mockResolvedValue(new Response(JSON.stringify({}), {
+      status: 200, headers: { "Content-Type": "application/json" },
+    }));
+    vi.stubGlobal("fetch", fetchMock);
+    await api.reviewFocus("600000", "visible-data-hash", "已核对的观察");
+    const [path, init] = fetchMock.mock.calls[0] as [string, RequestInit];
+    expect(path).toBe("/api/v1/focus/600000/review");
+    expect(JSON.parse(String(init.body))).toEqual({ expected_data_hash: "visible-data-hash", expected_note: "已核对的观察" });
+  });
+
 });

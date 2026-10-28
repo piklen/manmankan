@@ -133,7 +133,7 @@ describe("ScreenWorkbench", () => {
 
     renderWorkbench();
 
-    expect(await screen.findByText("把选股变成一条可复跑的研究流水线")).toBeInTheDocument();
+    expect(await screen.findByText("条件筛选")).toBeInTheDocument();
     expect(screen.queryAllByLabelText("筛选指标")).toHaveLength(0);
     expect(screen.getByRole("button", { name: "保存并运行" })).toBeDisabled();
     fireEvent.click(screen.getByRole("button", { name: "添加条件" }));

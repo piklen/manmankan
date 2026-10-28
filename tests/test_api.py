@@ -110,6 +110,9 @@ def test_api_all_lists_match_actual_exports():
         "save_compare_set", "list_compare_sets", "filter_catalog", "screen_schema",
         "parse_screen_text", "plan_screen", "explain_run",
         "ResearchRequest", "ResearchBundle", "build_research_bundle",
+        # 个人关注与连续观察 application service
+        "FocusPeriod", "FocusReviewEntry", "FocusRow", "FocusSnapshot",
+        "add_focus", "build_focus_snapshot", "mark_focus_reviewed", "update_focus_note",
     }
     assert declared == expected, f"kan.api.__all__ 与预期 surface 不符: 多={declared-expected} · 少={expected-declared}"
 
