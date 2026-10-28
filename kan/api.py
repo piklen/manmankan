@@ -232,6 +232,7 @@ from kan.domain.board_review import (
     BoardReviewSection,
     BoardReviewSectionSummary,
 )
+from kan.domain.focus import FocusPeriod, FocusReviewEntry, FocusRow, FocusSnapshot
 from kan.domain.research import ResearchBundle, ResearchRequest
 from kan.domain.screen import (
     CandidateList,
@@ -256,6 +257,12 @@ from kan.service.board_service import (
     BoardTrendServiceError,
     query_board_pulse,
     query_board_trends,
+)
+from kan.service.focus_service import (
+    add_focus,
+    build_focus_snapshot,
+    mark_focus_reviewed,
+    update_focus_note,
 )
 from kan.service.research_service import build_research_bundle
 from kan.service.screen_ai import (
@@ -317,6 +324,10 @@ __all__ = [
     "BoardTrendSort",
     "CandidateList",
     "CompareSet",
+    "FocusPeriod",
+    "FocusReviewEntry",
+    "FocusRow",
+    "FocusSnapshot",
     "HoldingsSet",
     "HotRankSet",
     "IndustrySet",
@@ -337,6 +348,8 @@ __all__ = [
     "WatchlistHoldingsSet",
     "WatchlistSet",
     "add_candidate",
+    "add_focus",
+    "build_focus_snapshot",
     "build_research_bundle",
     "clear_user_kline_sources",
     "clear_user_theme_constituent_sources",
@@ -356,6 +369,7 @@ __all__ = [
     "list_runs",
     "list_screens",
     "low",
+    "mark_focus_reviewed",
     "parse_screen_text",
     "plan_screen",
     "query_board_pulse",
@@ -371,4 +385,5 @@ __all__ = [
     "study_board_history",
     "theme_constituent_chain",
     "trend",
+    "update_focus_note",
 ]

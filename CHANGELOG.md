@@ -9,6 +9,19 @@ explicitly approves a larger bump.
 
 ## [Unreleased]
 
+## [0.0.6.9.40] - 2026-10-29
+
+### Added
+
+- 个人关注快照合并已有自选、持仓和人工候选，显示缓存日期、相邻行情涨跌、多周期位置及较上一条行情的变化；首屏不联网，按关注池更新复用持久任务。
+- 观察笔记复用候选记录，复看保存当时的数据日、价格、位置和笔记；同日相同内容幂等，新数据日重新待复看。
+- 新增 `kan tui` 键盘工作台，支持关注搜索、添加、详情、笔记、复看、显式更新与帮助；脚本模式保留原 CLI/JSON。
+
+### Changed
+
+- Web 默认进入“我的关注”，采用列表与详情并列的研究桌面；发现、条件筛选和板块复看归入二级研究入口，账户与数据保留独立入口。
+- 全站统一清晰的文字层级、留白、交互反馈与窄屏导航，补齐个股研究加入关注反馈及观察入口。
+
 ## [0.0.6.9.39] - 2026-09-21
 
 ### Fixed
@@ -32,7 +45,7 @@ explicitly approves a larger bump.
 - 财务指标缓存由90天改为按查询触发的24小时检查，并保留公告日与来源检查时间；`research --refresh` 可重新获取请求维度，单独研究财务不依赖历史行情。`find @fundamentals` 同步返回时间信息。
 - `kan range` 改为按下跌/上涨分组、同档位各周期相邻的历史证据表；指定 `--down/--up` 时，先用文字回答到过多少天、收盘收回/收涨或守住/未守住多少次。条件比例同时保留分子/分母，零触及明确标为无样本。
 - 批量终端按输入顺序逐股保留全部请求档位和收盘结果，修复旧紧凑表隐藏 75/85 档、遗漏条件结果的问题；公共说明与小样本提示只显示一次。计算与 JSON 契约不变。
-- 日涨跌幅、折算基准、短窗口重叠与样本边界改用直接说明；帮助页和中国用户快速开始补齐读表路径。收盘中位和最高至收盘回落等诊断明细保留在 JSON。
+- 相邻行情涨跌幅、折算基准、短窗口重叠与样本边界改用直接说明；帮助页和中国用户快速开始补齐读表路径。收盘中位和最高至收盘回落等诊断明细保留在 JSON。
 
 ### Fixed
 
@@ -51,7 +64,7 @@ explicitly approves a larger bump.
 
 ### Added
 
-- 新增 Web“趋势发现”首页：行业/题材、收盘连续/阳线连续、方向、天数与排序共用板块趋势契约；支持近日日涨跌轨迹复核，并把选中板块的成分股池带入 Screen。
+- 新增 Web“趋势发现”首页：行业/题材、收盘连续/阳线连续、方向、天数与排序共用板块趋势契约；支持近日相邻行情涨跌轨迹复核，并把选中板块的成分股池带入 Screen。
 - 新增严格 `BoardTrendQuery / BoardTrendSnapshot` 领域模型与共享 application service，并从 `kan.api` 和 `GET /api/v1/boards/trends` 暴露；CLI `kan board trend` 改为调用同一服务。
 - 新增 `BoardPulseQuery / BoardPulseSnapshot` 成员结构服务与 `GET /api/v1/boards/{kind}/{value}/pulse`：按同一最新完整交易日统计上涨/下跌/平盘家数、中位涨跌、覆盖率和涨跌靠前成员；缺行只进入 `missing`，不当作 0。
 - 新增 Web“每日复看”与 `BoardDailyReview`：保存行业/题材 latest-complete 趋势事实，跨日区分连续天数延长/缩短、方向切换和数据可用性变化；相同 result hash 幂等复用。页面同时复用现有 ScreenRun diff 与候选备注，不自动改写规则或候选状态。
@@ -734,7 +747,8 @@ explicitly approves a larger bump.
 - **Shell 补全** · zsh / bash / fish / powershell
 - **合规与隐私** · 强制风险提示 + 关键词黑名单（无买卖建议 / 无目标价 / 无评级）· 数据全本地
 
-[Unreleased]: https://github.com/piklen/manmankan/compare/v0.0.6.9.39...HEAD
+[Unreleased]: https://github.com/piklen/manmankan/compare/v0.0.6.9.40...HEAD
+[0.0.6.9.40]: https://github.com/piklen/manmankan/compare/v0.0.6.9.39...v0.0.6.9.40
 [0.0.6.9.39]: https://github.com/piklen/manmankan/compare/v0.0.6.9.38...v0.0.6.9.39
 [0.0.6.9.38]: https://github.com/piklen/manmankan/compare/v0.0.6.9.37...v0.0.6.9.38
 [0.0.6.9.37]: https://github.com/piklen/manmankan/compare/v0.0.6.9.36...v0.0.6.9.37

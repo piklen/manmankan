@@ -27,6 +27,13 @@ from kan.domain.board_review import (
     BoardDailyReviewRequest,
     BoardDailyReviewSummary,
 )
+from kan.domain.focus import (
+    FocusAddRequest,
+    FocusNoteRequest,
+    FocusReviewEntry,
+    FocusReviewRequest,
+    FocusSnapshot,
+)
 from kan.domain.job import MarketRefreshRequest, WorkspaceJob
 from kan.domain.screen import (
     Candidate,
@@ -40,6 +47,7 @@ from kan.service import (
     board_history_service,
     board_review_service,
     board_service,
+    focus_service,
     job_service,
     screen_service,
 )
@@ -135,6 +143,7 @@ def meta() -> ApiMeta:
             "candidate-lists",
             "compare-sets",
             "typed-openapi",
+            "personal-focus",
         ],
     )
 
@@ -142,6 +151,40 @@ def meta() -> ApiMeta:
 @router.get("/filters", response_model=list[dict[str, object]])
 def filters() -> list[dict[str, object]]:
     return screen_filter_groups()
+
+
+@router.get("/focus", response_model=FocusSnapshot)
+def focus() -> FocusSnapshot:
+    return focus_service.build_focus_snapshot()
+
+
+@router.post("/focus", response_model=Candidate, status_code=201)
+def add_focus(payload: FocusAddRequest) -> Candidate:
+    try:
+        return focus_service.add_focus(payload.symbol)
+    except ValueError as exc:
+        _value_error(exc)
+
+
+@router.put("/focus/{symbol}/note", response_model=Candidate)
+def focus_note(symbol: str, payload: FocusNoteRequest) -> Candidate:
+    try:
+        return focus_service.update_focus_note(symbol, payload.note, list_id=payload.list_id)
+    except ValueError as exc:
+        _value_error(exc)
+
+
+@router.post("/focus/{symbol}/review", response_model=FocusReviewEntry)
+def review_focus(symbol: str, payload: FocusReviewRequest | None = None) -> FocusReviewEntry:
+    try:
+        request = payload or FocusReviewRequest()
+        return focus_service.mark_focus_reviewed(
+            symbol,
+            expected_data_hash=request.expected_data_hash,
+            expected_note=request.expected_note,
+        )
+    except ValueError as exc:
+        _value_error(exc)
 
 
 @router.get("/boards/trends", response_model=BoardTrendSnapshot)

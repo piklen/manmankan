@@ -1,4 +1,5 @@
 import { Navigate, Route, Routes } from "react-router-dom";
+import { FocusPage } from "./pages/FocusPage";
 import { AppShell } from "./components/AppShell";
 import { CandidatesPage } from "./pages/CandidatesPage";
 import { BoardHistoryPage } from "./pages/BoardHistoryPage";
@@ -15,7 +16,8 @@ export default function App() {
   return (
     <Routes>
       <Route element={<AppShell />}>
-        <Route index element={<Navigate to="/trends" replace />} />
+        <Route index element={<Navigate to="/focus" replace />} />
+        <Route path="focus" element={<FocusPage />} />
         <Route path="trends" element={<TrendDiscoveryPage />} />
         <Route path="history/board" element={<BoardHistoryPage />} />
         <Route path="review" element={<DailyReviewPage />} />
@@ -30,7 +32,7 @@ export default function App() {
         <Route path="find" element={<Navigate to="/screen" replace />} />
         <Route path="stock/:symbol" element={<ResearchPage />} />
         <Route path="hold" element={<Navigate to="/portfolio" replace />} />
-        <Route path="*" element={<Navigate to="/trends" replace />} />
+        <Route path="*" element={<Navigate to="/focus" replace />} />
       </Route>
     </Routes>
   );

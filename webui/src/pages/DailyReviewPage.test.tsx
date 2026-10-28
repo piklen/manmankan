@@ -189,7 +189,7 @@ describe("DailyReviewPage", () => {
     mockQueries();
     renderPage();
 
-    expect(await screen.findByText("把今天看到的变化，留给明天复核")).toBeInTheDocument();
+    expect(await screen.findByText("板块复看")).toBeInTheDocument();
     expect(await screen.findByText("延长板块")).toBeInTheDocument();
     expect(screen.getByText("连涨 2 天")).toBeInTheDocument();
     expect(screen.getByText("连涨 3 天")).toBeInTheDocument();

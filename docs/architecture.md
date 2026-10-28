@@ -1,14 +1,14 @@
 # manmankan 当前架构与演进边界
 
-> 当前实现 SOT · 2026-08-24。趋势发现与 Screen 领域细节见 [`selection-workbench.md`](selection-workbench.md)。
+> 当前实现 SOT · 2026-10-29。趋势发现与 Screen 领域细节见 [`selection-workbench.md`](selection-workbench.md)。
 
 ---
 
-## 一、定位：一个 Python 事实核心，五个产品入口
+## 一、定位：一个 Python 事实核心，多种产品入口
 
-manmankan 的底层仍是行情数据翻译层，但默认产品已经从“今日观察页”迁移为可复跑选股研究工作台。用户优先级是硬约束：
+manmankan 以个人连续研究为产品主线，数据核心仍提供可复核事实。用户优先级是：
 
-1. **普通 A 股用户是第一用户**：本地 Web 默认完成 Board Trend → Screen → Run → Candidate → Compare → 复看 diff。
+1. **普通 A 股用户是第一用户**：Web 与 TUI 默认完成 Focus → 变化证据 → 笔记 → 复看历史；Board Trend / Screen / Compare 是扩展研究入口。
 2. **CLI / Python / HTTP / MCP 是同级适配器**：都执行同一个 Python application service，不复制筛选逻辑。
 3. **AI 是 typed contract 的消费者**：可以解析明确阈值、规划、运行和解释证据，不能成为指标或候选计算真相源。
 
@@ -17,11 +17,11 @@ manmankan 的底层仍是行情数据翻译层，但默认产品已经从“今�
 ```
 ┌─────────────────────────────────────────────────────────┐
 │             Layer 3: 产品入口                              │
-│ React Web · Typer CLI · kan.api · FastAPI /api/v1 · MCP   │
+│ React Web · Textual TUI · Typer CLI · kan.api · HTTP · MCP   │
 ├─────────────────────────────────────────────────────────┤
 │                 ★ Layer 2: 数据中间层 ★                    │
 │                     manmankan 在这里                      │
-│ BoardTrend/Pulse · ScreenRun · 证据 / diff · 候选 / 对比     │
+│ Focus · BoardTrend/Pulse · ScreenRun · 笔记 / 复看 / 证据     │
 ├─────────────────────────────────────────────────────────┤
 │                 Layer 1: 数据基础设施                       │
 │  tushare / akshare / baostock / Wind / iFinD / ...       │
@@ -87,7 +87,8 @@ Protocol、provider 注册与责任链；市场级 `Source` 聚合及多市场�
 ### 3.1 普通用户消费（React Web）
 
 - 默认入口是 `kan web`，生产由 Python 同源托管预构建 SPA，不要求用户安装 Node 或运行第二个服务。
-- 首页是趋势发现：行业/题材指数使用同一连续涨跌口径；选中板块后用 `BoardPulseSnapshot` 展示同一截止日的成员涨跌分布，再只把成分股池带入 Screen，不预置筛选条件。
+- 首页是个人关注：`FocusSnapshot` 合并自选、持仓和人工候选，只读取本地缓存；`workspace_state` 保存复看记录，候选领域继续保存笔记。数据口径见 [`focus-workspace.md`](focus-workspace.md)。
+- 发现与筛选保留趋势发现：行业/题材指数使用同一连续涨跌口径；选中板块后用 `BoardPulseSnapshot` 展示同一截止日的成员涨跌分布，再只把成分股池带入 Screen，不预置筛选条件。
 - “每日复看”把行业与题材 `BoardTrendSnapshot` 保存为不可变 `BoardDailyReview`，只比较连续天数、方向与数据可用性；相同 result hash 幂等返回已有记录。
 - 每日复看页复用已有 ScreenRun diff 与 CandidateList 备注，不复制规则执行器或候选领域，也不自动修改用户状态。
 - 成员 pulse 只描述上涨/下跌/平盘家数、中位涨跌和涨跌靠前成员；没有指数权重时不称“贡献”，没有公告/新闻证据时不称“因果”。
@@ -184,7 +185,7 @@ Protocol、provider 注册与责任链；市场级 `Source` 聚合及多市场�
 
 ## 五、演进路线
 
-当前演进优先围绕 A 股研究任务建立 CLI/AI 共用事实工具，保留 Python 模块化单体、SQLite 与 Parquet；Web 承担图表、矩阵和人工编辑。没有已测语言或进程边界瓶颈时，不重写数据源适配器、不拆新的 AI/Data HTTP 服务。跨入口直接复用 service，避免终端输出解析成为新的业务层。
+当前演进围绕个人连续研究建立 Web/TUI/CLI/AI 共用事实工具，保留 Python 模块化单体、SQLite 与 Parquet；Web 与 TUI 提供关注、观察和复看交互。没有已测语言或进程边界瓶颈时，不重写数据源适配器、不拆新的 AI/Data HTTP 服务。跨入口直接复用 service，避免终端输出解析成为新的业务层。
 
 `ResearchRequest → ResearchBundle` 已贯通终端、Python 和 MCP：各维度独立取数，逐项组织来源、数据日、单位和可引用事实。财务复用现有逐股 Parquet 缓存，24小时后按查询刷新，也支持 `--refresh`；报告期、公告日与来源检查时间分别保留。没有后台调度或第二套数据服务。详见 [`research.md`](research.md)。它不包含内置 LLM，历史复权一致性仍待修复。
 

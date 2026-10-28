@@ -1,5 +1,9 @@
 import type { components } from "./schema";
 
+export type FocusSnapshot = components["schemas"]["FocusSnapshot"];
+export type FocusRow = components["schemas"]["FocusRow"];
+export type FocusPeriod = components["schemas"]["FocusPeriod"];
+export type FocusReviewEntry = components["schemas"]["FocusReviewEntry"];
 export type ApiMeta = components["schemas"]["ApiMeta"];
 export type SavedScreen = components["schemas"]["SavedScreen"];
 export type ScreenSpec = components["schemas"]["ScreenSpec"];
@@ -117,6 +121,18 @@ async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
 const json = (value: unknown): string => JSON.stringify(value);
 
 export const api = {
+  focus: () => request<FocusSnapshot>("/api/v1/focus"),
+  addFocus: (symbol: string) => request<Candidate>("/api/v1/focus", {
+    method: "POST", body: json({ symbol }),
+  }),
+  saveFocusNote: (symbol: string, note: string, listId?: string | null) =>
+    request<Candidate>(`/api/v1/focus/${encodeURIComponent(symbol)}/note`, {
+      method: "PUT", body: json({ note, list_id: listId ?? null }),
+    }),
+  reviewFocus: (symbol: string, expectedDataHash: string, expectedNote: string) =>
+    request<FocusReviewEntry>(`/api/v1/focus/${encodeURIComponent(symbol)}/review`, {
+      method: "POST", body: json({ expected_data_hash: expectedDataHash, expected_note: expectedNote }),
+    }),
   meta: () => request<ApiMeta>("/api/v1/meta"),
   boardTrends: (query: BoardTrendParams) => {
     const params = new URLSearchParams({
@@ -232,7 +248,7 @@ export const api = {
       method: "POST",
       body: json(payload),
     }),
-  startMarketRefresh: (scope: "default" | "all", force = false) =>
+  startMarketRefresh: (scope: "default" | "all" | "focus", force = false) =>
     request<WorkspaceJob>("/api/v1/jobs/market-refresh", {
       method: "POST",
       body: json({ scope, force, days: 360 }),

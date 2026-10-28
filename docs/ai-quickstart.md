@@ -1,5 +1,7 @@
 # AI agent 快速开始
 
+个人日常入口是 `kan web` 和交互式 `kan tui`：关注对象、缓存行情、笔记与复看共用 `kan.service.focus_service`。自动化不要启动 TUI，继续使用本文的 CLI/JSON/MCP 契约。关注工作台的日期与复看口径见 [`focus-workspace.md`](focus-workspace.md)。
+
 `manmankan` 给外部 AI agent 提供可审计的 A 股数据输入：typed Screen、CLI、JSON、字段白名单和本地 MCP。工具不内置 LLM；自然语言 parser 只整理明确阈值，最终仍由确定性 Python application service 计算用户规则命中与证据。
 
 `kan research` 可直接取得个股研究事实。默认包含行情、估值、财务，也可只查需要的维度：

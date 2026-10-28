@@ -39,6 +39,7 @@ else:
         status_cmds,
         theme_cmds,
         trend_cmds,
+        tui_cmds,
         watchlist_cmds,
         web_cmds,
         workspace_cmds,

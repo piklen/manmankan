@@ -15,6 +15,7 @@ def root_help_text() -> str:
     return f"""[bold]慢慢看 · 命令速记[/bold]
 
 [bold cyan]普通用户先从这里开始[/bold cyan]
+  kan tui                   键盘工作台：我的关注 / 看变化 / 记观察
   kan web                   打开选股工作台：规则 / 运行 / 候选 / 对比 / 数据
   kan daily                 在终端查看一日事实概览
   kan guide                 只看最常用的下一步
@@ -219,13 +220,12 @@ def print_root_help() -> None:
 
 def start_help_text() -> str:
     """无参数启动时只展示普通散户的最短路径。"""
-    return """[bold]慢慢看 · 从一条明确规则开始[/bold]
+    return """[bold]慢慢看 · 看清变化，留下观察[/bold]
 
-  kan web       打开本地选股研究工作台
-  kan screen    查看可复跑 Screen 命令
-  kan daily     在终端看一日事实概览
-  kan guide     按目的查看下一步
-  kan help      查看完整命令表
+  kan web       浏览器工作台：关注、变化与研究
+  kan tui       键盘工作台：方向键选择，回车查看，随手记观察
+  kan daily     一次输出关注池事实，支持 --format json
+  kan help      完整 CLI 命令与自动化入口
 
 [dim]数据保存在本机 · 不登录 manmankan 服务 · 不云同步 / 遥测[/dim]
 """

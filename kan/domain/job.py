@@ -22,6 +22,7 @@ class JobStatus(StrEnum):
 class MarketRefreshScope(StrEnum):
     DEFAULT = "default"
     ALL = "all"
+    FOCUS = "focus"
 
 
 class MarketRefreshRequest(StrictModel):

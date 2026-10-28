@@ -1,5 +1,7 @@
 # manmankan Skill · AI Agent 能力清单
 
+个人日常入口是 `kan web` 和交互式 `kan tui`：关注对象、缓存行情、笔记与复看共用 `kan.service.focus_service`。自动化不要启动 TUI，继续使用本文的 CLI/JSON/MCP 契约。关注工作台的日期与复看口径见 [`docs/focus-workspace.md`](../docs/focus-workspace.md)。
+
 > 本文件是给 AI Agent 读的"说明书"。
 > 当 Agent 读到本文件时，它应该能够自主发现 manmankan 的全部能力、命令语法、输出格式和错误处理方式。
 > 格式参考 Agent Skills 标准（agent-data-cli / Dune CLI / Anthropic Skills）。

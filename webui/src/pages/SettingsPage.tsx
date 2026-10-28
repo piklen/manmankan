@@ -26,7 +26,7 @@ export function SettingsPage() {
     <div>
       <PageHeader
         eyebrow="Local workspace settings"
-        title="软件运行边界，一眼看清"
+        title="设置"
         description="查看版本、API 能力、数据接入状态与本地隐私边界。凭据值不会在页面回显。"
       />
       {metaQuery.isLoading ? <Loading label="读取本地服务信息" /> : null}

@@ -105,7 +105,7 @@ describe("BoardHistoryPage", () => {
     const query = vi.spyOn(api, "studyBoardHistory").mockResolvedValue(study);
     renderPage();
 
-    expect(await screen.findByText("把一次趋势，放回历史里看")).toBeInTheDocument();
+    expect(await screen.findByText("板块历史复核")).toBeInTheDocument();
     expect(await screen.findByText("上涨样本占比")).toBeInTheDocument();
     expect(screen.getAllByText("50%").length).toBeGreaterThanOrEqual(1);
     expect(screen.getByText("每个历史事件都能回看")).toBeInTheDocument();

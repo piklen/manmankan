@@ -1,4 +1,4 @@
-import { useQuery } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   ArrowRight,
   BookOpenCheck,
@@ -8,10 +8,10 @@ import {
   ShieldCheck,
 } from "lucide-react";
 import { FormEvent, useMemo, useState } from "react";
-import { useNavigate, useParams } from "react-router-dom";
+import { Link, useNavigate, useParams } from "react-router-dom";
 import { api, type ScreenEvidence } from "../api/client";
 import { Badge, Button, Card, EmptyState, Loading, PageHeader } from "../components/ui";
-import { number, percent, shortDate } from "../lib/format";
+import { errorMessage, number, percent, shortDate } from "../lib/format";
 
 interface InfoPeriod {
   period: number;
@@ -113,6 +113,8 @@ function HistoryLine({ series }: { series: HistoryPayload["series"] }) {
 
 export function ResearchPage() {
   const { symbol } = useParams();
+  const queryClient = useQueryClient();
+  const [notice, setNotice] = useState<string | null>(null);
   const navigate = useNavigate();
   const [query, setQuery] = useState(symbol ?? "");
   const validSymbol = Boolean(symbol && /^\d{6}$/.test(symbol));
@@ -129,6 +131,8 @@ export function ResearchPage() {
     enabled: validSymbol,
     retry: false,
   });
+  const focusQuery = useQuery({ queryKey: ["focus"], queryFn: api.focus, enabled: validSymbol, retry: false });
+  const isFocused = focusQuery.data?.rows.some((row) => row.symbol === symbol) ?? false;
   const historyQuery = useQuery({
     queryKey: ["stock-history", symbol],
     queryFn: () => api.stockHistory<HistoryPayload>(symbol!, 60),
@@ -137,6 +141,16 @@ export function ResearchPage() {
   });
   const runsQuery = useQuery({ queryKey: ["runs", "research"], queryFn: () => api.runs(null, 100) });
   const candidateQuery = useQuery({ queryKey: ["candidate-lists"], queryFn: api.candidateLists });
+
+  const addFocus = useMutation({
+    mutationFn: () => api.addFocus(symbol!),
+    onSuccess: () => {
+      setNotice("已加入我的关注，可以继续记录观察。");
+      void queryClient.invalidateQueries({ queryKey: ["candidate-lists"] });
+      void queryClient.invalidateQueries({ queryKey: ["focus"] });
+    },
+    onError: (error) => setNotice(errorMessage(error)),
+  });
 
   const occurrences = useMemo(() => {
     if (!symbol) return [];
@@ -161,13 +175,13 @@ export function ResearchPage() {
       <div>
         <PageHeader
           eyebrow="Stock research"
-          title="从一只股票开始，串起它的全部研究证据"
+          title="个股研究"
           description="查看本地行情位置、最近 Screen 命中原因、候选状态与历史变化。"
         />
         <Card className="research-landing">
           <form onSubmit={submit} className="research-search">
             <Search size={20} />
-            <input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="输入 6 位股票代码" autoFocus />
+            <input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="输入 6 位股票代码" aria-label="股票代码" pattern="(sh|sz)?[0-9]{6}" required autoFocus />
             <Button type="submit">打开研究页</Button>
           </form>
           <div className="research-recents">
@@ -179,7 +193,7 @@ export function ResearchPage() {
             ))}
           </div>
           {!candidateQuery.isLoading && recent.length === 0 ? (
-            <EmptyState title="还没有研究对象" detail="先运行一个 Screen，把结果加入候选池。" />
+            <EmptyState title="还没有研究对象" detail="输入明确的股票代码，或从「我的关注」继续已有研究。" />
           ) : null}
         </Card>
       </div>
@@ -201,6 +215,7 @@ export function ResearchPage() {
         }
       />
 
+      {infoQuery.error ? <div role="alert" className="focus-notice is-error">{errorMessage(infoQuery.error)}</div> : null}
       {infoQuery.isLoading ? <Loading label="读取本地股票档案" /> : null}
       {infoQuery.data && !infoQuery.data.available ? (
         <div className="inline-warning research-data-note">{infoQuery.data.message}</div>
@@ -278,19 +293,22 @@ export function ResearchPage() {
             <span>候选状态</span>
             <strong>{candidate ? CANDIDATE_LABEL[candidate.status] : "尚未加入候选"}</strong>
             <p>{candidate?.note || "加入候选后，在这里保留下一步要验证的问题。"}</p>
-            {!candidate ? (
+            {!isFocused ? (
               <Button
                 size="sm"
                 variant="secondary"
-                onClick={() => api.upsertCandidate("default", symbol!, { name: info?.name })}
-              >加入研究候选</Button>
+                disabled={addFocus.isPending}
+                onClick={() => addFocus.mutate()}
+              >{addFocus.isPending ? "正在加入" : "加入我的关注"}</Button>
             ) : null}
+            {notice ? <p role={addFocus.isError ? "alert" : "status"}>{notice}</p> : null}
+            {isFocused ? <Link className="text-link" to={`/focus?symbol=${symbol}`}>继续记录观察<ArrowRight size={15} /></Link> : null}
           </Card>
           <Card className="provenance-card">
             <h3><ShieldCheck size={17} /> 证据边界</h3>
             <dl>
               <div><dt><CalendarDays size={14} /> 行情截止</dt><dd>{info?.data_cutoff ?? "未知"}</dd></div>
-              <div><dt><Database size={14} /> 行情状态</dt><dd>{info?.stale ? "可能陈旧" : "未标记陈旧"}</dd></div>
+              <div><dt><Database size={14} /> 行情状态</dt><dd>{!info ? "暂无行情" : info.stale ? "可能陈旧" : "未标记陈旧"}</dd></div>
               <div><dt>Screen 覆盖</dt><dd>{occurrences.length} 次运行</dd></div>
             </dl>
             <p>页面只展示本机已经取得或计算的数据。空值不代表 0，也不自动补成判断。</p>
