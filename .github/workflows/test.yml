@@ -54,12 +54,16 @@ jobs:
         run: |
           uv lock --check
           uv sync --python 3.12 --frozen --all-groups
-      - name: Setup Node.js
+      # 自托管 runner 已预装 Node 24；RUNNER_* 会被 action runtime 覆盖，不能用 step env 改工具缓存。
+      - name: Setup Node.js on GitHub-hosted runner
+        if: runner.environment == 'github-hosted'
         uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020
-        env:
-          RUNNER_TOOL_CACHE: ${{ runner.temp }}/node-tool-cache
         with:
           node-version: '24'
+      - name: Verify Node.js runtime
+        run: |
+          node -e "if (process.versions.node.split('.')[0] !== '24') throw new Error('Node.js 24 is required'); console.log(process.version, process.execPath)"
+          npm --version
       - name: Build and test Web UI
         working-directory: webui
         run: |
