@@ -434,13 +434,6 @@ def _to_kline_df(data: dict | None) -> pd.DataFrame | None:
     return df
 
 
-_QFQ_KLINE_FIELDS = "trade_date,open_qfq,high_qfq,low_qfq,close_qfq,vol,amount"
-"""stk_factor_pro 前复权 K 线字段 · 用于 TuShare KlineSource 顶档。
-
-daily 接口返回未复权价格,会在除权除息日前后制造位置百分位跳变;scan/fetch 的
-K 线缓存必须保持前复权口径,与 baostock / akshare qfq fallback 对齐。
-"""
-
 _QFQ_FIELD_MAP = {
     "trade_date": "date",
     "open_qfq": "open",
@@ -449,22 +442,6 @@ _QFQ_FIELD_MAP = {
     "close_qfq": "close",
     "vol": "volume",
 }
-
-
-def _to_qfq_kline_df(data: dict | None) -> pd.DataFrame | None:
-    """TuShare stk_factor_pro data 块 → manmankan KLINE 标准列 (前复权)。"""
-    import pandas as pd
-
-    if not data:
-        return None
-    fields = data.get("fields") or []
-    items = data.get("items") or []
-    if not items:
-        return None
-    df = pd.DataFrame(items, columns=fields)
-    if "trade_date" not in df.columns:
-        return None
-    return df.rename(columns=_QFQ_FIELD_MAP)
 
 
 def _fetch_tushare_detailed(
@@ -494,118 +471,49 @@ def _fetch_tushare_detailed(
             FetchFailure(FetchFailureKind.INVALID, message=str(exc)),
         )
 
+    import pandas as pd
+
+    from kan.data.ohlc_history import FACTOR_FIELDS, RAW_FIELDS, adjust_history
+
+    frames = []
+    for api_name, fields in (("daily", RAW_FIELDS), ("adj_factor", FACTOR_FIELDS)):
+        try:
+            data, err = _post_tushare_api(
+                endpoint=endpoint, token=token, api_name=api_name,
+                params={"ts_code": ts_code, "start_date": start}, fields=fields,
+                allow_transport_retries=False,
+            )
+        except requests.Timeout as exc:
+            debug_log(__name__, "fetch tushare timeout", exc)
+            return ProviderFetchResult.failed(FetchFailure(FetchFailureKind.TIMEOUT, message=type(exc).__name__, retryable=True))
+        except Exception as exc:
+            debug_log(__name__, "fetch tushare failed", exc)
+            return ProviderFetchResult.failed(FetchFailure(FetchFailureKind.TRANSPORT, message=type(exc).__name__, retryable=True))
+        if data is None:
+            failure = _api_error_to_failure(err)
+            breaker_recorded = record_breaker and failure.affects_circuit
+            if breaker_recorded:
+                cb.record("tushare", ok=False)
+            return ProviderFetchResult.failed(failure, breaker_recorded=breaker_recorded)
+        if not data.get("items"):
+            return ProviderFetchResult.failed(FetchFailure(FetchFailureKind.EMPTY, message=f"{api_name} returned no data"))
+        frame = pd.DataFrame(data["items"], columns=data.get("fields", []))
+        if not set(fields.split(",")) <= set(frame.columns) or not frame["ts_code"].eq(ts_code).all():
+            return ProviderFetchResult.failed(FetchFailure(FetchFailureKind.INVALID_SCHEMA, message=f"{api_name} fields or symbol mismatch"))
+        frames.append(frame)
     try:
-        data, err = _post_tushare_api(
-            endpoint=endpoint,
-            token=token,
-            api_name="stk_factor_pro",
-            params={"ts_code": ts_code, "start_date": start},
-            fields=_QFQ_KLINE_FIELDS,
-            allow_transport_retries=False,
-        )
-    except requests.Timeout as exc:
-        debug_log(__name__, "fetch tushare timeout", exc)
-        failure = FetchFailure(
-            FetchFailureKind.TIMEOUT,
-            message=type(exc).__name__,
-            retryable=True,
-            affects_circuit=True,
-        )
-        if record_breaker:
-            cb.record("tushare", ok=False)
-        return ProviderFetchResult.failed(failure, breaker_recorded=record_breaker)
-    except Exception as exc:
-        debug_log(__name__, "fetch tushare 失败", exc)
-        failure = FetchFailure(
-            FetchFailureKind.TRANSPORT,
-            message=type(exc).__name__,
-            retryable=True,
-            affects_circuit=True,
-        )
-        if record_breaker:
-            cb.record("tushare", ok=False)
-        return ProviderFetchResult.failed(failure, breaker_recorded=record_breaker)
-
-    if data is None:
-        failure = _api_error_to_failure(err)
-        breaker_recorded = record_breaker and failure.affects_circuit
-        if breaker_recorded:
-            cb.record("tushare", ok=False)
-        return ProviderFetchResult.failed(failure, breaker_recorded=breaker_recorded)
-
-    items = data.get("items") or []
-    if not items:
-        return ProviderFetchResult.failed(
-            FetchFailure(FetchFailureKind.EMPTY, message="tushare returned no data"),
-        )
-    df = _to_qfq_kline_df(data)
-    if df is None or df.empty:
-        return ProviderFetchResult.failed(
-            FetchFailure(
-                FetchFailureKind.INVALID_SCHEMA,
-                message="tushare response is missing required qfq fields",
-            ),
-        )
+        raw = frames[0].merge(frames[1], on=["ts_code", "trade_date"], how="left", validate="one_to_one")
+        df = adjust_history(raw, str(raw["trade_date"].max())).rename(columns={"vol": "volume"})
+    except (ValueError, KeyError) as exc:
+        return ProviderFetchResult.failed(FetchFailure(FetchFailureKind.INVALID_SCHEMA, message=str(exc)))
     if record_breaker:
         cb.record("tushare", ok=True)
     return ProviderFetchResult.succeeded(df, breaker_recorded=record_breaker)
 
 
 def _fetch_tushare(symbol: str, start: str) -> pd.DataFrame | None:
-    """TuShare Pro 前复权日 K 入口 · fetch_kline 顶优先调用。
-
-    Args:
-      symbol: 6 位股票代码
-      start:  YYYYMMDD 起始日期（与 fetcher.py 其它 _fetch_* 函数一致）
-
-    Returns:
-      DataFrame（manmankan KLINE 标准列,前复权）或 None（未配 token / 熔断 / 失败）。
-      失败时上游 fetch_kline 会 fallback 到 baostock → akshare → 腾讯。
-    """
-    from kan.infra import circuit_breaker
-
-    token, endpoint = _resolve_config()
-    if not token:
-        return None
-
-    cb = circuit_breaker.get_breaker()
-    if cb.is_down("tushare"):
-        return None
-
-    try:
-        ts_code = _normalize_symbol_to_ts(symbol)
-    except ValueError:
-        return None
-
-    try:
-        for attempt in range(3):
-            data, err = _post_tushare_api(
-                endpoint=endpoint,
-                token=token,
-                api_name="stk_factor_pro",
-                params={"ts_code": ts_code, "start_date": start},
-                fields=_QFQ_KLINE_FIELDS,
-            )
-            # 个股 daily 走多源 fallback chain (TuShare → baostock → akshare → 腾讯)
-            # · error 已被 _post_tushare_api 写进 debug_log · 不上抛 caller
-            if data is None:
-                if _should_trip_tushare_circuit(err):
-                    cb.record("tushare", ok=False)
-                sleep_s = _retryable_sleep_seconds(err, attempt) if err else None
-                if sleep_s is not None and attempt < 2:
-                    time.sleep(sleep_s)
-                    continue
-                return None
-            df = _to_qfq_kline_df(data)
-            if df is None or df.empty:
-                return None
-            cb.record("tushare", ok=True)
-            return df
-        return None
-    except Exception as e:
-        debug_log(__name__, "fetch tushare 失败", e)
-        cb.record("tushare", ok=False)
-        return None
+    """逐股日线同样用原价与因子生成统一基准，重试由 scheduler 负责。"""
+    return _fetch_tushare_detailed(symbol, start).data
 
 
 _DAILY_BARS_FIELDS = "ts_code,trade_date,open_qfq,high_qfq,low_qfq,close_qfq,vol,amount"
@@ -800,97 +708,3 @@ class TushareKlineSource:
 def _strip_ts_suffix(ts_code: str) -> str:
     """ts_code '600519.SH' → 6 位 '600519' (跟 manmankan symbol 标准对齐)。"""
     return str(ts_code).split(".", 1)[0]
-
-
-def _to_metrics_df(data: dict | None) -> pd.DataFrame | None:
-    """Compatibility shim. Implementation lives in `kan.data.metrics`."""
-    from kan.data.metrics import _to_tushare_metrics_df
-    return _to_tushare_metrics_df(data)
-
-
-def _fetch_tushare_metrics(
-    trade_date: str, symbols: list[str] | None = None,
-) -> pd.DataFrame | None:
-    """Compatibility shim. Implementation lives in `kan.data.metrics`."""
-    from kan.data.metrics import _fetch_tushare_metrics as _impl
-    return _impl(trade_date, symbols)
-
-
-class TushareMetricsSource:
-    """Compatibility shim. Use `kan.data.metrics.TushareMetricsSource`."""
-
-    def __new__(cls):
-        from kan.data.metrics import TushareMetricsSource as _Impl
-        return _Impl()
-
-
-# ══════════════════════════════════════════════════════════════════
-# 估值历史时序 + 申万行业反查 (全市场截面层) · 估值分位 + 行业中位对照原料
-# ══════════════════════════════════════════════════════════════════
-
-def _fetch_tushare_metrics_history(
-    symbol: str, start_date: str,
-) -> pd.DataFrame | None:
-    """Compatibility shim. Implementation lives in `kan.data.metrics`."""
-    from kan.data.metrics import _fetch_tushare_metrics_history as _impl
-    return _impl(symbol, start_date)
-
-
-def _fetch_tushare_sw_l1_members() -> pd.DataFrame | None:
-    """Compatibility shim. Implementation lives in `kan.data.industry_map`."""
-    from kan.data.industry_map import _fetch_tushare_sw_l1_members as _impl
-    return _impl()
-
-
-def _fetch_tushare_stock_basic_all() -> pd.DataFrame | None:
-    """Compatibility shim. Implementation lives in `kan.data.universe`."""
-    from kan.data.universe import _fetch_tushare_stock_basic_all as _impl
-    return _impl()
-
-
-def _fetch_tushare_fundamentals(symbol: str) -> pd.DataFrame | None:
-    """Compatibility shim. Implementation lives in `kan.data.fundamentals`."""
-    from kan.data.fundamentals import _fetch_tushare_fundamentals as _impl
-    return _impl(symbol)
-
-
-def _fetch_tushare_holdernumber(symbol: str) -> pd.DataFrame | None:
-    """Compatibility shim. Implementation lives in `kan.data.shareholder`."""
-    from kan.data.shareholder import _fetch_tushare_holdernumber as _impl
-    return _impl(symbol)
-
-
-def _fetch_tushare_top10float(symbol: str) -> pd.DataFrame | None:
-    """Compatibility shim. Implementation lives in `kan.data.shareholder`."""
-    from kan.data.shareholder import _fetch_tushare_top10float as _impl
-    return _impl(symbol)
-
-
-def _fetch_tushare_moneyflow(trade_date: str) -> pd.DataFrame | None:
-    """Compatibility shim. Implementation lives in `kan.data.moneyflow`."""
-    from kan.data.moneyflow import _fetch_tushare_moneyflow as _impl
-    return _impl(trade_date)
-
-
-def _fetch_tushare_dividend(symbol: str) -> pd.DataFrame | None:
-    """Compatibility shim. Implementation lives in `kan.data.dividend`."""
-    from kan.data.dividend import _fetch_tushare_dividend as _impl
-    return _impl(symbol)
-
-
-def _fetch_tushare_technical(trade_date: str) -> pd.DataFrame | None:
-    """Compatibility shim. Implementation lives in `kan.data.technical`."""
-    from kan.data.technical import _fetch_tushare_technical as _impl
-    return _impl(trade_date)
-
-
-def _fetch_tushare_sentiment(trade_date: str) -> pd.DataFrame | None:
-    """Compatibility shim. Implementation lives in `kan.data.sentiment`."""
-    from kan.data.sentiment import _fetch_tushare_sentiment as _impl
-    return _impl(trade_date)
-
-
-def _fetch_tushare_cyq(trade_date: str) -> pd.DataFrame | None:
-    """Compatibility shim. Implementation lives in `kan.data.chip`."""
-    from kan.data.chip import _fetch_tushare_cyq as _impl
-    return _impl(trade_date)

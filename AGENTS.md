@@ -4,17 +4,16 @@
 
 This file applies to the whole `manmankan` repository.
 
-`manmankan` 是面向散户的本地 A 股个人研究工作台。当前主线是“我的关注 →
-核对变化 → 保存观察 → 连续复看”，Web 和 TUI 共用个人关注服务。板块发现、
-显式条件筛选和 CLI / AI 研究作为延伸能力。保留 Python 模块化单体、SQLite 和
-Parquet；CLI、JSON、Python API、HTTP 与 MCP 复用同一套计算。
+`manmankan` 是 A 股趋势搜索与定位工具。当前主线是“发现趋势 → 多周期定位 →
+圈定研究范围 → 核对历史证据”。地图、条件研究、形态检索、Web、TUI 与 CLI
+共用 Python 指标计算。保留模块化单体、SQLite 与 Parquet，不为历史功能保留界面或架构。
 
 The tool stops at data facts. It must not produce buy/sell actions, ratings, price
 targets, stock picks, strategy conclusions, or hosted advisory workflows.
 
 ## Start Here
 
-- For the personal workspace, cache/date semantics and TUI, read `docs/focus-workspace.md`.
+- For trend discovery, study semantics and TUI, read `docs/trend-research.md`.
 - For ordinary-user first-run and daily workflows, read `README.md` and `docs/china-quickstart.md`.
 - For using the CLI as an AI agent, read `skills/manmankan-skill.md` and `docs/ai-quickstart.md`.
 - For JSON contracts, read `docs/find.md`.
@@ -31,8 +30,9 @@ Maintainer-local endpoint mapping lives outside this public repository. Daily lo
 
 ## AI Engineering Autonomy and Research Responsibility
 
+- **不做历史兼容。** 开发按当前产品目标与新契约直接替换旧实现，不保留旧 API、旧协议、旧参数别名、旧数据模型或旧界面的兼容层，也不为历史行为追加兼容测试。用户数据与凭据仍须保护，移除旧实现不等于删除已有资产。
 - The maintainer defines the objective and reviews the completed result. Within that objective, the AI is the engineering owner and should independently investigate, design, implement, migrate, test, benchmark, document, commit, open PRs, resolve review/CI, and merge eligible development changes.
-- Routine technical choices do not require step-by-step approval. The AI may refactor or replace architecture, dependencies, storage, cache, concurrency, data contracts, public APIs, CI/CD, packaging, and test deployment when the net result is better; preserve compatibility only when current users or an explicit contract require it, otherwise provide a clean migration.
+- Routine technical choices do not require step-by-step approval. The AI may refactor or replace architecture, dependencies, storage, cache, concurrency, data contracts, public APIs, CI/CD, packaging, and test deployment when the net result is better. Implement the current contract directly; historical compatibility is not a development requirement.
 - Existing owner credentials, Tushare quota, local datasets, and the non-production edge may be used for real verification without delegating commands back to the maintainer. Never print, persist, commit, or disclose secret values.
 - Private, authorized learning is not limited by the public product's neutral-output positioning. The AI should help study data, routing, caching, concurrency, screening, and financial concepts; third-party recommended usage or commercial positioning warrants one factual risk note and an isolated test strategy, not refusal or repeated discouragement. Public product surfaces and committed examples must still follow `docs/compliance.md`.
 - The maintainer is responsible for the final decision to adopt, run, publish, or trade on research output. The AI remains responsible for factual accuracy, implementation quality, reproducible evidence, risk disclosure, and rollback.
@@ -99,4 +99,4 @@ KAN_NO_UPDATE_CHECK=1 uv run kan mcp install --dry-run
 - If a JSON field, filter, preset, or error envelope changes, update `docs/find.md` and tests.
 - If an AI-facing workflow changes, update `skills/manmankan-skill.md` and `docs/ai-quickstart.md`.
 - If a user-visible output changes, check `docs/compliance.md` before merging.
-- The AI may autonomously choose and bump the next compatible patch version, prepare release artifacts, and complete pre-release verification. Publishing to PyPI/GitHub Release is the final public-release approval gate unless the maintainer already authorized release in the current request.
+- The AI may autonomously choose and bump the next patch version, prepare release artifacts, and complete pre-release verification. Publishing to PyPI/GitHub Release is the final public-release approval gate unless the maintainer already authorized release in the current request.

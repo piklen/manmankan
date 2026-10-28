@@ -1,84 +1,43 @@
 import type { components } from "./schema";
 
-export type FocusSnapshot = components["schemas"]["FocusSnapshot"];
-export type FocusRow = components["schemas"]["FocusRow"];
-export type FocusPeriod = components["schemas"]["FocusPeriod"];
-export type FocusReviewEntry = components["schemas"]["FocusReviewEntry"];
-export type ApiMeta = components["schemas"]["ApiMeta"];
-export type SavedScreen = components["schemas"]["SavedScreen"];
-export type ScreenSpec = components["schemas"]["ScreenSpec"];
-export type ScreenCondition = components["schemas"]["ScreenCondition"];
-export type ScreenEvidence = components["schemas"]["ScreenEvidence"];
-export type ScreenFilterType = components["schemas"]["ScreenFilterType"];
-export type ScreenRun = components["schemas"]["ScreenRun"];
-export type ScreenVersion = components["schemas"]["ScreenVersion"];
-export type ScreenRow = components["schemas"]["ScreenRow"];
+export type TrendMapQuery = components["schemas"]["TrendMapQuery"];
+export type TrendMapSnapshot = components["schemas"]["TrendMapSnapshot"];
+export type TrendMapRow = components["schemas"]["TrendMapRow"];
+export type TrendStockSnapshot = components["schemas"]["TrendStockSnapshot"];
+export type StudyQuery = components["schemas"]["StudyQuery"];
+export type StudyCondition = components["schemas"]["StudyCondition"];
+export type StudyResult = components["schemas"]["StudyResult"];
+export type StudySummary = components["schemas"]["StudySummary"];
+export type StudyEvent = components["schemas"]["StudyEvent"];
+export type StudyMatch = components["schemas"]["StudyMatch"];
+export type StudyEvidence = components["schemas"]["StudyEvidence"];
+export type StudyEventPage = components["schemas"]["StudyEventPage"];
+export type StudyDistribution = components["schemas"]["StudyDistribution"];
+export type StudyBar = components["schemas"]["StudyBar"];
+export type WorkspaceJob = components["schemas"]["WorkspaceJob"];
 export type Candidate = components["schemas"]["Candidate"];
 export type CandidateList = components["schemas"]["CandidateList"];
-export type CandidateStatus = components["schemas"]["CandidateStatus"];
-export type CompareSet = components["schemas"]["CompareSet"];
-export type WorkspaceJob = components["schemas"]["WorkspaceJob"];
-export type MarketOverview = components["schemas"]["MarketOverviewResponse"];
+export type FocusSnapshot = components["schemas"]["FocusSnapshot"];
 export type Portfolio = components["schemas"]["PortfolioResponse"];
 export type SettingsFacts = components["schemas"]["SettingsFactsResponse"];
-export type StockResearch = components["schemas"]["StockResearchResponse"];
-export type BoardTrendSnapshot = components["schemas"]["BoardTrendSnapshot"];
-export type BoardTrendRow = components["schemas"]["BoardTrendRow"];
-export type BoardPulseSnapshot = components["schemas"]["BoardPulseSnapshot"];
-export type BoardPulseMember = components["schemas"]["BoardPulseMember"];
-export type BoardDailyReview = components["schemas"]["BoardDailyReview"];
-export type BoardDailyReviewSummary = components["schemas"]["BoardDailyReviewSummary"];
-export type BoardDailyReviewRequest = components["schemas"]["BoardDailyReviewRequest"];
-export type BoardReviewChange = components["schemas"]["BoardReviewChange"];
-export type BoardHistoryStudy = components["schemas"]["BoardHistoryStudy"];
-export type BoardHistoryStudyQuery = components["schemas"]["BoardHistoryStudyQuery"];
-export type BoardHistoryEvent = components["schemas"]["BoardHistoryEvent"];
-export type ReturnDistribution = components["schemas"]["ReturnDistribution"];
-
-export interface BoardTrendParams {
-  kind: "industry" | "theme";
-  mode: "close" | "candle";
-  direction: "all" | "up" | "down";
-  days: number;
-  sort: "streak" | "latest" | "moneyflow";
-  level: number;
-  limit?: number;
-}
-
-export interface FilterOption {
-  type: ScreenFilterType;
-  label: string;
-  unit: string;
-  input: "scalar" | "period" | "resonance";
-  flag: string;
-  supports_all: boolean;
-  source: string;
-  frequency: string;
-  missing_semantics: string;
-}
-
-export interface FilterGroup {
-  label: string;
-  options: FilterOption[];
-}
+export type ApiMeta = components["schemas"]["ApiMeta"];
 
 export class ApiError extends Error {
-  status: number;
-  code: string;
-  hint?: string;
-
-  constructor(status: number, code: string, message: string, hint?: string) {
+  constructor(
+    public status: number,
+    public code: string,
+    message: string,
+    public hint?: string,
+  ) {
     super(message);
     this.name = "ApiError";
-    this.status = status;
-    this.code = code;
-    this.hint = hint;
   }
 }
 
 function sessionToken(): string {
-  const meta = document.querySelector<HTMLMetaElement>('meta[name="kan-session"]');
-  const embedded = meta?.content ?? "";
+  const embedded = document.querySelector<HTMLMetaElement>(
+    'meta[name="kan-session"]',
+  )?.content;
   if (embedded && embedded !== "__KAN_SESSION_TOKEN__") return embedded;
   return new URLSearchParams(window.location.search).get("_kan_session") ?? "";
 }
@@ -91,263 +50,131 @@ async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
   if (token) headers.set("x-kan-session", token);
   if (!["GET", "HEAD", "OPTIONS"].includes(method)) {
     headers.set("X-Kan-Web", "1");
-    if (init.body !== undefined) headers.set("Content-Type", "application/json");
+    if (init.body !== undefined)
+      headers.set("Content-Type", "application/json");
   }
   const response = await fetch(path, { ...init, headers });
-  const payload = (await response.json().catch(() => null)) as unknown;
+  const payload = await response.json().catch(() => null);
   if (!response.ok) {
-    const detail =
-      payload && typeof payload === "object" && "detail" in payload
-        ? (payload as { detail?: unknown }).detail
-        : payload;
-    if (detail && typeof detail === "object") {
-      const error = detail as { code?: string; message?: string; hint?: string };
-      throw new ApiError(
-        response.status,
-        error.code ?? "request_failed",
-        error.message ?? `请求失败（${response.status}）`,
-        error.hint,
-      );
-    }
+    const detail = payload?.detail ?? payload;
+    const validation = Array.isArray(detail)
+      ? detail
+          .map((item: { msg?: string }) => item.msg)
+          .filter(Boolean)
+          .join("；")
+      : undefined;
     throw new ApiError(
       response.status,
-      "request_failed",
-      typeof detail === "string" ? detail : `请求失败（${response.status}）`,
+      detail?.code ?? "request_failed",
+      validation ||
+        detail?.message ||
+        (typeof detail === "string"
+          ? detail
+          : `请求失败（${response.status}）`),
+      detail?.hint,
     );
   }
   return payload as T;
 }
-
-const json = (value: unknown): string => JSON.stringify(value);
+const body = (value: unknown) => JSON.stringify(value);
+const encode = encodeURIComponent;
 
 export const api = {
-  focus: () => request<FocusSnapshot>("/api/v1/focus"),
-  addFocus: (symbol: string) => request<Candidate>("/api/v1/focus", {
-    method: "POST", body: json({ symbol }),
-  }),
-  saveFocusNote: (symbol: string, note: string, listId?: string | null) =>
-    request<Candidate>(`/api/v1/focus/${encodeURIComponent(symbol)}/note`, {
-      method: "PUT", body: json({ note, list_id: listId ?? null }),
+  trendMap: (query: TrendMapQuery) =>
+    request<TrendMapSnapshot>("/api/v1/trends/map", {
+      method: "POST",
+      body: body(query),
     }),
-  reviewFocus: (symbol: string, expectedDataHash: string, expectedNote: string) =>
-    request<FocusReviewEntry>(`/api/v1/focus/${encodeURIComponent(symbol)}/review`, {
-      method: "POST", body: json({ expected_data_hash: expectedDataHash, expected_note: expectedNote }),
+  trendStock: (symbol: string, asOf: string, days = 120) =>
+    request<TrendStockSnapshot>("/api/v1/trends/stock", {
+      method: "POST",
+      body: body({ symbol, as_of: asOf, days }),
     }),
-  meta: () => request<ApiMeta>("/api/v1/meta"),
-  boardTrends: (query: BoardTrendParams) => {
-    const params = new URLSearchParams({
-      kind: query.kind,
-      mode: query.mode,
-      sort: query.sort,
-      level: String(query.level),
-      limit: String(query.limit ?? 30),
-    });
-    if (query.direction === "up") params.set("up", String(query.days));
-    if (query.direction === "down") params.set("down", String(query.days));
-    return request<BoardTrendSnapshot>(`/api/v1/boards/trends?${params}`);
-  },
-  boardPulse: (
-    kind: "industry" | "theme",
-    value: string,
-    level = 1,
-    limit = 5,
-  ) => {
-    const params = new URLSearchParams({ level: String(level), limit: String(limit) });
-    return request<BoardPulseSnapshot>(
-      `/api/v1/boards/${kind}/${encodeURIComponent(value)}/pulse?${params}`,
-    );
-  },
-  boardReviews: (limit = 30) =>
-    request<BoardDailyReviewSummary[]>(`/api/v1/board-reviews?limit=${limit}`),
-  boardReview: (reviewId: string) =>
-    request<BoardDailyReview>(
-      `/api/v1/board-reviews/${encodeURIComponent(reviewId)}`,
+  studyCatalog: () =>
+    request<
+      Array<{
+        field: StudyCondition["field"];
+        label: string;
+        unit: string;
+        window: boolean;
+        definition: string;
+      }>
+    >("/api/v1/studies/catalog"),
+  runStudy: (query: StudyQuery) =>
+    request<StudyResult>("/api/v1/studies/run", {
+      method: "POST",
+      body: body(query),
+    }),
+  studies: () => request<StudySummary[]>("/api/v1/studies"),
+  study: (id: string) => request<StudyResult>(`/api/v1/studies/${encode(id)}`),
+  rerunStudy: (id: string, latest = false) =>
+    request<StudyResult>(
+      `/api/v1/studies/${encode(id)}/rerun?latest=${latest}`,
+      { method: "POST" },
     ),
-  createBoardReview: (payload: BoardDailyReviewRequest) =>
-    request<BoardDailyReview>("/api/v1/board-reviews", {
+  studyEvents: (run: string, offset = 0, limit = 50) =>
+    request<StudyEventPage>(
+      `/api/v1/studies/runs/${encode(run)}/events?offset=${offset}&limit=${limit}`,
+    ),
+  studyEvidence: (run: string, symbol: string, date: string) =>
+    request<StudyEvidence>(
+      `/api/v1/studies/runs/${encode(run)}/evidence?symbol=${encode(symbol)}&date=${encode(date)}`,
+    ),
+  refreshStudyData: (query: {
+    universe: StudyQuery["universe"];
+    codes: string[];
+    days?: number;
+  }) =>
+    request<WorkspaceJob>("/api/v1/studies/refresh", {
       method: "POST",
-      body: json(payload),
+      body: body(query),
     }),
-  studyBoardHistory: (payload: BoardHistoryStudyQuery) =>
-    request<BoardHistoryStudy>("/api/v1/board-history-studies", {
+  jobs: () => request<WorkspaceJob[]>("/api/v1/jobs?limit=30"),
+  job: (id: string) => request<WorkspaceJob>(`/api/v1/jobs/${encode(id)}`),
+  settings: () => request<SettingsFacts>("/api/v1/settings"),
+  meta: () => request<ApiMeta>("/api/v1/meta"),
+  focus: () => request<FocusSnapshot>("/api/v1/focus"),
+  addFocus: (symbol: string) =>
+    request<Candidate>("/api/v1/focus", {
       method: "POST",
-      body: json(payload),
+      body: body({ symbol }),
     }),
-  market: () => request<MarketOverview>("/api/v1/market"),
+  candidateLists: () => request<CandidateList[]>("/api/v1/candidate-lists"),
+  updateCandidate: (
+    candidate: Candidate,
+    updates: Partial<Pick<Candidate, "note" | "status">>,
+  ) =>
+    request<Candidate>(
+      `/api/v1/candidate-lists/${encode(candidate.list_id)}/candidates/${encode(candidate.symbol)}`,
+      {
+        method: "PUT",
+        body: body({
+          name: candidate.name,
+          status: candidate.status,
+          note: candidate.note,
+          source_run_id: candidate.source_run_id,
+          ...updates,
+        }),
+      },
+    ),
+  deleteCandidate: (candidate: Candidate) =>
+    request<{ deleted: boolean }>(
+      `/api/v1/candidate-lists/${encode(candidate.list_id)}/candidates/${encode(candidate.symbol)}`,
+      { method: "DELETE" },
+    ),
   portfolio: () => request<Portfolio>("/api/v1/portfolio"),
   updateCash: (cash: number) =>
     request<Portfolio>("/api/v1/portfolio/cash", {
       method: "PUT",
-      body: json({ cash }),
+      body: body({ cash }),
     }),
-  addPosition: (payload: {
-    code: string;
-    cost: number;
-    shares: number;
-    name?: string;
-    merge?: boolean;
-  }) =>
+  addPosition: (payload: { code: string; cost: number; shares: number }) =>
     request<Portfolio>("/api/v1/portfolio/positions", {
       method: "POST",
-      body: json(payload),
+      body: body(payload),
     }),
   deletePosition: (symbol: string) =>
-    request<Portfolio>(
-      `/api/v1/portfolio/positions/${encodeURIComponent(symbol)}`,
-      { method: "DELETE" },
-    ),
-  settings: () => request<SettingsFacts>("/api/v1/settings"),
-  stockResearch: (symbol: string) =>
-    request<StockResearch>(`/api/v1/stocks/${encodeURIComponent(symbol)}`),
-  stockHistory: <T>(symbol: string, period = 60) =>
-    request<T>(
-      `/api/v1/stocks/${encodeURIComponent(symbol)}/history?period=${period}`,
-    ),
-  filters: () => request<FilterGroup[]>("/api/v1/filters"),
-  screens: () => request<SavedScreen[]>("/api/v1/screens"),
-  screen: (screenId: string) =>
-    request<SavedScreen>(`/api/v1/screens/${encodeURIComponent(screenId)}`),
-  screenVersions: (screenId: string) =>
-    request<ScreenVersion[]>(
-      `/api/v1/screens/${encodeURIComponent(screenId)}/versions`,
-    ),
-  restoreScreenVersion: (screenId: string, version: number) =>
-    request<SavedScreen>(
-      `/api/v1/screens/${encodeURIComponent(screenId)}/versions/${version}/restore`,
-      { method: "POST" },
-    ),
-  saveScreen: (spec: ScreenSpec, screenId?: string | null) =>
-    request<SavedScreen>("/api/v1/screens", {
-      method: "POST",
-      body: json({ spec, screen_id: screenId ?? null }),
+    request<Portfolio>(`/api/v1/portfolio/positions/${encode(symbol)}`, {
+      method: "DELETE",
     }),
-  deleteScreen: (screenId: string) =>
-    request<{ deleted: boolean }>(
-      `/api/v1/screens/${encodeURIComponent(screenId)}`,
-      { method: "DELETE" },
-    ),
-  runSavedScreen: (screenId: string) =>
-    request<ScreenRun>(
-      `/api/v1/screens/${encodeURIComponent(screenId)}/runs`,
-      { method: "POST" },
-    ),
-  runSpec: (spec: ScreenSpec, persist = true) =>
-    request<ScreenRun>("/api/v1/runs", {
-      method: "POST",
-      body: json({ spec, persist }),
-    }),
-  runs: (screenId?: string | null, limit = 50) => {
-    const params = new URLSearchParams({ limit: String(limit) });
-    if (screenId) params.set("screen_id", screenId);
-    return request<ScreenRun[]>(`/api/v1/runs?${params}`);
-  },
-  run: (runId: string) =>
-    request<ScreenRun>(`/api/v1/runs/${encodeURIComponent(runId)}`),
-  startScreenJob: (payload: { spec?: ScreenSpec; screen_id?: string; persist?: boolean }) =>
-    request<WorkspaceJob>("/api/v1/jobs/screen-runs", {
-      method: "POST",
-      body: json(payload),
-    }),
-  startMarketRefresh: (scope: "default" | "all" | "focus", force = false) =>
-    request<WorkspaceJob>("/api/v1/jobs/market-refresh", {
-      method: "POST",
-      body: json({ scope, force, days: 360 }),
-    }),
-  job: (jobId: string) =>
-    request<WorkspaceJob>(`/api/v1/jobs/${encodeURIComponent(jobId)}`),
-  jobs: (limit = 50) => request<WorkspaceJob[]>(`/api/v1/jobs?limit=${limit}`),
-  candidateLists: () =>
-    request<CandidateList[]>("/api/v1/candidate-lists"),
-  createCandidateList: (name: string) =>
-    request<CandidateList>("/api/v1/candidate-lists", {
-      method: "POST",
-      body: json({ name }),
-    }),
-  renameCandidateList: (listId: string, name: string) =>
-    request<CandidateList>(
-      `/api/v1/candidate-lists/${encodeURIComponent(listId)}`,
-      { method: "PATCH", body: json({ name }) },
-    ),
-  deleteCandidateList: (listId: string) =>
-    request<{ deleted: boolean }>(
-      `/api/v1/candidate-lists/${encodeURIComponent(listId)}`,
-      { method: "DELETE" },
-    ),
-  upsertCandidate: (
-    listId: string,
-    symbol: string,
-    payload: {
-      name?: string;
-      status?: CandidateStatus;
-      note?: string;
-      source_run_id?: string | null;
-    },
-  ) =>
-    request<Candidate>(
-      `/api/v1/candidate-lists/${encodeURIComponent(listId)}/candidates/${encodeURIComponent(symbol)}`,
-      { method: "PUT", body: json(payload) },
-    ),
-  deleteCandidate: (listId: string, symbol: string) =>
-    request<{ deleted: boolean }>(
-      `/api/v1/candidate-lists/${encodeURIComponent(listId)}/candidates/${encodeURIComponent(symbol)}`,
-      { method: "DELETE" },
-    ),
-  compareSets: () => request<CompareSet[]>("/api/v1/compare-sets"),
-  saveCompareSet: (payload: {
-    compare_id?: string | null;
-    name: string;
-    symbols: string[];
-  }) =>
-    request<CompareSet>("/api/v1/compare-sets", {
-      method: "POST",
-      body: json(payload),
-    }),
-  deleteCompareSet: (compareId: string) =>
-    request<{ deleted: boolean }>(
-      `/api/v1/compare-sets/${encodeURIComponent(compareId)}`,
-      { method: "DELETE" },
-    ),
 };
-
-export async function waitForJob(
-  jobId: string,
-  onUpdate?: (job: WorkspaceJob) => void,
-): Promise<WorkspaceJob> {
-  const deadline = Date.now() + 10 * 60 * 1000;
-  while (Date.now() < deadline) {
-    const job = await api.job(jobId);
-    onUpdate?.(job);
-    if (["succeeded", "partial", "failed", "interrupted"].includes(job.status)) return job;
-    await new Promise((resolve) => window.setTimeout(resolve, 250));
-  }
-  throw new ApiError(408, "job_timeout", "任务等待超过 10 分钟，可在任务记录中继续查看");
-}
-
-export const defaultScreenSpec = (): ScreenSpec => ({
-  schema_version: 1,
-  name: "我的选股规则",
-  universe: { kind: "watchlist", value: null, codes: [], group: null },
-  as_of: {
-    trade_date: "latest_complete",
-    timezone: "Asia/Shanghai",
-    adjustment: "qfq",
-    freshness_policy: "allow_stale",
-  },
-  match_mode: "all",
-  conditions: [],
-  exclude_st: false,
-  exclude_star: false,
-  exclude_bj: false,
-  sort: [],
-  columns: [
-    "symbol",
-    "name",
-    "price",
-    "position.30d",
-    "position.60d",
-    "position.180d",
-    "pe",
-    "turnover",
-  ],
-  limit: 100,
-});

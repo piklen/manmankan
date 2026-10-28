@@ -26,6 +26,7 @@ TERMINAL_STATUSES = {
 _THREADS: dict[str, threading.Thread] = {}
 _THREADS_LOCK = threading.Lock()
 _ACTIVE_REFRESH_JOB_ID: str | None = None
+_ACTIVE_REFRESH_REQUEST: MarketRefreshRequest | None = None
 
 
 def recover_incomplete_jobs() -> int:
@@ -53,11 +54,13 @@ def start_screen_run_job(request: ScreenRunInput) -> WorkspaceJob:
 
 def start_market_refresh_job(request: MarketRefreshRequest) -> WorkspaceJob:
     """启动至多一个市场缓存刷新任务；重复点击返回当前运行任务。"""
-    global _ACTIVE_REFRESH_JOB_ID
+    global _ACTIVE_REFRESH_JOB_ID, _ACTIVE_REFRESH_REQUEST
     with _THREADS_LOCK:
         if _ACTIVE_REFRESH_JOB_ID is not None:
             current = workspace_db.get_job(_ACTIVE_REFRESH_JOB_ID)
             if current is not None and current.status not in TERMINAL_STATUSES:
+                if request != _ACTIVE_REFRESH_REQUEST:
+                    raise ValueError("已有另一份行情更新正在执行，请等它完成后再更新本研究的数据")
                 return current
             _ACTIVE_REFRESH_JOB_ID = None
         label = _refresh_label(request.scope)
@@ -73,6 +76,7 @@ def start_market_refresh_job(request: MarketRefreshRequest) -> WorkspaceJob:
         )
         _THREADS[job.job_id] = thread
         _ACTIVE_REFRESH_JOB_ID = job.job_id
+        _ACTIVE_REFRESH_REQUEST = request
     thread.start()
     return job
 
@@ -122,6 +126,8 @@ def _execute_screen_run(job_id: str, request: ScreenRunInput) -> None:
 
 
 def _resolve_refresh_targets(request: MarketRefreshRequest) -> list[str]:
+    if request.scope is MarketRefreshScope.CODES:
+        return request.codes
     if request.scope is MarketRefreshScope.FOCUS:
         from kan.service.focus_service import focus_symbols
 
@@ -138,12 +144,12 @@ def _resolve_refresh_targets(request: MarketRefreshRequest) -> list[str]:
 
 
 def _refresh_label(scope: MarketRefreshScope) -> str:
-    return {MarketRefreshScope.ALL: "全市场", MarketRefreshScope.DEFAULT: "默认池", MarketRefreshScope.FOCUS: "我的关注"}[scope]
+    return {MarketRefreshScope.ALL: "全市场", MarketRefreshScope.DEFAULT: "默认池", MarketRefreshScope.FOCUS: "我的关注", MarketRefreshScope.CODES: "指定股票"}[scope]
 
 
 def _execute_market_refresh(job_id: str, request: MarketRefreshRequest) -> None:
     """刷新缓存并把稀疏进度写入 SQLite；重新发起会复用已落盘缓存。"""
-    global _ACTIVE_REFRESH_JOB_ID
+    global _ACTIVE_REFRESH_JOB_ID, _ACTIVE_REFRESH_REQUEST
     label = _refresh_label(request.scope)
     try:
         workspace_db.update_job(
@@ -235,6 +241,7 @@ def _execute_market_refresh(job_id: str, request: MarketRefreshRequest) -> None:
             _THREADS.pop(job_id, None)
             if job_id == _ACTIVE_REFRESH_JOB_ID:
                 _ACTIVE_REFRESH_JOB_ID = None
+                _ACTIVE_REFRESH_REQUEST = None
 
 
 def get_job(job_id: str) -> WorkspaceJob:

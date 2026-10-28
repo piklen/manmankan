@@ -12,7 +12,6 @@ from fastapi.staticfiles import StaticFiles
 from kan import __version__
 from kan.service.job_service import recover_incomplete_jobs
 from kan.web.api_v1 import router as api_v1_router
-from kan.web.routes_api import router as api_router
 from kan.web.security import (
     MUTATING_METHODS,
     browser_request_error,
@@ -20,6 +19,7 @@ from kan.web.security import (
     mutating_request_error,
     session_allowed,
 )
+from kan.web.trend_map_routes import router as trend_map_router
 
 SPA_DIR = Path(__file__).with_name("spa")
 SPA_INDEX = SPA_DIR / "index.html"
@@ -48,9 +48,8 @@ def create_app(
         StaticFiles(directory=str(SPA_DIR / "assets"), check_dir=False),
         name="spa-assets",
     )
-    # 迁移期保留旧 API 兼容；默认页面和所有新调用统一走 SPA + /api/v1。
-    app.include_router(api_router, include_in_schema=False)
     app.include_router(api_v1_router)
+    app.include_router(trend_map_router)
 
     @app.get("/{full_path:path}", response_class=HTMLResponse, include_in_schema=False)
     def spa(full_path: str) -> Response:

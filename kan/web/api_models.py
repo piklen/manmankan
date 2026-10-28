@@ -1,12 +1,11 @@
-"""Web API v1 的显式请求与元数据模型。"""
-
+"""当前 Web 数据管理需要的请求与响应。"""
 from __future__ import annotations
 
-from typing import Any, Literal
+from typing import Literal
 
 from pydantic import Field
 
-from kan.domain.screen import CandidateStatus, ScreenSpec, StrictModel
+from kan.domain.screen import CandidateStatus, StrictModel
 
 
 class ApiMeta(StrictModel):
@@ -17,35 +16,11 @@ class ApiMeta(StrictModel):
     capabilities: list[str]
 
 
-class ScreenUpsertRequest(StrictModel):
-    spec: ScreenSpec
-    screen_id: str | None = None
-
-
-class ScreenRunRequest(StrictModel):
-    spec: ScreenSpec
-    persist: bool = True
-
-
-class CandidateListCreateRequest(StrictModel):
-    name: str = Field(min_length=1, max_length=80)
-
-
-class CandidateListRenameRequest(StrictModel):
-    name: str = Field(min_length=1, max_length=80)
-
-
 class CandidateUpsertRequest(StrictModel):
     name: str | None = Field(default=None, max_length=80)
     status: CandidateStatus = CandidateStatus.RESEARCH
     note: str = Field(default="", max_length=2_000)
     source_run_id: str | None = None
-
-
-class CompareSetUpsertRequest(StrictModel):
-    compare_id: str | None = None
-    name: str = Field(default="临时对比", max_length=80)
-    symbols: list[str] = Field(min_length=3, max_length=10)
 
 
 class DeleteResponse(StrictModel):
@@ -55,30 +30,6 @@ class DeleteResponse(StrictModel):
 class HealthResponse(StrictModel):
     status: Literal["ok"] = "ok"
     api_version: Literal["v1"] = "v1"
-
-
-class StockResearchResponse(StrictModel):
-    available: bool
-    data: dict[str, Any] | None = None
-    message: str | None = None
-
-
-class MarketSentimentResponse(StrictModel):
-    ok: bool
-    up_count: int | None = None
-    down_count: int | None = None
-    flat_count: int | None = None
-    limit_up: int | None = None
-    limit_down: int | None = None
-    median_position_180: float | None = None
-    trade_date: str | None = None
-    error: str | None = None
-
-
-class MarketOverviewResponse(StrictModel):
-    scan: dict[str, Any] | None = None
-    sentiment: MarketSentimentResponse
-    message: str | None = None
 
 
 class PortfolioAccountResponse(StrictModel):
@@ -108,14 +59,13 @@ class PortfolioRowResponse(StrictModel):
     p180_pct: float | None = None
     price_source: str | None = None
     price_status: str | None = None
-    position_alert: str | None = None
     breakeven_price: float | None = None
     distance_to_breakeven: float | None = None
 
 
 class PortfolioResponse(StrictModel):
     ok: bool
-    price_mode: str
+    price_mode: str | None
     data_cutoff: str | None = None
     account: PortfolioAccountResponse
     rows: list[PortfolioRowResponse] = Field(default_factory=list)

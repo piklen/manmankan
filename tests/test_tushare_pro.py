@@ -280,20 +280,6 @@ class TestToKlineDf:
         assert tushare._to_kline_df(None) is None
         assert tushare._to_kline_df({}) is None
 
-    def test_maps_qfq_fields(self):
-        data = {
-            "fields": [
-                "trade_date", "open_qfq", "high_qfq", "low_qfq", "close_qfq",
-                "vol", "amount",
-            ],
-            "items": [
-                ["20260102", 1490.0, 1520.0, 1480.0, 1510.0, 100000.0, 150000000.0],
-            ],
-        }
-        df = tushare._to_qfq_kline_df(data)
-        assert list(df.columns) == ["date", "open", "high", "low", "close", "volume", "amount"]
-        assert df.iloc[0]["open"] == 1490.0
-        assert df.iloc[0]["close"] == 1510.0
 
     def test_maps_raw_daily_cross_section_fields(self):
         data = {
@@ -444,44 +430,30 @@ class TestFetchTushare:
         assert tushare._fetch_tushare_raw_daily_bars("20260731") is None
 
     def test_with_token_returns_dataframe(self, temp_env, monkeypatch):
+        from kan.data.ohlc_history import FACTOR_FIELDS, RAW_FIELDS
+
         config.save({**config.DEFAULT_CONFIG, "tushare_token": "tk"})
+        captured = []
 
-        sample = {
-            "code": 0,
-            "data": {
-                "fields": [
-                    "trade_date", "open_qfq", "high_qfq", "low_qfq", "close_qfq",
-                    "vol", "amount",
-                ],
-                "items": [[
-                    "20260102", 1490.0, 1520.0, 1480.0, 1510.0,
-                    100000.0, 150000000.0,
-                ]],
-            },
-        }
-        captured = {}
+        def post(**kwargs):
+            captured.append(kwargs)
+            fields = RAW_FIELDS if kwargs["api_name"] == "daily" else FACTOR_FIELDS
+            rows = []
+            for day, close, factor in [("20260102", 10., 1.), ("20260105", 5., 2.)]:
+                raw = {"ts_code": "600519.SH", "trade_date": day, "open": close,
+                       "high": close, "low": close, "close": close, "pre_close": close,
+                       "pct_chg": 0., "vol": 100., "amount": 1000., "adj_factor": factor}
+                rows.append([raw[column] for column in fields.split(",")])
+            return {"fields": fields.split(","), "items": rows}, None
 
-        def fake_post(url, json, timeout):
-            captured["json"] = json
-            mock = MagicMock()
-            mock.status_code = 200
-            mock.json.return_value = sample
-            return mock
-
-        # 用 _get_session() · monkeypatch 改为 inject fake session
-        class _FakeSession:
-            def post(self, url, json, timeout):
-                return fake_post(url, json, timeout)
-
-        monkeypatch.setattr(tushare, "_get_session", lambda: _FakeSession())
+        monkeypatch.setattr(tushare, "_post_tushare_api", post)
         df = tushare._fetch_tushare("600519", "20260101")
         assert df is not None
-        assert "date" in df.columns
-        assert "volume" in df.columns
-        assert df.iloc[0]["low"] == 1480.0
-        assert len(df) == 1
-        assert captured["json"]["api_name"] == "stk_factor_pro"
-        assert "open_qfq" in captured["json"]["fields"]
+        assert df.close.tolist() == [5., 5.]
+        assert df.raw_close.tolist() == [10., 5.]
+        assert df.attrs == {"price_basis": "raw_adj_factor_v1", "price_basis_date": "2026-01-05"}
+        assert [call["api_name"] for call in captured] == ["daily", "adj_factor"]
+        assert all(call["allow_transport_retries"] is False for call in captured)
 
     def test_circuit_breaker_skips_when_down(self, temp_env, monkeypatch):
         from kan.infra import circuit_breaker
@@ -506,7 +478,7 @@ class TestFetchTushare:
             def post(self, *_args, **_kwargs):
                 raise tushare.requests.exceptions.ConnectionError("boom")
 
-        monkeypatch.setattr(tushare, "_get_session", lambda: _FailingSession())
+        monkeypatch.setattr(tushare, "_get_single_attempt_session", lambda: _FailingSession())
 
         monkeypatch.setattr(tushare.time, "sleep", lambda *_args: None)
         tushare._fetch_tushare("600519", "20260101")
@@ -583,44 +555,17 @@ class TestFetchTushare:
         assert tushare._fetch_tushare("600519", "20260101") is None
         assert circuit_breaker.get_breaker().is_down("tushare")
 
-    def test_retryable_data_hub_error_short_retries_then_succeeds(
-        self, temp_env, monkeypatch,
-    ):
+    def test_retryable_data_hub_error_is_returned_to_scheduler(self, temp_env, monkeypatch):
         from kan.infra import circuit_breaker
+
         config.save({**config.DEFAULT_CONFIG, "tushare_token": "tk"})
-
-        err = tushare.TushareApiError(
-            code=50003,
-            msg="回源繁忙",
-            api_name="stk_factor_pro",
-            retryable=True,
-            retry_after=1,
+        error = tushare.TushareApiError(
+            code=50003, msg="回源繁忙", api_name="daily", retryable=True, retry_after=1,
         )
-        payload = {
-            "fields": [
-                "trade_date", "open_qfq", "high_qfq", "low_qfq", "close_qfq",
-                "vol", "amount",
-            ],
-            "items": [[
-                "20260102", 1490.0, 1520.0, 1480.0, 1510.0,
-                100000.0, 150000000.0,
-            ]],
-        }
-        calls = {"n": 0}
-        sleeps: list[float] = []
-
-        def fake_post(*_a, **_kw):
-            calls["n"] += 1
-            if calls["n"] == 1:
-                return None, err
-            return payload, None
-
-        monkeypatch.setattr(tushare, "_post_tushare_api", fake_post)
-        monkeypatch.setattr(tushare.time, "sleep", lambda s: sleeps.append(s))
-
-        df = tushare._fetch_tushare("600519", "20260101")
-        assert df is not None
-        assert len(df) == 1
-        assert calls["n"] == 2
-        assert sleeps == [1.0]
+        calls = []
+        monkeypatch.setattr(tushare, "_post_tushare_api", lambda **kwargs: (calls.append(kwargs) or None, error))
+        result = tushare._fetch_tushare_detailed("600519", "20260101")
+        assert result.data is None and result.failure is not None
+        assert result.failure.retryable and result.failure.retry_after == 1
+        assert len(calls) == 1
         assert not circuit_breaker.get_breaker().is_down("tushare")

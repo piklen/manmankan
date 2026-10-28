@@ -175,64 +175,6 @@ def _fetch_tushare_table_detailed(
     )
 
 
-def _fetch_tushare_holdernumber(symbol: str) -> pd.DataFrame | None:
-    """兼容旧 stk_holdernumber 单股 adapter。"""
-    return _fetch_tushare_table_detailed(
-        symbol,
-        provider="tushare_holdernum",
-        api_name="stk_holdernumber",
-        fields_text=_HOLDERNUM_FIELDS,
-    ).data
-
-
-def _fetch_tushare_top10float(symbol: str) -> pd.DataFrame | None:
-    """兼容旧 top10_floatholders 单股 adapter。"""
-    return _fetch_tushare_table_detailed(
-        symbol,
-        provider="tushare_top10float",
-        api_name="top10_floatholders",
-        fields_text=_TOP10FLOAT_FIELDS,
-    ).data
-
-
-_ORIGINAL_FETCH_HOLDERNUMBER = _fetch_tushare_holdernumber
-_ORIGINAL_FETCH_TOP10FLOAT = _fetch_tushare_top10float
-
-
-def _fetch_holdernumber_job(symbol: str) -> ProviderFetchResult[pd.DataFrame]:
-    if _fetch_tushare_holdernumber is _ORIGINAL_FETCH_HOLDERNUMBER:
-        return _fetch_tushare_table_detailed(
-            symbol,
-            provider="tushare_holdernum",
-            api_name="stk_holdernumber",
-            fields_text=_HOLDERNUM_FIELDS,
-        )
-    data = _fetch_tushare_holdernumber(symbol)
-    if data is None or data.empty:
-        return ProviderFetchResult.failed(FetchFailure(
-            FetchFailureKind.EMPTY,
-            message="stk_holdernumber returned no data",
-        ))
-    return ProviderFetchResult.succeeded(data)
-
-
-def _fetch_top10float_job(symbol: str) -> ProviderFetchResult[pd.DataFrame]:
-    if _fetch_tushare_top10float is _ORIGINAL_FETCH_TOP10FLOAT:
-        return _fetch_tushare_table_detailed(
-            symbol,
-            provider="tushare_top10float",
-            api_name="top10_floatholders",
-            fields_text=_TOP10FLOAT_FIELDS,
-        )
-    data = _fetch_tushare_top10float(symbol)
-    if data is None or data.empty:
-        return ProviderFetchResult.failed(FetchFailure(
-            FetchFailureKind.EMPTY,
-            message="top10_floatholders returned no data",
-        ))
-    return ProviderFetchResult.succeeded(data)
-
-
 # ── 衍生计算 (两源 → 单行指标) ────────────────────────────────────────────
 
 def _derive_holders(
@@ -347,25 +289,6 @@ def _build_row(
     return df.iloc[0]
 
 
-def _fetch_one(symbol: str, force: bool = False) -> pd.Series | None:
-    """单股股东·持股结构衍生 · 逐股 parquet 缓存 · 两源任一有数据即缓存 (优雅降级)。
-
-    两源 (stk_holdernumber + top10_floatholders) 均失败 / 无披露 → None (不缓存 ·
-    同 fundamentals 失败不落盘 · caller .get(symbol) → None)。
-    """
-    if not _SYMBOL_PATTERN.match(symbol):
-        return None
-    ensure_dirs()
-    cached = _fresh_cache(symbol, force=force)
-    if cached is not None:
-        return cached
-    return _build_row(
-        symbol,
-        _fetch_tushare_holdernumber(symbol),
-        _fetch_tushare_top10float(symbol),
-    )
-
-
 def fetch_shareholder(
     symbols: list[str],
     force: bool = False,
@@ -444,13 +367,21 @@ def fetch_shareholder(
             ProviderJob(
                 key=f"{symbol}:holdernum",
                 provider="tushare_holdernum",
-                call=partial(_fetch_holdernumber_job, symbol),
+                call=partial(
+                    _fetch_tushare_table_detailed, symbol,
+                    provider="tushare_holdernum", api_name="stk_holdernumber",
+                    fields_text=_HOLDERNUM_FIELDS,
+                ),
                 capabilities=_TUSHARE_SHAREHOLDER_CAPABILITIES,
             ),
             ProviderJob(
                 key=f"{symbol}:top10float",
                 provider="tushare_top10float",
-                call=partial(_fetch_top10float_job, symbol),
+                call=partial(
+                    _fetch_tushare_table_detailed, symbol,
+                    provider="tushare_top10float", api_name="top10_floatholders",
+                    fields_text=_TOP10FLOAT_FIELDS,
+                ),
                 capabilities=_TUSHARE_SHAREHOLDER_CAPABILITIES,
             ),
         ])

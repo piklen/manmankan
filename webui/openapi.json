@@ -2,7 +2,7 @@
   "openapi": "3.1.0",
   "info": {
     "title": "ManManKan Local API",
-    "version": "0.0.6.9.40"
+    "version": "0.0.6.9.41"
   },
   "paths": {
     "/api/v1/health": {
@@ -47,13 +47,13 @@
         }
       }
     },
-    "/api/v1/filters": {
+    "/api/v1/studies/catalog": {
       "get": {
         "tags": [
           "v1"
         ],
-        "summary": "Filters",
-        "operationId": "filters_api_v1_filters_get",
+        "summary": "Study Catalog",
+        "operationId": "study_catalog_api_v1_studies_catalog_get",
         "responses": {
           "200": {
             "description": "Successful Response",
@@ -65,7 +65,334 @@
                     "type": "object"
                   },
                   "type": "array",
-                  "title": "Response Filters Api V1 Filters Get"
+                  "title": "Response Study Catalog Api V1 Studies Catalog Get"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/studies": {
+      "get": {
+        "tags": [
+          "v1"
+        ],
+        "summary": "Studies",
+        "operationId": "studies_api_v1_studies_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/StudySummary"
+                  },
+                  "type": "array",
+                  "title": "Response Studies Api V1 Studies Get"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/studies/run": {
+      "post": {
+        "tags": [
+          "v1"
+        ],
+        "summary": "Run Study",
+        "operationId": "run_study_api_v1_studies_run_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/StudyQuery"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StudyResult"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/studies/refresh": {
+      "post": {
+        "tags": [
+          "v1"
+        ],
+        "summary": "Refresh Study Data",
+        "operationId": "refresh_study_data_api_v1_studies_refresh_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/StudyRefreshRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "202": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WorkspaceJob"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/studies/runs/{run_id}/events": {
+      "get": {
+        "tags": [
+          "v1"
+        ],
+        "summary": "Study Events",
+        "operationId": "study_events_api_v1_studies_runs__run_id__events_get",
+        "parameters": [
+          {
+            "name": "run_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Run Id"
+            }
+          },
+          {
+            "name": "offset",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 0,
+              "default": 0,
+              "title": "Offset"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "maximum": 200,
+              "minimum": 1,
+              "default": 50,
+              "title": "Limit"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StudyEventPage"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/studies/runs/{run_id}/evidence": {
+      "get": {
+        "tags": [
+          "v1"
+        ],
+        "summary": "Study Evidence",
+        "operationId": "study_evidence_api_v1_studies_runs__run_id__evidence_get",
+        "parameters": [
+          {
+            "name": "run_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Run Id"
+            }
+          },
+          {
+            "name": "symbol",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Symbol"
+            }
+          },
+          {
+            "name": "date",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "date",
+              "title": "Date"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StudyEvidence"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/studies/{study_id}": {
+      "get": {
+        "tags": [
+          "v1"
+        ],
+        "summary": "Study",
+        "operationId": "study_api_v1_studies__study_id__get",
+        "parameters": [
+          {
+            "name": "study_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Study Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StudyResult"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/studies/{study_id}/rerun": {
+      "post": {
+        "tags": [
+          "v1"
+        ],
+        "summary": "Rerun Study",
+        "operationId": "rerun_study_api_v1_studies__study_id__rerun_post",
+        "parameters": [
+          {
+            "name": "study_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Study Id"
+            }
+          },
+          {
+            "name": "latest",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "boolean",
+              "default": false,
+              "title": "Latest"
+            }
+          }
+        ],
+        "responses": {
+          "201": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StudyResult"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
                 }
               }
             }
@@ -126,643 +453,6 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/api/v1/focus/{symbol}/note": {
-      "put": {
-        "tags": [
-          "v1"
-        ],
-        "summary": "Focus Note",
-        "operationId": "focus_note_api_v1_focus__symbol__note_put",
-        "parameters": [
-          {
-            "name": "symbol",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "string",
-              "title": "Symbol"
-            }
-          }
-        ],
-        "requestBody": {
-          "required": true,
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/FocusNoteRequest"
-              }
-            }
-          }
-        },
-        "responses": {
-          "200": {
-            "description": "Successful Response",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Candidate"
-                }
-              }
-            }
-          },
-          "422": {
-            "description": "Validation Error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/api/v1/focus/{symbol}/review": {
-      "post": {
-        "tags": [
-          "v1"
-        ],
-        "summary": "Review Focus",
-        "operationId": "review_focus_api_v1_focus__symbol__review_post",
-        "parameters": [
-          {
-            "name": "symbol",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "string",
-              "title": "Symbol"
-            }
-          }
-        ],
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "anyOf": [
-                  {
-                    "$ref": "#/components/schemas/FocusReviewRequest"
-                  },
-                  {
-                    "type": "null"
-                  }
-                ],
-                "title": "Payload"
-              }
-            }
-          }
-        },
-        "responses": {
-          "200": {
-            "description": "Successful Response",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/FocusReviewEntry"
-                }
-              }
-            }
-          },
-          "422": {
-            "description": "Validation Error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/api/v1/boards/trends": {
-      "get": {
-        "tags": [
-          "v1"
-        ],
-        "summary": "Board Trends",
-        "description": "\u8fd4\u56de\u884c\u4e1a / \u9898\u6750\u6307\u6570\u7684\u8fde\u7eed\u8d8b\u52bf\u5feb\u7167\u3002",
-        "operationId": "board_trends_api_v1_boards_trends_get",
-        "parameters": [
-          {
-            "name": "kind",
-            "in": "query",
-            "required": false,
-            "schema": {
-              "$ref": "#/components/schemas/BoardKind",
-              "default": "industry"
-            }
-          },
-          {
-            "name": "mode",
-            "in": "query",
-            "required": false,
-            "schema": {
-              "$ref": "#/components/schemas/BoardTrendMode",
-              "default": "close"
-            }
-          },
-          {
-            "name": "up",
-            "in": "query",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "integer",
-                  "maximum": 30,
-                  "minimum": 1
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "Up"
-            }
-          },
-          {
-            "name": "down",
-            "in": "query",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "integer",
-                  "maximum": 30,
-                  "minimum": 1
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "Down"
-            }
-          },
-          {
-            "name": "min_streak",
-            "in": "query",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "integer",
-                  "maximum": 30,
-                  "minimum": 1
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "Min Streak"
-            }
-          },
-          {
-            "name": "sort",
-            "in": "query",
-            "required": false,
-            "schema": {
-              "$ref": "#/components/schemas/BoardTrendSort",
-              "default": "streak"
-            }
-          },
-          {
-            "name": "level",
-            "in": "query",
-            "required": false,
-            "schema": {
-              "type": "integer",
-              "maximum": 3,
-              "minimum": 1,
-              "default": 1,
-              "title": "Level"
-            }
-          },
-          {
-            "name": "limit",
-            "in": "query",
-            "required": false,
-            "schema": {
-              "type": "integer",
-              "maximum": 500,
-              "minimum": 1,
-              "default": 30,
-              "title": "Limit"
-            }
-          },
-          {
-            "name": "force",
-            "in": "query",
-            "required": false,
-            "schema": {
-              "type": "boolean",
-              "default": false,
-              "title": "Force"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Successful Response",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/BoardTrendSnapshot"
-                }
-              }
-            }
-          },
-          "422": {
-            "description": "Validation Error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/api/v1/boards/{kind}/{value}/pulse": {
-      "get": {
-        "tags": [
-          "v1"
-        ],
-        "summary": "Board Pulse",
-        "description": "\u8fd4\u56de\u677f\u5757\u6210\u5206\u80a1\u5728\u6700\u65b0\u5b8c\u6574\u4ea4\u6613\u65e5\u7684\u6da8\u8dcc\u7ed3\u6784\u3002",
-        "operationId": "board_pulse_api_v1_boards__kind___value__pulse_get",
-        "parameters": [
-          {
-            "name": "kind",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "$ref": "#/components/schemas/BoardKind"
-            }
-          },
-          {
-            "name": "value",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "string",
-              "title": "Value"
-            }
-          },
-          {
-            "name": "level",
-            "in": "query",
-            "required": false,
-            "schema": {
-              "type": "integer",
-              "maximum": 3,
-              "minimum": 1,
-              "default": 1,
-              "title": "Level"
-            }
-          },
-          {
-            "name": "limit",
-            "in": "query",
-            "required": false,
-            "schema": {
-              "type": "integer",
-              "maximum": 10,
-              "minimum": 1,
-              "default": 5,
-              "title": "Limit"
-            }
-          },
-          {
-            "name": "force",
-            "in": "query",
-            "required": false,
-            "schema": {
-              "type": "boolean",
-              "default": false,
-              "title": "Force"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Successful Response",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/BoardPulseSnapshot"
-                }
-              }
-            }
-          },
-          "422": {
-            "description": "Validation Error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/api/v1/board-reviews": {
-      "post": {
-        "tags": [
-          "v1"
-        ],
-        "summary": "Create Board Review",
-        "description": "\u4fdd\u5b58\u884c\u4e1a\u4e0e\u9898\u6750\u6700\u65b0\u8d8b\u52bf\u4e8b\u5b9e\uff0c\u5e76\u4e0e\u4e0a\u4e00\u4efd\u540c\u53e3\u5f84\u8bb0\u5f55\u6bd4\u8f83\u3002",
-        "operationId": "create_board_review_api_v1_board_reviews_post",
-        "requestBody": {
-          "required": true,
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/BoardDailyReviewRequest"
-              }
-            }
-          }
-        },
-        "responses": {
-          "201": {
-            "description": "Successful Response",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/BoardDailyReview"
-                }
-              }
-            }
-          },
-          "422": {
-            "description": "Validation Error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            }
-          }
-        }
-      },
-      "get": {
-        "tags": [
-          "v1"
-        ],
-        "summary": "Board Reviews",
-        "operationId": "board_reviews_api_v1_board_reviews_get",
-        "parameters": [
-          {
-            "name": "limit",
-            "in": "query",
-            "required": false,
-            "schema": {
-              "type": "integer",
-              "maximum": 200,
-              "minimum": 1,
-              "default": 30,
-              "title": "Limit"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Successful Response",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "array",
-                  "items": {
-                    "$ref": "#/components/schemas/BoardDailyReviewSummary"
-                  },
-                  "title": "Response Board Reviews Api V1 Board Reviews Get"
-                }
-              }
-            }
-          },
-          "422": {
-            "description": "Validation Error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/api/v1/board-reviews/{review_id}": {
-      "get": {
-        "tags": [
-          "v1"
-        ],
-        "summary": "Board Review",
-        "operationId": "board_review_api_v1_board_reviews__review_id__get",
-        "parameters": [
-          {
-            "name": "review_id",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "string",
-              "title": "Review Id"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Successful Response",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/BoardDailyReview"
-                }
-              }
-            }
-          },
-          "422": {
-            "description": "Validation Error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/api/v1/board-history-studies": {
-      "post": {
-        "tags": [
-          "v1"
-        ],
-        "summary": "Board History Study",
-        "description": "\u590d\u6838\u5355\u4e2a\u677f\u5757\u6307\u6570\u5386\u53f2\u4e8b\u4ef6\uff0c\u4e0d\u8bfb\u53d6\u5f53\u524d\u6210\u5206\u80a1\u3002",
-        "operationId": "board_history_study_api_v1_board_history_studies_post",
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/BoardHistoryStudyQuery"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "200": {
-            "description": "Successful Response",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/BoardHistoryStudy"
-                }
-              }
-            }
-          },
-          "422": {
-            "description": "Validation Error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/api/v1/stocks/{symbol}": {
-      "get": {
-        "tags": [
-          "v1"
-        ],
-        "summary": "Stock Research",
-        "operationId": "stock_research_api_v1_stocks__symbol__get",
-        "parameters": [
-          {
-            "name": "symbol",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "string",
-              "title": "Symbol"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Successful Response",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/StockResearchResponse"
-                }
-              }
-            }
-          },
-          "422": {
-            "description": "Validation Error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/api/v1/stocks/{symbol}/history": {
-      "get": {
-        "tags": [
-          "v1"
-        ],
-        "summary": "Stock History",
-        "operationId": "stock_history_api_v1_stocks__symbol__history_get",
-        "parameters": [
-          {
-            "name": "symbol",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "string",
-              "title": "Symbol"
-            }
-          },
-          {
-            "name": "period",
-            "in": "query",
-            "required": false,
-            "schema": {
-              "type": "integer",
-              "maximum": 360,
-              "minimum": 2,
-              "default": 60,
-              "title": "Period"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Successful Response",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "additionalProperties": true,
-                  "title": "Response Stock History Api V1 Stocks  Symbol  History Get"
-                }
-              }
-            }
-          },
-          "422": {
-            "description": "Validation Error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/api/v1/market": {
-      "get": {
-        "tags": [
-          "v1"
-        ],
-        "summary": "Market Overview",
-        "operationId": "market_overview_api_v1_market_get",
-        "responses": {
-          "200": {
-            "description": "Successful Response",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/MarketOverviewResponse"
                 }
               }
             }
@@ -936,437 +626,6 @@
         }
       }
     },
-    "/api/v1/screens": {
-      "get": {
-        "tags": [
-          "v1"
-        ],
-        "summary": "Screens",
-        "operationId": "screens_api_v1_screens_get",
-        "responses": {
-          "200": {
-            "description": "Successful Response",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "items": {
-                    "$ref": "#/components/schemas/SavedScreen"
-                  },
-                  "type": "array",
-                  "title": "Response Screens Api V1 Screens Get"
-                }
-              }
-            }
-          }
-        }
-      },
-      "post": {
-        "tags": [
-          "v1"
-        ],
-        "summary": "Upsert Screen",
-        "operationId": "upsert_screen_api_v1_screens_post",
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/ScreenUpsertRequest"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "201": {
-            "description": "Successful Response",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/SavedScreen"
-                }
-              }
-            }
-          },
-          "422": {
-            "description": "Validation Error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/api/v1/screens/{screen_id}": {
-      "get": {
-        "tags": [
-          "v1"
-        ],
-        "summary": "Screen",
-        "operationId": "screen_api_v1_screens__screen_id__get",
-        "parameters": [
-          {
-            "name": "screen_id",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "string",
-              "title": "Screen Id"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Successful Response",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/SavedScreen"
-                }
-              }
-            }
-          },
-          "422": {
-            "description": "Validation Error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            }
-          }
-        }
-      },
-      "delete": {
-        "tags": [
-          "v1"
-        ],
-        "summary": "Delete Screen",
-        "operationId": "delete_screen_api_v1_screens__screen_id__delete",
-        "parameters": [
-          {
-            "name": "screen_id",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "string",
-              "title": "Screen Id"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Successful Response",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/DeleteResponse"
-                }
-              }
-            }
-          },
-          "422": {
-            "description": "Validation Error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/api/v1/screens/{screen_id}/versions": {
-      "get": {
-        "tags": [
-          "v1"
-        ],
-        "summary": "Screen Versions",
-        "operationId": "screen_versions_api_v1_screens__screen_id__versions_get",
-        "parameters": [
-          {
-            "name": "screen_id",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "string",
-              "title": "Screen Id"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Successful Response",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "array",
-                  "items": {
-                    "$ref": "#/components/schemas/ScreenVersion"
-                  },
-                  "title": "Response Screen Versions Api V1 Screens  Screen Id  Versions Get"
-                }
-              }
-            }
-          },
-          "422": {
-            "description": "Validation Error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/api/v1/screens/{screen_id}/versions/{version}/restore": {
-      "post": {
-        "tags": [
-          "v1"
-        ],
-        "summary": "Restore Screen Version",
-        "operationId": "restore_screen_version_api_v1_screens__screen_id__versions__version__restore_post",
-        "parameters": [
-          {
-            "name": "screen_id",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "string",
-              "title": "Screen Id"
-            }
-          },
-          {
-            "name": "version",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "integer",
-              "title": "Version"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Successful Response",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/SavedScreen"
-                }
-              }
-            }
-          },
-          "422": {
-            "description": "Validation Error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/api/v1/screens/{screen_id}/runs": {
-      "post": {
-        "tags": [
-          "v1"
-        ],
-        "summary": "Run Saved Screen",
-        "operationId": "run_saved_screen_api_v1_screens__screen_id__runs_post",
-        "parameters": [
-          {
-            "name": "screen_id",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "string",
-              "title": "Screen Id"
-            }
-          }
-        ],
-        "responses": {
-          "201": {
-            "description": "Successful Response",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ScreenRun"
-                }
-              }
-            }
-          },
-          "422": {
-            "description": "Validation Error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/api/v1/runs": {
-      "post": {
-        "tags": [
-          "v1"
-        ],
-        "summary": "Run Screen",
-        "operationId": "run_screen_api_v1_runs_post",
-        "requestBody": {
-          "required": true,
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/ScreenRunRequest"
-              }
-            }
-          }
-        },
-        "responses": {
-          "201": {
-            "description": "Successful Response",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ScreenRun"
-                }
-              }
-            }
-          },
-          "422": {
-            "description": "Validation Error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            }
-          }
-        }
-      },
-      "get": {
-        "tags": [
-          "v1"
-        ],
-        "summary": "Runs",
-        "operationId": "runs_api_v1_runs_get",
-        "parameters": [
-          {
-            "name": "screen_id",
-            "in": "query",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "Screen Id"
-            }
-          },
-          {
-            "name": "limit",
-            "in": "query",
-            "required": false,
-            "schema": {
-              "type": "integer",
-              "maximum": 200,
-              "minimum": 1,
-              "default": 50,
-              "title": "Limit"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Successful Response",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "array",
-                  "items": {
-                    "$ref": "#/components/schemas/ScreenRun"
-                  },
-                  "title": "Response Runs Api V1 Runs Get"
-                }
-              }
-            }
-          },
-          "422": {
-            "description": "Validation Error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/api/v1/runs/{run_id}": {
-      "get": {
-        "tags": [
-          "v1"
-        ],
-        "summary": "Run",
-        "operationId": "run_api_v1_runs__run_id__get",
-        "parameters": [
-          {
-            "name": "run_id",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "string",
-              "title": "Run Id"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Successful Response",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ScreenRun"
-                }
-              }
-            }
-          },
-          "422": {
-            "description": "Validation Error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
     "/api/v1/candidate-lists": {
       "get": {
         "tags": [
@@ -1385,137 +644,6 @@
                   },
                   "type": "array",
                   "title": "Response Candidate Lists Api V1 Candidate Lists Get"
-                }
-              }
-            }
-          }
-        }
-      },
-      "post": {
-        "tags": [
-          "v1"
-        ],
-        "summary": "Create Candidate List",
-        "operationId": "create_candidate_list_api_v1_candidate_lists_post",
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/CandidateListCreateRequest"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "201": {
-            "description": "Successful Response",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/CandidateList"
-                }
-              }
-            }
-          },
-          "422": {
-            "description": "Validation Error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/api/v1/candidate-lists/{list_id}": {
-      "patch": {
-        "tags": [
-          "v1"
-        ],
-        "summary": "Rename Candidate List",
-        "operationId": "rename_candidate_list_api_v1_candidate_lists__list_id__patch",
-        "parameters": [
-          {
-            "name": "list_id",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "string",
-              "title": "List Id"
-            }
-          }
-        ],
-        "requestBody": {
-          "required": true,
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/CandidateListRenameRequest"
-              }
-            }
-          }
-        },
-        "responses": {
-          "200": {
-            "description": "Successful Response",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/CandidateList"
-                }
-              }
-            }
-          },
-          "422": {
-            "description": "Validation Error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            }
-          }
-        }
-      },
-      "delete": {
-        "tags": [
-          "v1"
-        ],
-        "summary": "Delete Candidate List",
-        "operationId": "delete_candidate_list_api_v1_candidate_lists__list_id__delete",
-        "parameters": [
-          {
-            "name": "list_id",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "string",
-              "title": "List Id"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Successful Response",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/DeleteResponse"
-                }
-              }
-            }
-          },
-          "422": {
-            "description": "Validation Error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
                 }
               }
             }
@@ -1616,194 +744,6 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/DeleteResponse"
-                }
-              }
-            }
-          },
-          "422": {
-            "description": "Validation Error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/api/v1/compare-sets": {
-      "get": {
-        "tags": [
-          "v1"
-        ],
-        "summary": "Compare Sets",
-        "operationId": "compare_sets_api_v1_compare_sets_get",
-        "responses": {
-          "200": {
-            "description": "Successful Response",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "items": {
-                    "$ref": "#/components/schemas/CompareSet"
-                  },
-                  "type": "array",
-                  "title": "Response Compare Sets Api V1 Compare Sets Get"
-                }
-              }
-            }
-          }
-        }
-      },
-      "post": {
-        "tags": [
-          "v1"
-        ],
-        "summary": "Upsert Compare Set",
-        "operationId": "upsert_compare_set_api_v1_compare_sets_post",
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/CompareSetUpsertRequest"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "201": {
-            "description": "Successful Response",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/CompareSet"
-                }
-              }
-            }
-          },
-          "422": {
-            "description": "Validation Error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/api/v1/compare-sets/{compare_id}": {
-      "delete": {
-        "tags": [
-          "v1"
-        ],
-        "summary": "Delete Compare Set",
-        "operationId": "delete_compare_set_api_v1_compare_sets__compare_id__delete",
-        "parameters": [
-          {
-            "name": "compare_id",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "string",
-              "title": "Compare Id"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Successful Response",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/DeleteResponse"
-                }
-              }
-            }
-          },
-          "422": {
-            "description": "Validation Error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/api/v1/jobs/screen-runs": {
-      "post": {
-        "tags": [
-          "v1"
-        ],
-        "summary": "Start Screen Run Job",
-        "operationId": "start_screen_run_job_api_v1_jobs_screen_runs_post",
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/ScreenRunInput"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "202": {
-            "description": "Successful Response",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/WorkspaceJob"
-                }
-              }
-            }
-          },
-          "422": {
-            "description": "Validation Error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/api/v1/jobs/market-refresh": {
-      "post": {
-        "tags": [
-          "v1"
-        ],
-        "summary": "Start Market Refresh Job",
-        "operationId": "start_market_refresh_job_api_v1_jobs_market_refresh_post",
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/MarketRefreshRequest"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "202": {
-            "description": "Successful Response",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/WorkspaceJob"
                 }
               }
             }
@@ -1946,6 +886,88 @@
           }
         }
       }
+    },
+    "/api/v1/trends/map": {
+      "post": {
+        "tags": [
+          "trends"
+        ],
+        "summary": "Trend Map",
+        "operationId": "trend_map_api_v1_trends_map_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/TrendMapQuery"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TrendMapSnapshot"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/trends/stock": {
+      "post": {
+        "tags": [
+          "trends"
+        ],
+        "summary": "Trend Stock",
+        "operationId": "trend_stock_api_v1_trends_stock_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/TrendStockQuery"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TrendStockSnapshot"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
     }
   },
   "components": {
@@ -1988,1288 +1010,6 @@
           "capabilities"
         ],
         "title": "ApiMeta"
-      },
-      "AsOfSpec": {
-        "properties": {
-          "trade_date": {
-            "anyOf": [
-              {
-                "type": "string",
-                "format": "date"
-              },
-              {
-                "type": "string",
-                "const": "latest_complete"
-              }
-            ],
-            "title": "Trade Date",
-            "default": "latest_complete"
-          },
-          "timezone": {
-            "type": "string",
-            "title": "Timezone",
-            "default": "Asia/Shanghai"
-          },
-          "adjustment": {
-            "type": "string",
-            "const": "qfq",
-            "title": "Adjustment",
-            "default": "qfq"
-          },
-          "freshness_policy": {
-            "type": "string",
-            "enum": [
-              "require_complete",
-              "allow_stale"
-            ],
-            "title": "Freshness Policy",
-            "default": "allow_stale"
-          }
-        },
-        "additionalProperties": false,
-        "type": "object",
-        "title": "AsOfSpec"
-      },
-      "BoardDailyChange": {
-        "properties": {
-          "date": {
-            "type": "string",
-            "title": "Date"
-          },
-          "change_pct": {
-            "type": "number",
-            "title": "Change Pct"
-          }
-        },
-        "additionalProperties": false,
-        "type": "object",
-        "required": [
-          "date",
-          "change_pct"
-        ],
-        "title": "BoardDailyChange"
-      },
-      "BoardDailyReview": {
-        "properties": {
-          "schema_version": {
-            "type": "integer",
-            "title": "Schema Version",
-            "default": 1
-          },
-          "review_id": {
-            "type": "string",
-            "title": "Review Id"
-          },
-          "created_at": {
-            "type": "string",
-            "format": "date-time",
-            "title": "Created At"
-          },
-          "mode": {
-            "$ref": "#/components/schemas/BoardTrendMode"
-          },
-          "industry_level": {
-            "type": "integer",
-            "title": "Industry Level"
-          },
-          "result_hash": {
-            "type": "string",
-            "title": "Result Hash"
-          },
-          "previous_review_id": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Previous Review Id"
-          },
-          "partial": {
-            "type": "boolean",
-            "title": "Partial",
-            "default": false
-          },
-          "sections": {
-            "items": {
-              "$ref": "#/components/schemas/BoardReviewSection"
-            },
-            "type": "array",
-            "maxItems": 2,
-            "minItems": 2,
-            "title": "Sections"
-          },
-          "changes": {
-            "items": {
-              "$ref": "#/components/schemas/BoardReviewChange"
-            },
-            "type": "array",
-            "title": "Changes"
-          },
-          "change_counts": {
-            "$ref": "#/components/schemas/BoardReviewChangeCounts"
-          },
-          "warnings": {
-            "items": {
-              "type": "string"
-            },
-            "type": "array",
-            "title": "Warnings"
-          }
-        },
-        "additionalProperties": false,
-        "type": "object",
-        "required": [
-          "review_id",
-          "created_at",
-          "mode",
-          "industry_level",
-          "result_hash",
-          "sections"
-        ],
-        "title": "BoardDailyReview",
-        "description": "\u4e00\u6b21\u4e0d\u53ef\u53d8\u7684\u884c\u4e1a + \u9898\u6750\u65e5\u7ebf\u8d8b\u52bf\u590d\u770b\u3002"
-      },
-      "BoardDailyReviewRequest": {
-        "properties": {
-          "mode": {
-            "$ref": "#/components/schemas/BoardTrendMode",
-            "default": "close"
-          },
-          "industry_level": {
-            "type": "integer",
-            "maximum": 3.0,
-            "minimum": 1.0,
-            "title": "Industry Level",
-            "default": 1
-          },
-          "force": {
-            "type": "boolean",
-            "title": "Force",
-            "default": false
-          }
-        },
-        "additionalProperties": false,
-        "type": "object",
-        "title": "BoardDailyReviewRequest",
-        "description": "\u521b\u5efa\u6bcf\u65e5\u590d\u770b\u7684\u8f93\u5165\uff1b\u4e0d\u5305\u542b\u7b56\u7565\u9608\u503c\u6216\u9690\u85cf\u8bc4\u5206\u3002"
-      },
-      "BoardDailyReviewSummary": {
-        "properties": {
-          "schema_version": {
-            "type": "integer",
-            "title": "Schema Version",
-            "default": 1
-          },
-          "review_id": {
-            "type": "string",
-            "title": "Review Id"
-          },
-          "created_at": {
-            "type": "string",
-            "format": "date-time",
-            "title": "Created At"
-          },
-          "mode": {
-            "$ref": "#/components/schemas/BoardTrendMode"
-          },
-          "industry_level": {
-            "type": "integer",
-            "title": "Industry Level"
-          },
-          "result_hash": {
-            "type": "string",
-            "title": "Result Hash"
-          },
-          "previous_review_id": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Previous Review Id"
-          },
-          "partial": {
-            "type": "boolean",
-            "title": "Partial",
-            "default": false
-          },
-          "sections": {
-            "items": {
-              "$ref": "#/components/schemas/BoardReviewSectionSummary"
-            },
-            "type": "array",
-            "maxItems": 2,
-            "minItems": 2,
-            "title": "Sections"
-          },
-          "change_counts": {
-            "$ref": "#/components/schemas/BoardReviewChangeCounts"
-          }
-        },
-        "additionalProperties": false,
-        "type": "object",
-        "required": [
-          "review_id",
-          "created_at",
-          "mode",
-          "industry_level",
-          "result_hash",
-          "sections"
-        ],
-        "title": "BoardDailyReviewSummary"
-      },
-      "BoardHistoryCoverage": {
-        "properties": {
-          "observations": {
-            "type": "integer",
-            "title": "Observations"
-          },
-          "first_hits": {
-            "type": "integer",
-            "title": "First Hits"
-          },
-          "selected": {
-            "type": "integer",
-            "title": "Selected"
-          },
-          "completed": {
-            "type": "integer",
-            "title": "Completed"
-          },
-          "censored": {
-            "type": "integer",
-            "title": "Censored"
-          },
-          "benchmark_aligned": {
-            "type": "integer",
-            "title": "Benchmark Aligned"
-          }
-        },
-        "additionalProperties": false,
-        "type": "object",
-        "required": [
-          "observations",
-          "first_hits",
-          "selected",
-          "completed",
-          "censored",
-          "benchmark_aligned"
-        ],
-        "title": "BoardHistoryCoverage"
-      },
-      "BoardHistoryEvent": {
-        "properties": {
-          "event_date": {
-            "type": "string",
-            "title": "Event Date"
-          },
-          "forward_date": {
-            "type": "string",
-            "title": "Forward Date"
-          },
-          "streak": {
-            "type": "integer",
-            "title": "Streak"
-          },
-          "event_close": {
-            "type": "number",
-            "title": "Event Close"
-          },
-          "forward_close": {
-            "type": "number",
-            "title": "Forward Close"
-          },
-          "return_pct": {
-            "type": "number",
-            "title": "Return Pct"
-          },
-          "benchmark_return_pct": {
-            "anyOf": [
-              {
-                "type": "number"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Benchmark Return Pct"
-          },
-          "relative_return_pct": {
-            "anyOf": [
-              {
-                "type": "number"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Relative Return Pct"
-          }
-        },
-        "additionalProperties": false,
-        "type": "object",
-        "required": [
-          "event_date",
-          "forward_date",
-          "streak",
-          "event_close",
-          "forward_close",
-          "return_pct"
-        ],
-        "title": "BoardHistoryEvent"
-      },
-      "BoardHistoryStudy": {
-        "properties": {
-          "schema_version": {
-            "type": "integer",
-            "title": "Schema Version",
-            "default": 1
-          },
-          "query": {
-            "$ref": "#/components/schemas/BoardHistoryStudyQuery"
-          },
-          "board_code": {
-            "type": "string",
-            "title": "Board Code"
-          },
-          "board_name": {
-            "type": "string",
-            "title": "Board Name"
-          },
-          "source": {
-            "type": "string",
-            "title": "Source"
-          },
-          "benchmark_name": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Benchmark Name"
-          },
-          "benchmark_source": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Benchmark Source"
-          },
-          "data_start": {
-            "type": "string",
-            "title": "Data Start"
-          },
-          "data_cutoff": {
-            "type": "string",
-            "title": "Data Cutoff"
-          },
-          "coverage": {
-            "$ref": "#/components/schemas/BoardHistoryCoverage"
-          },
-          "events": {
-            "items": {
-              "$ref": "#/components/schemas/BoardHistoryEvent"
-            },
-            "type": "array",
-            "title": "Events"
-          },
-          "raw_distribution": {
-            "$ref": "#/components/schemas/ReturnDistribution"
-          },
-          "benchmark_distribution": {
-            "$ref": "#/components/schemas/ReturnDistribution"
-          },
-          "relative_distribution": {
-            "$ref": "#/components/schemas/ReturnDistribution"
-          },
-          "audit": {
-            "$ref": "#/components/schemas/PointInTimeAudit"
-          },
-          "warnings": {
-            "items": {
-              "type": "string"
-            },
-            "type": "array",
-            "title": "Warnings"
-          }
-        },
-        "additionalProperties": false,
-        "type": "object",
-        "required": [
-          "query",
-          "board_code",
-          "board_name",
-          "source",
-          "data_start",
-          "data_cutoff",
-          "coverage",
-          "raw_distribution",
-          "benchmark_distribution",
-          "relative_distribution"
-        ],
-        "title": "BoardHistoryStudy"
-      },
-      "BoardHistoryStudyQuery": {
-        "properties": {
-          "kind": {
-            "$ref": "#/components/schemas/BoardKind"
-          },
-          "value": {
-            "type": "string",
-            "maxLength": 80,
-            "minLength": 1,
-            "title": "Value"
-          },
-          "level": {
-            "type": "integer",
-            "maximum": 3.0,
-            "minimum": 1.0,
-            "title": "Level",
-            "default": 1
-          },
-          "mode": {
-            "$ref": "#/components/schemas/BoardTrendMode"
-          },
-          "direction": {
-            "$ref": "#/components/schemas/BoardStudyDirection"
-          },
-          "min_streak": {
-            "type": "integer",
-            "maximum": 30.0,
-            "minimum": 2.0,
-            "title": "Min Streak"
-          },
-          "forward_days": {
-            "type": "integer",
-            "maximum": 60.0,
-            "minimum": 1.0,
-            "title": "Forward Days"
-          },
-          "lookback_years": {
-            "type": "integer",
-            "maximum": 15.0,
-            "minimum": 1.0,
-            "title": "Lookback Years"
-          },
-          "sample_policy": {
-            "$ref": "#/components/schemas/BoardStudySamplePolicy"
-          },
-          "benchmark_code": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Benchmark Code",
-            "default": "000300.SH"
-          },
-          "force": {
-            "type": "boolean",
-            "title": "Force",
-            "default": false
-          }
-        },
-        "additionalProperties": false,
-        "type": "object",
-        "required": [
-          "kind",
-          "value",
-          "mode",
-          "direction",
-          "min_streak",
-          "forward_days",
-          "lookback_years",
-          "sample_policy"
-        ],
-        "title": "BoardHistoryStudyQuery",
-        "description": "\u7528\u6237\u663e\u5f0f\u9009\u62e9\u7684\u5386\u53f2\u4e8b\u4ef6\u5b9a\u4e49\uff0c\u4e0d\u542b\u81ea\u52a8\u4f18\u5316\u53c2\u6570\u3002"
-      },
-      "BoardKind": {
-        "type": "string",
-        "enum": [
-          "industry",
-          "theme"
-        ],
-        "title": "BoardKind"
-      },
-      "BoardPulseCoverage": {
-        "properties": {
-          "total": {
-            "type": "integer",
-            "title": "Total"
-          },
-          "evaluated": {
-            "type": "integer",
-            "title": "Evaluated"
-          },
-          "up": {
-            "type": "integer",
-            "title": "Up"
-          },
-          "down": {
-            "type": "integer",
-            "title": "Down"
-          },
-          "flat": {
-            "type": "integer",
-            "title": "Flat"
-          },
-          "missing": {
-            "type": "integer",
-            "title": "Missing"
-          }
-        },
-        "additionalProperties": false,
-        "type": "object",
-        "required": [
-          "total",
-          "evaluated",
-          "up",
-          "down",
-          "flat",
-          "missing"
-        ],
-        "title": "BoardPulseCoverage"
-      },
-      "BoardPulseMember": {
-        "properties": {
-          "rank": {
-            "type": "integer",
-            "title": "Rank"
-          },
-          "code": {
-            "type": "string",
-            "title": "Code"
-          },
-          "name": {
-            "type": "string",
-            "title": "Name"
-          },
-          "close": {
-            "type": "number",
-            "title": "Close"
-          },
-          "change_pct": {
-            "type": "number",
-            "title": "Change Pct"
-          }
-        },
-        "additionalProperties": false,
-        "type": "object",
-        "required": [
-          "rank",
-          "code",
-          "name",
-          "close",
-          "change_pct"
-        ],
-        "title": "BoardPulseMember"
-      },
-      "BoardPulseQuery": {
-        "properties": {
-          "kind": {
-            "$ref": "#/components/schemas/BoardKind"
-          },
-          "value": {
-            "type": "string",
-            "maxLength": 80,
-            "minLength": 1,
-            "title": "Value"
-          },
-          "level": {
-            "type": "integer",
-            "maximum": 3.0,
-            "minimum": 1.0,
-            "title": "Level",
-            "default": 1
-          },
-          "limit": {
-            "type": "integer",
-            "maximum": 10.0,
-            "minimum": 1.0,
-            "title": "Limit",
-            "default": 5
-          },
-          "force": {
-            "type": "boolean",
-            "title": "Force",
-            "default": false
-          }
-        },
-        "additionalProperties": false,
-        "type": "object",
-        "required": [
-          "kind",
-          "value"
-        ],
-        "title": "BoardPulseQuery",
-        "description": "\u67e5\u8be2\u4e00\u4e2a\u884c\u4e1a/\u9898\u6750\u5728\u6700\u65b0\u5b8c\u6574\u4ea4\u6613\u65e5\u7684\u6210\u5206\u80a1\u5185\u90e8\u7ed3\u6784\u3002"
-      },
-      "BoardPulseSnapshot": {
-        "properties": {
-          "schema_version": {
-            "type": "integer",
-            "title": "Schema Version",
-            "default": 1
-          },
-          "query": {
-            "$ref": "#/components/schemas/BoardPulseQuery"
-          },
-          "board_code": {
-            "type": "string",
-            "title": "Board Code"
-          },
-          "board_name": {
-            "type": "string",
-            "title": "Board Name"
-          },
-          "source": {
-            "type": "string",
-            "title": "Source"
-          },
-          "data_cutoff": {
-            "type": "string",
-            "title": "Data Cutoff"
-          },
-          "previous_date": {
-            "type": "string",
-            "title": "Previous Date"
-          },
-          "partial": {
-            "type": "boolean",
-            "title": "Partial",
-            "default": false
-          },
-          "coverage": {
-            "$ref": "#/components/schemas/BoardPulseCoverage"
-          },
-          "up_ratio_pct": {
-            "type": "number",
-            "title": "Up Ratio Pct"
-          },
-          "down_ratio_pct": {
-            "type": "number",
-            "title": "Down Ratio Pct"
-          },
-          "median_change_pct": {
-            "type": "number",
-            "title": "Median Change Pct"
-          },
-          "top_up": {
-            "items": {
-              "$ref": "#/components/schemas/BoardPulseMember"
-            },
-            "type": "array",
-            "title": "Top Up"
-          },
-          "top_down": {
-            "items": {
-              "$ref": "#/components/schemas/BoardPulseMember"
-            },
-            "type": "array",
-            "title": "Top Down"
-          },
-          "warnings": {
-            "items": {
-              "type": "string"
-            },
-            "type": "array",
-            "title": "Warnings"
-          }
-        },
-        "additionalProperties": false,
-        "type": "object",
-        "required": [
-          "query",
-          "board_code",
-          "board_name",
-          "source",
-          "data_cutoff",
-          "previous_date",
-          "coverage",
-          "up_ratio_pct",
-          "down_ratio_pct",
-          "median_change_pct"
-        ],
-        "title": "BoardPulseSnapshot",
-        "description": "\u677f\u5757\u6210\u5206\u80a1\u540c\u4e00\u4ea4\u6613\u65e5\u7684\u6da8\u8dcc\u5206\u5e03\uff0c\u4e0d\u8868\u793a\u6743\u91cd\u8d21\u732e\u6216\u65b0\u95fb\u56e0\u679c\u3002"
-      },
-      "BoardReviewChange": {
-        "properties": {
-          "kind": {
-            "$ref": "#/components/schemas/BoardKind"
-          },
-          "code": {
-            "type": "string",
-            "title": "Code"
-          },
-          "name": {
-            "type": "string",
-            "title": "Name"
-          },
-          "change_type": {
-            "$ref": "#/components/schemas/BoardReviewChangeType"
-          },
-          "previous_streak": {
-            "anyOf": [
-              {
-                "type": "integer"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Previous Streak"
-          },
-          "current_streak": {
-            "anyOf": [
-              {
-                "type": "integer"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Current Streak"
-          },
-          "previous_rank": {
-            "anyOf": [
-              {
-                "type": "integer"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Previous Rank"
-          },
-          "current_rank": {
-            "anyOf": [
-              {
-                "type": "integer"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Current Rank"
-          }
-        },
-        "additionalProperties": false,
-        "type": "object",
-        "required": [
-          "kind",
-          "code",
-          "name",
-          "change_type"
-        ],
-        "title": "BoardReviewChange"
-      },
-      "BoardReviewChangeCounts": {
-        "properties": {
-          "data_appeared": {
-            "type": "integer",
-            "title": "Data Appeared",
-            "default": 0
-          },
-          "data_unavailable": {
-            "type": "integer",
-            "title": "Data Unavailable",
-            "default": 0
-          },
-          "direction_changed": {
-            "type": "integer",
-            "title": "Direction Changed",
-            "default": 0
-          },
-          "streak_extended": {
-            "type": "integer",
-            "title": "Streak Extended",
-            "default": 0
-          },
-          "streak_shortened": {
-            "type": "integer",
-            "title": "Streak Shortened",
-            "default": 0
-          }
-        },
-        "additionalProperties": false,
-        "type": "object",
-        "title": "BoardReviewChangeCounts"
-      },
-      "BoardReviewChangeType": {
-        "type": "string",
-        "enum": [
-          "data_appeared",
-          "data_unavailable",
-          "direction_changed",
-          "streak_extended",
-          "streak_shortened"
-        ],
-        "title": "BoardReviewChangeType",
-        "description": "\u4e24\u4efd\u540c\u53e3\u5f84\u677f\u5757\u8d8b\u52bf\u5feb\u7167\u4e4b\u95f4\u7684\u5ba2\u89c2\u53d8\u5316\u3002"
-      },
-      "BoardReviewSection": {
-        "properties": {
-          "kind": {
-            "$ref": "#/components/schemas/BoardKind"
-          },
-          "snapshot": {
-            "anyOf": [
-              {
-                "$ref": "#/components/schemas/BoardTrendSnapshot"
-              },
-              {
-                "type": "null"
-              }
-            ]
-          },
-          "error_code": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Error Code"
-          },
-          "error_message": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Error Message"
-          },
-          "error_hint": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Error Hint"
-          }
-        },
-        "additionalProperties": false,
-        "type": "object",
-        "required": [
-          "kind"
-        ],
-        "title": "BoardReviewSection",
-        "description": "\u4e00\u4e2a\u677f\u5757\u7c7b\u578b\u7684\u8d8b\u52bf\u4e8b\u5b9e\uff0c\u6216\u8be5\u7c7b\u578b\u7684\u660e\u786e\u5931\u8d25\u3002"
-      },
-      "BoardReviewSectionSummary": {
-        "properties": {
-          "kind": {
-            "$ref": "#/components/schemas/BoardKind"
-          },
-          "source": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Source"
-          },
-          "data_cutoff": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Data Cutoff"
-          },
-          "partial": {
-            "type": "boolean",
-            "title": "Partial",
-            "default": false
-          },
-          "total": {
-            "type": "integer",
-            "title": "Total",
-            "default": 0
-          },
-          "evaluated": {
-            "type": "integer",
-            "title": "Evaluated",
-            "default": 0
-          },
-          "error_code": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Error Code"
-          },
-          "error_message": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Error Message"
-          }
-        },
-        "additionalProperties": false,
-        "type": "object",
-        "required": [
-          "kind"
-        ],
-        "title": "BoardReviewSectionSummary"
-      },
-      "BoardStudyDirection": {
-        "type": "string",
-        "enum": [
-          "up",
-          "down"
-        ],
-        "title": "BoardStudyDirection"
-      },
-      "BoardStudySamplePolicy": {
-        "type": "string",
-        "enum": [
-          "first_hit",
-          "non_overlapping"
-        ],
-        "title": "BoardStudySamplePolicy"
-      },
-      "BoardTrendCoverage": {
-        "properties": {
-          "total": {
-            "type": "integer",
-            "title": "Total"
-          },
-          "evaluated": {
-            "type": "integer",
-            "title": "Evaluated"
-          },
-          "matched": {
-            "type": "integer",
-            "title": "Matched"
-          },
-          "returned": {
-            "type": "integer",
-            "title": "Returned"
-          },
-          "errors": {
-            "type": "integer",
-            "title": "Errors"
-          }
-        },
-        "additionalProperties": false,
-        "type": "object",
-        "required": [
-          "total",
-          "evaluated",
-          "matched",
-          "returned",
-          "errors"
-        ],
-        "title": "BoardTrendCoverage"
-      },
-      "BoardTrendFailure": {
-        "properties": {
-          "code": {
-            "type": "string",
-            "title": "Code"
-          },
-          "name": {
-            "type": "string",
-            "title": "Name"
-          },
-          "message": {
-            "type": "string",
-            "title": "Message"
-          }
-        },
-        "additionalProperties": false,
-        "type": "object",
-        "required": [
-          "code",
-          "name",
-          "message"
-        ],
-        "title": "BoardTrendFailure"
-      },
-      "BoardTrendMode": {
-        "type": "string",
-        "enum": [
-          "close",
-          "candle"
-        ],
-        "title": "BoardTrendMode"
-      },
-      "BoardTrendQuery": {
-        "properties": {
-          "kind": {
-            "$ref": "#/components/schemas/BoardKind",
-            "default": "industry"
-          },
-          "mode": {
-            "$ref": "#/components/schemas/BoardTrendMode",
-            "default": "close"
-          },
-          "up": {
-            "anyOf": [
-              {
-                "type": "integer",
-                "maximum": 30.0,
-                "minimum": 1.0
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Up"
-          },
-          "down": {
-            "anyOf": [
-              {
-                "type": "integer",
-                "maximum": 30.0,
-                "minimum": 1.0
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Down"
-          },
-          "min_streak": {
-            "anyOf": [
-              {
-                "type": "integer",
-                "maximum": 30.0,
-                "minimum": 1.0
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Min Streak"
-          },
-          "sort": {
-            "$ref": "#/components/schemas/BoardTrendSort",
-            "default": "streak"
-          },
-          "level": {
-            "type": "integer",
-            "maximum": 3.0,
-            "minimum": 1.0,
-            "title": "Level",
-            "default": 1
-          },
-          "limit": {
-            "anyOf": [
-              {
-                "type": "integer",
-                "maximum": 500.0,
-                "minimum": 1.0
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Limit",
-            "default": 30
-          },
-          "force": {
-            "type": "boolean",
-            "title": "Force",
-            "default": false
-          }
-        },
-        "additionalProperties": false,
-        "type": "object",
-        "title": "BoardTrendQuery",
-        "description": "\u6240\u6709\u5165\u53e3\u5171\u7528\u7684\u677f\u5757\u8d8b\u52bf\u67e5\u8be2\u3002"
-      },
-      "BoardTrendRow": {
-        "properties": {
-          "rank": {
-            "type": "integer",
-            "title": "Rank"
-          },
-          "kind": {
-            "$ref": "#/components/schemas/BoardKind"
-          },
-          "code": {
-            "type": "string",
-            "title": "Code"
-          },
-          "name": {
-            "type": "string",
-            "title": "Name"
-          },
-          "current_price": {
-            "type": "number",
-            "title": "Current Price"
-          },
-          "streak": {
-            "type": "integer",
-            "title": "Streak"
-          },
-          "streak_pct": {
-            "type": "number",
-            "title": "Streak Pct"
-          },
-          "direction": {
-            "type": "string",
-            "title": "Direction"
-          },
-          "latest_change_pct": {
-            "anyOf": [
-              {
-                "type": "number"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Latest Change Pct"
-          },
-          "moneyflow_net": {
-            "anyOf": [
-              {
-                "type": "number"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Moneyflow Net"
-          },
-          "daily_changes": {
-            "items": {
-              "$ref": "#/components/schemas/BoardDailyChange"
-            },
-            "type": "array",
-            "title": "Daily Changes"
-          }
-        },
-        "additionalProperties": false,
-        "type": "object",
-        "required": [
-          "rank",
-          "kind",
-          "code",
-          "name",
-          "current_price",
-          "streak",
-          "streak_pct",
-          "direction"
-        ],
-        "title": "BoardTrendRow"
-      },
-      "BoardTrendSnapshot": {
-        "properties": {
-          "schema_version": {
-            "type": "integer",
-            "title": "Schema Version",
-            "default": 1
-          },
-          "query": {
-            "$ref": "#/components/schemas/BoardTrendQuery"
-          },
-          "source": {
-            "type": "string",
-            "title": "Source"
-          },
-          "data_cutoff": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Data Cutoff"
-          },
-          "partial": {
-            "type": "boolean",
-            "title": "Partial",
-            "default": false
-          },
-          "coverage": {
-            "$ref": "#/components/schemas/BoardTrendCoverage"
-          },
-          "rows": {
-            "items": {
-              "$ref": "#/components/schemas/BoardTrendRow"
-            },
-            "type": "array",
-            "title": "Rows"
-          },
-          "failures": {
-            "items": {
-              "$ref": "#/components/schemas/BoardTrendFailure"
-            },
-            "type": "array",
-            "title": "Failures"
-          },
-          "warnings": {
-            "items": {
-              "type": "string"
-            },
-            "type": "array",
-            "title": "Warnings"
-          }
-        },
-        "additionalProperties": false,
-        "type": "object",
-        "required": [
-          "query",
-          "source",
-          "coverage"
-        ],
-        "title": "BoardTrendSnapshot"
-      },
-      "BoardTrendSort": {
-        "type": "string",
-        "enum": [
-          "streak",
-          "latest",
-          "moneyflow"
-        ],
-        "title": "BoardTrendSort"
       },
       "Candidate": {
         "properties": {
@@ -3366,38 +1106,6 @@
         ],
         "title": "CandidateList"
       },
-      "CandidateListCreateRequest": {
-        "properties": {
-          "name": {
-            "type": "string",
-            "maxLength": 80,
-            "minLength": 1,
-            "title": "Name"
-          }
-        },
-        "additionalProperties": false,
-        "type": "object",
-        "required": [
-          "name"
-        ],
-        "title": "CandidateListCreateRequest"
-      },
-      "CandidateListRenameRequest": {
-        "properties": {
-          "name": {
-            "type": "string",
-            "maxLength": 80,
-            "minLength": 1,
-            "title": "Name"
-          }
-        },
-        "additionalProperties": false,
-        "type": "object",
-        "required": [
-          "name"
-        ],
-        "title": "CandidateListRenameRequest"
-      },
       "CandidateStatus": {
         "type": "string",
         "enum": [
@@ -3463,156 +1171,6 @@
         ],
         "title": "CashUpdateRequest"
       },
-      "CompareSet": {
-        "properties": {
-          "compare_id": {
-            "type": "string",
-            "title": "Compare Id"
-          },
-          "name": {
-            "type": "string",
-            "title": "Name"
-          },
-          "symbols": {
-            "items": {
-              "type": "string"
-            },
-            "type": "array",
-            "maxItems": 10,
-            "minItems": 3,
-            "title": "Symbols"
-          },
-          "created_at": {
-            "type": "string",
-            "format": "date-time",
-            "title": "Created At"
-          },
-          "updated_at": {
-            "type": "string",
-            "format": "date-time",
-            "title": "Updated At"
-          }
-        },
-        "additionalProperties": false,
-        "type": "object",
-        "required": [
-          "compare_id",
-          "name",
-          "symbols",
-          "created_at",
-          "updated_at"
-        ],
-        "title": "CompareSet"
-      },
-      "CompareSetUpsertRequest": {
-        "properties": {
-          "compare_id": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Compare Id"
-          },
-          "name": {
-            "type": "string",
-            "maxLength": 80,
-            "title": "Name",
-            "default": "\u4e34\u65f6\u5bf9\u6bd4"
-          },
-          "symbols": {
-            "items": {
-              "type": "string"
-            },
-            "type": "array",
-            "maxItems": 10,
-            "minItems": 3,
-            "title": "Symbols"
-          }
-        },
-        "additionalProperties": false,
-        "type": "object",
-        "required": [
-          "symbols"
-        ],
-        "title": "CompareSetUpsertRequest"
-      },
-      "ComparisonOperator": {
-        "type": "string",
-        "enum": [
-          "lt",
-          "lte",
-          "gt",
-          "gte",
-          "eq",
-          "ne"
-        ],
-        "title": "ComparisonOperator"
-      },
-      "DataCoverage": {
-        "properties": {
-          "universe_size": {
-            "type": "integer",
-            "title": "Universe Size",
-            "default": 0
-          },
-          "evaluated": {
-            "type": "integer",
-            "title": "Evaluated",
-            "default": 0
-          },
-          "matched": {
-            "type": "integer",
-            "title": "Matched",
-            "default": 0
-          },
-          "returned": {
-            "type": "integer",
-            "title": "Returned",
-            "default": 0
-          },
-          "missing": {
-            "type": "integer",
-            "title": "Missing",
-            "default": 0
-          },
-          "ratio": {
-            "type": "number",
-            "title": "Ratio",
-            "default": 0.0
-          },
-          "stale": {
-            "type": "boolean",
-            "title": "Stale",
-            "default": false
-          },
-          "data_cutoff": {
-            "anyOf": [
-              {
-                "type": "string",
-                "format": "date"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Data Cutoff"
-          },
-          "missing_by_field": {
-            "additionalProperties": {
-              "type": "integer"
-            },
-            "type": "object",
-            "title": "Missing By Field"
-          }
-        },
-        "additionalProperties": false,
-        "type": "object",
-        "title": "DataCoverage"
-      },
       "DeleteResponse": {
         "properties": {
           "deleted": {
@@ -3640,32 +1198,6 @@
           "symbol"
         ],
         "title": "FocusAddRequest"
-      },
-      "FocusNoteRequest": {
-        "properties": {
-          "note": {
-            "type": "string",
-            "maxLength": 2000,
-            "title": "Note"
-          },
-          "list_id": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "List Id"
-          }
-        },
-        "additionalProperties": false,
-        "type": "object",
-        "required": [
-          "note"
-        ],
-        "title": "FocusNoteRequest"
       },
       "FocusPeriod": {
         "properties": {
@@ -3797,36 +1329,6 @@
           "positions"
         ],
         "title": "FocusReviewEntry"
-      },
-      "FocusReviewRequest": {
-        "properties": {
-          "expected_data_hash": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Expected Data Hash"
-          },
-          "expected_note": {
-            "anyOf": [
-              {
-                "type": "string",
-                "maxLength": 2000
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Expected Note"
-          }
-        },
-        "additionalProperties": false,
-        "type": "object",
-        "title": "FocusReviewRequest"
       },
       "FocusRow": {
         "properties": {
@@ -4131,236 +1633,6 @@
         ],
         "title": "JobStatus"
       },
-      "MarketOverviewResponse": {
-        "properties": {
-          "scan": {
-            "anyOf": [
-              {
-                "additionalProperties": true,
-                "type": "object"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Scan"
-          },
-          "sentiment": {
-            "$ref": "#/components/schemas/MarketSentimentResponse"
-          },
-          "message": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Message"
-          }
-        },
-        "additionalProperties": false,
-        "type": "object",
-        "required": [
-          "sentiment"
-        ],
-        "title": "MarketOverviewResponse"
-      },
-      "MarketRefreshRequest": {
-        "properties": {
-          "scope": {
-            "$ref": "#/components/schemas/MarketRefreshScope",
-            "default": "default"
-          },
-          "force": {
-            "type": "boolean",
-            "title": "Force",
-            "default": false
-          },
-          "days": {
-            "type": "integer",
-            "maximum": 720.0,
-            "minimum": 180.0,
-            "title": "Days",
-            "default": 360
-          }
-        },
-        "additionalProperties": false,
-        "type": "object",
-        "title": "MarketRefreshRequest"
-      },
-      "MarketRefreshScope": {
-        "type": "string",
-        "enum": [
-          "default",
-          "all",
-          "focus"
-        ],
-        "title": "MarketRefreshScope"
-      },
-      "MarketSentimentResponse": {
-        "properties": {
-          "ok": {
-            "type": "boolean",
-            "title": "Ok"
-          },
-          "up_count": {
-            "anyOf": [
-              {
-                "type": "integer"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Up Count"
-          },
-          "down_count": {
-            "anyOf": [
-              {
-                "type": "integer"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Down Count"
-          },
-          "flat_count": {
-            "anyOf": [
-              {
-                "type": "integer"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Flat Count"
-          },
-          "limit_up": {
-            "anyOf": [
-              {
-                "type": "integer"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Limit Up"
-          },
-          "limit_down": {
-            "anyOf": [
-              {
-                "type": "integer"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Limit Down"
-          },
-          "median_position_180": {
-            "anyOf": [
-              {
-                "type": "number"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Median Position 180"
-          },
-          "trade_date": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Trade Date"
-          },
-          "error": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Error"
-          }
-        },
-        "additionalProperties": false,
-        "type": "object",
-        "required": [
-          "ok"
-        ],
-        "title": "MarketSentimentResponse"
-      },
-      "MatchMode": {
-        "type": "string",
-        "enum": [
-          "all",
-          "any"
-        ],
-        "title": "MatchMode"
-      },
-      "NullPolicy": {
-        "type": "string",
-        "enum": [
-          "exclude",
-          "fail"
-        ],
-        "title": "NullPolicy"
-      },
-      "PointInTimeAudit": {
-        "properties": {
-          "scope": {
-            "type": "string",
-            "const": "provider_board_index_series",
-            "title": "Scope",
-            "default": "provider_board_index_series"
-          },
-          "uses_current_constituents": {
-            "type": "boolean",
-            "const": false,
-            "title": "Uses Current Constituents",
-            "default": false
-          },
-          "reconstructs_historical_stock_pool": {
-            "type": "boolean",
-            "const": false,
-            "title": "Reconstructs Historical Stock Pool",
-            "default": false
-          },
-          "provider_vintage_archive": {
-            "type": "boolean",
-            "const": false,
-            "title": "Provider Vintage Archive",
-            "default": false
-          },
-          "benchmark_exact_date_alignment": {
-            "type": "boolean",
-            "const": true,
-            "title": "Benchmark Exact Date Alignment",
-            "default": true
-          },
-          "notes": {
-            "items": {
-              "type": "string"
-            },
-            "type": "array",
-            "title": "Notes"
-          }
-        },
-        "additionalProperties": false,
-        "type": "object",
-        "title": "PointInTimeAudit"
-      },
       "PortfolioAccountResponse": {
         "properties": {
           "cash": {
@@ -4441,7 +1713,14 @@
             "title": "Ok"
           },
           "price_mode": {
-            "type": "string",
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
             "title": "Price Mode"
           },
           "data_cutoff": {
@@ -4661,17 +1940,6 @@
             ],
             "title": "Price Status"
           },
-          "position_alert": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Position Alert"
-          },
           "breakeven_price": {
             "anyOf": [
               {
@@ -4746,796 +2014,6 @@
         ],
         "title": "PositionCreateRequest"
       },
-      "RankChange": {
-        "properties": {
-          "symbol": {
-            "type": "string",
-            "title": "Symbol"
-          },
-          "previous_rank": {
-            "type": "integer",
-            "title": "Previous Rank"
-          },
-          "current_rank": {
-            "type": "integer",
-            "title": "Current Rank"
-          },
-          "delta": {
-            "type": "integer",
-            "title": "Delta"
-          }
-        },
-        "additionalProperties": false,
-        "type": "object",
-        "required": [
-          "symbol",
-          "previous_rank",
-          "current_rank",
-          "delta"
-        ],
-        "title": "RankChange"
-      },
-      "ReturnDistribution": {
-        "properties": {
-          "count": {
-            "type": "integer",
-            "title": "Count"
-          },
-          "positive": {
-            "type": "integer",
-            "title": "Positive"
-          },
-          "negative": {
-            "type": "integer",
-            "title": "Negative"
-          },
-          "flat": {
-            "type": "integer",
-            "title": "Flat"
-          },
-          "positive_ratio_pct": {
-            "anyOf": [
-              {
-                "type": "number"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Positive Ratio Pct"
-          },
-          "mean_pct": {
-            "anyOf": [
-              {
-                "type": "number"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Mean Pct"
-          },
-          "median_pct": {
-            "anyOf": [
-              {
-                "type": "number"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Median Pct"
-          },
-          "p25_pct": {
-            "anyOf": [
-              {
-                "type": "number"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "P25 Pct"
-          },
-          "p75_pct": {
-            "anyOf": [
-              {
-                "type": "number"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "P75 Pct"
-          },
-          "min_pct": {
-            "anyOf": [
-              {
-                "type": "number"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Min Pct"
-          },
-          "max_pct": {
-            "anyOf": [
-              {
-                "type": "number"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Max Pct"
-          }
-        },
-        "additionalProperties": false,
-        "type": "object",
-        "required": [
-          "count",
-          "positive",
-          "negative",
-          "flat"
-        ],
-        "title": "ReturnDistribution"
-      },
-      "SavedScreen": {
-        "properties": {
-          "screen_id": {
-            "type": "string",
-            "title": "Screen Id"
-          },
-          "name": {
-            "type": "string",
-            "title": "Name"
-          },
-          "current_version": {
-            "type": "integer",
-            "title": "Current Version"
-          },
-          "spec": {
-            "$ref": "#/components/schemas/ScreenSpec"
-          },
-          "spec_hash": {
-            "type": "string",
-            "title": "Spec Hash"
-          },
-          "created_at": {
-            "type": "string",
-            "format": "date-time",
-            "title": "Created At"
-          },
-          "updated_at": {
-            "type": "string",
-            "format": "date-time",
-            "title": "Updated At"
-          }
-        },
-        "additionalProperties": false,
-        "type": "object",
-        "required": [
-          "screen_id",
-          "name",
-          "current_version",
-          "spec",
-          "spec_hash",
-          "created_at",
-          "updated_at"
-        ],
-        "title": "SavedScreen"
-      },
-      "ScreenCondition": {
-        "properties": {
-          "type": {
-            "$ref": "#/components/schemas/ScreenFilterType"
-          },
-          "operator": {
-            "$ref": "#/components/schemas/ComparisonOperator"
-          },
-          "value": {
-            "type": "number",
-            "title": "Value"
-          },
-          "period": {
-            "anyOf": [
-              {
-                "type": "integer",
-                "maximum": 360.0,
-                "minimum": 2.0
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Period"
-          },
-          "level": {
-            "anyOf": [
-              {
-                "type": "string",
-                "enum": [
-                  "low",
-                  "high"
-                ]
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Level"
-          },
-          "null_policy": {
-            "$ref": "#/components/schemas/NullPolicy",
-            "default": "exclude"
-          }
-        },
-        "additionalProperties": false,
-        "type": "object",
-        "required": [
-          "type",
-          "operator",
-          "value"
-        ],
-        "title": "ScreenCondition"
-      },
-      "ScreenDiff": {
-        "properties": {
-          "previous_run_id": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Previous Run Id"
-          },
-          "added": {
-            "items": {
-              "type": "string"
-            },
-            "type": "array",
-            "title": "Added"
-          },
-          "removed": {
-            "items": {
-              "type": "string"
-            },
-            "type": "array",
-            "title": "Removed"
-          },
-          "rank_changes": {
-            "items": {
-              "$ref": "#/components/schemas/RankChange"
-            },
-            "type": "array",
-            "title": "Rank Changes"
-          }
-        },
-        "additionalProperties": false,
-        "type": "object",
-        "title": "ScreenDiff"
-      },
-      "ScreenEvidence": {
-        "properties": {
-          "evidence_ref": {
-            "type": "string",
-            "title": "Evidence Ref"
-          },
-          "filter_type": {
-            "$ref": "#/components/schemas/ScreenFilterType"
-          },
-          "field_id": {
-            "type": "string",
-            "title": "Field Id"
-          },
-          "operator": {
-            "$ref": "#/components/schemas/ComparisonOperator"
-          },
-          "threshold": {
-            "type": "number",
-            "title": "Threshold"
-          },
-          "actual": {
-            "type": "number",
-            "title": "Actual"
-          },
-          "unit": {
-            "type": "string",
-            "title": "Unit",
-            "default": ""
-          },
-          "period": {
-            "anyOf": [
-              {
-                "type": "integer"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Period"
-          },
-          "level": {
-            "anyOf": [
-              {
-                "type": "string",
-                "enum": [
-                  "low",
-                  "high"
-                ]
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Level"
-          },
-          "data_date": {
-            "anyOf": [
-              {
-                "type": "string",
-                "format": "date"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Data Date"
-          },
-          "source": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Source"
-          },
-          "formula_version": {
-            "type": "string",
-            "title": "Formula Version",
-            "default": "find-v1"
-          }
-        },
-        "additionalProperties": false,
-        "type": "object",
-        "required": [
-          "evidence_ref",
-          "filter_type",
-          "field_id",
-          "operator",
-          "threshold",
-          "actual"
-        ],
-        "title": "ScreenEvidence"
-      },
-      "ScreenFilterType": {
-        "type": "string",
-        "enum": [
-          "pos",
-          "resonance",
-          "gain",
-          "up_days",
-          "ma_bias",
-          "rs_index",
-          "rs_board",
-          "pe",
-          "pb",
-          "dv",
-          "roe",
-          "turnover",
-          "market_cap",
-          "volume_ratio",
-          "moneyflow",
-          "moneyflow_daily",
-          "moneyflow_days",
-          "rsi",
-          "macd_dif",
-          "macd",
-          "kdj_j",
-          "atr_pct",
-          "winner",
-          "streak",
-          "holders",
-          "top10",
-          "north"
-        ],
-        "title": "ScreenFilterType"
-      },
-      "ScreenRow": {
-        "properties": {
-          "symbol": {
-            "type": "string",
-            "title": "Symbol"
-          },
-          "name": {
-            "type": "string",
-            "title": "Name"
-          },
-          "rank": {
-            "type": "integer",
-            "title": "Rank"
-          },
-          "price": {
-            "anyOf": [
-              {
-                "type": "number"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Price"
-          },
-          "in_watchlist": {
-            "type": "boolean",
-            "title": "In Watchlist",
-            "default": false
-          },
-          "values": {
-            "additionalProperties": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "integer"
-                },
-                {
-                  "type": "number"
-                },
-                {
-                  "type": "boolean"
-                },
-                {
-                  "type": "null"
-                }
-              ]
-            },
-            "type": "object",
-            "title": "Values"
-          },
-          "positions": {
-            "additionalProperties": {
-              "anyOf": [
-                {
-                  "type": "number"
-                },
-                {
-                  "type": "null"
-                }
-              ]
-            },
-            "type": "object",
-            "title": "Positions"
-          },
-          "evidence": {
-            "items": {
-              "$ref": "#/components/schemas/ScreenEvidence"
-            },
-            "type": "array",
-            "title": "Evidence"
-          }
-        },
-        "additionalProperties": false,
-        "type": "object",
-        "required": [
-          "symbol",
-          "name",
-          "rank"
-        ],
-        "title": "ScreenRow"
-      },
-      "ScreenRun": {
-        "properties": {
-          "schema_version": {
-            "type": "integer",
-            "const": 1,
-            "title": "Schema Version",
-            "default": 1
-          },
-          "run_id": {
-            "type": "string",
-            "title": "Run Id"
-          },
-          "screen_id": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Screen Id"
-          },
-          "screen_version": {
-            "anyOf": [
-              {
-                "type": "integer"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Screen Version"
-          },
-          "spec": {
-            "$ref": "#/components/schemas/ScreenSpec"
-          },
-          "spec_hash": {
-            "type": "string",
-            "title": "Spec Hash"
-          },
-          "snapshot_id": {
-            "type": "string",
-            "title": "Snapshot Id"
-          },
-          "result_hash": {
-            "type": "string",
-            "title": "Result Hash"
-          },
-          "created_at": {
-            "type": "string",
-            "format": "date-time",
-            "title": "Created At"
-          },
-          "duration_ms": {
-            "type": "integer",
-            "title": "Duration Ms"
-          },
-          "coverage": {
-            "$ref": "#/components/schemas/DataCoverage"
-          },
-          "warnings": {
-            "items": {
-              "type": "string"
-            },
-            "type": "array",
-            "title": "Warnings"
-          },
-          "rows": {
-            "items": {
-              "$ref": "#/components/schemas/ScreenRow"
-            },
-            "type": "array",
-            "title": "Rows"
-          },
-          "diff": {
-            "$ref": "#/components/schemas/ScreenDiff"
-          }
-        },
-        "additionalProperties": false,
-        "type": "object",
-        "required": [
-          "run_id",
-          "spec",
-          "spec_hash",
-          "snapshot_id",
-          "result_hash",
-          "created_at",
-          "duration_ms",
-          "coverage"
-        ],
-        "title": "ScreenRun"
-      },
-      "ScreenRunInput": {
-        "properties": {
-          "spec": {
-            "anyOf": [
-              {
-                "$ref": "#/components/schemas/ScreenSpec"
-              },
-              {
-                "type": "null"
-              }
-            ]
-          },
-          "screen_id": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Screen Id"
-          },
-          "persist": {
-            "type": "boolean",
-            "title": "Persist",
-            "default": true
-          }
-        },
-        "additionalProperties": false,
-        "type": "object",
-        "title": "ScreenRunInput"
-      },
-      "ScreenRunRequest": {
-        "properties": {
-          "spec": {
-            "$ref": "#/components/schemas/ScreenSpec"
-          },
-          "persist": {
-            "type": "boolean",
-            "title": "Persist",
-            "default": true
-          }
-        },
-        "additionalProperties": false,
-        "type": "object",
-        "required": [
-          "spec"
-        ],
-        "title": "ScreenRunRequest"
-      },
-      "ScreenSort": {
-        "properties": {
-          "field_id": {
-            "type": "string",
-            "maxLength": 128,
-            "minLength": 1,
-            "title": "Field Id"
-          },
-          "direction": {
-            "$ref": "#/components/schemas/SortDirection",
-            "default": "asc"
-          },
-          "nulls": {
-            "type": "string",
-            "const": "last",
-            "title": "Nulls",
-            "default": "last"
-          }
-        },
-        "additionalProperties": false,
-        "type": "object",
-        "required": [
-          "field_id"
-        ],
-        "title": "ScreenSort"
-      },
-      "ScreenSpec": {
-        "properties": {
-          "schema_version": {
-            "type": "integer",
-            "const": 1,
-            "title": "Schema Version",
-            "default": 1
-          },
-          "name": {
-            "type": "string",
-            "maxLength": 80,
-            "minLength": 1,
-            "title": "Name",
-            "default": "\u672a\u547d\u540d\u9009\u80a1"
-          },
-          "universe": {
-            "$ref": "#/components/schemas/UniverseSpec"
-          },
-          "as_of": {
-            "$ref": "#/components/schemas/AsOfSpec"
-          },
-          "match_mode": {
-            "$ref": "#/components/schemas/MatchMode",
-            "default": "all"
-          },
-          "conditions": {
-            "items": {
-              "$ref": "#/components/schemas/ScreenCondition"
-            },
-            "type": "array",
-            "maxItems": 12,
-            "title": "Conditions"
-          },
-          "exclude_st": {
-            "type": "boolean",
-            "title": "Exclude St",
-            "default": false
-          },
-          "exclude_star": {
-            "type": "boolean",
-            "title": "Exclude Star",
-            "default": false
-          },
-          "exclude_bj": {
-            "type": "boolean",
-            "title": "Exclude Bj",
-            "default": false
-          },
-          "sort": {
-            "items": {
-              "$ref": "#/components/schemas/ScreenSort"
-            },
-            "type": "array",
-            "maxItems": 3,
-            "title": "Sort"
-          },
-          "columns": {
-            "items": {
-              "type": "string"
-            },
-            "type": "array",
-            "maxItems": 40,
-            "title": "Columns"
-          },
-          "limit": {
-            "type": "integer",
-            "maximum": 10000.0,
-            "minimum": 1.0,
-            "title": "Limit",
-            "default": 100
-          }
-        },
-        "additionalProperties": false,
-        "type": "object",
-        "title": "ScreenSpec"
-      },
-      "ScreenUpsertRequest": {
-        "properties": {
-          "spec": {
-            "$ref": "#/components/schemas/ScreenSpec"
-          },
-          "screen_id": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Screen Id"
-          }
-        },
-        "additionalProperties": false,
-        "type": "object",
-        "required": [
-          "spec"
-        ],
-        "title": "ScreenUpsertRequest"
-      },
-      "ScreenVersion": {
-        "properties": {
-          "screen_id": {
-            "type": "string",
-            "title": "Screen Id"
-          },
-          "version": {
-            "type": "integer",
-            "title": "Version"
-          },
-          "spec": {
-            "$ref": "#/components/schemas/ScreenSpec"
-          },
-          "spec_hash": {
-            "type": "string",
-            "title": "Spec Hash"
-          },
-          "created_at": {
-            "type": "string",
-            "format": "date-time",
-            "title": "Created At"
-          }
-        },
-        "additionalProperties": false,
-        "type": "object",
-        "required": [
-          "screen_id",
-          "version",
-          "spec",
-          "spec_hash",
-          "created_at"
-        ],
-        "title": "ScreenVersion"
-      },
       "SettingsFactsResponse": {
         "properties": {
           "data_dir": {
@@ -5590,70 +2068,288 @@
         ],
         "title": "SettingsFactsResponse"
       },
-      "SortDirection": {
-        "type": "string",
-        "enum": [
-          "asc",
-          "desc"
-        ],
-        "title": "SortDirection"
-      },
-      "StockResearchResponse": {
+      "StudyBar": {
         "properties": {
-          "available": {
-            "type": "boolean",
-            "title": "Available"
+          "date": {
+            "type": "string",
+            "format": "date",
+            "title": "Date"
           },
-          "data": {
+          "open": {
             "anyOf": [
               {
-                "additionalProperties": true,
-                "type": "object"
+                "type": "number"
               },
               {
                 "type": "null"
               }
             ],
-            "title": "Data"
+            "title": "Open"
           },
-          "message": {
+          "high": {
             "anyOf": [
               {
-                "type": "string"
+                "type": "number"
               },
               {
                 "type": "null"
               }
             ],
-            "title": "Message"
+            "title": "High"
+          },
+          "low": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Low"
+          },
+          "close": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Close"
+          },
+          "volume": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Volume"
           }
         },
         "additionalProperties": false,
         "type": "object",
         "required": [
-          "available"
+          "date"
         ],
-        "title": "StockResearchResponse"
+        "title": "StudyBar"
       },
-      "UniverseKind": {
-        "type": "string",
-        "enum": [
-          "all",
-          "watchlist",
-          "holdings",
-          "codes",
-          "industry",
-          "theme"
-        ],
-        "title": "UniverseKind"
-      },
-      "UniverseSpec": {
+      "StudyBin": {
         "properties": {
-          "kind": {
-            "$ref": "#/components/schemas/UniverseKind",
-            "default": "watchlist"
+          "label": {
+            "type": "string",
+            "title": "Label"
+          },
+          "count": {
+            "type": "integer",
+            "title": "Count"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "label",
+          "count"
+        ],
+        "title": "StudyBin"
+      },
+      "StudyCheck": {
+        "properties": {
+          "condition": {
+            "$ref": "#/components/schemas/StudyCondition"
+          },
+          "actual": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Actual"
+          },
+          "bound": {
+            "type": "string",
+            "enum": [
+              "exact",
+              "at_least"
+            ],
+            "title": "Bound",
+            "default": "exact"
+          },
+          "matched": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Matched"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "condition"
+        ],
+        "title": "StudyCheck"
+      },
+      "StudyCondition": {
+        "properties": {
+          "field": {
+            "type": "string",
+            "enum": [
+              "change_pct",
+              "gap_pct",
+              "body_pct",
+              "return_pct",
+              "position",
+              "low_age",
+              "up_days",
+              "down_days",
+              "bull_days",
+              "bear_days",
+              "joint_up_days",
+              "volume_ratio",
+              "shape_distance"
+            ],
+            "title": "Field"
+          },
+          "operator": {
+            "type": "string",
+            "enum": [
+              "gt",
+              "gte",
+              "lt",
+              "lte",
+              "eq"
+            ],
+            "title": "Operator"
           },
           "value": {
+            "type": "number",
+            "title": "Value"
+          },
+          "window": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "maximum": 360.0,
+                "minimum": 2.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Window"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "field",
+          "operator",
+          "value"
+        ],
+        "title": "StudyCondition"
+      },
+      "StudyCoverage": {
+        "properties": {
+          "total_symbols": {
+            "type": "integer",
+            "title": "Total Symbols",
+            "default": 0
+          },
+          "cached_symbols": {
+            "type": "integer",
+            "title": "Cached Symbols",
+            "default": 0
+          },
+          "missing_symbols": {
+            "type": "integer",
+            "title": "Missing Symbols",
+            "default": 0
+          },
+          "calendar_days": {
+            "type": "integer",
+            "title": "Calendar Days",
+            "default": 0
+          },
+          "historical_stock_days": {
+            "type": "integer",
+            "title": "Historical Stock Days",
+            "default": 0
+          },
+          "valid_stock_days": {
+            "type": "integer",
+            "title": "Valid Stock Days",
+            "default": 0
+          },
+          "evaluated_stock_days": {
+            "type": "integer",
+            "title": "Evaluated Stock Days",
+            "default": 0
+          },
+          "matched_stock_days": {
+            "type": "integer",
+            "title": "Matched Stock Days",
+            "default": 0
+          },
+          "selected_events": {
+            "type": "integer",
+            "title": "Selected Events",
+            "default": 0
+          },
+          "complete_events": {
+            "type": "integer",
+            "title": "Complete Events",
+            "default": 0
+          },
+          "pending_events": {
+            "type": "integer",
+            "title": "Pending Events",
+            "default": 0
+          },
+          "missing_events": {
+            "type": "integer",
+            "title": "Missing Events",
+            "default": 0
+          },
+          "current_evaluated": {
+            "type": "integer",
+            "title": "Current Evaluated",
+            "default": 0
+          },
+          "current_matches": {
+            "type": "integer",
+            "title": "Current Matches",
+            "default": 0
+          },
+          "current_missing": {
+            "type": "integer",
+            "title": "Current Missing",
+            "default": 0
+          },
+          "self_matches_excluded": {
+            "type": "integer",
+            "title": "Self Matches Excluded",
+            "default": 0
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "title": "StudyCoverage"
+      },
+      "StudyDiff": {
+        "properties": {
+          "previous_run_id": {
             "anyOf": [
               {
                 "type": "string"
@@ -5662,7 +2358,473 @@
                 "type": "null"
               }
             ],
-            "title": "Value"
+            "title": "Previous Run Id"
+          },
+          "previous_as_of": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Previous As Of"
+          },
+          "added": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Added"
+          },
+          "removed": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Removed"
+          },
+          "unavailable": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Unavailable"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "title": "StudyDiff"
+      },
+      "StudyDistribution": {
+        "properties": {
+          "count": {
+            "type": "integer",
+            "title": "Count",
+            "default": 0
+          },
+          "positive": {
+            "type": "integer",
+            "title": "Positive",
+            "default": 0
+          },
+          "negative": {
+            "type": "integer",
+            "title": "Negative",
+            "default": 0
+          },
+          "flat": {
+            "type": "integer",
+            "title": "Flat",
+            "default": 0
+          },
+          "positive_ratio_pct": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Positive Ratio Pct"
+          },
+          "mean_pct": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Mean Pct"
+          },
+          "median_pct": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Median Pct"
+          },
+          "p10_pct": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "P10 Pct"
+          },
+          "p90_pct": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "P90 Pct"
+          },
+          "min_pct": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Min Pct"
+          },
+          "max_pct": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Max Pct"
+          },
+          "bins": {
+            "items": {
+              "$ref": "#/components/schemas/StudyBin"
+            },
+            "type": "array",
+            "title": "Bins"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "title": "StudyDistribution"
+      },
+      "StudyEvent": {
+        "properties": {
+          "event_id": {
+            "type": "string",
+            "title": "Event Id"
+          },
+          "symbol": {
+            "type": "string",
+            "title": "Symbol"
+          },
+          "name": {
+            "type": "string",
+            "title": "Name"
+          },
+          "event_date": {
+            "type": "string",
+            "format": "date",
+            "title": "Event Date"
+          },
+          "event_close": {
+            "type": "number",
+            "title": "Event Close"
+          },
+          "forward_date": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Forward Date"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "complete",
+              "pending",
+              "missing"
+            ],
+            "title": "Status"
+          },
+          "return_pct": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Return Pct"
+          },
+          "max_return_pct": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Max Return Pct"
+          },
+          "min_return_pct": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Min Return Pct"
+          },
+          "values": {
+            "additionalProperties": {
+              "anyOf": [
+                {
+                  "type": "number"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "type": "object",
+            "title": "Values"
+          },
+          "lower_bounds": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Lower Bounds"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "event_id",
+          "symbol",
+          "name",
+          "event_date",
+          "event_close",
+          "status",
+          "values"
+        ],
+        "title": "StudyEvent"
+      },
+      "StudyEventPage": {
+        "properties": {
+          "run_id": {
+            "type": "string",
+            "title": "Run Id"
+          },
+          "total": {
+            "type": "integer",
+            "title": "Total"
+          },
+          "offset": {
+            "type": "integer",
+            "title": "Offset"
+          },
+          "limit": {
+            "type": "integer",
+            "title": "Limit"
+          },
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/StudyEvent"
+            },
+            "type": "array",
+            "title": "Items"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "run_id",
+          "total",
+          "offset",
+          "limit",
+          "items"
+        ],
+        "title": "StudyEventPage"
+      },
+      "StudyEvidence": {
+        "properties": {
+          "run_id": {
+            "type": "string",
+            "title": "Run Id"
+          },
+          "symbol": {
+            "type": "string",
+            "title": "Symbol"
+          },
+          "name": {
+            "type": "string",
+            "title": "Name"
+          },
+          "event_date": {
+            "type": "string",
+            "format": "date",
+            "title": "Event Date"
+          },
+          "source": {
+            "type": "string",
+            "title": "Source"
+          },
+          "bars": {
+            "items": {
+              "$ref": "#/components/schemas/StudyBar"
+            },
+            "type": "array",
+            "title": "Bars"
+          },
+          "reference_bars": {
+            "items": {
+              "$ref": "#/components/schemas/StudyBar"
+            },
+            "type": "array",
+            "title": "Reference Bars"
+          },
+          "reference_source": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reference Source"
+          },
+          "conditions": {
+            "items": {
+              "$ref": "#/components/schemas/StudyCheck"
+            },
+            "type": "array",
+            "title": "Conditions"
+          },
+          "outcome": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/StudyEvent"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "warnings": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Warnings"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "run_id",
+          "symbol",
+          "name",
+          "event_date",
+          "source",
+          "bars",
+          "conditions"
+        ],
+        "title": "StudyEvidence"
+      },
+      "StudyMatch": {
+        "properties": {
+          "symbol": {
+            "type": "string",
+            "title": "Symbol"
+          },
+          "name": {
+            "type": "string",
+            "title": "Name"
+          },
+          "date": {
+            "type": "string",
+            "format": "date",
+            "title": "Date"
+          },
+          "close": {
+            "type": "number",
+            "title": "Close"
+          },
+          "change_pct": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Change Pct"
+          },
+          "values": {
+            "additionalProperties": {
+              "anyOf": [
+                {
+                  "type": "number"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "type": "object",
+            "title": "Values"
+          },
+          "lower_bounds": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Lower Bounds"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "symbol",
+          "name",
+          "date",
+          "close",
+          "values"
+        ],
+        "title": "StudyMatch"
+      },
+      "StudyQuery": {
+        "properties": {
+          "title": {
+            "type": "string",
+            "maxLength": 120,
+            "minLength": 1,
+            "title": "Title",
+            "default": "\u65e5\u7ebf\u7814\u7a76"
+          },
+          "universe": {
+            "type": "string",
+            "enum": [
+              "all",
+              "personal",
+              "codes"
+            ],
+            "title": "Universe",
+            "default": "codes"
           },
           "codes": {
             "items": {
@@ -5672,7 +2834,194 @@
             "maxItems": 10000,
             "title": "Codes"
           },
-          "group": {
+          "lookback_days": {
+            "type": "integer",
+            "maximum": 1260.0,
+            "minimum": 5.0,
+            "title": "Lookback Days",
+            "default": 120
+          },
+          "as_of": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "As Of"
+          },
+          "forward_days": {
+            "type": "integer",
+            "maximum": 60.0,
+            "minimum": 1.0,
+            "title": "Forward Days",
+            "default": 5
+          },
+          "sample_policy": {
+            "type": "string",
+            "enum": [
+              "first",
+              "every",
+              "non_overlapping"
+            ],
+            "title": "Sample Policy",
+            "default": "first"
+          },
+          "conditions": {
+            "items": {
+              "$ref": "#/components/schemas/StudyCondition"
+            },
+            "type": "array",
+            "maxItems": 12,
+            "minItems": 1,
+            "title": "Conditions"
+          },
+          "reference": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/StudyReference"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "conditions"
+        ],
+        "title": "StudyQuery"
+      },
+      "StudyReference": {
+        "properties": {
+          "symbol": {
+            "type": "string",
+            "title": "Symbol"
+          },
+          "as_of": {
+            "type": "string",
+            "format": "date",
+            "title": "As Of"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "symbol",
+          "as_of"
+        ],
+        "title": "StudyReference"
+      },
+      "StudyRefreshRequest": {
+        "properties": {
+          "universe": {
+            "type": "string",
+            "enum": [
+              "all",
+              "personal",
+              "codes"
+            ],
+            "title": "Universe"
+          },
+          "codes": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "maxItems": 10000,
+            "title": "Codes"
+          },
+          "days": {
+            "type": "integer",
+            "maximum": 1500.0,
+            "minimum": 180.0,
+            "title": "Days",
+            "default": 360
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "universe"
+        ],
+        "title": "StudyRefreshRequest"
+      },
+      "StudyResult": {
+        "properties": {
+          "study_id": {
+            "type": "string",
+            "title": "Study Id"
+          },
+          "run_id": {
+            "type": "string",
+            "title": "Run Id"
+          },
+          "query": {
+            "$ref": "#/components/schemas/StudyQuery"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Created At"
+          },
+          "as_of": {
+            "type": "string",
+            "format": "date",
+            "title": "As Of"
+          },
+          "start_date": {
+            "type": "string",
+            "format": "date",
+            "title": "Start Date"
+          },
+          "universe_note": {
+            "type": "string",
+            "title": "Universe Note"
+          },
+          "coverage": {
+            "$ref": "#/components/schemas/StudyCoverage"
+          },
+          "distribution": {
+            "$ref": "#/components/schemas/StudyDistribution"
+          },
+          "current_matches": {
+            "items": {
+              "$ref": "#/components/schemas/StudyMatch"
+            },
+            "type": "array",
+            "title": "Current Matches"
+          },
+          "events": {
+            "items": {
+              "$ref": "#/components/schemas/StudyEvent"
+            },
+            "type": "array",
+            "title": "Events"
+          },
+          "events_total": {
+            "type": "integer",
+            "title": "Events Total"
+          },
+          "unavailable_symbols": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Unavailable Symbols"
+          },
+          "reference_bars": {
+            "items": {
+              "$ref": "#/components/schemas/StudyBar"
+            },
+            "type": "array",
+            "title": "Reference Bars"
+          },
+          "reference_source": {
             "anyOf": [
               {
                 "type": "string"
@@ -5681,12 +3030,633 @@
                 "type": "null"
               }
             ],
-            "title": "Group"
+            "title": "Reference Source"
+          },
+          "diff": {
+            "$ref": "#/components/schemas/StudyDiff"
+          },
+          "warnings": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Warnings"
           }
         },
         "additionalProperties": false,
         "type": "object",
-        "title": "UniverseSpec"
+        "required": [
+          "study_id",
+          "run_id",
+          "query",
+          "created_at",
+          "as_of",
+          "start_date",
+          "universe_note",
+          "coverage",
+          "distribution",
+          "current_matches",
+          "events",
+          "events_total"
+        ],
+        "title": "StudyResult"
+      },
+      "StudySummary": {
+        "properties": {
+          "study_id": {
+            "type": "string",
+            "title": "Study Id"
+          },
+          "title": {
+            "type": "string",
+            "title": "Title"
+          },
+          "query": {
+            "$ref": "#/components/schemas/StudyQuery"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Created At"
+          },
+          "last_run_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Last Run At"
+          },
+          "last_run_id": {
+            "type": "string",
+            "title": "Last Run Id"
+          },
+          "as_of": {
+            "type": "string",
+            "format": "date",
+            "title": "As Of"
+          },
+          "current_count": {
+            "type": "integer",
+            "title": "Current Count"
+          },
+          "event_count": {
+            "type": "integer",
+            "title": "Event Count"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "study_id",
+          "title",
+          "query",
+          "created_at",
+          "last_run_at",
+          "last_run_id",
+          "as_of",
+          "current_count",
+          "event_count"
+        ],
+        "title": "StudySummary"
+      },
+      "TrendIndustry": {
+        "properties": {
+          "name": {
+            "type": "string",
+            "title": "Name"
+          },
+          "total": {
+            "type": "integer",
+            "title": "Total"
+          },
+          "available": {
+            "type": "integer",
+            "title": "Available"
+          },
+          "up": {
+            "type": "integer",
+            "title": "Up"
+          },
+          "down": {
+            "type": "integer",
+            "title": "Down"
+          },
+          "flat": {
+            "type": "integer",
+            "title": "Flat"
+          },
+          "median_return": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Median Return"
+          },
+          "median_position": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Median Position"
+          }
+        },
+        "type": "object",
+        "required": [
+          "name",
+          "total",
+          "available",
+          "up",
+          "down",
+          "flat",
+          "median_return",
+          "median_position"
+        ],
+        "title": "TrendIndustry"
+      },
+      "TrendMapQuery": {
+        "properties": {
+          "universe": {
+            "type": "string",
+            "enum": [
+              "all",
+              "personal",
+              "codes"
+            ],
+            "title": "Universe",
+            "default": "all"
+          },
+          "codes": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "maxItems": 10000,
+            "title": "Codes"
+          },
+          "as_of": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "As Of"
+          },
+          "position_window": {
+            "type": "integer",
+            "maximum": 360.0,
+            "minimum": 2.0,
+            "title": "Position Window",
+            "default": 180
+          },
+          "momentum_window": {
+            "type": "integer",
+            "maximum": 120.0,
+            "minimum": 2.0,
+            "title": "Momentum Window",
+            "default": 20
+          },
+          "trail_days": {
+            "type": "integer",
+            "maximum": 20.0,
+            "minimum": 0.0,
+            "title": "Trail Days",
+            "default": 5
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "title": "TrendMapQuery"
+      },
+      "TrendMapRow": {
+        "properties": {
+          "symbol": {
+            "type": "string",
+            "title": "Symbol"
+          },
+          "name": {
+            "type": "string",
+            "title": "Name"
+          },
+          "industry": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Industry"
+          },
+          "available": {
+            "type": "boolean",
+            "title": "Available",
+            "default": false
+          },
+          "reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reason"
+          },
+          "data_cutoff": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Data Cutoff"
+          },
+          "close": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Close"
+          },
+          "change_pct": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Change Pct"
+          },
+          "x": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "X"
+          },
+          "y": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Y"
+          },
+          "positions": {
+            "additionalProperties": {
+              "anyOf": [
+                {
+                  "type": "number"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "type": "object",
+            "title": "Positions"
+          },
+          "returns": {
+            "additionalProperties": {
+              "anyOf": [
+                {
+                  "type": "number"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "type": "object",
+            "title": "Returns"
+          },
+          "trail": {
+            "items": {
+              "$ref": "#/components/schemas/TrendPoint"
+            },
+            "type": "array",
+            "title": "Trail"
+          },
+          "source": {
+            "type": "string",
+            "title": "Source",
+            "default": "local_cache"
+          }
+        },
+        "type": "object",
+        "required": [
+          "symbol",
+          "name"
+        ],
+        "title": "TrendMapRow"
+      },
+      "TrendMapSnapshot": {
+        "properties": {
+          "query": {
+            "$ref": "#/components/schemas/TrendMapQuery"
+          },
+          "as_of": {
+            "type": "string",
+            "format": "date",
+            "title": "As Of"
+          },
+          "total": {
+            "type": "integer",
+            "title": "Total"
+          },
+          "plotted": {
+            "type": "integer",
+            "title": "Plotted"
+          },
+          "missing": {
+            "type": "integer",
+            "title": "Missing"
+          },
+          "rows": {
+            "items": {
+              "$ref": "#/components/schemas/TrendMapRow"
+            },
+            "type": "array",
+            "title": "Rows"
+          },
+          "industries": {
+            "items": {
+              "$ref": "#/components/schemas/TrendIndustry"
+            },
+            "type": "array",
+            "title": "Industries"
+          },
+          "views": {
+            "items": {
+              "$ref": "#/components/schemas/TrendMapView"
+            },
+            "type": "array",
+            "title": "Views"
+          },
+          "warnings": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Warnings"
+          }
+        },
+        "type": "object",
+        "required": [
+          "query",
+          "as_of",
+          "total",
+          "plotted",
+          "missing",
+          "rows",
+          "industries",
+          "views"
+        ],
+        "title": "TrendMapSnapshot"
+      },
+      "TrendMapView": {
+        "properties": {
+          "position_window": {
+            "type": "integer",
+            "title": "Position Window"
+          },
+          "momentum_window": {
+            "type": "integer",
+            "title": "Momentum Window"
+          },
+          "plotted": {
+            "type": "integer",
+            "title": "Plotted"
+          },
+          "missing": {
+            "type": "integer",
+            "title": "Missing"
+          },
+          "industries": {
+            "items": {
+              "$ref": "#/components/schemas/TrendIndustry"
+            },
+            "type": "array",
+            "title": "Industries"
+          }
+        },
+        "type": "object",
+        "required": [
+          "position_window",
+          "momentum_window",
+          "plotted",
+          "missing",
+          "industries"
+        ],
+        "title": "TrendMapView"
+      },
+      "TrendPoint": {
+        "properties": {
+          "date": {
+            "type": "string",
+            "format": "date",
+            "title": "Date"
+          },
+          "x": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "X"
+          },
+          "y": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Y"
+          },
+          "positions": {
+            "additionalProperties": {
+              "anyOf": [
+                {
+                  "type": "number"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "type": "object",
+            "title": "Positions"
+          },
+          "returns": {
+            "additionalProperties": {
+              "anyOf": [
+                {
+                  "type": "number"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "type": "object",
+            "title": "Returns"
+          }
+        },
+        "type": "object",
+        "required": [
+          "date",
+          "x",
+          "y",
+          "positions",
+          "returns"
+        ],
+        "title": "TrendPoint"
+      },
+      "TrendStockQuery": {
+        "properties": {
+          "symbol": {
+            "type": "string",
+            "title": "Symbol"
+          },
+          "as_of": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "As Of"
+          },
+          "days": {
+            "type": "integer",
+            "maximum": 360.0,
+            "minimum": 20.0,
+            "title": "Days",
+            "default": 120
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "symbol"
+        ],
+        "title": "TrendStockQuery"
+      },
+      "TrendStockSnapshot": {
+        "properties": {
+          "symbol": {
+            "type": "string",
+            "title": "Symbol"
+          },
+          "name": {
+            "type": "string",
+            "title": "Name"
+          },
+          "as_of": {
+            "type": "string",
+            "format": "date",
+            "title": "As Of"
+          },
+          "source": {
+            "type": "string",
+            "title": "Source"
+          },
+          "industry": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Industry"
+          },
+          "bars": {
+            "items": {
+              "$ref": "#/components/schemas/StudyBar"
+            },
+            "type": "array",
+            "title": "Bars"
+          },
+          "positions": {
+            "additionalProperties": {
+              "anyOf": [
+                {
+                  "type": "number"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "type": "object",
+            "title": "Positions"
+          },
+          "returns": {
+            "additionalProperties": {
+              "anyOf": [
+                {
+                  "type": "number"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "type": "object",
+            "title": "Returns"
+          }
+        },
+        "type": "object",
+        "required": [
+          "symbol",
+          "name",
+          "as_of",
+          "source",
+          "industry",
+          "bars",
+          "positions",
+          "returns"
+        ],
+        "title": "TrendStockSnapshot"
       },
       "ValidationError": {
         "properties": {

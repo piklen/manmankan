@@ -1,4 +1,4 @@
-"""kan/data/tushare.py · TushareMetricsSource (daily_basic 截面) 接入测试 (地基-1)。
+"""kan/data/metrics.py · TushareMetricsSource (daily_basic 截面) 接入测试 (地基-1)。
 
 对齐 test_tushare_pro.py 的 _FakeSession mock _get_session + temp_env fixture pattern。
 """
@@ -7,7 +7,7 @@ from unittest.mock import MagicMock
 
 import pytest
 
-from kan.data import tushare
+from kan.data import metrics, tushare
 from kan.storage import config
 
 
@@ -32,17 +32,17 @@ class TestToMetricsDf:
     }
 
     def test_maps_ts_code_to_symbol(self):
-        df = tushare._to_metrics_df(self.SAMPLE)
+        df = metrics._to_tushare_metrics_df(self.SAMPLE)
         assert "symbol" in df.columns
         assert "ts_code" not in df.columns  # 原列已 drop
         assert set(df["symbol"]) == {"600519", "000001"}
 
     def test_empty_items_none(self):
-        assert tushare._to_metrics_df({"fields": ["ts_code"], "items": []}) is None
+        assert metrics._to_tushare_metrics_df({"fields": ["ts_code"], "items": []}) is None
 
     def test_missing_data_none(self):
-        assert tushare._to_metrics_df(None) is None
-        assert tushare._to_metrics_df({}) is None
+        assert metrics._to_tushare_metrics_df(None) is None
+        assert metrics._to_tushare_metrics_df({}) is None
 
 
 class TestToDailyBarsDf:
@@ -81,7 +81,7 @@ class TestFetchTushareMetrics:
 
     def test_no_token_returns_none(self, temp_env):
         """未配 token → 直接 None · 不发请求。"""
-        assert tushare._fetch_tushare_metrics("20260529") is None
+        assert metrics._fetch_tushare_metrics("20260529") is None
 
     def test_with_token_returns_df(self, temp_env, monkeypatch):
         config.save({**config.DEFAULT_CONFIG, "tushare_token": "tk"})
@@ -93,7 +93,7 @@ class TestFetchTushareMetrics:
             },
         }
         self._fake_session(monkeypatch, sample)
-        df = tushare._fetch_tushare_metrics("20260529")
+        df = metrics._fetch_tushare_metrics("20260529")
         assert df is not None
         assert "symbol" in df.columns
         assert df.iloc[0]["symbol"] == "600519"  # ts_code 后缀已 strip
@@ -110,7 +110,7 @@ class TestFetchTushareMetrics:
         }
         self._fake_session(monkeypatch, sample)
         # metrics 仍可拉 (不同熔断 key)
-        assert tushare._fetch_tushare_metrics("20260529") is not None
+        assert metrics._fetch_tushare_metrics("20260529") is not None
 
     def test_metrics_breaker_skips_when_down(self, temp_env, monkeypatch):
         from kan.infra import circuit_breaker
@@ -121,7 +121,7 @@ class TestFetchTushareMetrics:
             def post(self, *a, **kw):
                 raise AssertionError("熔断器没拦住 · 不该发请求")
         monkeypatch.setattr(tushare, "_get_session", lambda: _TrapSession())
-        assert tushare._fetch_tushare_metrics("20260529") is None
+        assert metrics._fetch_tushare_metrics("20260529") is None
 
     def test_api_failure_records_breaker(self, temp_env, monkeypatch):
         from kan.infra import circuit_breaker
@@ -131,13 +131,13 @@ class TestFetchTushareMetrics:
             def post(self, *a, **kw):
                 raise tushare.requests.exceptions.ConnectionError("boom")
         monkeypatch.setattr(tushare, "_get_session", lambda: _BoomSession())
-        tushare._fetch_tushare_metrics("20260529")
+        metrics._fetch_tushare_metrics("20260529")
         assert circuit_breaker.get_breaker().is_down("tushare_metrics")
 
 
 class TestTushareMetricsSource:
     def test_name_priority(self):
-        src = tushare.TushareMetricsSource()
+        src = metrics.TushareMetricsSource()
         assert src.name == "tushare_metrics"  # 独立熔断 key
         assert src.priority == 10
 
@@ -146,4 +146,4 @@ class TestTushareMetricsSource:
         monkeypatch.setattr(paths, "BASE_DIR", tmp_path)
         monkeypatch.setattr(config, "CONFIG_PATH", tmp_path / "config.json")
         monkeypatch.delenv("TUSHARE_TOKEN", raising=False)
-        assert tushare.TushareMetricsSource().is_available() is False
+        assert metrics.TushareMetricsSource().is_available() is False

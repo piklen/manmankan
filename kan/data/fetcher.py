@@ -173,6 +173,8 @@ def _normalize_kline(
             "数据源 %s K线含无法解析的数值 · 已置 NaN: %s%s", source, detail, sym_tag
         )
     df["_source"] = source
+    if "price_basis" not in df.attrs:
+        df.attrs.update(price_basis="provider_adjusted", price_basis_date=None)
 
     df = df.sort_values("date").reset_index(drop=True)
     df = df.dropna(subset=["date", "close"])
@@ -255,6 +257,11 @@ def _is_cache_fresh(path: Path, *, min_rows: int | None = None) -> bool:
     """
     if not path.exists():
         return False
+    try:
+        if _read_usable_cache(path) is None:
+            return False
+    except (OSError, ValueError):
+        return False
     if not _cache_has_min_rows(path, min_rows):
         debug_log(
             __name__,
@@ -334,12 +341,14 @@ def _finalize_kline_result(
         raise ValueError(f"无效股票代码或无数据: {result.symbol}")
     cache = _cache_path(result.symbol)
     df = _normalize_kline(result.data, source=result.source, symbol=result.symbol)
+    if df.empty:
+        raise ValueError(f"无有效行情，未覆盖原缓存: {result.symbol}")
     from kan.storage.paths import atomic_write_parquet
 
     atomic_write_parquet(
         df,
         cache,
-        metadata={"kan.requested_days": str(int(days))},
+        metadata={"kan.requested_days": str(int(days)), **_price_basis_metadata(df)},
     )
     return df
 
@@ -444,11 +453,12 @@ def _fetch_market_batch(
     on_progress_state: Callable[[FetchProgress], None] | None,
     lifecycle: OperationLifecycle | None,
     retain_frames: bool,
+    as_of: date | None = None,
 ) -> tuple[dict[str, pd.DataFrame], dict[str, str]]:
     """全市场高速路径：按交易日批量拉取，再并发物化逐股 parquet。
 
-    这是 `kan fetch --all` 的主路径。把约 5500 次逐股 HTTP 改为 `days` 次
-    全市场截面请求；批量源整体不可用时明确失败，不再静默退化到 5500 次
+    这是 `kan fetch --all` 的主路径。按日复用原始价格与因子缓存，
+    缺失日期才请求对应的两种截面；批量源整体不可用时明确失败，不退化到约 5500 次
     串行 Baostock。
     """
     import time
@@ -507,7 +517,7 @@ def _fetch_market_batch(
         try:
             _validate_symbol(symbol)
             cache = _cache_path(symbol)
-            if not force and _is_cache_fresh(cache, min_rows=days):
+            if as_of is None and not force and _is_cache_fresh(cache, min_rows=days):
                 finish(symbol, pd.read_parquet(cache), None)
                 continue
         except Exception as exc:
@@ -528,6 +538,7 @@ def _fetch_market_batch(
     try:
         panel = fetch_recent_daily_bars(
             days,
+            end_date=as_of.strftime("%Y%m%d") if as_of else None,
             symbols=pending_symbols,
             force=force,
             lifecycle=lifecycle,
@@ -600,7 +611,7 @@ def _fetch_market_batch(
             atomic_write_parquet(
                 frame,
                 _cache_path(symbol),
-                metadata={"kan.requested_days": str(int(days))},
+                metadata={"kan.requested_days": str(int(days)), **_price_basis_metadata(frame)},
             )
             return symbol, frame, None
         except Exception as exc:
@@ -653,6 +664,7 @@ def fetch_batch(
     lifecycle: OperationLifecycle | None = None,
     market_wide: bool = False,
     retain_frames: bool = True,
+    as_of: date | None = None,
 ) -> tuple[dict[str, pd.DataFrame], dict[str, str]]:
     """批量拉取 · 自适应提交窗口 + 可选 progress callback.
 
@@ -670,6 +682,8 @@ def fetch_batch(
     if not symbols:
         return {}, {}
 
+    if as_of is not None and not market_wide:
+        raise ValueError("as_of 仅用于全市场统一复权缓存")
     if market_wide:
         return _fetch_market_batch(
             symbols,
@@ -680,6 +694,7 @@ def fetch_batch(
             on_progress_state=on_progress_state,
             lifecycle=lifecycle,
             retain_frames=retain_frames,
+            as_of=as_of,
         )
 
     initial_workers, worker_cap = resolve_batch_worker_bounds(max_workers)
@@ -789,14 +804,38 @@ def has_cache(symbol: str) -> bool:
     return _cache_path(symbol).exists()
 
 
+def _price_basis_metadata(frame: pd.DataFrame) -> dict[str, str]:
+    return {
+        "kan.price_basis": frame.attrs.get("price_basis", "provider_adjusted"),
+        "kan.price_basis_date": frame.attrs.get("price_basis_date") or "",
+    }
+
+
+def _read_usable_cache(path: Path) -> pd.DataFrame | None:
+    import pandas as pd
+    import pyarrow.parquet as pq
+
+    df = pd.read_parquet(path)
+    metadata = pq.read_metadata(path).metadata or {}
+    basis = metadata.get(b"kan.price_basis", b"provider_adjusted").decode()
+    basis_date = metadata.get(b"kan.price_basis_date", b"").decode() or None
+    from kan.data.ohlc_history import PRICE_BASIS
+
+    if ("_source" in df and df["_source"].isin(["tushare", "tushare_market_batch"]).any()
+            and (basis != PRICE_BASIS or basis_date is None)):
+        return None
+    df.attrs.update(price_basis=basis, price_basis_date=basis_date)
+    return df
+
+
 def get_cached(symbol: str) -> pd.DataFrame | None:
+    """读取可用行情；旧 TuShare qfq 缓存须用原价与因子重建，不原地删除。"""
     cache = _cache_path(symbol)
     if not cache.exists():
         return None
-    import pandas as pd
-
-    df = pd.read_parquet(cache)
-    # 兜底:用户自定义源 / 手工写入的 parquet 可能缺 volume/amount · 补 NaN 防下游 KeyError
+    df = _read_usable_cache(cache)
+    if df is None:
+        return None
     for col in ["volume", "amount"]:
         if col not in df.columns:
             df[col] = float("nan")

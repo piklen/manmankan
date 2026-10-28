@@ -1,97 +1,135 @@
-"""kan.data.kline_snapshot · 全市场 K 线预计算快照测试。"""
-
+"""全市场序列使用原始日线与因子；派生快照沿用同一复权基准。"""
 from __future__ import annotations
 
 import os
-import threading
-import time
-from datetime import date, datetime, timedelta
+from datetime import date, datetime
 
 import pandas as pd
 import pytest
 
-from kan.data import kline_snapshot
-from kan.infra.lifecycle import (
-    CollectingReporter,
-    LifecycleKind,
-    OperationState,
-    operation,
-)
+from kan.data import kline_snapshot, ohlc_history
+from kan.infra.lifecycle import CollectingReporter, LifecycleKind, OperationState, operation
 
 
 def _daily(d: date, close: float) -> pd.DataFrame:
     return pd.DataFrame([{
-        "symbol": "600519",
-        "date": d,
-        "open": close - 1,
-        "high": close + 1,
-        "low": close - 2,
-        "close": close,
-        "volume": 1000,
-        "amount": 10000,
+        "symbol": "600519", "date": d, "open": close - 1,
+        "high": close + 1, "low": close - 2, "close": close,
+        "volume": 1000, "amount": 10000,
     }])
 
 
-def test_fetch_kline_snapshot_builds_position_gain_and_up_days(monkeypatch, tmp_path):
-    monkeypatch.setattr("kan.storage.paths.DATA_DIR", tmp_path)
+@pytest.fixture
+def raw_facts(monkeypatch, tmp_path):
+    """拆股跨日原始数据；所有读取和写入都在本轮临时目录。"""
+    days = [date(2026, 9, day) for day in range(1, 5)]
+    frames = {}
+    for day, close, factor in zip(days, [9.5, 10.0, 5.1, 5.2], [1.0, 1.0, 2.0, 2.0], strict=True):
+        td = day.strftime("%Y%m%d")
+        frame = pd.DataFrame([
+            {"ts_code": "600519.SH", "trade_date": td, "open": close - .1,
+             "high": close + .2, "low": close - .2, "close": close,
+             "pre_close": close, "pct_chg": 0.0, "vol": 1000., "amount": 10000., "adj_factor": factor},
+            {"ts_code": "000001.SZ", "trade_date": td, "open": 20.,
+             "high": 21., "low": 19., "close": 20.,
+             "pre_close": 20., "pct_chg": 0.0, "vol": 2000., "amount": 20000., "adj_factor": 1.},
+        ])
+        frames[td] = frame
+        frame.to_parquet(tmp_path / f"ohlc_facts_v1_{td}.parquet", index=False)
     monkeypatch.setattr(kline_snapshot, "DATA_DIR", tmp_path)
-    days = [date(2026, 5, 25) + timedelta(days=i) for i in range(6)]
-    monkeypatch.setattr(kline_snapshot, "_recent_trade_dates", lambda _end, _count: days)
-
-    def fake_daily(td, *, symbols=None, force=False, minimum_rows=None):
-        d = date.fromisoformat(f"{td[:4]}-{td[4:6]}-{td[6:]}")
-        idx = days.index(d)
-        return _daily(d, 100.0 + idx * 2)
-
-    monkeypatch.setattr(kline_snapshot, "fetch_daily_bars", fake_daily)
-    out = kline_snapshot.fetch_kline_snapshot("20260530", periods=[3, 5])
-    assert len(out) == 1
-    row = out.iloc[0]
-    assert row["symbol"] == "600519"
-    assert row["pos_3"] is not None
-    assert row["gain_3"] > 0
-    assert row["up_days"] == 6
+    monkeypatch.setattr(ohlc_history, "DATA_DIR", tmp_path)
+    monkeypatch.setattr(kline_snapshot, "ensure_dirs", lambda: None)
+    monkeypatch.setattr("kan.core.trading_calendar.get_trade_dates", lambda: days)
+    monkeypatch.setattr("kan.core.trading_calendar.latest_trade_date", lambda: days[-1])
+    monkeypatch.setattr(ohlc_history, "_query", lambda *_args: pytest.fail("测试不得访问外部数据源"))
+    return tmp_path, days, frames
 
 
-def test_fetch_kline_snapshot_reports_fetch_and_compute_progress(monkeypatch, tmp_path):
-    days = [date(2026, 5, 28), date(2026, 5, 29)]
-    monkeypatch.setattr(kline_snapshot, "DATA_DIR", tmp_path)
-    monkeypatch.setattr(kline_snapshot, "_recent_trade_dates", lambda _end, _count: days)
-    monkeypatch.setattr(
-        kline_snapshot,
-        "fetch_daily_bars",
-        lambda td, **_kw: _daily(datetime.strptime(td, "%Y%m%d").date(), 100.0),
+def test_split_adjusted_panel_and_snapshot_use_same_basis(raw_facts):
+    path, days, _frames = raw_facts
+    # 旧版派生值不得因日期相同而直接用于新计算，资产本身仍保留。
+    old_cache = path / "kline_snapshot_v2_20260904_3.parquet"
+    pd.DataFrame([{"symbol": "600519", "close": 999., "pos_3": 0.}]).to_parquet(old_cache)
+
+    panel = kline_snapshot.fetch_recent_daily_bars(4, end_date="20260904", symbols=["600519"])
+    assert list(panel.date) == days
+    assert list(panel.close) == pytest.approx([4.75, 5., 5.1, 5.2])
+    assert set(panel.symbol) == {"600519"}
+    assert panel.attrs["price_basis"] == "raw_adj_factor_v1"
+    assert panel.attrs["price_basis_date"] == "2026-09-04"
+
+    snapshot = kline_snapshot.fetch_kline_snapshot("20260904", symbols=["600519"], periods=[3])
+    row = snapshot.iloc[0]
+    assert row.close == pytest.approx(5.2)
+    assert row.pos_3 == pytest.approx(60.)
+    assert row.gain_3 == pytest.approx(9.47)
+    assert row.up_days == 4
+    assert old_cache.exists()
+
+
+def test_same_raw_facts_rebase_to_requested_cutoff(raw_facts):
+    _path, days, _frames = raw_facts
+    earlier = kline_snapshot.fetch_recent_daily_bars(2, end_date="20260902", symbols=["600519"])
+    later = kline_snapshot.fetch_recent_daily_bars(4, end_date="20260904", symbols=["600519"])
+
+    assert list(earlier.date) == days[:2]
+    assert list(earlier.close) == pytest.approx([9.5, 10.])
+    assert list(later.close.iloc[:2]) == pytest.approx(earlier.close * .5)
+    assert earlier.attrs["price_basis_date"] == "2026-09-02"
+    assert later.attrs["price_basis_date"] == "2026-09-04"
+
+
+def test_cache_reuse_and_explicit_refresh(raw_facts, monkeypatch):
+    path, days, frames = raw_facts
+    initial = kline_snapshot.fetch_kline_snapshot("20260904", symbols=["600519"], periods=[3])
+    # 缓存命中不需要重新获取原始日线。
+    for day in days:
+        (path / f"ohlc_facts_v1_{day:%Y%m%d}.parquet").unlink()
+    cached = kline_snapshot.fetch_kline_snapshot("20260904", symbols=["600519"], periods=[3])
+    pd.testing.assert_frame_equal(initial, cached)
+
+    calls = []
+    def query(api, params, fields):
+        calls.append((api, params["trade_date"]))
+        frame = frames[params["trade_date"]].copy()
+        if params["trade_date"] == "20260904":
+            frame.loc[0, ["open", "high", "low", "close"]] += .2
+        # 外部全市场接口的真实完整性门槛仍执行，不用测试开关绕过。
+        extra = pd.DataFrame([frame.iloc[1].to_dict()] * 2998)
+        extra["ts_code"] = [f"{700000 + i}.SH" for i in range(2998)]
+        return pd.concat([frame, extra], ignore_index=True)[fields.split(",")]
+    monkeypatch.setattr(ohlc_history, "_query", query)
+    refreshed = kline_snapshot.fetch_kline_snapshot(
+        "20260904", symbols=["600519"], periods=[3], force=True,
     )
+    assert refreshed.iloc[0].close == pytest.approx(5.4)
+    assert set(calls) == {(api, f"{day:%Y%m%d}") for day in days for api in ("daily", "adj_factor")}
+
+
+def test_recent_panel_progress_and_source_failure(raw_facts, monkeypatch):
+    path, days, _frames = raw_facts
+    progress = []
     reporter = CollectingReporter()
-
-    out = kline_snapshot.fetch_kline_snapshot(
-        "20260529", periods=[2], reporter=reporter
+    panel = kline_snapshot.fetch_recent_daily_bars(
+        4, end_date="20260904", symbols=["600519"], max_workers=2,
+        reporter=reporter,
+        on_progress=lambda done, total, day, rows: progress.append((done, total, day, rows)),
     )
-
-    assert len(out) == 1
-    progress = [event for event in reporter.events if event.kind is LifecycleKind.PROGRESS]
-    assert any((event.completed, event.total) == (2, 2) for event in progress)
-    assert any(event.message == "计算 K 线快照" for event in progress)
+    assert len(panel) == 4
+    assert {event[2] for event in progress} == set(days)
+    assert progress[-1][:2] == (4, 4)
     assert reporter.events[-1].state is OperationState.SUCCEEDED
 
-
-def test_fetch_kline_snapshot_cache_hit_skips_remote_progress(monkeypatch, tmp_path):
-    cached = pd.DataFrame([{"symbol": "600519", "trade_date": date(2026, 5, 29)}])
-    monkeypatch.setattr(kline_snapshot, "DATA_DIR", tmp_path)
-    monkeypatch.setattr(kline_snapshot, "_cache_fresh", lambda *_a: True)
-    monkeypatch.setattr(kline_snapshot, "_load_cache", lambda _path: cached)
-    monkeypatch.setattr(
-        kline_snapshot,
-        "fetch_daily_bars",
-        lambda *_a, **_kw: (_ for _ in ()).throw(AssertionError("不应触发远端获取")),
-    )
-    reporter = CollectingReporter()
-
-    out = kline_snapshot.fetch_kline_snapshot("20260529", reporter=reporter)
-
-    assert out.equals(cached)
-    assert any(event.message == "命中 K 线快照缓存" for event in reporter.events)
-    assert all(event.kind is not LifecycleKind.PROGRESS for event in reporter.events)
+    # 原始事实缺失时，不回退到同日的旧 qfq 截面；明确传播真实数据源错误。
+    (path / "ohlc_facts_v1_20260903.parquet").unlink()
+    _daily(days[2], 999.).to_parquet(kline_snapshot._daily_cache_path("20260903"))
+    def fail(*_args):
+        raise kline_snapshot.TushareDataContractError("daily", "incomplete source")
+    monkeypatch.setattr(ohlc_history, "_query", fail)
+    failed = CollectingReporter()
+    with pytest.raises(kline_snapshot.TushareDataContractError, match="incomplete source"):
+        kline_snapshot.fetch_recent_daily_bars(4, end_date="20260904", reporter=failed)
+    assert failed.events[-1].state is OperationState.FAILED
 
 
 def test_build_snapshot_aggregates_symbol_failures(monkeypatch):
@@ -115,207 +153,6 @@ def test_build_snapshot_aggregates_symbol_failures(monkeypatch):
     degraded = [event for event in reporter.events if event.kind is LifecycleKind.DEGRADED]
     assert len(degraded) == 1
     assert degraded[0].details["failure_count"] == 1
-
-
-def test_fetch_recent_daily_bars_merges_recent_dates_and_filters_symbols(monkeypatch, tmp_path):
-    monkeypatch.setattr("kan.storage.paths.DATA_DIR", tmp_path)
-    monkeypatch.setattr(kline_snapshot, "DATA_DIR", tmp_path)
-    days = [date(2026, 5, 27) + timedelta(days=i) for i in range(3)]
-    monkeypatch.setattr(kline_snapshot, "_recent_trade_dates", lambda _end, _count: days)
-
-    def fake_daily(td, *, symbols=None, force=False, minimum_rows=None):
-        d = date.fromisoformat(f"{td[:4]}-{td[4:6]}-{td[6:]}")
-        return pd.DataFrame([
-            {
-                "symbol": "600519",
-                "date": d,
-                "open": 100.0,
-                "high": 102.0,
-                "low": 99.0,
-                "close": 101.0,
-                "volume": 1000,
-                "amount": 10000,
-            },
-            {
-                "symbol": "000001",
-                "date": d,
-                "open": 10.0,
-                "high": 11.0,
-                "low": 9.0,
-                "close": 10.5,
-                "volume": 2000,
-                "amount": 20000,
-            },
-        ])
-
-    monkeypatch.setattr(kline_snapshot, "fetch_daily_bars", fake_daily)
-    out = kline_snapshot.fetch_recent_daily_bars(3, end_date="20260529", symbols=["600519"])
-
-    assert len(out) == 3
-    assert set(out["symbol"]) == {"600519"}
-    assert list(out["date"]) == days
-
-
-def test_fetch_recent_daily_bars_reports_progress(monkeypatch, tmp_path):
-    """全市场日线 panel 拉取每个交易日完成后回调进度。"""
-    monkeypatch.setattr("kan.storage.paths.DATA_DIR", tmp_path)
-    monkeypatch.setattr(kline_snapshot, "DATA_DIR", tmp_path)
-    days = [date(2026, 5, 28), date(2026, 5, 29)]
-    monkeypatch.setattr(kline_snapshot, "_recent_trade_dates", lambda _end, _count: days)
-
-    def fake_daily(td, *, symbols=None, force=False, minimum_rows=None):
-        d = date.fromisoformat(f"{td[:4]}-{td[4:6]}-{td[6:]}")
-        return _daily(d, 100.0)
-
-    events: list[tuple[int, int, date, int]] = []
-    monkeypatch.setattr(kline_snapshot, "fetch_daily_bars", fake_daily)
-
-    out = kline_snapshot.fetch_recent_daily_bars(
-        2,
-        end_date="20260529",
-        symbols=["600519"],
-        on_progress=lambda done, total, day, rows: events.append((done, total, day, rows)),
-    )
-
-    assert len(out) == 2
-    assert events == [
-        (1, 2, date(2026, 5, 28), 1),
-        (2, 2, date(2026, 5, 29), 1),
-    ]
-
-
-def test_fetch_recent_daily_bars_parallelizes_large_history(monkeypatch, tmp_path):
-    """全市场长窗口按交易日并发，且输出仍按日期排序。"""
-    monkeypatch.setattr(kline_snapshot, "DATA_DIR", tmp_path)
-    days = [date(2026, 5, 1) + timedelta(days=i) for i in range(12)]
-    monkeypatch.setattr(kline_snapshot, "_recent_trade_dates", lambda _end, _count: days)
-    active = 0
-    peak = 0
-    lock = threading.Lock()
-
-    def fake_daily(td, **_kwargs):
-        nonlocal active, peak
-        with lock:
-            active += 1
-            peak = max(peak, active)
-        try:
-            time.sleep(0.02)
-            trade_day = datetime.strptime(td, "%Y%m%d").date()
-            return _daily(trade_day, 100.0)
-        finally:
-            with lock:
-                active -= 1
-
-    monkeypatch.setattr(kline_snapshot, "fetch_daily_bars", fake_daily)
-
-    out = kline_snapshot.fetch_recent_daily_bars(
-        len(days),
-        end_date="20260512",
-        symbols=["600519"],
-        max_workers=8,
-    )
-
-    assert 1 < peak <= 8
-    assert list(out["date"]) == days
-
-
-def test_fetch_recent_daily_bars_parallel_contract_failure_is_reported(
-    monkeypatch, tmp_path,
-):
-    """并发窗口中任一交易日契约异常必须让整批明确失败。"""
-    days = [date(2026, 5, 1) + timedelta(days=i) for i in range(8)]
-    monkeypatch.setattr(kline_snapshot, "DATA_DIR", tmp_path)
-    monkeypatch.setattr(kline_snapshot, "_recent_trade_dates", lambda _end, _count: days)
-
-    def fake_daily(td, **_kwargs):
-        if td == "20260503":
-            raise kline_snapshot.TushareDataContractError("stk_factor_pro", "incomplete")
-        return _daily(datetime.strptime(td, "%Y%m%d").date(), 100.0)
-
-    monkeypatch.setattr(kline_snapshot, "fetch_daily_bars", fake_daily)
-    reporter = CollectingReporter()
-
-    with pytest.raises(RuntimeError, match="数据契约校验失败"):
-        kline_snapshot.fetch_recent_daily_bars(
-            len(days),
-            end_date="20260508",
-            symbols=["600519"],
-            max_workers=4,
-            reporter=reporter,
-        )
-
-    degraded = [event for event in reporter.events if event.kind is LifecycleKind.DEGRADED]
-    assert degraded and degraded[-1].details["failure_count"] == 1
-
-
-def test_fetch_recent_daily_bars_reports_real_stage_events(monkeypatch, tmp_path):
-    days = [date(2026, 5, 28), date(2026, 5, 29)]
-    monkeypatch.setattr(kline_snapshot, "DATA_DIR", tmp_path)
-    monkeypatch.setattr(kline_snapshot, "_recent_trade_dates", lambda _end, _count: days)
-    monkeypatch.setattr(
-        kline_snapshot,
-        "fetch_daily_bars",
-        lambda td, **_kw: _daily(datetime.strptime(td, "%Y%m%d").date(), 100.0),
-    )
-    reporter = CollectingReporter()
-
-    out = kline_snapshot.fetch_recent_daily_bars(
-        2,
-        end_date="20260529",
-        symbols=["600519"],
-        reporter=reporter,
-    )
-
-    assert len(out) == 2
-    messages = [event.message for event in reporter.events]
-    assert messages == [
-        None,
-        "解析交易日历",
-        "交易日历就绪",
-        "获取每日截面",
-        "每日截面完成",
-        "获取每日截面",
-        "每日截面完成",
-        "合并每日截面",
-        "每日截面合并完成",
-        "排序日线面板",
-        "日线面板排序完成",
-        "过滤目标股票",
-        "目标股票过滤完成",
-        None,
-    ]
-    final_daily = reporter.events[6]
-    assert final_daily.kind is LifecycleKind.PROGRESS
-    assert (final_daily.completed, final_daily.total) == (2, 2)
-    assert final_daily.details["progress_unit"] == "个交易日"
-    assert final_daily.details["progress_detail"] == (
-        "2026-05-29 · 本日 1 只股票"
-    )
-    waiting_daily = reporter.events[5]
-    assert waiting_daily.kind is LifecycleKind.PROGRESS
-    assert (waiting_daily.completed, waiting_daily.total) == (1, 2)
-    assert waiting_daily.details["progress_unit"] == "个交易日"
-    assert waiting_daily.details["progress_detail"] == "正在获取 2026-05-29"
-    assert reporter.events[7].kind is LifecycleKind.PHASE
-    assert reporter.events[-1].state is OperationState.SUCCEEDED
-
-
-def test_fetch_recent_daily_bars_empty_day_fails_operation(monkeypatch):
-    trade_day = date(2026, 5, 29)
-    monkeypatch.setattr(kline_snapshot, "_recent_trade_dates", lambda _end, _count: [trade_day])
-    monkeypatch.setattr(kline_snapshot, "fetch_daily_bars", lambda *_a, **_kw: pd.DataFrame())
-    reporter = CollectingReporter()
-
-    with pytest.raises(RuntimeError, match="日线截面为空"):
-        kline_snapshot.fetch_recent_daily_bars(
-            1,
-            end_date="20260529",
-            reporter=reporter,
-        )
-
-    assert reporter.events[-2].kind is LifecycleKind.DEGRADED
-    assert reporter.events[-1].state is OperationState.FAILED
-    assert all(event.message != "每日截面完成" for event in reporter.events)
 
 
 def test_fetch_daily_bars_rejects_incomplete_cross_section_before_cache(
@@ -397,6 +234,7 @@ def test_daily_completeness_floor_scales_with_known_universe(monkeypatch):
 
 def test_daily_panel_freshness_uses_cross_section_cache_only(monkeypatch, tmp_path):
     monkeypatch.setattr(kline_snapshot, "DATA_DIR", tmp_path)
+    monkeypatch.setattr(ohlc_history, "DATA_DIR", tmp_path)
     monkeypatch.setattr("kan.core.trading_calendar.market_phase", lambda: "post")
     monkeypatch.setattr(
         "kan.data.fetcher.data_cutoff_date",
@@ -410,7 +248,7 @@ def test_daily_panel_freshness_uses_cross_section_cache_only(monkeypatch, tmp_pa
     panel = pd.concat([_daily(day, 100.0 + idx) for idx, day in enumerate(days)])
     timestamps = [1_780_000_000.0, 1_780_000_120.0]
     for day, timestamp in zip(days, timestamps, strict=True):
-        path = kline_snapshot._daily_cache_path(day.strftime("%Y%m%d"))
+        path = tmp_path / f"ohlc_facts_v1_{day:%Y%m%d}.parquet"
         panel[panel["date"] == day].to_parquet(path)
         os.utime(path, (timestamp, timestamp))
 
@@ -436,11 +274,12 @@ def test_daily_panel_freshness_uses_panel_cutoff_not_history_window_start(
 ):
     """历史窗口第一天不能被误当成整个股票池的最旧截止日。"""
     monkeypatch.setattr(kline_snapshot, "DATA_DIR", tmp_path)
+    monkeypatch.setattr(ohlc_history, "DATA_DIR", tmp_path)
     monkeypatch.setattr("kan.core.trading_calendar.market_phase", lambda: "post")
     days = [date(2026, 6, 5), date(2026, 7, 20)]
     panel = pd.concat([_daily(day, 100.0 + idx) for idx, day in enumerate(days)])
     for day in days:
-        kline_snapshot._daily_cache_path(day.strftime("%Y%m%d")).touch()
+        (tmp_path / f"ohlc_facts_v1_{day:%Y%m%d}.parquet").touch()
 
     freshness = kline_snapshot.daily_panel_freshness(
         panel,
@@ -459,6 +298,7 @@ def test_daily_panel_freshness_does_not_treat_suspension_as_market_lag(
     monkeypatch, tmp_path,
 ):
     monkeypatch.setattr(kline_snapshot, "DATA_DIR", tmp_path)
+    monkeypatch.setattr(ohlc_history, "DATA_DIR", tmp_path)
     monkeypatch.setattr("kan.core.trading_calendar.market_phase", lambda: "post")
     old_day = date(2026, 7, 17)
     latest_day = date(2026, 7, 20)
@@ -467,7 +307,7 @@ def test_daily_panel_freshness_does_not_treat_suspension_as_market_lag(
     suspended = _daily(old_day, 20.0).assign(symbol="000001")
     panel = pd.concat([active, suspended], ignore_index=True)
     for day in (old_day, latest_day):
-        kline_snapshot._daily_cache_path(day.strftime("%Y%m%d")).touch()
+        (tmp_path / f"ohlc_facts_v1_{day:%Y%m%d}.parquet").touch()
 
     freshness = kline_snapshot.daily_panel_freshness(
         panel,

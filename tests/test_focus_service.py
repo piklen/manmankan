@@ -182,22 +182,17 @@ def test_empty_focus_has_no_irrelevant_freshness_warning(focus_env, monkeypatch)
 
 def test_focus_api_roundtrip_and_input_validation(focus_env):
     client = TestClient(
-        create_app(session_token="focus-test"),
-        base_url="http://127.0.0.1",
+        create_app(session_token="focus-test"), base_url="http://127.0.0.1",
         headers={SESSION_HEADER_NAME: "focus-test", "X-Kan-Web": "1"},
     )
     assert client.post("/api/v1/focus", json={"symbol": "000001"}).status_code == 201
-    response = client.put("/api/v1/focus/000001/note", json={"note": "等待核对"})
+    response = client.put("/api/v1/candidate-lists/default/candidates/000001", json={"note":"等待核对", "status":"watch"})
     assert response.status_code == 200 and response.json()["note"] == "等待核对"
-    assert client.post("/api/v1/focus/000001/review").status_code == 200
     snapshot = client.get("/api/v1/focus").json()
-    assert snapshot["rows"][0]["reviewed"]
-    assert snapshot["rows"][0]["review_history"][0]["note"] == "等待核对"
+    assert snapshot["rows"][0]["note"] == "等待核对"
     assert client.post("/api/v1/focus", json={"symbol": "invalid"}).status_code == 400
-    assert client.put("/api/v1/focus/000001/note", json={"note": "字" * 2_001}).status_code == 422
-    schema = client.get("/api/v1/openapi.json").json()
-    assert "FocusSnapshot" in schema["components"]["schemas"]
-    assert "focus" in schema["components"]["schemas"]["MarketRefreshScope"]["enum"]
+    assert client.put("/api/v1/candidate-lists/default/candidates/000001", json={"note": "字" * 2_001}).status_code == 422
+
 
 
 @pytest.mark.parametrize(("hour", "cutoff"), [(14, "2026-10-28"), (16, "2026-10-29")])
@@ -274,17 +269,3 @@ def test_rejected_candidate_note_remains_accessible_for_watchlist_member(focus_e
     row = focus_service.build_focus_snapshot().rows[0]
     assert row.sources == ["watchlist"]
     assert row.note == "已排除理由" and row.candidates[0].status is CandidateStatus.REJECTED
-
-
-def test_review_api_checks_observed_hash(focus_env):
-    focus_service.add_focus("000001")
-    client = TestClient(
-        create_app(session_token="focus-test"), base_url="http://127.0.0.1",
-        headers={SESSION_HEADER_NAME: "focus-test", "X-Kan-Web": "1"},
-    )
-    seen = client.get("/api/v1/focus").json()["rows"][0]
-    response = client.post("/api/v1/focus/000001/review", json={"expected_data_hash": seen["data_hash"]})
-    assert response.status_code == 200
-    focus_env["000001"].loc[180, "close"] = 28.2
-    response = client.post("/api/v1/focus/000001/review", json={"expected_data_hash": seen["data_hash"]})
-    assert response.status_code == 400 and "行情已变化" in response.json()["detail"]["message"]

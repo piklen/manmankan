@@ -1,33 +1,24 @@
 """股东逐股双 endpoint 批量编排。"""
 from __future__ import annotations
 
-import pandas as pd
-
 from kan.data import shareholder
-from kan.data.provider_contracts import (
-    FetchFailure,
-    FetchFailureKind,
-    ProviderFetchResult,
-)
 from kan.infra.lifecycle import CollectingReporter, LifecycleKind, operation
 
 
 def test_shareholder_keeps_partial_endpoint_success(tmp_path, monkeypatch) -> None:
     monkeypatch.setattr(shareholder, "DATA_DIR", tmp_path)
     monkeypatch.setattr(shareholder, "ensure_dirs", lambda: None)
+    monkeypatch.setattr("kan.data.tushare._resolve_config", lambda: ("test-token", "https://example.invalid"))
 
-    def fetch(_symbol: str, *, api_name: str, **_kwargs):
+    def fetch(*, api_name: str, **_kwargs):
         if api_name == "stk_holdernumber":
-            return ProviderFetchResult.succeeded(pd.DataFrame([
-                {"end_date": "20260331", "holder_num": 1000},
-                {"end_date": "20251231", "holder_num": 1200},
-            ]))
-        return ProviderFetchResult.failed(FetchFailure(
-            FetchFailureKind.EMPTY,
-            message="no top10 disclosure",
-        ))
+            return {
+                "fields": ["end_date", "holder_num"],
+                "items": [["20260331", 1000], ["20251231", 1200]],
+            }, None
+        return {"fields": [], "items": []}, None
 
-    monkeypatch.setattr(shareholder, "_fetch_tushare_table_detailed", fetch)
+    monkeypatch.setattr("kan.data.tushare._post_tushare_api", fetch)
     reporter = CollectingReporter()
 
     with operation("find", reporter=reporter) as lifecycle:

@@ -233,6 +233,7 @@ from kan.domain.board_review import (
     BoardReviewSectionSummary,
 )
 from kan.domain.focus import FocusPeriod, FocusReviewEntry, FocusRow, FocusSnapshot
+from kan.domain.market_study import StudyCondition, StudyQuery, StudyResult
 from kan.domain.research import ResearchBundle, ResearchRequest
 from kan.domain.screen import (
     CandidateList,
@@ -263,6 +264,14 @@ from kan.service.focus_service import (
     build_focus_snapshot,
     mark_focus_reviewed,
     update_focus_note,
+)
+from kan.service.market_study import (
+    get_study,
+    list_studies,
+    rerun_study,
+    run_study,
+    study_events,
+    study_evidence,
 )
 from kan.service.research_service import build_research_bundle
 from kan.service.screen_ai import (
@@ -343,6 +352,9 @@ __all__ = [
     "ScreenRun",
     "ScreenSpec",
     "StockSet",
+    "StudyCondition",
+    "StudyQuery",
+    "StudyResult",
     "ThemeConstituentSource",
     "ThemeSet",
     "WatchlistHoldingsSet",
@@ -361,6 +373,7 @@ __all__ = [
     "get_board_review",
     "get_run",
     "get_screen",
+    "get_study",
     "high",
     "kline_chain",
     "list_board_reviews",
@@ -368,6 +381,7 @@ __all__ = [
     "list_compare_sets",
     "list_runs",
     "list_screens",
+    "list_studies",
     "low",
     "mark_focus_reviewed",
     "parse_screen_text",
@@ -377,12 +391,16 @@ __all__ = [
     "register_kline_source",
     "register_theme_constituent_source",
     "remove_candidate",
+    "rerun_study",
     "run_screen",
+    "run_study",
     "save_compare_set",
     "save_screen",
     "scan",
     "screen_schema",
     "study_board_history",
+    "study_events",
+    "study_evidence",
     "theme_constituent_chain",
     "trend",
     "update_focus_note",

@@ -113,6 +113,10 @@ def test_api_all_lists_match_actual_exports():
         # 个人关注与连续观察 application service
         "FocusPeriod", "FocusReviewEntry", "FocusRow", "FocusSnapshot",
         "add_focus", "build_focus_snapshot", "mark_focus_reviewed", "update_focus_note",
+        # 用户明确日线条件与历史证据
+        "StudyCondition", "StudyQuery", "StudyResult",
+        "run_study", "list_studies", "get_study", "rerun_study",
+        "study_events", "study_evidence",
     }
     assert declared == expected, f"kan.api.__all__ 与预期 surface 不符: 多={declared-expected} · 少={expected-declared}"
 

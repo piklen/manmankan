@@ -1,38 +1,28 @@
-import { Navigate, Route, Routes } from "react-router-dom";
-import { FocusPage } from "./pages/FocusPage";
+import { Link, Route, Routes } from "react-router-dom";
 import { AppShell } from "./components/AppShell";
-import { CandidatesPage } from "./pages/CandidatesPage";
-import { BoardHistoryPage } from "./pages/BoardHistoryPage";
-import { ComparePage } from "./pages/ComparePage";
-import { DailyReviewPage } from "./pages/DailyReviewPage";
-import { MarketDataPage } from "./pages/MarketDataPage";
-import { PortfolioPage } from "./pages/PortfolioPage";
-import { ResearchPage } from "./pages/ResearchPage";
-import { ScreenWorkbench } from "./pages/ScreenWorkbench";
-import { SettingsPage } from "./pages/SettingsPage";
-import { TrendDiscoveryPage } from "./pages/TrendDiscoveryPage";
+import { StudyPage, SavedStudyPage } from "./pages/StudyPage";
+import { StudiesPage } from "./pages/StudiesPage";
+import { TrendMapPage } from "./pages/TrendMapPage";
+import { DataPage } from "./pages/DataPage";
 
 export default function App() {
   return (
     <Routes>
       <Route element={<AppShell />}>
-        <Route index element={<Navigate to="/focus" replace />} />
-        <Route path="focus" element={<FocusPage />} />
-        <Route path="trends" element={<TrendDiscoveryPage />} />
-        <Route path="history/board" element={<BoardHistoryPage />} />
-        <Route path="review" element={<DailyReviewPage />} />
-        <Route path="screen" element={<ScreenWorkbench />} />
-        <Route path="candidates" element={<CandidatesPage />} />
-        <Route path="compare" element={<ComparePage />} />
-        <Route path="research" element={<ResearchPage />} />
-        <Route path="research/:symbol" element={<ResearchPage />} />
-        <Route path="market" element={<MarketDataPage />} />
-        <Route path="portfolio" element={<PortfolioPage />} />
-        <Route path="settings" element={<SettingsPage />} />
-        <Route path="find" element={<Navigate to="/screen" replace />} />
-        <Route path="stock/:symbol" element={<ResearchPage />} />
-        <Route path="hold" element={<Navigate to="/portfolio" replace />} />
-        <Route path="*" element={<Navigate to="/focus" replace />} />
+        <Route index element={<TrendMapPage />} />
+        <Route path="studies/new" element={<StudyPage key="new" />} />
+        <Route path="studies" element={<StudiesPage />} />
+        <Route path="studies/:studyId" element={<SavedStudyPage />} />
+        <Route path="data" element={<DataPage />} />
+        <Route
+          path="*"
+          element={
+            <div className="standalone-empty">
+              <h1>这个页面不存在</h1>
+              <Link to="/">开始一项新研究</Link>
+            </div>
+          }
+        />
       </Route>
     </Routes>
   );

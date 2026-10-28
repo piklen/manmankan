@@ -8,7 +8,6 @@ JSON 保留完整匹配、覆盖率和逐日原始证据。
 
 ## Web / Screen 适配契约
 
-默认 React 工作台不再使用页面专属 `POST /api/find`，而是通过 `/api/v1` 提交严格 `ScreenSpec`，由 `screen_service` 翻译到同一个 find engine，并返回不可变 `ScreenRun`。旧 `/api/find` 只作为迁移期兼容路由保留，不进入 OpenAPI。
 
 Screen 条件清单仍从核心 `FILTER_SPECS` 生成，覆盖除独立“排除 ST”开关外的全部 27 类 filter，最多组合 12 条，支持 AND / OR、六种比较符和 2–360 日周期。全市场模式开放其中 23 类；ROE、股东户数、前十大流通集中度和北向持股比例需要逐股或报告期数据，只能用于其余股票池。Screen 额外提供版本、多键排序、结果字段、缺失策略、数据新鲜度、逐条件 evidence、运行哈希和相邻运行 diff。
 

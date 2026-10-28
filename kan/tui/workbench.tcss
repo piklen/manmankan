@@ -1,52 +1,23 @@
-Screen {
-    background: #151e25;
-    color: #e8efed;
-}
-#brand { height: 2; padding: 0 2; margin-top: 1; text-style: bold; color: #95d5bd; }
-#purpose { height: 1; padding: 0 2; color: #afbdc3; }
-#toolbar { height: 3; margin: 1 2 0 2; }
+Screen { background: #151e25; color: #e8efed; }
+#brand { height: 1; padding: 0 2; margin-top: 1; text-style: bold; color: #95d5bd; }
+#toolbar { height: 3; margin: 0 2; }
 #search { width: 1fr; margin-right: 1; border: tall #40515b; }
-#toolbar Button { min-width: 12; margin-left: 1; }
+#toolbar Button { min-width: 8; width: auto; margin-left: 1; padding: 0 1; }
 Button { background: #273741; border: tall #273741; color: #e8efed; }
-Button.-primary { background: #467866; border: tall #467866; color: #ffffff; }
-Button:focus { text-style: bold; border: tall #95d5bd; }
-#summary { height: 2; padding: 1 2 0 2; color: #e8efed; }
-#status { height: auto; min-height: 1; max-height: 3; padding: 0 2; color: #a6babf; margin-bottom: 1; }
-#focus-table { height: 1fr; margin: 0 2; background: #151e25; }
+Button.-primary { background: #467866; border: tall #467866; color: white; }
+Button:focus { border: tall #95d5bd; }
+#summary { height: auto; max-height: 3; margin: 1 2 0 2; color: #d3dfdf; }
+#status { height: auto; min-height: 1; max-height: 3; margin: 0 2 1 2; color: #a6babf; }
+#results { height: 1fr; margin: 0 2; background: #151e25; }
 DataTable > .datatable--header { background: #273741; color: #d3dfdf; text-style: bold; }
 DataTable > .datatable--even-row { background: #19242c; }
 DataTable > .datatable--odd-row { background: #151e25; }
-DataTable > .datatable--cursor { background: #365b50; color: #ffffff; }
-#empty { height: 1fr; padding: 3 3; color: #afbdc3; }
-#preview { height: auto; min-height: 4; max-height: 6; padding: 1 2 0 2; color: #cfddda; }
-#disclaimer { height: 1; padding: 0 2; color: #82979d; }
+DataTable > .datatable--cursor { background: #365b50; color: white; }
+#empty { height: 1fr; padding: 2; color: #afbdc3; }
+#detail { height: 1fr; margin: 0 2; }
+#detail-content { height: auto; }
+#preview { height: auto; max-height: 2; margin: 1 2 0 2; color: #cfddda; }
+#disclaimer { height: auto; max-height: 2; padding: 0 2; color: #82979d; }
 Footer { background: #25343d; color: #afbdc3; }
 Footer > .footer--key { background: #365b50; color: #e8efed; }
-ModalScreen { align: center middle; background: #080f17 75%; }
-.dialog { width: 86; max-width: 95%; height: auto; max-height: 95%; padding: 1 2; background: #1e2b34; border: round #668c7f; }
-.dialog-title { height: auto; margin-bottom: 1; text-style: bold; color: #b1e1ca; }
-.section-title { height: auto; margin-top: 1; margin-bottom: 1; text-style: bold; color: #b1cfc4; }
-.dialog-actions { height: 3; margin-top: 1; }
-.dialog-actions Button { margin-right: 1; }
-.muted { color: #a6babf; height: auto; }
 .error { color: #f2a2a5; }
-#add-symbol { margin-top: 1; }
-#add-error { height: auto; max-height: 3; }
-#help-copy { height: auto; }
-#help-dialog { height: 90%; }
-#help-scroll { height: 1fr; }
-#help-close { margin-top: 1; }
-#detail-dialog { height: 90%; width: 96; }
-#detail-evidence { height: 1fr; min-height: 5; }
-#detail-facts { height: auto; }
-#detail-periods { height: auto; }
-#detail-history { height: auto; color: #afbdc3; }
-#note-editor { height: 6; border: tall #40515b; background: #151e25; }
-#note-editor:focus { border: tall #95d5bd; }
-#note-status { height: auto; max-height: 3; color: #a6babf; }
-#detail-dialog.compact { height: 100%; max-height: 100%; padding: 0 1; }
-#detail-dialog.compact .dialog-title { margin-bottom: 0; }
-#detail-dialog.compact .section-title { margin: 0; }
-#detail-dialog.compact #detail-evidence { min-height: 4; }
-#detail-dialog.compact #note-editor { height: 4; }
-#detail-dialog.compact .dialog-actions { margin-top: 0; }

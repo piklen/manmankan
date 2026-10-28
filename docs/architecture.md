@@ -1,227 +1,47 @@
-# manmankan 当前架构与演进边界
+# 当前架构与开发原则
 
-> 当前实现 SOT · 2026-10-29。趋势发现与 Screen 领域细节见 [`selection-workbench.md`](selection-workbench.md)。
+## 产品主线
 
----
+慢慢看是 A 股趋势搜索与定位工具：发现分布与变化 → 多周期定位 → 明确研究范围与条件 → 核对当前匹配和历史事件。Web 呈现图形联动，TUI 提供键盘浏览，CLI/Python 供精确查询与编排。
 
-## 一、定位：一个 Python 事实核心，多种产品入口
+导航和内部对象不互相绑定。用户不需要先创建 Screen、候选池、对比组，再拼出一次研究。
 
-manmankan 以个人连续研究为产品主线，数据核心仍提供可复核事实。用户优先级是：
+## 一个计算核心
 
-1. **普通 A 股用户是第一用户**：Web 与 TUI 默认完成 Focus → 变化证据 → 笔记 → 复看历史；Board Trend / Screen / Compare 是扩展研究入口。
-2. **CLI / Python / HTTP / MCP 是同级适配器**：都执行同一个 Python application service，不复制筛选逻辑。
-3. **AI 是 typed contract 的消费者**：可以解析明确阈值、规划、运行和解释证据，不能成为指标或候选计算真相源。
+`kan/service/market_study.py` 提供交易日对齐、指标计算、条件判断、事件采样、后续实际分布和研究执行。`trend_map.py` 复用其中的 `prepare_history`、`calculate_metrics`、`resolve_market_calendar` 与股票池解析；地图框选只是把明确的坐标边界转换为研究条件。
 
-所有入口必须复用同一套 domain/service 事实，不得复制位置计算、数据新鲜度、排序、证据或持仓逻辑。
+Web 与 TUI 负责选择、显示和交互，不另算金融指标。常用周期的坐标、轨迹与行业分布一次返回，前端切换显示列；改变股票池、截止日或更新行情后才重新读取。
 
-```
-┌─────────────────────────────────────────────────────────┐
-│             Layer 3: 产品入口                              │
-│ React Web · Textual TUI · Typer CLI · kan.api · HTTP · MCP   │
-├─────────────────────────────────────────────────────────┤
-│                 ★ Layer 2: 数据中间层 ★                    │
-│                     manmankan 在这里                      │
-│ Focus · BoardTrend/Pulse · ScreenRun · 笔记 / 复看 / 证据     │
-├─────────────────────────────────────────────────────────┤
-│                 Layer 1: 数据基础设施                       │
-│  tushare / akshare / baostock / Wind / iFinD / ...       │
-│  裸数据  ·  字段多  ·  噪音大  ·  AI 直接消费成本高          │
-└─────────────────────────────────────────────────────────┘
-```
+HTTP 是薄适配器，Pydantic 在外部输入边界校验类型与范围；OpenAPI 生成前端类型。计算内部按已验证契约工作，不重复层层封装或吞错。上游价格、日期、缺失和复权口径仍是必须核对的数据边界。
 
-**为什么仍需要中间层？**
+## 研究状态
 
-原始数据源（tushare 等）的问题：
-- 字段多（几十个）、命名不一致,普通用户和 AI 都不应直接理解上游 schema
-- 没有"位置""共振"等语义概念——只有裸价格，没有坐标
-- 没有稳定的筛选和位置语义,每个出口都会重复实现
-- 没有一致的中性表达,Web、CLI 和 AI 出口容易产生不同口径
+- SQLite `workspace_state` 保存研究定义、轻量摘要和运行索引。
+- 每次运行目录保存命中对象的当次行情与完整事件 Parquet；页面分页读取事件，点击样本读取当次封存事实。
+- 形态参照同样保存，历史图证不会用新缓存替换旧数据。
+- 研究自动留存；显式更新至最新日期或按原日期复算都产生新运行。
+- 行情补数复用一套现有持久任务。全市场、个人池与代码池更新有明确范围，不通过第二套内存任务隐藏执行状态。
 
-manmankan 做的事：
-- 数据筛选 → 普通用户先看到少而关键的事实,机器调用也减少无关字段
-- 语义增强 → 加入"位置百分位""共振""板块资金排名"等可复核概念
-- 中性包装 → 输出自带 `disclaimer`,所有出口不带方向性结论
-- 多源聚合 → tushare/akshare/baostock 自动 fallback,上层不关心数据来自哪里
+## 事实边界
 
----
+地图所有点使用同一截止日。缺数据保留为缺口，不填零，不混入旧日期。历史条件只读取事件当时及之前的行情，后续窗口分为完整、尚未成熟和应有数据缺失；统计与分页展示分开。
 
-## 二、Source 模型：多市场扩展的架构基础
+当前上市股票名单和行业归属不是历史时点名单，回溯时明确这一限制。使用后来选取的参照形态搜索过去属于事后形态检索，不称为可交易回测。价格变化和分布不是成交收益。
 
-manmankan 的核心抽象是 **Source**（数据源适配器）——每个市场或数据类别是一个独立的 Source。
+当前使用已有日线提供方与缓存，不新增行情基础设施。TuShare 适配器遵守其请求响应语义，用户配置的服务端点与凭据只用于对应来源。
 
-```
-manmankan
-  │
-  ├── Source: ashare (当前实现)
-  │     ├── DataProvider: akshare (K线/行业/概念)
-  │     ├── DataProvider: tushare (PE/PB/资金流)
-  │     ├── DataProvider: baostock (K线备选)
-  │     └── DataProvider: TuShare Pro 优先 / AkShare THS + 东财 EM fallback (题材位置)
-  │
-  ├── Source: usstock (远期)
-  │     ├── DataProvider: yfinance
-  │     └── DataProvider: alpha_vantage
-  │
-  ├── Source: hkstock (远期)
-  │     └── DataProvider: akshare (港股)
-  │
-  └── Source: crypto (远期)
-        └── DataProvider: coingecko / cryptocompare
-```
+TuShare 单股与全市场共用原始日线加复权因子的计算，按同一截止因子物化完整窗口。缓存记录价格基准；缺少基准证据的旧 TuShare 缓存不可读，刷新后原子替换，不另建旧数据兼容计算。
 
-**设计原则**：
-- 每个 Source 实现统一接口：`fetch()` / `scan()` / `info()` / `find()`
-- Source 之间完全解耦——usstock 挂了不影响 ashare
-- 每个 Source 可以有多个 DataProvider，通过责任链 fallback
-- 新增市场 = 实现一个新 Source，不改核心逻辑
+## 不做历史兼容
 
-**当前状态**：A 股 K 线和截面指标已分别实现 `KlineSource` / `MetricsSource`
-Protocol、provider 注册与责任链；市场级 `Source` 聚合及多市场路由尚未实现，
-部分数据领域也仍直接调用具体 provider。后续扩展市场时应在现有领域 Protocol
-之上补市场级路由，不重复建设已经落地的 provider 抽象。
+开发直接落实当前产品目标与契约，不保留旧 API、协议、参数别名、模型或页面的兼容层；不为了旧测试的 monkeypatch 入口在生产中切换实现。新增数据模型无需为历史行为追加适配。
 
----
+删除旧实现不等于删除用户资产。自选、持仓、笔记、凭据和研究原始事实仍须保护；涉及无法恢复的数据销毁时另行确认。旧代码与旧行为可以从 Git 查阅，不继续进入活跃执行路径。
 
-## 三、产品出口设计
+## 开发与验证
 
-### 3.1 普通用户消费（React Web）
+先实现一条真实研究路径，验证最容易出错的计算与数据边界，再完成界面和安装。测试不固定数量，不限制模块必须多少行，不以硬覆盖率门槛逼迫编写实现镜像测试。
 
-- 默认入口是 `kan web`，生产由 Python 同源托管预构建 SPA，不要求用户安装 Node 或运行第二个服务。
-- 首页是个人关注：`FocusSnapshot` 合并自选、持仓和人工候选，只读取本地缓存；`workspace_state` 保存复看记录，候选领域继续保存笔记。数据口径见 [`focus-workspace.md`](focus-workspace.md)。
-- 发现与筛选保留趋势发现：行业/题材指数使用同一连续涨跌口径；选中板块后用 `BoardPulseSnapshot` 展示同一截止日的成员涨跌分布，再只把成分股池带入 Screen，不预置筛选条件。
-- “每日复看”把行业与题材 `BoardTrendSnapshot` 保存为不可变 `BoardDailyReview`，只比较连续天数、方向与数据可用性；相同 result hash 幂等返回已有记录。
-- 每日复看页复用已有 ScreenRun diff 与 CandidateList 备注，不复制规则执行器或候选领域，也不自动修改用户状态。
-- 成员 pulse 只描述上涨/下跌/平盘家数、中位涨跌和涨跌靠前成员；没有指数权重时不称“贡献”，没有公告/新闻证据时不称“因果”。
-- Screen 工作台继续负责保存/复制/版本化规则、运行、证据、历史与 diff；板块榜不建立第二套股票筛选器。
-- 候选、对比、个股研究、市场数据、持仓和设置是独立页面，但都消费 `/api/v1` typed model。
-- 开发期 TypeScript 类型从 OpenAPI 生成；React 不重算指标，也不直接访问 provider 或 SQLite。
-- 旧 Jinja 模板和手写业务 JavaScript 已经删除；旧 `/api` 只作为暂时兼容层隐藏于 OpenAPI。
+CI 保留三个实际任务：Linux 主环境一次类型/构建/功能回归/安装/TTY；macOS 与 Windows 各一次干净安装。发布复用同一安装检查脚本，不通过固定启动文案判定是否可用。
 
-### 3.2 终端消费(CLI)
-
-- `kan screen` 提供规则发现、保存、版本、恢复、执行与运行历史。
-- `kan find / scan / history` 等原命令继续兼容，适合一次性查询。
-- `--format json` 使用稳定 envelope，业务失败不泄漏 traceback。
-
-### 3.3 Python / HTTP 消费
-
-- `kan.api` 公开导出 Board Trend/Pulse/DailyReview、Screen 类型和 application service；用户脚本不需要 import 内部 storage/service。
-- FastAPI 只在 `/api/v1` 暴露 OpenAPI；`/boards/trends`、`/boards/{kind}/{value}/pulse`、`/board-reviews`、Screen 与其他资源都以 Pydantic 作为请求/响应 SOT，并生成 TypeScript 类型。
-- Web 写请求叠加本机会话、Host、Origin 和自定义 header 检查。
-
-### 3.4 AI / 脚本消费（JSON）
-
-所有数据查询命令（`scan` / `find` / `info` / `history` / `board rank` / `board trend` / `trend`）支持 `--format json`：
-
-```json
-{
-  "ok": true,
-  "schema_version": 1,
-  "rule": {"pos": {"180": "lt:10"}},
-  "results": [...],
-  "data_availability": {"pe": false, "moneyflow": true},
-  "stats": {"total": 23, "returned": 23},
-  "disclaimer": "..."
-}
-```
-
-**设计原则**：
-- 合法 JSON 是硬要求——AI 不应该需要 try/except 来消费 manmankan 输出
-- 错误用 `{"ok": false, "error": {"code": "...", "message": "...", "hint": "..."}}` 信封，不是裸 traceback
-- `data_availability` 告诉 AI 哪些字段可能缺失（如 PE），避免 AI 基于空数据做判断
-- `schema_version` 保证向后兼容——AI 可以根据版本号适配解析逻辑
-- 字段白名单 `--fields @core,@valuation` 让 AI 只要求需要的数据，节省 token
-
-### 3.5 Agent 消费（MCP + Skills.md）
-
-- **Skills.md**：`skills/manmankan-skill.md` 是给 AI Agent 的能力清单——Agent 读到就知道所有命令、参数和典型用法
-- **MCP Server**：`kan mcp serve` 提供 stdio；`kan mcp http` 提供本机 Streamable HTTP endpoint；`kan mcp install` 负责注册客户端。
-- **Screen tools**：`kan_screen_parse / plan / run / get / explain` 直接调用 Python service，不 shell 到 CLI，也不允许任意 SQL/Pandas。
-- **退出码语义**：0=成功，非 0=具体错误类别，Agent 不需要解析 stderr
-
----
-
-## 四、数据管道
-
-```
-用户入口 (React Web / CLI / Python / HTTP / MCP)
-       │
-       ▼
-┌──────────────────┐
-│  入口适配层         │  FastAPI / typer / MCP · 参数校验
-└────────┬─────────┘
-         │
-         ▼
-┌──────────────────┐
-│  服务层 (Service) │  板块趋势/成员结构 · Screen · 证据 · diff · 任务
-└────────┬─────────┘
-         │
-         ▼
-┌──────────────────┐
-│ 数据/状态层        │  provider 责任链 + Parquet · SQLite WAL repository
-└────────┬─────────┘
-         │
-         ▼
-┌──────────────────┐
-│  适配输出          │  React JSON / 终端 / JSON / Markdown / MCP
-└──────────────────┘
-```
-
-**关键设计决策**：
-
-- **领域层**（`kan/domain/`）定义严格 `BoardTrendQuery / BoardTrendSnapshot / BoardPulseQuery / BoardPulseSnapshot / BoardDailyReview / ScreenSpec / ScreenRun / CandidateList / CompareSet / WorkspaceJob`，未知字段 fail-fast。
-- **入口适配层**（`kan/web/`、`kan/cli/`、`kan/mcp/`、`kan/api.py`）只做交互、参数校验和序列化，不复制业务计算。
-- **服务层**（`kan/service/`）承载板块趋势加载/过滤/排序以及 Screen 编排、证据、diff、AI plan 和任务，核心逻辑不与 FastAPI、Typer、React 或 MCP 耦合。
-- **数据层**（`kan/data/`）使用责任链模式——依次尝试多个 DataProvider，第一个成功即返回
-- **TuShare 兼容边界**:公开适配器只实现官方 TuShare 的请求与响应语义；用户配置的替代 endpoint 必须可替换地兼容该契约。仓库不加入某个中转服务专属的默认行数、分页或扩展字段逻辑；全市场响应会在缓存前做中立完整性校验，偏差作为数据契约错误暴露
-- **缓存层**（`kan/infra/`）基于 XDG 规范，增量更新策略
-- **状态层**（`kan/storage/workspace_db.py`）用 SQLite WAL 保存版本化/关系状态；配置、自选和持仓由可回滚 facade 接管；行情不迁入 SQLite。
-- **持久任务**：ScreenRun 和默认池/全市场刷新共用 `WorkspaceJob` 与 SSE；启动恢复把遗留运行态标为 `interrupted`。
-- **快照隔离**:CLI diff/history 与 Web 每日概览使用独立命名空间;Web 只在全部候选到达正常交易日时按行情截止日写入版本化快照
-- **本地 Web 安全边界**:只监听回环地址;每次启动签发随机会话,页面导航保留会话参数、API 使用会话请求头、SSE 使用会话参数;写请求继续叠加 Host / Origin / 自定义头检查
-- **渲染层**（`kan/render/`）终端和 JSON 走不同 code path，互不污染
-
----
-
-## 五、演进路线
-
-当前演进围绕个人连续研究建立 Web/TUI/CLI/AI 共用事实工具，保留 Python 模块化单体、SQLite 与 Parquet；Web 与 TUI 提供关注、观察和复看交互。没有已测语言或进程边界瓶颈时，不重写数据源适配器、不拆新的 AI/Data HTTP 服务。跨入口直接复用 service，避免终端输出解析成为新的业务层。
-
-`ResearchRequest → ResearchBundle` 已贯通终端、Python 和 MCP：各维度独立取数，逐项组织来源、数据日、单位和可引用事实。财务复用现有逐股 Parquet 缓存，24小时后按查询刷新，也支持 `--refresh`；报告期、公告日与来源检查时间分别保留。没有后台调度或第二套数据服务。详见 [`research.md`](research.md)。它不包含内置 LLM，历史复权一致性仍待修复。
-
-后续数据建设由“个股研究、规则复看、事件解释”中的实际缺口驱动：先补原始证据与时间口径，再扩展领域服务，最后让可选 AI 会话调用工具并引用结果。研究问答、结构化结论、持续观察可以共用这些材料；模型推断与程序计算分别保存。公告、财报正文的检索需求得到验证后再选择索引方案。
-
-下方多市场路线是后置候选，当前不优先于 A 股研究证据与数据质量。
-
-```
-现在                         近期                   中期                    远期
-┌─────────────────┐    ┌─────────────────┐    ┌──────────────────┐    ┌──────────────────┐
-│ Screen 工作台    │    │ 真实用户复看验证│    │ + 市场级 Source  │    │ 多市场支持       │
-│ React + /api/v1  │ →  │ 规则模板导入导出│ →  │ + 首个非A股Source│ →  │ 社区数据源生态   │
-│ CLI/Python/MCP   │    │ 证据回放能力增强│    │ + point-in-time  │    │ 开放数据标准     │
-│ SQLite 持久状态  │    │ 契约兼容维护    │    │   数据边界       │    │                  │
-│ Parquet 行情缓存 │    │                  │    │                  │    │                  │
-└─────────────────┘    └─────────────────┘    └──────────────────┘    └──────────────────┘
-```
-
-详见 [`docs/roadmap.md`](roadmap.md)。
-
----
-
-## 六、设计原则
-
-1. **数据原值优先**：manmankan 输出裸数据而非判断。位置百分位是原值，"低位"是 AI 自己的解读。唯一例外是公开阈值的分类标签（如 <20%=低位区），且阈值透明可查。
-
-2. **优雅降级**：一个数据源挂了 → 其余字段照常返回 + 失败的标为 `null`。全有或全无是不可接受的。
-
-3. **渐进披露**：普通用户默认只看关键事实,完整周期和高级参数按需展开；AI 默认输出不超过上下文窗口的合理比例。
-
-4. **本地优先**：零云依赖、零遥测；工作台关系状态使用 SQLite WAL，行情与截面缓存使用 Parquet，原 JSON 状态有可验证备份和回滚。普通用户无需 manmankan 账号。
-
-5. **合规红线硬编码**：输出不含"推荐""看好""低估""目标价"等词。免责声明自动注入，不由命令调用者选择。
-
-6. **开放生态**：manmankan 是开放协议的一部分——任何 LLM 都可以消费，不被特定 AI 厂商锁定。MCP 是开放标准，Skills.md 是开放格式。
-
----
-
-*最后更新：2026-08-23 · 与 `README.md` / `selection-workbench.md` / `roadmap.md` / `compliance.md` 互为补充*
+仅在真实性能问题出现时建立可比测量并 profile。优化命中的重复构造或数据搬运，不预先加入缓存、服务、重试或平台。当前地图与研究保留 Python 模块化单体、SQLite 和 Parquet。
