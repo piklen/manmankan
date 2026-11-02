@@ -37,9 +37,10 @@ def browse_trends(
     codes: Annotated[list[str] | None, Query()] = None,
     industries: Annotated[list[str] | None, Query()] = None,
     as_of: date | None = None,
+    compare_to: Literal["previous_session"] | date | None = None,
 ) -> TrendSearchResult:
     try:
-        return search_trends(TrendSearchQuery(universe=universe, codes=codes or [], industries=industries or [], as_of=as_of))
+        return search_trends(TrendSearchQuery(universe=universe, codes=codes or [], industries=industries or [], as_of=as_of, compare_to=compare_to))
     except ValueError as exc:
         raise HTTPException(status_code=422, detail={"code": "invalid_query", "message": str(exc)}) from exc
 
@@ -47,7 +48,7 @@ def browse_trends(
 @router.post("/search/evidence", response_model=TrendSearchEvidence)
 def search_evidence(request: TrendSearchEvidenceRequest) -> TrendSearchEvidence:
     try:
-        return trend_search_evidence(request.query, request.symbol)
+        return trend_search_evidence(request.query, request.symbol, request.at)
     except ValueError as exc:
         raise HTTPException(status_code=422, detail={"code": "data_unavailable", "message": str(exc)}) from exc
 

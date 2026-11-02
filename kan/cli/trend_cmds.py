@@ -36,6 +36,7 @@ def trend(
     codes: Annotated[str | None, typer.Option("--codes", help="逗号分隔股票代码；即明确选择代码范围")] = None,
     industry: Annotated[list[str] | None, typer.Option("--industry", help="在所选范围内按行业过滤，可重复")] = None,
     as_of: Annotated[str | None, typer.Option("--as-of", help="完整收盘日 YYYY-MM-DD，默认最近收盘")] = None,
+    compare_to: Annotated[str | None, typer.Option("--compare-to", help="对照 previous_session 或更早交易日 YYYY-MM-DD；不保存运行记录")] = None,
     up_days: Annotated[int | None, typer.Option("--up-days", min=1, help="连续收盘上涨天数")] = None,
     down_days: Annotated[int | None, typer.Option("--down-days", min=1, help="连续收盘下跌天数")] = None,
     bull_days: Annotated[int | None, typer.Option("--bull-days", min=1, help="连续阳线天数：收盘高于开盘")] = None,
@@ -89,6 +90,7 @@ def trend(
         query = TrendSearchQuery(
             universe=chosen.value, codes=codes.split(",") if codes else [], industries=industry or [],
             as_of=date.fromisoformat(as_of) if as_of else None, conditions=conditions, reference=reference,
+            compare_to="previous_session" if compare_to == "previous_session" else date.fromisoformat(compare_to) if compare_to else None,
         )
         result = search_trends(query)
         if save:
@@ -111,6 +113,23 @@ def trend(
             span = "缺前收" if segment is None else f"{segment.direction} {'≥' if segment.bound == 'at_least' else ''}{segment.days} 天 · {segment.return_pct:+.2f}%"
             table.add_row(row.symbol, row.name, row.industry or "未分类", f"{row.close:.2f}", actual, span)
         console.print(table)
+        if result.comparison:
+            changes = result.comparison
+            counts = changes.coverage
+            console.print(f"对照 {changes.as_of} → {result.as_of} · 新出现 {counts.entered} · 持续匹配 {counts.continued} · 已退出 {counts.exited} · 无法确认 {counts.uncertain}")
+            change_table = Table("代码", "名称", "变化", "对照日", "当前日")
+            labels = {"entered": "新出现", "exited": "已退出", "uncertain": "无法确认"}
+            for item in changes.rows:
+                if item.status == "continued":
+                    continue
+                descriptions = []
+                for state in (item.previous, item.current):
+                    descriptions.append(state.reason or " · ".join(f"{check.condition.key}={'≥' if check.bound == 'at_least' else ''}{check.actual:g}" for check in state.conditions) or "符合")
+                change_table.add_row(item.symbol, item.name, labels[item.status], *descriptions)
+            if change_table.row_count:
+                console.print(change_table)
+            if counts.excluded:
+                console.print(f"{counts.excluded} 只参照自身窗口不参与变化判断。")
         for warning in result.warnings:
             console.print(warning)
         if result.common_data_date and result.common_data_date < result.as_of:

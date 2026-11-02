@@ -1,6 +1,6 @@
 # manmankan Skill · AI Agent 能力清单
 
-当前主线是趋势搜索与定位。Web/TUI 提供地图与样本交互；AI 用 `kan study schema`、`kan study catalog` 发现确定性条件契约，用 `kan study run query.json --format json` 同时取得当前匹配、历史事件和完整分母，用 `rerun <id> --latest` 显式推进数据日。价格/位置/形态距离共用计算，不由模型另算；公开接口按当前契约使用，不做历史兼容。
+当前主线是趋势筛选、位置与两日变化。AI 使用 `kan trend` 或 MCP `kan_trend` 明确范围与条件，读取当前匹配；可选 `compare_to` 核对新出现、持续、退出与无法确认，不会自动保存历史研究。`kan study catalog/schema` 发现共享日线条件；只有需要历史事件与后续窗口时才执行 `kan study run query.json --format json`。价格、位置与形态距离由共享 Python 核心计算，模型不另算；接口按当前契约使用，不做历史兼容。
 
 
 > 本文件是给 AI Agent 读的"说明书"。
@@ -16,11 +16,11 @@
 执行。该入口固定前复权基准；不要拼接旧 qfq 缓存重算，不把收盘连续或阳线连续替代交集。
 
 **manmankan** (`kan`) 是一个本地优先的 A 股选股研究工作台。
-它提供 React Web、CLI、Python API、typed HTTP 和 MCP，但不内置 LLM；板块趋势由统一 `BoardTrendQuery → BoardTrendSnapshot` 服务计算，跨日事实由 `BoardDailyReview` 保存，股票筛选由统一 `ScreenSpec → ScreenRun` 服务计算。AI 只能整理明确查询/Screen、执行确定性服务和引用已保存证据。
+它提供 React Web、CLI、Python API、typed HTTP 和 MCP，但不内置 LLM；板块趋势由统一 `BoardTrendQuery → BoardTrendSnapshot` 服务计算，跨日事实由 `BoardDailyReview` 保存，当前趋势筛选由 `TrendSearchQuery → TrendSearchResult` 计算，历史事件由 `StudyQuery` 表达；其他结构化筛选使用 `ScreenSpec → ScreenRun`。AI 整理明确查询、执行确定性服务并引用对应证据。
 
 **命令入口**：终端执行 `kan <command> [options]`
 **安装**：`uv tool install manmankan`
-**市场**：当前仅 A 股（架构预留多市场扩展）
+**市场**：当前仅 A 股
 **首用文档**：`docs/ai-quickstart.md`
 **MCP 文档**：`docs/mcp.md`
 **Screen 契约**：`docs/selection-workbench.md`
@@ -28,6 +28,10 @@
 ---
 
 ## 命令族
+
+### 当前趋势与两日变化
+
+两日变化：明确选择 `kan trend --universe all --down-days 5 --compare-to previous_session`，或用 `--compare-to YYYY-MM-DD` 指定对照日。读取 `comparison.coverage` 与逐行两端实际值；未知不能解释为新增/退出，`rows` 仍是当前匹配。 当前匹配读取 `coverage`、`missing_rows`、`as_of` 和来源；资料不足不等于条件不满足。形态参照自身窗口由 `excluded_rows` 单列。
 
 ### 研究证据包
 

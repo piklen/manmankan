@@ -38,6 +38,8 @@ MCP `tools/list` 会返回每个工具的 `inputSchema` 和 `outputSchema`。`to
 
 返回 `coverage.total/evaluated/matched/missing`、匹配 `rows`、无法判断的 `missing_rows`，以及行业筛选后的完整 `scope_codes`。`rows` 提供条件实际值、`lower_bounds`、当前连续段日期与涨跌幅、多周期位置、区间涨跌、来源和实际走势。缺行情不是不符合条件，只有长度下界也不能宣称恰好 N 天。`common_data_date/count` 提示缓存主要截止日与对象数，不会静默替换请求日期。
 
+可选 `compare_to: "previous_session"` 或明确的 `YYYY-MM-DD` 开启两日对比。`comparison.as_of` 是对照日，`comparison.coverage` 汇总新出现、持续、退出、未知和自匹配排除；`comparison.rows` 给出两日 `matched / close / conditions / reason`。资料不足的 `matched` 为 `null`，不能当作 `false`。当前 `rows` 仍只代表截止日匹配，保存研究与当前对照分开。
+
 当前筛选需要历史验证时，沿用完整 `scope_codes` 构造明确的 Study 条件和观察窗口，使用 `kan study` 或 Web/TUI 历史入口；不要只拿今天的匹配对象冒充原研究池。当前 MCP 不提供 Study 或保存筛选工具，不能虚构对应工具名。
 
 ## 公司研究事实与结构化 Screen 工具

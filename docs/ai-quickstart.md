@@ -1,6 +1,6 @@
 # AI agent 快速开始
 
-当前主线是趋势搜索与定位。Web/TUI 提供地图与样本交互；AI 用 `kan study schema`、`kan study catalog` 发现确定性条件契约，用 `kan study run query.json --format json` 同时取得当前匹配、历史事件和完整分母，用 `rerun <id> --latest` 显式推进数据日。价格/位置/形态距离共用计算，不由模型另算；公开接口按当前契约使用，不做历史兼容。
+当前主线是趋势筛选、位置与两日变化。AI 使用 `kan trend` 或 MCP `kan_trend` 明确范围与条件，读取当前匹配；可选 `compare_to` 核对新出现、持续、退出与无法确认，不会自动保存历史研究。`kan study catalog/schema` 发现共享日线条件；只有需要历史事件与后续窗口时才执行 `kan study run query.json --format json`。价格、位置与形态距离由共享 Python 核心计算，模型不另算；接口按当前契约使用，不做历史兼容。
 
 
 `manmankan` 给外部 AI agent 提供可审计的 A 股数据输入：typed Screen、CLI、JSON、字段白名单和本地 MCP。工具不内置 LLM；自然语言 parser 只整理明确阈值，最终仍由确定性 Python application service 计算用户规则命中与证据。
@@ -18,8 +18,8 @@ kan research 600519 --dimensions income,balancesheet,cashflow --format json
 
 日线条件同时涉及阳线、相对前收上涨、区间低点日期时，先运行 `kan screen ohlc --help`，
 再传入用户已明确的全部参数。该入口固定复权基准并返回逐日证据，详见
-[`ohlc-screen.md`](ohlc-screen.md)；不能把 `trend --up`、`trend --candle` 或 `find --up-days`
-中的某一个口径当成两者交集。
+[`ohlc-screen.md`](ohlc-screen.md)；不能把 `trend --up-days`、`trend --bull-days` 或 `find --up-days`
+中的某一个口径当成两者交集；仅要求连续两者同时满足时可明确使用 `kan trend --joint-up-days N`。
 
 ```bash
 uv tool install manmankan

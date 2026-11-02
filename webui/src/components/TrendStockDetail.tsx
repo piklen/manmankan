@@ -1,11 +1,14 @@
+import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { ArrowLeft, ArrowRight, CheckCircle2, CircleAlert } from "lucide-react";
 import {
   api,
   type StudyEvidence,
   type TrendSearchQuery,
+  type TrendComparisonRow,
   type TrendSearchRow,
 } from "../api/client";
+import { ConditionChanges } from "./TrendComparison";
 import { StudyChart, ShapeOverlay } from "./StudyChart";
 import { Button, Loading, Notice } from "./ui";
 import { conditionLabel, FIELDS, OP_SYMBOLS } from "../lib/study";
@@ -60,44 +63,67 @@ export function PriceSparkline({
 }
 
 export function TrendStockDetail({
+  selection,
   row,
   query,
+  currentDate,
+  revision,
+  comparison,
+  comparisonDate,
   onBack,
   onHistory,
   onShape,
   busy,
 }: {
-  row: TrendSearchRow;
+  selection: { symbol: string; name: string };
+  row?: TrendSearchRow;
   query: TrendSearchQuery;
+  currentDate: string;
+  revision: number;
+  comparison?: TrendComparisonRow;
+  comparisonDate?: string;
   onBack: () => void;
   onHistory: () => void;
-  onShape: () => void;
+  onShape: (row: TrendSearchRow) => void;
   busy: boolean;
 }) {
+  const [side, setSide] = useState<"current" | "previous">(
+    comparison &&
+      comparison.current.close == null &&
+      comparison.previous.close != null
+      ? "previous"
+      : "current",
+  );
+  const at =
+    side === "previous" && comparisonDate ? comparisonDate : currentDate;
+  const snapshot = comparison?.[side];
+  const noQuote = Boolean(comparison && snapshot?.close == null);
   const evidence = useQuery({
-    queryKey: ["trend-evidence", query, row.symbol],
-    queryFn: () => api.trendEvidence(query, row.symbol),
+    queryKey: ["trend-evidence", query, selection.symbol, at, revision],
+    queryFn: () => api.trendEvidence(query, selection.symbol, at),
+    enabled: !noQuote,
     staleTime: Infinity,
     retry: false,
   });
-  const data = evidence.data;
-  const actual = data?.row ?? row;
-  const segment = actual.current_segment;
-  const chart: StudyEvidence | undefined = data
-    ? {
-        run_id: "current",
-        symbol: actual.symbol,
-        name: actual.name,
-        event_date: data.as_of,
-        source: actual.source,
-        bars: data.bars,
-        conditions: data.conditions,
-        outcome: null,
-        warnings: data.warnings,
-        reference_bars: data.reference_bars,
-        reference_source: data.reference_source,
-      }
-    : undefined;
+  const data = noQuote ? undefined : evidence.data;
+  const actual = data?.row ?? (at === currentDate ? row : undefined);
+  const segment = actual?.current_segment;
+  const chart: StudyEvidence | undefined =
+    data && actual
+      ? {
+          run_id: "current",
+          symbol: actual.symbol,
+          name: actual.name,
+          event_date: data.as_of,
+          source: actual.source,
+          bars: data.bars,
+          conditions: data.conditions,
+          outcome: null,
+          warnings: data.warnings,
+          reference_bars: data.reference_bars,
+          reference_source: data.reference_source,
+        }
+      : undefined;
   return (
     <aside className="trend-detail">
       <button
@@ -110,165 +136,206 @@ export function TrendStockDetail({
       </button>
       <header className="trend-detail-heading">
         <h2>
-          <span>{actual.symbol}</span>
-          {actual.name}
+          <span>{selection.symbol}</span>
+          {selection.name}
         </h2>
         <p>
-          {actual.date}
+          {at}
           <span>
-            收盘 <b>{number(actual.close)}</b>
+            收盘 <b>{number(actual?.close ?? snapshot?.close)}</b>
           </span>
           <strong
             className={
-              (actual.change_pct ?? 0) >= 0 ? "value-up" : "value-down"
+              (actual?.change_pct ?? 0) >= 0 ? "value-up" : "value-down"
             }
           >
-            {percent(actual.change_pct, 2)}
+            {percent(actual?.change_pct, 2)}
           </strong>
         </p>
       </header>
-      {evidence.isLoading ? (
+      {comparison && comparisonDate ? (
+        <>
+          <ConditionChanges
+            row={comparison}
+            currentDate={currentDate}
+            previousDate={comparisonDate}
+          />
+          <div
+            className="comparison-evidence-tabs"
+            role="group"
+            aria-label="选择图证日期"
+          >
+            <button
+              type="button"
+              aria-pressed={side === "previous"}
+              onClick={() => setSide("previous")}
+            >
+              对照日 {comparisonDate}
+            </button>
+            <button
+              type="button"
+              aria-pressed={side === "current"}
+              onClick={() => setSide("current")}
+            >
+              当前日 {currentDate}
+            </button>
+          </div>
+          <p className="field-hint">下方日线、连续段与位置均截至 {at}。</p>
+        </>
+      ) : null}
+      {noQuote ? (
+        <Notice>
+          {snapshot?.reason || "这个日期没有可展示的行情。"} ·
+          可切换另一日期核对已有证据。
+        </Notice>
+      ) : evidence.isLoading ? (
         <Loading>读取日线与条件证据</Loading>
       ) : evidence.error ? (
         <Notice error>{errorMessage(evidence.error)}</Notice>
       ) : chart ? (
         <StudyChart
-          key={`${actual.symbol}-${actual.date}`}
+          key={`${selection.symbol}-${at}`}
           evidence={chart}
           context="market"
           tone="light"
           segmentStart={segment?.start_date}
         />
       ) : null}
-      {segment ? (
-        <div className="segment-facts">
-          <div>
-            <span>本段首日</span>
-            <strong>{segment.start_date}</strong>
-          </div>
-          <div>
-            <span>{segmentLabel(actual)}</span>
-            <small>基准收盘 {segment.base_date}</small>
-          </div>
-          <div>
-            <span>本段变化</span>
-            <strong
-              className={segment.return_pct >= 0 ? "value-up" : "value-down"}
-            >
-              {percent(segment.return_pct, 2)}
-            </strong>
-          </div>
-        </div>
-      ) : null}
-      {segment?.bound === "at_least" ? (
-        <p className="field-hint">
-          缓存开始或行情缺口前的段长不可确认；这里显示的是已知下界。
-        </p>
-      ) : null}
-      <section className="trend-checks">
-        <h3>条件验证</h3>
-        {data?.conditions.length ? (
-          data.conditions.map((check, i) => (
-            <div key={i}>
-              <span>
-                {conditionLabel(check.condition)}
-                <small>
-                  要求 {OP_SYMBOLS[check.condition.operator]}{" "}
-                  {check.condition.value}
-                  {FIELDS[check.condition.field].unit}
-                </small>
-              </span>
-              <strong>
-                {check.bound === "at_least" ? "≥ " : ""}
-                {number(
-                  check.actual,
-                  check.condition.field.includes("days") ? 0 : 2,
-                )}
-                {FIELDS[check.condition.field].unit}
-              </strong>
-              {check.matched === true ? (
-                <CheckCircle2 size={16} />
-              ) : (
-                <CircleAlert size={16} />
-              )}
+      {actual ? (
+        <>
+          {segment ? (
+            <div className="segment-facts">
+              <div>
+                <span>本段首日</span>
+                <strong>{segment.start_date}</strong>
+              </div>
+              <div>
+                <span>{segmentLabel(actual)}</span>
+                <small>基准收盘 {segment.base_date}</small>
+              </div>
+              <div>
+                <span>本段变化</span>
+                <strong
+                  className={
+                    segment.return_pct >= 0 ? "value-up" : "value-down"
+                  }
+                >
+                  {percent(segment.return_pct, 2)}
+                </strong>
+              </div>
             </div>
-          ))
-        ) : (
-          <p className="field-hint">当前是无条件浏览，尚未设置筛选规则。</p>
-        )}
-      </section>
-      <section className="trend-position">
-        <h3>
-          多周期位置 <small>收盘价在区间高低点之间的位置</small>
-        </h3>
-        {[30, 60, 180].map((window) => (
-          <div key={window}>
-            <span>{window}日</span>
-            <strong>{percent(actual.positions[String(window)], 0)}</strong>
-            <i>
-              <b
-                style={{
-                  width: `${Math.max(0, Math.min(100, actual.positions[String(window)] ?? 0))}%`,
-                }}
-              />
-            </i>
+          ) : null}
+          {segment?.bound === "at_least" ? (
+            <p className="field-hint">
+              缓存开始或行情缺口前的段长不可确认；这里显示的是已知下界。
+            </p>
+          ) : null}
+          <section className="trend-checks">
+            <h3>条件验证</h3>
+            {data?.conditions.length ? (
+              data.conditions.map((check, i) => (
+                <div key={i}>
+                  <span>
+                    {conditionLabel(check.condition)}
+                    <small>
+                      要求 {OP_SYMBOLS[check.condition.operator]}{" "}
+                      {check.condition.value}
+                      {FIELDS[check.condition.field].unit}
+                    </small>
+                  </span>
+                  <strong>
+                    {check.bound === "at_least" ? "≥ " : ""}
+                    {number(
+                      check.actual,
+                      check.condition.field.includes("days") ? 0 : 2,
+                    )}
+                    {FIELDS[check.condition.field].unit}
+                  </strong>
+                  {check.matched === true ? (
+                    <CheckCircle2 size={16} />
+                  ) : (
+                    <CircleAlert size={16} />
+                  )}
+                </div>
+              ))
+            ) : (
+              <p className="field-hint">当前是无条件浏览，尚未设置筛选规则。</p>
+            )}
+          </section>
+          <section className="trend-position">
+            <h3>
+              多周期位置 <small>收盘价在区间高低点之间的位置</small>
+            </h3>
+            {[30, 60, 180].map((window) => (
+              <div key={window}>
+                <span>{window}日</span>
+                <strong>{percent(actual.positions[String(window)], 0)}</strong>
+                <i>
+                  <b
+                    style={{
+                      width: `${Math.max(0, Math.min(100, actual.positions[String(window)] ?? 0))}%`,
+                    }}
+                  />
+                </i>
+              </div>
+            ))}
+          </section>
+          {chart && (chart.reference_bars?.length ?? 0) > 0 ? (
+            <ShapeOverlay evidence={chart} context="market" />
+          ) : null}
+          <div className="trend-detail-actions">
+            <Button
+              variant="secondary"
+              onClick={onHistory}
+              disabled={busy || !query.conditions?.length}
+            >
+              核对历史
+            </Button>
+            <button
+              type="button"
+              className="small-link"
+              onClick={() => onShape(actual)}
+              disabled={busy}
+            >
+              按这段形态查找 <ArrowRight size={14} />
+            </button>
           </div>
-        ))}
-      </section>
-      {chart && (chart.reference_bars?.length ?? 0) > 0 ? (
-        <ShapeOverlay evidence={chart} context="market" />
-      ) : null}
-      <div className="trend-detail-actions">
-        <Button
-          variant="secondary"
-          onClick={onHistory}
-          disabled={busy || !query.conditions?.length}
-        >
-          核对历史
-        </Button>
-        <button
-          type="button"
-          className="small-link"
-          onClick={onShape}
-          disabled={busy}
-        >
-          按这段形态查找 <ArrowRight size={14} />
-        </button>
-      </div>
-      <details className="daily-evidence">
-        <summary>逐日核对收盘与涨跌</summary>
-        <div className="table-scroll">
-          <table>
-            <thead>
-              <tr>
-                <th>日期</th>
-                <th>收盘</th>
-                <th>较前日</th>
-                <th>实体涨跌</th>
-              </tr>
-            </thead>
-            <tbody>
-              {data?.bars
-                .slice(-20)
-                .reverse()
-                .map((bar) => (
-                  <tr key={bar.date}>
-                    <td>{bar.date}</td>
-                    <td>{number(bar.close)}</td>
-                    <td>{percent(bar.change_pct, 2)}</td>
-                    <td>{percent(bar.body_pct, 2)}</td>
+          <details className="daily-evidence">
+            <summary>逐日核对收盘与涨跌</summary>
+            <div className="table-scroll">
+              <table>
+                <thead>
+                  <tr>
+                    <th>日期</th>
+                    <th>收盘</th>
+                    <th>较前日</th>
+                    <th>实体涨跌</th>
                   </tr>
-                ))}
-            </tbody>
-          </table>
-        </div>
-      </details>
-      {data?.warnings.map((warning) => (
-        <Notice key={warning}>{warning}</Notice>
-      ))}
-      <p className="field-hint">
-        来源：{actual.source} · 当前缓存事实；核对历史后才保存研究证据。
-      </p>
+                </thead>
+                <tbody>
+                  {data?.bars
+                    .slice(-20)
+                    .reverse()
+                    .map((bar) => (
+                      <tr key={bar.date}>
+                        <td>{bar.date}</td>
+                        <td>{number(bar.close)}</td>
+                        <td>{percent(bar.change_pct, 2)}</td>
+                        <td>{percent(bar.body_pct, 2)}</td>
+                      </tr>
+                    ))}
+                </tbody>
+              </table>
+            </div>
+          </details>
+          {data?.warnings.map((warning) => (
+            <Notice key={warning}>{warning}</Notice>
+          ))}
+          <p className="field-hint">
+            来源：{actual.source} · 当前缓存事实；核对历史后才保存研究证据。
+          </p>
+        </>
+      ) : null}
     </aside>
   );
 }

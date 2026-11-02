@@ -116,7 +116,7 @@ def test_explicit_date_shape_and_no_silent_stale_fallback(market, monkeypatch):
     with monkeypatch.context() as scoped:
         scoped.setattr(search, "calculate_metrics", lambda *args: pytest.fail("缺少截止日的对象不应计算指标"))
         stale = search.search_trends(search.TrendSearchQuery(universe="all"))
-        with pytest.raises(ValueError, match="截止日缺少有效行情"):
+        with pytest.raises(ValueError, match="所选日期缺少有效行情"):
             search.trend_search_evidence(search.TrendSearchQuery(universe="all"), "000001")
     assert stale.rows == [] and stale.coverage.missing == 4
     assert stale.common_data_date == days[-2] and stale.common_data_count == 3
@@ -154,6 +154,15 @@ def test_saved_filter_http_cli_and_mcp_have_no_history_side_effect(market, monke
     assert CliRunner().invoke(app, ["trend", "--down"]).exit_code != 0
     mcp = TOOLS["kan_trend"].handler(query.model_dump(mode="json"))
     assert json.loads(mcp["stdout"]) == response.json()
+    compared = query.model_copy(update={"compare_to": "previous_session"})
+    compared_response = client.post("/api/v1/trends/search", json=compared.model_dump(mode="json"))
+    assert compared_response.json()["comparison"]["coverage"]["entered"] == 1
+    compared_cli = CliRunner().invoke(app, ["trend", "--codes", "000001", "--up-days", "2", "--compare-to", "previous_session", "--format", "json"])
+    assert compared_cli.exit_code == 0, compared_cli.output
+    assert json.loads(compared_cli.stdout) == compared_response.json()
+    assert json.loads(TOOLS["kan_trend"].handler(compared.model_dump(mode="json"))["stdout"]) == compared_response.json()
+    prior_evidence = client.post("/api/v1/trends/search/evidence", json={"query": compared.model_dump(mode="json"), "symbol": "000001", "at": market[0][-2].isoformat()})
+    assert prior_evidence.status_code == 200 and prior_evidence.json()["conditions"][0]["actual"] == 1
     assert study.list_studies() == [] and workspace_db.get_state("market_studies:index") is None
     assert client.delete(f"/api/v1/trends/saved/{saved.json()['id']}").json() == {"deleted": True}
     assert client.get("/api/v1/trends/saved").json() == []
@@ -183,3 +192,65 @@ def test_display_work_is_only_for_matches_browse_and_evidence_are_single_pass(ma
     evidence = search.trend_search_evidence(query, "000001")
     assert len(calls) == 1 and ("position", 180) in calls[0][1]
     assert evidence.row == selected.rows[0]
+
+
+def test_two_dates_share_one_read_and_unknown_never_becomes_entry_or_exit(market, monkeypatch):
+    days, frames = market
+    frames.clear()
+    frames.update({
+        "000001": bars([15, 16, 14, 12, 13, 14]),  # 1 → 2，新出现
+        "000002": bars([15, 14, 12, 13, 14, 15]),  # 2 → 3，持续
+        "000003": bars([15, 14, 12, 13, 14, 13]),  # 2 → 0，退出
+        "000004": bars([15, 14, 13, 12, 11, 10]),  # 两日都不满足
+        "000005": bars([15, 16, 14, 12, 13, 14]).drop(index=2),  # 至少 1 → 至少 2，不能叫新出现
+        "000006": bars([15, 14, 12, 13, 14, 15]).iloc[:-1],  # 旧日满足、当前缺行，不能叫退出
+        "000007": None,
+    })
+    reads = []
+    monkeypatch.setattr("kan.data.fetcher.get_cached", lambda symbol: reads.append(symbol) or frames[symbol])
+    query = search.TrendSearchQuery(universe="codes", codes=list(frames), compare_to="previous_session", conditions=[StudyCondition(field="up_days", operator="gte", value=2)])
+    result = search.search_trends(query)
+    changes = result.comparison
+    assert changes.as_of == days[-2]  # 周一的上一交易日为周五，不能用自然日前一天。
+    assert reads == list(frames)
+    assert changes.coverage.model_dump() == {"comparable": 4, "entered": 1, "continued": 1, "exited": 1, "unchanged": 1, "uncertain": 3, "excluded": 0}
+    assert result.coverage.total == changes.coverage.comparable + changes.coverage.uncertain + changes.coverage.excluded
+    actual = {row.symbol: row for row in changes.rows}
+    assert {code: row.status for code, row in actual.items()} == {"000001": "entered", "000002": "continued", "000003": "exited", "000005": "uncertain", "000006": "uncertain", "000007": "uncertain"}
+    assert [row.symbol for row in result.rows] == ["000001", "000002", "000005"]
+    assert actual["000003"].previous.conditions[0].actual == 2
+    assert actual["000003"].current.conditions[0].actual == 0
+    assert "要求 ≥ 2天" in actual["000003"].current.reason
+    assert actual["000005"].previous.matched is None and actual["000005"].current.matched is True
+    assert actual["000006"].previous.close == 14 and actual["000006"].current.close is None
+    previous = search.trend_search_evidence(query, "000006", changes.as_of)
+    assert previous.as_of == previous.bars[-1].date == changes.as_of
+    assert previous.conditions[0].actual == 2
+    with pytest.raises(ValueError, match="所选日期缺少有效行情"):
+        search.trend_search_evidence(query, "000006")
+    with pytest.raises(ValueError, match="本次截止日或对照日"):
+        search.trend_search_evidence(query, "000001", days[-3])
+    assert study.list_studies() == []
+
+
+def test_comparison_dates_fixed_shape_and_prior_evidence_do_not_leak_later_prices(market):
+    days, frames = market
+    frames["000001"] = bars([10, 11, 9, 10, 11, 9])
+    frames["000002"] = bars([20, 22, 18, 20, 22, 18])
+    query = search.TrendSearchQuery(universe="codes", codes=["000001", "000002"], compare_to=days[-2], reference={"symbol": "000001", "as_of": days[-1]}, conditions=[StudyCondition(field="shape_distance", operator="lte", value=.001, window=3)])
+    result = search.search_trends(query)
+    assert result.comparison.coverage.entered == 1 and result.comparison.coverage.excluded == 1
+    assert result.comparison.excluded_rows[0].symbol == "000001"
+    assert any("事后形态检索" in warning for warning in result.warnings)
+    evidence = search.trend_search_evidence(query, "000002", days[-2])
+    assert evidence.reference_bars[-1].date == days[-1]
+    assert evidence.bars[-1].date == days[-2]
+    assert evidence.conditions[0].matched is False
+    assert any("事后形态核对" in warning for warning in evidence.warnings)
+    frames["000002"].loc[5, ["open", "high", "low", "close"]] *= 10
+    assert search.trend_search_evidence(query, "000002", days[-2]) == evidence
+    after = search.search_trends(query).comparison.coverage
+    assert after.unchanged == 1 and after.entered == after.exited == 0
+    for invalid in (days[-1], days[-1] + pd.Timedelta(days=1), days[-2] + pd.Timedelta(days=1)):
+        with pytest.raises(ValueError, match="对照日必须"):
+            search.search_trends(query.model_copy(update={"compare_to": invalid}))

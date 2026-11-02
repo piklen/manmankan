@@ -9,6 +9,19 @@ explicitly approves a larger bump.
 
 ## [Unreleased]
 
+## [0.0.6.9.43] - 2026-11-02
+
+### Added
+
+- 当前筛选支持显式上一交易日或指定日期对照：新出现、持续匹配、已退出与无法确认，保留两日条件值和原因，支持切换两日图证。
+- Web、TUI、CLI 与 MCP 共用同一次缓存读取和条件计算，不新增研究记录、历史事件或缓存层；形态自匹配与未知单独计数。
+
+### Fixed
+
+- 明确重新筛选时刷新目标结果与图证，避免同日更新行情后仍看到旧详情。
+- TUI 增加明确截止日期和主要缓存日期操作；带日期、前后条件顺序不同的已存筛选可回填。
+- 修复 TUI 将真实 `> 0` 附加条件误当作内部辅助条件删除的问题；不能由简易表单完整表达的条件保留并锁定，明确新建才重置。
+
 ## [0.0.6.9.42] - 2026-11-02
 
 ### Changed
@@ -783,7 +796,8 @@ explicitly approves a larger bump.
 - **Shell 补全** · zsh / bash / fish / powershell
 - **合规与隐私** · 强制风险提示 + 关键词黑名单（无买卖建议 / 无目标价 / 无评级）· 数据全本地
 
-[Unreleased]: https://github.com/piklen/manmankan/compare/v0.0.6.9.42...HEAD
+[Unreleased]: https://github.com/piklen/manmankan/compare/v0.0.6.9.43...HEAD
+[0.0.6.9.43]: https://github.com/piklen/manmankan/compare/v0.0.6.9.42...v0.0.6.9.43
 [0.0.6.9.42]: https://github.com/piklen/manmankan/compare/v0.0.6.9.41...v0.0.6.9.42
 [0.0.6.9.41]: https://github.com/piklen/manmankan/compare/v0.0.6.9.40...v0.0.6.9.41
 [0.0.6.9.40]: https://github.com/piklen/manmankan/compare/v0.0.6.9.39...v0.0.6.9.40
