@@ -54,7 +54,7 @@ def meta() -> ApiMeta:
     return ApiMeta(
         product_version=__version__,
         capabilities=[
-            "trend-map", "pattern-search", "market-studies", "frozen-evidence",
+            "trend-search", "pattern-search", "market-studies", "frozen-evidence",
             "personal-universe", "typed-openapi",
         ],
     )

@@ -46,15 +46,16 @@ def _query(**updates) -> BoardHistoryStudyQuery:
     return BoardHistoryStudyQuery(**values)
 
 
-def test_historical_streaks_match_calc_trend_and_flat_penetration() -> None:
+def test_historical_streaks_match_calc_trend_and_flat_interrupts() -> None:
     frame = _frame([100, 101, 102, 102, 103, 102, 101, 100, 101, 102, 103, 104])
 
-    streaks = board_history_service._historical_streaks(
+    streaks, exact = board_history_service._historical_streaks(
         frame,
         mode=BoardTrendMode.CLOSE,
     )
 
-    assert streaks[1:8] == [1, 2, 3, 4, -1, -2, -3]
+    assert streaks[1:8] == [1, 2, 0, 1, -1, -2, -3]
+    assert exact[:5] == [False, False, False, True, True]
     for index in range(1, len(frame)):
         expected = calc_trend(
             frame.iloc[: index + 1].reset_index(drop=True),
@@ -69,10 +70,11 @@ def test_candle_streaks_match_calc_trend() -> None:
         [100, 101, 102, 100, 99, 98, 100],
         opens=[100, 100, 100, 100, 100, 100, 100],
     )
-    streaks = board_history_service._historical_streaks(
+    streaks, exact = board_history_service._historical_streaks(
         frame,
         mode=BoardTrendMode.CANDLE,
     )
+    assert all(exact)  # 第一根为已知平盘，后续每段起点可确认。
 
     for index in range(1, len(frame)):
         expected = calc_trend(
@@ -87,7 +89,7 @@ def test_candle_streaks_match_calc_trend() -> None:
 def test_first_hit_and_non_overlapping_sample_policies() -> None:
     streaks = [0, 1, 2, 3, 4, -1, -2, -3, 1, 2, 3, 4]
     first_hits = board_history_service._first_hit_indices(
-        streaks,
+        streaks, [True] * len(streaks),
         direction=BoardStudyDirection.UP,
         min_streak=3,
     )
@@ -106,7 +108,7 @@ def test_first_hit_and_non_overlapping_sample_policies() -> None:
 
 
 def test_study_reports_censored_events_exact_benchmark_and_audit(monkeypatch) -> None:
-    frame = _frame([100, 101, 102, 102, 103, 102, 101, 100, 101, 102, 103, 104, 103])
+    frame = _frame([101, 100, 101, 102, 103, 102, 101, 100, 101, 102, 103, 104, 103])
     monkeypatch.setattr(
         board_history_service,
         "_load_board_history",
@@ -126,9 +128,9 @@ def test_study_reports_censored_events_exact_benchmark_and_audit(monkeypatch) ->
     assert study.coverage.completed == 1
     assert study.coverage.censored == 1
     assert study.coverage.benchmark_aligned == 1
-    assert study.events[0].event_date == frame.iloc[3]["date"].isoformat()
-    assert study.events[0].forward_date == frame.iloc[8]["date"].isoformat()
-    assert study.events[0].return_pct == pytest.approx(-0.9804)
+    assert study.events[0].event_date == frame.iloc[4]["date"].isoformat()
+    assert study.events[0].forward_date == frame.iloc[9]["date"].isoformat()
+    assert study.events[0].return_pct == pytest.approx(-0.9709)
     assert study.events[0].benchmark_return_pct == 0.0
     assert study.events[0].relative_return_pct == study.events[0].return_pct
     assert study.raw_distribution.count == 1
@@ -139,7 +141,7 @@ def test_study_reports_censored_events_exact_benchmark_and_audit(monkeypatch) ->
 
 
 def test_missing_benchmark_dates_never_become_zero(monkeypatch) -> None:
-    frame = _frame([100, 101, 102, 103, 104, 105, 106])
+    frame = _frame([101, 100, 101, 102, 103, 104, 105])
     monkeypatch.setattr(
         board_history_service,
         "_load_board_history",
@@ -148,7 +150,7 @@ def test_missing_benchmark_dates_never_become_zero(monkeypatch) -> None:
     monkeypatch.setattr(
         board_history_service,
         "_benchmark_history",
-        lambda _query: ("沪深300", "fixture", {frame.iloc[3]["date"]: 200.0}, []),
+        lambda _query: ("沪深300", "fixture", {frame.iloc[4]["date"]: 200.0}, []),
     )
 
     study = board_history_service.study_board_history(
@@ -267,7 +269,7 @@ def test_all_flat_history_has_zero_streaks() -> None:
     assert board_history_service._historical_streaks(
         frame,
         mode=BoardTrendMode.CLOSE,
-    ) == [0, 0, 0, 0]
+    ) == ([0, 0, 0, 0], [False, True, True, True])
 
 
 def test_theme_history_prefers_native_tushare_series(monkeypatch) -> None:
@@ -334,3 +336,38 @@ def test_theme_history_falls_back_to_em_when_tushare_is_unavailable(monkeypatch)
 
     assert (code, name, source) == ("BK1234", "石墨电极", "em_concept_history")
     assert loaded is frame
+
+
+@pytest.mark.parametrize("mode", [BoardTrendMode.CLOSE, BoardTrendMode.CANDLE])
+def test_historical_streaks_use_raw_prices_and_have_no_thirty_day_cap(mode) -> None:
+    frame = _frame([100., 100., *[100. + index * .0001 for index in range(1, 42)]])
+    streaks, exact = board_history_service._historical_streaks(frame, mode=mode)
+    assert streaks[-1] == 41
+    assert exact[-1]
+    assert board_history_service._first_hit_indices(
+        streaks, exact, direction=BoardStudyDirection.UP, min_streak=35,
+    ) == [36]
+
+
+@pytest.mark.parametrize("forward_days, completed", [(2, 1), (3, 0)])
+def test_unknown_segment_starts_and_missing_forward_price_are_explicitly_excluded(monkeypatch, forward_days, completed) -> None:
+    frame = _frame([100, 101, 102, 103, float("nan"), 105, 106, 107, 108, 108, 109, 110, 111, 112, 113, float("nan")])
+    normalized = board_history_service._normalize_history(frame)
+    assert len(normalized) == len(frame) and pd.isna(normalized.iloc[4]["close"])
+    streaks, exact = board_history_service._historical_streaks(normalized, mode=BoardTrendMode.CLOSE)
+    assert streaks[3] == streaks[8] == 3 and not exact[3] and not exact[8]
+    assert streaks[9] == 0 and exact[9]
+    monkeypatch.setattr(board_history_service, "_load_board_history", lambda _query: ("801080", "电子", "fixture", frame))
+    monkeypatch.setattr(board_history_service, "_benchmark_history", lambda _query: (None, None, {}, []))
+
+    result = board_history_service.study_board_history(_query(forward_days=forward_days))
+    assert result.coverage.first_hits == 1
+    assert result.coverage.selected == result.coverage.completed == completed
+    assert result.warnings[0] == "2 段缺少可确认段首，未计入首次命中事件"
+    if completed:
+        assert result.events[0].event_date == frame.iloc[12]["date"].isoformat()
+        assert result.events[0].forward_date == frame.iloc[14]["date"].isoformat()
+        assert result.events[0].return_pct == pytest.approx(1.8018)
+    else:
+        assert result.events == [] and result.raw_distribution.count == 0
+        assert result.warnings[-1] == "1 个事件后续终点收盘缺失，已从可用样本中剔除"

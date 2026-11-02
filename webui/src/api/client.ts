@@ -1,9 +1,10 @@
 import type { components } from "./schema";
 
-export type TrendMapQuery = components["schemas"]["TrendMapQuery"];
-export type TrendMapSnapshot = components["schemas"]["TrendMapSnapshot"];
-export type TrendMapRow = components["schemas"]["TrendMapRow"];
-export type TrendStockSnapshot = components["schemas"]["TrendStockSnapshot"];
+export type TrendSearchQuery = components["schemas"]["TrendSearchQuery"];
+export type TrendSearchResult = components["schemas"]["TrendSearchResult"];
+export type TrendSearchRow = components["schemas"]["TrendSearchRow"];
+export type TrendSearchEvidence = components["schemas"]["TrendSearchEvidence"];
+export type SavedTrendSearch = components["schemas"]["SavedTrendSearch"];
 export type StudyQuery = components["schemas"]["StudyQuery"];
 export type StudyCondition = components["schemas"]["StudyCondition"];
 export type StudyResult = components["schemas"]["StudyResult"];
@@ -80,15 +81,25 @@ const body = (value: unknown) => JSON.stringify(value);
 const encode = encodeURIComponent;
 
 export const api = {
-  trendMap: (query: TrendMapQuery) =>
-    request<TrendMapSnapshot>("/api/v1/trends/map", {
+  searchTrends: (query: TrendSearchQuery) =>
+    request<TrendSearchResult>("/api/v1/trends/search", {
       method: "POST",
       body: body(query),
     }),
-  trendStock: (symbol: string, asOf: string, days = 120) =>
-    request<TrendStockSnapshot>("/api/v1/trends/stock", {
+  trendEvidence: (query: TrendSearchQuery, symbol: string) =>
+    request<TrendSearchEvidence>("/api/v1/trends/search/evidence", {
       method: "POST",
-      body: body({ symbol, as_of: asOf, days }),
+      body: body({ query, symbol }),
+    }),
+  savedTrends: () => request<SavedTrendSearch[]>("/api/v1/trends/saved"),
+  saveTrend: (title: string, query: TrendSearchQuery) =>
+    request<SavedTrendSearch>("/api/v1/trends/saved", {
+      method: "POST",
+      body: body({ title, query }),
+    }),
+  deleteSavedTrend: (id: string) =>
+    request<{ deleted: boolean }>(`/api/v1/trends/saved/${encode(id)}`, {
+      method: "DELETE",
     }),
   studyCatalog: () =>
     request<

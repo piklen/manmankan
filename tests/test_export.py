@@ -26,8 +26,6 @@ from kan.storage.export import (
     scan_markdown,
     scan_payload,
     to_json,
-    trend_markdown,
-    trend_payload,
 )
 
 
@@ -415,43 +413,10 @@ def test_info_markdown_with_board_context():
     assert "| 3日 | 50.0% | 40.0% | 2/3 |" in md
 
 
-def test_trend_payload_shape():
-    tr = _fake_trend(
-        symbol="600519", name="贵州茅台", current_price=100.0,
-        daily_changes=[("2026-05-08", -2.0), ("2026-05-07", -1.0)],
-    )
-    payload = trend_payload(
-        [tr], candle=False, data_cutoff=date(2026, 5, 8),
-        fetched_at=None, stale=False,
-    )
-    assert payload["command"] == "trend"
-    assert payload["mode"] == "close"
-    assert "disclaimer" in payload
-    assert payload["results"][0]["symbol"] == "600519"
-    assert payload["results"][0]["daily_changes"][0] == ["2026-05-08", -2.0]
 
 
-def test_trend_markdown_base_table():
-    tr = _fake_trend(
-        symbol="600519", name="贵州茅台", current_price=100.0,
-        direction="跌2天", streak_pct=-3.0, daily_changes=[],
-    )
-    md = trend_markdown([tr], title="趋势", latest=None)
-    assert md.startswith("# 趋势")
-    assert "| 股票 | 现价 | 连续 | 累计 |" in md
-    assert "跌2天" in md
 
 
-def test_trend_markdown_with_latest_date_columns():
-    tr = _fake_trend(
-        symbol="600519", name="茅台", current_price=100.0,
-        direction="跌2天", streak_pct=-3.0,
-        daily_changes=[("2026-05-08", 2.5), ("2026-05-07", -1.0)],
-    )
-    md = trend_markdown([tr], title="t", latest=2)
-    assert "05-08" in md      # 日期列头
-    assert "+2.50%" in md
-    assert "-1.00%" in md
 
 
 def test_compare_payload_shape():

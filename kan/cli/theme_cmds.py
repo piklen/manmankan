@@ -193,15 +193,15 @@ def search_cmd(
 def trend_cmd(
     up: Annotated[
         int | None,
-        typer.Option("--up", help="只看连涨≥N天的题材(1-30)"),
+        typer.Option("--up", help="只看连涨≥N天的题材(至少 1 天)"),
     ] = None,
     down: Annotated[
         int | None,
-        typer.Option("--down", help="只看连跌≥N天的题材(1-30)"),
+        typer.Option("--down", help="只看连跌≥N天的题材(至少 1 天)"),
     ] = None,
     min_streak: Annotated[
         int | None,
-        typer.Option("--min-streak", help="只看连续涨跌绝对天数 ≥ N 的题材(1-30)"),
+        typer.Option("--min-streak", help="只看连续涨跌绝对天数 ≥ N 的题材(至少 1 天)"),
     ] = None,
     sort: Annotated[
         ThemeTrendSort,
@@ -256,11 +256,11 @@ def trend_cmd(
         _print_err("❌ --up 和 --down 不能同时使用")
         raise typer.Exit(1)
     for name, val in [("--up", up), ("--down", down)]:
-        if val is not None and not (1 <= val <= 30):
-            _print_err(f"❌ {name} 的值必须在 1-30 之间(当前:{val})")
+        if val is not None and val < 1:
+            _print_err(f"❌ {name} 的值必须至少为 1(当前:{val})")
             raise typer.Exit(1)
-    if min_streak is not None and not (1 <= min_streak <= 30):
-        _print_err(f"❌ --min-streak 的值必须在 1-30 之间(当前:{min_streak})")
+    if min_streak is not None and min_streak < 1:
+        _print_err(f"❌ --min-streak 的值必须至少为 1(当前:{min_streak})")
         raise typer.Exit(1)
 
     from rich.console import Console
@@ -442,12 +442,12 @@ def trend_cmd(
                         if candle:
                             console.print(
                                 "[dim]  阳线阴线口径:收盘 > 开盘 = ▲"
-                                " · 收盘 < 开盘 = ▼ · 平盘不断连续[/dim]"
+                                " · 收盘 < 开盘 = ▼ · 平盘或缺值中断连续[/dim]"
                             )
                         else:
                             console.print(
                                 "[dim]  收盘价口径:今日收盘 > 昨日收盘 = ▲"
-                                " · 今日收盘 < 昨日收盘 = ▼ · 平盘不断连续[/dim]"
+                                " · 今日收盘 < 昨日收盘 = ▼ · 平盘或缺值中断连续[/dim]"
                             )
 
                         render_theme_trend_disclaimer(source=source)

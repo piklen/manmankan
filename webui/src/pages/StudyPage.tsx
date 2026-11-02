@@ -8,7 +8,7 @@ import {
   RefreshCw,
   Search,
 } from "lucide-react";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useState } from "react";
 import { Link, useLocation, useNavigate, useParams } from "react-router-dom";
 import { api, type StudyQuery, type StudyResult } from "../api/client";
 import { StudyEditor } from "../components/StudyEditor";
@@ -142,17 +142,6 @@ export function StudyPage({ initialResult }: { initialResult?: StudyResult }) {
     onSuccess: receive,
   });
   const busy = run.isPending || rerun.isPending;
-  const automaticRunStarted = useRef(false);
-  useEffect(() => {
-    if (
-      (location.state as { autoRun?: boolean } | null)?.autoRun &&
-      suppliedQuery &&
-      !automaticRunStarted.current
-    ) {
-      automaticRunStarted.current = true;
-      if (!draftError(draft)) run.mutate();
-    }
-  }, [suppliedQuery]);
   const evidence = useQuery({
     queryKey: [
       "study-evidence",
@@ -205,10 +194,10 @@ export function StudyPage({ initialResult }: { initialResult?: StudyResult }) {
           <div>
             <Link to="/" className="small-link">
               <ArrowLeft size={14} />
-              趋势地图
+              返回趋势筛选
             </Link>
             <h1>{result?.query.title ?? "验证一组明确条件"}</h1>
-            <p>当前匹配与历史验证使用同一组条件。</p>
+            <p>确认历史范围与观察窗口，运行后保存当次证据。</p>
           </div>
           {result ? (
             <div className="study-rerun-actions">
@@ -247,7 +236,7 @@ export function StudyPage({ initialResult }: { initialResult?: StudyResult }) {
         {!result ? (
           <Empty title="把一个趋势问题，变成可核对的事实">
             <FlaskConical size={36} strokeWidth={1.4} />
-            <p>从地图圈选区域进入，或在左侧明确自己的条件。</p>
+            <p>筛选条件已带入时，先核对股票池与日期，再设置历史观察范围。</p>
             <ol className="research-steps">
               <li>
                 <strong>看当前</strong>

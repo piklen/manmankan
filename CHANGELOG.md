@@ -9,6 +9,23 @@ explicitly approves a larger bump.
 
 ## [Unreleased]
 
+## [0.0.6.9.42] - 2026-11-02
+
+### Changed
+
+- 首页重构为趋势筛选：直接表达连涨、连跌、阴阳线、前后连续段和区间涨跌天数；表格、地图、位置与日线证据联动。
+- 当前筛选与历史研究分开，筛选不自动创建研究；命名保存只保存条件，显式核对历史时才计算事件并留存。
+- 重写 `kan trend`、TUI 条件输入与 MCP 当前筛选，删除旧默认天数、旧参数和无消费者的截面/导出实现，不保留历史兼容。
+
+### Added
+
+- 前一连续涨跌段与最近 N 日涨跌计数，共用市场交易日及连续段计算，平盘和缺口中断，下界与精确值分别展示。
+- 当前连续段起点、本段变化、逐日证据、行业完整范围及主要缓存日期提示；数据未更新时可明确选择已有数据日。
+
+### Fixed
+
+- 板块/Python 连续涨跌同步严格平盘中断，按原值判断方向，取消 30 日人为上限；本段变化按端点价格计算，保留实际正负号。
+
 ## [0.0.6.9.41] - 2026-10-29
 
 ### Changed
@@ -766,7 +783,8 @@ explicitly approves a larger bump.
 - **Shell 补全** · zsh / bash / fish / powershell
 - **合规与隐私** · 强制风险提示 + 关键词黑名单（无买卖建议 / 无目标价 / 无评级）· 数据全本地
 
-[Unreleased]: https://github.com/piklen/manmankan/compare/v0.0.6.9.41...HEAD
+[Unreleased]: https://github.com/piklen/manmankan/compare/v0.0.6.9.42...HEAD
+[0.0.6.9.42]: https://github.com/piklen/manmankan/compare/v0.0.6.9.41...v0.0.6.9.42
 [0.0.6.9.41]: https://github.com/piklen/manmankan/compare/v0.0.6.9.40...v0.0.6.9.41
 [0.0.6.9.40]: https://github.com/piklen/manmankan/compare/v0.0.6.9.39...v0.0.6.9.40
 [0.0.6.9.39]: https://github.com/piklen/manmankan/compare/v0.0.6.9.38...v0.0.6.9.39

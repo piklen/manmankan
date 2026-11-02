@@ -15,8 +15,8 @@ def root_help_text() -> str:
     return f"""[bold]慢慢看 · 命令速记[/bold]
 
 [bold cyan]普通用户先从这里开始[/bold cyan]
-  kan tui                   键盘研究：已存条件 / 重跑 / 当前匹配 / 历史证据
-  kan web                   趋势地图 / 多周期位置 / 形态搜索 / 历史证据
+  kan tui                   键盘筛选：选类型 / 填天数 / 当前事实 / 历史核对
+  kan web                   趋势筛选 / 连续涨跌 / 形态搜索 / 历史证据
   kan daily                 在终端查看一日事实概览
   kan guide                 只看最常用的下一步
   kan help                  查看这份完整命令表
@@ -99,23 +99,18 @@ def root_help_text() -> str:
   kan index                          常用大盘指数位置参照（上证/深成/创业板/沪深300）
 
 [bold cyan]连续涨跌[/bold cyan]
-  kan trend                 连续涨跌看板（不筛选）
-  kan trend --all           全市场连续涨跌看板
-  kan trend --down          只看连跌 ≥ 3 天（默认值）
-  kan trend --down 5        只看连跌 ≥ 5 天
-  kan trend --up            只看连涨 ≥ 3 天（默认值）
-  kan trend --up 5          只看连涨 ≥ 5 天
-  kan trend --latest 7      展示近 7 天走势详情
-  kan trend --candle        阳线阴线口径（默认收盘价口径）
-  kan trend --industry 半导体     行业范围连续涨跌（自选 ⭐ 高亮）
-  kan trend --hot rank            热榜范围连续涨跌
-  kan trend --theme AI应用        题材范围连续涨跌
-  kan board trend --kind industry --up 3  连续上涨 ≥ 3 天的申万行业指数
-  kan board trend --kind theme --up 3     连续上涨 ≥ 3 天的概念题材指数
-  kan board trend --kind theme --up 3 --candle  连续 3 根阳线的概念题材指数
+  kan trend --universe all --up-days 3           全市场连续收盘上涨至少 3 天
+  kan trend --universe personal --down-days 5    个人池连续收盘下跌至少 5 天
+  kan trend --codes 600519,000858 --bull-days 3 --comparison eq  恰好 3 根阳线
+  kan trend --universe all --up-days 2 --previous-down-days 3   先跌至少 3 天再涨至少 2 天
+  kan trend --universe all --window 10 --rising-days 7          最近 10 日至少 7 日上涨
+  kan trend --universe all --down-days 3 --comparison lte       连跌 1–3 天
+  kan trend --universe all --up-days 3 --save 连涨观察           只保存条件，不运行历史
+  kan trend --universe personal --browse        明确无条件浏览个人池
+  kan trend --help                              查看全部条件与 JSON 输出
 
-  [dim]以上参数可任意组合：kan trend --down 5 --latest 7 --candle --industry 半导体[/dim]
-  [dim]N 范围：2-30[/dim]
+  [dim]天数必须明确填写；平盘与缺行中断连续。上涨/下跌比较前收，阳线/阴线比较当日开收。[/dim]
+  [dim]多个条件取交集；历史核对使用 kan study，或在 kan tui 筛选后按 h。[/dim]
 
 [bold cyan]条件筛选[/bold cyan]
   kan find --pos 180:lt:5                      位置 filter · 180 日位置 < 5%
@@ -229,9 +224,10 @@ def start_help_text() -> str:
     """无参数启动时只展示普通散户的最短路径。"""
     return """[bold]慢慢看 · 找趋势，核对位置与历史[/bold]
 
-  kan web       浏览器研究台：趋势、位置与条件验证
-  kan tui       键盘研究台：方向键选择，回车查证，r 重跑
-  kan study     可编排研究入口，支持 --format json
+  kan web       浏览器筛选台：连续涨跌、区间位置与历史核对
+  kan tui       键盘筛选台：明确连续涨跌天数，回车核对日线
+  kan trend     直接按连续涨跌 / 阳阴线 / 前后两段筛选
+  kan study     显式运行历史研究，支持 --format json
   kan help      完整 CLI 命令与自动化入口
 
 [dim]数据保存在本机 · 不登录 manmankan 服务 · 不云同步 / 遥测[/dim]

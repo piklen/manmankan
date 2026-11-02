@@ -18,7 +18,7 @@ export function AppShell() {
         </Link>
         <nav aria-label="主导航">
           <NavLink to="/" end>
-            发现趋势
+            趋势筛选
           </NavLink>
           <NavLink to="/studies">我的研究</NavLink>
           <NavLink to="/data">数据</NavLink>

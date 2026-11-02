@@ -608,10 +608,10 @@ def test_render_freshness_warning_accepts_command_specific_refresh_hint():
     pipeline.render_freshness_warning(
         freshness,
         console,
-        refresh_hint="kan trend --all --force",
+        refresh_hint="kan fetch --all --force",
     )
 
-    assert "kan trend --all --force" in console.print.call_args.args[0]
+    assert "kan fetch --all --force" in console.print.call_args.args[0]
 
 
 # ═══ run_data_pipeline (StockSet 单签名) ═══════════════════════════════

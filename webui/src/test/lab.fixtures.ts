@@ -2,7 +2,6 @@ import type {
   StudyEvidence,
   StudyQuery,
   StudyResult,
-  TrendMapSnapshot,
 } from "../api/client";
 
 export const bars = Array.from({ length: 28 }, (_, index) => ({
@@ -13,74 +12,6 @@ export const bars = Array.from({ length: 28 }, (_, index) => ({
   close: 10.1 + index / 10,
   volume: 1000 + index,
 }));
-export function mapFixture(): TrendMapSnapshot {
-  const industry = {
-    name: "测试行业",
-    total: 1,
-    available: 1,
-    up: 1,
-    down: 0,
-    flat: 0,
-    median_return: 8,
-    median_position: 20,
-  };
-  return {
-    query: {
-      universe: "all",
-      codes: [],
-      as_of: null,
-      position_window: 180,
-      momentum_window: 20,
-      trail_days: 5,
-    },
-    as_of: "2026-10-28",
-    total: 1,
-    plotted: 1,
-    missing: 0,
-    rows: [
-      {
-        symbol: "600000",
-        name: "测试股票甲",
-        industry: "测试行业",
-        available: true,
-        data_cutoff: "2026-10-28",
-        close: 12.8,
-        change_pct: 1,
-        x: 20,
-        y: 8,
-        positions: { "30": 35, "60": 50, "180": 20 },
-        returns: { "5": 1, "20": 8, "60": -2 },
-        trail: [
-          {
-            date: "2026-10-28",
-            x: 20,
-            y: 8,
-            positions: { "30": 35, "60": 50, "180": 20 },
-            returns: { "5": 1, "20": 8, "60": -2 },
-          },
-        ],
-        source: "test-fixture",
-      },
-    ],
-    industries: [industry],
-    views: [30, 60, 180].flatMap((position_window) =>
-      [5, 20, 60].map((momentum_window) => ({
-        position_window,
-        momentum_window,
-        plotted: 1,
-        missing: 0,
-        industries: [
-          {
-            ...industry,
-            up: momentum_window === 60 ? 0 : 1,
-            down: momentum_window === 60 ? 1 : 0,
-          },
-        ],
-      })),
-    ),
-    warnings: [],
-  };
-}
 export function resultFixture(query: StudyQuery): StudyResult {
   return {
     study_id: "study-test",

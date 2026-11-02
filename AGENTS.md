@@ -4,8 +4,8 @@
 
 This file applies to the whole `manmankan` repository.
 
-`manmankan` 是 A 股趋势搜索与定位工具。当前主线是“发现趋势 → 多周期定位 →
-圈定研究范围 → 核对历史证据”。地图、条件研究、形态检索、Web、TUI 与 CLI
+`manmankan` 是 A 股趋势筛选与位置研究工具。当前主线是“明确走势条件 → 当前匹配 →
+核对连续段与位置 → 按需研究历史”。当前筛选不自动计算或保存历史研究，保存筛选仅保存命名条件。地图、条件研究、形态检索、Web、TUI 与 CLI
 共用 Python 指标计算。保留模块化单体、SQLite 与 Parquet，不为历史功能保留界面或架构。
 
 The tool stops at data facts. It must not produce buy/sell actions, ratings, price

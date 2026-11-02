@@ -71,56 +71,6 @@ def test_api_custom_class_satisfies_protocol():
     assert isinstance(MyBasket(), StockSet), "自定义类应自动满足 Protocol"
 
 
-def test_api_all_lists_match_actual_exports():
-    """kan.api.__all__ 必须与实际导出的符号一致 (防漏 / 防多)。"""
-    from kan import api
-
-    declared = set(api.__all__)
-    expected = {
-        # StockSet
-        "HoldingsSet", "HotRankSet", "IndustrySet", "StockSet", "ThemeSet",
-        "WatchlistHoldingsSet", "WatchlistSet", "from_flags",
-        # verbs
-        "fetch", "high", "low", "scan", "trend",
-        # 背景: 数据源扩展 API
-        "KlineSource", "ThemeConstituentSource",
-        "register_kline_source", "register_theme_constituent_source",
-        "clear_user_kline_sources", "clear_user_theme_constituent_sources",
-        "kline_chain", "theme_constituent_chain",
-        # 板块趋势 application service
-        "BoardDailyChange", "BoardKind", "BoardTrendCoverage", "BoardTrendFailure",
-        "BoardTrendMode", "BoardTrendQuery", "BoardTrendRow", "BoardTrendSnapshot",
-        "BoardTrendSort", "BoardTrendServiceError", "query_board_trends",
-        "BoardPulseCoverage", "BoardPulseMember", "BoardPulseQuery",
-        "BoardPulseServiceError", "BoardPulseSnapshot", "BoardServiceError",
-        "query_board_pulse",
-        "BoardDailyReview", "BoardDailyReviewRequest", "BoardDailyReviewSummary",
-        "BoardHistoryCoverage", "BoardHistoryEvent", "BoardHistoryServiceError",
-        "BoardHistoryStudy", "BoardHistoryStudyQuery", "BoardStudyDirection",
-        "BoardStudySamplePolicy", "PointInTimeAudit", "ReturnDistribution",
-        "BoardReviewChange", "BoardReviewChangeCounts", "BoardReviewChangeType",
-        "BoardReviewSection", "BoardReviewSectionSummary", "BoardReviewServiceError",
-        "create_board_review", "get_board_review", "list_board_reviews",
-        "study_board_history",
-        # vNext Screen application service
-        "CandidateList", "CompareSet", "SavedScreen", "ScreenRun", "ScreenSpec",
-        "ScreenExplainInput", "ScreenParseInput", "ScreenPlanInput",
-        "save_screen", "get_screen", "list_screens", "run_screen", "get_run", "list_runs",
-        "list_candidate_lists", "add_candidate", "remove_candidate",
-        "save_compare_set", "list_compare_sets", "filter_catalog", "screen_schema",
-        "parse_screen_text", "plan_screen", "explain_run",
-        "ResearchRequest", "ResearchBundle", "build_research_bundle",
-        # 个人关注与连续观察 application service
-        "FocusPeriod", "FocusReviewEntry", "FocusRow", "FocusSnapshot",
-        "add_focus", "build_focus_snapshot", "mark_focus_reviewed", "update_focus_note",
-        # 用户明确日线条件与历史证据
-        "StudyCondition", "StudyQuery", "StudyResult",
-        "run_study", "list_studies", "get_study", "rerun_study",
-        "study_events", "study_evidence",
-    }
-    assert declared == expected, f"kan.api.__all__ 与预期 surface 不符: 多={declared-expected} · 少={expected-declared}"
-
-
 def test_api_exports_board_trend_application_service():
     """Python 用户可从公开入口构造板块趋势查询。"""
     from kan import api

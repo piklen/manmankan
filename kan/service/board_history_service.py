@@ -7,7 +7,7 @@ from math import ceil, floor, isfinite
 from statistics import mean, median
 from typing import TYPE_CHECKING
 
-from kan.core.scanner_trend import TREND_STREAK_CAP
+from kan.core.streaks import streak_counts
 from kan.domain.board import BoardKind, BoardTrendMode
 from kan.domain.board_history import (
     BoardHistoryCoverage,
@@ -136,19 +136,18 @@ def _normalize_history(frame: pd.DataFrame) -> pd.DataFrame:
     normalized["open"] = pd.to_numeric(normalized["open"], errors="coerce")
     normalized["close"] = pd.to_numeric(normalized["close"], errors="coerce")
     normalized = (
-        normalized.dropna(subset=["date", "open", "close"])
+        normalized.dropna(subset=["date"])
         .drop_duplicates(subset=["date"], keep="last")
         .sort_values("date")
         .reset_index(drop=True)
     )
-    normalized = normalized[
-        normalized["open"].map(lambda value: isfinite(float(value)) and float(value) > 0)
-        & normalized["close"].map(lambda value: isfinite(float(value)) and float(value) > 0)
-    ].reset_index(drop=True)
-    if len(normalized) < 2:
+    for column in ("open", "close"):
+        valid = normalized[column].map(lambda value: isfinite(float(value)) and float(value) > 0)
+        normalized[column] = normalized[column].where(valid)
+    if len(normalized) < 2 or normalized["close"].notna().sum() < 2:
         raise BoardHistoryServiceError(
             "insufficient_history",
-            "板块指数历史不足两个交易日",
+            "板块指数历史不足两个有效交易日",
         )
     return normalized
 
@@ -157,41 +156,23 @@ def _historical_streaks(
     frame: pd.DataFrame,
     *,
     mode: BoardTrendMode,
-) -> list[int]:
-    """逐日复现 calc_trend：2 位涨跌、平盘穿透、最多 30 天。"""
+) -> tuple[list[int], list[bool]]:
+    """原值判方向；平盘结束连续段，缺口后的段长保留下界。"""
+    import numpy as np
 
-    changes = [0.0] * len(frame)
-    for index in range(1, len(frame)):
-        close = float(frame.iloc[index]["close"])
-        reference = (
-            float(frame.iloc[index]["open"])
-            if mode is BoardTrendMode.CANDLE
-            else float(frame.iloc[index - 1]["close"])
-        )
-        changes[index] = round((close - reference) / reference * 100, 2)
-
-    streaks = [0] * len(frame)
-    for end_index in range(1, len(frame)):
-        start_index = max(1, end_index - TREND_STREAK_CAP + 1)
-        recent = list(reversed(changes[start_index : end_index + 1]))
-        first_direction = next(
-            ((change > 0) - (change < 0) for change in recent if change != 0),
-            0,
-        )
-        if first_direction == 0:
-            continue
-        streak = 0
-        for change in recent:
-            if change == 0 or ((change > 0) - (change < 0)) == first_direction:
-                streak += first_direction
-            else:
-                break
-        streaks[end_index] = streak
-    return streaks
+    close = frame["close"]
+    base = frame["open"] if mode is BoardTrendMode.CANDLE else close.shift(1)
+    known = np.isfinite(close) & np.isfinite(base) & close.gt(0) & base.gt(0)
+    up, up_exact = streak_counts(close.gt(base), known)
+    down, down_exact = streak_counts(close.lt(base), known)
+    streaks = (up.fillna(0) - down.fillna(0)).astype(int)
+    exact = (streaks.ge(0) & up_exact) | (streaks.lt(0) & down_exact)
+    return streaks.tolist(), exact.tolist()
 
 
 def _first_hit_indices(
     streaks: list[int],
+    exact: list[bool],
     *,
     direction: BoardStudyDirection,
     min_streak: int,
@@ -199,7 +180,7 @@ def _first_hit_indices(
     expected_sign = 1 if direction is BoardStudyDirection.UP else -1
     hits: list[int] = []
     for index, streak in enumerate(streaks):
-        if streak * expected_sign < min_streak:
+        if not exact[index] or streak * expected_sign < min_streak:
             continue
         previous = streaks[index - 1] if index else 0
         previous_same_direction = previous * expected_sign > 0
@@ -277,6 +258,7 @@ def _benchmark_history(
     values = {
         row.date: float(row.close)
         for row in normalized.itertuples(index=False)
+        if isfinite(float(row.close)) and row.close > 0
     }
     return index_name(code), "tushare_or_akshare_index_daily", values, []
 
@@ -292,11 +274,11 @@ def study_board_history(query: BoardHistoryStudyQuery) -> BoardHistoryStudy:
         (index for index, value in enumerate(frame["date"]) if value >= start_boundary),
         len(frame) - 1,
     )
-    streaks = _historical_streaks(frame, mode=query.mode)
+    streaks, exact = _historical_streaks(frame, mode=query.mode)
     first_hits = [
         index
         for index in _first_hit_indices(
-            streaks,
+            streaks, exact,
             direction=query.direction,
             min_streak=query.min_streak,
         )
@@ -309,8 +291,16 @@ def study_board_history(query: BoardHistoryStudyQuery) -> BoardHistoryStudy:
     )
     benchmark_name, benchmark_source, benchmark, warnings = _benchmark_history(query)
 
+    expected_sign = 1 if query.direction is BoardStudyDirection.UP else -1
+    unknown_starts = sum(
+        index >= event_start_index and not exact[index] and streak == expected_sign * query.min_streak
+        for index, streak in enumerate(streaks)
+    )
+    if unknown_starts:
+        warnings.append(f"{unknown_starts} 段缺少可确认段首，未计入首次命中事件")
     events: list[BoardHistoryEvent] = []
     censored = 0
+    unavailable_windows = 0
     benchmark_aligned = 0
     for index in selected:
         forward_index = index + query.forward_days
@@ -321,6 +311,9 @@ def study_board_history(query: BoardHistoryStudyQuery) -> BoardHistoryStudy:
         forward_row = frame.iloc[forward_index]
         event_close = float(event_row["close"])
         forward_close = float(forward_row["close"])
+        if not isfinite(forward_close) or forward_close <= 0:
+            unavailable_windows += 1
+            continue
         return_pct = round((forward_close - event_close) / event_close * 100, 4)
         benchmark_return: float | None = None
         relative_return: float | None = None
@@ -357,6 +350,8 @@ def study_board_history(query: BoardHistoryStudyQuery) -> BoardHistoryStudy:
         for event in events
         if event.relative_return_pct is not None
     ]
+    if unavailable_windows:
+        warnings.append(f"{unavailable_windows} 个事件后续终点收盘缺失，已从可用样本中剔除")
     if benchmark and benchmark_aligned < len(events):
         warnings.append(f"{len(events) - benchmark_aligned} 个事件缺少精确同日基准")
 
@@ -372,7 +367,7 @@ def study_board_history(query: BoardHistoryStudyQuery) -> BoardHistoryStudy:
         coverage=BoardHistoryCoverage(
             observations=len(frame) - event_start_index,
             first_hits=len(first_hits),
-            selected=len(selected),
+            selected=len(selected) - unavailable_windows,
             completed=len(events),
             censored=censored,
             benchmark_aligned=benchmark_aligned,
@@ -385,7 +380,9 @@ def study_board_history(query: BoardHistoryStudyQuery) -> BoardHistoryStudy:
             notes=[
                 "只使用数据源发布的板块指数历史，没有读取或回填当前成分股",
                 "事件条件在当日收盘后才成立，收益从事件日收盘计算到未来交易日收盘",
-                "平盘日沿用最近方向并计入连续天数，与趋势榜当前口径一致",
+                "连续段按价格原值判断，平盘与缺值中断，不设 30 天上限",
+                "数据起点或缺口后无法确认段首的连续段，不伪装成首次命中事件",
+                "后续窗口按原日期行计数，缺失终点价的事件不列入可用样本",
                 "数据源可能修订历史序列；本工具没有保存逐日 vintage 版本",
                 "从当前趋势榜选择板块带有事后选择，本结果不代表样本外表现",
             ]

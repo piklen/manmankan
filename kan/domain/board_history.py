@@ -28,7 +28,7 @@ class BoardHistoryStudyQuery(BoardModel):
     level: Annotated[int, Field(ge=1, le=3)] = 1
     mode: BoardTrendMode
     direction: BoardStudyDirection
-    min_streak: Annotated[int, Field(ge=2, le=30)]
+    min_streak: Annotated[int, Field(ge=2)]
     forward_days: Annotated[int, Field(ge=1, le=60)]
     lookback_years: Annotated[int, Field(ge=1, le=15)]
     sample_policy: BoardStudySamplePolicy

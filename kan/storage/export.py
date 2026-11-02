@@ -1,7 +1,7 @@
-"""非终端输出格式 · markdown / json 导出兼容门面。
+"""非终端输出格式 · 当前 CLI 与服务共用的导出入口。
 
 具体实现按命令族拆到 export_base / export_hold / export_scan / export_find，
-本模块保留既有 `kan.storage.export` 导入契约，避免 CLI 和外部脚本迁移。
+本模块集中提供当前调用方使用的输出函数。
 """
 
 from __future__ import annotations
@@ -96,9 +96,6 @@ from kan.storage.export_trend import (
     compare_payload,
     theme_leaderboard_markdown,
     theme_leaderboard_payload,
-    trend_csv,
-    trend_markdown,
-    trend_payload,
 )
 
 __all__ = [
@@ -183,7 +180,4 @@ __all__ = [
     "theme_leaderboard_markdown",
     "theme_leaderboard_payload",
     "to_json",
-    "trend_csv",
-    "trend_markdown",
-    "trend_payload",
 ]

@@ -39,13 +39,7 @@ def hot_runner(monkeypatch):
     monkeypatch.setattr(
         "kan.cli.scan_cmds._load_watchlist_pairs", lambda group=None: [("600519", "贵州茅台")]
     )
-    monkeypatch.setattr(
-        "kan.cli.trend_cmds._get_watchlist_pairs", lambda group=None: [("600519", "贵州茅台")]
-    )
     monkeypatch.setattr("kan.core.auto_fetch.auto_fetch_stale", lambda _p, **_kw: None)
-    monkeypatch.setattr(
-        "kan.cli.trend_cmds._load_watchlist_pairs", lambda group=None: [("600519", "贵州茅台")]
-    )
     monkeypatch.setattr(
         "kan.cli.extreme_cmds._get_watchlist_pairs", lambda group=None: [("600519", "贵州茅台")]
     )
@@ -143,25 +137,6 @@ def test_high_hot_runs(hot_runner, monkeypatch):
     assert "Traceback" not in result.output
 
 
-def test_trend_hot_runs(hot_runner, monkeypatch):
-    from kan.app import app
-
-    class _Tr:
-        def __init__(self, sym, name):
-            self.symbol, self.name = sym, name
-            self.current_price, self.streak, self.streak_pct = 100.0, 0, 0.0
-            self.daily_changes = []
-            self.direction = "平"
-
-    monkeypatch.setattr(
-        "kan.core.scanner.trend_batch",
-        lambda pairs, candle=False: [_Tr(s, n) for s, n in pairs],
-    )
-    result = hot_runner.invoke(app, ["trend", "--hot", "rank"])
-    assert result.exit_code == 0, result.output
-    assert "Traceback" not in result.output
-    assert "东财人气榜" in result.output
-    assert "⭐" in result.output
 
 
 def test_fetch_hot_runs(hot_runner, monkeypatch):
@@ -179,29 +154,3 @@ def test_fetch_hot_runs(hot_runner, monkeypatch):
     result = hot_runner.invoke(app, ["fetch", "--hot", "rank"])
     assert result.exit_code == 0, result.output
     assert fetched == [["000725", "600519"]]
-
-
-def test_trend_hot_latest_uneven_daily_changes(hot_runner, monkeypatch):
-    """trend --hot --latest · 各股 daily_changes 长度不一时,榜列 + 日期列不错位。"""
-    from kan.app import app
-
-    class _Tr:
-        def __init__(self, sym, name, days):
-            self.symbol, self.name = sym, name
-            self.current_price, self.streak, self.streak_pct = 100.0, 0, 0.0
-            self.daily_changes = days
-            self.direction = "平"
-
-    # 第 1 只 3 天、第 2 只 1 天 —— 行宽不齐,验证 base_cols=5(含榜列)补齐逻辑
-    rows = {
-        "000725": [("2026-05-21", 1.5), ("2026-05-20", -2.0), ("2026-05-19", 0.3)],
-        "600519": [("2026-05-21", 0.8)],
-    }
-    monkeypatch.setattr(
-        "kan.core.scanner.trend_batch",
-        lambda pairs, candle=False: [_Tr(s, n, rows[s]) for s, n in pairs],
-    )
-    result = hot_runner.invoke(app, ["trend", "--hot", "rank", "--latest", "3"])
-    assert result.exit_code == 0, result.output
-    assert "Traceback" not in result.output
-    assert "东财人气榜" in result.output

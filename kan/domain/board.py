@@ -40,9 +40,9 @@ class BoardTrendQuery(BoardModel):
 
     kind: BoardKind = BoardKind.INDUSTRY
     mode: BoardTrendMode = BoardTrendMode.CLOSE
-    up: Annotated[int | None, Field(ge=1, le=30)] = None
-    down: Annotated[int | None, Field(ge=1, le=30)] = None
-    min_streak: Annotated[int | None, Field(ge=1, le=30)] = None
+    up: Annotated[int | None, Field(ge=1)] = None
+    down: Annotated[int | None, Field(ge=1)] = None
+    min_streak: Annotated[int | None, Field(ge=1)] = None
     sort: BoardTrendSort = BoardTrendSort.STREAK
     level: Annotated[int, Field(ge=1, le=3)] = 1
     limit: Annotated[int | None, Field(ge=1, le=500)] = 30

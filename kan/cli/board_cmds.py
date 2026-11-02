@@ -284,15 +284,15 @@ def trend_cmd(
     ] = BoardKind.INDUSTRY,
     up: Annotated[
         int | None,
-        typer.Option("--up", help="只看连续上涨 ≥ N 天的板块(1-30)"),
+        typer.Option("--up", help="只看连续上涨 ≥ N 天的板块(至少 1 天)"),
     ] = None,
     down: Annotated[
         int | None,
-        typer.Option("--down", help="只看连续下跌 ≥ N 天的板块(1-30)"),
+        typer.Option("--down", help="只看连续下跌 ≥ N 天的板块(至少 1 天)"),
     ] = None,
     min_streak: Annotated[
         int | None,
-        typer.Option("--min-streak", help="只看连续涨跌绝对天数 ≥ N 的板块(1-30)"),
+        typer.Option("--min-streak", help="只看连续涨跌绝对天数 ≥ N 的板块(至少 1 天)"),
     ] = None,
     sort: Annotated[
         BoardTrendSort,
@@ -340,11 +340,11 @@ def trend_cmd(
             exit_code=2,
         )
     for name, value in (("--up", up), ("--down", down), ("--min-streak", min_streak)):
-        if value is not None and not 1 <= value <= 30:
+        if value is not None and value < 1:
             _exit_board_trend_error(
                 fmt,
                 code="invalid_streak_days",
-                message=f"{name} 的值必须在 1-30 之间(当前:{value})",
+                message=f"{name} 的值必须至少为 1(当前:{value})",
                 hint="例: kan board trend --kind theme --up 3",
                 exit_code=2,
             )
@@ -537,12 +537,12 @@ def trend_cmd(
                     if candle:
                         console.print(
                             "[dim]  阳线阴线口径:收盘 > 开盘 = ▲"
-                            " · 收盘 < 开盘 = ▼ · 平盘不断连续[/dim]"
+                            " · 收盘 < 开盘 = ▼ · 平盘或缺值中断连续[/dim]"
                         )
                     else:
                         console.print(
                             "[dim]  收盘价口径:今日收盘 > 昨日收盘 = ▲"
-                            " · 今日收盘 < 昨日收盘 = ▼ · 平盘不断连续[/dim]"
+                            " · 今日收盘 < 昨日收盘 = ▼ · 平盘或缺值中断连续[/dim]"
                         )
                     if kind is BoardKind.THEME:
                         from kan.render.theme import render_theme_trend_disclaimer

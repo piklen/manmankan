@@ -231,7 +231,6 @@ def test_heavy_commands_show_lifecycle_within_slo(
     [
         (["low", "60"], True),
         (["high", "60"], True),
-        (["trend"], True),
     ],
 )
 def test_fast_commands_ttfb_within_slo(

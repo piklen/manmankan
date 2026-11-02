@@ -106,7 +106,7 @@ def test_trend_up_out_of_range(monkeypatch):
     runner = CliRunner()
     result = runner.invoke(app, ["theme", "trend", "--up", "0"])
     assert result.exit_code == 1
-    assert "1-30" in result.output
+    assert "至少为 1" in result.output
 
 
 def test_trend_min_streak_one(monkeypatch):

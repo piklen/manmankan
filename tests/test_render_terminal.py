@@ -690,10 +690,14 @@ def test_trend_table_cum_pct_signed():
         _ctx(), [_trend(streak=2, pct=3.5)], latest=None, candle=False,
     )
     down = terminal.trend_table(
-        _ctx(), [_trend(streak=-3, pct=4.2)], latest=None, candle=False,
+        _ctx(), [_trend(streak=-3, pct=-4.2)], latest=None, candle=False,
     )
     assert up.columns[3]._cells[0].plain == "+3.50%"
     assert down.columns[3]._cells[0].plain == "-4.20%"
+    gap = terminal.trend_table(
+        _ctx(), [_trend(streak=2, pct=-1.5)], latest=None, candle=True,
+    )
+    assert gap.columns[3]._cells[0].plain == "-1.50%"
 
 
 def test_trend_title_trims_suffixes_for_narrow_terminal():

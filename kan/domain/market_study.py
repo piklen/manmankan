@@ -9,7 +9,9 @@ from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 StudyField = Literal[
     "change_pct", "gap_pct", "body_pct", "return_pct", "position", "low_age",
-    "up_days", "down_days", "bull_days", "bear_days", "joint_up_days", "volume_ratio", "shape_distance",
+    "up_days", "down_days", "bull_days", "bear_days", "joint_up_days",
+    "previous_up_days", "previous_down_days", "rising_days", "falling_days",
+    "volume_ratio", "shape_distance",
 ]
 
 
@@ -25,9 +27,9 @@ class StudyCondition(StudyModel):
 
     @model_validator(mode="after")
     def window_matches_field(self) -> StudyCondition:
-        needs_window = self.field in {"return_pct", "position", "low_age", "volume_ratio", "shape_distance"}
+        needs_window = self.field in {"return_pct", "position", "low_age", "volume_ratio", "shape_distance", "rising_days", "falling_days"}
         if needs_window != (self.window is not None):
-            raise ValueError("区间收益、区间位置、低点距今、量比和形态距离必须指定窗口；其他条件不使用窗口")
+            raise ValueError("区间涨跌、位置、低点距今、量比、形态距离、区间上涨/下跌天数必须指定窗口；其他条件不使用窗口")
         return self
 
     @property

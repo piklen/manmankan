@@ -372,49 +372,10 @@ def test_low_csv(extreme_runner: CliRunner) -> None:
     assert lines[1] == "180日低点,测试,600519,100.00,90.00,110.00,8.0"
 
 
-# ── kan trend --format csv (trend_cmds) ────────────────────────────────
 
 
-@pytest.fixture
-def trend_runner(monkeypatch: pytest.MonkeyPatch) -> CliRunner:
-    """隔离 trend 全链路(参照 tests/test_trend_cli.py runner fixture)。"""
-    fake_watchlist = type("WL", (), {
-        "stocks": [type("S", (), {"symbol": "600519", "name": "测试跌5"})()],
-    })()
-    fake_positions = type("Book", (), {"positions": []})()
-    monkeypatch.setattr(
-        "kan.cli.trend_cmds._get_watchlist_pairs",
-        lambda group=None: [("600519", "测试跌5")],
-    )
-    monkeypatch.setattr(
-        "kan.storage.watchlist.load_watchlist", lambda group=None: fake_watchlist,
-    )
-    monkeypatch.setattr(
-        "kan.storage.positions.load_positions", lambda: fake_positions,
-    )
-    monkeypatch.setattr("kan.core.auto_fetch.auto_fetch_stale", lambda _pairs, **_kw: None)
-    monkeypatch.setattr(
-        "kan.core.scanner.trend_batch",
-        lambda *_args, **_kwargs: [
-            TrendResult("600519", "测试跌5", 100.0, -5, -8.0, [
-                ("2026-05-08", -2.0), ("2026-05-09", -1.5),
-            ]),
-        ],
-    )
-    monkeypatch.setattr("kan.data.fetcher.cache_age", lambda _sym: "2026-05-08 12:00")
-    monkeypatch.setattr("kan.core.scanner.get_limit_threshold", lambda *a, **k: 10.0)
-    return CliRunner()
 
 
-def test_trend_csv(trend_runner: CliRunner) -> None:
-    result = trend_runner.invoke(app, ["trend", "--format", "csv"])
-
-    assert result.exit_code == 0, result.output
-    out = result.output
-    assert out.startswith(BOM)
-    lines = out.lstrip(BOM).splitlines()
-    assert lines[0].startswith("股票,代码,现价,连续,累计%")
-    assert "测试跌5,600519,100.00,跌5天,8.00" in lines[1]
 
 
 # ── kan hold --format csv (hold_cmds) ──────────────────────────────────

@@ -85,12 +85,12 @@ def test_settings_never_returns_full_token(
     assert "secret" not in response.text.lower()
 
 
-def test_study_and_map_contracts_are_discoverable(client):
+def test_study_and_search_contracts_are_discoverable(client):
     schema = client.get("/api/v1/openapi.json").json()
     request = schema["paths"]["/api/v1/studies/run"]["post"]["requestBody"]
     assert request["content"]["application/json"]["schema"]["$ref"].endswith("/StudyQuery")
-    assert "/api/v1/trends/map" in schema["paths"]
-    assert {"trend-map", "market-studies", "pattern-search"} <= set(client.get("/api/v1/meta").json()["capabilities"])
+    assert "/api/v1/trends/search" in schema["paths"]
+    assert {"trend-search", "market-studies", "pattern-search"} <= set(client.get("/api/v1/meta").json()["capabilities"])
 
 
 def test_personal_candidate_note_state_roundtrip(client):

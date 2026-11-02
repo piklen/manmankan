@@ -72,10 +72,10 @@ export function StudiesPage() {
       ) : (
         <Empty title={search ? "没有匹配的研究" : "让一个问题留下可核对的答案"}>
           <p>
-            从趋势地图圈定一片区域，或明确写下自己的日线条件。每次运行都会自动保留。
+            先在趋势筛选中查看当前匹配，再按需核对历史；只有运行历史研究时才保存证据。
           </p>
           <Link className="button button--primary" to="/">
-            发现趋势
+            开始趋势筛选
             <ArrowRight size={16} />
           </Link>
         </Empty>

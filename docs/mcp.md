@@ -1,16 +1,52 @@
 # MCP 接入
 
-`manmankan` 提供本地 MCP server，让 AI 客户端调用同一套 Python application service 与既有 CLI / JSON 数据契约。当前支持 stdio 和本机 Streamable HTTP 两种 transport。MCP 只负责整理 typed Screen、执行确定性查询和返回证据，不提供买卖动作、评级、目标价或策略结论。
+`manmankan` 提供本地 MCP server，让 AI 客户端调用同一套 Python application service 与既有 CLI / JSON 数据契约。当前支持 stdio 和本机 Streamable HTTP 两种 transport。MCP 可直接筛选当前趋势、执行确定性研究查询并返回证据，不提供买卖动作、评级、目标价或策略结论。
 
-MCP `tools/list` 会返回每个工具的 `inputSchema` 和 `outputSchema`。`tools/call` 保留兼容旧客户端的 text content；当 CLI 输出是 JSON object 时，同时返回 `structuredContent`，客户端可以直接校验和读取结构，不需要再从文本里二次解析 JSON。
+MCP `tools/list` 会返回每个工具的 `inputSchema` 和 `outputSchema`。`tools/call` 返回可读的 text content；工具结果为 JSON object 时同时返回 `structuredContent`，客户端可以直接校验和读取结构。
 
-## Screen 生命周期 tools
+## 当前趋势筛选：`kan_trend`
+
+`kan_trend` 使用 `TrendSearchQuery → TrendSearchResult`，与 Web、TUI 和 `kan trend` 直接调用同一服务。它读取本地日线，不自动补行情、保存筛选或创建历史研究。先明确股票范围和条件；`conditions: []` 表示调用方明确选择无条件浏览，不会暗加策略阈值。
+
+下面是调用 `kan_trend` 的 `arguments`，数字仅演示用户明确填写的条件：
+
+```json
+{
+  "universe": "all",
+  "conditions": [
+    {"field": "down_days", "operator": "gte", "value": 5}
+  ]
+}
+```
+
+指定代码池并核对先跌后涨：
+
+```json
+{
+  "universe": "codes",
+  "codes": ["600519", "300750"],
+  "conditions": [
+    {"field": "previous_down_days", "operator": "gte", "value": 3},
+    {"field": "up_days", "operator": "gte", "value": 2}
+  ]
+}
+```
+
+范围可选 `all / personal / codes`；`personal` 包含自选、持仓与未拒绝候选。`industries` 按当前申万一级完整行业名筛范围；`as_of` 指定完整收盘日，留空请求最近完整收盘。日线条件全部按 AND 组合，字段、窗口与单位见 `kan study catalog`；`shape_distance` 还必须提供明确的 `reference: {symbol, as_of}`，不会把参照自身同日窗口当匹配。
+
+收盘涨跌使用 `up_days / down_days`，阳阴线使用 `bull_days / bear_days`，同时收阳且收涨使用 `joint_up_days`；平盘、十字或缺行中断对应连续段。`previous_down_days / previous_up_days` 表示当前反向段紧接的前一段，`rising_days / falling_days` 搭配 `window` 表示最近 N 个市场交易日内的次数。若表达“上涨最多 3 天”，须同时显式传 `up_days lte 3` 和 `up_days gt 0`；单独 `lte 3` 在数值上也包含零天。区间计数 `rising_days / falling_days` 允许 0，例如最近 10 日上涨最多 3 天只需 `rising_days(window=10) lte 3`，不能暗加大于 0。
+
+返回 `coverage.total/evaluated/matched/missing`、匹配 `rows`、无法判断的 `missing_rows`，以及行业筛选后的完整 `scope_codes`。`rows` 提供条件实际值、`lower_bounds`、当前连续段日期与涨跌幅、多周期位置、区间涨跌、来源和实际走势。缺行情不是不符合条件，只有长度下界也不能宣称恰好 N 天。`common_data_date/count` 提示缓存主要截止日与对象数，不会静默替换请求日期。
+
+当前筛选需要历史验证时，沿用完整 `scope_codes` 构造明确的 Study 条件和观察窗口，使用 `kan study` 或 Web/TUI 历史入口；不要只拿今天的匹配对象冒充原研究池。当前 MCP 不提供 Study 或保存筛选工具，不能虚构对应工具名。
+
+## 公司研究事实与结构化 Screen 工具
 
 研究事实入口 `kan_research` 使用 `ResearchRequest → ResearchBundle`，直接调用共享 Python 服务。示例参数为 `{"codes":["600519"],"dimensions":["fundamentals"],"refresh":true}`，只刷新财务，不依赖行情。默认维度为市场、估值、财务；逐维度日期、来源、单位、缺失与引用在同一个包中返回。财务分别记录报告期、公告日和来源检查时间；不调用模型、不读取持仓。`ok=true,status=partial` 表示执行成功但材料质量不完整；实际取数失败通过 `isError=true` 报告并保留成功部分。完整契约见 [`research.md`](research.md)。
 
 三表示例：`{"codes":["600519"],"dimensions":["income","balancesheet","cashflow"]}`。只获取所选表，返回报告期、实际公告日、合并报表类型与累计/期末口径；金额为元。逐表失败写入 `errors[].dimension`，不丢弃其他可用表。
 
-vNext 新增五个不经过 shell/CLI 的复合工具：
+下面五个 Screen 工具仍使用各自的结构化契约，不经过 shell/CLI；它们与当前趋势筛选是不同入口：
 
 | Tool | 输入/输出 | 行为边界 |
 |---|---|---|
@@ -151,11 +187,11 @@ kan mcp http --host localhost --port 8765 --path /mcp
 MCP 工具返回的数据仍然遵守 CLI / JSON 契约：
 
 - 首次接入可先调用 `kan_schema`，或在 CLI 侧跑 `kan schema --format json --section mcp --compact` 查看工具 schema。
-- 先检查 MCP `isError` 或 JSON `ok:false`。
+- 先检查 MCP `isError`；命令返回错误 envelope 时检查 `error` 或 `ok:false`。`kan_trend` 的成功结果使用 `coverage`，没有 `ok` 字段。
 - 优先读取 `structuredContent`；没有该字段时再回退到 text content。
-- 保留 `disclaimer`。
-- 读取 `data_cutoff` / `fetched_at`，不要假设数据实时。
-- 用 `data_availability` 区分未请求、缺数据和当前模式不支持。
+- 保留返回中的 `disclaimer`（若有）和 `warnings`。
+- `kan_trend` 读取 `as_of`、`common_data_date/count`、`missing_rows` 与逐股来源；其他工具按各自返回读取 `data_cutoff / fetched_at`，不要假设数据实时。
+- `kan_trend` 用 `coverage` 和缺口原因区分命中、未满足、无法判断；返回 `data_availability` 的其他工具按该字段区分未请求、缺数据和不支持。
 - 对 Screen 先调用 `kan_screen_plan`；只有 `executable=true` 才运行，不能忽略 `unsupported_filters` 或 `warnings`。
 - 解释 ScreenRun 时只引用已返回的 evidence；不得补造不存在的来源、日期、阈值或实际值。
 - 把结果解释为研究输入，不输出买卖建议、预测、评级或策略结论。

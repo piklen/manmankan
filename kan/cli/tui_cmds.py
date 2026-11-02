@@ -11,11 +11,11 @@ from kan.app import app
 
 @app.command()
 def tui() -> None:
-    """打开键盘工作台：已保存研究、同条件重跑、当前匹配与历史证据。"""
+    """打开键盘筛选：明确连续涨跌天数，查看当前日线，按需保存与核对历史。"""
     if not sys.stdin.isatty() or not sys.stdout.isatty():
         typer.echo(
             "kan tui 需要交互终端。请在终端直接运行；"
-            "脚本可用 kan study --help，网页使用 kan web。",
+            "脚本筛选可用 kan trend --help；历史研究用 kan study --help。",
             err=True,
         )
         raise typer.Exit(2)
