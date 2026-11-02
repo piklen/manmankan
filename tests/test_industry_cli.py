@@ -53,13 +53,7 @@ def industry_runner(monkeypatch):
     monkeypatch.setattr(
         "kan.cli.scan_cmds._load_watchlist_pairs", lambda group=None: [("600519", "贵州茅台")]
     )
-    monkeypatch.setattr(
-        "kan.cli.trend_cmds._get_watchlist_pairs", lambda group=None: [("600519", "贵州茅台")]
-    )
     monkeypatch.setattr("kan.core.auto_fetch.auto_fetch_stale", lambda _p, **_kw: None)
-    monkeypatch.setattr(
-        "kan.cli.trend_cmds._load_watchlist_pairs", lambda group=None: [("600519", "贵州茅台")]
-    )
     monkeypatch.setattr(
         "kan.cli.extreme_cmds._get_watchlist_pairs", lambda group=None: [("600519", "贵州茅台")]
     )
@@ -155,24 +149,6 @@ def test_high_industry_runs(industry_runner, monkeypatch):
     assert "板块指数" in result.output
 
 
-def test_trend_industry_runs(industry_runner, monkeypatch):
-    from kan.app import app
-
-    class _Tr:
-        def __init__(self, sym, name):
-            self.symbol, self.name = sym, name
-            self.current_price, self.streak, self.streak_pct = 100.0, 0, 0.0
-            self.daily_changes = []
-            self.direction = "平"
-
-    monkeypatch.setattr(
-        "kan.core.scanner.trend_batch",
-        lambda pairs, candle=False: [_Tr(s, n) for s, n in pairs],
-    )
-    result = industry_runner.invoke(app, ["trend", "--industry=食品饮料"])
-    assert result.exit_code == 0
-    assert "Traceback" not in result.output
-    assert "⭐" in result.output  # 茅台在自选
 
 
 def test_info_industry_shows_board_card(industry_runner):
@@ -298,26 +274,5 @@ def test_low_industry_empty_watchlist_ok(industry_runner, monkeypatch):
         "kan.core.scanner.filter_extreme", lambda pairs, periods, mode="low": {}
     )
     result = industry_runner.invoke(app, ["low", "30", "--industry=食品饮料"])
-    assert result.exit_code == 0
-    assert "自选列表为空" not in result.output
-
-
-def test_trend_industry_empty_watchlist_ok(industry_runner, monkeypatch):
-    """空自选股时 trend --industry 仍正常。"""
-    from kan.app import app
-
-    class _Tr:
-        def __init__(self, sym, name):
-            self.symbol, self.name = sym, name
-            self.current_price, self.streak, self.streak_pct = 100.0, 0, 0.0
-            self.daily_changes = []
-            self.direction = "平"
-
-    monkeypatch.setattr("kan.cli.trend_cmds._load_watchlist_pairs", lambda group=None: [])
-    monkeypatch.setattr(
-        "kan.core.scanner.trend_batch",
-        lambda pairs, candle=False: [_Tr(s, n) for s, n in pairs],
-    )
-    result = industry_runner.invoke(app, ["trend", "--industry=食品饮料"])
     assert result.exit_code == 0
     assert "自选列表为空" not in result.output

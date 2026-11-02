@@ -151,10 +151,10 @@ def test_board_trend_rejects_unsupported_industry_moneyflow_level():
 
 
 def test_board_trend_rejects_invalid_days_in_terminal():
-    result = CliRunner().invoke(app, ["board", "trend", "--up", "31"])
+    result = CliRunner().invoke(app, ["board", "trend", "--up", "0"])
 
     assert result.exit_code == 2
-    assert "--up 的值必须在 1-30 之间" in result.output
+    assert "--up 的值必须至少为 1" in result.output
     assert "例: kan board trend --kind theme --up 3" in result.output
 
 

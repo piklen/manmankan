@@ -18,6 +18,7 @@ from zoneinfo import ZoneInfo
 import numpy as np
 import pandas as pd
 
+from kan.core.streaks import streak_counts
 from kan.domain.market_study import (
     StudyBar,
     StudyBin,
@@ -32,6 +33,7 @@ from kan.domain.market_study import (
     StudyField,
     StudyMatch,
     StudyQuery,
+    StudyReference,
     StudyResult,
     StudySummary,
 )
@@ -42,6 +44,7 @@ _STUDY = "market_studies:study:"
 _RUN = "market_studies:run:"
 _OPS = {"gt": operator.gt, "gte": operator.ge, "lt": operator.lt, "lte": operator.le, "eq": operator.eq}
 _STREAKS = {"up_days", "down_days", "bull_days", "bear_days", "joint_up_days"}
+_PREVIOUS_STREAKS = {"previous_up_days", "previous_down_days"}
 _PRICE_COLUMNS = ["open", "high", "low", "close"]
 
 FIELD_CATALOG = [
@@ -58,6 +61,10 @@ FIELD_CATALOG = [
         ("bull_days", "连续阳线", "天", False, "严格 close > open；十字与缺行中断"),
         ("bear_days", "连续阴线", "天", False, "严格 close < open；十字与缺行中断"),
         ("joint_up_days", "连续收阳且上涨", "天", False, "每天同时 close > open 且 close > previous close"),
+        ("previous_down_days", "紧邻前一跌段", "天", False, "仅当前收盘上涨段前紧接的下跌天数；平盘、缺行不跨越，段长可能只有下界"),
+        ("previous_up_days", "紧邻前一涨段", "天", False, "仅当前收盘下跌段前紧接的上涨天数；平盘、缺行不跨越，段长可能只有下界"),
+        ("rising_days", "区间上涨天数", "天", True, "最近 N 个市场交易日中收盘高于前日的天数；需 N+1 个完整收盘，平盘不计"),
+        ("falling_days", "区间下跌天数", "天", True, "最近 N 个市场交易日中收盘低于前日的天数；需 N+1 个完整收盘，平盘不计"),
         ("volume_ratio", "成交量相对前期", "倍", True, "当日成交量 / 此前 N 日平均成交量，不含当日"),
         ("shape_distance", "与参照形态的距离", "百分点", True, "两段 N 日收盘按各自首日归一为100后，逐日差的均方根；事后形态距离，不是推荐评分"),
     ]
@@ -106,14 +113,25 @@ def _number(value: Any) -> float | None:
     return numeric if math.isfinite(numeric) else None
 
 
+def normalize_history_dates(values: pd.Series) -> pd.Series:
+    """日期列只解析一次；原生 date 必须整列验证，不能只信任第一行。"""
+    if pd.api.types.is_datetime64_any_dtype(values.dtype):
+        return values.dt.date
+    if pd.api.types.infer_dtype(values, skipna=True) == "date":
+        return values
+    return pd.to_datetime(values).dt.date
+
+
 def prepare_history(frame: pd.DataFrame, sessions: list[date]) -> pd.DataFrame:
-    frame = frame.copy()
     if "date" not in frame:
         raise ValueError("本地日线缺少日期列，请更新对应股票行情后重试")
-    frame["date"] = pd.to_datetime(frame["date"]).dt.date
-    if frame["date"].duplicated().any():
+    dates = normalize_history_dates(frame["date"])
+    if dates.duplicated().any():
         raise ValueError("本地日线存在重复交易日，请更新对应股票行情后重试")
-    frame = frame.set_index("date").reindex(sessions)
+    # set_index 已建立独立工作帧，无需在它之前再复制整份行情。
+    frame = frame.set_index("date")
+    frame.index = pd.Index(dates, name="date")
+    frame = frame.reindex(sessions)
     for column in [*_PRICE_COLUMNS, "volume"]:
         if column not in frame:
             frame[column] = np.nan
@@ -134,23 +152,22 @@ def prepare_history(frame: pd.DataFrame, sessions: list[date]) -> pd.DataFrame:
     return frame
 
 
-def _streak(flags: pd.Series, known: pd.Series) -> tuple[pd.Series, pd.Series]:
-    """缺行后的连续段只知道下界，不能据此断言恰好 N 天。"""
-    counts: list[float] = []
-    exact_flags: list[bool] = []
-    count, exact = 0, False
-    for flag, valid in zip(flags.to_numpy(), known.to_numpy(), strict=True):
-        if not valid:
-            count, exact = 0, False
-            counts.append(float("nan"))
-        elif flag:
-            count += 1
-            counts.append(float(count))
-        else:
-            count, exact = 0, True
-            counts.append(0.0)
-        exact_flags.append(exact)
-    return pd.Series(counts, index=flags.index), pd.Series(exact_flags, index=flags.index)
+def _previous_streak(close: pd.Series, paired: pd.Series, *, rising: bool) -> tuple[pd.Series, pd.Series]:
+    """当前反向段紧接的前一段；段首未知时不能越过缺口猜测。"""
+    up = close.gt(close.shift(1))
+    down = close.lt(close.shift(1))
+    current, current_exact = streak_counts(down if rising else up, paired)
+    previous, previous_exact = streak_counts(up if rising else down, paired)
+    values = np.full(len(close), np.nan)
+    exact = np.ones(len(close), dtype=bool)
+    current_values = current.to_numpy()
+    no_segment = paired.to_numpy() & (current_values == 0)
+    values[no_segment] = 0
+    indices = np.flatnonzero(paired.to_numpy() & (current_values > 0) & current_exact.to_numpy())
+    preceding = indices - current_values[indices].astype(int)
+    values[indices] = previous.to_numpy()[preceding]
+    exact[indices] = previous_exact.to_numpy()[preceding]
+    return pd.Series(values, index=close.index), pd.Series(exact, index=close.index)
 
 
 def calculate_metrics(frame: pd.DataFrame, fields: list[tuple[StudyField, int | None]], reference_prices: np.ndarray | None = None) -> tuple[pd.DataFrame, pd.DataFrame]:
@@ -178,9 +195,15 @@ def calculate_metrics(frame: pd.DataFrame, fields: list[tuple[StudyField, int | 
                 "bear_days": (close.lt(frame.open), valid),
                 "joint_up_days": (close.gt(frame.open) & close.gt(close.shift(1)), paired),
             }[field]
-            metrics[key], exact[key] = _streak(flags, known)
+            metrics[key], exact[key] = streak_counts(flags, known)
+        elif field in _PREVIOUS_STREAKS:
+            metrics[key], exact[key] = _previous_streak(close, paired, rising=field == "previous_up_days")
         elif window is not None:
-            if field == "return_pct":
+            if field in {"rising_days", "falling_days"}:
+                complete = valid.rolling(window + 1).sum().eq(window + 1)
+                flags = close.gt(close.shift(1)) if field == "rising_days" else close.lt(close.shift(1))
+                metrics[key] = flags.rolling(window).sum().where(complete)
+            elif field == "return_pct":
                 complete = valid.rolling(window + 1).sum().eq(window + 1)
                 metrics[key] = ((close / close.shift(window) - 1) * 100).where(complete)
             elif field == "volume_ratio":
@@ -210,7 +233,7 @@ def calculate_metrics(frame: pd.DataFrame, fields: list[tuple[StudyField, int | 
     )
 
 
-def _condition_mask(condition: StudyCondition, metrics: pd.DataFrame, exact: pd.DataFrame) -> tuple[pd.Series, pd.Series]:
+def evaluate_condition(condition: StudyCondition, metrics: pd.DataFrame, exact: pd.DataFrame) -> tuple[pd.Series, pd.Series]:
     values = metrics[condition.key]
     matched = _OPS[condition.operator](values, condition.value)
     known = values.notna()
@@ -229,7 +252,7 @@ def _evaluate(frame: pd.DataFrame, query: StudyQuery, reference_prices: np.ndarr
     matched = pd.Series(True, index=frame.index)
     evaluated = pd.Series(True, index=frame.index)
     for condition in query.conditions:
-        hits, known = _condition_mask(condition, metrics, exact)
+        hits, known = evaluate_condition(condition, metrics, exact)
         matched &= hits
         evaluated &= known
     return metrics, exact, matched, evaluated
@@ -308,6 +331,22 @@ def _event_model(record: dict) -> StudyEvent:
     return StudyEvent.model_validate(record)
 
 
+def prepare_reference(reference: StudyReference, conditions: list[StudyCondition], sessions: list[date], as_of: date, history: pd.DataFrame | None) -> tuple[np.ndarray, list[StudyBar], str]:
+    """当前筛选与历史研究共用同一参照窗口与完整性口径。"""
+    if reference.as_of > as_of or reference.as_of not in sessions:
+        raise ValueError("形态参照日必须是不晚于研究截止日的完整市场交易日")
+    window = max(item.window or 0 for item in conditions if item.field == "shape_distance")
+    dates = [day for day in sessions if day <= reference.as_of][-window:]
+    if history is None or len(dates) < window:
+        raise ValueError("参照股票缺少完整窗口，请先更新参照股票行情")
+    frame = prepare_history(history, dates)
+    if not frame.valid.all():
+        raise ValueError("参照股票窗口有行情缺口，请选择完整窗口或更新行情")
+    source = " / ".join(dict.fromkeys(frame["_source"].astype(str)))
+    bars = [StudyBar(date=day, **{column: _number(row[column]) for column in [*_PRICE_COLUMNS, "volume"]}) for day, row in frame.iterrows()]
+    return frame.close.to_numpy(), bars, source
+
+
 def evaluate_study(query: StudyQuery, histories: Iterable[tuple[str, str, pd.DataFrame | None]], sessions: list[date], as_of: date, *, study_id: str = "study", run_id: str = "run", reference_history: pd.DataFrame | None = None) -> tuple[StudyResult, pd.DataFrame, pd.DataFrame]:
     """无取数、无写入的研究计算；历史条件只读取当日及之前的数据。"""
     complete_sessions = [day for day in sessions if day <= as_of]
@@ -333,19 +372,7 @@ def evaluate_study(query: StudyQuery, histories: Iterable[tuple[str, str, pd.Dat
     reference_bars: list[StudyBar] = []
     reference_source = None
     if query.reference is not None:
-        reference = query.reference
-        if reference.as_of > as_of or reference.as_of not in sessions:
-            raise ValueError("形态参照日必须是不晚于研究截止日的完整市场交易日")
-        reference_window = max(item.window or 0 for item in query.conditions if item.field == "shape_distance")
-        reference_dates = [day for day in sessions if day <= reference.as_of][-reference_window:]
-        if reference_history is None or len(reference_dates) < reference_window:
-            raise ValueError("参照股票缺少完整窗口，请先更新参照股票行情")
-        reference_frame = prepare_history(reference_history, reference_dates)
-        if not reference_frame.valid.all():
-            raise ValueError("参照股票窗口有行情缺口，请选择完整窗口或更新行情")
-        reference_prices = reference_frame.close.to_numpy()
-        reference_source = " / ".join(dict.fromkeys(reference_frame["_source"].astype(str)))
-        reference_bars = [StudyBar(date=day, **{column: _number(row[column]) for column in [*_PRICE_COLUMNS, "volume"]}) for day, row in reference_frame.iterrows()]
+        reference_prices, reference_bars, reference_source = prepare_reference(query.reference, query.conditions, sessions, as_of, reference_history)
         warnings.append("这是事后形态检索：参照形态可能包含历史事件当时尚未知的信息，不能解释为可事前执行的策略回测；同股票同参照日期的自匹配已排除。")
     for symbol, name, raw in histories:
         coverage.total_symbols += 1
@@ -353,22 +380,27 @@ def evaluate_study(query: StudyQuery, histories: Iterable[tuple[str, str, pd.Dat
             coverage.missing_symbols += 1
             unavailable.append(symbol)
             continue
-        frame = prepare_history(raw, calendar)
+        symbol_calendar = calendar
+        if any(condition.field in _PREVIOUS_STREAKS for condition in query.conditions):
+            first_cached = pd.to_datetime(raw["date"]).min().date()
+            symbol_calendar = [day for day in complete_sessions if day >= min(calendar[0], first_cached)]
+        symbol_start = symbol_calendar.index(calendar[start])
+        frame = prepare_history(raw, symbol_calendar)
         coverage.cached_symbols += 1
         metrics, exact, hits, evaluated = _evaluate(frame, query, reference_prices)
-        coverage.valid_stock_days += int(frame.valid.iloc[start:].sum())
-        coverage.evaluated_stock_days += int(evaluated.iloc[start:].sum())
-        self_index = calendar.index(query.reference.as_of) if query.reference is not None and query.reference.symbol == symbol and query.reference.as_of in calendar else None
-        self_hit = self_index is not None and self_index >= start and bool(hits.iloc[self_index])
+        coverage.valid_stock_days += int(frame.valid.iloc[symbol_start:].sum())
+        coverage.evaluated_stock_days += int(evaluated.iloc[symbol_start:].sum())
+        self_index = symbol_calendar.index(query.reference.as_of) if query.reference is not None and query.reference.symbol == symbol and query.reference.as_of in symbol_calendar else None
+        self_hit = self_index is not None and self_index >= symbol_start and bool(hits.iloc[self_index])
         coverage.self_matches_excluded += int(self_hit)
-        coverage.matched_stock_days += int(hits.iloc[start:].sum()) - int(self_hit)
+        coverage.matched_stock_days += int(hits.iloc[symbol_start:].sum()) - int(self_hit)
         coverage.current_evaluated += int(evaluated.iloc[-1])
         if not evaluated.iloc[-1]:
             unavailable.append(symbol)
         if hits.iloc[-1] and self_index != len(frame) - 1:
             values, bounds = _values(metrics, exact, len(frame) - 1, query)
             matches.append(StudyMatch(symbol=symbol, name=name, date=as_of, close=float(frame.close.iloc[-1]), change_pct=_number(metrics.change_pct.iloc[-1]), values=values, lower_bounds=bounds))
-        indices = _selected_indices(hits, evaluated, start, query, excluded_index=self_index)
+        indices = _selected_indices(hits, evaluated, symbol_start, query, excluded_index=self_index)
         events.extend(_event_records(frame, indices, metrics, exact, query, symbol, name, sessions, session_positions))
         if indices or hits.iloc[-1]:
             saved = frame.reset_index(names="date")
@@ -526,7 +558,7 @@ def study_evidence(run_id: str, symbol: str, event_date: date) -> StudyEvidence:
         raise ValueError("该股票在指定日期未满足本次研究条件")
     checks = []
     for condition in run.query.conditions:
-        matched, known = _condition_mask(condition, metrics, exact)
+        matched, known = evaluate_condition(condition, metrics, exact)
         checks.append(StudyCheck(condition=condition, actual=_number(metrics[condition.key].iloc[index]), bound="exact" if exact[condition.key].iloc[index] else "at_least", matched=bool(matched.iloc[index]) if known.iloc[index] else None))
     events_path = _run_dir(run_id) / "events.parquet"
     outcome = None
@@ -535,6 +567,11 @@ def study_evidence(run_id: str, symbol: str, event_date: date) -> StudyEvidence:
         if not found.empty:
             outcome = _event_model(found.iloc[0].to_dict())
     before = max(30, max((item.window or 1 for item in run.query.conditions), default=1) + 1)
+    if any(item.field in _PREVIOUS_STREAKS for item in run.query.conditions):
+        before = index  # 前后两段须可逐日核对，不能只显示固定 30 日尾部。
+    else:
+        counts = [metrics[item.key].iloc[index] for item in run.query.conditions if item.field in _STREAKS]
+        before = max(before, *(int(value) + 1 for value in counts if pd.notna(value))) if counts else before
     shown = frame.iloc[max(0, index - before):index + run.query.forward_days + 1]
     source = " / ".join(dict.fromkeys(shown.loc[shown.valid, "_source"].astype(str)))
     return StudyEvidence(

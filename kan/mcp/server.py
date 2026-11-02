@@ -37,6 +37,7 @@ from kan.service.screen_ai import (
     plan_screen,
     run_from_input,
 )
+from kan.service.trend_search import TrendSearchQuery, TrendSearchResult, search_trends
 
 SERVER_NAME = "manmankan"
 SERVER_VERSION = __version__
@@ -237,6 +238,10 @@ def _kan_screen_parse(payload: dict[str, Any]) -> dict[str, Any]:
     return _model_result(parse_screen_text(ScreenParseInput.model_validate(payload)))
 
 
+def _kan_trend(payload: dict[str, Any]) -> dict[str, Any]:
+    return _model_result(search_trends(TrendSearchQuery.model_validate(payload)))
+
+
 def _kan_research(payload: dict[str, Any]) -> dict[str, Any]:
     from kan.service.research_service import build_research_bundle
 
@@ -302,6 +307,13 @@ def _kan_hold(payload: dict[str, Any]) -> dict[str, Any]:
 
 
 TOOLS = {
+    "kan_trend": ToolSpec(
+        name="kan_trend",
+        description="按明确日线条件筛当前趋势：连续涨跌、前后段、区间涨跌天数与形态。与 Web/TUI/CLI 同源，不自动取数或创建历史研究。",
+        input_schema=TrendSearchQuery.model_json_schema(),
+        handler=_kan_trend,
+        output_schema=TrendSearchResult.model_json_schema(),
+    ),
     "kan_research": ToolSpec(
         name="kan_research",
         description="Build a bounded stock research evidence bundle with per-dimension dates, sources, units and explicit gaps. Does not call an LLM or read holdings.",

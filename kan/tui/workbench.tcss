@@ -1,13 +1,13 @@
 Screen { background: #151e25; color: #e8efed; }
-#brand { height: 1; padding: 0 2; margin-top: 1; text-style: bold; color: #95d5bd; }
+#brand { height: 1; padding: 0 2; margin-top: 0; text-style: bold; color: #95d5bd; }
 #toolbar { height: 3; margin: 0 2; }
 #search { width: 1fr; margin-right: 1; border: tall #40515b; }
 #toolbar Button { min-width: 8; width: auto; margin-left: 1; padding: 0 1; }
 Button { background: #273741; border: tall #273741; color: #e8efed; }
 Button.-primary { background: #467866; border: tall #467866; color: white; }
 Button:focus { border: tall #95d5bd; }
-#summary { height: auto; max-height: 3; margin: 1 2 0 2; color: #d3dfdf; }
-#status { height: auto; min-height: 1; max-height: 3; margin: 0 2 1 2; color: #a6babf; }
+#summary { height: auto; max-height: 3; margin: 0 2; color: #d3dfdf; }
+#status { height: auto; min-height: 1; max-height: 3; margin: 0 2; color: #a6babf; }
 #results { height: 1fr; margin: 0 2; background: #151e25; }
 DataTable > .datatable--header { background: #273741; color: #d3dfdf; text-style: bold; }
 DataTable > .datatable--even-row { background: #19242c; }
@@ -16,8 +16,19 @@ DataTable > .datatable--cursor { background: #365b50; color: white; }
 #empty { height: 1fr; padding: 2; color: #afbdc3; }
 #detail { height: 1fr; margin: 0 2; }
 #detail-content { height: auto; }
-#preview { height: auto; max-height: 2; margin: 1 2 0 2; color: #cfddda; }
+#preview { height: auto; max-height: 2; margin: 0 2; color: #cfddda; }
 #disclaimer { height: auto; max-height: 2; padding: 0 2; color: #82979d; }
 Footer { background: #25343d; color: #afbdc3; }
 Footer > .footer--key { background: #365b50; color: #e8efed; }
 .error { color: #f2a2a5; }
+
+#filter-form { height: 7; margin: 0 2; }
+.form-row { height: 3; }
+.form-row Input, .form-row Select { width: 1fr; margin-right: 1; border: tall #40515b; }
+#filter-kind { width: 25; }
+#filter-universe { width: 16; }
+#filter-operator { width: 13; }
+#filter-hint { height: 1; color: #a6babf; }
+.form-row Button { min-width: 12; width: auto; padding: 0 1; }
+#save-form, #history-form { margin: 0 2; }
+#history-policy { width: 15; }

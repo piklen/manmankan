@@ -55,28 +55,30 @@ def test_saved_study_rerun_history_and_frozen_evidence(research_workspace) -> No
     async def scenario() -> None:
         app = StudyApp()
         async with app.run_test(size=(120, 36)) as pilot:
-            assert app.view == "trends"
-            assert app.trends is None
+            assert app.view == "screen"
+            assert app.screen_result is None
             await pilot.press("t")
             await app.workers.wait_for_complete()
             await pilot.pause()
-            assert app.trends.query.universe == "personal"
-            assert app.trends.total == app.trends.plotted == 1
+            assert app.screen_result.query.universe == "personal"
+            assert app.screen_result.query.conditions == []
+            assert app.screen_result.coverage.total == app.screen_result.coverage.matched == 1
             await pilot.press("slash")
             app.query_one(Input).value = "600519"
             await pilot.press("enter")
             await pilot.press("enter")
             await app.workers.wait_for_complete()
             await pilot.pause()
-            assert app.view == "stock"
-            assert app.stock.symbol == "600519"
-            assert app.stock.positions["180"] is not None
+            assert app.view == "filter_evidence"
+            assert app.screen_evidence.row.symbol == "600519"
+            assert app.screen_evidence.row.positions["180"] is not None
             await pilot.press("escape")
             assert app.query_one(Input).value == "600519"
             await pilot.press("a")
             await app.workers.wait_for_complete()
             await pilot.pause()
-            assert app.trends.total == 2 and app.trends.missing == 1
+            assert app.screen_result.coverage.total == 2 and app.screen_result.coverage.missing == 1
+            assert app.screen_result.query.universe == "all" and app.screen_result.query.conditions == []
             await pilot.press("l")
             await app.workers.wait_for_complete()
             await pilot.pause()
@@ -151,7 +153,8 @@ def test_empty_search_help_and_rerun_error_preserve_saved_result(research_worksp
             await app.workers.wait_for_complete()
             await pilot.pause()
             assert app.query_one("#empty").display
-            assert "kan web" in str(app.query_one("#empty", Static).render())
+            assert "Ctrl+Enter" in str(app.query_one("#empty", Static).render())
+            await pilot.press("escape")
             await pilot.press("?")
             assert app.view == "help"
             assert "kan study --help" in str(app.query_one("#detail-content", Static).render())
@@ -193,3 +196,118 @@ def test_non_tty_cannot_open_interactive_study(monkeypatch: pytest.MonkeyPatch) 
     assert result.exit_code == 2
     assert "需要交互终端" in result.output
     assert "kan study --help" in result.output
+
+
+def test_keyboard_filter_save_and_explicit_history(research_workspace) -> None:
+    from textual.widgets import Select
+
+    from kan.service import trend_search
+
+    async def settled(app, pilot):
+        await app.workers.wait_for_complete()
+        await pilot.pause()
+
+    async def scenario() -> None:
+        app = StudyApp()
+        async with app.run_test(size=(80, 24)) as pilot:
+            assert app.screen_result is None
+            assert app.query_one("#filter-kind", Select).value is Select.BLANK
+            await pilot.press("ctrl+enter")
+            assert "选择" in str(app.query_one("#status", Static).render())
+            # 真键盘：选择上涨、全市场、填写3天，再执行。
+            await pilot.press("enter", "down", "enter", "tab", "enter", "down", "enter", "tab", "3", "ctrl+enter")
+            await settled(app, pilot)
+            assert app.screen_result is not None
+            assert app.screen_result.query.universe == "all"
+            assert app.screen_result.query.conditions[0].field == "up_days"
+            assert app.screen_result.query.conditions[0].value == 3
+            assert app.screen_result.coverage.total == 2
+            assert app.screen_result.coverage.matched == app.screen_result.coverage.missing == 1
+            assert market_study.list_studies() == []
+            assert all(button.region.right <= 80 for button in app.query("#toolbar Button") if button.display)
+            assert app.query_one(DataTable).region.right <= 80
+            assert app.query_one(DataTable).size.height >= 3
+            await pilot.press("m")
+            assert app.view == "missing"
+            assert "缺少" in str(app.query_one(DataTable).get_row_at(0)[2])
+            await pilot.press("escape", "enter")
+            await settled(app, pilot)
+            assert app.view == "filter_evidence"
+            assert app.screen_evidence.conditions[0].actual >= 3
+            assert app.screen_evidence.row.current_segment.days >= 3
+            assert app.screen_evidence.bars[-1].change_pct > 0
+            await pilot.press("escape", "s")
+            app.query_one("#save-title", Input).value = "连续上涨条件"
+            await pilot.press("enter")
+            await settled(app, pilot)
+            assert len(trend_search.list_saved_trends()) == 1
+            assert market_study.list_studies() == []
+            await pilot.press("g")
+            await settled(app, pilot)
+            assert app.view == "saved_filters"
+            await pilot.press("enter")
+            await settled(app, pilot)
+            assert app.view == "screen"
+            await pilot.press("h")
+            assert app.history_edit
+            await pilot.press("ctrl+enter")
+            assert market_study.list_studies() == []
+            assert "回看" in str(app.query_one("#status", Static).render())
+            app.query_one("#history-lookback", Input).value = "90"
+            app.query_one("#history-forward", Input).value = "5"
+            await pilot.click("#history-run")
+            await settled(app, pilot)
+            assert app.view == "history"
+            assert len(market_study.list_studies()) == 1
+            assert set(app.result.query.codes) == {"600519", "000858"}
+            assert app.result.query.lookback_days == 90 and app.result.query.forward_days == 5
+            await pilot.press("ctrl+q")
+
+    asyncio.run(scenario())
+
+
+def test_two_segments_counts_and_maximum_excludes_wrong_direction(research_workspace) -> None:
+    from textual.widgets import Select
+
+    _query, frame = research_workspace
+    for index, price in zip(frame.index[-6:], [31.4, 31., 30., 29., 30., 31.], strict=True):
+        frame.loc[index, ["open", "high", "low", "close"]] = [price - .1, price + .2, price - .2, price]
+
+    async def scenario() -> None:
+        app = StudyApp()
+        async with app.run_test(size=(120, 36)) as pilot:
+            app.query_one("#filter-kind", Select).value = "down_then_up"
+            app.query_one("#filter-universe", Select).value = "codes"
+            app.query_one("#filter-codes", Input).value = "600519, 000858"
+            app.query_one("#filter-operator", Select).value = "eq"
+            app.query_one("#filter-days", Input).value = "2"
+            app.query_one("#filter-other", Input).value = "3"
+            await pilot.pause()
+            await pilot.press("ctrl+enter")
+            await app.workers.wait_for_complete()
+            await pilot.pause()
+            assert app.screen_result.coverage.matched == 1
+            assert app.screen_result.rows[0].values["previous_down_days"] == 3
+            assert app.screen_result.rows[0].values["up_days"] == 2
+            await pilot.press("f")
+            app.query_one("#filter-kind", Select).value = "falling"
+            app.query_one("#filter-days", Input).value = "5"
+            app.query_one("#filter-other", Input).value = "3"
+            await pilot.pause()
+            await pilot.press("ctrl+enter")
+            await app.workers.wait_for_complete()
+            await pilot.pause()
+            assert app.screen_result.coverage.matched == 1
+            assert app.screen_result.rows[0].values["falling_days.5"] == 3
+            await pilot.press("f")
+            app.query_one("#filter-kind", Select).value = "down_days"
+            app.query_one("#filter-operator", Select).value = "lte"
+            app.query_one("#filter-days", Input).value = "3"
+            await pilot.pause()
+            await pilot.press("ctrl+enter")
+            await app.workers.wait_for_complete()
+            await pilot.pause()
+            assert app.screen_result.coverage.matched == 0
+            assert any(c.field == "down_days" and c.operator == "gt" and c.value == 0 for c in app.screen_result.query.conditions)
+
+    asyncio.run(scenario())

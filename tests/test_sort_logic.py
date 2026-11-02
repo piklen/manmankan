@@ -192,7 +192,7 @@ def test_calc_trend_short_series_returns_flat_result() -> None:
     assert result.daily_changes == []
 
 
-def test_calc_trend_flat_days_keep_current_direction() -> None:
+def test_calc_trend_flat_day_ends_current_streak() -> None:
     import pandas as pd
 
     from kan.core.scanner import calc_trend
@@ -203,10 +203,11 @@ def test_calc_trend_flat_days_keep_current_direction() -> None:
         {"date": "2026-05-03", "open": 11.0, "close": 11.0},
     ])
 
-    result = calc_trend(df, "000001", "平盘穿透")
+    result = calc_trend(df, "000001", "平盘中断")
 
-    assert result.streak == 2
-    assert result.streak_pct == 10.0
+    assert result.streak == 0
+    assert result.streak_pct == 0.0
+    assert result.direction == "平"
 
 
 def test_trend_pct_tie_break(monkeypatch: pytest.MonkeyPatch) -> None:

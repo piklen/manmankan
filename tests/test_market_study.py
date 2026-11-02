@@ -296,3 +296,18 @@ def test_refresh_uses_explicit_unfiltered_codes(saved_env, monkeypatch):
     assert response.status_code == 202
     assert received[0].scope is MarketRefreshScope.CODES
     assert job_service._resolve_refresh_targets(received[0]) == ["000001", "000002"]
+
+
+def test_history_date_types_are_equivalent_and_input_is_not_mutated():
+    source = bars()
+    dates = source.date.dt.date.tolist()
+    expected = study.prepare_history(source, dates)
+    for values in (dates, [str(day) for day in dates], [day if index % 2 else str(day) for index, day in enumerate(dates)]):
+        variant = source.assign(date=values)
+        before = variant.copy(deep=True)
+        pd.testing.assert_frame_equal(study.prepare_history(variant, dates), expected)
+        pd.testing.assert_frame_equal(variant, before)
+    # 首行是原生 date，也不能放过后续混合字符串中的非法日期。
+    invalid = source.assign(date=[dates[0], "invalid-date", *dates[2:]])
+    with pytest.raises(ValueError):
+        study.prepare_history(invalid, dates)

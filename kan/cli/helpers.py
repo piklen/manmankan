@@ -4,7 +4,7 @@
 - 错误脱敏 / 网络异常友好化：_safe_error_msg / _print_err / _network_error_msg
 - 安装检测：_detect_install_method
 - shell 检测：_detect_shell_fallback / _VALID_SHELLS
-- argv 预处理：_normalize_streak_args / _normalize_help_args
+- argv 预处理：_normalize_help_args
 - 代码池解析：_parse_codes / _resolve_code_pairs
 - 自选股 / 数据加载：_load_names_with_optional_spinner / _get_watchlist_pairs / _auto_fetch_stale
 - 杂项：_NoopContext / _human_size
@@ -254,32 +254,6 @@ def _detect_shell_fallback() -> str | None:
         return "powershell"
 
     return None
-
-
-def _normalize_streak_args() -> None:
-    """让 --down / --up 不带值时注入默认 3（typer 0.25 无法透传 click 的 flag_value）
-
-    typer 把 ``--down`` 限定为「无值」(bool flag) 或「必带值」(Optional[int]) 二选一，
-    无法表达 click 的 ``is_flag=False, flag_value=N`` 模式。
-    本实现把语义合并到 ``--down N``，并在 entry 之前预处理 sys.argv，
-    让 ``--down`` 不带数字时注入 ``"3"`` 作为默认连跌天数：
-
-      kan trend --down              → 注入 3 → 等价 --down 3
-      kan trend --down 5            → 不动
-      kan trend --down --candle     → 注入 3 → --down 3 --candle
-      kan trend --down 5 --candle   → 不动
-    """
-    import sys
-
-    args = sys.argv
-    if len(args) < 2 or args[1] != "trend":
-        return
-    for i in range(len(args) - 1, -1, -1):
-        if args[i] not in ("--down", "--up"):
-            continue
-        next_is_value = (i + 1 < len(args)) and args[i + 1].lstrip("-").isdigit()
-        if not next_is_value:
-            args.insert(i + 1, "3")
 
 
 def _normalize_help_args() -> None:

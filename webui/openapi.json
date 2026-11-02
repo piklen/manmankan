@@ -2,7 +2,7 @@
   "openapi": "3.1.0",
   "info": {
     "title": "ManManKan Local API",
-    "version": "0.0.6.9.41"
+    "version": "0.0.6.9.42"
   },
   "paths": {
     "/api/v1/health": {
@@ -887,22 +887,22 @@
         }
       }
     },
-    "/api/v1/trends/map": {
+    "/api/v1/trends/search": {
       "post": {
         "tags": [
           "trends"
         ],
-        "summary": "Trend Map",
-        "operationId": "trend_map_api_v1_trends_map_post",
+        "summary": "Trend Search",
+        "operationId": "trend_search_api_v1_trends_search_post",
         "requestBody": {
+          "required": true,
           "content": {
             "application/json": {
               "schema": {
-                "$ref": "#/components/schemas/TrendMapQuery"
+                "$ref": "#/components/schemas/TrendSearchQuery"
               }
             }
-          },
-          "required": true
+          }
         },
         "responses": {
           "200": {
@@ -910,7 +910,108 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/TrendMapSnapshot"
+                  "$ref": "#/components/schemas/TrendSearchResult"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "get": {
+        "tags": [
+          "trends"
+        ],
+        "summary": "Browse Trends",
+        "operationId": "browse_trends_api_v1_trends_search_get",
+        "parameters": [
+          {
+            "name": "universe",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "enum": [
+                "all",
+                "personal",
+                "codes"
+              ],
+              "type": "string",
+              "default": "all",
+              "title": "Universe"
+            }
+          },
+          {
+            "name": "codes",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  }
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Codes"
+            }
+          },
+          {
+            "name": "industries",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  }
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Industries"
+            }
+          },
+          {
+            "name": "as_of",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "format": "date"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "As Of"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TrendSearchResult"
                 }
               }
             }
@@ -928,18 +1029,18 @@
         }
       }
     },
-    "/api/v1/trends/stock": {
+    "/api/v1/trends/search/evidence": {
       "post": {
         "tags": [
           "trends"
         ],
-        "summary": "Trend Stock",
-        "operationId": "trend_stock_api_v1_trends_stock_post",
+        "summary": "Search Evidence",
+        "operationId": "search_evidence_api_v1_trends_search_evidence_post",
         "requestBody": {
           "content": {
             "application/json": {
               "schema": {
-                "$ref": "#/components/schemas/TrendStockQuery"
+                "$ref": "#/components/schemas/TrendSearchEvidenceRequest"
               }
             }
           },
@@ -951,7 +1052,113 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/TrendStockSnapshot"
+                  "$ref": "#/components/schemas/TrendSearchEvidence"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/trends/saved": {
+      "get": {
+        "tags": [
+          "trends"
+        ],
+        "summary": "Saved Trends",
+        "operationId": "saved_trends_api_v1_trends_saved_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/SavedTrendSearch"
+                  },
+                  "type": "array",
+                  "title": "Response Saved Trends Api V1 Trends Saved Get"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "trends"
+        ],
+        "summary": "Save Trend",
+        "operationId": "save_trend_api_v1_trends_saved_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SaveTrendSearchRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SavedTrendSearch"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/trends/saved/{saved_id}": {
+      "delete": {
+        "tags": [
+          "trends"
+        ],
+        "summary": "Delete Trend",
+        "operationId": "delete_trend_api_v1_trends_saved__saved_id__delete",
+        "parameters": [
+          {
+            "name": "saved_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Saved Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DeleteResponse"
                 }
               }
             }
@@ -2014,6 +2221,51 @@
         ],
         "title": "PositionCreateRequest"
       },
+      "SaveTrendSearchRequest": {
+        "properties": {
+          "title": {
+            "type": "string",
+            "maxLength": 120,
+            "minLength": 1,
+            "title": "Title"
+          },
+          "query": {
+            "$ref": "#/components/schemas/TrendSearchQuery"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "title",
+          "query"
+        ],
+        "title": "SaveTrendSearchRequest"
+      },
+      "SavedTrendSearch": {
+        "properties": {
+          "title": {
+            "type": "string",
+            "maxLength": 120,
+            "minLength": 1,
+            "title": "Title"
+          },
+          "query": {
+            "$ref": "#/components/schemas/TrendSearchQuery"
+          },
+          "id": {
+            "type": "string",
+            "title": "Id"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "title",
+          "query",
+          "id"
+        ],
+        "title": "SavedTrendSearch"
+      },
       "SettingsFactsResponse": {
         "properties": {
           "data_dir": {
@@ -2217,6 +2469,10 @@
               "bull_days",
               "bear_days",
               "joint_up_days",
+              "previous_up_days",
+              "previous_down_days",
+              "rising_days",
+              "falling_days",
               "volume_ratio",
               "shape_distance"
             ],
@@ -3117,7 +3373,243 @@
         ],
         "title": "StudySummary"
       },
-      "TrendIndustry": {
+      "TrendEvidenceBar": {
+        "properties": {
+          "date": {
+            "type": "string",
+            "format": "date",
+            "title": "Date"
+          },
+          "open": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Open"
+          },
+          "high": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "High"
+          },
+          "low": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Low"
+          },
+          "close": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Close"
+          },
+          "volume": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Volume"
+          },
+          "change_pct": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Change Pct"
+          },
+          "body_pct": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Body Pct"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "date"
+        ],
+        "title": "TrendEvidenceBar"
+      },
+      "TrendPricePoint": {
+        "properties": {
+          "date": {
+            "type": "string",
+            "format": "date",
+            "title": "Date"
+          },
+          "close": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Close"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "date",
+          "close"
+        ],
+        "title": "TrendPricePoint"
+      },
+      "TrendSearchCoverage": {
+        "properties": {
+          "total": {
+            "type": "integer",
+            "title": "Total"
+          },
+          "evaluated": {
+            "type": "integer",
+            "title": "Evaluated"
+          },
+          "matched": {
+            "type": "integer",
+            "title": "Matched"
+          },
+          "missing": {
+            "type": "integer",
+            "title": "Missing"
+          },
+          "self_matches_excluded": {
+            "type": "integer",
+            "title": "Self Matches Excluded",
+            "default": 0
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "total",
+          "evaluated",
+          "matched",
+          "missing"
+        ],
+        "title": "TrendSearchCoverage"
+      },
+      "TrendSearchEvidence": {
+        "properties": {
+          "query": {
+            "$ref": "#/components/schemas/TrendSearchQuery"
+          },
+          "as_of": {
+            "type": "string",
+            "format": "date",
+            "title": "As Of"
+          },
+          "row": {
+            "$ref": "#/components/schemas/TrendSearchRow"
+          },
+          "bars": {
+            "items": {
+              "$ref": "#/components/schemas/TrendEvidenceBar"
+            },
+            "type": "array",
+            "title": "Bars"
+          },
+          "reference_bars": {
+            "items": {
+              "$ref": "#/components/schemas/StudyBar"
+            },
+            "type": "array",
+            "title": "Reference Bars"
+          },
+          "reference_source": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reference Source"
+          },
+          "conditions": {
+            "items": {
+              "$ref": "#/components/schemas/StudyCheck"
+            },
+            "type": "array",
+            "title": "Conditions"
+          },
+          "warnings": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Warnings"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "query",
+          "as_of",
+          "row",
+          "bars",
+          "conditions",
+          "warnings"
+        ],
+        "title": "TrendSearchEvidence"
+      },
+      "TrendSearchEvidenceRequest": {
+        "properties": {
+          "query": {
+            "$ref": "#/components/schemas/TrendSearchQuery"
+          },
+          "symbol": {
+            "type": "string",
+            "title": "Symbol"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "query",
+          "symbol"
+        ],
+        "title": "TrendSearchEvidenceRequest"
+      },
+      "TrendSearchIndustry": {
         "properties": {
           "name": {
             "type": "string",
@@ -3126,60 +3618,41 @@
           "total": {
             "type": "integer",
             "title": "Total"
-          },
-          "available": {
-            "type": "integer",
-            "title": "Available"
-          },
-          "up": {
-            "type": "integer",
-            "title": "Up"
-          },
-          "down": {
-            "type": "integer",
-            "title": "Down"
-          },
-          "flat": {
-            "type": "integer",
-            "title": "Flat"
-          },
-          "median_return": {
-            "anyOf": [
-              {
-                "type": "number"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Median Return"
-          },
-          "median_position": {
-            "anyOf": [
-              {
-                "type": "number"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Median Position"
           }
         },
+        "additionalProperties": false,
         "type": "object",
         "required": [
           "name",
-          "total",
-          "available",
-          "up",
-          "down",
-          "flat",
-          "median_return",
-          "median_position"
+          "total"
         ],
-        "title": "TrendIndustry"
+        "title": "TrendSearchIndustry"
       },
-      "TrendMapQuery": {
+      "TrendSearchMissing": {
+        "properties": {
+          "symbol": {
+            "type": "string",
+            "title": "Symbol"
+          },
+          "name": {
+            "type": "string",
+            "title": "Name"
+          },
+          "reason": {
+            "type": "string",
+            "title": "Reason"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "symbol",
+          "name",
+          "reason"
+        ],
+        "title": "TrendSearchMissing"
+      },
+      "TrendSearchQuery": {
         "properties": {
           "universe": {
             "type": "string",
@@ -3199,6 +3672,14 @@
             "maxItems": 10000,
             "title": "Codes"
           },
+          "industries": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "maxItems": 100,
+            "title": "Industries"
+          },
           "as_of": {
             "anyOf": [
               {
@@ -3211,33 +3692,110 @@
             ],
             "title": "As Of"
           },
-          "position_window": {
-            "type": "integer",
-            "maximum": 360.0,
-            "minimum": 2.0,
-            "title": "Position Window",
-            "default": 180
+          "conditions": {
+            "items": {
+              "$ref": "#/components/schemas/StudyCondition"
+            },
+            "type": "array",
+            "maxItems": 12,
+            "title": "Conditions"
           },
-          "momentum_window": {
-            "type": "integer",
-            "maximum": 120.0,
-            "minimum": 2.0,
-            "title": "Momentum Window",
-            "default": 20
-          },
-          "trail_days": {
-            "type": "integer",
-            "maximum": 20.0,
-            "minimum": 0.0,
-            "title": "Trail Days",
-            "default": 5
+          "reference": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/StudyReference"
+              },
+              {
+                "type": "null"
+              }
+            ]
           }
         },
         "additionalProperties": false,
         "type": "object",
-        "title": "TrendMapQuery"
+        "title": "TrendSearchQuery"
       },
-      "TrendMapRow": {
+      "TrendSearchResult": {
+        "properties": {
+          "query": {
+            "$ref": "#/components/schemas/TrendSearchQuery"
+          },
+          "as_of": {
+            "type": "string",
+            "format": "date",
+            "title": "As Of"
+          },
+          "coverage": {
+            "$ref": "#/components/schemas/TrendSearchCoverage"
+          },
+          "common_data_date": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Common Data Date"
+          },
+          "common_data_count": {
+            "type": "integer",
+            "title": "Common Data Count",
+            "default": 0
+          },
+          "rows": {
+            "items": {
+              "$ref": "#/components/schemas/TrendSearchRow"
+            },
+            "type": "array",
+            "title": "Rows"
+          },
+          "missing_rows": {
+            "items": {
+              "$ref": "#/components/schemas/TrendSearchMissing"
+            },
+            "type": "array",
+            "title": "Missing Rows"
+          },
+          "scope_codes": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Scope Codes"
+          },
+          "industries": {
+            "items": {
+              "$ref": "#/components/schemas/TrendSearchIndustry"
+            },
+            "type": "array",
+            "title": "Industries"
+          },
+          "warnings": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Warnings"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "query",
+          "as_of",
+          "coverage",
+          "rows",
+          "missing_rows",
+          "scope_codes",
+          "industries",
+          "warnings"
+        ],
+        "title": "TrendSearchResult"
+      },
+      "TrendSearchRow": {
         "properties": {
           "symbol": {
             "type": "string",
@@ -3258,43 +3816,13 @@
             ],
             "title": "Industry"
           },
-          "available": {
-            "type": "boolean",
-            "title": "Available",
-            "default": false
-          },
-          "reason": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Reason"
-          },
-          "data_cutoff": {
-            "anyOf": [
-              {
-                "type": "string",
-                "format": "date"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Data Cutoff"
+          "date": {
+            "type": "string",
+            "format": "date",
+            "title": "Date"
           },
           "close": {
-            "anyOf": [
-              {
-                "type": "number"
-              },
-              {
-                "type": "null"
-              }
-            ],
+            "type": "number",
             "title": "Close"
           },
           "change_pct": {
@@ -3308,29 +3836,7 @@
             ],
             "title": "Change Pct"
           },
-          "x": {
-            "anyOf": [
-              {
-                "type": "number"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "X"
-          },
-          "y": {
-            "anyOf": [
-              {
-                "type": "number"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Y"
-          },
-          "positions": {
+          "values": {
             "additionalProperties": {
               "anyOf": [
                 {
@@ -3342,170 +3848,14 @@
               ]
             },
             "type": "object",
-            "title": "Positions"
+            "title": "Values"
           },
-          "returns": {
-            "additionalProperties": {
-              "anyOf": [
-                {
-                  "type": "number"
-                },
-                {
-                  "type": "null"
-                }
-              ]
-            },
-            "type": "object",
-            "title": "Returns"
-          },
-          "trail": {
-            "items": {
-              "$ref": "#/components/schemas/TrendPoint"
-            },
-            "type": "array",
-            "title": "Trail"
-          },
-          "source": {
-            "type": "string",
-            "title": "Source",
-            "default": "local_cache"
-          }
-        },
-        "type": "object",
-        "required": [
-          "symbol",
-          "name"
-        ],
-        "title": "TrendMapRow"
-      },
-      "TrendMapSnapshot": {
-        "properties": {
-          "query": {
-            "$ref": "#/components/schemas/TrendMapQuery"
-          },
-          "as_of": {
-            "type": "string",
-            "format": "date",
-            "title": "As Of"
-          },
-          "total": {
-            "type": "integer",
-            "title": "Total"
-          },
-          "plotted": {
-            "type": "integer",
-            "title": "Plotted"
-          },
-          "missing": {
-            "type": "integer",
-            "title": "Missing"
-          },
-          "rows": {
-            "items": {
-              "$ref": "#/components/schemas/TrendMapRow"
-            },
-            "type": "array",
-            "title": "Rows"
-          },
-          "industries": {
-            "items": {
-              "$ref": "#/components/schemas/TrendIndustry"
-            },
-            "type": "array",
-            "title": "Industries"
-          },
-          "views": {
-            "items": {
-              "$ref": "#/components/schemas/TrendMapView"
-            },
-            "type": "array",
-            "title": "Views"
-          },
-          "warnings": {
+          "lower_bounds": {
             "items": {
               "type": "string"
             },
             "type": "array",
-            "title": "Warnings"
-          }
-        },
-        "type": "object",
-        "required": [
-          "query",
-          "as_of",
-          "total",
-          "plotted",
-          "missing",
-          "rows",
-          "industries",
-          "views"
-        ],
-        "title": "TrendMapSnapshot"
-      },
-      "TrendMapView": {
-        "properties": {
-          "position_window": {
-            "type": "integer",
-            "title": "Position Window"
-          },
-          "momentum_window": {
-            "type": "integer",
-            "title": "Momentum Window"
-          },
-          "plotted": {
-            "type": "integer",
-            "title": "Plotted"
-          },
-          "missing": {
-            "type": "integer",
-            "title": "Missing"
-          },
-          "industries": {
-            "items": {
-              "$ref": "#/components/schemas/TrendIndustry"
-            },
-            "type": "array",
-            "title": "Industries"
-          }
-        },
-        "type": "object",
-        "required": [
-          "position_window",
-          "momentum_window",
-          "plotted",
-          "missing",
-          "industries"
-        ],
-        "title": "TrendMapView"
-      },
-      "TrendPoint": {
-        "properties": {
-          "date": {
-            "type": "string",
-            "format": "date",
-            "title": "Date"
-          },
-          "x": {
-            "anyOf": [
-              {
-                "type": "number"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "X"
-          },
-          "y": {
-            "anyOf": [
-              {
-                "type": "number"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Y"
+            "title": "Lower Bounds"
           },
           "positions": {
             "additionalProperties": {
@@ -3534,129 +3884,104 @@
             },
             "type": "object",
             "title": "Returns"
-          }
-        },
-        "type": "object",
-        "required": [
-          "date",
-          "x",
-          "y",
-          "positions",
-          "returns"
-        ],
-        "title": "TrendPoint"
-      },
-      "TrendStockQuery": {
-        "properties": {
-          "symbol": {
-            "type": "string",
-            "title": "Symbol"
           },
-          "as_of": {
+          "current_segment": {
             "anyOf": [
               {
-                "type": "string",
-                "format": "date"
+                "$ref": "#/components/schemas/TrendSegment"
               },
               {
                 "type": "null"
               }
-            ],
-            "title": "As Of"
-          },
-          "days": {
-            "type": "integer",
-            "maximum": 360.0,
-            "minimum": 20.0,
-            "title": "Days",
-            "default": 120
-          }
-        },
-        "additionalProperties": false,
-        "type": "object",
-        "required": [
-          "symbol"
-        ],
-        "title": "TrendStockQuery"
-      },
-      "TrendStockSnapshot": {
-        "properties": {
-          "symbol": {
-            "type": "string",
-            "title": "Symbol"
-          },
-          "name": {
-            "type": "string",
-            "title": "Name"
-          },
-          "as_of": {
-            "type": "string",
-            "format": "date",
-            "title": "As Of"
+            ]
           },
           "source": {
             "type": "string",
             "title": "Source"
           },
-          "industry": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Industry"
-          },
-          "bars": {
+          "gap_dates": {
             "items": {
-              "$ref": "#/components/schemas/StudyBar"
+              "type": "string",
+              "format": "date"
             },
             "type": "array",
-            "title": "Bars"
+            "title": "Gap Dates"
           },
-          "positions": {
-            "additionalProperties": {
-              "anyOf": [
-                {
-                  "type": "number"
-                },
-                {
-                  "type": "null"
-                }
-              ]
+          "sparkline": {
+            "items": {
+              "$ref": "#/components/schemas/TrendPricePoint"
             },
-            "type": "object",
-            "title": "Positions"
-          },
-          "returns": {
-            "additionalProperties": {
-              "anyOf": [
-                {
-                  "type": "number"
-                },
-                {
-                  "type": "null"
-                }
-              ]
-            },
-            "type": "object",
-            "title": "Returns"
+            "type": "array",
+            "title": "Sparkline"
           }
         },
+        "additionalProperties": false,
         "type": "object",
         "required": [
           "symbol",
           "name",
-          "as_of",
-          "source",
-          "industry",
-          "bars",
+          "date",
+          "close",
+          "change_pct",
+          "values",
+          "lower_bounds",
           "positions",
-          "returns"
+          "returns",
+          "source",
+          "gap_dates",
+          "sparkline"
         ],
-        "title": "TrendStockSnapshot"
+        "title": "TrendSearchRow"
+      },
+      "TrendSegment": {
+        "properties": {
+          "direction": {
+            "type": "string",
+            "enum": [
+              "up",
+              "down",
+              "flat"
+            ],
+            "title": "Direction"
+          },
+          "days": {
+            "type": "integer",
+            "title": "Days"
+          },
+          "bound": {
+            "type": "string",
+            "enum": [
+              "exact",
+              "at_least"
+            ],
+            "title": "Bound"
+          },
+          "start_date": {
+            "type": "string",
+            "format": "date",
+            "title": "Start Date"
+          },
+          "base_date": {
+            "type": "string",
+            "format": "date",
+            "title": "Base Date"
+          },
+          "return_pct": {
+            "type": "number",
+            "title": "Return Pct"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "direction",
+          "days",
+          "bound",
+          "start_date",
+          "base_date",
+          "return_pct"
+        ],
+        "title": "TrendSegment"
       },
       "ValidationError": {
         "properties": {

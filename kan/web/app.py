@@ -19,7 +19,7 @@ from kan.web.security import (
     mutating_request_error,
     session_allowed,
 )
-from kan.web.trend_map_routes import router as trend_map_router
+from kan.web.trend_routes import router as trend_router
 
 SPA_DIR = Path(__file__).with_name("spa")
 SPA_INDEX = SPA_DIR / "index.html"
@@ -49,7 +49,7 @@ def create_app(
         name="spa-assets",
     )
     app.include_router(api_v1_router)
-    app.include_router(trend_map_router)
+    app.include_router(trend_router)
 
     @app.get("/{full_path:path}", response_class=HTMLResponse, include_in_schema=False)
     def spa(full_path: str) -> Response:

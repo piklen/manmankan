@@ -53,6 +53,28 @@ export const FIELDS: Record<
     unit: "天",
     detail: "收盘价连续低于上一交易日收盘价",
   },
+  previous_up_days: {
+    label: "紧邻前一涨段",
+    unit: "天",
+    detail: "当前下跌段之前紧邻的连续上涨天数；不跨过平盘或缺失行情",
+  },
+  previous_down_days: {
+    label: "紧邻前一跌段",
+    unit: "天",
+    detail: "当前上涨段之前紧邻的连续下跌天数；不跨过平盘或缺失行情",
+  },
+  rising_days: {
+    label: "区间上涨天数",
+    unit: "天",
+    window: true,
+    detail: "最近 N 个市场交易日中，收盘高于前一交易日的天数；平盘不计",
+  },
+  falling_days: {
+    label: "区间下跌天数",
+    unit: "天",
+    window: true,
+    detail: "最近 N 个市场交易日中，收盘低于前一交易日的天数；平盘不计",
+  },
   bull_days: {
     label: "连续收阳",
     unit: "天",

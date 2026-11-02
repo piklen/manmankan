@@ -363,24 +363,25 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/v1/trends/map": {
+    "/api/v1/trends/search": {
         parameters: {
             query?: never;
             header?: never;
             path?: never;
             cookie?: never;
         };
-        get?: never;
+        /** Browse Trends */
+        get: operations["browse_trends_api_v1_trends_search_get"];
         put?: never;
-        /** Trend Map */
-        post: operations["trend_map_api_v1_trends_map_post"];
+        /** Trend Search */
+        post: operations["trend_search_api_v1_trends_search_post"];
         delete?: never;
         options?: never;
         head?: never;
         patch?: never;
         trace?: never;
     };
-    "/api/v1/trends/stock": {
+    "/api/v1/trends/search/evidence": {
         parameters: {
             query?: never;
             header?: never;
@@ -389,9 +390,44 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Trend Stock */
-        post: operations["trend_stock_api_v1_trends_stock_post"];
+        /** Search Evidence */
+        post: operations["search_evidence_api_v1_trends_search_evidence_post"];
         delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/trends/saved": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Saved Trends */
+        get: operations["saved_trends_api_v1_trends_saved_get"];
+        put?: never;
+        /** Save Trend */
+        post: operations["save_trend_api_v1_trends_saved_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/trends/saved/{saved_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /** Delete Trend */
+        delete: operations["delete_trend_api_v1_trends_saved__saved_id__delete"];
         options?: never;
         head?: never;
         patch?: never;
@@ -748,6 +784,20 @@ export interface components {
              */
             merge: boolean;
         };
+        /** SaveTrendSearchRequest */
+        SaveTrendSearchRequest: {
+            /** Title */
+            title: string;
+            query: components["schemas"]["TrendSearchQuery"];
+        };
+        /** SavedTrendSearch */
+        SavedTrendSearch: {
+            /** Title */
+            title: string;
+            query: components["schemas"]["TrendSearchQuery"];
+            /** Id */
+            id: string;
+        };
         /** SettingsFactsResponse */
         SettingsFactsResponse: {
             /** Data Dir */
@@ -813,7 +863,7 @@ export interface components {
              * Field
              * @enum {string}
              */
-            field: "change_pct" | "gap_pct" | "body_pct" | "return_pct" | "position" | "low_age" | "up_days" | "down_days" | "bull_days" | "bear_days" | "joint_up_days" | "volume_ratio" | "shape_distance";
+            field: "change_pct" | "gap_pct" | "body_pct" | "return_pct" | "position" | "low_age" | "up_days" | "down_days" | "bull_days" | "bear_days" | "joint_up_days" | "previous_up_days" | "previous_down_days" | "rising_days" | "falling_days" | "volume_ratio" | "shape_distance";
             /**
              * Operator
              * @enum {string}
@@ -1189,27 +1239,98 @@ export interface components {
             /** Event Count */
             event_count: number;
         };
-        /** TrendIndustry */
-        TrendIndustry: {
+        /** TrendEvidenceBar */
+        TrendEvidenceBar: {
+            /**
+             * Date
+             * Format: date
+             */
+            date: string;
+            /** Open */
+            open?: number | null;
+            /** High */
+            high?: number | null;
+            /** Low */
+            low?: number | null;
+            /** Close */
+            close?: number | null;
+            /** Volume */
+            volume?: number | null;
+            /** Change Pct */
+            change_pct?: number | null;
+            /** Body Pct */
+            body_pct?: number | null;
+        };
+        /** TrendPricePoint */
+        TrendPricePoint: {
+            /**
+             * Date
+             * Format: date
+             */
+            date: string;
+            /** Close */
+            close: number | null;
+        };
+        /** TrendSearchCoverage */
+        TrendSearchCoverage: {
+            /** Total */
+            total: number;
+            /** Evaluated */
+            evaluated: number;
+            /** Matched */
+            matched: number;
+            /** Missing */
+            missing: number;
+            /**
+             * Self Matches Excluded
+             * @default 0
+             */
+            self_matches_excluded: number;
+        };
+        /** TrendSearchEvidence */
+        TrendSearchEvidence: {
+            query: components["schemas"]["TrendSearchQuery"];
+            /**
+             * As Of
+             * Format: date
+             */
+            as_of: string;
+            row: components["schemas"]["TrendSearchRow"];
+            /** Bars */
+            bars: components["schemas"]["TrendEvidenceBar"][];
+            /** Reference Bars */
+            reference_bars?: components["schemas"]["StudyBar"][];
+            /** Reference Source */
+            reference_source?: string | null;
+            /** Conditions */
+            conditions: components["schemas"]["StudyCheck"][];
+            /** Warnings */
+            warnings: string[];
+        };
+        /** TrendSearchEvidenceRequest */
+        TrendSearchEvidenceRequest: {
+            query: components["schemas"]["TrendSearchQuery"];
+            /** Symbol */
+            symbol: string;
+        };
+        /** TrendSearchIndustry */
+        TrendSearchIndustry: {
             /** Name */
             name: string;
             /** Total */
             total: number;
-            /** Available */
-            available: number;
-            /** Up */
-            up: number;
-            /** Down */
-            down: number;
-            /** Flat */
-            flat: number;
-            /** Median Return */
-            median_return: number | null;
-            /** Median Position */
-            median_position: number | null;
         };
-        /** TrendMapQuery */
-        TrendMapQuery: {
+        /** TrendSearchMissing */
+        TrendSearchMissing: {
+            /** Symbol */
+            symbol: string;
+            /** Name */
+            name: string;
+            /** Reason */
+            reason: string;
+        };
+        /** TrendSearchQuery */
+        TrendSearchQuery: {
             /**
              * Universe
              * @default all
@@ -1218,26 +1339,43 @@ export interface components {
             universe: "all" | "personal" | "codes";
             /** Codes */
             codes?: string[];
+            /** Industries */
+            industries?: string[];
             /** As Of */
             as_of?: string | null;
-            /**
-             * Position Window
-             * @default 180
-             */
-            position_window: number;
-            /**
-             * Momentum Window
-             * @default 20
-             */
-            momentum_window: number;
-            /**
-             * Trail Days
-             * @default 5
-             */
-            trail_days: number;
+            /** Conditions */
+            conditions?: components["schemas"]["StudyCondition"][];
+            reference?: components["schemas"]["StudyReference"] | null;
         };
-        /** TrendMapRow */
-        TrendMapRow: {
+        /** TrendSearchResult */
+        TrendSearchResult: {
+            query: components["schemas"]["TrendSearchQuery"];
+            /**
+             * As Of
+             * Format: date
+             */
+            as_of: string;
+            coverage: components["schemas"]["TrendSearchCoverage"];
+            /** Common Data Date */
+            common_data_date?: string | null;
+            /**
+             * Common Data Count
+             * @default 0
+             */
+            common_data_count: number;
+            /** Rows */
+            rows: components["schemas"]["TrendSearchRow"][];
+            /** Missing Rows */
+            missing_rows: components["schemas"]["TrendSearchMissing"][];
+            /** Scope Codes */
+            scope_codes: string[];
+            /** Industries */
+            industries: components["schemas"]["TrendSearchIndustry"][];
+            /** Warnings */
+            warnings: string[];
+        };
+        /** TrendSearchRow */
+        TrendSearchRow: {
             /** Symbol */
             symbol: string;
             /** Name */
@@ -1245,85 +1383,20 @@ export interface components {
             /** Industry */
             industry?: string | null;
             /**
-             * Available
-             * @default false
-             */
-            available: boolean;
-            /** Reason */
-            reason?: string | null;
-            /** Data Cutoff */
-            data_cutoff?: string | null;
-            /** Close */
-            close?: number | null;
-            /** Change Pct */
-            change_pct?: number | null;
-            /** X */
-            x?: number | null;
-            /** Y */
-            y?: number | null;
-            /** Positions */
-            positions?: {
-                [key: string]: number | null;
-            };
-            /** Returns */
-            returns?: {
-                [key: string]: number | null;
-            };
-            /** Trail */
-            trail?: components["schemas"]["TrendPoint"][];
-            /**
-             * Source
-             * @default local_cache
-             */
-            source: string;
-        };
-        /** TrendMapSnapshot */
-        TrendMapSnapshot: {
-            query: components["schemas"]["TrendMapQuery"];
-            /**
-             * As Of
-             * Format: date
-             */
-            as_of: string;
-            /** Total */
-            total: number;
-            /** Plotted */
-            plotted: number;
-            /** Missing */
-            missing: number;
-            /** Rows */
-            rows: components["schemas"]["TrendMapRow"][];
-            /** Industries */
-            industries: components["schemas"]["TrendIndustry"][];
-            /** Views */
-            views: components["schemas"]["TrendMapView"][];
-            /** Warnings */
-            warnings?: string[];
-        };
-        /** TrendMapView */
-        TrendMapView: {
-            /** Position Window */
-            position_window: number;
-            /** Momentum Window */
-            momentum_window: number;
-            /** Plotted */
-            plotted: number;
-            /** Missing */
-            missing: number;
-            /** Industries */
-            industries: components["schemas"]["TrendIndustry"][];
-        };
-        /** TrendPoint */
-        TrendPoint: {
-            /**
              * Date
              * Format: date
              */
             date: string;
-            /** X */
-            x: number | null;
-            /** Y */
-            y: number | null;
+            /** Close */
+            close: number;
+            /** Change Pct */
+            change_pct: number | null;
+            /** Values */
+            values: {
+                [key: string]: number | null;
+            };
+            /** Lower Bounds */
+            lower_bounds: string[];
             /** Positions */
             positions: {
                 [key: string]: number | null;
@@ -1332,44 +1405,40 @@ export interface components {
             returns: {
                 [key: string]: number | null;
             };
-        };
-        /** TrendStockQuery */
-        TrendStockQuery: {
-            /** Symbol */
-            symbol: string;
-            /** As Of */
-            as_of?: string | null;
-            /**
-             * Days
-             * @default 120
-             */
-            days: number;
-        };
-        /** TrendStockSnapshot */
-        TrendStockSnapshot: {
-            /** Symbol */
-            symbol: string;
-            /** Name */
-            name: string;
-            /**
-             * As Of
-             * Format: date
-             */
-            as_of: string;
+            current_segment?: components["schemas"]["TrendSegment"] | null;
             /** Source */
             source: string;
-            /** Industry */
-            industry: string | null;
-            /** Bars */
-            bars: components["schemas"]["StudyBar"][];
-            /** Positions */
-            positions: {
-                [key: string]: number | null;
-            };
-            /** Returns */
-            returns: {
-                [key: string]: number | null;
-            };
+            /** Gap Dates */
+            gap_dates: string[];
+            /** Sparkline */
+            sparkline: components["schemas"]["TrendPricePoint"][];
+        };
+        /** TrendSegment */
+        TrendSegment: {
+            /**
+             * Direction
+             * @enum {string}
+             */
+            direction: "up" | "down" | "flat";
+            /** Days */
+            days: number;
+            /**
+             * Bound
+             * @enum {string}
+             */
+            bound: "exact" | "at_least";
+            /**
+             * Start Date
+             * Format: date
+             */
+            start_date: string;
+            /**
+             * Base Date
+             * Format: date
+             */
+            base_date: string;
+            /** Return Pct */
+            return_pct: number;
         };
         /** ValidationError */
         ValidationError: {
@@ -2081,18 +2150,19 @@ export interface operations {
             };
         };
     };
-    trend_map_api_v1_trends_map_post: {
+    browse_trends_api_v1_trends_search_get: {
         parameters: {
-            query?: never;
+            query?: {
+                universe?: "all" | "personal" | "codes";
+                codes?: string[] | null;
+                industries?: string[] | null;
+                as_of?: string | null;
+            };
             header?: never;
             path?: never;
             cookie?: never;
         };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["TrendMapQuery"];
-            };
-        };
+        requestBody?: never;
         responses: {
             /** @description Successful Response */
             200: {
@@ -2100,7 +2170,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["TrendMapSnapshot"];
+                    "application/json": components["schemas"]["TrendSearchResult"];
                 };
             };
             /** @description Validation Error */
@@ -2114,7 +2184,7 @@ export interface operations {
             };
         };
     };
-    trend_stock_api_v1_trends_stock_post: {
+    trend_search_api_v1_trends_search_post: {
         parameters: {
             query?: never;
             header?: never;
@@ -2123,7 +2193,7 @@ export interface operations {
         };
         requestBody: {
             content: {
-                "application/json": components["schemas"]["TrendStockQuery"];
+                "application/json": components["schemas"]["TrendSearchQuery"];
             };
         };
         responses: {
@@ -2133,7 +2203,124 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["TrendStockSnapshot"];
+                    "application/json": components["schemas"]["TrendSearchResult"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    search_evidence_api_v1_trends_search_evidence_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["TrendSearchEvidenceRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TrendSearchEvidence"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    saved_trends_api_v1_trends_saved_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SavedTrendSearch"][];
+                };
+            };
+        };
+    };
+    save_trend_api_v1_trends_saved_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SaveTrendSearchRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SavedTrendSearch"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    delete_trend_api_v1_trends_saved__saved_id__delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                saved_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DeleteResponse"];
                 };
             };
             /** @description Validation Error */

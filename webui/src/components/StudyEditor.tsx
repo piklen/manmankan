@@ -359,7 +359,7 @@ export function StudyEditor({
             type="submit"
             disabled={Boolean(error) || busy}
           >
-            {busy ? "正在核对日线" : "运行研究"}
+            {busy ? "正在核对日线" : "核对历史并保存"}
             <ArrowRight size={16} />
           </Button>
           {error ? (

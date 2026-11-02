@@ -1,7 +1,15 @@
 import { useEffect, useRef, useState } from "react";
-import { MousePointer2, RotateCcw, Scan, Workflow } from "lucide-react";
-import type { TrendMapRow } from "../api/client";
+import { MousePointer2, RotateCcw, Scan } from "lucide-react";
 import { number, percent } from "../lib/format";
+
+export type TrendPoint = {
+  symbol: string;
+  name: string;
+  date: string;
+  x: number | null;
+  y: number | null;
+  available: boolean;
+};
 
 export type MapBounds = {
   xMin: number;
@@ -9,7 +17,7 @@ export type MapBounds = {
   yMin: number;
   yMax: number;
 };
-export const inBounds = (row: TrendMapRow, bounds: MapBounds | null) =>
+export const inBounds = (row: TrendPoint, bounds: MapBounds | null) =>
   row.available &&
   row.x != null &&
   row.y != null &&
@@ -28,21 +36,20 @@ export function TrendScatter({
   onBounds,
   onSelect,
 }: {
-  rows: TrendMapRow[];
-  selected: TrendMapRow | null;
+  rows: TrendPoint[];
+  selected: TrendPoint | null;
   positionWindow: number;
   momentumWindow: number;
   bounds: MapBounds | null;
   onBounds: (value: MapBounds | null) => void;
-  onSelect: (row: TrendMapRow) => void;
+  onSelect: (row: TrendPoint) => void;
 }) {
   const wrapper = useRef<HTMLDivElement>(null),
     canvas = useRef<HTMLCanvasElement>(null);
   const [size, setSize] = useState({ width: 800, height: 480 });
-  const [brushMode, setBrushMode] = useState(false),
-    [trail, setTrail] = useState(true);
+  const [brushMode, setBrushMode] = useState(false);
   const [hover, setHover] = useState<{
-    row: TrendMapRow;
+    row: TrendPoint;
     x: number;
     y: number;
   } | null>(null);
@@ -51,7 +58,7 @@ export function TrendScatter({
     end: [number, number];
   } | null>(null);
   const points = rows.filter(
-    (row): row is TrendMapRow & { x: number; y: number } =>
+    (row): row is TrendPoint & { x: number; y: number } =>
       row.available && row.x != null && row.y != null,
   );
   const minY = Math.min(0, ...points.map((row) => row.y)),
@@ -166,45 +173,6 @@ export function TrendScatter({
     }
     context.globalAlpha = 1;
     if (selected?.available && selected.x != null && selected.y != null) {
-      if (trail) {
-        context.strokeStyle = "#f0b553";
-        context.fillStyle = "#f0b553";
-        context.lineWidth = 1.8;
-        let previous: { x: number; y: number } | null = null;
-        for (const point of selected.trail ?? []) {
-          if (point.x == null || point.y == null) {
-            previous = null;
-            continue;
-          }
-          const current = { x: x(point.x), y: y(point.y) };
-          if (previous) {
-            context.beginPath();
-            context.moveTo(previous.x, previous.y);
-            context.lineTo(current.x, current.y);
-            context.stroke();
-            const angle = Math.atan2(
-              current.y - previous.y,
-              current.x - previous.x,
-            );
-            context.beginPath();
-            context.moveTo(current.x, current.y);
-            context.lineTo(
-              current.x - 6 * Math.cos(angle - 0.5),
-              current.y - 6 * Math.sin(angle - 0.5),
-            );
-            context.lineTo(
-              current.x - 6 * Math.cos(angle + 0.5),
-              current.y - 6 * Math.sin(angle + 0.5),
-            );
-            context.closePath();
-            context.fill();
-          }
-          context.beginPath();
-          context.arc(current.x, current.y, 3.7, 0, Math.PI * 2);
-          context.fill();
-          previous = current;
-        }
-      }
       context.strokeStyle = "#ffc76c";
       context.lineWidth = 1.2;
       context.beginPath();
@@ -266,15 +234,6 @@ export function TrendScatter({
           </button>
           <button
             type="button"
-            aria-pressed={trail}
-            className={trail ? "active" : ""}
-            onClick={() => setTrail(!trail)}
-          >
-            <Workflow size={15} />
-            显示轨迹
-          </button>
-          <button
-            type="button"
             onClick={() => {
               onBounds(null);
               setBrushMode(false);
@@ -297,7 +256,7 @@ export function TrendScatter({
           }}
           tabIndex={0}
           role="img"
-          aria-label={`趋势地图：横轴${positionWindow}日位置，纵轴${momentumWindow}日涨跌，${points.length}只股票。也可在下方表格选择股票。`}
+          aria-label={`趋势地图：横轴${positionWindow}日位置，纵轴${momentumWindow}日涨跌，${points.length}只股票。可切换表格选择股票。`}
           onPointerDown={(event) => {
             const point = coordinates(event);
             if (brushMode) {
@@ -395,7 +354,7 @@ export function TrendScatter({
           >
             <strong>{selected.name}</strong>
             <span>
-              {selected.symbol} · {selected.data_cutoff?.slice(5)}
+              {selected.symbol} · {selected.date.slice(5)}
             </span>
           </div>
         ) : null}
@@ -403,7 +362,8 @@ export function TrendScatter({
       </div>
       <p className="map-canvas-hint">
         <MousePointer2 size={12} />
-        点击点查看个股；框选后可验证范围。轨迹向右表示区间位置上移，向上表示区间涨幅增加。
+        横轴表示{positionWindow}日区间位置，纵轴表示{momentumWindow}
+        日涨跌幅。点击点查看个股；框选后可将范围加入筛选条件。
       </p>
     </div>
   );

@@ -147,33 +147,8 @@ def test_info_csv_without_optional_sections() -> None:
 # ── trend_csv (export_trend) ──────────────────────────────────────────
 
 
-def test_trend_csv_with_latest_date_columns() -> None:
-    results = [
-        TrendResult("600519", "测试跌5", 100.0, -5, -8.0, [
-            ("2026-05-27", -1.0), ("2026-05-28", -2.0), ("2026-05-29", -3.0),
-        ]),
-        # daily_changes 比 latest 短 → 尾部补空
-        TrendResult("000001", "测试涨3", 50.0, 3, 4.5, [("2026-05-29", 1.5)]),
-    ]
-    text = export.trend_csv(results, latest=2)
-
-    assert text.startswith(BOM)
-    lines = text.lstrip(BOM).splitlines()
-    # 日期列取 daily_changes 前 2 个 · header 用 MM-DD
-    assert lines[0] == "股票,代码,现价,连续,累计%,05-27,05-28"
-    assert "测试跌5,600519,100.00,跌5天,8.00,-1.00,-2.00" in lines[1]
-    # 短行补空列 · 列数对齐 header
-    assert lines[2].endswith(",")
 
 
-def test_trend_csv_without_latest() -> None:
-    results = [TrendResult("600519", "测试平", 20.0, 0, 0.0, [])]
-    text = export.trend_csv(results, latest=None)
-
-    assert text.startswith(BOM)
-    lines = text.lstrip(BOM).splitlines()
-    assert lines[0] == "股票,代码,现价,连续,累计%"
-    assert lines[1] == "测试平,600519,20.00,平,0.00"
 
 
 # ── compare_csv (export_trend) ────────────────────────────────────────

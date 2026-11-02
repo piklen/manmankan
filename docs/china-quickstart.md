@@ -1,6 +1,6 @@
 # 中国用户快速开始
 
-这份文档帮助在本机打开趋势地图，完成位置观察、明确条件与历史样本核对。数据、研究、自选、笔记和持仓保存在本机，不做云同步或遥测；凭据只发送到配置的数据来源。
+这份文档帮助在本机明确趋势条件、筛出当前匹配、查看多周期位置并核对历史样本。数据、研究、自选、笔记和持仓保存在本机，不做云同步或遥测；凭据只发送到配置的数据来源。
 
 ## 1. 最短可用路径
 
@@ -9,11 +9,11 @@ uv tool install manmankan
 kan web
 ```
 
-默认进入“发现趋势”。选择股票范围与数据日，查看长期位置与近期变化；行业、股票表和地图联动。框选区域或填写坐标边界后进入研究验证，核对当前匹配、历史分布和具体样本。也可以选一段实际走势，明确窗口与距离阈值进行形态检索。
+默认进入“趋势筛选”。选择股票范围、数据日及明确条件：连续收盘上涨/下跌、阳线/阴线、先跌后涨/先涨后跌，或最近 N 个交易日中上涨/下跌的次数；填写阈值后点击执行。结果可切换表格与位置图，选中个股后在右侧详情核对实际日线与条件值；也可以选择参照股票、日期、窗口和距离阈值检索相似形态。保存筛选只保存名称与条件，需要历史分布时再明确研究窗口和后续观察天数，单独运行历史核对。
 
 首次没有行情时，到“数据”页选择明确代码或市场范围更新，再返回读取。没有配置完整股票名单来源时不能用缓存子集冒充全市场；可以先用明确代码研究。数据连接与网络问题见下方章节。
 
-不想打开浏览器时运行 `kan tui`，用 `t/a` 浏览个人池或全市场趋势、`l` 查看研究、Enter 核对事实、Esc 返回、`?` 打开帮助。完整口径见 [趋势与研究](trend-research.md)。
+不想打开浏览器时运行 `kan tui`。首屏填写范围、条件和天数，Tab 切换输入，`Ctrl+Enter` 执行，Enter 查看个股事实；`s` 保存条件，`g` 载入已存条件，`m` 查看数据缺口，`h` 明确窗口后核对历史，`l` 查看已存研究，Esc 返回，`?` 打开帮助。完整口径见 [趋势与研究](trend-research.md)。
 
 浏览器地址只监听本机，带本次启动会话凭证；不要把完整地址发给别人。数据更新与研究仅在明确操作后执行。
 
@@ -22,12 +22,26 @@ kan web
 ```bash
 kan --version
 KAN_NO_UPDATE_CHECK=1 kan help
-KAN_NO_UPDATE_CHECK=1 kan screen filters --format json
-NO_COLOR=1 KAN_NO_UPDATE_CHECK=1 kan find --codes 600519,000858 --format json --dry-run
-KAN_NO_UPDATE_CHECK=1 kan scan --codes 600519,000858 --periods 5,20,60,180 --format json
+KAN_NO_UPDATE_CHECK=1 kan study catalog
+KAN_NO_UPDATE_CHECK=1 kan schema --section mcp --format json --compact
+KAN_NO_UPDATE_CHECK=1 kan trend --codes 600519,000858 --browse --format json
 ```
 
-`kan screen filters` 发现新版稳定条件契约；`kan find --dry-run` 只验证兼容入口、JSON envelope、免责声明、退出码和查询计划，不拉行情；`kan scan` 才验证真实日 K 数据路径。完整 Screen CLI 见 [`selection-workbench.md`](selection-workbench.md)。
+`kan study catalog` 与 `kan schema` 只读取字段定义与接口契约；`kan trend` 读取本地日线，不自动更新行情或创建历史研究。当前没有缓存时，先明确执行 `kan fetch 600519 000858`，或在“数据”页更新所选范围。
+
+已有明确问题后可以直接筛选，下面的天数仅演示参数，不是预设策略：
+
+```bash
+kan trend --universe all --down-days 5 --format json
+kan trend --universe personal --up-days 3 --comparison eq
+kan trend --codes 600519,000858 --previous-down-days 3 --up-days 2
+kan trend --universe all --rising-days 8 --window 10 --format json
+kan trend --universe all --industry 银行 --browse --format json
+```
+
+`--up-days / --down-days` 比较当日收盘与前一市场交易日收盘，`--bull-days / --bear-days` 比较收盘与开盘；平盘、十字及缺行中断对应连续段。`--comparison eq` 表示恰好。连续段的 `lte` 表示最多且同时要求该方向大于 0；区间上涨/下跌次数允许填写 0，`lte` 只比较次数上限。当前条件筛选使用 `--universe all`，`kan fetch --all`、`kan board trend --all` 等其他命令仍按各自契约使用 `--all`，不要混用。
+
+先看 `coverage` 和 `missing_rows`：资料不足不等于不符合。`lower_bounds` 只能解释为至少天数；`common_data_date` 是缓存主要截止日，不能冒充请求的 `as_of`。如需改用旧日期，明确传 `--as-of YYYY-MM-DD`；否则先更新数据。
 
 旧版本已有 `config.json / watchlist.json / positions.json` 时，新版会在接管前保留 `.vnext-backup`。可用 `kan workspace status` 查看状态，完整回滚手册见 [`workspace-migration.md`](workspace-migration.md)。
 
@@ -74,7 +88,7 @@ $env:NO_COLOR = "1"
 kan find --codes 600519,000858 --format json --dry-run
 ```
 
-观察台请在另一个 PowerShell 窗口单独运行 `kan web`；该命令会持续占用前台，按 `Ctrl+C` 才会退出。
+趋势筛选页面请在另一个 PowerShell 窗口单独运行 `kan web`；该命令会持续占用前台，按 `Ctrl+C` 才会退出。
 
 脱敏后的实测输出形态应接近：
 

@@ -1,6 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Database, Plus, RefreshCw, Search, Trash2 } from "lucide-react";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useSearchParams } from "react-router-dom";
 import { api, type Candidate, type StudyQuery } from "../api/client";
 import { Button, Empty, Loading, Notice } from "../components/ui";
@@ -44,6 +44,7 @@ function NotesTool() {
       setSelected(null);
       void client.invalidateQueries({ queryKey: ["candidate-lists"] });
       void client.invalidateQueries({ queryKey: ["focus"] });
+      void client.invalidateQueries({ queryKey: ["trend-search"] });
     },
   });
   const items = (query.data ?? [])
@@ -187,6 +188,7 @@ function PersonalTool() {
     onSuccess: () => {
       setCode("");
       void client.invalidateQueries({ queryKey: ["focus"] });
+      void client.invalidateQueries({ queryKey: ["trend-search"] });
       void client.invalidateQueries({ queryKey: ["candidate-lists"] });
     },
   });
@@ -253,6 +255,7 @@ function HoldingsTool() {
   const refresh = () => {
     void client.invalidateQueries({ queryKey: ["portfolio"] });
     void client.invalidateQueries({ queryKey: ["focus"] });
+    void client.invalidateQueries({ queryKey: ["trend-search"] });
   };
   const saveCash = useMutation({
     mutationFn: () => api.updateCash(Number(cash)),
@@ -441,6 +444,7 @@ function HoldingsTool() {
 }
 
 export function DataPage() {
+  const client = useQueryClient();
   const [params, setParams] = useSearchParams();
   const tab = params.get("tab") ?? "market";
   const settings = useQuery({ queryKey: ["settings"], queryFn: api.settings });
@@ -466,6 +470,15 @@ export function DataPage() {
       }),
     onSuccess: () => void jobs.refetch(),
   });
+  const refreshStatus = jobs.data?.find(
+    (job) => job.job_id === refresh.data?.job_id,
+  )?.status;
+  useEffect(() => {
+    if (refreshStatus && !["queued", "running"].includes(refreshStatus)) {
+      void client.invalidateQueries({ queryKey: ["trend-search"] });
+      void client.invalidateQueries({ queryKey: ["trend-evidence"] });
+    }
+  }, [refreshStatus, client]);
   const canRefresh =
     scope !== "codes" ||
     (parseCodes(codes).length > 0 &&

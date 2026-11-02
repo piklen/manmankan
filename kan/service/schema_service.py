@@ -58,6 +58,13 @@ def _command_schemas(*, compact: bool) -> list[dict[str, Any]]:
             ],
         },
         {
+            "name": "trend",
+            "purpose": "Filter current daily trends with explicit streak, preceding-run, window-count, position or shape conditions; no historical run is created.",
+            "formats": ["terminal", "json"],
+            "success_keys": ["query", "as_of", "coverage", "rows", "missing_rows", "scope_codes"],
+            "examples": ["kan trend --universe all --down-days 5 --format json", "kan trend --universe all --up-days 3 --comparison eq", "kan trend --universe all --up-days 2 --previous-down-days 3"],
+        },
+        {
             "name": "study",
             "purpose": "Run explicit daily conditions across current matches and historical events; inspect full denominators and frozen evidence.",
             "formats": ["terminal", "json"],

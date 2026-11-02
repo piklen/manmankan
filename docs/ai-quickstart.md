@@ -232,7 +232,7 @@ kan find --all --pe lt:20 --format json --compact --no-compact-context
 kan scan --all --periods 20,60,180 --format json
 kan range 600519 --periods 5,15 --levels 75,85,90,95 --format json
 kan range --codes 600519,000858 --format json
-kan trend --all --down 3 --format json
+kan trend --universe all --down-days 3 --format json
 kan board trend --kind industry --up 3 --format json
 kan board trend --kind theme --up 3 --candle --format json
 kan find --codes 600519,000858 --roe gt:10 --fields @core,@fundamentals --format json

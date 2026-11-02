@@ -210,7 +210,7 @@ def test_root_help_lists_batch_sources_and_theme_watchlist_commands() -> None:
     assert "kan scan --wide" in output
     assert "kan scan --compact" in output
     assert "kan scan --all" in output
-    assert "kan trend --all" in output
+    assert "kan trend --universe all --up-days 3" in output
     assert "kan low 60 --all" in output
     assert "kan high 30 --all" in output
     assert "kan fetch --all" in output

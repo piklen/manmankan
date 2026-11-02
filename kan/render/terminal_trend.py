@@ -121,12 +121,12 @@ def trend_table(
         if r.streak < 0:
             streak_text = Text(r.direction, style="bold green")
             # 显式负号:管道/重定向丢失颜色时方向仍可读
-            cum_text = Text(f"-{abs(r.streak_pct):.2f}%", style="green")
+            cum_text = Text(f"{r.streak_pct:+.2f}%", style="red" if r.streak_pct > 0 else "green")
         elif r.streak > 0:
             streak_text = Text(r.direction, style="bold red")
-            cum_text = Text(f"+{abs(r.streak_pct):.2f}%", style="red")
+            cum_text = Text(f"{r.streak_pct:+.2f}%", style="green" if r.streak_pct < 0 else "red")
         else:
-            streak_text = Text("平", style="dim")
+            streak_text = Text(r.direction, style="dim")
             cum_text = Text("0%", style="dim")
 
         star = "⭐ " if r.symbol in highlight else ""
@@ -252,12 +252,12 @@ def theme_leaderboard_table(
         if r.streak < 0:
             streak_text = Text(r.direction, style="bold green")
             # 显式负号:管道/重定向丢失颜色时方向仍可读
-            cum_text = Text(f"-{abs(r.streak_pct):.2f}%", style="green")
+            cum_text = Text(f"{r.streak_pct:+.2f}%", style="red" if r.streak_pct > 0 else "green")
         elif r.streak > 0:
             streak_text = Text(r.direction, style="bold red")
-            cum_text = Text(f"+{abs(r.streak_pct):.2f}%", style="red")
+            cum_text = Text(f"{r.streak_pct:+.2f}%", style="green" if r.streak_pct < 0 else "red")
         else:
-            streak_text = Text("平", style="dim")
+            streak_text = Text(r.direction, style="dim")
             cum_text = Text("0%", style="dim")
 
         row: list[str | Text] = [

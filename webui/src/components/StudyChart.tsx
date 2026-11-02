@@ -6,20 +6,29 @@ import { number, percent } from "../lib/format";
 export function StudyChart({
   evidence,
   context = "study",
+  tone = "dark",
+  segmentStart,
 }: {
   evidence: StudyEvidence;
   context?: "study" | "market";
+  tone?: "dark" | "light";
+  segmentStart?: string;
 }) {
   const holder = useRef<HTMLDivElement>(null);
   const [width, setWidth] = useState(820);
-  const [nearEvent, setNearEvent] = useState(false);
+  const [nearEvent, setNearEvent] = useState(context === "market");
   const [hoveredDate, setHoveredDate] = useState(evidence.event_date);
   const eventOffset = evidence.bars.findIndex(
     (bar) => bar.date === evidence.event_date,
   );
-  const bars = nearEvent
-    ? evidence.bars.slice(Math.max(0, eventOffset - 30))
-    : evidence.bars;
+  const segmentOffset = segmentStart
+    ? evidence.bars.findIndex((bar) => bar.date >= segmentStart)
+    : eventOffset;
+  const nearStart =
+    context === "market"
+      ? Math.max(0, Math.min(eventOffset - 29, Math.max(0, segmentOffset) - 8))
+      : Math.max(0, eventOffset - 30);
+  const bars = nearEvent ? evidence.bars.slice(nearStart) : evidence.bars;
   const eventIndex = bars.findIndex((bar) => bar.date === evidence.event_date);
   const hoveredIndex = Math.max(
     0,
@@ -83,7 +92,7 @@ export function StudyChart({
     if (bar) setHoveredDate(bar.date);
   };
   return (
-    <section className="candle-panel" ref={holder}>
+    <section className={`candle-panel candle-panel--${tone}`} ref={holder}>
       <div className="candle-heading">
         <div>
           <h2>{evidence.name}</h2>
@@ -97,6 +106,7 @@ export function StudyChart({
           <button
             type="button"
             className={!nearEvent ? "active" : ""}
+            aria-pressed={!nearEvent}
             onClick={() => setNearEvent(false)}
           >
             完整窗口
@@ -104,9 +114,10 @@ export function StudyChart({
           <button
             type="button"
             className={nearEvent ? "active" : ""}
+            aria-pressed={nearEvent}
             onClick={() => setNearEvent(true)}
           >
-            事件附近
+            {context === "study" ? "事件附近" : "本段附近"}
           </button>
           <Crosshair size={16} aria-hidden="true" />
         </div>
@@ -129,6 +140,11 @@ export function StudyChart({
           量 <b>{number(hovered?.volume, 0)}</b>
         </span>
       </div>
+      {context === "market" ? (
+        <p className="chart-visible-range">
+          {bars[0]?.date} — {bars.at(-1)?.date} · {bars.length} 个交易日
+        </p>
+      ) : null}
       <svg
         viewBox={`0 0 ${width} 328`}
         role="img"
@@ -167,6 +183,20 @@ export function StudyChart({
           height={272}
           className={context === "study" ? "chart-outcome" : "chart-formation"}
         />
+        {segmentStart && bars.some((bar) => bar.date >= segmentStart) ? (
+          <rect
+            x={x(bars.findIndex((bar) => bar.date >= segmentStart)) - step / 2}
+            y={30}
+            width={Math.max(
+              0,
+              eventX -
+                x(bars.findIndex((bar) => bar.date >= segmentStart)) +
+                step,
+            )}
+            height={272}
+            className="chart-current-segment"
+          />
+        ) : null}
         {gridPrices.map((price) => (
           <g key={price}>
             <line
@@ -202,7 +232,10 @@ export function StudyChart({
               }
               className="chart-axis"
             >
-              {bars[index]?.date.slice(5)}
+              {(index === 0 || index === bars.length - 1) &&
+              bars[0]?.date.slice(0, 4) !== bars.at(-1)?.date.slice(0, 4)
+                ? bars[index]?.date
+                : bars[index]?.date.slice(5)}
             </text>
           </g>
         ))}
@@ -343,7 +376,13 @@ export function DistributionChart({
   );
 }
 
-export function ShapeOverlay({ evidence }: { evidence: StudyEvidence }) {
+export function ShapeOverlay({
+  evidence,
+  context = "study",
+}: {
+  evidence: StudyEvidence;
+  context?: "study" | "market";
+}) {
   const condition = evidence.conditions.find(
     (item) => item.condition.field === "shape_distance",
   );
@@ -418,11 +457,11 @@ export function ShapeOverlay({ evidence }: { evidence: StudyEvidence }) {
       <div className="overlay-legend">
         <span>
           <i />
-          冻结的参照
+          {context === "study" ? "冻结的参照" : "参照形态"}
         </span>
         <span>
           <i />
-          选中事件
+          {context === "study" ? "选中事件" : "当前对象"}
         </span>
         <strong>均方根距离 {number(condition?.actual, 2)} 个百分点</strong>
       </div>
