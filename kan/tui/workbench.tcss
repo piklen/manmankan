@@ -2,7 +2,7 @@ Screen { background: #151e25; color: #e8efed; }
 #brand { height: 1; padding: 0 2; margin-top: 0; text-style: bold; color: #95d5bd; }
 #toolbar { height: 3; margin: 0 2; }
 #search { width: 1fr; margin-right: 1; border: tall #40515b; }
-#toolbar Button { min-width: 8; width: auto; margin-left: 1; padding: 0 1; }
+#toolbar Button { min-width: 8; width: auto; margin-left: 1; padding: 0; }
 Button { background: #273741; border: tall #273741; color: #e8efed; }
 Button.-primary { background: #467866; border: tall #467866; color: white; }
 Button:focus { border: tall #95d5bd; }
@@ -22,13 +22,21 @@ Footer { background: #25343d; color: #afbdc3; }
 Footer > .footer--key { background: #365b50; color: #e8efed; }
 .error { color: #f2a2a5; }
 
-#filter-form { height: 7; margin: 0 2; }
+#filter-form { height: 10; margin: 0 2; }
 .form-row { height: 3; }
-.form-row Input, .form-row Select { width: 1fr; margin-right: 1; border: tall #40515b; }
+.form-row Input, .form-row Select { width: 1fr; margin-right: 1; }
+.form-row Input { border: tall #40515b; }
+.form-row Select > SelectCurrent { border: tall #40515b; padding: 0 1; }
+.form-row Select:focus > SelectCurrent { border: tall #95d5bd; }
 #filter-kind { width: 25; }
 #filter-universe { width: 16; }
 #filter-operator { width: 13; }
+#filter-compare { width: 22; }
 #filter-hint { height: 1; color: #a6babf; }
 .form-row Button { min-width: 12; width: auto; padding: 0 1; }
 #save-form, #history-form { margin: 0 2; }
 #history-policy { width: 15; }
+#common-date, #change-options { height: 3; margin: 0 2; }
+#common-date-text { width: 1fr; height: 3; content-align: left middle; color: #dac88e; }
+#common-date Button { min-width: 14; width: auto; }
+#change-mode { width: 24; }

@@ -3,6 +3,12 @@ import type { components } from "./schema";
 export type TrendSearchQuery = components["schemas"]["TrendSearchQuery"];
 export type TrendSearchResult = components["schemas"]["TrendSearchResult"];
 export type TrendSearchRow = components["schemas"]["TrendSearchRow"];
+export type TrendComparisonRow = components["schemas"]["TrendComparisonRow"];
+export type TrendComparisonSnapshot =
+  components["schemas"]["TrendComparisonSnapshot"];
+export type TrendSearchComparison =
+  components["schemas"]["TrendSearchComparison"];
+export type StudyCheck = components["schemas"]["StudyCheck"];
 export type TrendSearchEvidence = components["schemas"]["TrendSearchEvidence"];
 export type SavedTrendSearch = components["schemas"]["SavedTrendSearch"];
 export type StudyQuery = components["schemas"]["StudyQuery"];
@@ -86,10 +92,10 @@ export const api = {
       method: "POST",
       body: body(query),
     }),
-  trendEvidence: (query: TrendSearchQuery, symbol: string) =>
+  trendEvidence: (query: TrendSearchQuery, symbol: string, at?: string) =>
     request<TrendSearchEvidence>("/api/v1/trends/search/evidence", {
       method: "POST",
-      body: body({ query, symbol }),
+      body: body({ query, symbol, at }),
     }),
   savedTrends: () => request<SavedTrendSearch[]>("/api/v1/trends/saved"),
   saveTrend: (title: string, query: TrendSearchQuery) =>

@@ -5,14 +5,63 @@ from rich.console import Group
 from rich.table import Table
 from rich.text import Text
 
-from kan.domain.market_study import StudyBar, StudyCondition, StudyEvidence, StudyResult
+from kan.domain.market_study import StudyBar, StudyCheck, StudyCondition, StudyEvidence, StudyResult
 from kan.render.base import DISCLAIMER
 from kan.service.market_study import FIELD_CATALOG
-from kan.service.trend_search import TrendSearchEvidence, TrendSegment
+from kan.service.trend_search import (
+    TrendComparisonRow,
+    TrendSearchEvidence,
+    TrendSearchResult,
+    TrendSegment,
+)
 
 _FIELDS = {str(item["field"]): item for item in FIELD_CATALOG}
 _OPERATORS = {"gt": ">", "gte": "≥", "lt": "<", "lte": "≤", "eq": "="}
 STATUSES = {"complete": "完整", "pending": "窗口未满", "missing": "行情缺失"}
+CHANGE_STATUSES = {"entered": "新出现", "continued": "持续符合", "exited": "不再符合", "uncertain": "无法确认"}
+
+
+def matched_text(value: bool | None) -> str:
+    return "符合" if value is True else "未满足" if value is False else "未知"
+
+
+def _check_text(check: StudyCheck | None) -> str:
+    if check is None:
+        return "未知"
+    actual = number(check.actual, str(_FIELDS[check.condition.field]["unit"]))
+    if check.bound == "at_least" and check.actual is not None:
+        actual = "至少 " + actual
+    return f"{actual} · {matched_text(check.matched)}"
+
+
+def comparison_reason(row: TrendComparisonRow) -> str:
+    reasons = [f"{label}：{point.reason}" for label, point in (("对照日", row.previous), ("当前日", row.current)) if point.reason]
+    if reasons:
+        return "；".join(reasons)
+    checks = row.previous.conditions if row.status == "entered" else row.current.conditions
+    failed = [f"{condition_text(c.condition)}，实际 {_check_text(c)}" for c in checks if c.matched is False]
+    return "；".join(failed) or "两日均符合所设条件"
+
+
+def comparison_evidence_view(row: TrendComparisonRow, result: TrendSearchResult) -> Group:
+    comparison = result.comparison
+    assert comparison is not None
+    checks = Table(expand=True, box=None, padding=(0, 1))
+    for label in ("明确条件", f"对照日 {comparison.as_of}", f"当前日 {result.as_of}"):
+        checks.add_column(label)
+    for condition in result.query.conditions:
+        previous = next((c for c in row.previous.conditions if c.condition == condition), None)
+        current = next((c for c in row.current.conditions if c.condition == condition), None)
+        checks.add_row(Text(condition_text(condition)), _check_text(previous), _check_text(current))
+    return Group(
+        Text(f"{row.name} {row.symbol} · {CHANGE_STATUSES[row.status]}", style="bold #95d5bd"),
+        Text(f"{comparison.as_of} {matched_text(row.previous.matched)} → {result.as_of} {matched_text(row.current.matched)}\n"
+             f"收盘 {number(row.previous.close)} → {number(row.current.close)}\n"),
+        checks,
+        Text("\n" + comparison_reason(row)),
+        Text("\n1 查看当前日日线 · 2 查看对照日日线 · Esc 返回变化列表"),
+        Text("\n缺少任一天所需数据时归为无法确认，不把缺行情当作退出。两日使用相同范围、条件与形态参照。", style="#afbdc3"),
+    )
 
 
 def number(value: float | None, suffix: str = "", *, signed: bool = False) -> str:
@@ -123,6 +172,11 @@ def help_view() -> Text:
         "直接输入明确条件，筛当前，再按需核对历史\n\n"
         "f             打开条件：方向键选择类型，Tab 切换输入\n"
         "Ctrl+Enter    按已填天数筛选；不自动运行历史研究\n"
+        "Ctrl+N        明确新建条件；已载入的高级条件不会被简化\n"
+        "截止日        可填写日期；留空使用最近完整收盘\n"
+        "d             明确改用结果提示的本地主要数据日\n"
+        "c             查看两日变化；需先明确开启交易日对比\n"
+        "变化 Enter    逐项核对原因；1 / 2 查看当前 / 对照日日线\n"
         "↑ ↓ / Enter   选结果 / 看条件实际值、连续段和日线\n"
         "s / g         命名保存条件 / 读取已保存条件\n"
         "h             明确回看与后续天数，再核对并保存历史\n"

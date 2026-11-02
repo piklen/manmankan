@@ -12,6 +12,7 @@ import App from "../App";
 import {
   api,
   type TrendSearchQuery,
+  type TrendComparisonRow,
   type TrendSearchResult,
   type TrendSearchRow,
 } from "../api/client";
@@ -284,16 +285,22 @@ describe("explicit current trend screening and optional historical research", ()
             }
           : row.current_segment,
     }));
+    let dataSource = "test-fixture";
     const search = vi
       .spyOn(api, "searchTrends")
       .mockImplementation(async (query) => ({
         ...searchResult(query),
-        rows: [...ordered].reverse(),
+        rows: [...ordered]
+          .reverse()
+          .map((item) => ({ ...item, source: dataSource })),
       }));
     vi.mocked(api.trendEvidence).mockImplementation(async (query, symbol) => ({
       query,
       as_of: row.date,
-      row: ordered.find((item) => item.symbol === symbol)!,
+      row: {
+        ...ordered.find((item) => item.symbol === symbol)!,
+        source: dataSource,
+      },
       bars: longBars,
       conditions: [],
       reference_bars: [],
@@ -306,10 +313,9 @@ describe("explicit current trend screening and optional historical research", ()
       name: "查看 测试对象1 000001",
     });
     await waitFor(() => expect(first.closest("tr")).toHaveClass("selected"));
-    expect(await screen.findByRole("button", { name: "本段附近" })).toHaveAttribute(
-      "aria-pressed",
-      "true",
-    );
+    expect(
+      await screen.findByRole("button", { name: "本段附近" }),
+    ).toHaveAttribute("aria-pressed", "true");
     expect(
       screen.getByText(
         `${longBars[50]!.date} — ${longBars[79]!.date} · 30 个交易日`,
@@ -328,8 +334,10 @@ describe("explicit current trend screening and optional historical research", ()
     await screen.findByText(
       `${longBars[2]!.date} — ${longBars[79]!.date} · 78 个交易日`,
     );
+    dataSource = "test-refreshed";
     fireEvent.click(screen.getByRole("button", { name: "开始筛选" }));
     await waitFor(() => expect(search).toHaveBeenCalledTimes(2));
+    await screen.findByText(/来源：test-refreshed ·/);
     await waitFor(() =>
       expect(
         screen
@@ -347,6 +355,17 @@ describe("explicit current trend screening and optional historical research", ()
         .getByRole("button", { name: "查看 测试对象11 000011" })
         .closest("tr"),
     ).toHaveClass("selected");
+    enter("条件 1 数值", "6");
+    fireEvent.click(screen.getByRole("button", { name: "开始筛选" }));
+    await waitFor(() => expect(search).toHaveBeenCalledTimes(3));
+    await waitFor(() =>
+      expect(screen.getByRole("button", { name: "开始筛选" })).toBeEnabled(),
+    );
+    dataSource = "test-refreshed-again";
+    enter("条件 1 数值", "5");
+    fireEvent.click(screen.getByRole("button", { name: "开始筛选" }));
+    await waitFor(() => expect(search).toHaveBeenCalledTimes(4));
+    await screen.findByText(/来源：test-refreshed-again ·/);
   });
 
   it("shares results with map and shape searches without running historical research", async () => {
@@ -389,6 +408,199 @@ describe("explicit current trend screening and optional historical research", ()
     expect(search.mock.calls[1]![0].conditions).toEqual([
       { field: "shape_distance", operator: "lte", value: 2.5, window: 20 },
     ]);
+    expect(run).not.toHaveBeenCalled();
+  });
+
+  it("preserves explicit comparison settings and exposes both dates for exited and uncertain rows", async () => {
+    const currentDate = "2026-10-28",
+      previousDate = "2026-10-27";
+    const query: TrendSearchQuery = {
+      universe: "all",
+      as_of: currentDate,
+      compare_to: "previous_session",
+      conditions: [{ field: "down_days", operator: "gte", value: 5 }],
+    };
+    const snapshot = (actual: number | null, close: number | null) => ({
+      matched: actual == null ? null : actual >= 5,
+      close,
+      conditions: [
+        {
+          condition: query.conditions![0]!,
+          actual,
+          matched: actual == null ? null : actual >= 5,
+          bound: "exact" as const,
+        },
+      ],
+      reason: actual == null ? "当前日缺少行情" : null,
+    });
+    const changes: TrendComparisonRow[] = [
+      {
+        symbol: "600000",
+        name: row.name,
+        status: "entered",
+        previous: snapshot(4, 13),
+        current: snapshot(5, 12.8),
+      },
+      {
+        symbol: "000001",
+        name: "测试退出",
+        status: "exited",
+        previous: snapshot(5, 10),
+        current: snapshot(0, 10.2),
+      },
+      {
+        symbol: "000002",
+        name: "测试未知",
+        status: "uncertain",
+        previous: snapshot(5, 8),
+        current: snapshot(null, null),
+      },
+      {
+        symbol: "000003",
+        name: "测试旧日缺口",
+        status: "uncertain",
+        previous: { ...snapshot(null, 9), reason: "对照日条件缺行情" },
+        current: { ...snapshot(0, 9.2), reason: "当前不满足" },
+      },
+    ];
+    const search = vi
+      .spyOn(api, "searchTrends")
+      .mockImplementation(async (input) => ({
+        ...searchResult(input),
+        coverage: {
+          total: 4,
+          evaluated: 3,
+          matched: 1,
+          missing: 1,
+          self_matches_excluded: 0,
+        },
+        scope_codes: ["600000", "000001", "000002", "000003"],
+        comparison: {
+          as_of: previousDate,
+          coverage: {
+            comparable: 2,
+            entered: 1,
+            continued: 0,
+            exited: 1,
+            unchanged: 0,
+            uncertain: 2,
+            excluded: 0,
+          },
+          rows: changes,
+          excluded_rows: [],
+        },
+      }));
+    vi.mocked(api.savedTrends).mockResolvedValue([
+      { id: "saved-comparison", title: "每日变化", query },
+    ]);
+    const save = vi
+      .spyOn(api, "saveTrend")
+      .mockImplementation(async (title, input) => ({
+        id: "saved-copy",
+        title,
+        query: input,
+      }));
+    const run = vi.spyOn(api, "runStudy");
+    vi.mocked(api.trendEvidence).mockImplementation(
+      async (input, symbol, at) => {
+        const selected = changes.find((item) => item.symbol === symbol)!;
+        const actualDate = at ?? currentDate;
+        const fact =
+          actualDate === previousDate ? selected.previous : selected.current;
+        if (fact.close == null)
+          throw new Error("当前日缺少行情，选择对照日可查看已有证据");
+        return {
+          query: input,
+          as_of: actualDate,
+          row: {
+            ...row,
+            symbol,
+            name: selected.name,
+            date: actualDate,
+            close: fact.close,
+          },
+          bars: bars.filter((bar) => bar.date <= actualDate),
+          conditions: fact.conditions ?? [],
+          reference_bars: [],
+          warnings: [],
+        };
+      },
+    );
+    mount();
+    expect(screen.getByLabelText("两日对比")).toHaveValue("none");
+    fireEvent.click(screen.getByRole("button", { name: "连续下跌" }));
+    enter("条件 1 数值", "5");
+    enter("两日对比", "date");
+    expect(screen.getByRole("button", { name: "开始筛选" })).toBeDisabled();
+    enter("截止日期", currentDate);
+    enter("对照日期", currentDate);
+    expect(
+      screen.getByText("对照日期必须早于当前截止日期。"),
+    ).toBeInTheDocument();
+    expect(search).not.toHaveBeenCalled();
+    fireEvent.click(
+      await screen.findByRole("button", { name: /每日变化.*2026-10-28/ }),
+    );
+    expect(screen.getByLabelText("两日对比")).toHaveValue("previous_session");
+    expect(search).not.toHaveBeenCalled();
+    fireEvent.click(screen.getByRole("button", { name: "保存筛选" }));
+    enter("筛选名称", "每日变化副本");
+    fireEvent.click(screen.getByRole("button", { name: "确认保存" }));
+    await waitFor(() => expect(save).toHaveBeenCalledOnce());
+    expect(save.mock.calls[0]![1].compare_to).toBe("previous_session");
+    fireEvent.click(screen.getByRole("button", { name: "开始筛选" }));
+    await screen.findByRole("button", { name: /新出现\s*1/ });
+    expect(search.mock.calls[0]![0].compare_to).toBe("previous_session");
+    fireEvent.click(screen.getByRole("button", { name: /已退出\s*1/ }));
+    fireEvent.click(
+      await screen.findByRole("button", { name: "查看变化 测试退出 000001" }),
+    );
+    await screen.findByRole("heading", { name: /000001\s*测试退出/ });
+    expect(
+      screen.getByRole("heading", { name: "为什么已退出" }),
+    ).toBeInTheDocument();
+    fireEvent.click(
+      screen.getByRole("button", { name: `对照日 ${previousDate}` }),
+    );
+    await waitFor(() =>
+      expect(api.trendEvidence).toHaveBeenLastCalledWith(
+        expect.objectContaining({
+          as_of: currentDate,
+          compare_to: "previous_session",
+        }),
+        "000001",
+        previousDate,
+      ),
+    );
+    fireEvent.click(screen.getByRole("button", { name: "返回筛选结果" }));
+    fireEvent.click(screen.getByRole("button", { name: /无法确认\s*2/ }));
+    expect(screen.getByText("对照日：对照日条件缺行情")).toBeInTheDocument();
+    fireEvent.click(
+      await screen.findByRole("button", { name: "查看变化 测试未知 000002" }),
+    );
+    await screen.findByRole("heading", { name: /000002\s*测试未知/ });
+    expect(
+      screen.getByRole("button", { name: `对照日 ${previousDate}` }),
+    ).toHaveAttribute("aria-pressed", "true");
+    fireEvent.click(
+      screen.getByRole("button", { name: `当前日 ${currentDate}` }),
+    );
+    expect(
+      await screen.findByText("当前日缺少行情 · 可切换另一日期核对已有证据。"),
+    ).toBeInTheDocument();
+    expect(api.trendEvidence).not.toHaveBeenCalledWith(
+      expect.anything(),
+      "000002",
+      currentDate,
+    );
+    fireEvent.click(
+      screen.getByRole("button", { name: `对照日 ${previousDate}` }),
+    );
+    expect(
+      screen.getByRole("img", {
+        name: /测试未知 日K与成交量，事件日 2026-10-27/,
+      }),
+    ).toBeInTheDocument();
     expect(run).not.toHaveBeenCalled();
   });
 });

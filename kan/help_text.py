@@ -15,7 +15,7 @@ def root_help_text() -> str:
     return f"""[bold]慢慢看 · 命令速记[/bold]
 
 [bold cyan]普通用户先从这里开始[/bold cyan]
-  kan tui                   键盘筛选：选类型 / 填天数 / 当前事实 / 历史核对
+  kan tui                   键盘筛选：选类型 / 填天数与日期 / 两日变化 / 历史核对
   kan web                   趋势筛选 / 连续涨跌 / 形态搜索 / 历史证据
   kan daily                 在终端查看一日事实概览
   kan guide                 只看最常用的下一步
@@ -225,7 +225,7 @@ def start_help_text() -> str:
     return """[bold]慢慢看 · 找趋势，核对位置与历史[/bold]
 
   kan web       浏览器筛选台：连续涨跌、区间位置与历史核对
-  kan tui       键盘筛选台：明确连续涨跌天数，回车核对日线
+  kan tui       键盘筛选台：明确连续涨跌天数与日期，c 看两日变化
   kan trend     直接按连续涨跌 / 阳阴线 / 前后两段筛选
   kan study     显式运行历史研究，支持 --format json
   kan help      完整 CLI 命令与自动化入口

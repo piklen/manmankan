@@ -1239,6 +1239,71 @@ export interface components {
             /** Event Count */
             event_count: number;
         };
+        /** TrendComparisonCoverage */
+        TrendComparisonCoverage: {
+            /**
+             * Comparable
+             * @default 0
+             */
+            comparable: number;
+            /**
+             * Entered
+             * @default 0
+             */
+            entered: number;
+            /**
+             * Continued
+             * @default 0
+             */
+            continued: number;
+            /**
+             * Exited
+             * @default 0
+             */
+            exited: number;
+            /**
+             * Unchanged
+             * @default 0
+             */
+            unchanged: number;
+            /**
+             * Uncertain
+             * @default 0
+             */
+            uncertain: number;
+            /**
+             * Excluded
+             * @default 0
+             */
+            excluded: number;
+        };
+        /** TrendComparisonRow */
+        TrendComparisonRow: {
+            /** Symbol */
+            symbol: string;
+            /** Name */
+            name: string;
+            /** Industry */
+            industry?: string | null;
+            /**
+             * Status
+             * @enum {string}
+             */
+            status: "entered" | "continued" | "exited" | "uncertain";
+            previous: components["schemas"]["TrendComparisonSnapshot"];
+            current: components["schemas"]["TrendComparisonSnapshot"];
+        };
+        /** TrendComparisonSnapshot */
+        TrendComparisonSnapshot: {
+            /** Matched */
+            matched: boolean | null;
+            /** Close */
+            close?: number | null;
+            /** Conditions */
+            conditions?: components["schemas"]["StudyCheck"][];
+            /** Reason */
+            reason?: string | null;
+        };
         /** TrendEvidenceBar */
         TrendEvidenceBar: {
             /**
@@ -1270,6 +1335,19 @@ export interface components {
             date: string;
             /** Close */
             close: number | null;
+        };
+        /** TrendSearchComparison */
+        TrendSearchComparison: {
+            /**
+             * As Of
+             * Format: date
+             */
+            as_of: string;
+            coverage?: components["schemas"]["TrendComparisonCoverage"];
+            /** Rows */
+            rows?: components["schemas"]["TrendComparisonRow"][];
+            /** Excluded Rows */
+            excluded_rows?: components["schemas"]["TrendSearchMissing"][];
         };
         /** TrendSearchCoverage */
         TrendSearchCoverage: {
@@ -1312,6 +1390,8 @@ export interface components {
             query: components["schemas"]["TrendSearchQuery"];
             /** Symbol */
             symbol: string;
+            /** At */
+            at?: string | null;
         };
         /** TrendSearchIndustry */
         TrendSearchIndustry: {
@@ -1343,6 +1423,8 @@ export interface components {
             industries?: string[];
             /** As Of */
             as_of?: string | null;
+            /** Compare To */
+            compare_to?: "previous_session" | string | null;
             /** Conditions */
             conditions?: components["schemas"]["StudyCondition"][];
             reference?: components["schemas"]["StudyReference"] | null;
@@ -1373,6 +1455,7 @@ export interface components {
             industries: components["schemas"]["TrendSearchIndustry"][];
             /** Warnings */
             warnings: string[];
+            comparison?: components["schemas"]["TrendSearchComparison"] | null;
         };
         /** TrendSearchRow */
         TrendSearchRow: {
@@ -2157,6 +2240,7 @@ export interface operations {
                 codes?: string[] | null;
                 industries?: string[] | null;
                 as_of?: string | null;
+                compare_to?: "previous_session" | string | null;
             };
             header?: never;
             path?: never;

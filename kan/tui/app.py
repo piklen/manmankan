@@ -18,17 +18,21 @@ from kan.render.base import DISCLAIMER
 from kan.service import market_study, trend_search
 from kan.tui.conditions import TrendFilterForm
 from kan.tui.screens import (
+    CHANGE_STATUSES,
     STATUSES,
+    comparison_evidence_view,
+    comparison_reason,
     condition_text,
     evidence_view,
     help_view,
+    matched_text,
     number,
     result_summary,
     segment_text,
     trend_evidence_view,
 )
 
-View = Literal["screen", "missing", "filter_evidence", "saved_filters", "studies", "current", "history", "evidence", "help"]
+View = Literal["screen", "changes", "change_detail", "missing", "filter_evidence", "saved_filters", "studies", "current", "history", "evidence", "help"]
 PAGE_SIZE = 50
 
 
@@ -39,6 +43,9 @@ class StudyApp(App[None]):
     BINDINGS: ClassVar[list[BindingType]] = [
         Binding("f", "filters", "条件"),
         Binding("ctrl+enter", "screen", "执行", priority=True),
+        Binding("ctrl+n", "new_filter", "新建", show=False),
+        Binding("d", "common_date", "已有数据日", show=False),
+        Binding("c", "changes", "两日变化", show=False),
         Binding("s", "save_filter", "保存条件", show=False),
         Binding("g", "saved_filters", "已存条件", show=False),
         Binding("h", "investigate", "历史核对", show=False),
@@ -71,6 +78,7 @@ class StudyApp(App[None]):
         self.busy = False
         self.screen_result: trend_search.TrendSearchResult | None = None
         self.screen_evidence: trend_search.TrendSearchEvidence | None = None
+        self.screen_evidence_return: View = "screen"
         self.saved_filters: list[trend_search.SavedTrendSearch] = []
         self.form_open = True
         self.history_edit = False
@@ -83,6 +91,7 @@ class StudyApp(App[None]):
             yield Button("条件 f", id="filters")
             yield Button("个人 t", id="personal")
             yield Button("保存 s", id="save-filter")
+            yield Button("变化 c", id="changes")
             yield Button("已存 g", id="saved-filters")
             yield Button("核对 h", id="investigate")
             yield Button("研究 l", id="studies")
@@ -101,6 +110,11 @@ class StudyApp(App[None]):
             yield Button("核对并保存", id="history-run", variant="primary")
         yield Static("", id="summary", markup=False)
         yield Static("正在读取已保存研究…", id="status", markup=False)
+        with Horizontal(id="common-date"):
+            yield Static("", id="common-date-text", markup=False)
+            yield Button("查看此日 d", id="use-common-date")
+        with Horizontal(id="change-options"):
+            yield Select([("全部变化", "all"), *((label, value) for value, label in CHANGE_STATUSES.items())], value="all", allow_blank=False, id="change-mode")
         yield DataTable(id="results", cursor_type="row", zebra_stripes=True)
         yield Static("", id="empty", markup=False)
         with VerticalScroll(id="detail"):
@@ -135,7 +149,7 @@ class StudyApp(App[None]):
             if action == "screen":
                 value = trend_search.search_trends(cast(trend_search.TrendSearchQuery, query))
             elif action == "filter_evidence":
-                value = trend_search.trend_search_evidence(cast(trend_search.TrendSearchQuery, query), key)
+                value = trend_search.trend_search_evidence(cast(trend_search.TrendSearchQuery, query), key, at=day)
             elif action == "saved":
                 value = trend_search.list_saved_trends()
             elif action == "save_filter":
@@ -215,8 +229,9 @@ class StudyApp(App[None]):
     def _render(self) -> None:
         table = self.query_one(DataTable)
         table.clear(columns=True)
-        detail_view = self.view in {"evidence", "help", "filter_evidence"}
+        detail_view = self.view in {"evidence", "help", "filter_evidence", "change_detail"}
         study_view = self.view in {"current", "history", "evidence"}
+        comparison_detail = self.view == "change_detail" or (self.view == "filter_evidence" and self.screen_evidence_return == "change_detail")
         self.query_one("#filter-form").display = self.view == "screen" and self.form_open and not self.history_edit and not self.save_edit
         self.query_one("#save-form").display = self.view == "screen" and self.save_edit
         self.query_one("#history-form").display = self.view == "screen" and self.history_edit
@@ -224,22 +239,32 @@ class StudyApp(App[None]):
             self.query_one(f"#{name}").display = self.view == "screen"
             self.query_one(f"#{name}", Button).disabled = self.screen_result is None or self.busy
         self.query_one("#saved-filters").display = self.view == "screen"
+        self.query_one("#changes").display = self.view in {"screen", "changes"} and self.screen_result is not None and self.screen_result.comparison is not None
+        self.query_one("#changes", Button).disabled = self.busy
+        self.query_one("#change-options").display = self.view == "changes"
         self.query_one("#filters").display = not self.query_one("#filter-form").display
         self.query_one("#detail").display = detail_view
         self.query_one("#preview").display = not detail_view
         self.query_one("#search").display = not detail_view
         for name in ("current", "history"):
-            self.query_one(f"#{name}").display = study_view
+            self.query_one(f"#{name}").display = study_view or comparison_detail
+        self.query_one("#current", Button).label = "当前日线 1" if comparison_detail else "当前 1"
+        self.query_one("#history", Button).label = "对照日线 2" if comparison_detail else "历史 2"
         for name in ("personal", "studies"):
             self.query_one(f"#{name}").display = not study_view
         self.query_one("#personal").display = not study_view and self.view != "screen"
         self.query_one("#back").display = self.view != "screen"
         self.query_one("#rerun").display = self.view in {"studies", "current", "history"}
         self.query_one("#rerun", Button).disabled = self.busy or (not self.studies and self.result is None)
-        title = {"screen": "条件筛选", "missing": "缺口明细", "filter_evidence": "当前日线证据", "saved_filters": "已保存条件", "studies": "已保存研究", "current": "当前匹配", "history": "历史样本", "evidence": "当次证据", "help": "使用说明"}[self.view]
+        title = {"screen": "条件筛选", "changes": "两日变化", "change_detail": "变化依据", "missing": "缺口明细", "filter_evidence": "日线证据", "saved_filters": "已保存条件", "studies": "已保存研究", "current": "当前匹配", "history": "历史样本", "evidence": "当次证据", "help": "使用说明"}[self.view]
         context = f"{self.result.query.title[:22]} / " if study_view and self.result else ""
         self.query_one("#brand", Static).update(f"慢慢看  /  {context}{title}")
         query = self.query_one("#search", Input).value.strip().casefold()
+        stale = self.screen_result and self.screen_result.common_data_date and self.screen_result.common_data_date < self.screen_result.as_of
+        self.query_one("#common-date").display = bool(stale) and self.view in {"screen", "missing", "changes"}
+        self.query_one("#use-common-date", Button).disabled = self.busy
+        if stale and self.screen_result:
+            self.query_one("#common-date-text", Static).update(f"本地主要行情 {self.screen_result.common_data_date} · {self.screen_result.common_data_count} 只")
         empty_text = "没有匹配项。Esc 清空搜索。"
         if self.view == "screen":
             table.add_columns("代码", "名称", "实际连续段", "条件实际值" if not self.screen_result or self.screen_result.query.conditions else "位置30/60/180%", "收盘", "涨跌")
@@ -250,11 +275,12 @@ class StudyApp(App[None]):
                 self.query_one("#summary", Static).update(f"{pool} · {result.as_of} · 匹配 {coverage.matched}/{coverage.total} · 可判断 {coverage.evaluated} · 缺口 {coverage.missing}（m）\n" + ("；".join(condition_text(c) for c in result.query.conditions) or "无条件浏览（没有预设筛选条件）"))
                 for screen_row in result.rows:
                     if query in (screen_row.symbol + screen_row.name + (screen_row.industry or "")).casefold():
-                        values = "/".join(("≥" if c.key in screen_row.lower_bounds else "") + number(screen_row.values.get(c.key)) for c in result.query.conditions if c.operator != "gt")
+                        values = "/".join(("≥" if c.key in screen_row.lower_bounds else "") + number(screen_row.values.get(c.key)) for c in result.query.conditions)
                         if not result.query.conditions:
                             values = "/".join(number(screen_row.positions.get(str(n))) for n in (30, 60, 180))
                         table.add_row(screen_row.symbol, Text(screen_row.name), segment_text(screen_row.current_segment), values, number(screen_row.close), number(screen_row.change_pct, "%", signed=True), key=screen_row.symbol)
-                empty_text = (
+                empty_text = "股票范围为空，按 f 选择代码或其他范围。" if coverage.total == 0 else (
+                    "这个截止日暂无可判断的行情。m 核对缺口；f 修改日期，或 d 明确查看已有数据日。" if coverage.evaluated == 0 else
                     "没有符合这些条件的股票。f 修改条件；m 查看缺口，未满足条件与缺行情分开统计。"
                     if result.query.conditions else
                     "此范围没有可列出的行情。t 浏览个人池，a 浏览全市场；m 核对缺口，f 填写条件。"
@@ -262,6 +288,24 @@ class StudyApp(App[None]):
             else:
                 self.query_one("#summary", Static).update("条件和天数由你明确；这里只筛当前，不自动运行历史研究")
                 empty_text = "选择连续上涨/下跌、阳线/阴线、前后两段或最近 N 日计数。\nTab 切换输入，Ctrl+Enter 执行。g 载入保存的条件；l 查看历史研究。"
+        elif self.view == "changes" and self.screen_result and self.screen_result.comparison:
+            result = self.screen_result
+            comparison = self.screen_result.comparison
+            counts = comparison.coverage
+            self.query_one("#summary", Static).update(
+                f"{comparison.as_of} → {result.as_of} · 新出现 {counts.entered} · 持续 {counts.continued} · 不再符合 {counts.exited}\n"
+                f"无法确认 {counts.uncertain} · 两日未满足 {counts.unchanged} · 排除 {counts.excluded} · 可对比 {counts.comparable}/{result.coverage.total}"
+            )
+            table.add_columns("代码", "名称", "变化", "对照→当前", "依据")
+            mode = self.query_one("#change-mode", Select).value
+            for change in sorted(comparison.rows, key=lambda item: item.symbol):
+                if (mode == "all" or mode == change.status) and query in (change.symbol + change.name + (change.industry or "")).casefold():
+                    table.add_row(change.symbol, Text(change.name), CHANGE_STATUSES[change.status], f"{matched_text(change.previous.matched)}→{matched_text(change.current.matched)}", Text(comparison_reason(change)), key=change.symbol)
+            empty_text = "所选变化类别没有对象。切换类别或按 c 返回当前匹配。"
+        elif self.view == "change_detail" and self.screen_result and self.screen_result.comparison:
+            row = next(item for item in self.screen_result.comparison.rows if item.symbol == self.selected_key)
+            self.query_one("#summary", Static).update("同一条件逐项对照 · 1 当前日线 / 2 对照日线 · Esc 返回变化")
+            self.query_one("#detail-content", Static).update(comparison_evidence_view(row, self.screen_result))
         elif self.view == "missing" and self.screen_result:
             self.query_one("#summary", Static).update(f"{self.screen_result.coverage.missing} 个对象无法判断，计入股票池分母")
             table.add_columns("代码", "名称", "无法判断的原因")
@@ -270,14 +314,15 @@ class StudyApp(App[None]):
                     table.add_row(missing_row.symbol, Text(missing_row.name), Text(missing_row.reason), key=missing_row.symbol)
             empty_text = "没有行情缺口。Esc 返回筛选结果。"
         elif self.view == "filter_evidence" and self.screen_evidence:
-            self.query_one("#summary", Static).update("当前缓存事实 · 实际交易日、条件值和连续段 · Esc 返回结果")
+            self.query_one("#summary", Static).update(f"{self.screen_evidence.as_of} 缓存事实 · 实际交易日、条件值和连续段 · Esc 返回")
             self.query_one("#detail-content", Static).update(trend_evidence_view(self.screen_evidence))
         elif self.view == "saved_filters":
             self.query_one("#summary", Static).update("保存的是条件；Enter 才运行当前筛选，不自动核对历史")
-            table.add_columns("条件名称", "范围", "明确条件")
+            table.add_columns("条件名称", "范围与日期", "明确条件")
             for item in self.saved_filters:
                 if query in item.title.casefold():
-                    table.add_row(Text(item.title), {"personal": "个人池", "all": "全市场", "codes": "代码池"}[item.query.universe], Text("；".join(condition_text(c) for c in item.query.conditions)), key=item.id)
+                    scope = {"personal": "个人池", "all": "全市场", "codes": "代码池"}[item.query.universe]
+                    table.add_row(Text(item.title), f"{scope} · {item.query.as_of or '最近收盘'}", Text("；".join(condition_text(c) for c in item.query.conditions)), key=item.id)
             empty_text = "还没有保存条件。f 选择条件并筛选，然后按 s 命名保存。"
         elif self.view == "studies":
             self.query_one("#summary", Static).update(f"{len(self.studies)} 份研究 · 条件、当前匹配和历史证据一起保存")
@@ -309,20 +354,20 @@ class StudyApp(App[None]):
         elif self.view == "help":
             self.query_one("#summary", Static).update("输入明确条件，筛当前，按需保存与核对历史")
             self.query_one("#detail-content", Static).update(help_view())
-        list_view = self.view in {"screen", "missing", "saved_filters", "studies", "current", "history"}
+        list_view = self.view in {"screen", "changes", "missing", "saved_filters", "studies", "current", "history"}
         table.display = list_view and table.row_count > 0
         empty = self.query_one("#empty", Static)
         empty.display = list_view and not table.row_count
         empty.update(empty_text)
         if self.view != "history":
-            preview = "；".join(condition_text(c) for c in self.result.query.conditions) if self.result and study_view else "↑ ↓ 选择 · Enter 查证 · f 条件 · g 已存条件 · h 历史核对 · l 研究 · ? 帮助"
+            preview = "；".join(condition_text(c) for c in self.result.query.conditions) if self.result and study_view else "↑ ↓ 选择 · Enter 查证 · f 条件 · c 变化 · g 已存 · h 核对历史 · ? 帮助"
             self.query_one("#preview", Static).update(preview)
         if self.view == "screen" and self.history_edit:
             self.query_one("#history-lookback", Input).focus()
         elif self.view == "screen" and self.save_edit:
             self.query_one("#save-title", Input).focus()
         elif self.view == "screen" and self.form_open:
-            self.query_one("#filter-kind", Select).focus()
+            self.query_one("#filter-as-of", Input).focus() if self.query_one("#filter-kind", Select).disabled else self.query_one("#filter-kind", Select).focus()
         elif table.display:
             for index, key in enumerate(table.rows):
                 if key.value == self.selected_key:
@@ -341,6 +386,10 @@ class StudyApp(App[None]):
             if row:
                 returns = "/".join(number(row.returns.get(str(n)), signed=True) for n in (5, 20, 60))
                 self.query_one("#preview", Static).update(f"{row.name} · {row.industry or '未分类'} · 区间涨跌5/20/60日 {returns}% · Enter查证")
+        elif self.view == "changes" and self.screen_result and self.screen_result.comparison:
+            change = next((item for item in self.screen_result.comparison.rows if item.symbol == self.selected_key), None)
+            if change:
+                self.query_one("#preview", Static).update(f"{CHANGE_STATUSES[change.status]} · {comparison_reason(change)} · Enter逐项核对")
         elif self.view == "studies":
             study = next((s for s in self.studies if s.study_id == self.selected_key), None)
             if study:
@@ -349,7 +398,12 @@ class StudyApp(App[None]):
     def on_data_table_row_selected(self, event: DataTable.RowSelected) -> None:
         key = str(event.row_key.value)
         if self.view == "screen" and self.screen_result:
+            self.screen_evidence_return = "screen"
             self._load("filter_evidence", key, query=self.screen_result.query.model_copy(update={"as_of": self.screen_result.as_of}))
+        elif self.view == "changes":
+            self.selected_key = key
+            self.view = "change_detail"
+            self._render()
         elif self.view == "saved_filters":
             saved = next(item for item in self.saved_filters if item.id == key)
             self.query_one(TrendFilterForm).set_query(saved.query)
@@ -372,6 +426,11 @@ class StudyApp(App[None]):
             if was_focused:
                 event.input.focus()
 
+    def on_select_changed(self, event: Select.Changed) -> None:
+        if event.select.id == "change-mode" and self.is_running and self.view == "changes":
+            self.selected_key = None
+            self._render()
+
     def on_input_submitted(self, event: Input.Submitted) -> None:
         if event.input.id == "search":
             self.query_one(DataTable).focus()
@@ -383,7 +442,7 @@ class StudyApp(App[None]):
             self.action_screen()
 
     def action_search(self) -> None:
-        if self.view in {"screen", "missing", "saved_filters", "studies", "current", "history"}:
+        if self.view in {"screen", "changes", "missing", "saved_filters", "studies", "current", "history"}:
             self.query_one("#search", Input).focus()
 
     def action_rerun(self) -> None:
@@ -395,12 +454,18 @@ class StudyApp(App[None]):
             self._load("rerun", key)
 
     def action_current(self) -> None:
+        if self.view == "change_detail" or (self.view == "filter_evidence" and self.screen_evidence_return == "change_detail"):
+            self._comparison_chart(previous=False)
+            return
         if self.result is not None and not self.busy:
             self.view = "current"
             self.query_one("#search", Input).value = ""
             self._render()
 
     def action_history(self) -> None:
+        if self.view == "change_detail" or (self.view == "filter_evidence" and self.screen_evidence_return == "change_detail"):
+            self._comparison_chart(previous=True)
+            return
         if self.result is not None and not self.busy:
             self._load("events", self.result.run_id)
 
@@ -436,7 +501,13 @@ class StudyApp(App[None]):
         elif self.view == "evidence":
             self.view = self.evidence_return
             self._render()
-        elif self.view in {"filter_evidence", "missing", "saved_filters"}:
+        elif self.view == "filter_evidence":
+            self.view = self.screen_evidence_return
+            self._render()
+        elif self.view == "change_detail":
+            self.view = "changes"
+            self._render()
+        elif self.view in {"changes", "missing", "saved_filters"}:
             self.view = "screen"
             self._render()
         elif self.view == "screen" and (self.history_edit or self.save_edit or self.form_open):
@@ -462,6 +533,12 @@ class StudyApp(App[None]):
             self.action_filters()
         elif event.button.id == "filter-run":
             self.action_screen()
+        elif event.button.id == "filter-new":
+            self.action_new_filter()
+        elif event.button.id == "use-common-date":
+            self.action_common_date()
+        elif event.button.id == "changes":
+            self.action_changes()
         elif event.button.id == "save-filter":
             self.action_save_filter()
         elif event.button.id == "saved-filters":
@@ -493,6 +570,45 @@ class StudyApp(App[None]):
             self.history_edit = self.save_edit = False
             self._render()
             self._status("填写条件后 Enter 或 Ctrl+Enter 筛当前；Esc 回到上次结果")
+
+    def action_new_filter(self) -> None:
+        if not self.busy:
+            self.query_one(TrendFilterForm).new_query()
+            self.screen_result = None
+            self.screen_evidence = None
+            self.selected_key = None
+            self.action_filters()
+            self._status("新建空白条件；已保存的筛选和研究不变。")
+
+    def action_common_date(self) -> None:
+        result = self.screen_result
+        if not self.busy and self.view in {"screen", "missing", "changes"} and result and result.common_data_date and result.common_data_date < result.as_of:
+            query = result.query.model_copy(update={"as_of": result.common_data_date})
+            self.query_one(TrendFilterForm).set_query(query)
+            self._load("screen", query=query)
+
+    def action_changes(self) -> None:
+        if not self.busy:
+            if self.screen_result and self.screen_result.comparison:
+                self.view = "screen" if self.view == "changes" else "changes"
+                self.form_open = self.history_edit = self.save_edit = False
+                self._render()
+                self._status("两日使用同一股票范围与条件；Enter 逐项核对，缺行情不算退出。")
+            else:
+                self._status("先按 f，在截止日旁选择「对比上个交易日」后执行筛选。")
+
+    def _comparison_chart(self, *, previous: bool) -> None:
+        result = self.screen_result
+        if self.busy or result is None or result.comparison is None:
+            return
+        row = next(item for item in result.comparison.rows if item.symbol == self.selected_key)
+        snapshot = row.previous if previous else row.current
+        day = result.comparison.as_of if previous else result.as_of
+        if snapshot.close is None:
+            self._status(f"{day} 缺少有效日线：{snapshot.reason or '请核对数据缺口'}", error=True)
+            return
+        self.screen_evidence_return = "change_detail"
+        self._load("filter_evidence", row.symbol, day=day, query=result.query.model_copy(update={"as_of": result.as_of}))
 
     def action_screen(self) -> None:
         if self.busy:

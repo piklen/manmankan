@@ -2,7 +2,7 @@
   "openapi": "3.1.0",
   "info": {
     "title": "ManManKan Local API",
-    "version": "0.0.6.9.42"
+    "version": "0.0.6.9.43"
   },
   "paths": {
     "/api/v1/health": {
@@ -1002,6 +1002,27 @@
                 }
               ],
               "title": "As Of"
+            }
+          },
+          {
+            "name": "compare_to",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "const": "previous_session",
+                  "type": "string"
+                },
+                {
+                  "type": "string",
+                  "format": "date"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Compare To"
             }
           }
         ],
@@ -3373,6 +3394,147 @@
         ],
         "title": "StudySummary"
       },
+      "TrendComparisonCoverage": {
+        "properties": {
+          "comparable": {
+            "type": "integer",
+            "title": "Comparable",
+            "default": 0
+          },
+          "entered": {
+            "type": "integer",
+            "title": "Entered",
+            "default": 0
+          },
+          "continued": {
+            "type": "integer",
+            "title": "Continued",
+            "default": 0
+          },
+          "exited": {
+            "type": "integer",
+            "title": "Exited",
+            "default": 0
+          },
+          "unchanged": {
+            "type": "integer",
+            "title": "Unchanged",
+            "default": 0
+          },
+          "uncertain": {
+            "type": "integer",
+            "title": "Uncertain",
+            "default": 0
+          },
+          "excluded": {
+            "type": "integer",
+            "title": "Excluded",
+            "default": 0
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "title": "TrendComparisonCoverage"
+      },
+      "TrendComparisonRow": {
+        "properties": {
+          "symbol": {
+            "type": "string",
+            "title": "Symbol"
+          },
+          "name": {
+            "type": "string",
+            "title": "Name"
+          },
+          "industry": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Industry"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "entered",
+              "continued",
+              "exited",
+              "uncertain"
+            ],
+            "title": "Status"
+          },
+          "previous": {
+            "$ref": "#/components/schemas/TrendComparisonSnapshot"
+          },
+          "current": {
+            "$ref": "#/components/schemas/TrendComparisonSnapshot"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "symbol",
+          "name",
+          "status",
+          "previous",
+          "current"
+        ],
+        "title": "TrendComparisonRow"
+      },
+      "TrendComparisonSnapshot": {
+        "properties": {
+          "matched": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Matched"
+          },
+          "close": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Close"
+          },
+          "conditions": {
+            "items": {
+              "$ref": "#/components/schemas/StudyCheck"
+            },
+            "type": "array",
+            "title": "Conditions"
+          },
+          "reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reason"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "matched"
+        ],
+        "title": "TrendComparisonSnapshot"
+      },
       "TrendEvidenceBar": {
         "properties": {
           "date": {
@@ -3492,6 +3654,38 @@
         ],
         "title": "TrendPricePoint"
       },
+      "TrendSearchComparison": {
+        "properties": {
+          "as_of": {
+            "type": "string",
+            "format": "date",
+            "title": "As Of"
+          },
+          "coverage": {
+            "$ref": "#/components/schemas/TrendComparisonCoverage"
+          },
+          "rows": {
+            "items": {
+              "$ref": "#/components/schemas/TrendComparisonRow"
+            },
+            "type": "array",
+            "title": "Rows"
+          },
+          "excluded_rows": {
+            "items": {
+              "$ref": "#/components/schemas/TrendSearchMissing"
+            },
+            "type": "array",
+            "title": "Excluded Rows"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "as_of"
+        ],
+        "title": "TrendSearchComparison"
+      },
       "TrendSearchCoverage": {
         "properties": {
           "total": {
@@ -3599,6 +3793,18 @@
           "symbol": {
             "type": "string",
             "title": "Symbol"
+          },
+          "at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "At"
           }
         },
         "additionalProperties": false,
@@ -3692,6 +3898,22 @@
             ],
             "title": "As Of"
           },
+          "compare_to": {
+            "anyOf": [
+              {
+                "type": "string",
+                "const": "previous_session"
+              },
+              {
+                "type": "string",
+                "format": "date"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Compare To"
+          },
           "conditions": {
             "items": {
               "$ref": "#/components/schemas/StudyCondition"
@@ -3779,6 +4001,16 @@
             },
             "type": "array",
             "title": "Warnings"
+          },
+          "comparison": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/TrendSearchComparison"
+              },
+              {
+                "type": "null"
+              }
+            ]
           }
         },
         "additionalProperties": false,

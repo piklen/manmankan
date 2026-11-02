@@ -27,6 +27,8 @@ export type ScreenerDraft = {
   codes: string;
   industries: string[];
   asOf: string;
+  compareMode: "none" | "previous_session" | "date";
+  compareDate: string;
   conditions: ConditionDraft[];
   referenceSymbol: string;
   referenceDate: string;
@@ -36,6 +38,8 @@ export const blankScreenDraft = (): ScreenerDraft => ({
   codes: "",
   industries: [],
   asOf: "",
+  compareMode: "none",
+  compareDate: "",
   conditions: [],
   referenceSymbol: "",
   referenceDate: "",
@@ -138,6 +142,14 @@ export function conditionsToDraft(
     }));
 }
 
+export function comparisonInputError(draft: ScreenerDraft): string | null {
+  if (draft.compareMode !== "date") return null;
+  if (!draft.compareDate) return "请填写明确的对照日期。";
+  return draft.asOf && draft.compareDate >= draft.asOf
+    ? "对照日期必须早于当前截止日期。"
+    : null;
+}
+
 export function screenInputError(draft: ScreenerDraft): string | null {
   if (
     draft.universe === "codes" &&
@@ -145,6 +157,8 @@ export function screenInputError(draft: ScreenerDraft): string | null {
       parseCodes(draft.codes).some((code) => !/^\d{6}$/.test(code)))
   )
     return "请填写至少一个 6 位股票代码。";
+  const comparisonError = comparisonInputError(draft);
+  if (comparisonError) return comparisonError;
   const error = conditionInputError(draft.conditions);
   if (error) return error;
   if (
@@ -163,6 +177,12 @@ export function screenDraftToQuery(draft: ScreenerDraft): TrendSearchQuery {
     codes: draft.universe === "codes" ? parseCodes(draft.codes) : [],
     industries: draft.industries,
     as_of: draft.asOf || null,
+    compare_to:
+      draft.compareMode === "previous_session"
+        ? "previous_session"
+        : draft.compareMode === "date"
+          ? draft.compareDate
+          : null,
     conditions: compileConditions(draft.conditions),
     reference: draft.conditions.some((item) => item.field === "shape_distance")
       ? { symbol: draft.referenceSymbol, as_of: draft.referenceDate }
@@ -176,6 +196,15 @@ export function screenQueryToDraft(query: TrendSearchQuery): ScreenerDraft {
     codes: (query.codes ?? []).join(", "),
     industries: query.industries ?? [],
     asOf: query.as_of ?? "",
+    compareMode: !query.compare_to
+      ? "none"
+      : query.compare_to === "previous_session"
+        ? "previous_session"
+        : "date",
+    compareDate:
+      query.compare_to && query.compare_to !== "previous_session"
+        ? query.compare_to
+        : "",
     conditions: conditionsToDraft(query.conditions ?? []),
     referenceSymbol: query.reference?.symbol ?? "",
     referenceDate: query.reference?.as_of ?? "",
