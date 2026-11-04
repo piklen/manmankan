@@ -1,6 +1,8 @@
 # manmankan Skill · AI Agent 能力清单
 
-当前主线是趋势筛选、位置与两日变化。AI 使用 `kan trend` 或 MCP `kan_trend` 明确范围与条件，读取当前匹配；可选 `compare_to` 核对新出现、持续、退出与无法确认，不会自动保存历史研究。`kan study catalog/schema` 发现共享日线条件；只有需要历史事件与后续窗口时才执行 `kan study run query.json --format json`。价格、位置与形态距离由共享 Python 核心计算，模型不另算；接口按当前契约使用，不做历史兼容。
+波段筛选：`kan trend --universe all --swing up --window 60 --reversal-pct 5`（下降改 `down`、混合改 `mixed`）。精确阳阴数量问题用 `--window 15 --bull-excess 0 --return-above 0`，不要替换成上涨日计数。typed条件支持 `bull_count/bear_count/candle_balance/trend_slope/trend_efficiency/swing_structure/swing_direction/swing_count`，均需窗口。`swing_reversal_pct` 随Query保存/传递；结构编码1/-1/0分别为抬高/降低/混合，不足为null。图证 `swings` 给出确认点、确认日、当前未完成段与 `structure_broken`，不是事后预测。口径见[趋势研究](../docs/trend-research.md#波段结构与趋势因子)。
+
+当前主线是趋势与波段筛选、位置与两日变化。AI 使用 `kan trend` 或 MCP `kan_trend` 明确范围与条件，读取当前匹配；可选 `compare_to` 核对新出现、持续、退出与无法确认，不会自动保存历史研究。`kan study catalog/schema` 发现共享日线条件；只有需要历史事件与后续窗口时才执行 `kan study run query.json --format json`。价格、位置与形态距离由共享 Python 核心计算，模型不另算；接口按当前契约使用，不做历史兼容。
 
 
 > 本文件是给 AI Agent 读的"说明书"。
@@ -136,7 +138,7 @@
 |------|------|------------|
 | `kan fetch` | 更新当前自选数据 | 每日首次使用前跑一次；默认摘要输出 |
 | `kan fetch 600519 000858` | 更新指定股票 | 新加入自选股后 |
-| `kan fetch --all` | 预拉完整 A 股市场 K 线缓存 | 耗时较久；给 `scan/trend/low/high --all` 预热；明显不完整的上游响应会停止且不缓存 |
+| `kan fetch --all` | 预拉完整 A 股市场 K 线缓存 | 耗时较久；给 `scan/low/high --all` 预热；明显不完整的上游响应会停止且不缓存 |
 | `kan fetch --verbose` | 逐只输出拉取状态 | 排障时使用 |
 
 Web 的“市场与数据”页还可启动 SQLite 持久刷新任务。终态包括 `succeeded / partial / failed / interrupted`；部分失败不等于完整成功，重新发起会复用已写入缓存。

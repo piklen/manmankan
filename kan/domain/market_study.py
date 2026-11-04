@@ -12,6 +12,8 @@ StudyField = Literal[
     "up_days", "down_days", "bull_days", "bear_days", "joint_up_days",
     "previous_up_days", "previous_down_days", "rising_days", "falling_days",
     "volume_ratio", "shape_distance",
+    "bull_count", "bear_count", "candle_balance", "trend_slope", "trend_efficiency",
+    "swing_structure", "swing_direction", "swing_count",
 ]
 
 
@@ -27,9 +29,11 @@ class StudyCondition(StudyModel):
 
     @model_validator(mode="after")
     def window_matches_field(self) -> StudyCondition:
-        needs_window = self.field in {"return_pct", "position", "low_age", "volume_ratio", "shape_distance", "rising_days", "falling_days"}
+        needs_window = self.field in {"return_pct", "position", "low_age", "volume_ratio", "shape_distance", "rising_days", "falling_days", "bull_count", "bear_count", "candle_balance", "trend_slope", "trend_efficiency", "swing_structure", "swing_direction", "swing_count"}
         if needs_window != (self.window is not None):
-            raise ValueError("区间涨跌、位置、低点距今、量比、形态距离、区间上涨/下跌天数必须指定窗口；其他条件不使用窗口")
+            raise ValueError("区间指标与波段因子必须指定窗口；当日指标和连续段不使用窗口")
+        if self.field in {"swing_structure", "swing_direction"} and (self.operator != "eq" or self.value not in {-1, 0, 1}):
+            raise ValueError("波段结构与方向使用等于比较：-1、0 或 1")
         return self
 
     @property
@@ -59,6 +63,7 @@ class StudyQuery(StudyModel):
     sample_policy: Literal["first", "every", "non_overlapping"] = "first"
     conditions: list[StudyCondition] = Field(min_length=1, max_length=12)
     reference: StudyReference | None = None
+    swing_reversal_pct: float = Field(default=5, gt=0, lt=100)
 
     @model_validator(mode="after")
     def validate_scope(self) -> StudyQuery:
@@ -177,6 +182,35 @@ class StudyBar(StudyModel):
     volume: float | None = None
 
 
+class SwingPivot(StudyModel):
+    date: date
+    price: float
+    kind: Literal["high", "low"]
+    confirmed_at: date
+
+
+class SwingLeg(StudyModel):
+    start_date: date
+    start_price: float
+    start_confirmed: bool
+    extreme_date: date
+    extreme_price: float
+    direction: Literal["up", "down"]
+    return_pct: float
+    days: int
+
+
+class SwingEvidence(StudyModel):
+    window: int
+    reversal_pct: float
+    structure: int | None = None
+    structure_broken: bool | None = None
+    direction: int | None = None
+    pivots: list[SwingPivot] = Field(default_factory=list)
+    current: SwingLeg | None = None
+    reason: str | None = None
+
+
 class StudyResult(StudyModel):
     study_id: str
     run_id: str
@@ -235,4 +269,5 @@ class StudyEvidence(StudyModel):
     reference_source: str | None = None
     conditions: list[StudyCheck]
     outcome: StudyEvent | None = None
+    swings: list[SwingEvidence] = Field(default_factory=list)
     warnings: list[str] = Field(default_factory=list)

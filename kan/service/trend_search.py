@@ -19,6 +19,7 @@ from kan.domain.market_study import (
     StudyField,
     StudyModel,
     StudyReference,
+    SwingEvidence,
 )
 from kan.service.market_study import (
     FIELD_CATALOG,
@@ -29,6 +30,7 @@ from kan.service.market_study import (
     prepare_reference,
     resolve_market_calendar,
     resolve_study_members,
+    swing_evidence,
 )
 
 
@@ -40,6 +42,7 @@ class TrendSearchQuery(StudyModel):
     compare_to: Literal["previous_session"] | datetime.date | None = None
     conditions: list[StudyCondition] = Field(default_factory=list, max_length=12)
     reference: StudyReference | None = None
+    swing_reversal_pct: float = Field(default=5, gt=0, lt=100)
 
     @model_validator(mode="after")
     def validate_scope(self) -> TrendSearchQuery:
@@ -173,6 +176,7 @@ class TrendSearchEvidence(StudyModel):
     reference_bars: list[StudyBar] = Field(default_factory=list)
     reference_source: str | None = None
     conditions: list[StudyCheck]
+    swings: list[SwingEvidence] = Field(default_factory=list)
     warnings: list[str]
 
 
@@ -270,6 +274,10 @@ def _snapshot(frame: pd.DataFrame, day: datetime.date, checks: list[StudyCheck])
         if check.matched is None:
             detail = (f"仅能确认至少 {check.actual:g}{definition['unit']}，无法核对当前条件"
                       if check.actual is not None and check.bound == "at_least" else "缺少所需行情")
+            if check.condition.field == "swing_structure":
+                sample = frame.loc[:day].tail(check.condition.window)
+                if len(sample) == check.condition.window and sample.valid.all():
+                    detail = "尚不足两组已确认波峰与波谷，无法判断结构"
             unknown.append(f"{label}：{detail}")
         elif not check.matched:
             bound = "至少 " if check.bound == "at_least" else ""
@@ -340,6 +348,12 @@ def _reference(query: TrendSearchQuery, sessions: list[datetime.date], as_of: da
     return prepare_reference(query.reference, query.conditions, sessions, as_of, get_cached(query.reference.symbol))
 
 
+def _swing_display_fields(query: TrendSearchQuery) -> list[tuple[StudyField, int | None]]:
+    fields: tuple[StudyField, ...] = ("swing_structure", "swing_direction", "swing_count")
+    windows = sorted({item.window for item in query.conditions if item.field in fields and item.window is not None})
+    return [(field, window) for window in windows for field in fields]
+
+
 def search_trends(query: TrendSearchQuery) -> TrendSearchResult:
     """同一当前成员范围、同一复权缓存；一次读取同时核对两个日期。"""
     sessions, as_of = resolve_market_calendar(query.as_of)
@@ -353,7 +367,8 @@ def search_trends(query: TrendSearchQuery) -> TrendSearchResult:
     rows: list[TrendSearchRow] = []
     missing: list[TrendSearchMissing] = []
     points = [as_of, compared_at] if compared_at else [as_of]
-    fields = [(item.field, item.window) for item in query.conditions] if query.conditions else _BASE_FIELDS
+    swing_fields = _swing_display_fields(query)
+    fields = [*((item.field, item.window) for item in query.conditions), *swing_fields] if query.conditions else _BASE_FIELDS
     for symbol, name in members:
         try:
             frame = _prepare_cached(symbol, sessions)
@@ -363,7 +378,7 @@ def search_trends(query: TrendSearchQuery) -> TrendSearchResult:
             available_points = [day for day in points if day in frame.index and frame.at[day, "valid"]]
             point_checks: dict[datetime.date, list[StudyCheck]] = {}
             if available_points:
-                metrics, exact = calculate_metrics(frame, fields, reference_prices)
+                metrics, exact = calculate_metrics(frame, fields, reference_prices, swing_reversal_pct=query.swing_reversal_pct, swing_points=available_points)
                 point_checks = _checks_at(query, metrics, exact, available_points)
             current = _snapshot(frame, as_of, point_checks.get(as_of, []))
             previous = _snapshot(frame, compared_at, point_checks.get(compared_at, [])) if compared_at else current
@@ -378,7 +393,7 @@ def search_trends(query: TrendSearchQuery) -> TrendSearchResult:
                             more_metrics, more_exact = calculate_metrics(frame, remaining, reference_prices)
                             metrics = metrics.join(more_metrics[[key for key in more_metrics if key not in metrics]])
                             exact = exact.join(more_exact[[key for key in more_exact if key not in exact]])
-                        display_fields = [*_BASE_FIELDS, *((item.field, item.window) for item in query.conditions)]
+                        display_fields = [*_BASE_FIELDS, *((item.field, item.window) for item in query.conditions), *swing_fields]
                         keys = list(dict.fromkeys(f"{field}.{window}" if window else field for field, window in display_fields))
                         metrics, exact = metrics[keys], exact[keys]
                     rows.append(_row(symbol, name, industries.get(symbol), frame, metrics, exact))
@@ -396,7 +411,7 @@ def search_trends(query: TrendSearchQuery) -> TrendSearchResult:
         if compared_at and query.reference.as_of > compared_at:
             warnings.append("固定形态参照晚于对照日；两日对照是事后形态检索，不是当时可执行的筛选或回测。")
     if missing:
-        warnings.append(f"{len(missing)} 只资料不足，未将其视为不符合条件；更新数据后可重新筛选。")
+        warnings.append(f"{len(missing)} 只资料或条件证据不足，未将其视为不符合条件；具体原因见无法判断列表。")
     return TrendSearchResult(
         query=query, as_of=as_of,
         coverage=TrendSearchCoverage(total=len(members), evaluated=len(members) - len(missing), matched=len(rows), missing=len(missing), self_matches_excluded=self_matches),
@@ -422,8 +437,8 @@ def trend_search_evidence(query: TrendSearchQuery, symbol: str, at: datetime.dat
     frame = _prepare_cached(symbol, sessions).loc[:point]
     if frame.empty or frame.index[-1] != point or not frame.valid.iloc[-1]:
         raise ValueError("所选日期缺少有效行情，请先更新数据")
-    fields = [*_BASE_FIELDS, *((item.field, item.window) for item in query.conditions)]
-    metrics, exact = calculate_metrics(frame, fields, reference_prices)
+    fields = [*_BASE_FIELDS, *((item.field, item.window) for item in query.conditions), *_swing_display_fields(query)]
+    metrics, exact = calculate_metrics(frame, fields, reference_prices, swing_reversal_pct=query.swing_reversal_pct, swing_points=[point])
     row = _row(symbol, names[symbol], _industries().get(symbol), frame, metrics, exact)
     bars = [TrendEvidenceBar(
         date=day, **{key: _number(value[key]) for key in ("open", "high", "low", "close", "volume")},
@@ -435,6 +450,7 @@ def trend_search_evidence(query: TrendSearchQuery, symbol: str, at: datetime.dat
     return TrendSearchEvidence(
         query=query, as_of=point, row=row, bars=bars, reference_bars=reference_bars, reference_source=reference_source,
         conditions=_checks_at(query, metrics, exact, [point])[point], warnings=warnings,
+        swings=swing_evidence(frame, query.conditions, query.swing_reversal_pct),
     )
 
 

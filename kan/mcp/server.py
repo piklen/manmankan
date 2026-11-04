@@ -309,7 +309,7 @@ def _kan_hold(payload: dict[str, Any]) -> dict[str, Any]:
 TOOLS = {
     "kan_trend": ToolSpec(
         name="kan_trend",
-        description="按明确日线条件筛当前趋势；compare_to 可选上一交易日或明确日期，核对新出现、持续、退出与无法确认。与 Web/TUI/CLI 同源，不自动取数或创建历史研究。",
+        description="按明确条件筛趋势与波段：区间阳阴、斜率、效率、确认高低点结构及当前波段方向；swing_reversal_pct 调整反转幅度。compare_to 核对两日变化。与 Web/TUI/CLI 同源，不自动取数或创建研究。",
         input_schema=TrendSearchQuery.model_json_schema(),
         handler=_kan_trend,
         output_schema=TrendSearchResult.model_json_schema(),

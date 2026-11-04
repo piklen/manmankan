@@ -245,7 +245,7 @@ kan find --industry 半导体 --pos 20:lt:30 --sort pos_20:asc --limit 30 --form
 | `--theme` | 题材成分股;题材分类来自上游口径 |
 | `--hot rank\|surge` | 东方财富热榜 |
 | `--codes` | 外部传入代码池,不写入自选 |
-| `--all` | 在 `kan find` 中为完整上市 A 股截面池（含北交所 / ST）；同名 selector 也可用于 `scan` / `trend` / `low` / `high` / `fetch` 的全市场 K 线池；逐股高成本维度不支持 |
+| `--all` | 在 `kan find` 中为完整上市 A 股截面池（含北交所 / ST）；同名 selector 也可用于 `scan` / `low` / `high` / `fetch` 的全市场 K 线池；逐股高成本维度不支持 |
 
 ## 错误语义
 
@@ -283,3 +283,7 @@ TuShare endpoint 没有完整实现官方接口语义，不等同于“没有股
 | `invalid_sort` | `--sort` 字段或方向不在登记白名单内 |
 | `invalid_codes` | `--codes` 或 `--codes -` 中包含非 6 位 A 股代码 |
 | `empty_codes` | `--codes` 解析后没有任何有效代码 |
+
+## 趋势与波段查询
+
+`kan trend` / MCP `kan_trend` 使用独立的 `TrendSearchQuery`，全市场范围为 `--universe all`。波段结构、斜率、效率、区间阳阴线以及图证 `swings` 的精确字段与窗口口径见[趋势研究](trend-research.md#波段结构与趋势因子)，运行时契约由 `kan study catalog/schema` 与HTTP OpenAPI提供；不要把这些新字段当成 `find` DSL参数。

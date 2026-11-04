@@ -25,6 +25,7 @@ import {
   TrendChangesTable,
   type ChangeFilter,
 } from "../components/TrendComparison";
+import { SwingSettings } from "../components/SwingSettings";
 import { TrendConditionBuilder } from "../components/TrendConditionBuilder";
 import {
   PriceSparkline,
@@ -37,7 +38,7 @@ import {
   type TrendPoint,
 } from "../components/TrendScatter";
 import { Button, Empty, Loading, Notice } from "../components/ui";
-import { conditionText, parseCodes, UNIVERSE_LABELS } from "../lib/study";
+import { conditionText, fieldValue, parseCodes, SWING_FIELDS, UNIVERSE_LABELS } from "../lib/study";
 import {
   blankScreenDraft,
   conditionsToDraft,
@@ -53,7 +54,7 @@ import {
 } from "../lib/screener";
 import { errorMessage, number, percent } from "../lib/format";
 
-const storageKey = "manmankan.trend-screen.v2";
+const storageKey = "manmankan.trend-screen.v3";
 function remembered(): {
   draft: ScreenerDraft;
   submitted: TrendSearchQuery | null;
@@ -219,6 +220,7 @@ export function TrendScreenerPage() {
       ),
     [sortedChanges, changeFilter, search],
   );
+  const swingWindows = [...new Set(result?.query.conditions?.filter((item) => SWING_FIELDS.has(item.field)).map((item) => item.window) ?? [])];
   const selectedRow = result?.rows.find((row) => row.symbol === selectedSymbol);
   const selectedChange = sortedChanges.find(
     (row) => row.symbol === selectedSymbol,
@@ -456,7 +458,7 @@ export function TrendScreenerPage() {
     >
       <header className="screener-heading">
         <h1>筛出你要找的走势</h1>
-        <p>连涨、连跌、先跌后涨，把条件写清楚再看结果。</p>
+        <p>看整体方向、波段结构和当前阶段，再核对每一段的价格证据。</p>
         <div className="trend-task-tabs" role="group" aria-label="趋势问题">
           {Object.entries(TREND_TASKS).map(([value, label]) => (
             <button
@@ -598,6 +600,9 @@ export function TrendScreenerPage() {
                   conditions={draft.conditions}
                   onChange={(items) => update("conditions", items)}
                 />
+                {draft.conditions.some((item) => item.field && SWING_FIELDS.has(item.field)) ? (
+                  <SwingSettings value={draft.swingReversal} onChange={(value) => update("swingReversal", value)} />
+                ) : null}
                 {draft.conditions.some(
                   (item) => item.field === "shape_distance",
                 ) ? (
@@ -1150,8 +1155,8 @@ export function TrendScreenerPage() {
                     <thead>
                       <tr>
                         <th>股票</th>
-                        <th>当前连续段</th>
-                        <th>本段变化</th>
+                        <th>{swingWindows.length ? "波段结构 / 阶段" : "当前连续段"}</th>
+                        <th>{swingWindows.length ? "当日涨跌" : "本段变化"}</th>
                         <th>30日位置</th>
                         <th>60日位置</th>
                         <th>180日位置</th>
@@ -1180,17 +1185,21 @@ export function TrendScreenerPage() {
                           </td>
                           <td>
                             <span className="segment-tag">
-                              {segmentLabel(row)}
+                              {swingWindows.length ? swingWindows.map((window) => <span className="swing-row-fact" key={window}>
+                                <small>{window} 日 · 已确认点关系</small>
+                                {fieldValue("swing_structure", row.values[`swing_structure.${window}`])}
+                                <small>{fieldValue("swing_direction", row.values[`swing_direction.${window}`])} · {fieldValue("swing_count", row.values[`swing_count.${window}`])}</small>
+                              </span>) : segmentLabel(row)}
                             </span>
                           </td>
                           <td
                             className={
-                              (row.current_segment?.return_pct ?? 0) >= 0
+                              (swingWindows.length ? row.change_pct ?? 0 : row.current_segment?.return_pct ?? 0) >= 0
                                 ? "value-up"
                                 : "value-down"
                             }
                           >
-                            {percent(row.current_segment?.return_pct, 2)}
+                            {percent(swingWindows.length ? row.change_pct : row.current_segment?.return_pct, 2)}
                           </td>
                           {[30, 60, 180].map((period) => (
                             <td key={period}>

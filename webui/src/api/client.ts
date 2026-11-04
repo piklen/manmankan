@@ -10,6 +10,7 @@ export type TrendSearchComparison =
   components["schemas"]["TrendSearchComparison"];
 export type StudyCheck = components["schemas"]["StudyCheck"];
 export type TrendSearchEvidence = components["schemas"]["TrendSearchEvidence"];
+export type SwingEvidence = NonNullable<TrendSearchEvidence["swings"]>[number];
 export type SavedTrendSearch = components["schemas"]["SavedTrendSearch"];
 export type StudyQuery = components["schemas"]["StudyQuery"];
 export type StudyCondition = components["schemas"]["StudyCondition"];

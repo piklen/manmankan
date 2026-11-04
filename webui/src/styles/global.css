@@ -3629,3 +3629,84 @@ td button {
     display: none;
   }
 }
+
+/* 波段先展示结构和阶段，识别尺度与逐点证据按需展开。 */
+.swing-settings {
+  border-top: 1px solid var(--line);
+  border-bottom: 1px solid var(--line);
+  padding: 12px 0;
+  margin: 12px 0 18px;
+  font-size: 12px;
+}
+.swing-settings summary, .swing-pivots summary {
+  cursor: pointer;
+  font-weight: 600;
+  line-height: 1.7;
+}
+.swing-settings summary span, .swing-pivots summary span {
+  float: right;
+  color: var(--muted);
+  font-weight: 400;
+}
+.swing-settings p {
+  margin: 10px 0;
+  color: var(--muted);
+  font-size: 11px;
+  line-height: 1.8;
+}
+.swing-evidence {
+  margin: 18px 0 22px;
+  padding: 18px;
+  background: var(--soft);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+}
+.swing-evidence > header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 10px;
+}
+.swing-evidence > header > div > span {
+  color: var(--muted);
+  font-size: 11px;
+  display: block;
+  margin-bottom: 5px;
+}
+.swing-evidence > header > span {
+  white-space: nowrap;
+  color: var(--muted);
+  font-size: 11px;
+}
+.swing-evidence select { max-width: 100px; }
+.swing-facts {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+  margin: 16px 0;
+}
+.swing-facts dt { font-size: 11px; color: var(--muted); margin-bottom: 5px; }
+.swing-facts dd { margin: 0; font-size: 20px; font-variant-numeric: tabular-nums; }
+.swing-facts small { font-size: 10px; color: var(--muted); }
+.swing-pivots { border-top: 1px solid var(--line); padding-top: 12px; margin-top: 14px; font-size: 12px; }
+.swing-pivots table { width: 100%; margin: 10px 0; border-collapse: collapse; white-space: nowrap; }
+.swing-pivots th, .swing-pivots td { padding: 9px 7px; text-align: left; border-bottom: 1px solid var(--line); font-weight: 400; font-size: 11px; }
+.swing-pivots th { color: var(--muted); }
+.swing-reason { font-size: 12px; line-height: 1.8; margin-top: 10px; }
+.swing-confirmed-line, .swing-current-line { fill: none; stroke: #34485d; stroke-width: 2; vector-effect: non-scaling-stroke; }
+.swing-current-line { stroke-dasharray: 5 4; stroke: #6b7d90; }
+.swing-pivot-dot { fill: white; stroke: #34485d; stroke-width: 1.5; }
+.swing-pivot-label { fill: #34485d; font-size: 10px; paint-order: stroke; stroke: white; stroke-width: 3px; }
+.candle-panel--dark .swing-confirmed-line { stroke: #dde6ee; }
+.candle-panel--dark .swing-pivot-label { fill: #dde6ee; stroke: var(--navy); }
+.swing-row-fact { display: block; white-space: nowrap; }
+.swing-row-fact + .swing-row-fact { margin-top: 5px; }
+.swing-row-fact small { margin-right: 5px; }
+@media (max-width: 700px) {
+  .swing-evidence { padding: 14px; }
+  .swing-evidence > header { align-items: flex-start; }
+  .swing-evidence h3 { line-height: 1.7; }
+  .swing-facts { gap: 7px; }
+  .swing-facts dd { font-size: 18px; }
+}

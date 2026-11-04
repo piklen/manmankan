@@ -36,6 +36,8 @@ kan trend --universe all --down-days 5 --format json
 kan trend --universe personal --up-days 3 --comparison eq
 kan trend --codes 600519,000858 --previous-down-days 3 --up-days 2
 kan trend --universe all --rising-days 8 --window 10 --format json
+kan trend --universe all --swing up --window 60 --reversal-pct 5
+kan trend --universe all --window 15 --bull-excess 0 --return-above 0
 kan trend --universe all --down-days 5 --compare-to previous_session
 kan trend --universe all --industry 银行 --browse --format json
 ```

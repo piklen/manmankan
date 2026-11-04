@@ -5,8 +5,16 @@ from rich.console import Group
 from rich.table import Table
 from rich.text import Text
 
-from kan.domain.market_study import StudyBar, StudyCheck, StudyCondition, StudyEvidence, StudyResult
+from kan.domain.market_study import (
+    StudyBar,
+    StudyCheck,
+    StudyCondition,
+    StudyEvidence,
+    StudyResult,
+    SwingEvidence,
+)
 from kan.render.base import DISCLAIMER
+from kan.render.trend import factor_value
 from kan.service.market_study import FIELD_CATALOG
 from kan.service.trend_search import (
     TrendComparisonRow,
@@ -28,7 +36,7 @@ def matched_text(value: bool | None) -> str:
 def _check_text(check: StudyCheck | None) -> str:
     if check is None:
         return "未知"
-    actual = number(check.actual, str(_FIELDS[check.condition.field]["unit"]))
+    actual = factor_value(check.condition.field, check.actual, str(_FIELDS[check.condition.field]["unit"]))
     if check.bound == "at_least" and check.actual is not None:
         actual = "至少 " + actual
     return f"{actual} · {matched_text(check.matched)}"
@@ -73,7 +81,7 @@ def number(value: float | None, suffix: str = "", *, signed: bool = False) -> st
 def condition_text(condition: StudyCondition) -> str:
     field = _FIELDS[condition.field]
     window = f"{condition.window}日 " if condition.window else ""
-    return f"{window}{field['label']} {_OPERATORS[condition.operator]} {condition.value:g}{field['unit']}"
+    return f"{window}{field['label']} {_OPERATORS[condition.operator]} {factor_value(condition.field, condition.value, str(field['unit']))}"
 
 
 def result_summary(result: StudyResult) -> str:
@@ -96,7 +104,7 @@ def evidence_view(evidence: StudyEvidence, warnings: list[str]) -> Group:
         checks.add_column(label)
     for check in evidence.conditions:
         field = _FIELDS[check.condition.field]
-        actual = number(check.actual, str(field["unit"]))
+        actual = factor_value(check.condition.field, check.actual, str(field["unit"]))
         if check.bound == "at_least" and check.actual is not None:
             actual = "至少 " + actual
         checks.add_row(
@@ -118,7 +126,7 @@ def evidence_view(evidence: StudyEvidence, warnings: list[str]) -> Group:
     return Group(
         Text(f"{evidence.name} {evidence.symbol} · 事件日期 {evidence.event_date}", style="bold #95d5bd"),
         Text(f"当次保存的数据源：{evidence.source}\n"),
-        checks, Text("\n" + result_text),
+        checks, *[swing_view(swing) for swing in evidence.swings], Text("\n" + result_text),
         Text("\n数据与样本说明\n" + "\n".join([*warnings, *evidence.warnings]), style="#afbdc3"),
         Text("\n当次封存日线 · 空值表示缺口\n", style="bold"), bars_table(evidence.bars),
     )
@@ -142,13 +150,45 @@ def segment_text(segment: TrendSegment | None) -> str:
     return f"{direction} {'≥' if segment.bound == 'at_least' else ''}{segment.days} 天"
 
 
+def swing_view(swing: SwingEvidence) -> Group:
+    structure = factor_value("swing_structure", swing.structure) if swing.structure is not None else "结构不足"
+    if swing.structure_broken:
+        direction = "已越过最近确认波谷" if swing.structure == 1 else "已越过最近确认波峰"
+    elif swing.structure_broken is False and swing.structure == 1 and swing.direction == -1:
+        direction = "当前回撤"
+    elif swing.structure_broken is False and swing.structure == -1 and swing.direction == 1:
+        direction = "当前反弹"
+    else:
+        direction = factor_value("swing_direction", swing.direction)
+    pivots = Table(expand=True, box=None, padding=(0, 1))
+    for label in ("转折发生日", "类型", "收盘", "确认日期"):
+        pivots.add_column(label)
+    for point in swing.pivots:
+        pivots.add_row(str(point.date), "波峰" if point.kind == "high" else "波谷", number(point.price), str(point.confirmed_at))
+    current = swing.current
+    segment = "尚未形成达到确认幅度的波段。"
+    if current:
+        anchor = "已确认转折" if current.start_confirmed else "窗口边界锚点，非已确认转折"
+        segment = (
+            f"最新段尚未完成 · 起点 {current.start_date}（{anchor}）\n"
+            f"截至当前 {current.days} 个交易日 · 段涨跌 {number(current.return_pct, '%', signed=True)}\n"
+            f"暂定极值 {current.extreme_date} · {number(current.extreme_price)}；仍可能延伸"
+        )
+    return Group(
+        Text(f"\n{swing.window} 日波段 · 已确认点关系：{structure} · {direction}", style="bold"),
+        Text(f"收盘反向幅度 {swing.reversal_pct:g}% · 截止日已确认的转折如下"),
+        pivots if swing.pivots else Text("尚无已确认转折"),
+        Text(segment), Text(swing.reason or ""),
+    )
+
+
 def trend_evidence_view(evidence: TrendSearchEvidence) -> Group:
     row = evidence.row
     checks = Table(expand=True, box=None, padding=(0, 1))
     for label in ("明确条件", "实际值", "核对"):
         checks.add_column(label)
     for check in evidence.conditions:
-        actual = ("至少 " if check.bound == "at_least" and check.actual is not None else "") + number(check.actual)
+        actual = ("至少 " if check.bound == "at_least" and check.actual is not None else "") + factor_value(check.condition.field, check.actual, str(_FIELDS[check.condition.field]["unit"]))
         checks.add_row(Text(condition_text(check.condition)), actual, "符合" if check.matched else "未知" if check.matched is None else "不符合")
     segment = row.current_segment
     dates = f"段首 {segment.start_date} · 比较基日 {segment.base_date}" if segment else "日线不足，无法确认当前连续段"
@@ -160,6 +200,7 @@ def trend_evidence_view(evidence: TrendSearchEvidence) -> Group:
     return Group(
         Text(f"{row.name} {row.symbol} · 截止 {evidence.as_of}", style="bold #95d5bd"),
         Text(f"{segment_text(segment)} · 段涨跌 {number(segment.return_pct if segment else None, '%', signed=True)}\n{dates}\n来源 {row.source}"), checks if evidence.conditions else Text("无条件浏览，仅展示当前事实"),
+        *[swing_view(swing) for swing in evidence.swings],
         Text("位置30/60/180日：" + "/".join(number(row.positions.get(str(n)), "%") for n in (30, 60, 180))),
         Text("实际日线（最近日期在前，空值表示缺口）", style="bold"), bars,
         Text("\n平盘与缺行中断连续；上涨/下跌比较前收，阳线/阴线比较当日开收。\n"),
@@ -192,6 +233,9 @@ def help_view() -> Text:
         "平盘与缺行中断连续；最多 N 天仍要求该方向至少 1 天。\n"
         "先跌后涨/先涨后跌的两段相邻，分别填写各段天数。\n"
         "最近 N 日计数与连续 N 日不同，按实际交易日核对。\n\n"
+        "波段任务填写窗口与反向确认幅度；只用已确认的波峰波谷。\n"
+        "详情分别展示转折发生日、确认日；最新一段仍可能延伸。\n"
+        "区间阳阴线统计与收盘涨跌次数独立；十字线不计阳阴。\n\n"
         "命令行直接筛选：kan trend --help；历史与 JSON：kan study --help\n"
         "读取本地行情，不自动联网更新；数据日和缺口随结果展示。\n\n"
         + DISCLAIMER.strip()

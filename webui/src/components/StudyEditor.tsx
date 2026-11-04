@@ -2,9 +2,12 @@ import { ArrowRight, Info, Plus, Trash2 } from "lucide-react";
 import { Link } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import { api, type StudyCondition, type StudyQuery } from "../api/client";
+import { SwingSettings } from "./SwingSettings";
 import { Button } from "./ui";
 import {
   draftError,
+  ENUM_VALUES,
+  SWING_FIELDS,
   FIELDS,
   OPERATORS,
   SAMPLE_LABELS,
@@ -151,6 +154,7 @@ export function StudyEditor({
                                   .value as StudyCondition["field"],
                                 window: "",
                                 value: "",
+                                operator: ENUM_VALUES[event.target.value as StudyCondition["field"]] ? "eq" : "gte",
                               }
                             : item,
                         ),
@@ -211,7 +215,13 @@ export function StudyEditor({
                     </span>
                   </label>
                 ) : null}
-                <div className="condition-comparison">
+                {condition.field && ENUM_VALUES[condition.field] ? (
+                  <select aria-label={`条件 ${index + 1} 波段状态`} value={condition.value}
+                    onChange={(event) => update("conditions", draft.conditions.map((item) => item.id === condition.id ? { ...item, operator: "eq", value: event.target.value } : item))}>
+                    <option value="">选择要找的状态</option>
+                    {Object.entries(ENUM_VALUES[condition.field]!).map(([value, label]) => <option key={value} value={value}>{label}</option>)}
+                  </select>
+                ) : <div className="condition-comparison">
                   <select
                     aria-label={`条件 ${index + 1} 比较关系`}
                     value={condition.operator}
@@ -257,7 +267,7 @@ export function StudyEditor({
                       {condition.field ? FIELDS[condition.field].unit : ""}
                     </span>
                   </span>
-                </div>
+                </div>}
                 {condition.field ? (
                   <p>
                     {catalog.data?.find(
@@ -289,6 +299,9 @@ export function StudyEditor({
             <Plus size={16} />
             添加条件
           </button>
+          {draft.conditions.some((condition) => condition.field && SWING_FIELDS.has(condition.field)) ? (
+            <SwingSettings value={draft.swingReversal} onChange={(value) => update("swingReversal", value)} />
+          ) : null}
           {hasShape ? (
             <div className="reference-editor">
               <h3>形态参照</h3>

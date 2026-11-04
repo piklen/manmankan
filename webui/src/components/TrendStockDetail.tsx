@@ -8,10 +8,11 @@ import {
   type TrendComparisonRow,
   type TrendSearchRow,
 } from "../api/client";
+import { SwingEvidencePanel } from "./SwingEvidence";
 import { ConditionChanges } from "./TrendComparison";
 import { StudyChart, ShapeOverlay } from "./StudyChart";
 import { Button, Loading, Notice } from "./ui";
-import { conditionLabel, FIELDS, OP_SYMBOLS } from "../lib/study";
+import { conditionLabel, fieldValue, OP_SYMBOLS } from "../lib/study";
 import { errorMessage, number, percent } from "../lib/format";
 
 export function segmentLabel(row: TrendSearchRow) {
@@ -87,6 +88,7 @@ export function TrendStockDetail({
   onShape: (row: TrendSearchRow) => void;
   busy: boolean;
 }) {
+  const [swingWindow, setSwingWindow] = useState<number | null>(null);
   const [side, setSide] = useState<"current" | "previous">(
     comparison &&
       comparison.current.close == null &&
@@ -108,6 +110,7 @@ export function TrendStockDetail({
   const data = noQuote ? undefined : evidence.data;
   const actual = data?.row ?? (at === currentDate ? row : undefined);
   const segment = actual?.current_segment;
+  const swing = data?.swings?.find((item) => item.window === swingWindow) ?? data?.swings?.[0];
   const chart: StudyEvidence | undefined =
     data && actual
       ? {
@@ -118,6 +121,7 @@ export function TrendStockDetail({
           source: actual.source,
           bars: data.bars,
           conditions: data.conditions,
+          swings: data.swings,
           outcome: null,
           warnings: data.warnings,
           reference_bars: data.reference_bars,
@@ -198,12 +202,14 @@ export function TrendStockDetail({
           evidence={chart}
           context="market"
           tone="light"
-          segmentStart={segment?.start_date}
+          segmentStart={swing ? undefined : segment?.start_date}
+          swing={swing}
         />
       ) : null}
       {actual ? (
         <>
-          {segment ? (
+          {swing ? <SwingEvidencePanel evidence={swing} windows={data?.swings?.map((item) => item.window) ?? []} onWindow={setSwingWindow} /> : null}
+          {segment && !swing ? (
             <div className="segment-facts">
               <div>
                 <span>本段首日</span>
@@ -225,7 +231,7 @@ export function TrendStockDetail({
               </div>
             </div>
           ) : null}
-          {segment?.bound === "at_least" ? (
+          {!swing && segment?.bound === "at_least" ? (
             <p className="field-hint">
               缓存开始或行情缺口前的段长不可确认；这里显示的是已知下界。
             </p>
@@ -239,17 +245,12 @@ export function TrendStockDetail({
                     {conditionLabel(check.condition)}
                     <small>
                       要求 {OP_SYMBOLS[check.condition.operator]}{" "}
-                      {check.condition.value}
-                      {FIELDS[check.condition.field].unit}
+                      {fieldValue(check.condition.field, check.condition.value)}
                     </small>
                   </span>
                   <strong>
                     {check.bound === "at_least" ? "≥ " : ""}
-                    {number(
-                      check.actual,
-                      check.condition.field.includes("days") ? 0 : 2,
-                    )}
-                    {FIELDS[check.condition.field].unit}
+                    {fieldValue(check.condition.field, check.actual)}
                   </strong>
                   {check.matched === true ? (
                     <CheckCircle2 size={16} />

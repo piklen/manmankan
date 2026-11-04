@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { Crosshair } from "lucide-react";
-import type { StudyDistribution, StudyEvidence } from "../api/client";
+import type { StudyDistribution, StudyEvidence, SwingEvidence } from "../api/client";
 import { number, percent } from "../lib/format";
 
 export function StudyChart({
@@ -8,11 +8,13 @@ export function StudyChart({
   context = "study",
   tone = "dark",
   segmentStart,
+  swing,
 }: {
   evidence: StudyEvidence;
   context?: "study" | "market";
   tone?: "dark" | "light";
   segmentStart?: string;
+  swing?: SwingEvidence;
 }) {
   const holder = useRef<HTMLDivElement>(null);
   const [width, setWidth] = useState(820);
@@ -24,8 +26,9 @@ export function StudyChart({
   const segmentOffset = segmentStart
     ? evidence.bars.findIndex((bar) => bar.date >= segmentStart)
     : eventOffset;
-  const nearStart =
-    context === "market"
+  const nearStart = swing
+    ? Math.max(0, eventOffset - swing.window + 1)
+    : context === "market"
       ? Math.max(0, Math.min(eventOffset - 29, Math.max(0, segmentOffset) - 8))
       : Math.max(0, eventOffset - 30);
   const bars = nearEvent ? evidence.bars.slice(nearStart) : evidence.bars;
@@ -78,6 +81,18 @@ export function StudyChart({
     ]),
   ];
   const eventX = x(eventIndex);
+  const pivotPoints = (swing?.pivots ?? []).flatMap((pivot) => {
+    const index = bars.findIndex((bar) => bar.date === pivot.date);
+    return index < 0 ? [] : [{ ...pivot, x: x(index), y: y(pivot.price) }];
+  });
+  const currentPoints = swing?.current ? [
+    { date: swing.current.start_date, price: swing.current.start_price },
+    { date: swing.current.extreme_date, price: swing.current.extreme_price },
+    { date: evidence.event_date, price: evidence.bars[eventOffset]?.close },
+  ].flatMap((point) => {
+    const index = bars.findIndex((bar) => bar.date === point.date);
+    return index < 0 || point.price == null ? [] : [`${x(index)},${y(point.price)}`];
+  }) : [];
   const pointerDate = (clientX: number) => {
     const bounds = holder.current?.getBoundingClientRect();
     if (!bounds) return;
@@ -117,7 +132,7 @@ export function StudyChart({
             aria-pressed={nearEvent}
             onClick={() => setNearEvent(true)}
           >
-            {context === "study" ? "事件附近" : "本段附近"}
+            {swing ? `${swing.window} 日波段` : context === "study" ? "事件附近" : "本段附近"}
           </button>
           <Crosshair size={16} aria-hidden="true" />
         </div>
@@ -284,6 +299,16 @@ export function StudyChart({
             </g>
           );
         })}
+        {swing ? <g className="swing-chart-overlay">
+          <polyline points={pivotPoints.map((point) => `${point.x},${point.y}`).join(" ")} className="swing-confirmed-line" />
+          {currentPoints.length > 1 ? <polyline points={currentPoints.join(" ")} className="swing-current-line" /> : null}
+          {pivotPoints.map((point) => <g key={point.date}>
+            <circle cx={point.x} cy={point.y} r={4} className="swing-pivot-dot">
+              <title>{point.kind === "high" ? "波峰" : "波谷"} {point.date} · 收盘 {number(point.price)} · 确认于 {point.confirmed_at}</title>
+            </circle>
+            {pivotPoints.length <= 12 ? <text x={point.x} y={point.y + (point.kind === "high" ? -10 : 17)} textAnchor="middle" className="swing-pivot-label">{point.kind === "high" ? "峰" : "谷"}</text> : null}
+          </g>)}
+        </g> : null}
         <line
           x1={inset}
           x2={width - right}

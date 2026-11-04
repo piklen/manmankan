@@ -10,6 +10,8 @@ import typer
 
 from kan.app import app
 from kan.domain.market_study import StudyCondition, StudyField, StudyReference
+from kan.render.trend import factor_value, swing_phase
+from kan.service.market_study import FIELD_CATALOG
 from kan.service.trend_search import TrendSearchQuery, save_trend_search, search_trends
 
 
@@ -30,6 +32,12 @@ class TrendComparison(StrEnum):
     lte = "lte"
 
 
+class SwingStructure(StrEnum):
+    up = "up"
+    down = "down"
+    mixed = "mixed"
+
+
 @app.command()
 def trend(
     universe: Annotated[TrendUniverse | None, typer.Option("--universe", help="明确范围：all / personal / codes")] = None,
@@ -46,7 +54,17 @@ def trend(
     previous_up_days: Annotated[int | None, typer.Option("--previous-up-days", min=1, help="当前下跌段紧邻的前一段上涨天数")] = None,
     rising_days: Annotated[int | None, typer.Option("--rising-days", min=0, help="最近 --window 个市场日中的上涨天数")] = None,
     falling_days: Annotated[int | None, typer.Option("--falling-days", min=0, help="最近 --window 个市场日中的下跌天数")] = None,
-    window: Annotated[int | None, typer.Option("--window", min=2, max=360, help="区间天数条件的市场交易日窗口")] = None,
+    bull_count: Annotated[int | None, typer.Option("--bull-count", min=0, help="最近 --window 根 K 线中的阳线数量")] = None,
+    bear_count: Annotated[int | None, typer.Option("--bear-count", min=0, help="最近 --window 根 K 线中的阴线数量")] = None,
+    bull_excess: Annotated[int | None, typer.Option("--bull-excess", help="阳线数减阴线数严格大于此值；0 表示阳多于阴")] = None,
+    return_above: Annotated[float | None, typer.Option("--return-above", help="--window 日区间涨跌幅严格大于此百分数")] = None,
+    return_below: Annotated[float | None, typer.Option("--return-below", help="--window 日区间涨跌幅严格小于此百分数")] = None,
+    slope_above: Annotated[float | None, typer.Option("--slope-above", help="趋势斜率严格大于此值，单位 %/交易日")] = None,
+    slope_below: Annotated[float | None, typer.Option("--slope-below", help="趋势斜率严格小于此值，单位 %/交易日")] = None,
+    efficiency_min: Annotated[float | None, typer.Option("--efficiency-min", min=0, max=1, help="趋势效率下限，0–1；只描述路径直接程度")] = None,
+    swing: Annotated[SwingStructure | None, typer.Option("--swing", help="波段结构：up 高低点抬高 / down 降低 / mixed 混合")] = None,
+    reversal_pct: Annotated[float, typer.Option("--reversal-pct", help="收盘反向移动达到此百分比才确认波段转折，须大于 0 且小于 100")] = 5,
+    window: Annotated[int | None, typer.Option("--window", min=2, max=360, help="区间、趋势因子及波段的市场交易日窗口")] = None,
     comparison: Annotated[TrendComparison, typer.Option("--comparison", help="天数比较：gte 至少 / eq 恰好 / lte 最多，连续段的最多限定 1–N 天")] = TrendComparison.gte,
     like: Annotated[str | None, typer.Option("--like", help="形态参照股票代码")] = None,
     reference_date: Annotated[str | None, typer.Option("--reference-date", help="形态参照截止日 YYYY-MM-DD")] = None,
@@ -66,19 +84,31 @@ def trend(
             ("bear_days", bear_days), ("joint_up_days", joint_up_days),
             ("previous_down_days", previous_down_days), ("previous_up_days", previous_up_days),
             ("rising_days", rising_days), ("falling_days", falling_days),
+            ("bull_count", bull_count), ("bear_count", bear_count),
         ]
+        counted = {"rising_days", "falling_days", "bull_count", "bear_count"}
         conditions = []
         for field, value in fields:
             if value is None:
                 continue
-            condition_window = window if field in {"rising_days", "falling_days"} else None
+            condition_window = window if field in counted else None
             if condition_window is not None and value > condition_window:
-                raise ValueError("区间上涨/下跌天数不能超过 --window")
+                raise ValueError("区间计数不能超过 --window")
             conditions.append(StudyCondition(field=field, operator=comparison.value, value=value, window=condition_window))
-            if comparison is TrendComparison.lte and field not in {"rising_days", "falling_days"}:
+            if comparison is TrendComparison.lte and field not in counted:
                 conditions.append(StudyCondition(field=field, operator="gt", value=0, window=condition_window))
-        if window is not None and rising_days is None and falling_days is None:
-            raise ValueError("--window 需要配合 --rising-days 或 --falling-days")
+        for factor, relation, threshold in (
+            ("candle_balance", "gt", bull_excess),
+            ("return_pct", "gt", return_above), ("return_pct", "lt", return_below),
+            ("trend_slope", "gt", slope_above), ("trend_slope", "lt", slope_below),
+            ("trend_efficiency", "gte", efficiency_min),
+        ):
+            if threshold is not None:
+                conditions.append(StudyCondition.model_validate({"field": factor, "operator": relation, "value": threshold, "window": window}))
+        if swing is not None:
+            conditions.append(StudyCondition(field="swing_structure", operator="eq", value={"up": 1, "down": -1, "mixed": 0}[swing], window=window))
+        if window is not None and not any(c.window is not None for c in conditions):
+            raise ValueError("--window 需要配合区间计数、涨幅、趋势因子或 --swing")
         reference = None
         if any(value is not None for value in (like, reference_date, shape_window, shape_distance)):
             if like is None or reference_date is None or shape_window is None or shape_distance is None:
@@ -91,6 +121,7 @@ def trend(
             universe=chosen.value, codes=codes.split(",") if codes else [], industries=industry or [],
             as_of=date.fromisoformat(as_of) if as_of else None, conditions=conditions, reference=reference,
             compare_to="previous_session" if compare_to == "previous_session" else date.fromisoformat(compare_to) if compare_to else None,
+            swing_reversal_pct=reversal_pct,
         )
         result = search_trends(query)
         if save:
@@ -102,15 +133,19 @@ def trend(
         from rich.table import Table
 
         console = Console()
+        field_labels = {str(item["field"]): item for item in FIELD_CATALOG}
         coverage = result.coverage
         console.print(f"趋势筛选 · {result.as_of} · 匹配 {coverage.matched}/{coverage.total} · 可判断 {coverage.evaluated} · 资料不足 {coverage.missing}")
         if query.conditions:
-            console.print(" AND ".join(f"{item.key} {item.operator} {item.value:g}" for item in query.conditions))
-        table = Table("代码", "名称", "行业", "收盘", "条件实际值", "当前连续段")
+            console.print(" AND ".join(f"{str(item.window) + '日 ' if item.window else ''}{field_labels[item.field]['label']} {item.operator} {factor_value(item.field, item.value, str(field_labels[item.field]['unit']))}" for item in query.conditions))
+        if any(c.field.startswith("swing_") for c in query.conditions):
+            console.print(f"波段口径：收盘反向幅度 {query.swing_reversal_pct:g}% · 仅用截止日已确认转折 · 最近一段尚未完成")
+        wave_window = next((c.window for c in query.conditions if c.field.startswith("swing_")), None)
+        table = Table("代码", "名称", "行业", "收盘", "条件实际值", "波段阶段" if wave_window else "当前连续段")
         for row in result.rows:
-            actual = " · ".join(f"{item.key}={'≥' if item.key in row.lower_bounds else ''}{row.values[item.key]:g}" for item in query.conditions)
+            actual = " · ".join(f"{field_labels[item.field]['label']}={'≥' if item.key in row.lower_bounds else ''}{factor_value(item.field, row.values[item.key], str(field_labels[item.field]['unit']))}" for item in query.conditions)
             segment = row.current_segment
-            span = "缺前收" if segment is None else f"{segment.direction} {'≥' if segment.bound == 'at_least' else ''}{segment.days} 天 · {segment.return_pct:+.2f}%"
+            span = swing_phase(row.values, wave_window) if wave_window else "缺前收" if segment is None else f"{segment.direction} {'≥' if segment.bound == 'at_least' else ''}{segment.days} 天 · {segment.return_pct:+.2f}%"
             table.add_row(row.symbol, row.name, row.industry or "未分类", f"{row.close:.2f}", actual, span)
         console.print(table)
         if result.comparison:
@@ -124,7 +159,7 @@ def trend(
                     continue
                 descriptions = []
                 for state in (item.previous, item.current):
-                    descriptions.append(state.reason or " · ".join(f"{check.condition.key}={'≥' if check.bound == 'at_least' else ''}{check.actual:g}" for check in state.conditions) or "符合")
+                    descriptions.append(state.reason or " · ".join(f"{field_labels[check.condition.field]['label']}={'≥' if check.bound == 'at_least' else ''}{factor_value(check.condition.field, check.actual)}" for check in state.conditions) or "符合")
                 change_table.add_row(item.symbol, item.name, labels[item.status], *descriptions)
             if change_table.row_count:
                 console.print(change_table)
