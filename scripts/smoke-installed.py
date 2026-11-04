@@ -16,6 +16,7 @@ import kan
 package = Path(kan.__file__).resolve().parent
 assert package.is_relative_to(Path(sys.prefix).resolve()), "package must come from the clean environment"
 assert version("manmankan") == kan.__version__
+assert not any(package.glob("*.json")), "package root must not contain local JSON data"
 assert (package / "tui" / "workbench.tcss").is_file()
 spa = package / "web" / "spa"
 assert (spa / "index.html").is_file()
