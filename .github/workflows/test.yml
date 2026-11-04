@@ -54,9 +54,8 @@ jobs:
         run: |
           uv lock --check
           uv sync --python 3.12 --frozen --all-groups
-      # 自托管 runner 已预装 Node 24；RUNNER_* 会被 action runtime 覆盖，不能用 step env 改工具缓存。
-      - name: Setup Node.js on GitHub-hosted runner
-        if: runner.environment == 'github-hosted'
+      # 不依赖各台 runner 的系统 Node 版本，统一使用同一构建环境。
+      - name: Setup Node.js
         uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020
         with:
           node-version: '24'
