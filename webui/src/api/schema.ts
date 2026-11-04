@@ -863,7 +863,7 @@ export interface components {
              * Field
              * @enum {string}
              */
-            field: "change_pct" | "gap_pct" | "body_pct" | "return_pct" | "position" | "low_age" | "up_days" | "down_days" | "bull_days" | "bear_days" | "joint_up_days" | "previous_up_days" | "previous_down_days" | "rising_days" | "falling_days" | "volume_ratio" | "shape_distance";
+            field: "change_pct" | "gap_pct" | "body_pct" | "return_pct" | "position" | "low_age" | "up_days" | "down_days" | "bull_days" | "bear_days" | "joint_up_days" | "previous_up_days" | "previous_down_days" | "rising_days" | "falling_days" | "volume_ratio" | "shape_distance" | "bull_count" | "bear_count" | "candle_balance" | "trend_slope" | "trend_efficiency" | "swing_structure" | "swing_direction" | "swing_count";
             /**
              * Operator
              * @enum {string}
@@ -1081,6 +1081,8 @@ export interface components {
             /** Conditions */
             conditions: components["schemas"]["StudyCheck"][];
             outcome?: components["schemas"]["StudyEvent"] | null;
+            /** Swings */
+            swings?: components["schemas"]["SwingEvidence"][];
             /** Warnings */
             warnings?: string[];
         };
@@ -1142,6 +1144,11 @@ export interface components {
             /** Conditions */
             conditions: components["schemas"]["StudyCondition"][];
             reference?: components["schemas"]["StudyReference"] | null;
+            /**
+             * Swing Reversal Pct
+             * @default 5
+             */
+            swing_reversal_pct: number;
         };
         /** StudyReference */
         StudyReference: {
@@ -1238,6 +1245,72 @@ export interface components {
             current_count: number;
             /** Event Count */
             event_count: number;
+        };
+        /** SwingEvidence */
+        SwingEvidence: {
+            /** Window */
+            window: number;
+            /** Reversal Pct */
+            reversal_pct: number;
+            /** Structure */
+            structure?: number | null;
+            /** Structure Broken */
+            structure_broken?: boolean | null;
+            /** Direction */
+            direction?: number | null;
+            /** Pivots */
+            pivots?: components["schemas"]["SwingPivot"][];
+            current?: components["schemas"]["SwingLeg"] | null;
+            /** Reason */
+            reason?: string | null;
+        };
+        /** SwingLeg */
+        SwingLeg: {
+            /**
+             * Start Date
+             * Format: date
+             */
+            start_date: string;
+            /** Start Price */
+            start_price: number;
+            /** Start Confirmed */
+            start_confirmed: boolean;
+            /**
+             * Extreme Date
+             * Format: date
+             */
+            extreme_date: string;
+            /** Extreme Price */
+            extreme_price: number;
+            /**
+             * Direction
+             * @enum {string}
+             */
+            direction: "up" | "down";
+            /** Return Pct */
+            return_pct: number;
+            /** Days */
+            days: number;
+        };
+        /** SwingPivot */
+        SwingPivot: {
+            /**
+             * Date
+             * Format: date
+             */
+            date: string;
+            /** Price */
+            price: number;
+            /**
+             * Kind
+             * @enum {string}
+             */
+            kind: "high" | "low";
+            /**
+             * Confirmed At
+             * Format: date
+             */
+            confirmed_at: string;
         };
         /** TrendComparisonCoverage */
         TrendComparisonCoverage: {
@@ -1382,6 +1455,8 @@ export interface components {
             reference_source?: string | null;
             /** Conditions */
             conditions: components["schemas"]["StudyCheck"][];
+            /** Swings */
+            swings?: components["schemas"]["SwingEvidence"][];
             /** Warnings */
             warnings: string[];
         };
@@ -1428,6 +1503,11 @@ export interface components {
             /** Conditions */
             conditions?: components["schemas"]["StudyCondition"][];
             reference?: components["schemas"]["StudyReference"] | null;
+            /**
+             * Swing Reversal Pct
+             * @default 5
+             */
+            swing_reversal_pct: number;
         };
         /** TrendSearchResult */
         TrendSearchResult: {

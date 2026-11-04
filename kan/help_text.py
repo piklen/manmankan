@@ -104,6 +104,9 @@ def root_help_text() -> str:
   kan trend --codes 600519,000858 --bull-days 3 --comparison eq  恰好 3 根阳线
   kan trend --universe all --up-days 2 --previous-down-days 3   先跌至少 3 天再涨至少 2 天
   kan trend --universe all --window 10 --rising-days 7          最近 10 日至少 7 日上涨
+  kan trend --universe all --window 60 --swing up --reversal-pct 5  高低点抬高的波段结构
+  kan trend --universe all --window 15 --bull-excess 0 --return-above 0  阳多于阴且区间上涨
+  kan trend --codes 600519 --window 30 --slope-above 0 --efficiency-min 0.4  明确斜率与路径效率
   kan trend --universe all --down-days 3 --comparison lte       连跌 1–3 天
   kan trend --universe all --up-days 3 --save 连涨观察           只保存条件，不运行历史
   kan trend --universe personal --browse        明确无条件浏览个人池
@@ -226,7 +229,7 @@ def start_help_text() -> str:
 
   kan web       浏览器筛选台：连续涨跌、区间位置与历史核对
   kan tui       键盘筛选台：明确连续涨跌天数与日期，c 看两日变化
-  kan trend     直接按连续涨跌 / 阳阴线 / 前后两段筛选
+  kan trend     按波段结构 / 趋势因子 / 连续涨跌筛选
   kan study     显式运行历史研究，支持 --format json
   kan help      完整 CLI 命令与自动化入口
 

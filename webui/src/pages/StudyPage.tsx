@@ -338,6 +338,7 @@ export function StudyPage({ initialResult }: { initialResult?: StudyResult }) {
                   <StudyChart
                     key={`${evidence.data.run_id}-${evidence.data.symbol}-${evidence.data.event_date}`}
                     evidence={evidence.data}
+                    swing={evidence.data.swings?.[0]}
                   />
                 ) : null}
                 {evidence.data?.reference_bars?.length ? (

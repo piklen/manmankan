@@ -1,6 +1,7 @@
+import { SwingEvidencePanel } from "./SwingEvidence";
 import { Check, CircleHelp, Database } from "lucide-react";
 import type { StudyEvidence, StudyResult } from "../api/client";
-import { conditionLabel, FIELDS, OP_SYMBOLS } from "../lib/study";
+import { conditionLabel, fieldValue, FIELDS, OP_SYMBOLS } from "../lib/study";
 import { number, percent } from "../lib/format";
 
 export function EvidencePanel({
@@ -42,14 +43,12 @@ export function EvidencePanel({
                     实际{" "}
                     <strong>
                       {check.bound === "at_least" ? "≥ " : ""}
-                      {number(check.actual)}
-                      {FIELDS[check.condition.field].unit}
+                      {fieldValue(check.condition.field, check.actual)}
                     </strong>
                   </span>
                   <span>
                     条件 {OP_SYMBOLS[check.condition.operator]}{" "}
-                    {check.condition.value}
-                    {FIELDS[check.condition.field].unit}
+                    {fieldValue(check.condition.field, check.condition.value)}
                   </span>
                 </div>
                 <p>{FIELDS[check.condition.field].detail}</p>
@@ -59,6 +58,7 @@ export function EvidencePanel({
               </article>
             ))}
           </div>
+          {evidence.swings?.map((swing) => <SwingEvidencePanel key={swing.window} evidence={swing} windows={[swing.window]} onWindow={() => {}} />)}
           <h2>后续实际变化</h2>
           {evidence.outcome ? (
             <article className="outcome-proof">

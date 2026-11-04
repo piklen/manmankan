@@ -4,7 +4,7 @@ import type {
   TrendComparisonSnapshot,
   TrendSearchComparison,
 } from "../api/client";
-import { conditionLabel, FIELDS, OP_SYMBOLS } from "../lib/study";
+import { conditionLabel, fieldValue, OP_SYMBOLS } from "../lib/study";
 import { number } from "../lib/format";
 import { Empty } from "./ui";
 
@@ -18,7 +18,7 @@ export type ChangeFilter = "all" | keyof typeof CHANGE_LABELS;
 
 function actualText(check: StudyCheck | undefined) {
   if (!check || check.actual == null) return "资料不足";
-  return `${check.bound === "at_least" ? "至少 " : ""}${number(check.actual, check.condition.field.includes("days") ? 0 : 2)}${FIELDS[check.condition.field].unit}`;
+  return `${check.bound === "at_least" ? "至少 " : ""}${fieldValue(check.condition.field, check.actual)}`;
 }
 export function matchText(matched: boolean | null) {
   return matched == null ? "无法判断" : matched ? "符合" : "不符合";
@@ -241,8 +241,7 @@ export function ConditionChanges({
                 <strong>{conditionLabel(check.condition)}</strong>
                 <small>
                   要求 {OP_SYMBOLS[check.condition.operator]}{" "}
-                  {check.condition.value}
-                  {FIELDS[check.condition.field].unit}
+                  {fieldValue(check.condition.field, check.condition.value)}
                 </small>
               </div>
               <span

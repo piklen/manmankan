@@ -9,6 +9,14 @@ explicitly approves a larger bump.
 
 ## [Unreleased]
 
+## [0.0.6.9.44] - 2026-11-05
+
+### Added
+
+- 波段结构筛选与图证：按可调的收盘反向幅度确认峰谷，区分最近确认结构、当前未完成段、确认日期及当前越过结构边界；确认点不足与缺行情保持未知。
+- 区间阳阴线数量及差、对数价格斜率和趋势效率；Web、TUI、CLI、MCP及历史研究共用计算，保存筛选与两日对照保留波段参数。
+- Web提供中文波段选择与确认点图证；终端支持波段与阳阴组合输入，CLI增加 `--swing`、`--reversal-pct`、`--bull-excess`、`--return-above` 等明确条件。
+
 ## [0.0.6.9.43] - 2026-11-02
 
 ### Added
@@ -796,7 +804,8 @@ explicitly approves a larger bump.
 - **Shell 补全** · zsh / bash / fish / powershell
 - **合规与隐私** · 强制风险提示 + 关键词黑名单（无买卖建议 / 无目标价 / 无评级）· 数据全本地
 
-[Unreleased]: https://github.com/piklen/manmankan/compare/v0.0.6.9.43...HEAD
+[Unreleased]: https://github.com/piklen/manmankan/compare/v0.0.6.9.44...HEAD
+[0.0.6.9.44]: https://github.com/piklen/manmankan/compare/v0.0.6.9.43...v0.0.6.9.44
 [0.0.6.9.43]: https://github.com/piklen/manmankan/compare/v0.0.6.9.42...v0.0.6.9.43
 [0.0.6.9.42]: https://github.com/piklen/manmankan/compare/v0.0.6.9.41...v0.0.6.9.42
 [0.0.6.9.41]: https://github.com/piklen/manmankan/compare/v0.0.6.9.40...v0.0.6.9.41

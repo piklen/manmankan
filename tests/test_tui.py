@@ -215,7 +215,7 @@ def test_keyboard_filter_save_and_explicit_history(research_workspace) -> None:
             await pilot.press("ctrl+enter")
             assert "选择" in str(app.query_one("#status", Static).render())
             # 真键盘：选择上涨、全市场、填写3天，再执行。
-            await pilot.press("enter", "down", "enter", "tab", "enter", "down", "enter", "tab", "3", "ctrl+enter")
+            await pilot.press("enter", "down", "down", "down", "down", "down", "down", "enter", "tab", "enter", "down", "enter", "tab", "3", "ctrl+enter")
             await settled(app, pilot)
             assert app.screen_result is not None
             assert app.screen_result.query.universe == "all"
@@ -367,6 +367,92 @@ def test_saved_conditions_keep_dates_order_and_advanced_filters(research_workspa
             assert app.query_one("#filter-compare", Select).value == "none"
 
     asyncio.run(scenario())
+
+
+def test_swing_cli_form_evidence_and_historical_parameters(research_workspace) -> None:
+    import json
+
+    from textual.widgets import Select
+
+    from kan.service.trend_search import TrendSearchQuery
+    from kan.tui.conditions import TrendFilterForm
+
+    _query, frame = research_workspace
+    prices = [10, 11, 12, 11, 10.8, 12, 13, 12, 11.5, 13, 14, 13, 12.5, 14, 15, 14, 13.5, 15, 16, 15, 14.5, 15.5]
+    tail = frame.index[-len(prices):]
+    frame.loc[tail, "close"] = prices
+    frame.loc[tail, "open"] = [price - .05 for price in prices]
+    frame.loc[tail, "high"] = [price + .2 for price in prices]
+    frame.loc[tail, "low"] = [price - .2 for price in prices]
+    args = ["trend", "--codes", "600519", "--window", "22", "--swing", "up", "--reversal-pct", "4", "--format", "json"]
+    run = CliRunner().invoke(cli_app, args)
+    assert run.exit_code == 0, run.output
+    result = json.loads(run.stdout)
+    assert result["coverage"]["matched"] == 1
+    saved = TrendSearchQuery.model_validate(result["query"])
+    assert saved.swing_reversal_pct == 4
+    factors = CliRunner().invoke(cli_app, ["trend", "--codes", "600519", "--window", "15", "--bull-excess", "0", "--return-above", "0", "--format", "json"])
+    assert factors.exit_code == 0, factors.output
+    assert [(c["field"], c["operator"], c["value"]) for c in json.loads(factors.stdout)["query"]["conditions"]] == [("candle_balance", "gt", 0), ("return_pct", "gt", 0)]
+    assert CliRunner().invoke(cli_app, ["trend", "--codes", "600519", "--swing", "up"]).exit_code == 1
+
+    async def scenario() -> None:
+        app = StudyApp()
+        async with app.run_test(size=(80, 24)) as pilot:
+            form = app.query_one(TrendFilterForm)
+            form.set_query(saved)
+            await pilot.pause()
+            assert app.query_one("#filter-kind", Select).value == "swing_up"
+            assert not app.query_one("#filter-kind", Select).disabled
+            assert form.read_query() == saved
+            assert app.query_one("#filter-reversal", Input).display
+            assert not app.query_one("#filter-operator", Select).display
+            assert app.query_one("#filter-run").region.right <= 80
+            await pilot.press("ctrl+enter")
+            await app.workers.wait_for_complete()
+            await pilot.pause()
+            assert app.screen_result.coverage.matched == 1
+            assert "上升结构" in str(app.query_one(DataTable).get_row_at(0)[3])
+            assert "已确认点关系：上升结构" in str(app.query_one(DataTable).get_row_at(0)[2])
+            assert "回撤" not in str(app.query_one(DataTable).get_row_at(0)[2])
+            await pilot.press("enter")
+            await app.workers.wait_for_complete()
+            await pilot.pause()
+            assert app.screen_evidence.swings[0].structure == 1
+            assert app.screen_evidence.swings[0].reversal_pct == 4
+            assert all(p.confirmed_at > p.date for p in app.screen_evidence.swings[0].pivots)
+            await pilot.press("escape", "h")
+            app.query_one("#history-lookback", Input).value = "30"
+            app.query_one("#history-forward", Input).value = "3"
+            await pilot.click("#history-run")
+            await app.workers.wait_for_complete()
+            await pilot.pause()
+            assert app.result.query.swing_reversal_pct == 4
+            # 高阶混合条件仍无损保留，不用简易表单擅自重写。
+            advanced = saved.model_copy(update={"conditions": [*saved.conditions, StudyCondition(field="trend_efficiency", operator="gte", value=.2, window=15)]})
+            form.set_query(advanced)
+            await pilot.pause()
+            assert form.read_query() == advanced
+            assert app.query_one("#filter-kind", Select).disabled
+
+    asyncio.run(scenario())
+
+
+def test_swing_rendering_distinguishes_confirmed_structure_from_current_break() -> None:
+    from kan.domain.market_study import SwingEvidence
+    from kan.render.trend import swing_phase
+    from kan.tui.screens import swing_view
+
+    for structure, direction, intact, crossed in ((1, -1, "当前回撤", "已越过最近确认波谷"), (-1, 1, "当前反弹", "已越过最近确认波峰")):
+        listed = swing_phase({"swing_structure.60": structure, "swing_direction.60": direction}, 60)
+        assert "已确认点关系" in listed and intact not in listed
+        evidence = SwingEvidence(window=60, reversal_pct=5, structure=structure, direction=direction)
+        assert intact not in swing_view(evidence).renderables[0].plain
+        evidence.structure_broken = False
+        assert intact in swing_view(evidence).renderables[0].plain
+        evidence.structure_broken = True
+        title = swing_view(evidence).renderables[0].plain
+        assert crossed in title and intact not in title
 
 
 def test_stale_day_change_review_and_both_daily_evidence(research_workspace, monkeypatch) -> None:

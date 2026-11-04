@@ -1,6 +1,8 @@
 # AI agent 快速开始
 
-当前主线是趋势筛选、位置与两日变化。AI 使用 `kan trend` 或 MCP `kan_trend` 明确范围与条件，读取当前匹配；可选 `compare_to` 核对新出现、持续、退出与无法确认，不会自动保存历史研究。`kan study catalog/schema` 发现共享日线条件；只有需要历史事件与后续窗口时才执行 `kan study run query.json --format json`。价格、位置与形态距离由共享 Python 核心计算，模型不另算；接口按当前契约使用，不做历史兼容。
+波段筛选：`kan trend --universe all --swing up --window 60 --reversal-pct 5`（下降改 `down`、混合改 `mixed`）。精确阳阴数量问题用 `--window 15 --bull-excess 0 --return-above 0`，不要替换成上涨日计数。typed条件支持 `bull_count/bear_count/candle_balance/trend_slope/trend_efficiency/swing_structure/swing_direction/swing_count`，均需窗口。`swing_reversal_pct` 随Query保存/传递；结构编码1/-1/0分别为抬高/降低/混合，不足为null。图证 `swings` 给出确认点、确认日、当前未完成段与 `structure_broken`，不是事后预测。口径见[趋势研究](trend-research.md#波段结构与趋势因子)。
+
+当前主线是趋势与波段筛选、位置与两日变化。AI 使用 `kan trend` 或 MCP `kan_trend` 明确范围与条件，读取当前匹配；可选 `compare_to` 核对新出现、持续、退出与无法确认，不会自动保存历史研究。`kan study catalog/schema` 发现共享日线条件；只有需要历史事件与后续窗口时才执行 `kan study run query.json --format json`。价格、位置与形态距离由共享 Python 核心计算，模型不另算；接口按当前契约使用，不做历史兼容。
 
 
 `manmankan` 给外部 AI agent 提供可审计的 A 股数据输入：typed Screen、CLI、JSON、字段白名单和本地 MCP。工具不内置 LLM；自然语言 parser 只整理明确阈值，最终仍由确定性 Python application service 计算用户规则命中与证据。
@@ -251,7 +253,7 @@ kan fields list --format json
 
 `--all`、估值、资金、技术、筹码、股东等维度可能依赖 TuShare token 或上游接口权限。用 `data_availability` 区分未请求、不可用和缺失。
 
-`--all` 可作为完整上市 A 股（含北交所 / ST）股票池 selector 用在 `find`、`scan`、`trend`、`low`、`high`、`fetch`。`find --all` 走截面数据；`scan/trend/low/high/fetch --all` 走全市场 K 线池。`kan fetch --all` 按交易日批量并发拉取并拆分逐股缓存，默认 360 个交易日；`--workers/-j 1..32` 可设硬上限，其中全市场大响应网络链路最多使用 12 路。若批量源不可用，命令会快速失败而不会静默退化成数千次串行请求。若上游全市场响应明显不完整，会返回 `tushare_data_contract_error` 且不缓存该响应；这表示当前配置的 TuShare endpoint 偏离官方接口语义，不是筛选结果为空。
+`--all` 可作为完整上市 A 股（含北交所 / ST）股票池 selector 用在 `find`、`scan`、`low`、`high`、`fetch`。`find --all` 走截面数据；`scan/low/high/fetch --all` 走全市场 K 线池。`kan fetch --all` 按交易日批量并发拉取并拆分逐股缓存，默认 360 个交易日；`--workers/-j 1..32` 可设硬上限，其中全市场大响应网络链路最多使用 12 路。若批量源不可用，命令会快速失败而不会静默退化成数千次串行请求。若上游全市场响应明显不完整，会返回 `tushare_data_contract_error` 且不缓存该响应；这表示当前配置的 TuShare endpoint 偏离官方接口语义，不是筛选结果为空。
 
 `@fundamentals` 包含 ROE、净利润同比、营收同比，以及报告期 `end_date`、公告日 `ann_date` 和来源检查时间 `fetched_at`；缓存最多复用24小时。全市场模式不支持这类逐股高成本维度，先用 `--codes`、`--industry` 或 `--theme` 缩小候选池。
 

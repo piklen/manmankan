@@ -2,7 +2,7 @@
   "openapi": "3.1.0",
   "info": {
     "title": "ManManKan Local API",
-    "version": "0.0.6.9.43"
+    "version": "0.0.6.9.44"
   },
   "paths": {
     "/api/v1/health": {
@@ -2495,7 +2495,15 @@
               "rising_days",
               "falling_days",
               "volume_ratio",
-              "shape_distance"
+              "shape_distance",
+              "bull_count",
+              "bear_count",
+              "candle_balance",
+              "trend_slope",
+              "trend_efficiency",
+              "swing_structure",
+              "swing_direction",
+              "swing_count"
             ],
             "title": "Field"
           },
@@ -3000,6 +3008,13 @@
               }
             ]
           },
+          "swings": {
+            "items": {
+              "$ref": "#/components/schemas/SwingEvidence"
+            },
+            "type": "array",
+            "title": "Swings"
+          },
           "warnings": {
             "items": {
               "type": "string"
@@ -3165,6 +3180,13 @@
                 "type": "null"
               }
             ]
+          },
+          "swing_reversal_pct": {
+            "type": "number",
+            "exclusiveMaximum": 100.0,
+            "exclusiveMinimum": 0.0,
+            "title": "Swing Reversal Pct",
+            "default": 5
           }
         },
         "additionalProperties": false,
@@ -3393,6 +3415,176 @@
           "event_count"
         ],
         "title": "StudySummary"
+      },
+      "SwingEvidence": {
+        "properties": {
+          "window": {
+            "type": "integer",
+            "title": "Window"
+          },
+          "reversal_pct": {
+            "type": "number",
+            "title": "Reversal Pct"
+          },
+          "structure": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Structure"
+          },
+          "structure_broken": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Structure Broken"
+          },
+          "direction": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Direction"
+          },
+          "pivots": {
+            "items": {
+              "$ref": "#/components/schemas/SwingPivot"
+            },
+            "type": "array",
+            "title": "Pivots"
+          },
+          "current": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/SwingLeg"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reason"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "window",
+          "reversal_pct"
+        ],
+        "title": "SwingEvidence"
+      },
+      "SwingLeg": {
+        "properties": {
+          "start_date": {
+            "type": "string",
+            "format": "date",
+            "title": "Start Date"
+          },
+          "start_price": {
+            "type": "number",
+            "title": "Start Price"
+          },
+          "start_confirmed": {
+            "type": "boolean",
+            "title": "Start Confirmed"
+          },
+          "extreme_date": {
+            "type": "string",
+            "format": "date",
+            "title": "Extreme Date"
+          },
+          "extreme_price": {
+            "type": "number",
+            "title": "Extreme Price"
+          },
+          "direction": {
+            "type": "string",
+            "enum": [
+              "up",
+              "down"
+            ],
+            "title": "Direction"
+          },
+          "return_pct": {
+            "type": "number",
+            "title": "Return Pct"
+          },
+          "days": {
+            "type": "integer",
+            "title": "Days"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "start_date",
+          "start_price",
+          "start_confirmed",
+          "extreme_date",
+          "extreme_price",
+          "direction",
+          "return_pct",
+          "days"
+        ],
+        "title": "SwingLeg"
+      },
+      "SwingPivot": {
+        "properties": {
+          "date": {
+            "type": "string",
+            "format": "date",
+            "title": "Date"
+          },
+          "price": {
+            "type": "number",
+            "title": "Price"
+          },
+          "kind": {
+            "type": "string",
+            "enum": [
+              "high",
+              "low"
+            ],
+            "title": "Kind"
+          },
+          "confirmed_at": {
+            "type": "string",
+            "format": "date",
+            "title": "Confirmed At"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "date",
+          "price",
+          "kind",
+          "confirmed_at"
+        ],
+        "title": "SwingPivot"
       },
       "TrendComparisonCoverage": {
         "properties": {
@@ -3765,6 +3957,13 @@
             "type": "array",
             "title": "Conditions"
           },
+          "swings": {
+            "items": {
+              "$ref": "#/components/schemas/SwingEvidence"
+            },
+            "type": "array",
+            "title": "Swings"
+          },
           "warnings": {
             "items": {
               "type": "string"
@@ -3931,6 +4130,13 @@
                 "type": "null"
               }
             ]
+          },
+          "swing_reversal_pct": {
+            "type": "number",
+            "exclusiveMaximum": 100.0,
+            "exclusiveMinimum": 0.0,
+            "title": "Swing Reversal Pct",
+            "default": 5
           }
         },
         "additionalProperties": false,

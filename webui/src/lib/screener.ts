@@ -4,15 +4,17 @@ import type {
   TrendSearchQuery,
   TrendSearchResult,
 } from "../api/client";
-import { FIELDS, parseCodes, type ConditionDraft } from "./study";
+import { ENUM_VALUES, FIELDS, parseCodes, SWING_FIELDS, swingInputError, type ConditionDraft } from "./study";
 
-export type TrendTask = "up" | "down" | "down_up" | "up_down" | "count";
+export type TrendTask = "up" | "down" | "down_up" | "up_down" | "count" | "candles" | "swings";
 export const TREND_TASKS: Record<TrendTask, string> = {
   up: "连续上涨",
   down: "连续下跌",
   down_up: "先跌后涨",
   up_down: "先涨后跌",
   count: "区间涨跌天数",
+  candles: "区间阳阴线",
+  swings: "波段结构",
 };
 const taskFields: Record<TrendTask, StudyCondition["field"][]> = {
   up: ["up_days"],
@@ -20,6 +22,8 @@ const taskFields: Record<TrendTask, StudyCondition["field"][]> = {
   down_up: ["previous_down_days", "up_days"],
   up_down: ["previous_up_days", "down_days"],
   count: ["rising_days"],
+  candles: ["candle_balance"],
+  swings: ["swing_structure"],
 };
 export const DAY_OPERATORS = { gte: "至少", eq: "恰好", lte: "最多" } as const;
 export type ScreenerDraft = {
@@ -32,6 +36,7 @@ export type ScreenerDraft = {
   conditions: ConditionDraft[];
   referenceSymbol: string;
   referenceDate: string;
+  swingReversal: string;
 };
 export const blankScreenDraft = (): ScreenerDraft => ({
   universe: "all",
@@ -43,6 +48,7 @@ export const blankScreenDraft = (): ScreenerDraft => ({
   conditions: [],
   referenceSymbol: "",
   referenceDate: "",
+  swingReversal: "5",
 });
 const directionalDays = new Set<StudyCondition["field"]>([
   "up_days",
@@ -56,13 +62,15 @@ const directionalDays = new Set<StudyCondition["field"]>([
 const countedDays = new Set<StudyCondition["field"]>([
   "rising_days",
   "falling_days",
+  "bull_count",
+  "bear_count",
 ]);
 
 export const taskConditions = (task: TrendTask): ConditionDraft[] =>
   taskFields[task].map((field, index) => ({
     id: index + 1,
     field,
-    operator: "gte",
+    operator: ENUM_VALUES[field] ? "eq" : "gte",
     value: "",
     window: "",
   }));
@@ -76,6 +84,13 @@ export function conditionInputError(
     if (!item.value.trim() || !Number.isFinite(Number(item.value)))
       return "请填写每个条件的数值。";
     const value = Number(item.value);
+    if (ENUM_VALUES[item.field] && (item.operator !== "eq" || !ENUM_VALUES[item.field]?.[item.value]))
+      return "请选择明确的波段结构或方向。";
+    if (item.field === "trend_efficiency" && (value < 0 || value > 1))
+      return "趋势效率请填写 0–1 之间的数值。";
+    if (["candle_balance", "swing_count"].includes(item.field) && !Number.isInteger(value))
+      return "数量请填写整数。";
+    if (item.field === "swing_count" && value < 0) return "已完成波段数量不能小于 0。";
     if (
       directionalDays.has(item.field) &&
       (!Number.isInteger(value) || value < 1)
@@ -91,7 +106,7 @@ export function conditionInputError(
         Number(item.window) > 360)
     )
       return "窗口请填写 2–360 个交易日。";
-    if (countedDays.has(item.field) && value > Number(item.window))
+    if ((countedDays.has(item.field) || item.field === "candle_balance") && Math.abs(value) > Number(item.window))
       return "区间涨跌天数不能超过观察窗口。";
   }
   return null;
@@ -157,6 +172,8 @@ export function screenInputError(draft: ScreenerDraft): string | null {
       parseCodes(draft.codes).some((code) => !/^\d{6}$/.test(code)))
   )
     return "请填写至少一个 6 位股票代码。";
+  const swingError = swingInputError(draft.conditions, draft.swingReversal);
+  if (swingError) return swingError;
   const comparisonError = comparisonInputError(draft);
   if (comparisonError) return comparisonError;
   const error = conditionInputError(draft.conditions);
@@ -184,6 +201,7 @@ export function screenDraftToQuery(draft: ScreenerDraft): TrendSearchQuery {
           ? draft.compareDate
           : null,
     conditions: compileConditions(draft.conditions),
+    swing_reversal_pct: draft.conditions.some((item) => item.field && SWING_FIELDS.has(item.field)) ? Number(draft.swingReversal) : 5,
     reference: draft.conditions.some((item) => item.field === "shape_distance")
       ? { symbol: draft.referenceSymbol, as_of: draft.referenceDate }
       : null,
@@ -208,6 +226,7 @@ export function screenQueryToDraft(query: TrendSearchQuery): ScreenerDraft {
     conditions: conditionsToDraft(query.conditions ?? []),
     referenceSymbol: query.reference?.symbol ?? "",
     referenceDate: query.reference?.as_of ?? "",
+    swingReversal: String(query.swing_reversal_pct ?? 5),
   };
 }
 
@@ -223,6 +242,7 @@ export function historicalQuery(
     as_of: result.as_of,
     conditions: result.query.conditions ?? [],
     reference: result.query.reference ?? null,
+    swing_reversal_pct: result.query.swing_reversal_pct,
     lookback_days: 120,
     forward_days: 5,
     sample_policy: "first",

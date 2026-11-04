@@ -15,6 +15,7 @@ from textual.worker import get_current_worker
 from kan.domain.market_study import StudyEvent, StudyEvidence, StudyQuery, StudyResult, StudySummary
 from kan.infra.log import redact_text
 from kan.render.base import DISCLAIMER
+from kan.render.trend import factor_value, swing_phase
 from kan.service import market_study, trend_search
 from kan.tui.conditions import TrendFilterForm
 from kan.tui.screens import (
@@ -267,7 +268,8 @@ class StudyApp(App[None]):
             self.query_one("#common-date-text", Static).update(f"本地主要行情 {self.screen_result.common_data_date} · {self.screen_result.common_data_count} 只")
         empty_text = "没有匹配项。Esc 清空搜索。"
         if self.view == "screen":
-            table.add_columns("代码", "名称", "实际连续段", "条件实际值" if not self.screen_result or self.screen_result.query.conditions else "位置30/60/180%", "收盘", "涨跌")
+            wave_window = next((c.window for c in self.screen_result.query.conditions if c.field.startswith("swing_")), None) if self.screen_result else None
+            table.add_columns("代码", "名称", "波段阶段" if wave_window else "实际连续段", "条件实际值" if not self.screen_result or self.screen_result.query.conditions else "位置30/60/180%", "收盘", "涨跌")
             if self.screen_result:
                 result = self.screen_result
                 coverage = result.coverage
@@ -275,10 +277,11 @@ class StudyApp(App[None]):
                 self.query_one("#summary", Static).update(f"{pool} · {result.as_of} · 匹配 {coverage.matched}/{coverage.total} · 可判断 {coverage.evaluated} · 缺口 {coverage.missing}（m）\n" + ("；".join(condition_text(c) for c in result.query.conditions) or "无条件浏览（没有预设筛选条件）"))
                 for screen_row in result.rows:
                     if query in (screen_row.symbol + screen_row.name + (screen_row.industry or "")).casefold():
-                        values = "/".join(("≥" if c.key in screen_row.lower_bounds else "") + number(screen_row.values.get(c.key)) for c in result.query.conditions)
+                        values = "/".join(("≥" if c.key in screen_row.lower_bounds else "") + factor_value(c.field, screen_row.values.get(c.key)) for c in result.query.conditions)
                         if not result.query.conditions:
                             values = "/".join(number(screen_row.positions.get(str(n))) for n in (30, 60, 180))
-                        table.add_row(screen_row.symbol, Text(screen_row.name), segment_text(screen_row.current_segment), values, number(screen_row.close), number(screen_row.change_pct, "%", signed=True), key=screen_row.symbol)
+                        phase = swing_phase(screen_row.values, wave_window) if wave_window else segment_text(screen_row.current_segment)
+                        table.add_row(screen_row.symbol, Text(screen_row.name), phase, values, number(screen_row.close), number(screen_row.change_pct, "%", signed=True), key=screen_row.symbol)
                 empty_text = "股票范围为空，按 f 选择代码或其他范围。" if coverage.total == 0 else (
                     "这个截止日暂无可判断的行情。m 核对缺口；f 修改日期，或 d 明确查看已有数据日。" if coverage.evaluated == 0 else
                     "没有符合这些条件的股票。f 修改条件；m 查看缺口，未满足条件与缺行情分开统计。"
@@ -287,7 +290,7 @@ class StudyApp(App[None]):
                 )
             else:
                 self.query_one("#summary", Static).update("条件和天数由你明确；这里只筛当前，不自动运行历史研究")
-                empty_text = "选择连续上涨/下跌、阳线/阴线、前后两段或最近 N 日计数。\nTab 切换输入，Ctrl+Enter 执行。g 载入保存的条件；l 查看历史研究。"
+                empty_text = "选择波段结构、区间因子、连续涨跌或阳阴线条件。\nTab 切换输入，Ctrl+Enter 执行。g 载入保存的条件；l 查看历史研究。"
         elif self.view == "changes" and self.screen_result and self.screen_result.comparison:
             result = self.screen_result
             comparison = self.screen_result.comparison
@@ -667,6 +670,7 @@ class StudyApp(App[None]):
                 title="；".join(condition_text(c) for c in self.screen_result.query.conditions)[:120],
                 universe="codes", codes=self.screen_result.scope_codes, as_of=self.screen_result.as_of,
                 conditions=self.screen_result.query.conditions, reference=self.screen_result.query.reference,
+                swing_reversal_pct=self.screen_result.query.swing_reversal_pct,
                 lookback_days=int(self.query_one("#history-lookback", Input).value),
                 forward_days=int(self.query_one("#history-forward", Input).value),
                 sample_policy=cast(Literal["first", "every", "non_overlapping"], self.query_one("#history-policy", Select).value),

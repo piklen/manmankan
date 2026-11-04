@@ -1,4 +1,5 @@
 import type { StudyCondition, StudyQuery } from "../api/client";
+import { number } from "./format";
 
 export const FIELDS: Record<
   StudyCondition["field"],
@@ -75,6 +76,38 @@ export const FIELDS: Record<
     window: true,
     detail: "最近 N 个市场交易日中，收盘低于前一交易日的天数；平盘不计",
   },
+  bull_count: {
+    label: "区间阳线数量", unit: "天", window: true,
+    detail: "最近 N 根日 K 中收盘高于当日开盘的数量；十字线不计",
+  },
+  bear_count: {
+    label: "区间阴线数量", unit: "天", window: true,
+    detail: "最近 N 根日 K 中收盘低于当日开盘的数量；十字线不计",
+  },
+  candle_balance: {
+    label: "阳线与阴线数量差", unit: "天", window: true,
+    detail: "阳线数量减阴线数量；大于 0 表示阳线更多，小于 0 表示阴线更多",
+  },
+  trend_slope: {
+    label: "价格趋势斜率", unit: "%/日", window: true,
+    detail: "N 次收盘变化（N+1 个收盘）的对数回归斜率，换算为每交易日百分比；不是未来收益",
+  },
+  trend_efficiency: {
+    label: "趋势效率", unit: "", window: true,
+    detail: "N 次收盘变化的净位移绝对值 ÷ 累计绝对变化，0–1；越接近 1 路径越直接，不表示方向或概率",
+  },
+  swing_structure: {
+    label: "波段结构", unit: "", window: true,
+    detail: "窗口内至少两个已确认波峰和两个波谷；高低点同向抬高为上升、同向降低为下降，否则混合；不足时不判断",
+  },
+  swing_direction: {
+    label: "当前波段方向", unit: "", window: true,
+    detail: "最后一个确认转折之后的当前波段方向；反向收盘幅度未达阈值时不改变方向",
+  },
+  swing_count: {
+    label: "已完成波段数量", unit: "段", window: true,
+    detail: "相邻已确认转折点之间的段数；窗口边界和当前未完成段不计入",
+  },
   bull_days: {
     label: "连续收阳",
     unit: "天",
@@ -121,10 +154,22 @@ export const UNIVERSE_LABELS: Record<StudyQuery["universe"], string> = {
   personal: "我的个人池",
   codes: "指定股票代码",
 };
+export const SWING_FIELDS = new Set<StudyCondition["field"]>([
+  "swing_structure", "swing_direction", "swing_count",
+]);
+export const ENUM_VALUES: Partial<Record<StudyCondition["field"], Record<string, string>>> = {
+  swing_structure: { "1": "上升结构", "-1": "下降结构", "0": "混合结构" },
+  swing_direction: { "1": "当前上行", "-1": "当前下行", "0": "尚未形成方向" },
+};
+export const fieldValue = (field: StudyCondition["field"], value: number | null | undefined) => {
+  if (value == null) return "无法确认";
+  const label = ENUM_VALUES[field]?.[String(value)];
+  return label ?? `${number(value, FIELDS[field].unit === "天" || FIELDS[field].unit === "段" ? 0 : field === "trend_slope" ? 3 : 2)}${FIELDS[field].unit}`;
+};
 export const conditionLabel = (condition: StudyCondition) =>
   `${condition.window ? `${condition.window}日` : ""}${FIELDS[condition.field].label}`;
 export const conditionText = (condition: StudyCondition) =>
-  `${conditionLabel(condition)} ${OP_SYMBOLS[condition.operator]} ${condition.value}${FIELDS[condition.field].unit}`;
+  `${conditionLabel(condition)} ${OP_SYMBOLS[condition.operator]} ${fieldValue(condition.field, condition.value)}`;
 export const parseCodes = (value: string) => [
   ...new Set(
     value
@@ -152,6 +197,7 @@ export interface StudyDraft {
   conditions: ConditionDraft[];
   referenceSymbol: string;
   referenceDate: string;
+  swingReversal: string;
 }
 export const blankDraft = (): StudyDraft => ({
   title: "",
@@ -164,6 +210,7 @@ export const blankDraft = (): StudyDraft => ({
   conditions: [],
   referenceSymbol: "",
   referenceDate: "",
+  swingReversal: "5",
 });
 export const queryToDraft = (query: StudyQuery): StudyDraft => ({
   title: query.title,
@@ -175,6 +222,7 @@ export const queryToDraft = (query: StudyQuery): StudyDraft => ({
   sample: query.sample_policy,
   referenceSymbol: query.reference?.symbol ?? "",
   referenceDate: query.reference?.as_of ?? "",
+  swingReversal: String(query.swing_reversal_pct ?? 5),
   conditions: query.conditions.map((condition, index) => ({
     id: index + 1,
     field: condition.field,
@@ -184,7 +232,14 @@ export const queryToDraft = (query: StudyQuery): StudyDraft => ({
   })),
 });
 
+export function swingInputError(conditions: ConditionDraft[], reversal: string): string | null {
+  if (!conditions.some((condition) => condition.field && SWING_FIELDS.has(condition.field))) return null;
+  return !reversal.trim() || !Number.isFinite(Number(reversal)) || Number(reversal) <= 0 || Number(reversal) >= 100
+    ? "转折确认幅度需要大于 0%、小于 100%。" : null;
+}
 export function draftError(draft: StudyDraft): string | null {
+  const swingError = swingInputError(draft.conditions, draft.swingReversal);
+  if (swingError) return swingError;
   if (
     draft.universe === "codes" &&
     (!parseCodes(draft.codes).length ||
@@ -194,6 +249,8 @@ export function draftError(draft: StudyDraft): string | null {
   if (!draft.conditions.length) return "请添加你要验证的价格条件。";
   for (const condition of draft.conditions) {
     if (!condition.field) return "请选择条件字段。";
+    if (ENUM_VALUES[condition.field] && (condition.operator !== "eq" || !ENUM_VALUES[condition.field]?.[condition.value]))
+      return "请选择明确的波段结构或方向。";
     if (!condition.value.trim() || !Number.isFinite(Number(condition.value)))
       return "请明确填写每个条件的数值。";
     if (
@@ -235,6 +292,7 @@ export function draftToQuery(draft: StudyDraft): StudyQuery {
     as_of: draft.asOf || null,
     forward_days: Number(draft.forward),
     sample_policy: draft.sample,
+    swing_reversal_pct: draft.conditions.some((item) => item.field && SWING_FIELDS.has(item.field)) ? Number(draft.swingReversal) : 5,
     reference: draft.conditions.some(
       (condition) => condition.field === "shape_distance",
     )

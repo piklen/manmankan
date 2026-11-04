@@ -172,9 +172,9 @@ def test_display_work_is_only_for_matches_browse_and_evidence_are_single_pass(ma
     calls = []
     original = search.calculate_metrics
 
-    def record(frame, fields, reference_prices=None):
+    def record(frame, fields, reference_prices=None, **kwargs):
         calls.append((frame, list(fields)))
-        return original(frame, fields, reference_prices)
+        return original(frame, fields, reference_prices, **kwargs)
 
     monkeypatch.setattr(search, "calculate_metrics", record)
     query = search.TrendSearchQuery(universe="codes", codes=["000001", "000002"], conditions=[StudyCondition(field="up_days", operator="gte", value=2)])

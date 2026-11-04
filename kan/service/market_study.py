@@ -19,6 +19,7 @@ import numpy as np
 import pandas as pd
 
 from kan.core.streaks import streak_counts
+from kan.core.swings import price_relation, scan_swings
 from kan.domain.market_study import (
     StudyBar,
     StudyBin,
@@ -36,6 +37,9 @@ from kan.domain.market_study import (
     StudyReference,
     StudyResult,
     StudySummary,
+    SwingEvidence,
+    SwingLeg,
+    SwingPivot,
 )
 from kan.storage import paths, workspace_db
 
@@ -45,6 +49,7 @@ _RUN = "market_studies:run:"
 _OPS = {"gt": operator.gt, "gte": operator.ge, "lt": operator.lt, "lte": operator.le, "eq": operator.eq}
 _STREAKS = {"up_days", "down_days", "bull_days", "bear_days", "joint_up_days"}
 _PREVIOUS_STREAKS = {"previous_up_days", "previous_down_days"}
+_SWING_FIELDS = {"swing_structure", "swing_direction", "swing_count"}
 _PRICE_COLUMNS = ["open", "high", "low", "close"]
 
 FIELD_CATALOG = [
@@ -65,6 +70,14 @@ FIELD_CATALOG = [
         ("previous_up_days", "紧邻前一涨段", "天", False, "仅当前收盘下跌段前紧接的上涨天数；平盘、缺行不跨越，段长可能只有下界"),
         ("rising_days", "区间上涨天数", "天", True, "最近 N 个市场交易日中收盘高于前日的天数；需 N+1 个完整收盘，平盘不计"),
         ("falling_days", "区间下跌天数", "天", True, "最近 N 个市场交易日中收盘低于前日的天数；需 N+1 个完整收盘，平盘不计"),
+        ("bull_count", "区间阳线数", "根", True, "最近 N 根完整日线中 close > open 的根数；十字线不计"),
+        ("bear_count", "区间阴线数", "根", True, "最近 N 根完整日线中 close < open 的根数；十字线不计"),
+        ("candle_balance", "阳阴线数量差", "根", True, "最近 N 根完整日线的阳线数减阴线数；大于 0 表示阳线更多"),
+        ("trend_slope", "趋势斜率", "%/交易日", True, "最近 N 次收盘变化的对数价格线性回归斜率，转换为每日百分比；需 N+1 个完整收盘"),
+        ("trend_efficiency", "趋势效率", "", True, "最近 N 次收盘变化：首尾净位移绝对值 / 每日位移绝对值之和；0–1，全程平价为 0，不表示收益概率"),
+        ("swing_structure", "波段结构", "", True, "窗口内最近两组已确认高低点：均抬高=1、均降低=-1、关系混合=0；高低点不足为未知"),
+        ("swing_direction", "当前波段方向", "", True, "收盘反向幅度达到阈值后确认转折：当前上行=1、下行=-1、尚未形成=0；最新段未完成"),
+        ("swing_count", "已完成波段数", "段", True, "窗口内相邻已确认转折点之间的段数；首段边界锚点和最新未完成段不计"),
         ("volume_ratio", "成交量相对前期", "倍", True, "当日成交量 / 此前 N 日平均成交量，不含当日"),
         ("shape_distance", "与参照形态的距离", "百分点", True, "两段 N 日收盘按各自首日归一为100后，逐日差的均方根；事后形态距离，不是推荐评分"),
     ]
@@ -170,12 +183,13 @@ def _previous_streak(close: pd.Series, paired: pd.Series, *, rising: bool) -> tu
     return pd.Series(values, index=close.index), pd.Series(exact, index=close.index)
 
 
-def calculate_metrics(frame: pd.DataFrame, fields: list[tuple[StudyField, int | None]], reference_prices: np.ndarray | None = None) -> tuple[pd.DataFrame, pd.DataFrame]:
+def calculate_metrics(frame: pd.DataFrame, fields: list[tuple[StudyField, int | None]], reference_prices: np.ndarray | None = None, *, swing_reversal_pct: float = 5, swing_points: list[date] | None = None) -> tuple[pd.DataFrame, pd.DataFrame]:
     close, valid = frame.close, frame.valid
     paired = valid & valid.shift(1, fill_value=False)
     metrics: dict[str, Any] = {}
     exact: dict[str, Any] = {}
     metrics["change_pct"] = (close / close.shift(1) - 1) * 100
+    swing_windows: dict[int, dict[str, np.ndarray]] = {}
     for field, window in fields:
         key = f"{field}.{window}" if window else field
         if key in exact:
@@ -199,7 +213,41 @@ def calculate_metrics(frame: pd.DataFrame, fields: list[tuple[StudyField, int | 
         elif field in _PREVIOUS_STREAKS:
             metrics[key], exact[key] = _previous_streak(close, paired, rising=field == "previous_up_days")
         elif window is not None:
-            if field in {"rising_days", "falling_days"}:
+            if field in _SWING_FIELDS:
+                if window not in swing_windows:
+                    results = {name: np.full(len(frame), np.nan) for name in _SWING_FIELDS}
+                    complete = valid.rolling(window).sum().eq(window).to_numpy()
+                    indices = np.flatnonzero(complete) if swing_points is None else np.array([frame.index.get_loc(day) for day in swing_points])
+                    prices = close.to_numpy()
+                    for index in indices:
+                        if not complete[index]:
+                            continue
+                        scanned = scan_swings(prices[index - window + 1:index + 1], swing_reversal_pct)
+                        results["swing_structure"][index] = scanned.structure if scanned.structure is not None else np.nan
+                        results["swing_direction"][index] = scanned.direction
+                        results["swing_count"][index] = scanned.count
+                    swing_windows[window] = results
+                metrics[key] = swing_windows[window][field]
+            elif field in {"bull_count", "bear_count", "candle_balance"}:
+                complete = valid.rolling(window).sum().eq(window)
+                bulls = close.gt(frame.open).rolling(window).sum()
+                bears = close.lt(frame.open).rolling(window).sum()
+                metrics[key] = {"bull_count": bulls, "bear_count": bears, "candle_balance": bulls - bears}[field].where(complete)
+            elif field in {"trend_slope", "trend_efficiency"}:
+                complete = valid.rolling(window + 1).sum().eq(window + 1)
+                if field == "trend_efficiency":
+                    distance = close.diff().abs().rolling(window).sum()
+                    metrics[key] = ((close - close.shift(window)).abs() / distance).where(distance.ne(0), 0).where(complete)
+                else:
+                    centered = np.arange(window + 1, dtype=float) - window / 2
+                    variance = float(centered @ centered)
+                    slope = np.full(len(close), np.nan)
+                    if len(close) > window:
+                        log_windows = np.lib.stride_tricks.sliding_window_view(np.log(close.to_numpy()), window + 1)
+                        # 先减窗口首值，消除恒价基线与正负权重相消的尾差；不截断真实小斜率。
+                        slope[window:] = ((log_windows - log_windows[:, :1]) @ centered) / variance
+                    metrics[key] = pd.Series(np.expm1(slope) * 100, index=frame.index).where(complete)
+            elif field in {"rising_days", "falling_days"}:
                 complete = valid.rolling(window + 1).sum().eq(window + 1)
                 flags = close.gt(close.shift(1)) if field == "rising_days" else close.lt(close.shift(1))
                 metrics[key] = flags.rolling(window).sum().where(complete)
@@ -248,7 +296,7 @@ def evaluate_condition(condition: StudyCondition, metrics: pd.DataFrame, exact: 
 
 
 def _evaluate(frame: pd.DataFrame, query: StudyQuery, reference_prices: np.ndarray | None = None) -> tuple[pd.DataFrame, pd.DataFrame, pd.Series, pd.Series]:
-    metrics, exact = calculate_metrics(frame, [(condition.field, condition.window) for condition in query.conditions], reference_prices)
+    metrics, exact = calculate_metrics(frame, [(condition.field, condition.window) for condition in query.conditions], reference_prices, swing_reversal_pct=query.swing_reversal_pct)
     matched = pd.Series(True, index=frame.index)
     evaluated = pd.Series(True, index=frame.index)
     for condition in query.conditions:
@@ -256,6 +304,39 @@ def _evaluate(frame: pd.DataFrame, query: StudyQuery, reference_prices: np.ndarr
         matched &= hits
         evaluated &= known
     return metrics, exact, matched, evaluated
+
+
+def swing_evidence(frame: pd.DataFrame, conditions: list[StudyCondition], reversal_pct: float) -> list[SwingEvidence]:
+    """图证与指标共用转折识别；调用者先截断到待核对的截止日。"""
+    result = []
+    windows = sorted({item.window for item in conditions if item.field in _SWING_FIELDS and item.window is not None})
+    for window in windows:
+        evidence = SwingEvidence(window=window, reversal_pct=reversal_pct)
+        sample = frame.tail(window)
+        if len(sample) != window or not sample.valid.all():
+            evidence.reason = f"最近 {window} 个市场交易日的完整行情不足，无法确认波段"
+        else:
+            prices = sample.close.to_numpy()
+            scanned = scan_swings(prices, reversal_pct)
+            evidence.structure, evidence.direction = scanned.structure, scanned.direction
+            evidence.pivots = [SwingPivot(date=sample.index[pivot.index], price=pivot.price, kind=pivot.kind, confirmed_at=sample.index[pivot.confirmed_index]) for pivot in scanned.pivots]
+            if scanned.structure in {-1, 1}:
+                boundary_kind = "low" if scanned.structure == 1 else "high"
+                boundary = next(pivot.price for pivot in reversed(scanned.pivots) if pivot.kind == boundary_kind)
+                evidence.structure_broken = price_relation(float(prices[-1]), boundary) == -scanned.structure
+            if scanned.structure is None:
+                evidence.reason = "尚不足两组已确认波峰与波谷，无法判断结构"
+            if scanned.direction:
+                evidence.current = SwingLeg(
+                    start_date=sample.index[scanned.start_index], start_price=float(prices[scanned.start_index]),
+                    start_confirmed=bool(scanned.pivots),
+                    extreme_date=sample.index[scanned.extreme_index], extreme_price=float(prices[scanned.extreme_index]),
+                    direction="up" if scanned.direction == 1 else "down",
+                    return_pct=float(prices[-1] / prices[scanned.start_index] - 1) * 100,
+                    days=len(sample) - 1 - scanned.start_index,
+                )
+        result.append(evidence)
+    return result
 
 
 def _values(metrics: pd.DataFrame, exact: pd.DataFrame, index: int, query: StudyQuery) -> tuple[dict[str, float | None], list[str]]:
@@ -579,5 +660,6 @@ def study_evidence(run_id: str, symbol: str, event_date: date) -> StudyEvidence:
         bars=[StudyBar(date=day, **{column: _number(row[column]) for column in [*_PRICE_COLUMNS, "volume"]}) for day, row in shown.iterrows()],
         reference_bars=run.reference_bars, reference_source=run.reference_source,
         conditions=checks, outcome=outcome,
+        swings=swing_evidence(frame.iloc[:index + 1], run.query.conditions, run.query.swing_reversal_pct),
         warnings=["图中空缺表示当次保存的数据缺口；所有价格为当次缓存复权口径。"],
     )

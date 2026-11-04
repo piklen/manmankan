@@ -5,6 +5,7 @@ import {
   render,
   screen,
   waitFor,
+  within,
 } from "@testing-library/react";
 import { MemoryRouter } from "react-router-dom";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -415,6 +416,7 @@ describe("explicit current trend screening and optional historical research", ()
     const currentDate = "2026-10-28",
       previousDate = "2026-10-27";
     const query: TrendSearchQuery = {
+      swing_reversal_pct: 5,
       universe: "all",
       as_of: currentDate,
       compare_to: "previous_session",
@@ -603,4 +605,75 @@ describe("explicit current trend screening and optional historical research", ()
     ).toBeInTheDocument();
     expect(run).not.toHaveBeenCalled();
   });
+
+  it("screens explicit swing structure with adjustable scale and preserves causal evidence into history", async () => {
+    const search = vi.spyOn(api, "searchTrends").mockImplementation(async (query) => ({
+      ...searchResult(query),
+      rows: [{ ...row, values: { "swing_structure.20": 1, "swing_direction.20": -1 } }],
+    }));
+    const save = vi.spyOn(api, "saveTrend").mockImplementation(async (title, query) => ({ id: "swings", title, query }));
+    vi.mocked(api.savedTrends).mockImplementation(async () => save.mock.calls.length ? [{ id: "swings", title: save.mock.calls[0]![0], query: save.mock.calls[0]![1] }] : []);
+    const run = vi.spyOn(api, "runStudy").mockImplementation(async (query) => resultFixture(query));
+    vi.spyOn(api, "studyEvidence").mockImplementation(async (_, __, date) => evidenceFixture(date, run.mock.calls.at(-1)![0]));
+    vi.mocked(api.trendEvidence).mockImplementation(async (query) => ({
+      query, as_of: "2026-10-28", row: { ...row, close: 10.8 }, bars: bars.map((bar, index) => index === bars.length - 1 ? { ...bar, close: 10.8, low: 10.7 } : bar),
+      conditions: (query.conditions ?? []).map((condition) => ({ condition, actual: condition.value, bound: "exact", matched: true })),
+      warnings: [],
+      swings: [{
+        window: 20, reversal_pct: query.swing_reversal_pct, structure: 1, direction: -1, structure_broken: true,
+        reason: null,
+        pivots: [
+          { date: "2026-10-10", price: 10, kind: "low", confirmed_at: "2026-10-11" },
+          { date: "2026-10-14", price: 12, kind: "high", confirmed_at: "2026-10-15" },
+          { date: "2026-10-18", price: 11, kind: "low", confirmed_at: "2026-10-19" },
+          { date: "2026-10-23", price: 13, kind: "high", confirmed_at: "2026-10-24" },
+        ],
+        current: { start_date: "2026-10-23", start_price: 13, start_confirmed: true,
+          extreme_date: "2026-10-28", extreme_price: 10.8, direction: "down", return_pct: -16.923, days: 5 },
+      }],
+    }));
+    mount();
+    fireEvent.click(screen.getByRole("button", { name: "波段结构" }));
+    expect(screen.getByLabelText("条件 1 波段状态")).toHaveValue("");
+    expect(screen.getByRole("button", { name: "开始筛选" })).toBeDisabled();
+    enter("条件 1 观察窗口", "20");
+    enter("条件 1 波段状态", "1");
+    enter("转折确认幅度", "0");
+    expect(screen.getByRole("button", { name: "开始筛选" })).toBeDisabled();
+    enter("转折确认幅度", "3");
+    fireEvent.click(screen.getByRole("button", { name: "叠加位置、涨幅或其他条件" }));
+    enter("条件 2 字段", "swing_direction");
+    enter("条件 2 观察窗口", "20");
+    enter("条件 2 波段状态", "-1");
+    fireEvent.click(screen.getByRole("button", { name: "开始筛选" }));
+    await screen.findByRole("heading", { name: "已确认上升结构 · 已越过最近波谷" });
+    expect(search.mock.calls[0]![0]).toMatchObject({ swing_reversal_pct: 3, conditions: [
+      { field: "swing_structure", operator: "eq", value: 1, window: 20 },
+      { field: "swing_direction", operator: "eq", value: -1, window: 20 },
+    ] });
+    expect(within(screen.getByRole("region", { name: "波段结构证据" })).getByText("2026-10-24")).toBeInTheDocument();
+    expect(document.querySelector(".swing-current-line")).toBeInTheDocument();
+    expect(screen.getByText(/当前收盘已越过最近确认波谷/)).toBeInTheDocument();
+    expect(run).not.toHaveBeenCalled();
+    fireEvent.click(screen.getByRole("button", { name: "保存筛选" }));
+    enter("筛选名称", "波段结构核对");
+    fireEvent.click(screen.getByRole("button", { name: "确认保存" }));
+    await waitFor(() => expect(save).toHaveBeenCalledOnce());
+    expect(save.mock.calls[0]![1].swing_reversal_pct).toBe(3);
+    fireEvent.click(screen.getByRole("button", { name: "区间阳阴线" }));
+    enter("条件 1 观察窗口", "15");
+    enter("条件 1 比较关系", "gt");
+    enter("条件 1 数值", "0");
+    expect(screen.getByRole("button", { name: "开始筛选" })).toBeEnabled();
+    fireEvent.click(await screen.findByRole("button", { name: /^波段结构核对/ }));
+    expect(screen.getByLabelText("转折确认幅度")).toHaveValue(3);
+    expect(screen.getByLabelText("条件 1 波段状态")).toHaveValue("1");
+    fireEvent.click(screen.getByRole("button", { name: "核对历史 / 保存研究" }));
+    expect(screen.getByLabelText("转折确认幅度")).toHaveValue(3);
+    expect(screen.getByLabelText("条件 1 波段状态")).toHaveValue("1");
+    fireEvent.click(screen.getByRole("button", { name: "核对历史并保存" }));
+    await waitFor(() => expect(run).toHaveBeenCalledOnce());
+    expect(run.mock.calls[0]![0].swing_reversal_pct).toBe(3);
+  });
+
 });

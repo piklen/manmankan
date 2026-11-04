@@ -17,6 +17,7 @@ export function resultFixture(query: StudyQuery): StudyResult {
     study_id: "study-test",
     run_id: "run-test",
     query: {
+      swing_reversal_pct: query?.swing_reversal_pct ?? 5,
       title: query.title,
       universe: query.universe,
       codes: query.codes,

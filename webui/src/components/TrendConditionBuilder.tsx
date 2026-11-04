@@ -1,6 +1,6 @@
 import { Plus, Trash2 } from "lucide-react";
 import type { StudyCondition } from "../api/client";
-import { FIELDS, OPERATORS, type ConditionDraft } from "../lib/study";
+import { ENUM_VALUES, FIELDS, OPERATORS, type ConditionDraft } from "../lib/study";
 import { DAY_OPERATORS } from "../lib/screener";
 
 const daysFields = new Set([
@@ -13,6 +13,8 @@ const daysFields = new Set([
   "bull_days",
   "bear_days",
   "joint_up_days",
+  "bull_count",
+  "bear_count",
 ]);
 const labels: Partial<Record<StudyCondition["field"], string>> = {
   up_days: "连续上涨",
@@ -23,6 +25,11 @@ const labels: Partial<Record<StudyCondition["field"], string>> = {
   falling_days: "区间下跌天数",
   bull_days: "连续收阳",
   bear_days: "连续收阴",
+  bull_count: "区间阳线数量",
+  bear_count: "区间阴线数量",
+  candle_balance: "阳线与阴线数量差",
+  swing_structure: "波段结构",
+  swing_direction: "当前波段方向",
 };
 export function TrendConditionBuilder({
   conditions,
@@ -51,6 +58,7 @@ export function TrendConditionBuilder({
                 onChange={(e) =>
                   update(item.id, {
                     field: e.target.value as StudyCondition["field"],
+                    operator: ENUM_VALUES[e.target.value as StudyCondition["field"]] ? "eq" : "gte",
                     value: "",
                     window: "",
                   })
@@ -119,6 +127,14 @@ export function TrendConditionBuilder({
               <option value="falling_days">统计下跌天数</option>
             </select>
           ) : null}
+          {["bull_count", "bear_count", "candle_balance"].includes(item.field) ? (
+            <select aria-label={`条件 ${index + 1} 阳阴统计`} value={item.field}
+              onChange={(event) => update(item.id, { field: event.target.value as StudyCondition["field"], value: "" })}>
+              <option value="candle_balance">阳线减阴线数量</option>
+              <option value="bull_count">统计阳线数量</option>
+              <option value="bear_count">统计阴线数量</option>
+            </select>
+          ) : null}
           {item.field && FIELDS[item.field].window ? (
             <label className="trend-window">
               观察最近
@@ -136,7 +152,13 @@ export function TrendConditionBuilder({
               </span>
             </label>
           ) : null}
-          <div className="trend-comparison">
+          {item.field && ENUM_VALUES[item.field] ? (
+            <select aria-label={`条件 ${index + 1} 波段状态`} value={item.value}
+              onChange={(event) => update(item.id, { operator: "eq", value: event.target.value })}>
+              <option value="">选择要找的状态</option>
+              {Object.entries(ENUM_VALUES[item.field]!).map(([value, label]) => <option key={value} value={value}>{label}</option>)}
+            </select>
+          ) : <div className="trend-comparison">
             <select
               aria-label={`条件 ${index + 1} 比较关系`}
               value={item.operator}
@@ -171,7 +193,7 @@ export function TrendConditionBuilder({
               />
               <span>{item.field ? FIELDS[item.field].unit : ""}</span>
             </span>
-          </div>
+          </div>}
           {item.operator === "lte" &&
           [
             "up_days",
