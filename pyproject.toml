@@ -98,6 +98,10 @@ markers = [
     "network: 真网络冒烟 case · 默认 CI 跳 · 用 -m network 单独跑",
 ]
 
+[tool.hatch.build]
+# 包根目录不承载运行数据，避免本地临时 JSON 被带入 wheel 或源码包。
+exclude = ["/kan/*.json", "/.codex"]
+
 [tool.hatch.build.targets.wheel]
 packages = ["kan"]
 
