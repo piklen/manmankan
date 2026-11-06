@@ -13,7 +13,7 @@
 
 ## 市场观察
 
-用户明确要求留住观察时，使用`kan observe save request.json`或MCP `kan_observe(action="save")`，固定`query.as_of`；保存原完整成员与用户自己的文字。之后`review`冻结原成员与window，按共同完整者比较，不覆盖原记录；不自动替用户写判断或建候选。
+用户明确要求留住观察时，使用`kan observe save request.json`或MCP `kan_observe(action="save")`，固定`query.as_of`，并将已浏览 market/industry 组的`fingerprint`传作`expected_fingerprint`；事实变化时保留用户文字并重新核对，不移除指纹静默重试。保存原完整成员与用户自己的文字。之后`review`冻结原成员与window，按共同完整者比较，不覆盖原记录；不自动替用户写判断或建候选。
 
 优先用 `kan discover --window 20 --format json` 或 MCP `kan_discover` 发现完整范围的群体现象，再用明确条件核对。输入 `universe/codes/industries/as_of/window`；输出当前分布、行业剖面、相邻等长窗口变化、固定成员轨迹与完整成员。
 

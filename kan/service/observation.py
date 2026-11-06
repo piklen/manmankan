@@ -3,6 +3,7 @@
 import sqlite3
 from collections import Counter
 from datetime import UTC, date, datetime
+from typing import Any, cast
 from uuid import uuid4
 
 import numpy as np
@@ -34,6 +35,10 @@ class ObservationNotFoundError(ValueError):
     """记录不存在，可由入口映射为 404。"""
 
 
+class ObservationChangedError(ValueError):
+    """保存时事实已不同于已展示内容，可由入口映射为 409。"""
+
+
 def _snapshot(result: DiscoveryResult) -> ObservationSnapshot:
     return ObservationSnapshot(
         as_of=result.as_of, current_start=result.current_start,
@@ -63,6 +68,9 @@ def _read_record(observation_id: str, conn: sqlite3.Connection | None = None) ->
     payload = workspace_db.get_state(_RECORD + observation_id, conn=conn)
     if payload is None:
         raise ObservationNotFoundError("观察记录不存在")
+    # 历史笔记没有浏览指纹，仍保留其原事实；读取不重算行情，也不改写存档。
+    snapshot = cast(dict[str, Any], payload["snapshot"])
+    snapshot["group"].setdefault("fingerprint", "")
     return ObservationRecord.model_validate(payload)
 
 
@@ -71,8 +79,10 @@ def _default_title(scope_label: str, window: int) -> str:
 
 
 def save_observation(request: ObservationSaveRequest) -> ObservationRecord:
-    """以明确日期重新计算完整范围，不接受浏览器提交的统计或成员子集。"""
+    """重算明确日期的完整范围；有浏览指纹时，核对一致才保存。"""
     result = discover_market(request.query)
+    if request.expected_fingerprint is not None and request.expected_fingerprint != result.market.fingerprint:
+        raise ObservationChangedError("成员范围或数据已变化，请刷新观察并核对事实后再保存；本次没有写入记录")
     if not result.members or not result.market.current.available:
         raise ValueError("当前范围没有可判断的成员，请先确认日期、范围与数据后再保存")
     scope_label = "、".join(request.query.industries) or {"all": "全市场", "personal": "个人池", "codes": "指定股票"}[request.query.universe]

@@ -98,6 +98,7 @@ class DiscoveryMember(StudyModel):
 
 class DiscoveryGroup(StudyModel):
     name: str
+    fingerprint: str
     total: int
     current: DiscoveryStats
     comparison: DiscoveryComparison
@@ -126,3 +127,10 @@ class DiscoveryResult(StudyModel):
     members: list[DiscoveryMember]
     data_gaps: list[DiscoveryDataGap]
     warnings: list[str]
+
+    @model_validator(mode="after")
+    def require_live_fingerprints(self) -> "DiscoveryResult":
+        # 空指纹只用于读取已有保存事实，不能出现在新的观察结果中。
+        if not self.market.fingerprint or any(not group.fingerprint for group in self.industries):
+            raise ValueError("新的观察结果必须包含事实指纹")
+        return self

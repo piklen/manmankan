@@ -27,6 +27,7 @@ class ObservationSaveRequest(StudyModel):
     title: str = Field(default="", max_length=120)
     note: str = Field(default="", max_length=4_000)
     query: DiscoveryQuery
+    expected_fingerprint: str | None = Field(default=None, pattern=r"^[0-9a-f]{24}$")
 
     @model_validator(mode="after")
     def require_fixed_date(self) -> "ObservationSaveRequest":

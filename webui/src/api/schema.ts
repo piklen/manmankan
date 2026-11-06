@@ -678,6 +678,8 @@ export interface components {
         DiscoveryGroup: {
             /** Name */
             name: string;
+            /** Fingerprint */
+            fingerprint: string;
             /** Total */
             total: number;
             current: components["schemas"]["DiscoveryStats"];
@@ -954,6 +956,8 @@ export interface components {
              */
             note: string;
             query: components["schemas"]["DiscoveryQuery"];
+            /** Expected Fingerprint */
+            expected_fingerprint?: string | null;
         };
         /** ObservationSnapshot */
         ObservationSnapshot: {

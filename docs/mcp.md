@@ -178,6 +178,8 @@ kan mcp http --host localhost --port 8765 --path /mcp
 
 MCP 工具返回的数据仍然遵守 CLI / JSON 契约：
 
+`kan_observe` 保存先前 `kan_discover` 的观察时，传入对应 market/industry 组的 `fingerprint` 到 `expected_fingerprint`。事实变化会拒绝保存，用户文字应保留并重新核对，不能去掉指纹自动重试。
+
 - 首次接入可先调用 `kan_schema`，或在 CLI 侧跑 `kan schema --format json --section mcp --compact` 查看工具 schema。
 - 先检查 MCP `isError`；命令返回错误 envelope 时检查 `error` 或 `ok:false`。`kan_trend` 的成功结果使用 `coverage`，没有 `ok` 字段。
 - 优先读取 `structuredContent`；没有该字段时再回退到 text content。

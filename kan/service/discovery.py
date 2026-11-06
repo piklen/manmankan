@@ -1,5 +1,7 @@
 """一次读取日线，形成群体分布与相邻等长窗口的变化剖面。"""
 
+import hashlib
+import json
 from collections import Counter, defaultdict
 from datetime import date
 from math import isclose
@@ -125,7 +127,10 @@ def _observations(stats: DiscoveryStats, comparison: DiscoveryComparison, window
     return observations
 
 
-def _group(name: str, members: list[DiscoveryMember], history: np.ndarray, days: list[date], window: int) -> DiscoveryGroup:
+def _group(
+    name: str, members: list[DiscoveryMember], history: np.ndarray, days: list[date], window: int,
+    as_of: date, previous_as_of: date | None, previous_start: date | None,
+) -> DiscoveryGroup:
     total = len(members)
     current = np.array([item.return_pct if item.return_pct is not None else np.nan for item in members])
     previous = np.array([item.previous_return_pct if item.previous_return_pct is not None else np.nan for item in members])
@@ -142,8 +147,23 @@ def _group(name: str, members: list[DiscoveryMember], history: np.ndarray, days:
         ))
     transitions = Counter(item.transition for item in members)
     bins = Counter(item.distribution_bin for item in members)
+    # 识别用户看到的事实，而非查询入口；行业下钻与同范围查询必须得到同一指纹。
+    facts = {
+        "window": window, "as_of": as_of.isoformat(),
+        "current_start": previous_as_of.isoformat() if previous_as_of else None,
+        "previous_as_of": previous_as_of.isoformat() if previous_as_of else None,
+        "previous_start": previous_start.isoformat() if previous_start else None,
+        "members": [item.model_dump(mode="json") for item in sorted(members, key=lambda item: item.symbol)],
+        "current": stats.model_dump(mode="json"),
+        "comparison": comparison.model_dump(mode="json"),
+        "history": [point.model_dump(mode="json") for point in points],
+        "history_available": len(fixed),
+    }
+    fingerprint = hashlib.sha256(json.dumps(
+        facts, ensure_ascii=False, sort_keys=True, separators=(",", ":"), allow_nan=False,
+    ).encode()).hexdigest()[:24]
     return DiscoveryGroup(
-        name=name, total=total, current=stats, comparison=comparison,
+        name=name, fingerprint=fingerprint, total=total, current=stats, comparison=comparison,
         history=points, history_available=len(fixed),
         transitions=[DiscoveryTransition(key=key, label=label, count=transitions[key]) for key, label in _TRANSITIONS],
         distribution=[DiscoveryBin(key=key, label=label, count=bins[key]) for key, label in _BINS],
@@ -224,8 +244,8 @@ def discover_market(query: DiscoveryQuery) -> DiscoveryResult:
         query=query, as_of=as_of, current_start=previous_as_of, previous_as_of=previous_as_of,
         previous_start=previous_start, common_data_date=common_date,
         common_data_count=cutoffs[common_date] if common_date else 0,
-        market=_group("全部范围", members, history, days, query.window),
-        industries=[_group(name, [members[index] for index in indices], history[indices], days, query.window) for name, indices in sorted(industry_indices.items())],
+        market=_group("全部范围", members, history, days, query.window, as_of, previous_as_of, previous_start),
+        industries=[_group(name, [members[index] for index in indices], history[indices], days, query.window, as_of, previous_as_of, previous_start) for name, indices in sorted(industry_indices.items())],
         members=members, data_gaps=data_gaps,
         warnings=[
             *gap_warnings,

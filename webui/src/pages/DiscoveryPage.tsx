@@ -218,6 +218,7 @@ export function DiscoveryPage() {
     initialView.selectedSymbol,
   );
   const [page, setPage] = useState(initialView.page);
+  const [refreshingObservation, setRefreshingObservation] = useState(false);
   const membersRef = useRef<HTMLElement>(null);
   const detailRef = useRef<HTMLDivElement>(null);
   const evidenceRef = useRef<HTMLDivElement>(null);
@@ -283,8 +284,9 @@ export function DiscoveryPage() {
           : null;
     requestAnimationFrame(() => target?.scrollIntoView({ block: "start" }));
   }, [result, initialView]);
-  const group =
-    result?.industries.find((item) => item.name === industry) ?? result?.market;
+  const group = industry
+    ? result?.industries.find((item) => item.name === industry)
+    : result?.market;
   const selected = result?.members.find(
     (member) => member.symbol === selectedSymbol,
   );
@@ -376,6 +378,15 @@ export function DiscoveryPage() {
       }),
     );
   };
+  const refreshObservationFacts = async () => {
+    setRefreshingObservation(true);
+    try {
+      const refreshed = await query.refetch();
+      if (refreshed.error) throw refreshed.error;
+    } finally {
+      setRefreshingObservation(false);
+    }
+  };
   return (
     <div className="discovery-page">
       <header className="discovery-heading">
@@ -462,7 +473,7 @@ export function DiscoveryPage() {
           </p>
         ) : null}
       </form>
-      {query.isFetching ? (
+      {query.isFetching && !refreshingObservation ? (
         <div className="discovery-loading">
           <Loading>正在从日线汇集分布与变化</Loading>
           <p>同一批成员、相邻两个观察窗口。首次读取全市场需要一点时间。</p>
@@ -493,16 +504,25 @@ export function DiscoveryPage() {
           {result.data_gaps.length ? (
             <details className="discovery-data-gaps">
               <summary>
-                行情存在共同缺口：{result.data_gaps[0]!.date} · {number(result.data_gaps[0]!.missing, 0)} 只
+                行情存在共同缺口：{result.data_gaps[0]!.date} ·{" "}
+                {number(result.data_gaps[0]!.missing, 0)} 只
               </summary>
-              <p>以下日期缺少有效日线。缺失成员保留为未知，不当作下跌、停牌或退出；请先核对资料，再解释变化。</p>
+              <p>
+                以下日期缺少有效日线。缺失成员保留为未知，不当作下跌、停牌或退出；请先核对资料，再解释变化。
+              </p>
               <ul>
                 {result.data_gaps.map((gap) => (
-                  <li key={gap.date}>{gap.date}<span>{number(gap.missing, 0)} 只</span></li>
+                  <li key={gap.date}>
+                    {gap.date}
+                    <span>{number(gap.missing, 0)} 只</span>
+                  </li>
                 ))}
               </ul>
               <p>只统计已有有效行情之后的窗口缺日，不把上市前历史不足计入。</p>
-              <Link to="/data" state={{ returnTo: "/", discoveryQuery: submitted }}>
+              <Link
+                to="/data"
+                state={{ returnTo: "/", discoveryQuery: submitted }}
+              >
                 按本次范围核对数据 <ArrowRight size={14} />
               </Link>
             </details>
@@ -565,6 +585,13 @@ export function DiscoveryPage() {
                   ))}
                 </div>
               ) : null}
+              <div className="discovery-market-save">
+                <SaveObservation
+                  result={result}
+                  industry={null}
+                  onRefresh={refreshObservationFacts}
+                />
+              </div>
               <section className="industry-section">
                 <header className="discovery-section-heading">
                   <div>
@@ -709,15 +736,22 @@ export function DiscoveryPage() {
                   ) : null}
                 </div>
               </section>
-              {group ? (
-                <div ref={detailRef} className="discovery-group-detail">
+              {group || industry ? (
+                <div
+                  ref={detailRef}
+                  className="discovery-group-detail"
+                  role="region"
+                  aria-label={`${industry ?? "整个范围"}分布与成员`}
+                >
                   <div className="observation-context-heading">
                     <header className="discovery-section-heading">
                       <div>
                         <h2>{industry ?? "整个范围"} · 拆开看</h2>
                         <p>
                           {industry
-                            ? `${group.total} 只成员，当前 ${group.current.available} 只可判断。`
+                            ? group
+                              ? `${group.total} 只成员，当前 ${group.current.available} 只可判断。`
+                              : "这个行业已不在当前范围中，原观察草稿仍然保留。"
                             : "每个分布都能下钻，查看组成它的全部成员。"}
                         </p>
                       </div>
@@ -732,68 +766,73 @@ export function DiscoveryPage() {
                         </button>
                       ) : null}
                     </header>
-                    <SaveObservation
-                      key={`${result.as_of}-${industry ?? "all"}`}
-                      result={result}
-                      industry={industry}
-                    />
-                  </div>
-                  <div className="group-analysis">
-                    <section>
-                      <h3>本期涨跌分布</h3>
-                      <p className="analysis-description">
-                        中间一半成员的变化在 {percent(group.current.q25, 2)} 至{" "}
-                        {percent(group.current.q75, 2)} 之间
-                      </p>
-                      <ReturnDistribution
-                        group={group}
-                        active={filter?.kind === "bin" ? filter.key : null}
-                        onSelect={(key, label) =>
-                          drill({ kind: "bin", key, label })
-                        }
+                    {industry ? (
+                      <SaveObservation
+                        key={`${result.as_of}-${industry ?? "all"}`}
+                        result={result}
+                        industry={industry}
+                        onRefresh={refreshObservationFacts}
                       />
-                    </section>
-                    <section>
-                      <h3>从前期，到本期</h3>
-                      <p className="analysis-description">
-                        相邻两个 {window} 日窗口 · 两期完整{" "}
-                        {number(group.comparison.available, 0)} 只
-                      </p>
-                      <div className="transition-list">
-                        {group.transitions.map((item) => (
-                          <button
-                            type="button"
-                            key={item.key}
-                            aria-label={`${item.label}，${item.count}只，查看成员`}
-                            aria-pressed={
-                              filter?.kind === "transition" &&
-                              filter.key === item.key
-                            }
-                            onClick={() =>
-                              drill({
-                                kind: "transition",
-                                key: item.key,
-                                label: item.label,
-                              })
-                            }
-                            disabled={!item.count}
-                          >
-                            <span>{item.label}</span>
-                            <i>
-                              <b
-                                style={{
-                                  width: `${group.total ? (item.count / group.total) * 100 : 0}%`,
-                                }}
-                              />
-                            </i>
-                            <strong>{number(item.count, 0)}</strong>
-                            <ChevronRight size={14} />
-                          </button>
-                        ))}
-                      </div>
-                    </section>
+                    ) : null}
                   </div>
-                  {industry ? (
+                  {group ? (
+                    <div className="group-analysis">
+                      <section>
+                        <h3>本期涨跌分布</h3>
+                        <p className="analysis-description">
+                          中间一半成员的变化在 {percent(group.current.q25, 2)}{" "}
+                          至 {percent(group.current.q75, 2)} 之间
+                        </p>
+                        <ReturnDistribution
+                          group={group}
+                          active={filter?.kind === "bin" ? filter.key : null}
+                          onSelect={(key, label) =>
+                            drill({ kind: "bin", key, label })
+                          }
+                        />
+                      </section>
+                      <section>
+                        <h3>从前期，到本期</h3>
+                        <p className="analysis-description">
+                          相邻两个 {window} 日窗口 · 两期完整{" "}
+                          {number(group.comparison.available, 0)} 只
+                        </p>
+                        <div className="transition-list">
+                          {group.transitions.map((item) => (
+                            <button
+                              type="button"
+                              key={item.key}
+                              aria-label={`${item.label}，${item.count}只，查看成员`}
+                              aria-pressed={
+                                filter?.kind === "transition" &&
+                                filter.key === item.key
+                              }
+                              onClick={() =>
+                                drill({
+                                  kind: "transition",
+                                  key: item.key,
+                                  label: item.label,
+                                })
+                              }
+                              disabled={!item.count}
+                            >
+                              <span>{item.label}</span>
+                              <i>
+                                <b
+                                  style={{
+                                    width: `${group.total ? (item.count / group.total) * 100 : 0}%`,
+                                  }}
+                                />
+                              </i>
+                              <strong>{number(item.count, 0)}</strong>
+                              <ChevronRight size={14} />
+                            </button>
+                          ))}
+                        </div>
+                      </section>
+                    </div>
+                  ) : null}
+                  {industry && group ? (
                     <BreadthHistory group={group} window={window} />
                   ) : null}
                 </div>

@@ -64,6 +64,7 @@ it("recovers a fresh observation through explicit local configuration and data u
     common_data_count: 1,
     data_gaps: [],
     market: {
+      fingerprint: "a".repeat(24),
       name: "全部范围",
       total: 1,
       current: stats,
