@@ -7,7 +7,7 @@ import sys
 
 _BOOT_BANNER_COMMANDS = {
     "add", "scan", "fetch", "low", "high", "info", "trend", "find", "theme", "board",
-    "index", "daily", "guide", "range",
+    "index", "daily", "guide", "range", "discover",
 }
 _FAST_ROOT_HELP_ARGS = {("help",), ("--help",), ("-h",)}
 _FAST_START_HELP_ARGS = {()}

@@ -1,16 +1,8 @@
-"""Filter functions for `kan find`.
-
-Apply ConditionSet to scan / cross-section results · return matching subset + audit trail.
-
-本模块保留 `kan.core.find_filter` 旧导入路径:
-- `apply_conditions` / `apply_cross_section_conditions` 仍是生产入口
-- `TriggeredFilter` / `FindMatch` / `MatchSegmentSpec` 仍从这里 re-export
-- `_match_*` 仍挂在本模块，便于既有测试和外部脚本直接导入或 monkeypatch
-"""
+"""按明确条件过滤扫描与截面结果，并保留逐项命中事实。"""
 from __future__ import annotations
 
 from collections.abc import Callable
-from typing import TYPE_CHECKING, cast
+from typing import TYPE_CHECKING
 
 from kan.core.find_filter_kline import (
     _match_gain,
@@ -137,12 +129,6 @@ def _cross_section_target(row: CrossSectionRow, target_attr: str) -> object:
     return getattr(row, target_attr, None)
 
 
-def _resolve_segment_matcher(segment: MatchSegmentSpec) -> _Matcher:
-    """从兼容入口动态解析 matcher，保留老路径 monkeypatch 语义。"""
-    matcher = globals().get(segment.matcher.__name__, segment.matcher)
-    return cast(_Matcher, matcher)
-
-
 def _match_all(
     filters: tuple,
     target: object,
@@ -205,7 +191,7 @@ def apply_conditions(
             for segment in FIND_MATCH_SEGMENTS:
                 filters = getattr(conditions, segment.condition_attr)
                 target = _result_target(r, segment.target_attr)
-                matcher = _resolve_segment_matcher(segment)
+                matcher = segment.matcher
                 triggered.extend(_match_any(filters, target, matcher))
             if not triggered:
                 continue
@@ -214,7 +200,7 @@ def apply_conditions(
             for segment in FIND_MATCH_SEGMENTS:
                 filters = getattr(conditions, segment.condition_attr)
                 target = _result_target(r, segment.target_attr)
-                matcher = _resolve_segment_matcher(segment)
+                matcher = segment.matcher
                 seg = _match_all(filters, target, matcher)
                 if seg is None:
                     all_match = False
@@ -254,7 +240,7 @@ def apply_cross_section_conditions(
                     continue
                 filters = getattr(conditions, segment.condition_attr)
                 target = _cross_section_target(row, segment.target_attr)
-                matcher = _resolve_segment_matcher(segment)
+                matcher = segment.matcher
                 triggered.extend(_match_any(filters, target, matcher))
             if triggered:
                 out.append((row, tuple(triggered)))
@@ -265,7 +251,7 @@ def apply_cross_section_conditions(
                     continue
                 filters = getattr(conditions, segment.condition_attr)
                 target = _cross_section_target(row, segment.target_attr)
-                matcher = _resolve_segment_matcher(segment)
+                matcher = segment.matcher
                 seg = _match_all(filters, target, matcher)
                 if seg is None:
                     all_match = False

@@ -127,7 +127,7 @@ def test_fetch_kline_invalid_symbol_raises(temp_data_dir, force_eastmoney_path):
     empty_df = pd.DataFrame()
     with (
         patch("akshare.stock_zh_a_hist", return_value=empty_df),
-        pytest.raises(ValueError, match="无效股票代码或无数据"),
+        pytest.raises(ValueError, match="行情获取失败"),
     ):
         fetcher.fetch_kline("999999", force=True)
 
@@ -167,6 +167,7 @@ def test_short_new_listing_cache_is_current_after_full_period_request(
 
     assert len(frame) == 3
     assert "_requested_days" not in frame.columns
+    monkeypatch.setattr(trading_calendar, "get_trade_dates", lambda: set(frame.date))
     assert fetcher.is_fresh("600519", min_rows=180)
 
 
@@ -239,6 +240,7 @@ def test_fetch_batch_fresh_cache_does_not_construct_scheduler(
         "latest_trade_date",
         lambda *a, **kw: cached["date"].iloc[-1],
     )
+    monkeypatch.setattr(trading_calendar, "get_trade_dates", lambda: set(cached.date))
 
     class UnexpectedScheduler:
         def __init__(self, *args, **kwargs):
@@ -270,9 +272,11 @@ def test_fetch_kline_scheduler_success_stamps_source_and_metadata(
 
 
 def test_fetch_kline_all_sources_failed_preserves_error_message(temp_data_dir, monkeypatch):
-    _install_chain(monkeypatch, [_DetailedSource("failed", lambda symbol, start: _no_data())])
+    _install_chain(monkeypatch, [_DetailedSource("failed", lambda symbol, start: ProviderFetchResult.failed(
+        FetchFailure(FetchFailureKind.PERMANENT, "permission_denied: daily"),
+    ))])
 
-    with pytest.raises(ValueError, match=r"^无效股票代码或无数据: 600519$"):
+    with pytest.raises(ValueError, match="failed: permission_denied: daily"):
         fetcher.fetch_kline("600519", force=True)
 
 
@@ -535,6 +539,7 @@ def test_fetch_batch_market_wide_fresh_cache_is_fast_and_callback_safe(
         "latest_trade_date",
         lambda *_args, **_kwargs: cached["date"].iloc[-1],
     )
+    monkeypatch.setattr(trading_calendar, "get_trade_dates", lambda: set(cached.date))
     monkeypatch.setattr(
         "kan.data.kline_snapshot.fetch_recent_daily_bars",
         lambda *_args, **_kwargs: (_ for _ in ()).throw(

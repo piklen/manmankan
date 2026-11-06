@@ -2,19 +2,15 @@
 
 from __future__ import annotations
 
-import time
-from datetime import UTC, date, datetime
+from datetime import date
 from pathlib import Path
-from types import SimpleNamespace
 
 import pytest
 from fastapi.testclient import TestClient
 
 from kan.data.fetcher import FetchProgress
 from kan.domain.job import JobStatus, MarketRefreshRequest, MarketRefreshScope
-from kan.domain.screen import DataCoverage, ScreenRun, ScreenSpec
-from kan.service import job_service, screen_service
-from kan.service.screen_ai import ScreenRunInput
+from kan.service import job_service
 from kan.storage import paths, workspace_db
 from kan.web.app import create_app
 from kan.web.security import SESSION_QUERY_NAME
@@ -26,52 +22,9 @@ def isolated_workspace(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(paths, "ensure_dirs", lambda: tmp_path.mkdir(exist_ok=True))
 
 
-def _run() -> ScreenRun:
-    spec = ScreenSpec(name="任务规则", exclude_st=True)
-    return ScreenRun(
-        run_id="job-run",
-        spec=spec,
-        spec_hash=screen_service.content_hash(spec),
-        snapshot_id="job-snapshot",
-        result_hash="job-result",
-        created_at=datetime.now(UTC),
-        duration_ms=5,
-        coverage=DataCoverage(returned=0),
-    )
-
-
-def _wait_terminal(job_id: str) -> None:
-    deadline = time.monotonic() + 3
-    while time.monotonic() < deadline:
-        job = workspace_db.get_job(job_id)
-        if job is not None and job.status in job_service.TERMINAL_STATUSES:
-            return
-        time.sleep(0.01)
-    raise AssertionError("job did not reach terminal state")
-
-
-def test_screen_job_persists_progress_and_result_reference(
-    isolated_workspace: None,
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    monkeypatch.setattr(job_service, "run_from_input", lambda _request: _run())
-
-    job = job_service.start_screen_run_job(
-        ScreenRunInput(spec=ScreenSpec(name="任务规则", exclude_st=True))
-    )
-    _wait_terminal(job.job_id)
-    completed = workspace_db.get_job(job.job_id)
-
-    assert completed is not None
-    assert completed.status is JobStatus.SUCCEEDED
-    assert completed.progress == completed.total == 3
-    assert completed.result_ref == "job-run"
-    assert completed.watermark == "job-snapshot"
-
-
 def test_recovery_marks_incomplete_jobs_interrupted(isolated_workspace: None) -> None:
-    queued = workspace_db.create_job("screen_run")
-    running = workspace_db.create_job("screen_run")
+    queued = workspace_db.create_job("market_refresh:all")
+    running = workspace_db.create_job("market_refresh:all")
     workspace_db.update_job(running.job_id, status=JobStatus.RUNNING)
 
     assert job_service.recover_incomplete_jobs() == 2
@@ -109,7 +62,7 @@ def test_market_refresh_persists_partial_progress_and_resume_watermark(
                     total=len(symbols),
                 )
             )
-        return {"600519": object()}, {"000858": "upstream unavailable"}
+        return {"600519": object()}, {"000858": "upstream unavailable token=isolated-secret"}
 
     monkeypatch.setattr("kan.data.fetcher.fetch_batch", fake_fetch)
     monkeypatch.setattr(
@@ -127,39 +80,8 @@ def test_market_refresh_persists_partial_progress_and_resume_watermark(
     assert completed.watermark == "2026-08-21"
     assert completed.result_ref == "market-cache:2026-08-21"
     assert completed.error is not None
-
-
-def test_screen_job_records_partial_and_planning_failure(
-    isolated_workspace: None,
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    partial_run = _run().model_copy(update={"warnings": ["行情数据可能需要更新"]})
-    monkeypatch.setattr(job_service, "run_from_input", lambda _request: partial_run)
-    partial_job = workspace_db.create_job("screen_run", total=3)
-    job_service._execute_screen_run(
-        partial_job.job_id,
-        ScreenRunInput(spec=ScreenSpec(name="任务规则", exclude_st=True)),
-    )
-
-    partial = workspace_db.get_job(partial_job.job_id)
-    assert partial is not None
-    assert partial.status is JobStatus.PARTIAL
-    assert "1 项数据提示" in partial.message
-
-    monkeypatch.setattr(
-        job_service,
-        "plan_screen",
-        lambda _spec: SimpleNamespace(executable=False, warnings=["当前条件不可执行"]),
-    )
-    failed_job = workspace_db.create_job("screen_run", total=3)
-    job_service._execute_screen_run(
-        failed_job.job_id,
-        ScreenRunInput(spec=ScreenSpec(name="失败规则", exclude_st=True)),
-    )
-    failed = workspace_db.get_job(failed_job.job_id)
-    assert failed is not None
-    assert failed.status is JobStatus.FAILED
-    assert failed.error == "当前条件不可执行"
+    assert "upstream unavailable" in completed.error
+    assert "isolated-secret" not in completed.error
 
 
 def test_market_refresh_single_worker_success_and_failures(
@@ -235,7 +157,7 @@ def test_job_lookup_and_sse_wait_for_terminal_state(
     with pytest.raises(ValueError, match="任务不存在"):
         job_service.get_job("missing")
 
-    job = workspace_db.create_job("screen_run", total=1)
+    job = workspace_db.create_job("market_refresh:all", total=1)
 
     def complete(_interval: float) -> None:
         workspace_db.update_job(
@@ -256,7 +178,7 @@ def test_sse_accepts_session_query_and_closes_after_terminal(
 ) -> None:
     token = "job-test-session"
     app = create_app(session_token=token)
-    job = workspace_db.create_job("screen_run", total=1)
+    job = workspace_db.create_job("market_refresh:all", total=1)
     workspace_db.update_job(
         job.job_id,
         status=JobStatus.SUCCEEDED,

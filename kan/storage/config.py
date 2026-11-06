@@ -134,10 +134,33 @@ def update(**changes: Any) -> dict[str, Any]:
 
 
 def mask_token(token: str | None) -> str:
-    """末 4 位显形 · 前面 *** · 少于 4 位 / None / 空串全返 '***'。
+    """末 4 位显形 · 前面 *** · 不多于 4 位 / None / 空串全返 '***'。
 
     所有 token 出 CLI / 日志 / 错误消息一律走此函数 · 永不直传原 token。
     """
-    if not token or len(token) < 4:
+    if not token or len(token) <= 4:
         return "***"
     return f"***{token[-4:]}"
+
+
+def validate_tushare_endpoint(value: str) -> str:
+    """CLI 与本地网页共用端点校验，错误不回显可能包含认证信息的 URL。"""
+    from urllib.parse import urlsplit
+
+    from kan.data.tushare import _allow_insecure_endpoint
+
+    cleaned = value.strip()
+    try:
+        parsed = urlsplit(cleaned)
+        # urllib 在访问 port 时才验证格式和范围。
+        _ = parsed.port
+        valid = parsed.scheme in {"http", "https"} and bool(parsed.hostname)
+    except ValueError:
+        valid = False
+    if not valid:
+        raise ValueError("端点需以 http:// 或 https:// 开头并包含有效主机，例如 https://api.tushare.pro")
+    if parsed.username or parsed.password:
+        raise ValueError("端点不能包含账号密码；认证 token 请填写在单独字段。")
+    if parsed.scheme == "http" and not _allow_insecure_endpoint():
+        raise ValueError("默认拒绝 http:// TuShare endpoint，避免 token 明文传输；请使用 https://，可信内网需明确设置 KAN_ALLOW_INSECURE_TUSHARE=1。")
+    return parsed.geturl()

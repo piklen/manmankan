@@ -11,7 +11,7 @@ from kan.app import app
 
 @app.command()
 def tui() -> None:
-    """打开键盘筛选：明确连续涨跌天数，查看当前日线，按需保存与核对历史。"""
+    """打开市场观察：查看分布与变化，沿行业、成员下钻日线；f 进入高级筛选。"""
     if not sys.stdin.isatty() or not sys.stdout.isatty():
         typer.echo(
             "kan tui 需要交互终端。请在终端直接运行；"

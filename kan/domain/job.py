@@ -7,7 +7,7 @@ from enum import StrEnum
 
 from pydantic import Field, model_validator
 
-from kan.domain.screen import StrictModel
+from kan.domain.workspace import StrictModel
 
 
 class JobStatus(StrEnum):
@@ -29,7 +29,7 @@ class MarketRefreshScope(StrEnum):
 class MarketRefreshRequest(StrictModel):
     scope: MarketRefreshScope = MarketRefreshScope.DEFAULT
     force: bool = False
-    days: int = Field(default=360, ge=180, le=1_500)
+    days: int = Field(default=360, ge=2, le=1_500)
     codes: list[str] = Field(default_factory=list, max_length=10_000)
 
     @model_validator(mode="after")

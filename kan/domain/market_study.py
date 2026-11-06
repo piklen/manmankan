@@ -86,7 +86,7 @@ class StudyQuery(StudyModel):
 class StudyRefreshRequest(StudyModel):
     universe: Literal["all", "personal", "codes"]
     codes: list[str] = Field(default_factory=list, max_length=10_000)
-    days: int = Field(default=360, ge=180, le=1_500)
+    days: int = Field(default=360, ge=2, le=1_500)
 
     @model_validator(mode="after")
     def validate_scope(self) -> StudyRefreshRequest:

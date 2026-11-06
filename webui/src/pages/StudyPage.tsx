@@ -192,7 +192,7 @@ export function StudyPage({ initialResult }: { initialResult?: StudyResult }) {
       <section className="study-main">
         <header className="study-heading">
           <div>
-            <Link to="/" className="small-link">
+            <Link to="/explore" className="small-link">
               <ArrowLeft size={14} />
               返回趋势筛选
             </Link>

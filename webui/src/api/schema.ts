@@ -106,6 +106,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/discovery/data-plan": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Discovery Data Plan */
+        post: operations["discovery_data_plan_api_v1_discovery_data_plan_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/studies/runs/{run_id}/events": {
         parameters: {
             query?: never;
@@ -269,7 +286,8 @@ export interface paths {
         };
         /** Settings */
         get: operations["settings_api_v1_settings_get"];
-        put?: never;
+        /** Update Settings */
+        put: operations["update_settings_api_v1_settings_put"];
         post?: never;
         delete?: never;
         options?: never;
@@ -433,6 +451,78 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/discovery": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Current Discovery */
+        get: operations["current_discovery_api_v1_discovery_get"];
+        put?: never;
+        /** Discovery */
+        post: operations["discovery_api_v1_discovery_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/observations": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Observations */
+        get: operations["observations_api_v1_observations_get"];
+        put?: never;
+        /** Save Observation */
+        post: operations["save_observation_api_v1_observations_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/observations/{observation_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Observation */
+        get: operations["get_observation_api_v1_observations__observation_id__get"];
+        put?: never;
+        post?: never;
+        /** Delete Observation */
+        delete: operations["delete_observation_api_v1_observations__observation_id__delete"];
+        options?: never;
+        head?: never;
+        /** Edit Observation */
+        patch: operations["edit_observation_api_v1_observations__observation_id__patch"];
+        trace?: never;
+    };
+    "/api/v1/observations/{observation_id}/review": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Review Observation */
+        post: operations["review_observation_api_v1_observations__observation_id__review_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -537,53 +627,207 @@ export interface components {
             /** Deleted */
             deleted: boolean;
         };
+        /** DiscoveryBin */
+        DiscoveryBin: {
+            /** Key */
+            key: string;
+            /** Label */
+            label: string;
+            /** Count */
+            count: number;
+        };
+        /** DiscoveryComparison */
+        DiscoveryComparison: {
+            /** Available */
+            available: number;
+            /** Missing */
+            missing: number;
+            /** Current Positive Share */
+            current_positive_share: number | null;
+            /** Previous Positive Share */
+            previous_positive_share: number | null;
+            /** Breadth Delta Pp */
+            breadth_delta_pp: number | null;
+            /** Current Median */
+            current_median: number | null;
+            /** Previous Median */
+            previous_median: number | null;
+        };
+        /** DiscoveryDataPlan */
+        DiscoveryDataPlan: {
+            query: components["schemas"]["DiscoveryQuery"];
+            refresh: components["schemas"]["StudyRefreshRequest"];
+            /** Required Start */
+            required_start: string;
+            /** Latest */
+            latest: string;
+            /** Message */
+            message: string;
+        };
+        /** DiscoveryGroup */
+        DiscoveryGroup: {
+            /** Name */
+            name: string;
+            /** Total */
+            total: number;
+            current: components["schemas"]["DiscoveryStats"];
+            comparison: components["schemas"]["DiscoveryComparison"];
+            /** History */
+            history: components["schemas"]["DiscoveryHistoryPoint"][];
+            /** History Available */
+            history_available: number;
+            /** Transitions */
+            transitions: components["schemas"]["DiscoveryTransition"][];
+            /** Distribution */
+            distribution: components["schemas"]["DiscoveryBin"][];
+            /** Observations */
+            observations: components["schemas"]["DiscoveryObservation"][];
+        };
+        /** DiscoveryHistoryPoint */
+        DiscoveryHistoryPoint: {
+            /**
+             * Date
+             * Format: date
+             */
+            date: string;
+            /** Available */
+            available: number;
+            /** Up */
+            up: number;
+            /** Down */
+            down: number;
+            /** Flat */
+            flat: number;
+            /** Positive Share */
+            positive_share: number | null;
+            /** Median Return */
+            median_return: number | null;
+        };
+        /** DiscoveryMember */
+        DiscoveryMember: {
+            /** Symbol */
+            symbol: string;
+            /** Name */
+            name: string;
+            /** Industry */
+            industry: string;
+            /** Latest Available */
+            latest_available: boolean;
+            /** Return Pct */
+            return_pct: number | null;
+            /** Previous Return Pct */
+            previous_return_pct: number | null;
+            /** Change Pct */
+            change_pct: number | null;
+            /**
+             * Transition
+             * @enum {string}
+             */
+            transition: "up_up" | "down_up" | "up_down" | "down_down" | "flat" | "unknown";
+            /** Distribution Bin */
+            distribution_bin: string | null;
+            /** Source */
+            source: string;
+            /** Reason */
+            reason: string | null;
+        };
+        /** DiscoveryObservation */
+        DiscoveryObservation: {
+            /**
+             * Kind
+             * @enum {string}
+             */
+            kind: "breadth" | "distribution" | "comparison" | "coverage";
+            /** Title */
+            title: string;
+            /** Detail */
+            detail: string;
+        };
+        /** DiscoveryQuery */
+        DiscoveryQuery: {
+            /**
+             * Universe
+             * @default all
+             * @enum {string}
+             */
+            universe: "all" | "personal" | "codes";
+            /** Codes */
+            codes?: string[];
+            /** Industries */
+            industries?: string[];
+            /** As Of */
+            as_of?: string | null;
+            /**
+             * Window
+             * @default 20
+             */
+            window: number;
+        };
+        /** DiscoveryResult */
+        DiscoveryResult: {
+            query: components["schemas"]["DiscoveryQuery"];
+            /**
+             * As Of
+             * Format: date
+             */
+            as_of: string;
+            /** Current Start */
+            current_start: string | null;
+            /** Previous As Of */
+            previous_as_of: string | null;
+            /** Previous Start */
+            previous_start: string | null;
+            /** Common Data Date */
+            common_data_date: string | null;
+            /** Common Data Count */
+            common_data_count: number;
+            market: components["schemas"]["DiscoveryGroup"];
+            /** Industries */
+            industries: components["schemas"]["DiscoveryGroup"][];
+            /** Members */
+            members: components["schemas"]["DiscoveryMember"][];
+            /** Warnings */
+            warnings: string[];
+        };
+        /** DiscoveryStats */
+        DiscoveryStats: {
+            /** Total */
+            total: number;
+            /** Available */
+            available: number;
+            /** Missing */
+            missing: number;
+            /** Up */
+            up: number;
+            /** Down */
+            down: number;
+            /** Flat */
+            flat: number;
+            /** Positive Share */
+            positive_share: number | null;
+            /** Median Return */
+            median_return: number | null;
+            /** Q25 */
+            q25: number | null;
+            /** Q75 */
+            q75: number | null;
+        };
+        /** DiscoveryTransition */
+        DiscoveryTransition: {
+            /**
+             * Key
+             * @enum {string}
+             */
+            key: "up_up" | "down_up" | "up_down" | "down_down" | "flat" | "unknown";
+            /** Label */
+            label: string;
+            /** Count */
+            count: number;
+        };
         /** FocusAddRequest */
         FocusAddRequest: {
             /** Symbol */
             symbol: string;
-        };
-        /** FocusPeriod */
-        FocusPeriod: {
-            /** Period */
-            period: number;
-            /** Position Pct */
-            position_pct?: number | null;
-            /** Previous Position Pct */
-            previous_position_pct?: number | null;
-            /** Change Pp */
-            change_pp?: number | null;
-            /** Low */
-            low?: number | null;
-            /** High */
-            high?: number | null;
-        };
-        /** FocusReviewEntry */
-        FocusReviewEntry: {
-            /**
-             * Reviewed At
-             * Format: date-time
-             */
-            reviewed_at: string;
-            /**
-             * Data Cutoff
-             * Format: date
-             */
-            data_cutoff: string;
-            /** Note */
-            note: string;
-            /** Price */
-            price: number;
-            /** Positions */
-            positions: {
-                [key: string]: number | null;
-            };
-            /**
-             * Data Hash
-             * @default
-             */
-            data_hash: string;
-            /** Candidate List Id */
-            candidate_list_id?: string | null;
         };
         /** FocusRow */
         FocusRow: {
@@ -594,42 +838,6 @@ export interface components {
             /** Sources */
             sources: string[];
             /**
-             * Source
-             * @default local_cache
-             */
-            source: string;
-            /**
-             * Data Hash
-             * @default
-             */
-            data_hash: string;
-            /**
-             * Available
-             * @default false
-             */
-            available: boolean;
-            /** Message */
-            message?: string | null;
-            /** Price */
-            price?: number | null;
-            /** Change Pct */
-            change_pct?: number | null;
-            /** Data Cutoff */
-            data_cutoff?: string | null;
-            /** Previous Cutoff */
-            previous_cutoff?: string | null;
-            /** Fetched At */
-            fetched_at?: string | null;
-            /**
-             * Stale
-             * @default true
-             */
-            stale: boolean;
-            /** Periods */
-            periods?: components["schemas"]["FocusPeriod"][];
-            /** Streak */
-            streak?: number | null;
-            /**
              * Note
              * @default
              */
@@ -639,17 +847,6 @@ export interface components {
             candidate_status?: components["schemas"]["CandidateStatus"] | null;
             /** Candidates */
             candidates?: components["schemas"]["Candidate"][];
-            /**
-             * Reviewed
-             * @default false
-             */
-            reviewed: boolean;
-            /** Reviewed At */
-            reviewed_at?: string | null;
-            /** Reviewed Data Cutoff */
-            reviewed_data_cutoff?: string | null;
-            /** Review History */
-            review_history?: components["schemas"]["FocusReviewEntry"][];
         };
         /** FocusSnapshot */
         FocusSnapshot: {
@@ -658,18 +855,10 @@ export interface components {
              * Format: date-time
              */
             generated_at: string;
-            /** Expected Cutoff */
-            expected_cutoff?: string | null;
             /** Total */
             total: number;
-            /** Available */
-            available: number;
-            /** Stale */
-            stale: number;
             /** Rows */
             rows: components["schemas"]["FocusRow"][];
-            /** Warnings */
-            warnings?: string[];
         };
         /** HTTPValidationError */
         HTTPValidationError: {
@@ -696,6 +885,106 @@ export interface components {
          * @enum {string}
          */
         JobStatus: "queued" | "running" | "succeeded" | "partial" | "failed" | "interrupted";
+        /** ObservationEditRequest */
+        ObservationEditRequest: {
+            /**
+             * Title
+             * @default
+             */
+            title: string;
+            /**
+             * Note
+             * @default
+             */
+            note: string;
+        };
+        /** ObservationRecord */
+        ObservationRecord: {
+            /** Id */
+            id: string;
+            /** Title */
+            title: string;
+            /** Note */
+            note: string;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            query: components["schemas"]["DiscoveryQuery"];
+            /** Scope Label */
+            scope_label: string;
+            snapshot: components["schemas"]["ObservationSnapshot"];
+        };
+        /** ObservationReviewRequest */
+        ObservationReviewRequest: {
+            /** As Of */
+            as_of?: string | null;
+        };
+        /** ObservationReviewResult */
+        ObservationReviewResult: {
+            observation: components["schemas"]["ObservationRecord"];
+            current: components["schemas"]["ObservationSnapshot"];
+            comparison: components["schemas"]["DiscoveryComparison"];
+            /** Transitions */
+            transitions: components["schemas"]["DiscoveryTransition"][];
+        };
+        /** ObservationSaveRequest */
+        ObservationSaveRequest: {
+            /**
+             * Title
+             * @default
+             */
+            title: string;
+            /**
+             * Note
+             * @default
+             */
+            note: string;
+            query: components["schemas"]["DiscoveryQuery"];
+        };
+        /** ObservationSnapshot */
+        ObservationSnapshot: {
+            /**
+             * As Of
+             * Format: date
+             */
+            as_of: string;
+            /** Current Start */
+            current_start: string | null;
+            /** Previous As Of */
+            previous_as_of: string | null;
+            /** Previous Start */
+            previous_start: string | null;
+            group: components["schemas"]["DiscoveryGroup"];
+            /** Members */
+            members: components["schemas"]["DiscoveryMember"][];
+        };
+        /** ObservationSummary */
+        ObservationSummary: {
+            /** Id */
+            id: string;
+            /** Title */
+            title: string;
+            /** Note */
+            note: string;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /**
+             * As Of
+             * Format: date
+             */
+            as_of: string;
+            /** Window */
+            window: number;
+            /** Scope Label */
+            scope_label: string;
+            /** Total */
+            total: number;
+        };
         /** PortfolioAccountResponse */
         PortfolioAccountResponse: {
             /** Cash */
@@ -813,10 +1102,27 @@ export interface components {
             /** Tushare Masked */
             tushare_masked?: string | null;
             /**
+             * Tushare Token Source
+             * @enum {string}
+             */
+            tushare_token_source: "environment" | "config" | "unconfigured";
+            /**
+             * Tushare Endpoint Source
+             * @enum {string}
+             */
+            tushare_endpoint_source: "environment" | "config" | "default";
+            /**
              * State Backend
              * @enum {string}
              */
             state_backend: "sqlite" | "legacy";
+        };
+        /** SettingsUpdateRequest */
+        SettingsUpdateRequest: {
+            /** Token */
+            token?: string | null;
+            /** Endpoint */
+            endpoint?: string | null;
         };
         /** StudyBar */
         StudyBar: {
@@ -1812,6 +2118,39 @@ export interface operations {
             };
         };
     };
+    discovery_data_plan_api_v1_discovery_data_plan_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["DiscoveryQuery"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DiscoveryDataPlan"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     study_events_api_v1_studies_runs__run_id__events_get: {
         parameters: {
             query?: {
@@ -2130,6 +2469,39 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["SettingsFactsResponse"];
+                };
+            };
+        };
+    };
+    update_settings_api_v1_settings_put: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SettingsUpdateRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SettingsFactsResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
                 };
             };
         };
@@ -2485,6 +2857,244 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["DeleteResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    current_discovery_api_v1_discovery_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DiscoveryResult"];
+                };
+            };
+        };
+    };
+    discovery_api_v1_discovery_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["DiscoveryQuery"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DiscoveryResult"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    observations_api_v1_observations_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ObservationSummary"][];
+                };
+            };
+        };
+    };
+    save_observation_api_v1_observations_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ObservationSaveRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ObservationRecord"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_observation_api_v1_observations__observation_id__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                observation_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ObservationRecord"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    delete_observation_api_v1_observations__observation_id__delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                observation_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DeleteResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    edit_observation_api_v1_observations__observation_id__patch: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                observation_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ObservationEditRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ObservationRecord"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    review_observation_api_v1_observations__observation_id__review_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                observation_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ObservationReviewRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ObservationReviewResult"];
                 };
             };
             /** @description Validation Error */

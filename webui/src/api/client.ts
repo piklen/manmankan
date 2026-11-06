@@ -1,5 +1,14 @@
 import type { components } from "./schema";
 
+export type DiscoveryQuery = components["schemas"]["DiscoveryQuery"];
+export type DiscoveryResult = components["schemas"]["DiscoveryResult"];
+export type DiscoveryGroup = DiscoveryResult["market"];
+export type DiscoveryMember = DiscoveryResult["members"][number];
+export type ObservationRecord = components["schemas"]["ObservationRecord"];
+export type ObservationSummary = components["schemas"]["ObservationSummary"];
+export type ObservationReviewResult =
+  components["schemas"]["ObservationReviewResult"];
+
 export type TrendSearchQuery = components["schemas"]["TrendSearchQuery"];
 export type TrendSearchResult = components["schemas"]["TrendSearchResult"];
 export type TrendSearchRow = components["schemas"]["TrendSearchRow"];
@@ -28,6 +37,7 @@ export type CandidateList = components["schemas"]["CandidateList"];
 export type FocusSnapshot = components["schemas"]["FocusSnapshot"];
 export type Portfolio = components["schemas"]["PortfolioResponse"];
 export type SettingsFacts = components["schemas"]["SettingsFactsResponse"];
+export type DiscoveryDataPlan = components["schemas"]["DiscoveryDataPlan"];
 export type ApiMeta = components["schemas"]["ApiMeta"];
 
 export class ApiError extends Error {
@@ -88,6 +98,37 @@ const body = (value: unknown) => JSON.stringify(value);
 const encode = encodeURIComponent;
 
 export const api = {
+  observations: () => request<ObservationSummary[]>("/api/v1/observations"),
+  observation: (id: string) =>
+    request<ObservationRecord>(`/api/v1/observations/${encode(id)}`),
+  saveObservation: (value: {
+    title: string;
+    note: string;
+    query: DiscoveryQuery;
+  }) =>
+    request<ObservationRecord>("/api/v1/observations", {
+      method: "POST",
+      body: body(value),
+    }),
+  updateObservation: (id: string, value: { title: string; note: string }) =>
+    request<ObservationRecord>(`/api/v1/observations/${encode(id)}`, {
+      method: "PATCH",
+      body: body(value),
+    }),
+  deleteObservation: (id: string) =>
+    request<{ deleted: boolean }>(`/api/v1/observations/${encode(id)}`, {
+      method: "DELETE",
+    }),
+  reviewObservation: (id: string, as_of: string | null) =>
+    request<ObservationReviewResult>(
+      `/api/v1/observations/${encode(id)}/review`,
+      { method: "POST", body: body({ as_of }) },
+    ),
+  discover: (query: DiscoveryQuery) =>
+    request<DiscoveryResult>("/api/v1/discovery", {
+      method: "POST",
+      body: body(query),
+    }),
   searchTrends: (query: TrendSearchQuery) =>
     request<TrendSearchResult>("/api/v1/trends/search", {
       method: "POST",
@@ -150,6 +191,16 @@ export const api = {
   jobs: () => request<WorkspaceJob[]>("/api/v1/jobs?limit=30"),
   job: (id: string) => request<WorkspaceJob>(`/api/v1/jobs/${encode(id)}`),
   settings: () => request<SettingsFacts>("/api/v1/settings"),
+  updateSettings: (values: { token?: string; endpoint?: string }) =>
+    request<SettingsFacts>("/api/v1/settings", {
+      method: "PUT",
+      body: body(values),
+    }),
+  discoveryDataPlan: (query: DiscoveryQuery) =>
+    request<DiscoveryDataPlan>("/api/v1/discovery/data-plan", {
+      method: "POST",
+      body: body(query),
+    }),
   meta: () => request<ApiMeta>("/api/v1/meta"),
   focus: () => request<FocusSnapshot>("/api/v1/focus"),
   addFocus: (symbol: string) =>

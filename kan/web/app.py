@@ -6,12 +6,16 @@ from html import escape
 from pathlib import Path
 
 from fastapi import FastAPI, Request
+from fastapi.exception_handlers import request_validation_exception_handler
+from fastapi.exceptions import RequestValidationError
 from fastapi.responses import HTMLResponse, JSONResponse, PlainTextResponse, Response
 from fastapi.staticfiles import StaticFiles
 
 from kan import __version__
 from kan.service.job_service import recover_incomplete_jobs
 from kan.web.api_v1 import router as api_v1_router
+from kan.web.discovery_routes import router as discovery_router
+from kan.web.observation_routes import router as observation_router
 from kan.web.security import (
     MUTATING_METHODS,
     browser_request_error,
@@ -41,6 +45,13 @@ def create_app(
         openapi_url="/api/v1/openapi.json",
     )
     app.state.kan_session_token = active_session_token
+
+    @app.exception_handler(RequestValidationError)
+    async def invalid_request(request: Request, exc: RequestValidationError) -> Response:
+        if request.url.path == "/api/v1/settings":
+            # Pydantic 默认错误含原始 input，配置请求不能回显认证材料。
+            return JSONResponse(status_code=422, content={"detail": {"code": "invalid_settings", "message": "配置格式无效；token 与端点请填写文本，空白保留已有配置。"}})
+        return await request_validation_exception_handler(request, exc)
     if recover_jobs:
         recover_incomplete_jobs()
     app.mount(
@@ -50,6 +61,8 @@ def create_app(
     )
     app.include_router(api_v1_router)
     app.include_router(trend_router)
+    app.include_router(discovery_router)
+    app.include_router(observation_router)
 
     @app.get("/{full_path:path}", response_class=HTMLResponse, include_in_schema=False)
     def spa(full_path: str) -> Response:

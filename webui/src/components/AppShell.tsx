@@ -14,13 +14,21 @@ export function AppShell() {
       <header className="app-header">
         <Link to="/" className="brand">
           <strong>慢慢看</strong>
-          <span>趋势搜索与定位</span>
+          <span>市场变化研究</span>
         </Link>
         <nav aria-label="主导航">
           <NavLink to="/" end>
-            趋势筛选
+            市场观察
           </NavLink>
-          <NavLink to="/studies">我的研究</NavLink>
+          <NavLink to="/explore">趋势筛选</NavLink>
+          <NavLink
+            to="/studies"
+            className={
+              pathname.startsWith("/observations/") ? "active" : undefined
+            }
+          >
+            我的研究
+          </NavLink>
           <NavLink to="/data">数据</NavLink>
         </nav>
       </header>
@@ -28,8 +36,8 @@ export function AppShell() {
         <Outlet />
       </main>
       <footer className="app-footer">
-        日线事实研究 · 创新低 ≠ 见底 · 创新高 ≠ 顶 · 历史价格不预示未来 ·
-        仅供参考，不构成投资建议
+        慢慢看 ·
+        数据帮助理解，判断留给自己。历史价格不预示未来，不构成投资建议。
       </footer>
     </div>
   );

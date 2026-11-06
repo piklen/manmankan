@@ -32,14 +32,13 @@ def test_market_cache_rebuilds_at_explicit_cutoff_without_mixing_bases(monkeypat
     assert metadata[b"kan.price_basis_date"] == b"2026-09-04"
     assert fetcher.is_fresh("600001")
 
-    # 即使当前缓存新鲜，固定过去截止日也必须重新选择分母并整段覆盖。
-    _, errors = fetcher.fetch_batch(["600001"], days=2, market_wide=True, as_of=days[1])
-    assert not errors
-    previous = fetcher.get_cached("600001")
-    assert previous is not None and previous.close.tolist() == [9., 10.]
-    assert previous.date.tolist() == days[:2]
-    assert previous.attrs["price_basis_date"] == "2026-09-02"
-    assert not fetcher.is_fresh("600001")
+    # 固定过去截止日不得抹掉已经存在的较新事实；force 也不是删历史的授权。
+    path = tmp_path / "600001.parquet"
+    original = path.read_bytes()
+    _, errors = fetcher.fetch_batch(["600001"], days=2, force=True, market_wide=True, as_of=days[1])
+    assert "会丢失较新事实" in errors["600001"]
+    assert path.read_bytes() == original
+    assert fetcher.is_fresh("600001")
 
 
 @pytest.mark.parametrize("source", ["tushare", "tushare_market_batch", "baostock"])

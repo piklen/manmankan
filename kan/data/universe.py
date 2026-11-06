@@ -4,8 +4,8 @@ tushare stock_basic(list_status="L") 一次拉全部上市股 → [(symbol, name
 JSON cache。保留主板 / 创业板 / 科创板 / 北交所 / 含 ST；`--all` 的含义就是
 完整 A 股市场，需要排除某类股票时由命令自己的显式过滤项负责。
 
-无 token / 网络失败 → 退化陈旧 cache · 仍无则空 list；响应契约不完整则明确报错，
-不能用旧缓存掩盖数据源偏差。
+无 token 时使用完整缓存，仍无则空 list；上游失败且无完整缓存时保留实际错误。
+响应契约不完整则明确报错，不能用旧缓存掩盖数据源偏差。
 
 单源领域 (tushare stock_basic) · 暂不抽 chain (复刻 industry_map 单源约定) ·
 后续可加 akshare 降级源 (同形 metrics chain)。
@@ -17,7 +17,7 @@ import time
 from pathlib import Path
 
 from kan.data.tushare import TushareDataContractError
-from kan.infra.log import debug_log
+from kan.infra.log import debug_log, redact_text
 from kan.storage.paths import DATA_DIR, atomic_write_json, ensure_dirs
 
 _ALL_STOCKS_TTL = 24 * 3600
@@ -73,7 +73,7 @@ def _fetch_tushare_stock_basic_all():
     if cb.is_down("tushare_basic"):
         return None
     try:
-        data, _err = _post_tushare_api(
+        data, error = _post_tushare_api(
             endpoint=endpoint,
             token=token,
             api_name="stock_basic",
@@ -83,6 +83,8 @@ def _fetch_tushare_stock_basic_all():
         )
         if data is None:
             cb.record("tushare_basic", ok=False)
+            if error is not None:
+                raise ConnectionError(f"stock_basic ({error.code}): {redact_text(error.msg)}")
             return None
         fields = data.get("fields") or []
         items = data.get("items") or []
@@ -107,8 +109,8 @@ def _fetch_tushare_stock_basic_all():
             )
         cb.record("tushare_basic", ok=True)
         return df
-    except TushareDataContractError:
-        # 契约偏差必须暴露给调用方，不能静默回退后继续冒充“全市场”。
+    except (TushareDataContractError, ConnectionError):
+        # 由拥有缓存的入口处理可用性；契约偏差始终向调用方暴露。
         raise
     except Exception as e:
         debug_log(__name__, "fetch tushare stock_basic 失败", e)
@@ -119,7 +121,7 @@ def _fetch_tushare_stock_basic_all():
 def fetch_all_stocks(force: bool = False) -> list[tuple[str, str]]:
     """全市场 [(symbol, name)] · 含北交所 / ST · 24h JSON cache。
 
-    无 token / 网络失败 → 退化陈旧 cache；响应契约错误直接抛出且不覆盖缓存。
+    无 token 或上游失败可读完整缓存；没有缓存时实际错误向外传播，契约错误不降级。
     """
     ensure_dirs()
     cache = DATA_DIR / _ALL_STOCKS_CACHE
@@ -128,7 +130,13 @@ def fetch_all_stocks(force: bool = False) -> list[tuple[str, str]]:
         if cached is not None and _cache_complete(cached):
             return cached
 
-    df = _fetch_tushare_stock_basic_all()
+    try:
+        df = _fetch_tushare_stock_basic_all()
+    except ConnectionError as exc:
+        stale = _load_cache(cache) if cache.exists() else None
+        if stale is not None and _cache_complete(stale):
+            return stale
+        raise ValueError(str(exc)) from exc
     if df is None or df.empty:
         # 退化陈旧 cache (若存在) · 否则空 (无 token / 全失败)
         stale = _load_cache(cache) if cache.exists() else None

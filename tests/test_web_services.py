@@ -12,14 +12,15 @@ from kan.core.trading_calendar import PHASE_INTRADAY
 from kan.storage.positions import Position, PositionsBook
 from kan.web.app import create_app
 from kan.web.security import SESSION_HEADER_NAME
-from kan.web.serialize import empty_hold_payload, serialize_hold
+from kan.web.serialize import serialize_hold
 
 _TEST_SESSION_TOKEN = "test-session-token"
 
 
-def _client() -> TestClient:
+def _client(*, raise_server_exceptions: bool = True) -> TestClient:
     return TestClient(
         create_app(session_token=_TEST_SESSION_TOKEN, recover_jobs=False),
+        raise_server_exceptions=raise_server_exceptions,
         base_url="http://127.0.0.1",
         headers={SESSION_HEADER_NAME: _TEST_SESSION_TOKEN},
     )
@@ -147,7 +148,9 @@ def test_hold_service_empty_and_realtime_fail_soft_falls_back_to_close(monkeypat
         lambda _symbols: (_ for _ in ()).throw(RuntimeError("rt down")),
     )
 
-    fallback = build_hold_summary(HoldRequest(no_refresh=False, check_corporate_actions=False))
+    fallback = build_hold_summary(HoldRequest(
+        refresh_stale=lambda _pairs, _days: None, check_corporate_actions=False,
+    ))
 
     assert fallback.price_mode == "close"
     assert fallback.results[0].price_source == "close_cache"
@@ -170,7 +173,9 @@ def test_hold_service_skips_empty_cache_and_can_raise_realtime(monkeypatch) -> N
     )
 
     with pytest.raises(RuntimeError, match="rt hard fail"):
-        build_hold_summary(HoldRequest(realtime_fail_soft=False))
+        build_hold_summary(HoldRequest(
+            realtime_fail_soft=False, refresh_stale=lambda _pairs, _days: None,
+        ))
 
 
 def test_hold_service_refresh_stale_silent_filters_and_suppresses(monkeypatch) -> None:
@@ -206,14 +211,14 @@ def test_settings_facts_helpers(monkeypatch, tmp_path) -> None:
     (data_dir / "note.parquet").write_text("x", encoding="utf-8")
     cfg_path = tmp_path / "config.json"
     monkeypatch.setattr(config, "CONFIG_PATH", cfg_path)
-    config.save({**config.DEFAULT_CONFIG, "tushare_endpoint": "not-a-url"})
+    config.save({**config.DEFAULT_CONFIG, "tushare_endpoint": "HTTPS://quotes.example.test"})
     monkeypatch.setattr("kan.storage.paths.DATA_DIR", data_dir)
     monkeypatch.delenv("TUSHARE_ENDPOINT", raising=False)
 
     facts = workspace_views.settings_facts()
 
     assert facts["kline_cache_files"] == 1
-    assert facts["tushare_endpoint_domain"]
+    assert facts["tushare_endpoint_domain"] == "quotes.example.test"
 
     class BrokenDir:
         def glob(self, _pattern):
@@ -223,17 +228,16 @@ def test_settings_facts_helpers(monkeypatch, tmp_path) -> None:
     assert workspace_views._endpoint_domain("http://[::1") == ""
 
 
-def test_hold_api_unavailable_is_neutral(monkeypatch) -> None:
+def test_hold_api_failure_is_not_an_empty_account(monkeypatch) -> None:
     monkeypatch.setattr(
         "kan.web.api_v1.build_hold_summary",
         lambda: (_ for _ in ()).throw(RuntimeError("hold down")),
     )
 
-    response = _client().get("/api/v1/portfolio")
+    response = _client(raise_server_exceptions=False).get("/api/v1/portfolio")
 
-    assert response.status_code == 200
-    assert response.json()["ok"] is False
-    assert response.json()["error"] == "持仓数据不可用"
+    assert response.status_code == 500
+    assert "hold down" not in response.text
 
 
 def test_serialize_hold_preserves_missing_quotes() -> None:
@@ -264,4 +268,3 @@ def test_serialize_hold_preserves_missing_quotes() -> None:
     ))
     assert hold_payload["rows"][0]["p180_pct"] is None
     assert hold_payload["rows"][0]["name"] == "贵州茅台"
-    assert empty_hold_payload(error="boom")["ok"] is False

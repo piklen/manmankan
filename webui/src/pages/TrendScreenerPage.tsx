@@ -13,7 +13,7 @@ import {
   Trash2,
 } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
-import { Link, useNavigate } from "react-router-dom";
+import { Link, useLocation, useNavigate } from "react-router-dom";
 import {
   api,
   type SavedTrendSearch,
@@ -114,7 +114,13 @@ function summary(query: TrendSearchQuery) {
 export function TrendScreenerPage() {
   const navigate = useNavigate(),
     client = useQueryClient();
-  const [initial] = useState(remembered);
+  const location = useLocation();
+  const [initial] = useState(() => {
+    const query = location.state?.discoveryQuery as TrendSearchQuery | undefined;
+    return query
+      ? { draft: screenQueryToDraft(query), submitted: query, task: null }
+      : remembered();
+  });
   const [draft, setDraft] = useState(initial.draft);
   const [submitted, setSubmitted] = useState<TrendSearchQuery | null>(
     initial.submitted,

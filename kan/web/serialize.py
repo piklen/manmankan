@@ -68,23 +68,3 @@ def serialize_hold(result: PositionsSummary) -> dict[str, Any]:
         "rows": rows,
         "notes": list(result.notes),
     }
-
-
-def empty_hold_payload(*, error: str | None = None) -> dict[str, Any]:
-    """持仓不可用时的中性降级 payload。"""
-    return {
-        "ok": error is None,
-        "error": error,
-        "price_mode": None,
-        "data_cutoff": None,
-        "account": {
-            "cash": None,
-            "total_market_value": None,
-            "total_assets": None,
-            "total_position_pct": None,
-            "daily_pnl": None,
-            "total_pnl": None,
-        },
-        "rows": [],
-        "notes": [],
-    }

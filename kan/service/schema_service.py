@@ -72,12 +72,12 @@ def _command_schemas(*, compact: bool) -> list[dict[str, Any]]:
             "examples": ["kan study schema", "kan study catalog", "kan study run query.json --format json", "kan study list --format json"],
         },
         {
-            "name": "screen ohlc",
+            "name": "ohlc",
             "purpose": "Evaluate explicit joint candle/close and recent range-low rules with a fixed adjustment basis.",
             "formats": ["json"],
             "schema_version": 1,
             "success_keys": ["ok", "command", "request", "as_of", "adjustment", "sources", "coverage", "rows", "evaluated_rows", "excluded"],
-            "examples": ["kan screen ohlc --help"],
+            "examples": ["kan ohlc --help"],
         },
         {
             "name": "research",

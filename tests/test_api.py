@@ -101,25 +101,6 @@ def test_api_exports_board_trend_application_service():
     assert callable(api.study_board_history)
 
 
-def test_api_exports_vnext_screen_application_service():
-    """Python 用户不需要 import 内部 service/storage 模块。"""
-    from kan import api
-
-    assert api.ScreenSpec(name="公开 API 规则", exclude_st=True)
-    for function_name in (
-        "save_screen",
-        "get_screen",
-        "list_screens",
-        "run_screen",
-        "get_run",
-        "list_runs",
-        "parse_screen_text",
-        "plan_screen",
-        "explain_run",
-    ):
-        assert callable(getattr(api, function_name))
-
-
 # ── 早期数据源扩展 API surface ──────────────────────────────────────
 
 

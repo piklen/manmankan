@@ -76,11 +76,9 @@ def test_no_args_shows_short_retail_start_instead_of_full_reference() -> None:
     result = runner.invoke(app, [])
 
     assert result.exit_code == 0
-    assert "慢慢看 · 找趋势，核对位置与历史" in result.stdout
     assert "kan web" in result.stdout
     assert "kan tui" in result.stdout
-    assert "数据保存在本机" in result.stdout
-    assert "条件筛选" not in result.stdout
+    assert "kan discover" in result.stdout
 
 
 def test_console_script_root_help_bypasses_full_cli_import(

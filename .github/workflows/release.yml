@@ -120,7 +120,7 @@ jobs:
         run: |
           uv run ruff check kan/ tests/
           uv run mypy
-          uv run pytest -vv -m "not tty and not network" --durations=25 --durations-min=1.0
+          uv run pytest -q -m "not tty and not network" -n 2 --dist worksteal --durations=10
       - name: Build
         run: uv build --clear
       - name: Verify dist artifacts
@@ -140,50 +140,10 @@ jobs:
           PY
       - name: Pre-publish clean wheel smoke
         run: |
-          VERSION="${GITHUB_REF_NAME#v}"
-          uv venv /tmp/manmankan-release-smoke --python 3.12
-          uv pip install --python /tmp/manmankan-release-smoke/bin/python dist/*.whl
-          SMOKE_CWD="$(mktemp -d)"
-          cd "$SMOKE_CWD"
-          HOME="$(mktemp -d)" XDG_DATA_HOME="$(mktemp -d)" /tmp/manmankan-release-smoke/bin/kan --version | grep "kan ${VERSION}"
-          HOME="$(mktemp -d)" XDG_DATA_HOME="$(mktemp -d)" /tmp/manmankan-release-smoke/bin/kan --help
-          HOME="$(mktemp -d)" XDG_DATA_HOME="$(mktemp -d)" /tmp/manmankan-release-smoke/bin/kan scan --help
-          HOME="$(mktemp -d)" XDG_DATA_HOME="$(mktemp -d)" /tmp/manmankan-release-smoke/bin/kan find --help
-          HOME="$(mktemp -d)" XDG_DATA_HOME="$(mktemp -d)" /tmp/manmankan-release-smoke/bin/kan screen --help
-          HOME="$(mktemp -d)" XDG_DATA_HOME="$(mktemp -d)" /tmp/manmankan-release-smoke/bin/kan workspace --help
-          HOME="$(mktemp -d)" XDG_DATA_HOME="$(mktemp -d)" /tmp/manmankan-release-smoke/bin/kan board rank --help
-          HOME="$(mktemp -d)" XDG_DATA_HOME="$(mktemp -d)" /tmp/manmankan-release-smoke/bin/kan board trend --help
-          HOME="$(mktemp -d)" XDG_DATA_HOME="$(mktemp -d)" /tmp/manmankan-release-smoke/bin/kan history --help
-          HOME="$(mktemp -d)" XDG_DATA_HOME="$(mktemp -d)" /tmp/manmankan-release-smoke/bin/kan range --help
-          XDG_DATA_HOME="$(mktemp -d)" /tmp/manmankan-release-smoke/bin/kan research --help
-          FIND_JSON="$(mktemp)"
-          FIND_ERR="$(mktemp)"
-          export FIND_JSON
-          HOME="$(mktemp -d)" XDG_DATA_HOME="$(mktemp -d)" NO_COLOR=1 /tmp/manmankan-release-smoke/bin/kan find --codes 600519,000858 --format json > "$FIND_JSON" 2> "$FIND_ERR"
-          test ! -s "$FIND_ERR"
-          /tmp/manmankan-release-smoke/bin/python - <<'PY'
-          import importlib.metadata
-          import json
-          import os
-          from pathlib import Path
-
-          version = os.environ["GITHUB_REF_NAME"].removeprefix("v")
-          import kan
-          from kan.web.app import SPA_INDEX
-
-          assert importlib.metadata.version("manmankan") == version
-          assert kan.__version__ == version
-          assert Path(kan.__file__).resolve().is_relative_to(Path("/tmp/manmankan-release-smoke").resolve())
-          assert SPA_INDEX.is_file()
-          assert "/assets/index-" in SPA_INDEX.read_text(encoding="utf-8")
-          payload = json.loads(Path(os.environ["FIND_JSON"]).read_text())
-          assert payload["ok"] is True
-          assert payload["command"] == "find"
-          assert payload["result_schema"] == "full"
-          assert payload["stats"]["matched"] == 2
-          assert len(payload["results"]) == 2
-          assert payload["disclaimer"]
-          PY
+          smoke_env="$RUNNER_TEMP/manmankan-release-smoke"
+          uv venv "$smoke_env" --python 3.12
+          uv pip install --python "$smoke_env/bin/python" dist/*.whl
+          "$smoke_env/bin/python" scripts/smoke-installed.py
       - name: Compute install.sh / install.ps1 SHA256
         run: |
           {
@@ -199,34 +159,41 @@ jobs:
           packages-dir: dist/
           attestations: true  # sigstore PEP 740 attestation
 
-  # 发版前 CI 测试 ≠ 装回来跑命令 · 历史上是安装后导入失败的成因之一
-  # 这个 job 模拟用户视角: PyPI clean install → 跑 kan 核心命令 → 验证 import chain
+  # 代表组合覆盖最低 Python、原生数据依赖、Windows 入口与两种安装器。
   post-publish-smoke:
     name: Smoke test from PyPI (clean install)
     needs: build-and-publish
     runs-on: ${{ matrix.os }}
-    timeout-minutes: 20
+    timeout-minutes: 15
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-latest, macos-15-intel]
-        manager: [uv, pip]
-        python: ['3.11', '3.12']
+        include:
+          - os: ubuntu-latest
+            manager: pip
+            python: '3.11'
+          - os: macos-15-intel
+            manager: uv
+            python: '3.12'
+          - os: windows-latest
+            manager: pip
+            python: '3.11'
     steps:
-      - name: Wait for PyPI CDN propagation
-        run: sleep 60  # PyPI index 同步需要 30-60s
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: false
       - name: Setup Python
-        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97  # pinned 2026-06-02
+        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97
         with:
           python-version: ${{ matrix.python }}
-      - uses: astral-sh/setup-uv@11f9893b081a58869d3b5fccaea48c9e9e46f990  # pinned 2026-05-27
+      - uses: astral-sh/setup-uv@11f9893b081a58869d3b5fccaea48c9e9e46f990
         with:
           version: "0.11.21"
           enable-cache: false
-      - name: Install manmankan from PyPI (${{ matrix.manager }})
+      - name: Install and verify published package
+        shell: bash
         run: |
-          # ref_name 去掉前导 v 后得到包版本
-          VERSION="${GITHUB_REF_NAME#v}"
+          version="${GITHUB_REF_NAME#v}"
           retry_install() {
             local attempt
             for attempt in 1 2 3 4 5 6; do
@@ -240,38 +207,16 @@ jobs:
               sleep 30
             done
           }
-          case "${{ matrix.manager }}" in
-            uv)
-              retry_install uv tool install "manmankan==${VERSION}" --reinstall
-              ;;
-            pip)
-              python -m venv /tmp/smoke-venv
-              /tmp/smoke-venv/bin/python -m pip install --upgrade pip
-              retry_install /tmp/smoke-venv/bin/python -m pip install --no-cache-dir "manmankan==${VERSION}"
-              echo "/tmp/smoke-venv/bin" >> "$GITHUB_PATH"
-              ;;
-          esac
-      - name: Verify kan entry point
-        run: |
-          kan --version
-          KAN_NO_UPDATE_CHECK=1 kan --help
-          KAN_NO_UPDATE_CHECK=1 kan scan --help
-          KAN_NO_UPDATE_CHECK=1 kan find --help
-          KAN_NO_UPDATE_CHECK=1 kan screen --help
-          KAN_NO_UPDATE_CHECK=1 kan workspace --help
-          NO_COLOR=1 KAN_NO_UPDATE_CHECK=1 kan find --help > /tmp/kan-find-help.txt
-          python - <<'PY'
-          import re
-          from pathlib import Path
-
-          text = re.sub(r"\x1b\[[0-9;]*m", "", Path("/tmp/kan-find-help.txt").read_text())
-          assert "--compact" in text
-          assert "--fields" in text
-          PY
-          KAN_NO_UPDATE_CHECK=1 kan board rank --help
-          KAN_NO_UPDATE_CHECK=1 kan board trend --help
-          KAN_NO_UPDATE_CHECK=1 kan trend --help
-          KAN_NO_UPDATE_CHECK=1 kan info --help
-          KAN_NO_UPDATE_CHECK=1 kan history --help
-          KAN_NO_UPDATE_CHECK=1 kan range --help
-          KAN_NO_UPDATE_CHECK=1 kan research --help
+          if [ "${{ matrix.manager }}" = "uv" ]; then
+            retry_install uv tool install --python "${{ matrix.python }}" "manmankan==${version}"
+            smoke_python="$(uv tool dir)/manmankan/bin/python"
+          else
+            python -m venv .smoke
+            if [ "$RUNNER_OS" = "Windows" ]; then
+              smoke_python=".smoke/Scripts/python.exe"
+            else
+              smoke_python=".smoke/bin/python"
+            fi
+            retry_install "$smoke_python" -m pip install --no-cache-dir "manmankan==${version}"
+          fi
+          "$smoke_python" scripts/smoke-installed.py

@@ -18,6 +18,7 @@ from zoneinfo import ZoneInfo
 import numpy as np
 import pandas as pd
 
+from kan.core.returns import rolling_returns
 from kan.core.streaks import streak_counts
 from kan.core.swings import price_relation, scan_swings
 from kan.domain.market_study import (
@@ -157,7 +158,8 @@ def prepare_history(frame: pd.DataFrame, sessions: list[date]) -> pd.DataFrame:
         & (prices[:, 1] >= prices[:, [0, 2, 3]].max(axis=1))
         & (prices[:, 2] <= prices[:, [0, 1, 3]].min(axis=1))
     )
-    frame.loc[~valid, _PRICE_COLUMNS] = np.nan
+    if not valid.all():
+        frame.loc[~valid, _PRICE_COLUMNS] = np.nan
     frame["valid"] = valid
     volume = frame.volume.to_numpy(dtype=float, na_value=np.nan)
     frame["volume"] = np.where(valid & (volume >= 0) & np.isfinite(volume), volume, np.nan)
@@ -185,10 +187,11 @@ def _previous_streak(close: pd.Series, paired: pd.Series, *, rising: bool) -> tu
 
 def calculate_metrics(frame: pd.DataFrame, fields: list[tuple[StudyField, int | None]], reference_prices: np.ndarray | None = None, *, swing_reversal_pct: float = 5, swing_points: list[date] | None = None) -> tuple[pd.DataFrame, pd.DataFrame]:
     close, valid = frame.close, frame.valid
+    close_values, valid_values = close.to_numpy(dtype=float), valid.to_numpy(dtype=bool)
     paired = valid & valid.shift(1, fill_value=False)
     metrics: dict[str, Any] = {}
     exact: dict[str, Any] = {}
-    metrics["change_pct"] = (close / close.shift(1) - 1) * 100
+    metrics["change_pct"] = rolling_returns(close_values, valid_values, 1)
     swing_windows: dict[int, dict[str, np.ndarray]] = {}
     for field, window in fields:
         key = f"{field}.{window}" if window else field
@@ -252,8 +255,7 @@ def calculate_metrics(frame: pd.DataFrame, fields: list[tuple[StudyField, int | 
                 flags = close.gt(close.shift(1)) if field == "rising_days" else close.lt(close.shift(1))
                 metrics[key] = flags.rolling(window).sum().where(complete)
             elif field == "return_pct":
-                complete = valid.rolling(window + 1).sum().eq(window + 1)
-                metrics[key] = ((close / close.shift(window) - 1) * 100).where(complete)
+                metrics[key] = rolling_returns(close_values, valid_values, window)
             elif field == "volume_ratio":
                 average = frame.volume.shift(1).rolling(window).mean()
                 metrics[key] = (frame.volume / average).where(average.gt(0))

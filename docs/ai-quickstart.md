@@ -1,11 +1,12 @@
 # AI agent 快速开始
 
-波段筛选：`kan trend --universe all --swing up --window 60 --reversal-pct 5`（下降改 `down`、混合改 `mixed`）。精确阳阴数量问题用 `--window 15 --bull-excess 0 --return-above 0`，不要替换成上涨日计数。typed条件支持 `bull_count/bear_count/candle_balance/trend_slope/trend_efficiency/swing_structure/swing_direction/swing_count`，均需窗口。`swing_reversal_pct` 随Query保存/传递；结构编码1/-1/0分别为抬高/降低/混合，不足为null。图证 `swings` 给出确认点、确认日、当前未完成段与 `structure_broken`，不是事后预测。口径见[趋势研究](trend-research.md#波段结构与趋势因子)。
+> 本文对应 `main` 主线契约。`uv tool install manmankan` 安装 PyPI 稳定包；调用新入口前按 [README 的安装与主线说明](../README.md#安装与主线体验) 核对安装来源，再通过 `kan --version` 和 `--help` 发现实际能力。
 
-当前主线是趋势与波段筛选、位置与两日变化。AI 使用 `kan trend` 或 MCP `kan_trend` 明确范围与条件，读取当前匹配；可选 `compare_to` 核对新出现、持续、退出与无法确认，不会自动保存历史研究。`kan study catalog/schema` 发现共享日线条件；只有需要历史事件与后续窗口时才执行 `kan study run query.json --format json`。价格、位置与形态距离由共享 Python 核心计算，模型不另算；接口按当前契约使用，不做历史兼容。
+当前主线是观察群体现象、核对成员证据，再明确条件研究。先用 `kan discover --format json` 或 MCP `kan_discover` 获取完整范围的分布、行业剖面和同组变化；保留日期、窗口和各自分母。用户明确要求保留时，用 `kan observe` / MCP `kan_observe` 保存当时的事实与用户文字，之后显式复看同一批成员，不自动生成候选或判断。
 
+明确条件仍用 `kan trend` / `kan_trend`，历史事件用 `kan study`。波段参数、连续段、位置、两日比较与形态检索的精确口径见[研究契约](trend-research.md)，模型不另算金融指标，也不把未知当未命中。
 
-`manmankan` 给外部 AI agent 提供可审计的 A 股数据输入：typed Screen、CLI、JSON、字段白名单和本地 MCP。工具不内置 LLM；自然语言 parser 只整理明确阈值，最终仍由确定性 Python application service 计算用户规则命中与证据。
+`manmankan` 给外部 AI agent 提供可审计的 A 股数据输入：共享趋势与历史研究契约、CLI、JSON、字段白名单和本地 MCP。工具不内置 LLM；AI 整理用户明确的问题与参数，由确定性 Python 服务计算事实与证据。
 
 `kan research` 可直接取得个股研究事实。默认包含行情、估值、财务，也可只查需要的维度：
 
@@ -16,9 +17,17 @@ kan research 600519 --dimensions income,balancesheet,cashflow --format json
 
 这些命令只取请求的财务材料，不要求先拉 K 线。三表额外返回实际公告日、报表类型及累计/期末口径，跨表比较先核对报告期，不能把累计值当成单季值。CLI、Python 和 MCP 共用 [`research.md`](research.md) 的请求与证据契约。
 
+## 先观察市场变化
+
+无需先假定股票条件：`kan discover --window 20 --format json` 返回完整范围的当前分布、行业剖面、相邻等长窗口比较、固定成员轨迹和逐股成员。MCP `kan_discover` 接收同一个 `DiscoveryQuery`，HTTP 为 `POST /api/v1/discovery`。
+
+解释时保留 `as_of`、`window` 和各自分母。`market.current.available`、`market.comparison.available`、`market.history_available` 可能不同，不可混用。下钻收益桶用成员 `distribution_bin`，下钻变化用 `transition`，不在客户端重算分组。
+
+观察属于描述性统计，默认20日窗口不是选股条件；需要选股时，用户明确规则后才调用 `kan_trend`。不把上涨占比、迁移或历史中位数写成未来概率、评级或推荐。
+
 ## 1. 安装和发现
 
-日线条件同时涉及阳线、相对前收上涨、区间低点日期时，先运行 `kan screen ohlc --help`，
+日线条件同时涉及阳线、相对前收上涨、区间低点日期时，先运行 `kan ohlc --help`，
 再传入用户已明确的全部参数。该入口固定复权基准并返回逐日证据，详见
 [`ohlc-screen.md`](ohlc-screen.md)；不能把 `trend --up-days`、`trend --bull-days` 或 `find --up-days`
 中的某一个口径当成两者交集；仅要求连续两者同时满足时可明确使用 `kan trend --joint-up-days N`。
@@ -27,7 +36,7 @@ kan research 600519 --dimensions income,balancesheet,cashflow --format json
 uv tool install manmankan
 kan --version
 KAN_NO_UPDATE_CHECK=1 kan guide
-KAN_NO_UPDATE_CHECK=1 kan screen filters --format json
+KAN_NO_UPDATE_CHECK=1 kan study catalog
 KAN_NO_UPDATE_CHECK=1 kan find --codes 600519,000858 --format json --dry-run
 ```
 
@@ -98,25 +107,20 @@ uv run kan fields list --format json
 
 ## 2. 常用首用路径
 
-### 可复跑 Screen：优先用于持续研究
+### 趋势条件与历史证据
 
-需要保存规则、回看版本、比较多次运行、保留 evidence handle 或建立候选来源时，使用 `ScreenSpec / ScreenRun`，不要把多轮一次性 `find` 输出拼成隐式状态。
+当前条件用 `kan trend` 或 MCP `kan_trend`。保存条件不会触发行情查询或历史计算；
+需要核对过去时，明确范围、窗口和条件，再执行 `kan study run query.json --format json`。
+`kan study list/show/rerun` 管理历史研究，逐事件图证读取当次封存行情。
 
 ```bash
-kan screen filters --format json
-kan screen save screen.json --format json
-kan screen run <screen_id> --format json
-kan screen runs <screen_id> --format json
+kan study catalog
+kan study schema
+kan trend --universe personal --down-days 3 --format json
+kan study list --format json
 ```
 
-MCP agent 的等价路径是：
-
-1. `kan_screen_parse` 整理明确表达；检查 `ignored_text / errors / executable`。部分解析、有错误或引擎不支持时 `executable=false`，保留草稿供补充，不能直接执行。
-2. `kan_screen_plan` 核对执行路径、数据源、限制和 canonical hash。
-3. 只有 `executable=true` 才调用 `kan_screen_run`。
-4. 后续用 `kan_screen_get` 取不可变 run，用 `kan_screen_explain` 基于持久 evidence 解释。
-
-不要让模型自行删除 `unsupported_filters`、发明模糊阈值、把 `null` 改成 `0`，或根据自然语言重新排序 Python 已返回的 ScreenRun。
+不得把模糊描述静默换成阈值，把 `null` 改成 `0`，或拿当前匹配股票替代原完整研究范围。
 
 ### 查询计划 smoke：不取数
 
@@ -242,7 +246,7 @@ kan find --codes 600519,000858 --roe gt:10 --fields @core,@fundamentals --format
 
 `kan board trend` 把板块指数作为 OHLC 序列计算：默认比较“今日收盘与前日收盘”，`--candle` 改为比较“当日收盘与当日开盘”。因此“连续上涨 3 天”和“连续 3 根阳线”是两个不同口径；读取 JSON 的 `mode` 后再解释 `streak`。
 
-需要进程内 typed 调用时，使用 `from kan.api import BoardTrendQuery, query_board_trends`；HTTP 客户端使用 `GET /api/v1/boards/trends`。成员内部结构使用 `BoardPulseQuery / query_board_pulse` 或 `GET /api/v1/boards/{kind}/{value}/pulse`，只可解释为同一截止日的成员涨跌分布，不能把涨跌靠前成员改写成指数权重贡献或新闻因果。跨日复看使用 `create_board_review(BoardDailyReviewRequest(...))` 或 `POST /api/v1/board-reviews`；`streak_extended` 只表示连续天数绝对值增加，不得改写成“转强”或行动信号。CLI、Python、HTTP 与 Web 共享 typed snapshot，不要在 agent 内重新计算或重新排序。从 Web 板块下钻只代表 Screen 股票池已填入，不代表存在任何选股条件。
+板块指数研究的 Python 入口是 `kan.api.query_board_trends`、`query_board_pulse` 和 `create_board_review`。这些入口只描述指数连续事实、成员涨跌分布与跨日变化，没有对应的旧板块 HTTP 路由或每日复看 Web 页。成员涨跌不能改写成指数权重贡献或新闻因果。
 
 字段和 preset 以命令输出为准：
 
@@ -298,7 +302,7 @@ kan mcp http --host localhost --port 8765 --path /mcp
 
 HTTP transport 默认只绑定本机地址，并检查浏览器 `Origin`。它适合本机 agent、浏览器插件或调试工具连接；不要把本机 MCP 端口直接暴露成公网服务。
 
-MCP 同时提供既有 CLI/JSON 工具和直接 application service 的 `kan_screen_parse / plan / run / get / explain`。`tools/list` 会暴露 `inputSchema` 和 `outputSchema`；`tools/call` 保留 text content，并返回可校验的 `structuredContent`。AI 调 MCP 时要检查 `isError` / `ok:false`，读取 coverage、warnings 和 evidence，把数据解释为研究输入而不是交易结论。
+MCP 提供 CLI/JSON 工具，以及直接调用共享服务的 `kan_trend` 和 `kan_research`。`tools/list` 会暴露 `inputSchema` 和 `outputSchema`；`tools/call` 保留 text content，并返回可校验的 `structuredContent`。AI 调 MCP 时要检查 `isError` / `ok:false`，读取 coverage、warnings 和 evidence，把数据解释为研究输入而不是交易结论。
 
 支持的客户端和写入规则见 [`docs/mcp.md`](mcp.md)。
 

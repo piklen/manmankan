@@ -222,19 +222,19 @@ def _read_cutoff_from_parquet(path: Path) -> date | None:
         return None
 
 
-def _cache_has_min_rows(path: Path, min_rows: int | None) -> bool:
+def _cache_has_min_rows(path: Path, min_rows: int | None, *, frame: pd.DataFrame | None = None) -> bool:
     """缓存是否已按所需周期完整请求过。
 
-    新股上市历史可能天然少于所需行数；只要缓存由不少于 min_rows 的请求生成，
-    就视为已完整刷新，计算层仍会把不足周期标成 insufficient。
+    新股上市历史可能天然少于所需行数；元数据可证明已请求过相应范围。
+    窗口内部是否完整由 _is_cache_fresh 另按交易日核对，计算层仍保留不足周期。
     """
     if min_rows is None or min_rows <= 0:
         return True
     try:
         import pandas as pd
 
-        cached_dates = pd.read_parquet(path, columns=["date"])
-        if len(cached_dates) >= min_rows:
+        cached = frame if frame is not None else pd.read_parquet(path, columns=["date"])
+        if len(cached) >= min_rows:
             return True
         import pyarrow.parquet as pq
 
@@ -249,31 +249,34 @@ def _cache_has_min_rows(path: Path, min_rows: int | None) -> bool:
 
 
 def _is_cache_fresh(path: Path, *, min_rows: int | None = None) -> bool:
-    """缓存是否已包含"应有最近交易日"数据。
-
-    当前判据：K 线最后一行 date == latest_trade_date()。
-    旧实现 mtime_date == today 已废 · 凌晨 02:55 拉到昨日数据后会被
-    误判为"今日数据齐了"整天不刷新 · scan 显示昨日涨停名单。
-    """
+    """末日必须最新；显式窗口还须覆盖其中已有上市区间的有效日线。"""
     if not path.exists():
         return False
+    import pandas as pd
+
+    from kan.core.trading_calendar import get_trade_dates, latest_trade_date
+
     try:
-        if _read_usable_cache(path) is None:
+        frame = _read_usable_cache(path)
+        if frame is None or frame.empty or "date" not in frame:
             return False
-    except (OSError, ValueError):
+        dates = pd.to_datetime(frame["date"], errors="coerce").dt.date
+        latest = latest_trade_date()
+        if dates.isna().any() or dates.duplicated().any() or dates.iloc[-1] != latest:
+            return False
+        if min_rows is None or min_rows <= 0:
+            return True
+        if not _cache_has_min_rows(path, min_rows, frame=frame):
+            return False
+        calendar = sorted(day for day in get_trade_dates() if day <= latest)
+        if not calendar or calendar[-1] != latest:
+            return False
+        first_cached = dates.min()
+        # requested_days 可以解释上市前的天然不足，不能掩盖上市后的内部缺口。
+        required = {day for day in calendar[-min_rows:] if day >= first_cached}
+        return required.issubset(_valid_quote_dates(frame))
+    except (OSError, ValueError, TypeError):
         return False
-    if not _cache_has_min_rows(path, min_rows):
-        debug_log(
-            __name__,
-            f"_is_cache_fresh({path.name})",
-            f"cache rows < required {min_rows} → stale",
-        )
-        return False
-    last_date = _read_cutoff_from_parquet(path)
-    if last_date is None:
-        return False
-    from kan.core.trading_calendar import latest_trade_date
-    return last_date == latest_trade_date()
 
 
 # ── 网络代理隔离 ─────────────────────────────────────────────────────
@@ -331,25 +334,75 @@ def _kline_source_snapshot() -> list[KlineSource]:
     return list(unique.values())
 
 
+def _valid_quote_dates(frame: pd.DataFrame) -> set[date]:
+    """保护可用日线事实；坏日期或无效 OHLC 不阻止重新获取。"""
+    import numpy as np
+    import pandas as pd
+
+    if not set(KLINE_REQUIRED).issubset(frame.columns):
+        return set()
+    dates = pd.to_datetime(frame["date"], errors="coerce").dt.date
+    prices = frame[["open", "high", "low", "close"]].apply(pd.to_numeric, errors="coerce").to_numpy(dtype=float)
+    valid = (
+        dates.notna().to_numpy() & np.isfinite(prices).all(axis=1) & (prices > 0).all(axis=1)
+        & (prices[:, 1] >= prices[:, [0, 2, 3]].max(axis=1))
+        & (prices[:, 2] <= prices[:, [0, 1, 3]].min(axis=1))
+    )
+    return set(dates[valid])
+
+
+def _existing_quote_dates(symbol: str) -> set[date]:
+    try:
+        previous = get_cached(symbol)
+        return _valid_quote_dates(previous) if previous is not None else set()
+    except (OSError, ValueError, TypeError) as exc:
+        # 损坏或未验证缓存没有可保留的有效事实，允许用完整响应重建。
+        debug_log(__name__, f"cache unavailable for refresh {symbol}", exc)
+        return set()
+
+
+def _preserving_start(symbols: list[str], start: str) -> str:
+    for symbol in dict.fromkeys(symbols):
+        dates = _existing_quote_dates(symbol)
+        if dates:
+            start = min(start, min(dates).strftime("%Y%m%d"))
+    return start
+
+
+def _write_kline_cache(symbol: str, frame: pd.DataFrame, days: int) -> None:
+    """新整段须覆盖旧有效日期；不同复权基准绝不拼接。"""
+    from kan.storage.paths import atomic_write_parquet
+
+    missing = _existing_quote_dates(symbol) - _valid_quote_dates(frame)
+    if missing:
+        raise ValueError(
+            f"{symbol} 新行情缺少已有的 {len(missing)} 个有效交易日"
+            f"（{min(missing)} 至 {max(missing)}）；为保留较长历史，未覆盖原缓存"
+        )
+    atomic_write_parquet(
+        frame, _cache_path(symbol),
+        metadata={"kan.requested_days": str(int(days)), **_price_basis_metadata(frame)},
+    )
+
+
 def _finalize_kline_result(
     result: KlineFetchResult,
     *,
     days: int,
 ) -> pd.DataFrame:
-    """把 scheduler raw result 归一化并原子落盘，保留旧失败文案。"""
+    """把 scheduler 结果归一化并安全落盘；失败保留实际来源明细。"""
     if not result.succeeded or result.data is None or result.source is None:
+        details = list(dict.fromkeys(
+            f"{attempt.provider}: {redact_text(attempt.failure.message)}"
+            for attempt in result.attempts if attempt.failure is not None and attempt.failure.message
+        ))
+        if details:
+            raise ValueError(f"{result.symbol} 行情获取失败：{'；'.join(details)}")
         raise ValueError(f"无效股票代码或无数据: {result.symbol}")
-    cache = _cache_path(result.symbol)
     df = _normalize_kline(result.data, source=result.source, symbol=result.symbol)
     if df.empty:
         raise ValueError(f"无有效行情，未覆盖原缓存: {result.symbol}")
-    from kan.storage.paths import atomic_write_parquet
-
-    atomic_write_parquet(
-        df,
-        cache,
-        metadata={"kan.requested_days": str(int(days)), **_price_basis_metadata(df)},
-    )
+    _write_kline_cache(result.symbol, df, days)
     return df
 
 
@@ -381,7 +434,7 @@ def fetch_kline(
         return pd.read_parquet(cache)
 
     _ensure_no_proxy()
-    start = (datetime.now() - timedelta(days=int(days * 1.8))).strftime("%Y%m%d")
+    start = _preserving_start([symbol], (datetime.now() - timedelta(days=int(days * 1.8))).strftime("%Y%m%d"))
 
     with KlineScheduler(
         _kline_source_snapshot(),
@@ -513,6 +566,7 @@ def _fetch_market_batch(
         safe_callback(on_progress, symbol, ok, error)
 
     pending_symbols: list[str] = []
+    oldest: date | None = None
     for symbol in unique_symbols:
         try:
             _validate_symbol(symbol)
@@ -520,6 +574,12 @@ def _fetch_market_batch(
             if as_of is None and not force and _is_cache_fresh(cache, min_rows=days):
                 finish(symbol, pd.read_parquet(cache), None)
                 continue
+            old_dates = _existing_quote_dates(symbol)
+            if old_dates:
+                if as_of is not None and max(old_dates) > as_of:
+                    raise ValueError(f"{symbol} 已有 {max(old_dates)} 的有效行情，早于该日的截止日期会丢失较新事实；未覆盖原缓存")
+                first = min(old_dates)
+                oldest = min(oldest, first) if oldest is not None else first
         except Exception as exc:
             finish(symbol, None, str(exc))
             continue
@@ -528,14 +588,22 @@ def _fetch_market_batch(
     if not pending_symbols:
         return results, errors
 
-    if lifecycle is not None:
-        lifecycle.phase(
-            "全市场批量拉取",
-            symbols=len(pending_symbols),
-            days=days,
-            workers=min(max_workers or 12, 12),
-        )
     try:
+        if oldest is not None:
+            from kan.core.trading_calendar import get_trade_dates, latest_trade_date
+
+            end = as_of or latest_trade_date()
+            calendar = get_trade_dates()
+            if oldest not in calendar or end not in calendar:
+                raise ValueError("真实交易日历未覆盖已有历史与请求截止日，无法安全扩展更新范围；原缓存保留")
+            days = max(days, sum(oldest <= day <= end for day in calendar))
+        if lifecycle is not None:
+            lifecycle.phase(
+                "全市场批量拉取",
+                symbols=len(pending_symbols),
+                days=days,
+                workers=min(max_workers or 12, 12),
+            )
         panel = fetch_recent_daily_bars(
             days,
             end_date=as_of.strftime("%Y%m%d") if as_of else None,
@@ -568,8 +636,6 @@ def _fetch_market_batch(
             rows=len(panel),
             workers=worker_limit,
         )
-
-    from kan.storage.paths import atomic_write_parquet
 
     wanted = set(pending_symbols)
     seen: set[str] = set()
@@ -607,12 +673,8 @@ def _fetch_market_batch(
                 symbol=symbol,
             )
             if frame.empty:
-                raise ValueError(f"无效股票代码或无数据: {symbol}")
-            atomic_write_parquet(
-                frame,
-                _cache_path(symbol),
-                metadata={"kan.requested_days": str(int(days)), **_price_basis_metadata(frame)},
-            )
+                raise ValueError(f"{symbol} 截止日缺少可用行情或复权因子，无法物化统一基准；原缓存保留")
+            _write_kline_cache(symbol, frame, days)
             return symbol, frame, None
         except Exception as exc:
             return symbol, None, str(exc)
@@ -766,7 +828,7 @@ def fetch_batch(
 
     _ensure_data_dir()
     _ensure_no_proxy()
-    start = (datetime.now() - timedelta(days=int(days * 1.8))).strftime("%Y%m%d")
+    start = _preserving_start(network_symbols, (datetime.now() - timedelta(days=int(days * 1.8))).strftime("%Y%m%d"))
 
     def _on_result(result: KlineFetchResult) -> None:
         started_at = network_started[result.symbol].popleft()

@@ -16,12 +16,13 @@ def root_help_text() -> str:
 
 [bold cyan]普通用户先从这里开始[/bold cyan]
   kan tui                   键盘筛选：选类型 / 填天数与日期 / 两日变化 / 历史核对
-  kan web                   趋势筛选 / 连续涨跌 / 形态搜索 / 历史证据
+  kan web                   群体变化 / 行业剖面 / 成员证据 / 条件研究
   kan daily                 在终端查看一日事实概览
   kan guide                 只看最常用的下一步
   kan help                  查看这份完整命令表
 
-[bold cyan]趋势与历史研究[/bold cyan]
+[bold cyan]观察与历史研究[/bold cyan]
+  kan discover              查看市场分布、行业与前后窗口变化
   kan study catalog                      查看条件字段、定义和单位
   kan study schema                       查看研究输入格式
   kan study run query.json --format json  执行明确条件并保存图证
@@ -29,14 +30,7 @@ def root_help_text() -> str:
   kan study rerun <study_id> --latest     推进到最近收盘并比较变化
 
 [bold cyan]可复跑选股规则[/bold cyan]
-  kan screen filters                    查看 27 类条件与数据边界
-  kan screen ohlc --help                 显式日线交集、近期区间低点与复权证据
-  kan screen save screen.json           保存规则；内容变化时追加版本
-  kan screen run <screen_id>             运行并保存不可变 ScreenRun
-  kan screen versions <screen_id>        查看规则版本
-  kan screen restore <screen_id> 1       把历史规则恢复为新版本
-  kan screen runs <screen_id>            查看运行历史
-  kan screen show-run <run_id>           查看结果、覆盖率与逐条件证据
+  kan ohlc --help                 显式日线交集、近期区间低点与复权证据
   kan workspace status                  查看 SQLite / JSON 状态后端
 
 [bold cyan]自选股管理[/bold cyan]
@@ -225,11 +219,13 @@ def print_root_help() -> None:
 
 def start_help_text() -> str:
     """无参数启动时只展示普通散户的最短路径。"""
-    return """[bold]慢慢看 · 找趋势，核对位置与历史[/bold]
+    return """[bold]慢慢看 · 看见市场变化，核对事实[/bold]
 
-  kan web       浏览器筛选台：连续涨跌、区间位置与历史核对
-  kan tui       键盘筛选台：明确连续涨跌天数与日期，c 看两日变化
-  kan trend     按波段结构 / 趋势因子 / 连续涨跌筛选
+  kan web       观察市场、拆解行业，再核对成员与历史
+  kan tui       键盘观察：Enter 下钻，f 切高级筛选，o 回观察
+  kan discover  先看市场分布 / 行业变化 / 同组对照
+  kan observe   保存自己的观察，之后显式复看同一批成员
+  kan trend     再按明确条件筛选与研究
   kan study     显式运行历史研究，支持 --format json
   kan help      完整 CLI 命令与自动化入口
 

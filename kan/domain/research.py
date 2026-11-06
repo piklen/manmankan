@@ -8,7 +8,7 @@ from typing import Literal
 
 from pydantic import Field, field_validator
 
-from kan.domain.screen import StrictModel
+from kan.domain.workspace import StrictModel
 
 
 class ResearchDimension(StrEnum):

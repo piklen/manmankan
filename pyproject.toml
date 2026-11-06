@@ -1,7 +1,7 @@
 [project]
 name = "manmankan"
-version = "0.0.6.9.44"
-description = "A 股趋势搜索与定位 · 多周期地图、形态检索与历史证据"
+version = "0.0.6.9.45"
+description = "A 股市场变化研究 · 群体分布、行业剖面与可追溯证据"
 requires-python = ">=3.11"
 license = { file = "LICENSE" }
 authors = [
@@ -36,7 +36,7 @@ dependencies = [
     "pandas>=2.0,<3",  # 避免提前吃 pandas 3.x 行为变更
     "pydantic>=2.13.4,<3",
     "rich>=13.0,<16",
-    "typer>=0.12,<0.26",  # 0.26.x 让 TTY help 首帧超出 100ms SLO，修复前先收紧
+    "typer>=0.12,<0.26",  # 保持当前已验证的 CLI 依赖范围
     "fastapi>=0.139.0,<0.141",  # 本地 Web 服务端路由 · 窄范围避免 Starlette 契约漂移
     "uvicorn>=0.32,<0.52",  # 本地 Web ASGI 运行时 · 只监听 127.0.0.1
     "pyarrow>=15.0,<25",  # pandas 读写 parquet 的运行时依赖
@@ -94,7 +94,7 @@ show_error_codes = true
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 markers = [
-    "tty: true terminal PTY tests for Rich spinner/progress first-frame SLO",
+    "tty: 真实终端的进度、JSON 分流与退出恢复",
     "network: 真网络冒烟 case · 默认 CI 跳 · 用 -m network 单独跑",
 ]
 
