@@ -85,15 +85,22 @@ class TestResolveConfig:
         token, _ = tushare._resolve_config()
         assert token is None
 
-    def test_invalid_endpoint_falls_back_to_default(self, temp_config, monkeypatch):
+    def test_invalid_endpoint_does_not_send_credentials_elsewhere(self, temp_config, monkeypatch):
         monkeypatch.setenv("TUSHARE_ENDPOINT", "not-a-url")
-        _, endpoint = tushare._resolve_config()
-        assert endpoint == self.DEFAULT_ENDPOINT
+        with pytest.raises(ValueError, match="端点"):
+            tushare._resolve_config()
 
-    def test_http_endpoint_falls_back_without_opt_in(self, temp_config):
+    def test_http_endpoint_fails_without_opt_in(self, temp_config):
         config.save({**config.DEFAULT_CONFIG, "tushare_endpoint": "http://mirror.local"})
-        _, endpoint = tushare._resolve_config()
-        assert endpoint == self.DEFAULT_ENDPOINT
+        with pytest.raises(ValueError, match="默认拒绝"):
+            tushare._resolve_config()
+
+    def test_endpoint_normalization_and_port_validation_match_execution(self, temp_config):
+        endpoint = config.validate_tushare_endpoint("HTTPS://quotes.example.test/api")
+        config.save({**config.DEFAULT_CONFIG, "tushare_endpoint": endpoint})
+        assert tushare._resolve_config()[1] == "https://quotes.example.test/api"
+        with pytest.raises(ValueError, match="端点"):
+            config.validate_tushare_endpoint("https://quotes.example.test:99999/api")
 
     def test_http_endpoint_allowed_with_opt_in(self, temp_config, monkeypatch):
         monkeypatch.setenv("KAN_ALLOW_INSECURE_TUSHARE", "1")
@@ -226,7 +233,8 @@ class TestPostTushareApi:
         assert err.code == -1
         assert "ConnectionError" in err.msg
 
-    def test_token_redacted_in_server_msg(self, monkeypatch):
+    @pytest.mark.parametrize("message", ["token abc1234567890def 已失效", "认证材料 abc1234567890def 不可用"])
+    def test_token_redacted_in_server_msg(self, monkeypatch, message):
         """背景: server msg 若含 token-like 字符串 · err.msg 必经 redact_text 清洗。"""
         class _FakeSession:
             def post(self, url, json, timeout):
@@ -235,13 +243,13 @@ class TestPostTushareApi:
                 # 模拟 TuShare 偶尔 msg 含 token 字符串(防御)
                 mock.json.return_value = {
                     "code": 40101,
-                    "msg": "token abc1234567890def 已失效",
+                    "msg": message,
                     "data": None,
                 }
                 return mock
         monkeypatch.setattr(tushare, "_get_session", lambda: _FakeSession())
         _data, err = tushare._post_tushare_api(
-            "http://api.tushare.pro", "tk", "daily", {}, "x")
+            "http://api.tushare.pro", "abc1234567890def", "daily", {}, "x")
         assert err is not None
         assert "abc1234567890def" not in err.msg  # token 被 redact
 

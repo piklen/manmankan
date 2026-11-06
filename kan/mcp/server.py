@@ -9,6 +9,7 @@ import json
 import sys
 from collections.abc import Callable
 from dataclasses import dataclass
+from datetime import date
 from http import HTTPStatus
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from typing import Any
@@ -18,25 +19,12 @@ from pydantic import BaseModel
 from typer.testing import CliRunner
 
 from kan import __version__
+from kan.domain.discovery import DiscoveryQuery, DiscoveryResult
+from kan.domain.observation import ObservationSaveRequest
 from kan.domain.research import ResearchBundle, ResearchRequest
-from kan.domain.screen import ScreenRun
 from kan.infra.log import redact_text
-from kan.service.screen_ai import (
-    ScreenArtifact,
-    ScreenExplainInput,
-    ScreenExplanation,
-    ScreenGetInput,
-    ScreenParseInput,
-    ScreenParseResult,
-    ScreenPlan,
-    ScreenPlanInput,
-    ScreenRunInput,
-    explain_run,
-    get_artifact,
-    parse_screen_text,
-    plan_screen,
-    run_from_input,
-)
+from kan.service import observation
+from kan.service.discovery import discover_market
 from kan.service.trend_search import TrendSearchQuery, TrendSearchResult, search_trends
 
 SERVER_NAME = "manmankan"
@@ -234,12 +222,34 @@ def _model_result(value: BaseModel) -> dict[str, Any]:
     }
 
 
-def _kan_screen_parse(payload: dict[str, Any]) -> dict[str, Any]:
-    return _model_result(parse_screen_text(ScreenParseInput.model_validate(payload)))
 
 
 def _kan_trend(payload: dict[str, Any]) -> dict[str, Any]:
     return _model_result(search_trends(TrendSearchQuery.model_validate(payload)))
+
+
+def _kan_discover(payload: dict[str, Any]) -> dict[str, Any]:
+    return _model_result(discover_market(DiscoveryQuery.model_validate(payload)))
+
+
+def _kan_observe(payload: dict[str, Any]) -> dict[str, Any]:
+    action = payload.get("action")
+    if action not in {"list", "show", "save", "review"}:
+        raise ValueError("action 必须为 list / show / save / review")
+    if action == "save":
+        request = ObservationSaveRequest.model_validate({key: payload[key] for key in ("query", "title", "note") if key in payload})
+        return _model_result(observation.save_observation(request))
+    if action == "list":
+        return {"exit_code": 0, "stdout": json.dumps({"observations": [item.model_dump(mode="json") for item in observation.list_observations()]}, ensure_ascii=False), "stderr": ""}
+    observation_id = payload.get("id")
+    if not isinstance(observation_id, str) or not observation_id:
+        raise ValueError("show / review 需要明确观察 id")
+    if action == "show":
+        return _model_result(observation.get_observation(observation_id))
+    if action == "review":
+        cutoff = payload.get("as_of")
+        return _model_result(observation.review_observation(observation_id, date.fromisoformat(cutoff) if cutoff else None))
+    raise ValueError("action 必须为 list / show / save / review")
 
 
 def _kan_research(payload: dict[str, Any]) -> dict[str, Any]:
@@ -251,22 +261,12 @@ def _kan_research(payload: dict[str, Any]) -> dict[str, Any]:
     return result
 
 
-def _kan_screen_plan(payload: dict[str, Any]) -> dict[str, Any]:
-    request = ScreenPlanInput.model_validate(payload)
-    return _model_result(plan_screen(request.spec))
 
 
-def _kan_screen_run(payload: dict[str, Any]) -> dict[str, Any]:
-    return _model_result(run_from_input(ScreenRunInput.model_validate(payload)))
 
 
-def _kan_screen_get(payload: dict[str, Any]) -> dict[str, Any]:
-    return _model_result(get_artifact(ScreenGetInput.model_validate(payload)))
 
 
-def _kan_screen_explain(payload: dict[str, Any]) -> dict[str, Any]:
-    request = ScreenExplainInput.model_validate(payload)
-    return _model_result(explain_run(request.run_id))
 
 
 def _kan_hold(payload: dict[str, Any]) -> dict[str, Any]:
@@ -307,6 +307,29 @@ def _kan_hold(payload: dict[str, Any]) -> dict[str, Any]:
 
 
 TOOLS = {
+    "kan_observe": ToolSpec(
+        name="kan_observe",
+        description="保存用户明确要求保留的观察，或读取/复看已有观察。save需要固定日期query，保留完整范围与用户自己的想法；review只比较原/新共同完整成员，不覆盖原事实。不得自动替用户创建观察、候选或判断。",
+        input_schema={
+            "type": "object", "additionalProperties": False, "required": ["action"],
+            "properties": {
+                "action": {"type": "string", "enum": ["list", "show", "save", "review"]},
+                "id": {"type": "string", "description": "show/review的观察ID"},
+                "query": DiscoveryQuery.model_json_schema(),
+                "title": {"type": "string", "maxLength": 120},
+                "note": {"type": "string", "maxLength": 4000},
+                "as_of": {"type": "string", "format": "date", "description": "明确复看日；不填使用最近收盘"},
+            },
+        },
+        handler=_kan_observe,
+    ),
+    "kan_discover": ToolSpec(
+        name="kan_discover",
+        description="观察完整范围的涨跌分布、行业差异、相邻等长窗口参与变化及固定成员轨迹。全部统计保留分母、缺口与成员，不预置选股条件或推荐评分。与 Web、CLI 共用同一结果。",
+        input_schema=DiscoveryQuery.model_json_schema(),
+        handler=_kan_discover,
+        output_schema=DiscoveryResult.model_json_schema(),
+    ),
     "kan_trend": ToolSpec(
         name="kan_trend",
         description="按明确条件筛趋势与波段：区间阳阴、斜率、效率、确认高低点结构及当前波段方向；swing_reversal_pct 调整反转幅度。compare_to 核对两日变化。与 Web/TUI/CLI 同源，不自动取数或创建研究。",
@@ -498,53 +521,6 @@ TOOLS = {
         },
         handler=_kan_index,
         output_schema=DEFAULT_OUTPUT_SCHEMA,
-    ),
-    "kan_screen_parse": ToolSpec(
-        name="kan_screen_parse",
-        description=(
-            "Parse explicit stock-screen threshold expressions into a typed ScreenSpec; "
-            "unknown text is surfaced and no thresholds are invented."
-        ),
-        input_schema=ScreenParseInput.model_json_schema(),
-        handler=_kan_screen_parse,
-        output_schema=ScreenParseResult.model_json_schema(),
-    ),
-    "kan_screen_plan": ToolSpec(
-        name="kan_screen_plan",
-        description=(
-            "Validate a ScreenSpec and return its engine path, data dependencies, "
-            "limitations, and canonical hash without executing it."
-        ),
-        input_schema=ScreenPlanInput.model_json_schema(),
-        handler=_kan_screen_plan,
-        output_schema=ScreenPlan.model_json_schema(),
-    ),
-    "kan_screen_run": ToolSpec(
-        name="kan_screen_run",
-        description=(
-            "Execute either a typed ScreenSpec or a saved Screen through the shared "
-            "ManManKan application service and return an auditable immutable run."
-        ),
-        input_schema=ScreenRunInput.model_json_schema(),
-        handler=_kan_screen_run,
-        output_schema=ScreenRun.model_json_schema(),
-    ),
-    "kan_screen_get": ToolSpec(
-        name="kan_screen_get",
-        description="Load one saved Screen or immutable ScreenRun by ID.",
-        input_schema=ScreenGetInput.model_json_schema(),
-        handler=_kan_screen_get,
-        output_schema=ScreenArtifact.model_json_schema(),
-    ),
-    "kan_screen_explain": ToolSpec(
-        name="kan_screen_explain",
-        description=(
-            "Explain why each row matched a persisted ScreenRun using stored facts, "
-            "thresholds, dates, coverage, and run-to-run changes."
-        ),
-        input_schema=ScreenExplainInput.model_json_schema(),
-        handler=_kan_screen_explain,
-        output_schema=ScreenExplanation.model_json_schema(),
     ),
 }
 

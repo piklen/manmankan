@@ -215,12 +215,14 @@ def _scope(query: TrendSearchQuery) -> tuple[list[tuple[str, str]], dict[str, st
     return members, industries, choices
 
 
-def _prepare_cached(symbol: str, sessions: list[datetime.date]) -> pd.DataFrame:
+def prepare_cached_history(symbol: str, sessions: list[datetime.date]) -> pd.DataFrame:
     from kan.data.fetcher import get_cached
 
     raw = get_cached(symbol)
     if raw is None or raw.empty:
         raise ValueError("缺少可用本地日线，请更新该股票数据")
+    if "date" not in raw:
+        raise ValueError("本地日线缺少日期列，请更新对应股票行情后重试")
     dates = normalize_history_dates(raw["date"])
     included = dates <= sessions[-1]
     raw = raw.loc[included].copy(deep=False)
@@ -371,7 +373,7 @@ def search_trends(query: TrendSearchQuery) -> TrendSearchResult:
     fields = [*((item.field, item.window) for item in query.conditions), *swing_fields] if query.conditions else _BASE_FIELDS
     for symbol, name in members:
         try:
-            frame = _prepare_cached(symbol, sessions)
+            frame = prepare_cached_history(symbol, sessions)
             valid_dates = frame.index[frame.valid]
             if len(valid_dates):
                 cutoffs[valid_dates[-1]] += 1
@@ -434,7 +436,7 @@ def trend_search_evidence(query: TrendSearchQuery, symbol: str, at: datetime.dat
         raise ValueError("图证日期必须是本次截止日或对照日")
     names = dict(resolve_study_members("codes", [symbol]))
     reference_prices, reference_bars, reference_source = _reference(query, sessions, as_of)
-    frame = _prepare_cached(symbol, sessions).loc[:point]
+    frame = prepare_cached_history(symbol, sessions).loc[:point]
     if frame.empty or frame.index[-1] != point or not frame.valid.iloc[-1]:
         raise ValueError("所选日期缺少有效行情，请先更新数据")
     fields = [*_BASE_FIELDS, *((item.field, item.window) for item in query.conditions), *_swing_display_fields(query)]

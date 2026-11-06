@@ -76,7 +76,7 @@ function mount() {
         })
       }
     >
-      <MemoryRouter>
+      <MemoryRouter initialEntries={["/explore"]}>
         <App />
       </MemoryRouter>
     </QueryClientProvider>,

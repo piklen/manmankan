@@ -14,7 +14,7 @@ import os
 import typer
 
 from kan.app import app
-from kan.data.tushare import ALLOW_INSECURE_ENDPOINT_ENV, DEFAULT_ENDPOINT
+from kan.data.tushare import DEFAULT_ENDPOINT
 from kan.storage import config
 from kan.storage.config import mask_token
 
@@ -30,15 +30,6 @@ _KEY_MAP = {
     "tushare-token": "tushare_token",
     "tushare-endpoint": "tushare_endpoint",
 }
-
-
-def _allow_insecure_endpoint() -> bool:
-    return os.environ.get(ALLOW_INSECURE_ENDPOINT_ENV, "").lower() in {
-        "1",
-        "true",
-        "yes",
-        "on",
-    }
 
 
 def _print_token(cfg: dict, *, raw: bool = False) -> None:
@@ -141,23 +132,12 @@ def set_cmd(
     if internal_key == "tushare_token" and not cleaned:
         typer.echo("❌ token 不能为空 · 例: kan config set tushare-token abc123def456")
         raise typer.Exit(code=2)
-    if internal_key == "tushare_endpoint" and not cleaned.startswith(("http://", "https://")):
-        typer.echo(
-            "❌ 端点需以 http:// 或 https:// 开头\n"
-            "   例: kan config set tushare-endpoint https://api.tushare.pro",
-        )
-        raise typer.Exit(code=2)
-    if (
-        internal_key == "tushare_endpoint"
-        and cleaned.startswith("http://")
-        and not _allow_insecure_endpoint()
-    ):
-        typer.echo(
-            "❌ 默认拒绝 http:// TuShare endpoint，避免 token 明文传输\n"
-            "   请改用 https://，或仅在可信内网/无 token 镜像下设置 "
-            f"{ALLOW_INSECURE_ENDPOINT_ENV}=1 后重试",
-        )
-        raise typer.Exit(code=2)
+    if internal_key == "tushare_endpoint":
+        try:
+            cleaned = config.validate_tushare_endpoint(cleaned)
+        except ValueError as exc:
+            typer.echo(f"❌ {exc}")
+            raise typer.Exit(code=2) from exc
 
     config.update(**{internal_key: cleaned})
 

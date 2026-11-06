@@ -96,7 +96,7 @@ class ProviderLane:
         self.name = name
         self.capabilities = capabilities
         maximum = 1 if capabilities.serializes_requests or name.lower() == "baostock" else capabilities.max_concurrency
-        initial = int(getattr(capabilities, "initial_concurrency", maximum))
+        initial = capabilities.initial_concurrency
         self.maximum = max(1, maximum)
         self.limit = min(self.maximum, max(1, initial))
         self.active = 0
@@ -130,7 +130,7 @@ class ProviderLane:
             self._healthy = 0
             if failure.kind == FetchFailureKind.RATE_LIMIT:
                 self.limit = max(1, self.limit // 2)
-                cooldown = float(getattr(self.capabilities, "rate_limit_cooldown_seconds", 0.0))
+                cooldown = self.capabilities.rate_limit_cooldown_seconds
                 retry_after = failure.retry_after or 0.0
                 self.blocked_until = max(self.blocked_until, self._clock() + max(cooldown, retry_after))
             elif failure.kind in {FetchFailureKind.TIMEOUT, FetchFailureKind.TRANSPORT}:
@@ -597,7 +597,7 @@ class KlineScheduler:
                 continue
             result_queue: queue.Queue[ProviderFetchResult[pd.DataFrame]] = queue.Queue(maxsize=1)
             self.pools[dispatch.source.name].submit(dispatch, result_queue)
-            timeout = getattr(dispatch.source.capabilities, "timeout_seconds", None)
+            timeout = dispatch.source.capabilities.timeout_seconds
             try:
                 result = result_queue.get(timeout=timeout)
                 elapsed = max(0.0, self.clock() - dispatch.started_at)
@@ -627,7 +627,7 @@ class KlineScheduler:
             kind = FetchFailureKind.EMPTY
             message = f"{completion.dispatch.source.name} returned no data"
         else:
-            kind = getattr(FetchFailureKind, "INVALID_SCHEMA", FetchFailureKind.EMPTY)
+            kind = FetchFailureKind.INVALID_SCHEMA
             missing = ",".join(sorted(required - columns))
             message = f"{completion.dispatch.source.name} invalid schema: missing {missing}"
         failure = FetchFailure(kind, message=message)
@@ -661,12 +661,12 @@ class KlineScheduler:
     ) -> bool:
         if not failure.retryable or soft_timed_out:
             return False
-        maximum = int(getattr(source.capabilities, "max_attempts", 1))
+        maximum = source.capabilities.max_attempts
         return attempt < max(1, maximum)
 
     def _retry_delay(self, source: DetailedKlineSource, attempt: int, failure: FetchFailure) -> float:
-        base = float(getattr(source.capabilities, "backoff_base_seconds", 0.5))
-        cap = float(getattr(source.capabilities, "backoff_cap_seconds", 30.0))
+        base = source.capabilities.backoff_base_seconds
+        cap = source.capabilities.backoff_cap_seconds
         exponential = min(cap, base * (2 ** max(0, attempt - 1)))
         if failure.retry_after is not None:
             exponential = max(exponential, failure.retry_after)

@@ -3,9 +3,11 @@ from __future__ import annotations
 
 from typing import Literal
 
-from pydantic import Field
+from pydantic import Field, SecretStr
 
-from kan.domain.screen import CandidateStatus, StrictModel
+from kan.domain.discovery import DiscoveryQuery
+from kan.domain.market_study import StudyRefreshRequest
+from kan.domain.workspace import CandidateStatus, StrictModel
 
 
 class ApiMeta(StrictModel):
@@ -92,4 +94,19 @@ class SettingsFactsResponse(StrictModel):
     tushare_endpoint_domain: str
     tushare_configured: bool
     tushare_masked: str | None = None
+    tushare_token_source: Literal["environment", "config", "unconfigured"]
+    tushare_endpoint_source: Literal["environment", "config", "default"]
     state_backend: Literal["sqlite", "legacy"]
+
+
+class SettingsUpdateRequest(StrictModel):
+    token: SecretStr | None = None
+    endpoint: str | None = None
+
+
+class DiscoveryDataPlan(StrictModel):
+    query: DiscoveryQuery
+    refresh: StudyRefreshRequest
+    required_start: str
+    latest: str
+    message: str

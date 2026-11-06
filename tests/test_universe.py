@@ -195,3 +195,16 @@ class TestFetchAllStocks:
         )
         # 拉取失败 → 退化陈旧 cache (而非空)
         assert universe.fetch_all_stocks() == [("600519", "贵州茅台")]
+
+
+def test_first_stock_list_failure_preserves_upstream_reason(tmp_path, monkeypatch):
+    from kan.data.tushare import TushareApiError
+
+    monkeypatch.setattr(universe, "DATA_DIR", tmp_path)
+    monkeypatch.setattr(universe, "ensure_dirs", lambda: None)
+    monkeypatch.setattr("kan.data.tushare._resolve_config", lambda: ("isolated-probe", "https://example.test"))
+    monkeypatch.setattr("kan.data.tushare._post_tushare_api", lambda **_kw: (None, TushareApiError(code=40101, msg="认证失败 token=isolated-secret", api_name="stock_basic")))
+    with pytest.raises(ValueError) as raised:
+        universe.fetch_all_stocks()
+    assert "40101" in str(raised.value) and "认证失败" in str(raised.value)
+    assert "isolated-secret" not in str(raised.value)

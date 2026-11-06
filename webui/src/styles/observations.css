@@ -1,0 +1,507 @@
+.observation-context-heading {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: start;
+  gap: 0 25px;
+}
+.observation-context-heading > .button {
+  margin-top: 2px;
+}
+.save-observation-form {
+  grid-column: 1 / -1;
+  width: 100%;
+  background: #edf3e8;
+  border: 1px solid #dbe5d5;
+  border-radius: 13px;
+  padding: 25px;
+  margin: 0 0 30px;
+}
+.save-observation-form header {
+  display: flex;
+  align-items: flex-start;
+  gap: 20px;
+  justify-content: space-between;
+  margin-bottom: 20px;
+}
+.save-observation-form h3 {
+  font-size: 18px;
+  font-weight: 550;
+}
+.save-observation-form header p {
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.8;
+  margin-top: 10px;
+}
+.save-observation-form label {
+  margin-top: 17px;
+  font-size: 12px;
+  color: var(--ink);
+}
+.save-observation-form label > span {
+  color: var(--muted);
+}
+.save-observation-form input,
+.save-observation-form textarea {
+  font-size: 14px;
+  padding: 12px 14px;
+}
+.save-observation-actions {
+  display: flex;
+  align-items: center;
+  gap: 18px;
+  flex-wrap: wrap;
+  margin-top: 20px;
+}
+.save-observation-actions > span {
+  font-size: 12px;
+  color: var(--muted);
+}
+.research-record-kind {
+  display: block;
+  color: var(--blue);
+  font-size: 12px;
+  margin-bottom: 8px;
+}
+.study-archive-row p {
+  color: var(--muted);
+  white-space: pre-line;
+  max-height: 68px;
+  overflow: hidden;
+}
+.study-archive-row small,
+.archive-count span {
+  font-size: 12px;
+  color: var(--muted);
+}
+.observation-page {
+  max-width: 1250px;
+  margin: 0 auto;
+  padding: 35px 40px 50px;
+}
+.observation-back {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--muted);
+  font-size: 12px;
+}
+.observation-heading {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 25px;
+  margin: 30px 0 35px;
+}
+.observation-heading > div > p {
+  font-size: 12px;
+  color: var(--blue);
+  margin-bottom: 12px;
+}
+.observation-heading h1 {
+  font-size: 34px;
+  font-weight: 550;
+  line-height: 1.5;
+  overflow-wrap: anywhere;
+}
+.observation-heading > div > span {
+  display: block;
+  font-size: 12px;
+  color: var(--muted);
+  margin-top: 12px;
+}
+.observation-note {
+  background: #eef3e9;
+  border-radius: 14px;
+  padding: 27px 30px;
+  margin-bottom: 36px;
+}
+.observation-note header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 20px;
+  margin-bottom: 16px;
+}
+.observation-note h2 {
+  font-size: 17px;
+  font-weight: 550;
+}
+.saved-observation-note {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  font-size: 16px;
+  line-height: 1.9;
+  max-width: 950px;
+}
+.observation-note-empty {
+  color: var(--muted);
+  font-size: 13px;
+  line-height: 1.9;
+}
+.observation-note form label {
+  margin-bottom: 16px;
+  font-size: 12px;
+  color: var(--ink);
+}
+.observation-note input,
+.observation-note textarea {
+  font-size: 14px;
+  padding: 12px;
+}
+.observation-section-heading {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 22px;
+  margin-bottom: 25px;
+}
+.observation-section-heading h2 {
+  font-size: 23px;
+  font-weight: 550;
+}
+.observation-section-heading p {
+  font-size: 12px;
+  color: var(--muted);
+  margin-top: 10px;
+  line-height: 1.8;
+}
+.observation-section-heading > span {
+  display: inline-flex;
+  gap: 5px;
+  align-items: center;
+  font-size: 12px;
+  color: var(--muted);
+}
+.observation-original {
+  padding-bottom: 35px;
+}
+.observation-original-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: 55px;
+  align-items: start;
+}
+.observation-facts {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 20px;
+  margin: 10px 0 30px;
+}
+.observation-facts span,
+.observation-facts small {
+  display: block;
+  font-size: 12px;
+  color: var(--muted);
+  line-height: 1.8;
+}
+.observation-facts strong {
+  display: block;
+  font-weight: 500;
+  font-size: 29px;
+  margin: 12px 0 7px;
+}
+.observation-original-statement {
+  font-size: 13px;
+  color: var(--muted);
+  line-height: 1.9;
+  margin-top: 19px;
+}
+.observation-review {
+  padding: 35px 0;
+  border-top: 1px solid var(--line);
+}
+.observation-review-form {
+  display: flex;
+  align-items: flex-start;
+  gap: 22px;
+}
+.observation-review-form > label {
+  width: 210px;
+  font-size: 12px;
+}
+.observation-review-form input {
+  font-size: 14px;
+  min-height: 42px;
+}
+.observation-review-form small {
+  font-size: 12px;
+  color: var(--muted);
+}
+.observation-review-form > button {
+  margin-top: 26px;
+  min-height: 42px;
+}
+.observation-review-empty {
+  font-size: 13px;
+  color: var(--muted);
+  line-height: 1.8;
+  padding: 24px 0 5px;
+}
+.observation-review-result {
+  margin-top: 30px;
+}
+.review-comparison-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 20px;
+}
+.review-comparison-head h3 {
+  font-size: 17px;
+  font-weight: 550;
+}
+.review-comparison-head p {
+  font-size: 12px;
+  color: var(--muted);
+}
+.review-comparison-head strong {
+  color: var(--ink);
+  font-weight: 500;
+}
+.review-comparison-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1.4fr) minmax(0, 1fr);
+  gap: 45px;
+  align-items: center;
+}
+.review-comparison-layout th,
+.review-comparison-layout td {
+  font-size: 13px;
+  padding: 15px;
+}
+.review-comparison-layout tbody th {
+  background: transparent;
+  font-weight: 400;
+}
+.review-comparison-layout tbody td {
+  font-size: 22px;
+}
+.review-delta {
+  padding-left: 35px;
+  border-left: 1px solid var(--line);
+}
+.review-delta > span,
+.review-delta > small {
+  display: block;
+  font-size: 12px;
+  color: var(--muted);
+}
+.review-delta > strong {
+  display: block;
+  font-size: 39px;
+  font-weight: 500;
+  margin: 12px 0;
+}
+.review-transitions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 22px 28px;
+  border-top: 1px solid var(--line);
+  padding: 24px 0;
+  margin-top: 24px;
+}
+.review-transitions > div {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  font-size: 12px;
+  color: var(--muted);
+}
+.review-transitions strong {
+  font-size: 20px;
+  font-weight: 500;
+  color: var(--ink);
+}
+.review-coverage-note {
+  font-size: 12px;
+  color: var(--muted);
+  line-height: 1.9;
+}
+.observation-members {
+  padding: 35px 0;
+  border-top: 1px solid var(--line);
+}
+.observation-members .search-field {
+  width: 210px;
+}
+.observation-members .table-scroll {
+  border: 0;
+  border-radius: 8px;
+}
+.observation-members th,
+.observation-members td {
+  padding: 15px;
+  font-size: 13px;
+}
+.observation-members td strong {
+  display: block;
+  font-size: 13px;
+  font-weight: 500;
+}
+.observation-members td small {
+  margin-left: 0;
+  font-size: 12px;
+  line-height: 1.9;
+}
+.observation-member-reason {
+  max-width: 350px;
+  color: var(--muted);
+  line-height: 1.8;
+}
+.observation-boundary {
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.9;
+  border-top: 1px solid var(--line);
+  padding-top: 22px;
+}
+@media (max-width: 900px) {
+  .observation-original-layout {
+    grid-template-columns: 1fr;
+    gap: 30px;
+  }
+  .observation-original-layout > .breadth-history {
+    max-width: 700px;
+  }
+}
+@media (max-width: 700px) {
+  .observation-context-heading {
+    display: block;
+  }
+  .observation-context-heading > .button {
+    margin: 0 0 24px;
+  }
+  .save-observation-form {
+    padding: 20px 16px;
+  }
+  .save-observation-actions {
+    align-items: flex-start;
+  }
+  .observation-page {
+    padding: 28px 20px 35px;
+  }
+  .observation-heading {
+    align-items: flex-start;
+    flex-direction: column;
+    margin: 24px 0;
+    gap: 13px;
+  }
+  .observation-heading h1 {
+    font-size: 27px;
+  }
+  .observation-note {
+    padding: 21px 18px;
+  }
+  .observation-note header {
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+  .saved-observation-note {
+    font-size: 15px;
+  }
+  .observation-section-heading {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 12px;
+  }
+  .observation-section-heading h2 {
+    font-size: 22px;
+  }
+  .observation-facts {
+    gap: 14px;
+  }
+  .observation-facts strong {
+    font-size: 25px;
+  }
+  .observation-review-form {
+    gap: 14px;
+  }
+  .observation-review-form > label {
+    flex: 1;
+    min-width: 0;
+  }
+  .observation-review-form > button {
+    margin-top: 26px;
+  }
+  .review-comparison-layout {
+    grid-template-columns: 1fr;
+    gap: 25px;
+  }
+  .review-delta {
+    border-left: 0;
+    padding-left: 0;
+  }
+  .review-comparison-layout th,
+  .review-comparison-layout td {
+    font-size: 12px;
+    padding: 13px 8px;
+  }
+  .review-comparison-layout tbody td {
+    font-size: 20px;
+  }
+  .review-transitions {
+    gap: 18px;
+  }
+  .observation-members table {
+    min-width: 540px;
+  }
+  .observation-members .search-field {
+    width: 100%;
+  }
+  .observation-members th,
+  .observation-members td {
+    padding: 13px 10px;
+    font-size: 12px;
+  }
+  .observation-member-reason {
+    max-width: 150px;
+  }
+}
+
+.observation-window-definition {
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.9;
+  margin: -8px 0 22px;
+  max-width: 850px;
+}
+.observation-delete {
+  margin-top: 22px;
+}
+.observation-delete-trigger {
+  background: transparent;
+  border: 0;
+  padding: 8px 0;
+  color: var(--muted);
+  font-size: 12px;
+}
+.observation-delete-trigger:hover:not(:disabled) {
+  color: var(--danger);
+}
+.observation-delete > p {
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.8;
+  margin-top: 7px;
+}
+.observation-delete-confirm {
+  padding: 20px;
+  border: 1px solid #e5d4ce;
+  border-radius: 10px;
+  background: #fcf8f5;
+}
+.observation-delete-confirm > p {
+  font-size: 13px;
+  line-height: 1.9;
+  margin-bottom: 17px;
+}
+
+.observation-draft-notice {
+  color: var(--blue);
+  font-size: 12px;
+  line-height: 1.8;
+  margin: 12px 0 18px;
+}

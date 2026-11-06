@@ -1,11 +1,11 @@
 # 显式日线条件与复权证据
 
-`kan screen ohlc` 用于用户同时指定日线交集、区间低点日期与位置上限的查询。
+`kan ohlc` 用于用户同时指定日线交集、区间低点日期与位置上限的查询。
 它输出 JSON 事实，不自动保存 Screen、候选状态或排序偏好。所有条件和范围都必须
 由用户显式传入；省略参数只显示用法，不运行条件组合。
 
 ```text
-kan screen ohlc --market mainboard --as-of YYYY-MM-DD \
+kan ohlc --market mainboard --as-of YYYY-MM-DD \
   --period N --low-within K --max-position P --joint-up-days M
 ```
 

@@ -13,8 +13,8 @@ _DAILY_SCHEMA_VERSION = "0.1"
 
 _GUIDE_TOPICS: dict[str, list[tuple[str, str]]] = {
     "start": [
-        ("打开本地选股工作台", "kan web"),
-        ("查看可用选股条件", "kan screen filters"),
+        ("打开市场观察", "kan web"),
+        ("查看可用研究指标", "kan study catalog"),
         ("在终端看一日概览", "kan daily"),
         ("只看自选", "kan scan --only-watchlist"),
         ("只看持仓", "kan hold scan"),

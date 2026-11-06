@@ -1,7 +1,7 @@
 # kan find 数据契约
 
 需要严格同时满足阳线、收盘上涨和区间低点日期时，使用
-[`kan screen ohlc`](ohlc-screen.md)。该独立入口固定复权分母、显式接收全部阈值，
+[`kan ohlc`](ohlc-screen.md)。该独立入口固定复权分母、显式接收全部阈值，
 JSON 保留完整匹配、覆盖率和逐日原始证据。
 
 `kan find` 是用户主导的条件筛选器。规则必须由命令参数显式给出;工具只返回符合规则的数据,不提供评分、评级、目标价、买卖建议或策略 preset。
@@ -11,7 +11,7 @@ JSON 保留完整匹配、覆盖率和逐日原始证据。
 
 Screen 条件清单仍从核心 `FILTER_SPECS` 生成，覆盖除独立“排除 ST”开关外的全部 27 类 filter，最多组合 12 条，支持 AND / OR、六种比较符和 2–360 日周期。全市场模式开放其中 23 类；ROE、股东户数、前十大流通集中度和北向持股比例需要逐股或报告期数据，只能用于其余股票池。Screen 额外提供版本、多键排序、结果字段、缺失策略、数据新鲜度、逐条件 evidence、运行哈希和相邻运行 diff。
 
-需要一次性 shell 查询时继续使用下文 `kan find`；需要保存和复跑时使用 [`selection-workbench.md`](selection-workbench.md) 中的 `kan screen` 或 `/api/v1`。
+需要一次性 shell 查询时继续使用下文 `kan find`；需要保存趋势条件和核对历史时使用 [`趋势与研究`](trend-research.md) 中的 `kan trend` / `kan study`。
 
 ## JSON 输出
 

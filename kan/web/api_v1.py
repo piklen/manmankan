@@ -8,6 +8,7 @@ from fastapi import APIRouter, Body, HTTPException, Query
 from fastapi.responses import StreamingResponse
 
 from kan import __version__
+from kan.domain.discovery import DiscoveryQuery
 from kan.domain.focus import FocusAddRequest, FocusSnapshot
 from kan.domain.job import MarketRefreshRequest, MarketRefreshScope, WorkspaceJob
 from kan.domain.market_study import (
@@ -18,7 +19,7 @@ from kan.domain.market_study import (
     StudyResult,
     StudySummary,
 )
-from kan.domain.screen import Candidate, CandidateList
+from kan.domain.workspace import Candidate, CandidateList
 from kan.service import focus_service, job_service, market_study
 from kan.service.hold_service import build_hold_summary
 from kan.storage import positions, watchlist, workspace_db
@@ -27,12 +28,14 @@ from kan.web.api_models import (
     CandidateUpsertRequest,
     CashUpdateRequest,
     DeleteResponse,
+    DiscoveryDataPlan,
     HealthResponse,
     PortfolioResponse,
     PositionCreateRequest,
     SettingsFactsResponse,
+    SettingsUpdateRequest,
 )
-from kan.web.serialize import empty_hold_payload, serialize_hold
+from kan.web.serialize import serialize_hold
 
 router = APIRouter(prefix="/api/v1", tags=["v1"])
 
@@ -54,7 +57,7 @@ def meta() -> ApiMeta:
     return ApiMeta(
         product_version=__version__,
         capabilities=[
-            "trend-search", "pattern-search", "market-studies", "frozen-evidence",
+            "market-discovery", "observations", "trend-search", "pattern-search", "market-studies", "frozen-evidence",
             "personal-universe", "typed-openapi",
         ],
     )
@@ -85,6 +88,19 @@ def refresh_study_data(payload: StudyRefreshRequest) -> WorkspaceJob:
         return job_service.start_market_refresh_job(MarketRefreshRequest(
             scope=scopes[payload.universe], codes=payload.codes, days=payload.days,
         ))
+    except ValueError as exc:
+        _value_error(exc)
+
+
+@router.post("/discovery/data-plan", response_model=DiscoveryDataPlan)
+def discovery_data_plan(payload: DiscoveryQuery) -> DiscoveryDataPlan:
+    from kan.core.trading_calendar import clear_memo
+    from kan.service.job_service import plan_discovery_data
+
+    try:
+        # 用户重新准备数据时允许首取失败的日历恢复；有效磁盘缓存仍会复用。
+        clear_memo()
+        return DiscoveryDataPlan(**plan_discovery_data(payload))
     except ValueError as exc:
         _value_error(exc)
 
@@ -135,10 +151,7 @@ def add_focus(payload: FocusAddRequest) -> Candidate:
 
 
 def _portfolio_response() -> PortfolioResponse:
-    try:
-        payload = serialize_hold(build_hold_summary())
-    except Exception:
-        payload = empty_hold_payload(error="持仓数据不可用")
+    payload = serialize_hold(build_hold_summary())
     return PortfolioResponse.model_validate(payload)
 
 
@@ -184,8 +197,11 @@ def delete_portfolio_position(symbol: str) -> PortfolioResponse:
 def settings() -> SettingsFactsResponse:
     from kan.web.workspace_views import _token_status, settings_facts
 
-    facts = settings_facts()
-    token = _token_status()
+    try:
+        facts = settings_facts()
+        token = _token_status()
+    except ValueError as exc:
+        _value_error(exc)
     return SettingsFactsResponse(
         data_dir=str(facts["data_dir"]),
         workspace_db=str(workspace_db.database_path()),
@@ -193,8 +209,21 @@ def settings() -> SettingsFactsResponse:
         tushare_endpoint_domain=str(facts["tushare_endpoint_domain"]),
         tushare_configured=bool(token["configured"]),
         tushare_masked=str(token["masked"]) if token["masked"] is not None else None,
+        tushare_token_source=token["source"],
+        tushare_endpoint_source=facts["tushare_endpoint_source"],
         state_backend="sqlite" if workspace_db.state_backend_enabled() else "legacy",
     )
+
+
+@router.put("/settings", response_model=SettingsFactsResponse)
+def update_settings(payload: SettingsUpdateRequest) -> SettingsFactsResponse:
+    from kan.web.workspace_views import update_data_connection
+
+    try:
+        update_data_connection(payload.token.get_secret_value() if payload.token else None, payload.endpoint)
+    except ValueError as exc:
+        _value_error(exc)
+    return settings()
 
 
 @router.get("/candidate-lists", response_model=list[CandidateList])

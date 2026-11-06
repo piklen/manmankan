@@ -1,6 +1,7 @@
 """数据管理页的本地配置事实。"""
 from __future__ import annotations
 
+import os
 from typing import Any
 from urllib.parse import urlsplit
 
@@ -8,33 +9,48 @@ from kan.storage import config
 
 
 def _token_status() -> dict[str, Any]:
-    token = config.load().get("tushare_token")
-    token_text = token.strip() if isinstance(token, str) else ""
-    configured = bool(token_text)
+    from kan.data.tushare import _resolve_config
+
+    token, _endpoint = _resolve_config()
+    configured = bool(token)
     return {
         "ok": True,
         "configured": configured,
-        "masked": config.mask_token(token_text) if configured else None,
+        "masked": config.mask_token(token) if configured else None,
+        "source": "environment" if os.environ.get("TUSHARE_TOKEN") else "config" if configured else "unconfigured",
     }
 
 
 def settings_facts() -> dict[str, Any]:
     """设置页只读事实。"""
-    import os
-
-    from kan.data.tushare import DEFAULT_ENDPOINT
+    from kan.data.tushare import _resolve_config
     from kan.storage import paths
 
     cfg = config.load()
-    endpoint_raw = os.environ.get("TUSHARE_ENDPOINT") or cfg.get("tushare_endpoint") or DEFAULT_ENDPOINT
-    endpoint = endpoint_raw.strip() if isinstance(endpoint_raw, str) else DEFAULT_ENDPOINT
-    if not endpoint.startswith(("http://", "https://")):
-        endpoint = DEFAULT_ENDPOINT
+    _token, endpoint = _resolve_config()
     return {
         "data_dir": str(paths.DATA_DIR),
         "kline_cache_files": _kline_cache_count(paths.DATA_DIR),
         "tushare_endpoint_domain": _endpoint_domain(endpoint),
+        "tushare_endpoint_source": "environment" if os.environ.get("TUSHARE_ENDPOINT") else "config" if cfg.get("tushare_endpoint") else "default",
     }
+
+
+def update_data_connection(token: str | None, endpoint: str | None) -> None:
+    """只保存用户本次填写的字段；空白保留，环境变量生效时不写无效配置。"""
+    from kan.storage.config import validate_tushare_endpoint
+
+    changes = {}
+    if token and token.strip():
+        if os.environ.get("TUSHARE_TOKEN"):
+            raise ValueError("TUSHARE_TOKEN 环境变量正在生效；请在启动环境修改并重启，网页不会覆盖它。")
+        changes["tushare_token"] = token.strip()
+    if endpoint and endpoint.strip():
+        if os.environ.get("TUSHARE_ENDPOINT"):
+            raise ValueError("TUSHARE_ENDPOINT 环境变量正在生效；请在启动环境修改并重启，网页不会覆盖它。")
+        changes["tushare_endpoint"] = validate_tushare_endpoint(endpoint)
+    if changes:
+        config.update(**changes)
 
 
 def _kline_cache_count(data_dir) -> int:

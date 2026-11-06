@@ -9,6 +9,28 @@ explicitly approves a larger bump.
 
 ## [Unreleased]
 
+## [0.0.6.9.45] - 2026-11-07
+
+### Added
+
+- 市场观察：完整范围的涨跌分布、行业剖面、相邻等长窗口参与变化与方向迁移；固定成员历史轨迹单独显示分母，分组可下钻全部成员与日线。
+- Web、终端、`kan discover`、Python 与 MCP `kan_discover` 共用确定性聚合；旧数据日期显式选择，缺口不生成趋势。
+- 观察笔记保存当时的范围、成员事实与自己的想法；显式复看冻结成员和窗口，按两次共同完整者比较，不覆盖原记录。CLI `kan observe`、MCP `kan_observe` 与 Web 同源。
+- 首用数据准备贯通：网页配置来源、环境变量状态与实际来源一致，补数带原观察范围、日期和窗口，完成后返回重算。
+
+### Changed
+
+- 重做观察、行业与证据的页面层级、响应式布局和交互；趋势筛选位于 `/explore`，保留明确条件、波段、形态及历史研究。
+- 删除旧 Screen/AI plan/ScreenRun 执行链和专属任务；个人池只管理成员和笔记，已有 SQLite 原始资产保留。独立严格 OHLC 命令为 `kan ohlc`。
+- 精简实现形状、文案与重复安装检查；真实 PTY 验证反馈、JSON 分流和退出恢复，发布使用代表性平台组合。
+- 更新前端构建与测试依赖至修复版本，锁文件同步。
+
+### Fixed
+
+- 稳定收益分布精确边界的浮点尾差；单股缓存缺日期列计入缺口，不中断整批观察。
+- 持仓读取故障返回真实错误，不伪装为空账户；候选更新保留的来源信息与数据库一致。
+- 短窗口刷新扩展到已有缓存最早日；新整段缺少旧有效交易日时拒绝覆盖，不混接不同复权基准。取数失败保留实际脱敏来源原因。
+
 ## [0.0.6.9.44] - 2026-11-05
 
 ### Fixed
@@ -808,7 +830,8 @@ explicitly approves a larger bump.
 - **Shell 补全** · zsh / bash / fish / powershell
 - **合规与隐私** · 强制风险提示 + 关键词黑名单（无买卖建议 / 无目标价 / 无评级）· 数据全本地
 
-[Unreleased]: https://github.com/piklen/manmankan/compare/v0.0.6.9.44...HEAD
+[Unreleased]: https://github.com/piklen/manmankan/compare/v0.0.6.9.45...HEAD
+[0.0.6.9.45]: https://github.com/piklen/manmankan/compare/v0.0.6.9.44...v0.0.6.9.45
 [0.0.6.9.44]: https://github.com/piklen/manmankan/compare/v0.0.6.9.43...v0.0.6.9.44
 [0.0.6.9.43]: https://github.com/piklen/manmankan/compare/v0.0.6.9.42...v0.0.6.9.43
 [0.0.6.9.42]: https://github.com/piklen/manmankan/compare/v0.0.6.9.41...v0.0.6.9.42

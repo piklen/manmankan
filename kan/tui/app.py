@@ -18,6 +18,7 @@ from kan.render.base import DISCLAIMER
 from kan.render.trend import factor_value, swing_phase
 from kan.service import market_study, trend_search
 from kan.tui.conditions import TrendFilterForm
+from kan.tui.discovery import DiscoveryScreen
 from kan.tui.screens import (
     CHANGE_STATUSES,
     STATUSES,
@@ -38,10 +39,11 @@ PAGE_SIZE = 50
 
 
 class StudyApp(App[None]):
-    TITLE = "慢慢看 · 趋势条件筛选"
+    TITLE = "慢慢看 · 市场观察"
     CSS_PATH = "workbench.tcss"
     ENABLE_COMMAND_PALETTE = False
     BINDINGS: ClassVar[list[BindingType]] = [
+        Binding("o", "discovery", "市场观察"),
         Binding("f", "filters", "条件"),
         Binding("ctrl+enter", "screen", "执行", priority=True),
         Binding("ctrl+n", "new_filter", "新建", show=False),
@@ -128,6 +130,22 @@ class StudyApp(App[None]):
         self._render()
         self._status("选择条件与天数后筛选；不会自动运行历史研究")
         self.query_one("#filter-kind", Select).focus()
+        self.install_screen(DiscoveryScreen(), "discovery")
+        self.action_discovery()
+
+    def check_action(self, action: str, parameters: tuple[object, ...]) -> bool | None:
+        # 观察屏拥有自己的快捷键，避免父应用在后台执行筛选或创建研究。
+        if isinstance(self.screen, DiscoveryScreen):
+            return action == "quit"
+        return True
+
+    def action_discovery(self) -> None:
+        if not self.busy:
+            self.push_screen("discovery", self._discovery_closed)
+
+    def _discovery_closed(self, result: str | None) -> None:
+        if result == "filters":
+            self.action_filters()
 
     def _status(self, message: str, *, error: bool = False) -> None:
         widget = self.query_one("#status", Static)

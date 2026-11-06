@@ -7,7 +7,7 @@ from urllib.parse import urlsplit
 from fastapi import Request
 
 LOCAL_WEB_HOSTS = {"127.0.0.1", "localhost"}
-MUTATING_METHODS = {"POST", "PUT", "DELETE"}
+MUTATING_METHODS = {"POST", "PUT", "PATCH", "DELETE"}
 SESSION_QUERY_NAME = "_kan_session"
 SESSION_HEADER_NAME = "x-kan-session"
 

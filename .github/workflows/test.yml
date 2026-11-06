@@ -88,7 +88,7 @@ jobs:
           "$smoke_env/bin/python" scripts/smoke-installed.py
           echo "$smoke_env/bin" >> "$GITHUB_PATH"
       - name: Real terminal verification
-        run: script -q -e -c ".venv/bin/python -m pytest -q -m tty --tb=short tests/test_cli_silent_period.py" /dev/null
+        run: uv run pytest -q -m tty tests/test_cli_terminal.py
       - name: Clean CI runner workspace
         if: always()
         continue-on-error: true

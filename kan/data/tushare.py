@@ -179,7 +179,7 @@ def _resolve_config() -> tuple[str | None, str]:
 
     校验：
     - token 去首尾空白；空串 / None → 未配置
-    - endpoint 必须 http(s):// 前缀；否则回退默认（不抛异常）
+    - 未设置端点才使用默认；已设置但无效时明确失败，不向另一个服务发送凭据
     """
     from kan.storage import config as _config
 
@@ -191,23 +191,7 @@ def _resolve_config() -> tuple[str | None, str]:
 
     endpoint_raw = os.environ.get("TUSHARE_ENDPOINT") or cfg.get("tushare_endpoint")
     endpoint = endpoint_raw.strip() if isinstance(endpoint_raw, str) else ""
-    if not endpoint.startswith(("http://", "https://")):
-        endpoint = DEFAULT_ENDPOINT
-    elif endpoint.startswith("http://"):
-        if _allow_insecure_endpoint():
-            # 自部署镜像 / 内网测试可显式 opt-in；默认仍拒绝明文传 token。
-            debug_log(
-                __name__,
-                "endpoint 走明文 HTTP · 已由 KAN_ALLOW_INSECURE_TUSHARE 显式放行",
-                RuntimeWarning(endpoint),
-            )
-        else:
-            debug_log(
-                __name__,
-                "拒绝明文 HTTP TuShare endpoint · 已回退官方 HTTPS",
-                RuntimeWarning(endpoint),
-            )
-            endpoint = DEFAULT_ENDPOINT
+    endpoint = _config.validate_tushare_endpoint(endpoint) if endpoint else DEFAULT_ENDPOINT
 
     return token, endpoint
 
@@ -312,7 +296,7 @@ def _post_tushare_api(
     if numeric_code != 0:
         raw_msg = str(body.get("msg") or "(server msg 为空)")
         # redact 防 server msg 偶尔含 token 字符串("您的 token xxx 失效" 模式)
-        sanitized_msg = redact_text(raw_msg)
+        sanitized_msg = redact_text(raw_msg.replace(token, "<redacted>") if token else raw_msg)
         retryable = (
             str(headers.get(_DATA_HUB_RETRYABLE_HEADER, "")).lower() in {"1", "true", "yes"}
             or numeric_code in _DATA_HUB_RETRYABLE_CODES

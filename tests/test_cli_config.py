@@ -23,7 +23,7 @@ def runner():
 
 @pytest.fixture
 def app():
-    """触发命令注册并返回 typer app · 与既有 test_cli_registration.py 同模式"""
+    """触发命令注册并返回 Typer app。"""
     import kan.cli  # noqa: F401 — 触发子模块 import 注册所有命令
     from kan.app import app
     return app

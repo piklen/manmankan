@@ -207,13 +207,13 @@ def test_run_and_cli_use_same_service(sample, monkeypatch):
     result = service.run_ohlc_screen(req)
     assert result["ok"] and result["sources"] and result["disclaimer"]
     runner = CliRunner()
-    args = ["screen", "ohlc", "--market", "mainboard", "--as-of", "2026-09-04", "--period", "10",
+    args = ["ohlc", "--market", "mainboard", "--as-of", "2026-09-04", "--period", "10",
             "--low-within", "3", "--max-position", "35", "--joint-up-days", "2"]
     output = runner.invoke(app, args)
     assert output.exit_code == 0, output.output
     assert json.loads(output.stdout)["rows"] == result["rows"]
-    assert runner.invoke(app, ["screen", "ohlc"]).exit_code == 2
-    args[3] = "unknown"
+    assert runner.invoke(app, ["ohlc"]).exit_code == 2
+    args[2] = "unknown"
     failure = runner.invoke(app, args)
     assert failure.exit_code == 1
     assert json.loads(failure.stdout)["ok"] is False

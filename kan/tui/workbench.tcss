@@ -40,3 +40,24 @@ Footer > .footer--key { background: #365b50; color: #e8efed; }
 #common-date-text { width: 1fr; height: 3; content-align: left middle; color: #dac88e; }
 #common-date Button { min-width: 14; width: auto; }
 #change-mode { width: 24; }
+
+/* 观察入口：首屏保留上下文，主表随终端高度伸展。 */
+#discovery-brand { height: 1; margin: 1 2 0 2; color: #95d5bd; text-style: bold; }
+#discovery-intro { height: 1; margin: 0 2; color: #a6babf; }
+#discovery-controls { height: 3; margin: 1 2 0 2; }
+#discovery-universe { width: 18; }
+#discovery-window-label { width: 8; height: 3; content-align: center middle; color: #a6babf; }
+#discovery-window { width: 9; }
+#discovery-date { width: 1fr; }
+#discovery-run { min-width: 12; width: 12; }
+#discovery-status { height: auto; max-height: 2; margin: 0 2; color: #a6babf; }
+#discovery-common { height: 3; margin: 0 2; }
+#discovery-common-text { width: 1fr; content-align: left middle; color: #dac88e; }
+#discovery-use-date { width: 14; }
+#discovery-summary { height: 3; margin: 1 2 0 2; color: #e8efed; }
+#discovery-observations { height: auto; max-height: 2; margin: 0 2 1 2; color: #d3dfdf; }
+#discovery-results { height: 1fr; margin: 0 2; background: #151e25; }
+#discovery-detail { height: 1fr; margin: 0 2; }
+#discovery-detail-content { height: auto; }
+#discovery-preview { height: 2; margin: 0 2; color: #cfddda; }
+#discovery-boundary { height: 1; margin: 0 2; color: #82979d; }

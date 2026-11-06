@@ -210,7 +210,10 @@ def trend_evidence_view(evidence: TrendSearchEvidence) -> Group:
 
 def help_view() -> Text:
     return Text(
-        "直接输入明确条件，筛当前，再按需核对历史\n\n"
+        "市场观察 → 分布与变化 → 行业成员 → 日线证据\n\n"
+        "o             返回市场观察；观察页 f 进入高级筛选\n"
+        "观察页 v      核对涨跌分布、两段变化与固定成员轨迹\n\n"
+        "高级筛选：直接输入明确条件，筛当前，再按需核对历史\n\n"
         "f             打开条件：方向键选择类型，Tab 切换输入\n"
         "Ctrl+Enter    按已填天数筛选；不自动运行历史研究\n"
         "Ctrl+N        明确新建条件；已载入的高级条件不会被简化\n"

@@ -133,7 +133,7 @@ def run_ohlc_screen(request: OhlcScreenRequest, *, refresh: bool = False) -> dic
     dates = load_session_dates(request.as_of, request.period + 1)
     panel = load_adjusted_history(dates, refresh=refresh)
     result = evaluate_ohlc_screen(request, universe, panel, dates)
-    return {"ok": True, "schema_version": 1, "command": "screen ohlc",
+    return {"ok": True, "schema_version": 1, "command": "ohlc",
             "sources": ["TuShare stock_basic", "TuShare trade_cal SSE/SZSE", "TuShare daily", "TuShare adj_factor"],
             "queried_at": datetime.now().astimezone().isoformat(),
             "disclaimer": f"{DISCLAIMER.strip()}\n{FIND_DISCLAIMER_TEXT}",

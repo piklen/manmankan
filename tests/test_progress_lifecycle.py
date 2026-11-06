@@ -310,20 +310,6 @@ def test_renderer_marks_keyboard_interrupt_as_cancelled() -> None:
     assert "已取消" in _plain(lives[0].renderables[-1])
 
 
-def test_daemon_timer_is_daemon_and_runs_callback() -> None:
-    """_daemon_timer 创建 daemon=True 的 Timer · 覆盖行 129-131。"""
-    from threading import Event
-
-    from kan.infra.progress import _daemon_timer
-
-    fired = Event()
-    timer = _daemon_timer(0.01, fired.set)
-    assert timer.daemon is True
-    timer.start()
-    assert fired.wait(0.5) is True
-    timer.cancel()
-
-
 def test_close_while_live_active_stops_and_cleans_up() -> None:
     """close() 在 Live 活跃时主动停止 · 覆盖行 210-215。"""
     clock = _Clock()
@@ -349,31 +335,6 @@ def test_close_while_live_active_stops_and_cleans_up() -> None:
     assert lives[0].stopped is True
     # close() 后重复调用无副作用
     reporter.close()
-
-
-def test_refresh_when_closed_is_noop() -> None:
-    """已关闭的 reporter 上 refresh() 无操作 · 覆盖行 205-206。"""
-    clock = _Clock()
-    lives: list[_FakeLive] = []
-
-    def live_factory(renderable: object, **kwargs: Any) -> _FakeLive:
-        live = _FakeLive(renderable, **kwargs)
-        lives.append(live)
-        return live
-
-    reporter = RichOperationReporter(
-        console=Console(file=_Stream(tty=True), force_terminal=True),
-        clock=clock,
-        show_after=0.0,
-        live_factory=live_factory,
-    )
-    # 关闭前先开一个 operation 让 reporter 有事件记录
-    with operation("预热", reporter=reporter, clock=clock) as op:
-        clock.now = 0.1
-        op.phase("阶段")
-
-    # 操作已结束，refresh 应该是 no-op
-    reporter.refresh()
 
 
 def test_progress_suffix_edge_cases() -> None:

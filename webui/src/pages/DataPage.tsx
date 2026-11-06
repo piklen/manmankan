@@ -1,8 +1,19 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Database, Plus, RefreshCw, Search, Trash2 } from "lucide-react";
 import { useEffect, useState } from "react";
-import { useSearchParams } from "react-router-dom";
-import { api, type Candidate, type StudyQuery } from "../api/client";
+import {
+  Link,
+  useLocation,
+  useNavigate,
+  useSearchParams,
+} from "react-router-dom";
+import {
+  api,
+  type Candidate,
+  type DiscoveryQuery,
+  type SettingsFacts,
+  type StudyQuery,
+} from "../api/client";
 import { Button, Empty, Loading, Notice } from "../components/ui";
 import { errorMessage, number, shortDate } from "../lib/format";
 import { parseCodes } from "../lib/study";
@@ -45,6 +56,7 @@ function NotesTool() {
       void client.invalidateQueries({ queryKey: ["candidate-lists"] });
       void client.invalidateQueries({ queryKey: ["focus"] });
       void client.invalidateQueries({ queryKey: ["trend-search"] });
+      void client.invalidateQueries({ queryKey: ["discovery"] });
     },
   });
   const items = (query.data ?? [])
@@ -189,6 +201,7 @@ function PersonalTool() {
       setCode("");
       void client.invalidateQueries({ queryKey: ["focus"] });
       void client.invalidateQueries({ queryKey: ["trend-search"] });
+      void client.invalidateQueries({ queryKey: ["discovery"] });
       void client.invalidateQueries({ queryKey: ["candidate-lists"] });
     },
   });
@@ -235,8 +248,8 @@ function PersonalTool() {
           <Notice error>{errorMessage(query.error)}</Notice>
         ) : (
           <p className="pool-summary">
-            <strong>{query.data?.total ?? 0}</strong> 个个人对象 ·{" "}
-            {query.data?.available ?? 0} 个有本地行情
+            <strong>{query.data?.total ?? 0}</strong> 个个人对象
+            <span> · 行情覆盖在市场观察中核对</span>
           </p>
         )}
       </section>
@@ -256,6 +269,7 @@ function HoldingsTool() {
     void client.invalidateQueries({ queryKey: ["portfolio"] });
     void client.invalidateQueries({ queryKey: ["focus"] });
     void client.invalidateQueries({ queryKey: ["trend-search"] });
+    void client.invalidateQueries({ queryKey: ["discovery"] });
   };
   const saveCash = useMutation({
     mutationFn: () => api.updateCash(Number(cash)),
@@ -443,8 +457,121 @@ function HoldingsTool() {
   );
 }
 
+function ConnectionTool({ settings }: { settings?: SettingsFacts }) {
+  const client = useQueryClient();
+  const [token, setToken] = useState("");
+  const [endpoint, setEndpoint] = useState("");
+  const save = useMutation({
+    mutationFn: () =>
+      api.updateSettings({
+        token: token || undefined,
+        endpoint: endpoint || undefined,
+      }),
+    onSuccess: (facts) => {
+      setToken("");
+      setEndpoint("");
+      client.setQueryData(["settings"], facts);
+      void client.invalidateQueries({ queryKey: ["discovery-data-plan"] });
+    },
+  });
+  return (
+    <section className="data-section">
+      <h2>连接行情来源</h2>
+      <p className="muted">
+        完整 A 股名单与全市场日线需要可用的 TuShare 来源。填写你已有的
+        token，保存后再更新日线；默认连接官方服务。
+      </p>
+      <p>
+        {settings?.tushare_configured
+          ? `已配置 ${settings.tushare_masked ?? ""}`
+          : "尚未配置 token"}{" "}
+        · 当前服务 {settings?.tushare_endpoint_domain ?? "api.tushare.pro"}
+      </p>
+      <form
+        className="data-refresh-form"
+        onSubmit={(event) => {
+          event.preventDefault();
+          save.mutate();
+        }}
+      >
+        <label>
+          TuShare token（留空保留）
+          <input
+            type="password"
+            autoComplete="off"
+            value={token}
+            onChange={(event) => {
+              setToken(event.target.value);
+              save.reset();
+            }}
+            disabled={settings?.tushare_token_source === "environment"}
+            placeholder="只在你提交时保存到本机"
+          />
+        </label>
+        <label>
+          服务地址（可选）
+          <input
+            type="url"
+            value={endpoint}
+            onChange={(event) => {
+              setEndpoint(event.target.value);
+              save.reset();
+            }}
+            disabled={settings?.tushare_endpoint_source === "environment"}
+            placeholder="留空保留当前；首次为官方服务"
+          />
+        </label>
+        <Button
+          type="submit"
+          disabled={save.isPending || (!token.trim() && !endpoint.trim())}
+        >
+          保存连接配置
+        </Button>
+      </form>
+      {settings?.tushare_token_source === "environment" ||
+      settings?.tushare_endpoint_source === "environment" ? (
+        <Notice>
+          启动环境中的{" "}
+          {settings.tushare_token_source === "environment"
+            ? "TUSHARE_TOKEN "
+            : ""}
+          {settings.tushare_endpoint_source === "environment"
+            ? "TUSHARE_ENDPOINT "
+            : ""}
+          优先生效。请在启动环境修改并重启；网页不会覆盖这些字段。
+        </Notice>
+      ) : null}
+      {save.error ? (
+        <Notice error>{errorMessage(save.error)}</Notice>
+      ) : save.isSuccess ? (
+        <Notice>
+          已保存填写的配置，未填写的字段保持原样。下一步更新日线；是否有数据权限以实际更新结果为准。
+        </Notice>
+      ) : null}
+      <p className="muted">
+        还没有 token：可在{" "}
+        <a href="https://tushare.pro/" target="_blank" rel="noreferrer">
+          TuShare 官网
+        </a>
+        了解账号与数据权限；也可使用你已获授权的兼容服务。页面不回显完整 token。
+      </p>
+    </section>
+  );
+}
+
+type DataRecovery = {
+  returnTo: string;
+  discoveryQuery: DiscoveryQuery;
+  jobId?: string;
+};
+
 export function DataPage() {
   const client = useQueryClient();
+  const location = useLocation();
+  const navigate = useNavigate();
+  const [recovery, setRecovery] = useState<DataRecovery | null>(() =>
+    location.state?.discoveryQuery ? location.state : null,
+  );
   const [params, setParams] = useSearchParams();
   const tab = params.get("tab") ?? "market";
   const settings = useQuery({ queryKey: ["settings"], queryFn: api.settings });
@@ -458,31 +585,62 @@ export function DataPage() {
         ? 1500
         : false,
   });
-  const [scope, setScope] = useState<StudyQuery["universe"]>("codes");
-  const [codes, setCodes] = useState("");
+  const [scope, setScope] = useState<StudyQuery["universe"]>(
+    recovery?.discoveryQuery.universe ?? "codes",
+  );
+  const [codes, setCodes] = useState(
+    (recovery?.discoveryQuery.codes ?? []).join(","),
+  );
   const [days, setDays] = useState("360");
+  const plan = useQuery({
+    queryKey: ["discovery-data-plan", recovery?.discoveryQuery],
+    queryFn: () => api.discoveryDataPlan(recovery!.discoveryQuery),
+    enabled: Boolean(recovery),
+    retry: false,
+  });
   const refresh = useMutation({
     mutationFn: () =>
-      api.refreshStudyData({
-        universe: scope,
-        codes: scope === "codes" ? parseCodes(codes) : [],
-        days: Number(days),
-      }),
-    onSuccess: () => void jobs.refetch(),
+      api.refreshStudyData(
+        recovery
+          ? { ...plan.data!.refresh, codes: plan.data!.refresh.codes ?? [] }
+          : {
+              universe: scope,
+              codes: scope === "codes" ? parseCodes(codes) : [],
+              days: Number(days),
+            },
+      ),
+    onSuccess: (job) => {
+      void jobs.refetch();
+      if (recovery) {
+        const updated = { ...recovery, jobId: job.job_id };
+        setRecovery(updated);
+        void navigate(
+          { pathname: "/data", search: location.search },
+          { replace: true, state: updated },
+        );
+      }
+    },
   });
   const refreshStatus = jobs.data?.find(
-    (job) => job.job_id === refresh.data?.job_id,
+    (job) => job.job_id === (refresh.data?.job_id ?? recovery?.jobId),
   )?.status;
   useEffect(() => {
     if (refreshStatus && !["queued", "running"].includes(refreshStatus)) {
       void client.invalidateQueries({ queryKey: ["trend-search"] });
+      void client.invalidateQueries({ queryKey: ["discovery"] });
       void client.invalidateQueries({ queryKey: ["trend-evidence"] });
+      void client.invalidateQueries({ queryKey: ["settings"] });
     }
   }, [refreshStatus, client]);
+  const needsConnection =
+    (recovery ? (plan.data?.refresh.universe ?? scope) : scope) === "all";
   const canRefresh =
-    scope !== "codes" ||
-    (parseCodes(codes).length > 0 &&
-      parseCodes(codes).every((code) => /^\d{6}$/.test(code)));
+    (recovery
+      ? Boolean(plan.data) && !plan.isFetching
+      : scope !== "codes" ||
+        (parseCodes(codes).length > 0 &&
+          parseCodes(codes).every((code) => /^\d{6}$/.test(code)))) &&
+    (!needsConnection || Boolean(settings.data?.tushare_configured));
   return (
     <div className="data-page">
       <header className="page-heading">
@@ -494,19 +652,19 @@ export function DataPage() {
       <nav className="page-tabs" aria-label="数据工具">
         <button
           className={tab === "market" ? "active" : ""}
-          onClick={() => setParams({})}
+          onClick={() => setParams({}, { state: recovery })}
         >
           行情与任务
         </button>
         <button
           className={tab === "personal" ? "active" : ""}
-          onClick={() => setParams({ tab: "personal" })}
+          onClick={() => setParams({ tab: "personal" }, { state: recovery })}
         >
           个人池与笔记
         </button>
         <button
           className={tab === "holdings" ? "active" : ""}
-          onClick={() => setParams({ tab: "holdings" })}
+          onClick={() => setParams({ tab: "holdings" }, { state: recovery })}
         >
           持仓账本
         </button>
@@ -517,6 +675,60 @@ export function DataPage() {
         <HoldingsTool />
       ) : (
         <>
+          {recovery ? (
+            <section className="data-section">
+              <h2>为这次观察准备数据</h2>
+              <p>
+                {recovery.discoveryQuery.universe === "all"
+                  ? "全市场"
+                  : recovery.discoveryQuery.universe === "personal"
+                    ? "个人范围"
+                    : `指定 ${recovery.discoveryQuery.codes?.length ?? 0} 只股票`}{" "}
+                · 两期各 {recovery.discoveryQuery.window} 个交易日 · 截至{" "}
+                {recovery.discoveryQuery.as_of ?? "最近完整收盘"}
+                {recovery.discoveryQuery.industries?.length
+                  ? ` · ${recovery.discoveryQuery.industries.join("、")}`
+                  : ""}
+              </p>
+              {plan.isLoading ? (
+                <Loading>正在计算本次需要覆盖的日期</Loading>
+              ) : plan.error ? (
+                <Notice error>
+                  {errorMessage(plan.error)}{" "}
+                  <Button variant="ghost" onClick={() => void plan.refetch()}>
+                    重新核对
+                  </Button>
+                </Notice>
+              ) : (
+                <p className="muted">{plan.data?.message}</p>
+              )}
+              {refreshStatus === "succeeded" || refreshStatus === "partial" ? (
+                <Notice>
+                  {refreshStatus === "partial"
+                    ? "部分行情已更新，回到观察核对剩余缺口。"
+                    : "行情已更新。"}{" "}
+                  <Link
+                    className="button button--primary"
+                    to="/"
+                    state={{
+                      discoveryQuery: recovery.discoveryQuery,
+                      refreshDiscovery: true,
+                    }}
+                  >
+                    回到原观察并重新计算
+                  </Link>
+                </Notice>
+              ) : (
+                <Link
+                  to="/"
+                  state={{ discoveryQuery: recovery.discoveryQuery }}
+                >
+                  返回原观察
+                </Link>
+              )}
+            </section>
+          ) : null}
+          <ConnectionTool settings={settings.data} />
           <section className="data-section">
             <div className="section-heading">
               <h2>
@@ -545,6 +757,7 @@ export function DataPage() {
                 更新范围
                 <select
                   value={scope}
+                  disabled={Boolean(recovery)}
                   onChange={(event) =>
                     setScope(event.target.value as StudyQuery["universe"])
                   }
@@ -559,6 +772,7 @@ export function DataPage() {
                   股票代码
                   <input
                     value={codes}
+                    readOnly={Boolean(recovery)}
                     onChange={(event) => setCodes(event.target.value)}
                     placeholder="填写代码，用逗号分隔"
                     required
@@ -569,9 +783,10 @@ export function DataPage() {
                 获取日数
                 <input
                   type="number"
-                  min="180"
+                  min="2"
                   max="1500"
-                  value={days}
+                  value={recovery ? (plan.data?.refresh.days ?? "") : days}
+                  readOnly={Boolean(recovery)}
                   onChange={(event) => setDays(event.target.value)}
                   required
                 />
@@ -581,10 +796,17 @@ export function DataPage() {
                 {refresh.isPending ? "正在创建任务" : "更新日线"}
               </Button>
             </form>
+            {needsConnection && !settings.data?.tushare_configured ? (
+              <Notice>
+                请先在上方保存可用的行情来源，完整市场名单需要该连接。
+              </Notice>
+            ) : null}
             {refresh.error ? (
               <Notice error>{errorMessage(refresh.error)}</Notice>
             ) : refresh.isSuccess ? (
-              <Notice>更新任务已创建。完成后回到研究页重新运行。</Notice>
+              <Notice>
+                更新任务已创建。下方会显示进度与实际失败原因；完成后可回到原观察核对。
+              </Notice>
             ) : null}
           </section>
           <section className="data-section">

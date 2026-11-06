@@ -2,7 +2,7 @@
   "openapi": "3.1.0",
   "info": {
     "title": "ManManKan Local API",
-    "version": "0.0.6.9.44"
+    "version": "0.0.6.9.45"
   },
   "paths": {
     "/api/v1/health": {
@@ -163,6 +163,47 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/WorkspaceJob"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/discovery/data-plan": {
+      "post": {
+        "tags": [
+          "v1"
+        ],
+        "summary": "Discovery Data Plan",
+        "operationId": "discovery_data_plan_api_v1_discovery_data_plan_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DiscoveryQuery"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DiscoveryDataPlan"
                 }
               }
             }
@@ -619,6 +660,45 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/SettingsFactsResponse"
+                }
+              }
+            }
+          }
+        }
+      },
+      "put": {
+        "tags": [
+          "v1"
+        ],
+        "summary": "Update Settings",
+        "operationId": "update_settings_api_v1_settings_put",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SettingsUpdateRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SettingsFactsResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
                 }
               }
             }
@@ -1196,6 +1276,314 @@
           }
         }
       }
+    },
+    "/api/v1/discovery": {
+      "get": {
+        "tags": [
+          "discovery"
+        ],
+        "summary": "Current Discovery",
+        "operationId": "current_discovery_api_v1_discovery_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DiscoveryResult"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "discovery"
+        ],
+        "summary": "Discovery",
+        "operationId": "discovery_api_v1_discovery_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DiscoveryQuery"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DiscoveryResult"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/observations": {
+      "get": {
+        "tags": [
+          "observations"
+        ],
+        "summary": "Observations",
+        "operationId": "observations_api_v1_observations_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/ObservationSummary"
+                  },
+                  "type": "array",
+                  "title": "Response Observations Api V1 Observations Get"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "observations"
+        ],
+        "summary": "Save Observation",
+        "operationId": "save_observation_api_v1_observations_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ObservationSaveRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ObservationRecord"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/observations/{observation_id}": {
+      "get": {
+        "tags": [
+          "observations"
+        ],
+        "summary": "Get Observation",
+        "operationId": "get_observation_api_v1_observations__observation_id__get",
+        "parameters": [
+          {
+            "name": "observation_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Observation Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ObservationRecord"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "patch": {
+        "tags": [
+          "observations"
+        ],
+        "summary": "Edit Observation",
+        "operationId": "edit_observation_api_v1_observations__observation_id__patch",
+        "parameters": [
+          {
+            "name": "observation_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Observation Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ObservationEditRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ObservationRecord"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "observations"
+        ],
+        "summary": "Delete Observation",
+        "operationId": "delete_observation_api_v1_observations__observation_id__delete",
+        "parameters": [
+          {
+            "name": "observation_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Observation Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DeleteResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/observations/{observation_id}/review": {
+      "post": {
+        "tags": [
+          "observations"
+        ],
+        "summary": "Review Observation",
+        "operationId": "review_observation_api_v1_observations__observation_id__review_post",
+        "parameters": [
+          {
+            "name": "observation_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Observation Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ObservationReviewRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ObservationReviewResult"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
     }
   },
   "components": {
@@ -1413,6 +1801,704 @@
         ],
         "title": "DeleteResponse"
       },
+      "DiscoveryBin": {
+        "properties": {
+          "key": {
+            "type": "string",
+            "title": "Key"
+          },
+          "label": {
+            "type": "string",
+            "title": "Label"
+          },
+          "count": {
+            "type": "integer",
+            "title": "Count"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "key",
+          "label",
+          "count"
+        ],
+        "title": "DiscoveryBin"
+      },
+      "DiscoveryComparison": {
+        "properties": {
+          "available": {
+            "type": "integer",
+            "title": "Available"
+          },
+          "missing": {
+            "type": "integer",
+            "title": "Missing"
+          },
+          "current_positive_share": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Current Positive Share"
+          },
+          "previous_positive_share": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Previous Positive Share"
+          },
+          "breadth_delta_pp": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Breadth Delta Pp"
+          },
+          "current_median": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Current Median"
+          },
+          "previous_median": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Previous Median"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "available",
+          "missing",
+          "current_positive_share",
+          "previous_positive_share",
+          "breadth_delta_pp",
+          "current_median",
+          "previous_median"
+        ],
+        "title": "DiscoveryComparison"
+      },
+      "DiscoveryDataGap": {
+        "properties": {
+          "date": {
+            "type": "string",
+            "format": "date",
+            "title": "Date"
+          },
+          "missing": {
+            "type": "integer",
+            "title": "Missing"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "date",
+          "missing"
+        ],
+        "title": "DiscoveryDataGap"
+      },
+      "DiscoveryDataPlan": {
+        "properties": {
+          "query": {
+            "$ref": "#/components/schemas/DiscoveryQuery"
+          },
+          "refresh": {
+            "$ref": "#/components/schemas/StudyRefreshRequest"
+          },
+          "required_start": {
+            "type": "string",
+            "title": "Required Start"
+          },
+          "latest": {
+            "type": "string",
+            "title": "Latest"
+          },
+          "message": {
+            "type": "string",
+            "title": "Message"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "query",
+          "refresh",
+          "required_start",
+          "latest",
+          "message"
+        ],
+        "title": "DiscoveryDataPlan"
+      },
+      "DiscoveryGroup": {
+        "properties": {
+          "name": {
+            "type": "string",
+            "title": "Name"
+          },
+          "total": {
+            "type": "integer",
+            "title": "Total"
+          },
+          "current": {
+            "$ref": "#/components/schemas/DiscoveryStats"
+          },
+          "comparison": {
+            "$ref": "#/components/schemas/DiscoveryComparison"
+          },
+          "history": {
+            "items": {
+              "$ref": "#/components/schemas/DiscoveryHistoryPoint"
+            },
+            "type": "array",
+            "title": "History"
+          },
+          "history_available": {
+            "type": "integer",
+            "title": "History Available"
+          },
+          "transitions": {
+            "items": {
+              "$ref": "#/components/schemas/DiscoveryTransition"
+            },
+            "type": "array",
+            "title": "Transitions"
+          },
+          "distribution": {
+            "items": {
+              "$ref": "#/components/schemas/DiscoveryBin"
+            },
+            "type": "array",
+            "title": "Distribution"
+          },
+          "observations": {
+            "items": {
+              "$ref": "#/components/schemas/DiscoveryObservation"
+            },
+            "type": "array",
+            "title": "Observations"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "name",
+          "total",
+          "current",
+          "comparison",
+          "history",
+          "history_available",
+          "transitions",
+          "distribution",
+          "observations"
+        ],
+        "title": "DiscoveryGroup"
+      },
+      "DiscoveryHistoryPoint": {
+        "properties": {
+          "date": {
+            "type": "string",
+            "format": "date",
+            "title": "Date"
+          },
+          "available": {
+            "type": "integer",
+            "title": "Available"
+          },
+          "up": {
+            "type": "integer",
+            "title": "Up"
+          },
+          "down": {
+            "type": "integer",
+            "title": "Down"
+          },
+          "flat": {
+            "type": "integer",
+            "title": "Flat"
+          },
+          "positive_share": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Positive Share"
+          },
+          "median_return": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Median Return"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "date",
+          "available",
+          "up",
+          "down",
+          "flat",
+          "positive_share",
+          "median_return"
+        ],
+        "title": "DiscoveryHistoryPoint"
+      },
+      "DiscoveryMember": {
+        "properties": {
+          "symbol": {
+            "type": "string",
+            "title": "Symbol"
+          },
+          "name": {
+            "type": "string",
+            "title": "Name"
+          },
+          "industry": {
+            "type": "string",
+            "title": "Industry"
+          },
+          "latest_available": {
+            "type": "boolean",
+            "title": "Latest Available"
+          },
+          "return_pct": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Return Pct"
+          },
+          "previous_return_pct": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Previous Return Pct"
+          },
+          "change_pct": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Change Pct"
+          },
+          "transition": {
+            "type": "string",
+            "enum": [
+              "up_up",
+              "down_up",
+              "up_down",
+              "down_down",
+              "flat",
+              "unknown"
+            ],
+            "title": "Transition"
+          },
+          "distribution_bin": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Distribution Bin"
+          },
+          "source": {
+            "type": "string",
+            "title": "Source"
+          },
+          "reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reason"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "symbol",
+          "name",
+          "industry",
+          "latest_available",
+          "return_pct",
+          "previous_return_pct",
+          "change_pct",
+          "transition",
+          "distribution_bin",
+          "source",
+          "reason"
+        ],
+        "title": "DiscoveryMember"
+      },
+      "DiscoveryObservation": {
+        "properties": {
+          "kind": {
+            "type": "string",
+            "enum": [
+              "breadth",
+              "distribution",
+              "comparison",
+              "coverage"
+            ],
+            "title": "Kind"
+          },
+          "title": {
+            "type": "string",
+            "title": "Title"
+          },
+          "detail": {
+            "type": "string",
+            "title": "Detail"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "kind",
+          "title",
+          "detail"
+        ],
+        "title": "DiscoveryObservation"
+      },
+      "DiscoveryQuery": {
+        "properties": {
+          "universe": {
+            "type": "string",
+            "enum": [
+              "all",
+              "personal",
+              "codes"
+            ],
+            "title": "Universe",
+            "default": "all"
+          },
+          "codes": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "maxItems": 10000,
+            "title": "Codes"
+          },
+          "industries": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "maxItems": 100,
+            "title": "Industries"
+          },
+          "as_of": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "As Of"
+          },
+          "window": {
+            "type": "integer",
+            "maximum": 120.0,
+            "minimum": 2.0,
+            "title": "Window",
+            "default": 20
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "title": "DiscoveryQuery"
+      },
+      "DiscoveryResult": {
+        "properties": {
+          "query": {
+            "$ref": "#/components/schemas/DiscoveryQuery"
+          },
+          "as_of": {
+            "type": "string",
+            "format": "date",
+            "title": "As Of"
+          },
+          "current_start": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Current Start"
+          },
+          "previous_as_of": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Previous As Of"
+          },
+          "previous_start": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Previous Start"
+          },
+          "common_data_date": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Common Data Date"
+          },
+          "common_data_count": {
+            "type": "integer",
+            "title": "Common Data Count"
+          },
+          "market": {
+            "$ref": "#/components/schemas/DiscoveryGroup"
+          },
+          "industries": {
+            "items": {
+              "$ref": "#/components/schemas/DiscoveryGroup"
+            },
+            "type": "array",
+            "title": "Industries"
+          },
+          "members": {
+            "items": {
+              "$ref": "#/components/schemas/DiscoveryMember"
+            },
+            "type": "array",
+            "title": "Members"
+          },
+          "data_gaps": {
+            "items": {
+              "$ref": "#/components/schemas/DiscoveryDataGap"
+            },
+            "type": "array",
+            "title": "Data Gaps"
+          },
+          "warnings": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Warnings"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "query",
+          "as_of",
+          "current_start",
+          "previous_as_of",
+          "previous_start",
+          "common_data_date",
+          "common_data_count",
+          "market",
+          "industries",
+          "members",
+          "data_gaps",
+          "warnings"
+        ],
+        "title": "DiscoveryResult"
+      },
+      "DiscoveryStats": {
+        "properties": {
+          "total": {
+            "type": "integer",
+            "title": "Total"
+          },
+          "available": {
+            "type": "integer",
+            "title": "Available"
+          },
+          "missing": {
+            "type": "integer",
+            "title": "Missing"
+          },
+          "up": {
+            "type": "integer",
+            "title": "Up"
+          },
+          "down": {
+            "type": "integer",
+            "title": "Down"
+          },
+          "flat": {
+            "type": "integer",
+            "title": "Flat"
+          },
+          "positive_share": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Positive Share"
+          },
+          "median_return": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Median Return"
+          },
+          "q25": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Q25"
+          },
+          "q75": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Q75"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "total",
+          "available",
+          "missing",
+          "up",
+          "down",
+          "flat",
+          "positive_share",
+          "median_return",
+          "q25",
+          "q75"
+        ],
+        "title": "DiscoveryStats"
+      },
+      "DiscoveryTransition": {
+        "properties": {
+          "key": {
+            "type": "string",
+            "enum": [
+              "up_up",
+              "down_up",
+              "up_down",
+              "down_down",
+              "flat",
+              "unknown"
+            ],
+            "title": "Key"
+          },
+          "label": {
+            "type": "string",
+            "title": "Label"
+          },
+          "count": {
+            "type": "integer",
+            "title": "Count"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "key",
+          "label",
+          "count"
+        ],
+        "title": "DiscoveryTransition"
+      },
       "FocusAddRequest": {
         "properties": {
           "symbol": {
@@ -1426,137 +2512,6 @@
           "symbol"
         ],
         "title": "FocusAddRequest"
-      },
-      "FocusPeriod": {
-        "properties": {
-          "period": {
-            "type": "integer",
-            "title": "Period"
-          },
-          "position_pct": {
-            "anyOf": [
-              {
-                "type": "number"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Position Pct"
-          },
-          "previous_position_pct": {
-            "anyOf": [
-              {
-                "type": "number"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Previous Position Pct"
-          },
-          "change_pp": {
-            "anyOf": [
-              {
-                "type": "number"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Change Pp"
-          },
-          "low": {
-            "anyOf": [
-              {
-                "type": "number"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Low"
-          },
-          "high": {
-            "anyOf": [
-              {
-                "type": "number"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "High"
-          }
-        },
-        "additionalProperties": false,
-        "type": "object",
-        "required": [
-          "period"
-        ],
-        "title": "FocusPeriod"
-      },
-      "FocusReviewEntry": {
-        "properties": {
-          "reviewed_at": {
-            "type": "string",
-            "format": "date-time",
-            "title": "Reviewed At"
-          },
-          "data_cutoff": {
-            "type": "string",
-            "format": "date",
-            "title": "Data Cutoff"
-          },
-          "note": {
-            "type": "string",
-            "title": "Note"
-          },
-          "price": {
-            "type": "number",
-            "title": "Price"
-          },
-          "positions": {
-            "additionalProperties": {
-              "anyOf": [
-                {
-                  "type": "number"
-                },
-                {
-                  "type": "null"
-                }
-              ]
-            },
-            "type": "object",
-            "title": "Positions"
-          },
-          "data_hash": {
-            "type": "string",
-            "title": "Data Hash",
-            "default": ""
-          },
-          "candidate_list_id": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Candidate List Id"
-          }
-        },
-        "additionalProperties": false,
-        "type": "object",
-        "required": [
-          "reviewed_at",
-          "data_cutoff",
-          "note",
-          "price",
-          "positions"
-        ],
-        "title": "FocusReviewEntry"
       },
       "FocusRow": {
         "properties": {
@@ -1574,112 +2529,6 @@
             },
             "type": "array",
             "title": "Sources"
-          },
-          "source": {
-            "type": "string",
-            "title": "Source",
-            "default": "local_cache"
-          },
-          "data_hash": {
-            "type": "string",
-            "title": "Data Hash",
-            "default": ""
-          },
-          "available": {
-            "type": "boolean",
-            "title": "Available",
-            "default": false
-          },
-          "message": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Message"
-          },
-          "price": {
-            "anyOf": [
-              {
-                "type": "number"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Price"
-          },
-          "change_pct": {
-            "anyOf": [
-              {
-                "type": "number"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Change Pct"
-          },
-          "data_cutoff": {
-            "anyOf": [
-              {
-                "type": "string",
-                "format": "date"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Data Cutoff"
-          },
-          "previous_cutoff": {
-            "anyOf": [
-              {
-                "type": "string",
-                "format": "date"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Previous Cutoff"
-          },
-          "fetched_at": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Fetched At"
-          },
-          "stale": {
-            "type": "boolean",
-            "title": "Stale",
-            "default": true
-          },
-          "periods": {
-            "items": {
-              "$ref": "#/components/schemas/FocusPeriod"
-            },
-            "type": "array",
-            "title": "Periods"
-          },
-          "streak": {
-            "anyOf": [
-              {
-                "type": "integer"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Streak"
           },
           "note": {
             "type": "string",
@@ -1713,42 +2562,6 @@
             },
             "type": "array",
             "title": "Candidates"
-          },
-          "reviewed": {
-            "type": "boolean",
-            "title": "Reviewed",
-            "default": false
-          },
-          "reviewed_at": {
-            "anyOf": [
-              {
-                "type": "string",
-                "format": "date-time"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Reviewed At"
-          },
-          "reviewed_data_cutoff": {
-            "anyOf": [
-              {
-                "type": "string",
-                "format": "date"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Reviewed Data Cutoff"
-          },
-          "review_history": {
-            "items": {
-              "$ref": "#/components/schemas/FocusReviewEntry"
-            },
-            "type": "array",
-            "title": "Review History"
           }
         },
         "additionalProperties": false,
@@ -1767,29 +2580,9 @@
             "format": "date-time",
             "title": "Generated At"
           },
-          "expected_cutoff": {
-            "anyOf": [
-              {
-                "type": "string",
-                "format": "date"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Expected Cutoff"
-          },
           "total": {
             "type": "integer",
             "title": "Total"
-          },
-          "available": {
-            "type": "integer",
-            "title": "Available"
-          },
-          "stale": {
-            "type": "integer",
-            "title": "Stale"
           },
           "rows": {
             "items": {
@@ -1797,13 +2590,6 @@
             },
             "type": "array",
             "title": "Rows"
-          },
-          "warnings": {
-            "items": {
-              "type": "string"
-            },
-            "type": "array",
-            "title": "Warnings"
           }
         },
         "additionalProperties": false,
@@ -1811,8 +2597,6 @@
         "required": [
           "generated_at",
           "total",
-          "available",
-          "stale",
           "rows"
         ],
         "title": "FocusSnapshot"
@@ -1860,6 +2644,258 @@
           "interrupted"
         ],
         "title": "JobStatus"
+      },
+      "ObservationEditRequest": {
+        "properties": {
+          "title": {
+            "type": "string",
+            "maxLength": 120,
+            "title": "Title",
+            "default": ""
+          },
+          "note": {
+            "type": "string",
+            "maxLength": 4000,
+            "title": "Note",
+            "default": ""
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "title": "ObservationEditRequest"
+      },
+      "ObservationRecord": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "title": "Id"
+          },
+          "title": {
+            "type": "string",
+            "title": "Title"
+          },
+          "note": {
+            "type": "string",
+            "title": "Note"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Created At"
+          },
+          "query": {
+            "$ref": "#/components/schemas/DiscoveryQuery"
+          },
+          "scope_label": {
+            "type": "string",
+            "title": "Scope Label"
+          },
+          "snapshot": {
+            "$ref": "#/components/schemas/ObservationSnapshot"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "id",
+          "title",
+          "note",
+          "created_at",
+          "query",
+          "scope_label",
+          "snapshot"
+        ],
+        "title": "ObservationRecord"
+      },
+      "ObservationReviewRequest": {
+        "properties": {
+          "as_of": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "As Of"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "title": "ObservationReviewRequest"
+      },
+      "ObservationReviewResult": {
+        "properties": {
+          "observation": {
+            "$ref": "#/components/schemas/ObservationRecord"
+          },
+          "current": {
+            "$ref": "#/components/schemas/ObservationSnapshot"
+          },
+          "comparison": {
+            "$ref": "#/components/schemas/DiscoveryComparison"
+          },
+          "transitions": {
+            "items": {
+              "$ref": "#/components/schemas/DiscoveryTransition"
+            },
+            "type": "array",
+            "title": "Transitions"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "observation",
+          "current",
+          "comparison",
+          "transitions"
+        ],
+        "title": "ObservationReviewResult"
+      },
+      "ObservationSaveRequest": {
+        "properties": {
+          "title": {
+            "type": "string",
+            "maxLength": 120,
+            "title": "Title",
+            "default": ""
+          },
+          "note": {
+            "type": "string",
+            "maxLength": 4000,
+            "title": "Note",
+            "default": ""
+          },
+          "query": {
+            "$ref": "#/components/schemas/DiscoveryQuery"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "query"
+        ],
+        "title": "ObservationSaveRequest"
+      },
+      "ObservationSnapshot": {
+        "properties": {
+          "as_of": {
+            "type": "string",
+            "format": "date",
+            "title": "As Of"
+          },
+          "current_start": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Current Start"
+          },
+          "previous_as_of": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Previous As Of"
+          },
+          "previous_start": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Previous Start"
+          },
+          "group": {
+            "$ref": "#/components/schemas/DiscoveryGroup"
+          },
+          "members": {
+            "items": {
+              "$ref": "#/components/schemas/DiscoveryMember"
+            },
+            "type": "array",
+            "title": "Members"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "as_of",
+          "current_start",
+          "previous_as_of",
+          "previous_start",
+          "group",
+          "members"
+        ],
+        "title": "ObservationSnapshot"
+      },
+      "ObservationSummary": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "title": "Id"
+          },
+          "title": {
+            "type": "string",
+            "title": "Title"
+          },
+          "note": {
+            "type": "string",
+            "title": "Note"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Created At"
+          },
+          "as_of": {
+            "type": "string",
+            "format": "date",
+            "title": "As Of"
+          },
+          "window": {
+            "type": "integer",
+            "title": "Window"
+          },
+          "scope_label": {
+            "type": "string",
+            "title": "Scope Label"
+          },
+          "total": {
+            "type": "integer",
+            "title": "Total"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "id",
+          "title",
+          "note",
+          "created_at",
+          "as_of",
+          "window",
+          "scope_label",
+          "total"
+        ],
+        "title": "ObservationSummary"
       },
       "PortfolioAccountResponse": {
         "properties": {
@@ -2320,6 +3356,24 @@
             ],
             "title": "Tushare Masked"
           },
+          "tushare_token_source": {
+            "type": "string",
+            "enum": [
+              "environment",
+              "config",
+              "unconfigured"
+            ],
+            "title": "Tushare Token Source"
+          },
+          "tushare_endpoint_source": {
+            "type": "string",
+            "enum": [
+              "environment",
+              "config",
+              "default"
+            ],
+            "title": "Tushare Endpoint Source"
+          },
           "state_backend": {
             "type": "string",
             "enum": [
@@ -2337,9 +3391,42 @@
           "kline_cache_files",
           "tushare_endpoint_domain",
           "tushare_configured",
+          "tushare_token_source",
+          "tushare_endpoint_source",
           "state_backend"
         ],
         "title": "SettingsFactsResponse"
+      },
+      "SettingsUpdateRequest": {
+        "properties": {
+          "token": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "password",
+                "writeOnly": true
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Token"
+          },
+          "endpoint": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Endpoint"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "title": "SettingsUpdateRequest"
       },
       "StudyBar": {
         "properties": {
@@ -3238,7 +4325,7 @@
           "days": {
             "type": "integer",
             "maximum": 1500.0,
-            "minimum": 180.0,
+            "minimum": 2.0,
             "title": "Days",
             "default": 360
           }

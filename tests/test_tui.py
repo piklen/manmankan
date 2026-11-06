@@ -55,6 +55,7 @@ def test_saved_study_rerun_history_and_frozen_evidence(research_workspace) -> No
     async def scenario() -> None:
         app = StudyApp()
         async with app.run_test(size=(120, 36)) as pilot:
+            await pilot.press("f")
             assert app.view == "screen"
             assert app.screen_result is None
             await pilot.press("t")
@@ -150,6 +151,7 @@ def test_empty_search_help_and_rerun_error_preserve_saved_result(research_worksp
     async def scenario() -> None:
         app = StudyApp()
         async with app.run_test(size=(80, 24)) as pilot:
+            await pilot.press("f")
             await app.workers.wait_for_complete()
             await pilot.pause()
             assert app.query_one("#empty").display
@@ -210,6 +212,7 @@ def test_keyboard_filter_save_and_explicit_history(research_workspace) -> None:
     async def scenario() -> None:
         app = StudyApp()
         async with app.run_test(size=(80, 24)) as pilot:
+            await pilot.press("f")
             assert app.screen_result is None
             assert app.query_one("#filter-kind", Select).value is Select.BLANK
             await pilot.press("ctrl+enter")
@@ -276,6 +279,7 @@ def test_two_segments_counts_and_maximum_excludes_wrong_direction(research_works
     async def scenario() -> None:
         app = StudyApp()
         async with app.run_test(size=(120, 36)) as pilot:
+            await pilot.press("f")
             app.query_one("#filter-kind", Select).value = "down_then_up"
             app.query_one("#filter-universe", Select).value = "codes"
             app.query_one("#filter-codes", Input).value = "600519, 000858"
@@ -325,6 +329,7 @@ def test_saved_conditions_keep_dates_order_and_advanced_filters(research_workspa
     async def scenario() -> None:
         app = StudyApp()
         async with app.run_test(size=(80, 24)) as pilot:
+            await pilot.press("f")
             form = app.query_one(TrendFilterForm)
             # Web 使用前段→当前段顺序；TUI 仍能完整回填并保留两个日期。
             saved = TrendSearchQuery(universe="codes", codes=["600519"], as_of=day, compare_to=previous, conditions=[
@@ -399,6 +404,7 @@ def test_swing_cli_form_evidence_and_historical_parameters(research_workspace) -
     async def scenario() -> None:
         app = StudyApp()
         async with app.run_test(size=(80, 24)) as pilot:
+            await pilot.press("f")
             form = app.query_one(TrendFilterForm)
             form.set_query(saved)
             await pilot.pause()
@@ -485,6 +491,7 @@ def test_stale_day_change_review_and_both_daily_evidence(research_workspace, mon
     async def scenario() -> None:
         app = StudyApp()
         async with app.run_test(size=(80, 24)) as pilot:
+            await pilot.press("f")
             app.query_one("#filter-kind", Select).value = "up_days"
             app.query_one("#filter-universe", Select).value = "codes"
             app.query_one("#filter-codes", Input).value = ",".join(frames)
@@ -528,6 +535,85 @@ def test_stale_day_change_review_and_both_daily_evidence(research_workspace, mon
             await pilot.press("2")
             await settled(app, pilot)
             assert app.screen_evidence.as_of == previous and app.screen_evidence.row.symbol == "000002"
+            assert market_study.list_studies() == []
+
+    asyncio.run(scenario())
+
+
+def test_discovery_default_drilldown_and_advanced_state_at_80_columns(research_workspace, monkeypatch) -> None:
+    from datetime import timedelta
+
+    from kan.service import discovery
+    from kan.service.trend_search import TrendSearchQuery
+    from kan.tui.conditions import TrendFilterForm
+    from kan.tui.discovery import DiscoveryScreen
+
+    _query, frame = research_workspace
+    data_day = frame.date.iloc[-1]
+    latest = data_day + timedelta(days=1)
+    monkeypatch.setattr("kan.core.trading_calendar.get_trade_dates", lambda: {*frame.date, latest})
+    monkeypatch.setattr("kan.core.trading_calendar.latest_trade_date", lambda *_a, **_kw: latest)
+
+    async def settle(app, pilot):
+        await app.workers.wait_for_complete()
+        await pilot.pause()
+
+    async def scenario() -> None:
+        app = StudyApp()
+        async with app.run_test(size=(80, 24)) as pilot:
+            await settle(app, pilot)
+            screen = app.screen
+            assert isinstance(screen, DiscoveryScreen)
+            assert screen.result.as_of == latest and screen.result.market.current.available == 0
+            assert screen.result.common_data_date == data_day
+            assert screen.query_one("#discovery-common").display
+            assert screen.query_one("#discovery-run").region.right <= 80
+            assert screen.query_one("#discovery-results").size.height >= 3
+            screen.query_one("#discovery-window", Input).value = "10"
+            await pilot.press("d")
+            await settle(app, pilot)
+            assert screen.result.as_of == data_day
+            assert screen.query_one("#discovery-date", Input).value == str(data_day)
+            assert screen.result.query.window == 10
+            assert screen.result.market.current.available == screen.result.market.current.missing == 1
+            screen.query_one("#discovery-window", Input).value = "15"
+            await pilot.press("ctrl+enter")
+            await settle(app, pilot)
+            assert screen.result.query.window == 15
+            assert app.screen_result is None  # 父应用快捷键不能在观察页背后运行筛选。
+            await pilot.press("v")
+            assert screen.view == "profile"
+            assert screen.query_one("#discovery-detail").size.height >= 3
+            await pilot.press("escape", "enter")
+            assert screen.view == "members" and screen.industry == "合成行业"
+            await pilot.press("enter")
+            await settle(app, pilot)
+            assert screen.view == "evidence"
+            await pilot.press("escape", "escape")
+            assert screen.view == "industries"
+            observed = screen.result
+
+            def unavailable(_query):
+                raise ValueError("日历资料暂不可用")
+
+            monkeypatch.setattr(discovery, "discover_market", unavailable)
+            await pilot.press("ctrl+enter")
+            await settle(app, pilot)
+            assert screen.result is observed
+            assert "日历资料暂不可用" in str(screen.query_one("#discovery-status", Static).render())
+            await pilot.press("f")
+            advanced = TrendSearchQuery(universe="codes", codes=["600519"], as_of=data_day, conditions=[StudyCondition(field="return_pct", operator="gt", value=0, window=10)])
+            app.query_one(TrendFilterForm).set_query(advanced)
+            await pilot.press("ctrl+enter")
+            await settle(app, pilot)
+            filtered = app.screen_result
+            assert filtered.coverage.matched == 1
+            await pilot.press("o")
+            assert app.screen is screen
+            assert screen.result is observed
+            await pilot.press("f")
+            assert app.screen_result is filtered
+            assert app.query_one(TrendFilterForm).read_query() == advanced
             assert market_study.list_studies() == []
 
     asyncio.run(scenario())

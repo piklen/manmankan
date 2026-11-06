@@ -26,12 +26,14 @@ command = Path(sys.executable).parent / ("kan.exe" if os.name == "nt" else "kan"
 with tempfile.TemporaryDirectory(prefix="kan-installed-smoke-") as state:
     env = {
         **os.environ,
-        "XDG_DATA_HOME": state,
+        "XDG_DATA_HOME": str(Path(state) / "data"),
+        "XDG_CONFIG_HOME": str(Path(state) / "config"),
+        "XDG_CACHE_HOME": str(Path(state) / "cache"),
         "KAN_NO_UPDATE_CHECK": "1",
         "KAN_NO_NAMES_BACKGROUND_REFRESH": "1",
         "NO_COLOR": "1",
     }
-    for args in ([], ["--version"], ["web", "--help"], ["tui", "--help"], ["mcp", "--help"]):
+    for args in ([], ["--version"], ["web", "--help"], ["tui", "--help"], ["discover", "--help"], ["observe", "--help"], ["ohlc", "--help"], ["mcp", "--help"]):
         result = subprocess.run(
             [str(command), *args], cwd=state, env=env,
             capture_output=True, text=True, encoding="utf-8", check=True,

@@ -1,4 +1,4 @@
-"""选股工作台 SQLite repository。
+"""本地用户状态 SQLite repository。
 
 行情仍保存在 Parquet；SQLite 只承载需要事务、版本和关系查询的用户状态。
 所有公开函数自行打开短连接，CLI 与本地 Web 可跨进程共享 WAL 数据库。
@@ -18,16 +18,7 @@ from uuid import uuid4
 from pydantic import BaseModel
 
 from kan.domain.job import JobStatus, WorkspaceJob
-from kan.domain.screen import (
-    Candidate,
-    CandidateList,
-    CandidateStatus,
-    CompareSet,
-    SavedScreen,
-    ScreenRun,
-    ScreenSpec,
-    ScreenVersion,
-)
+from kan.domain.workspace import Candidate, CandidateList, CandidateStatus
 from kan.storage import paths
 
 SCHEMA_VERSION = 3
@@ -90,6 +81,7 @@ def _ensure_schema(conn: sqlite3.Connection) -> None:
         )
     if version == SCHEMA_VERSION:
         return
+    # 旧 Screen 表只保留原始用户记录及候选来源外键，不再提供执行或 CRUD 路径。
     conn.executescript(
         """
         CREATE TABLE IF NOT EXISTS screens (
@@ -216,245 +208,6 @@ def _ensure_schema(conn: sqlite3.Connection) -> None:
     conn.commit()
 
 
-def _screen_from_row(conn: sqlite3.Connection, row: sqlite3.Row) -> SavedScreen:
-    version_row = conn.execute(
-        """
-        SELECT spec_json FROM screen_versions
-        WHERE screen_id = ? AND version = ?
-        """,
-        (row["screen_id"], row["current_version"]),
-    ).fetchone()
-    if version_row is None:
-        raise RuntimeError(f"Screen {row['screen_id']} 缺少当前版本")
-    return SavedScreen(
-        screen_id=row["screen_id"],
-        name=row["name"],
-        current_version=row["current_version"],
-        spec=ScreenSpec.model_validate_json(version_row["spec_json"]),
-        spec_hash=row["spec_hash"],
-        created_at=datetime.fromisoformat(row["created_at"]),
-        updated_at=datetime.fromisoformat(row["updated_at"]),
-    )
-
-
-def save_screen(spec: ScreenSpec, spec_hash: str, *, screen_id: str | None = None) -> SavedScreen:
-    now = _now()
-    actual_id = screen_id or uuid4().hex
-    with transaction() as conn:
-        current = conn.execute(
-            "SELECT * FROM screens WHERE screen_id = ?", (actual_id,)
-        ).fetchone()
-        if current is None:
-            version = 1
-            conn.execute(
-                """
-                INSERT INTO screens(screen_id, name, current_version, spec_hash, created_at, updated_at)
-                VALUES (?, ?, ?, ?, ?, ?)
-                """,
-                (actual_id, spec.name, version, spec_hash, now.isoformat(), now.isoformat()),
-            )
-            conn.execute(
-                """
-                INSERT INTO screen_versions(screen_id, version, spec_json, spec_hash, created_at)
-                VALUES (?, ?, ?, ?, ?)
-                """,
-                (actual_id, version, spec.model_dump_json(), spec_hash, now.isoformat()),
-            )
-        elif current["spec_hash"] == spec_hash:
-            version = int(current["current_version"])
-            conn.execute(
-                "UPDATE screens SET name = ?, updated_at = ? WHERE screen_id = ?",
-                (spec.name, now.isoformat(), actual_id),
-            )
-        else:
-            version = int(current["current_version"]) + 1
-            conn.execute(
-                """
-                INSERT INTO screen_versions(screen_id, version, spec_json, spec_hash, created_at)
-                VALUES (?, ?, ?, ?, ?)
-                """,
-                (actual_id, version, spec.model_dump_json(), spec_hash, now.isoformat()),
-            )
-            conn.execute(
-                """
-                UPDATE screens
-                SET name = ?, current_version = ?, spec_hash = ?, updated_at = ?
-                WHERE screen_id = ?
-                """,
-                (spec.name, version, spec_hash, now.isoformat(), actual_id),
-            )
-        row = conn.execute(
-            "SELECT * FROM screens WHERE screen_id = ?", (actual_id,)
-        ).fetchone()
-        assert row is not None
-        return _screen_from_row(conn, row)
-
-
-def list_screens() -> list[SavedScreen]:
-    with contextlib.closing(_connect()) as conn:
-        rows = conn.execute("SELECT * FROM screens ORDER BY updated_at DESC").fetchall()
-        return [_screen_from_row(conn, row) for row in rows]
-
-
-def get_screen(screen_id: str) -> SavedScreen | None:
-    with contextlib.closing(_connect()) as conn:
-        row = conn.execute(
-            "SELECT * FROM screens WHERE screen_id = ?", (screen_id,)
-        ).fetchone()
-        return None if row is None else _screen_from_row(conn, row)
-
-
-def list_screen_versions(screen_id: str) -> list[ScreenVersion]:
-    with contextlib.closing(_connect()) as conn:
-        rows = conn.execute(
-            """
-            SELECT screen_id, version, spec_json, spec_hash, created_at
-            FROM screen_versions
-            WHERE screen_id = ?
-            ORDER BY version DESC
-            """,
-            (screen_id,),
-        ).fetchall()
-        return [
-            ScreenVersion(
-                screen_id=row["screen_id"],
-                version=row["version"],
-                spec=ScreenSpec.model_validate_json(row["spec_json"]),
-                spec_hash=row["spec_hash"],
-                created_at=datetime.fromisoformat(row["created_at"]),
-            )
-            for row in rows
-        ]
-
-
-def get_screen_version(screen_id: str, version: int) -> ScreenVersion | None:
-    with contextlib.closing(_connect()) as conn:
-        row = conn.execute(
-            """
-            SELECT screen_id, version, spec_json, spec_hash, created_at
-            FROM screen_versions
-            WHERE screen_id = ? AND version = ?
-            """,
-            (screen_id, version),
-        ).fetchone()
-        if row is None:
-            return None
-        return ScreenVersion(
-            screen_id=row["screen_id"],
-            version=row["version"],
-            spec=ScreenSpec.model_validate_json(row["spec_json"]),
-            spec_hash=row["spec_hash"],
-            created_at=datetime.fromisoformat(row["created_at"]),
-        )
-
-
-def delete_screen(screen_id: str) -> bool:
-    with transaction() as conn:
-        cursor = conn.execute("DELETE FROM screens WHERE screen_id = ?", (screen_id,))
-        return cursor.rowcount > 0
-
-
-def save_run(run: ScreenRun) -> None:
-    with transaction() as conn:
-        conn.execute(
-            """
-            INSERT INTO screen_runs(
-                run_id, screen_id, screen_version, spec_json, spec_hash,
-                snapshot_id, result_hash, coverage_json, warnings_json,
-                diff_json, duration_ms, created_at
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-            """,
-            (
-                run.run_id,
-                run.screen_id,
-                run.screen_version,
-                run.spec.model_dump_json(),
-                run.spec_hash,
-                run.snapshot_id,
-                run.result_hash,
-                run.coverage.model_dump_json(),
-                _json(run.warnings),
-                run.diff.model_dump_json(),
-                run.duration_ms,
-                run.created_at.isoformat(),
-            ),
-        )
-        conn.executemany(
-            """
-            INSERT INTO screen_run_members(run_id, symbol, rank, name, row_json)
-            VALUES (?, ?, ?, ?, ?)
-            """,
-            [
-                (run.run_id, row.symbol, row.rank, row.name, row.model_dump_json())
-                for row in run.rows
-            ],
-        )
-
-
-def _run_from_row(conn: sqlite3.Connection, row: sqlite3.Row) -> ScreenRun:
-    members = conn.execute(
-        """
-        SELECT row_json FROM screen_run_members
-        WHERE run_id = ? ORDER BY rank ASC
-        """,
-        (row["run_id"],),
-    ).fetchall()
-    from kan.domain.screen import DataCoverage, ScreenDiff, ScreenRow
-
-    return ScreenRun(
-        run_id=row["run_id"],
-        screen_id=row["screen_id"],
-        screen_version=row["screen_version"],
-        spec=ScreenSpec.model_validate_json(row["spec_json"]),
-        spec_hash=row["spec_hash"],
-        snapshot_id=row["snapshot_id"],
-        result_hash=row["result_hash"],
-        created_at=datetime.fromisoformat(row["created_at"]),
-        duration_ms=row["duration_ms"],
-        coverage=DataCoverage.model_validate_json(row["coverage_json"]),
-        warnings=json.loads(row["warnings_json"]),
-        rows=[ScreenRow.model_validate_json(item["row_json"]) for item in members],
-        diff=ScreenDiff.model_validate_json(row["diff_json"]),
-    )
-
-
-def get_run(run_id: str) -> ScreenRun | None:
-    with contextlib.closing(_connect()) as conn:
-        row = conn.execute(
-            "SELECT * FROM screen_runs WHERE run_id = ?", (run_id,)
-        ).fetchone()
-        return None if row is None else _run_from_row(conn, row)
-
-
-def latest_run_for_screen(screen_id: str) -> ScreenRun | None:
-    with contextlib.closing(_connect()) as conn:
-        row = conn.execute(
-            """
-            SELECT * FROM screen_runs
-            WHERE screen_id = ? ORDER BY created_at DESC LIMIT 1
-            """,
-            (screen_id,),
-        ).fetchone()
-        return None if row is None else _run_from_row(conn, row)
-
-
-def list_runs(*, screen_id: str | None = None, limit: int = 50) -> list[ScreenRun]:
-    with contextlib.closing(_connect()) as conn:
-        if screen_id is None:
-            rows = conn.execute(
-                "SELECT * FROM screen_runs ORDER BY created_at DESC LIMIT ?", (limit,)
-            ).fetchall()
-        else:
-            rows = conn.execute(
-                """
-                SELECT * FROM screen_runs
-                WHERE screen_id = ? ORDER BY created_at DESC LIMIT ?
-                """,
-                (screen_id, limit),
-            ).fetchall()
-        return [_run_from_row(conn, row) for row in rows]
-
-
 def list_candidate_lists() -> list[CandidateList]:
     with contextlib.closing(_connect()) as conn:
         rows = conn.execute(
@@ -555,10 +308,12 @@ def upsert_candidate(
         if exists is None:
             raise ValueError(f"候选池不存在: {list_id}")
         old = conn.execute(
-            "SELECT added_at FROM candidates WHERE list_id = ? AND symbol = ?",
+            "SELECT added_at, source_run_id FROM candidates WHERE list_id = ? AND symbol = ?",
             (list_id, symbol),
         ).fetchone()
         added_at = old["added_at"] if old is not None else now.isoformat()
+        if source_run_id is None and old is not None:
+            source_run_id = old["source_run_id"]
         conn.execute(
             """
             INSERT INTO candidates(
@@ -609,60 +364,6 @@ def remove_candidate(list_id: str, symbol: str) -> bool:
                 "UPDATE candidate_lists SET updated_at = ? WHERE list_id = ?",
                 (_now().isoformat(), list_id),
             )
-        return cursor.rowcount > 0
-
-
-def save_compare_set(name: str, symbols: list[str], *, compare_id: str | None = None) -> CompareSet:
-    if not 3 <= len(symbols) <= 10:
-        raise ValueError("对比组合必须包含 3–10 只股票")
-    actual_id = compare_id or uuid4().hex
-    actual_name = name.strip() or "临时对比"
-    now = _now()
-    with transaction() as conn:
-        existing = conn.execute(
-            "SELECT created_at FROM compare_sets WHERE compare_id = ?", (actual_id,)
-        ).fetchone()
-        created_at = existing["created_at"] if existing is not None else now.isoformat()
-        conn.execute(
-            """
-            INSERT INTO compare_sets(compare_id, name, symbols_json, created_at, updated_at)
-            VALUES (?, ?, ?, ?, ?)
-            ON CONFLICT(compare_id) DO UPDATE SET
-                name = excluded.name,
-                symbols_json = excluded.symbols_json,
-                updated_at = excluded.updated_at
-            """,
-            (actual_id, actual_name, _json(symbols), created_at, now.isoformat()),
-        )
-    return CompareSet(
-        compare_id=actual_id,
-        name=actual_name,
-        symbols=symbols,
-        created_at=datetime.fromisoformat(created_at),
-        updated_at=now,
-    )
-
-
-def list_compare_sets() -> list[CompareSet]:
-    with contextlib.closing(_connect()) as conn:
-        rows = conn.execute("SELECT * FROM compare_sets ORDER BY updated_at DESC").fetchall()
-        return [
-            CompareSet(
-                compare_id=row["compare_id"],
-                name=row["name"],
-                symbols=json.loads(row["symbols_json"]),
-                created_at=datetime.fromisoformat(row["created_at"]),
-                updated_at=datetime.fromisoformat(row["updated_at"]),
-            )
-            for row in rows
-        ]
-
-
-def delete_compare_set(compare_id: str) -> bool:
-    with transaction() as conn:
-        cursor = conn.execute(
-            "DELETE FROM compare_sets WHERE compare_id = ?", (compare_id,)
-        )
         return cursor.rowcount > 0
 
 
