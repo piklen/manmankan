@@ -23,11 +23,11 @@
 
 ## 保留认识，并复看同一群体
 
-点击“记下这个观察”保存明确截止日、完整范围、当时成员收益与缺口、群体统计和用户自己的文字。保存时服务重新核对固定日期；不接受浏览器提交的统计。没有可判断成员时先准备数据，不保存纯缺口。记录沿用SQLite状态，不建立任务、定时执行或候选状态。
+在市场事实之后记下整个范围的观察，或在行业剖面旁保存该行业。记录保存明确截止日、完整范围、当时成员收益与缺口、群体统计和用户自己的文字。保存时服务重新核对固定日期及已展示事实的内容版本；成员或行情已变化则不写入，保留草稿，明确查看新事实并核对后再保存。不接受浏览器提交的统计。没有可判断成员时先准备数据，不保存纯缺口。记录沿用SQLite状态，不建立任务、定时执行或候选状态。
 
 “我的研究”同时显示观察记录与条件研究。读取观察与编辑文字只读写存档，不取行情。显式复看冻结原成员代码和窗口，不重新解析当前行业或个人池；新增股票、行业变更不会改变原范围。按原/新两个滚动窗口都完整的同一批成员比较上涨占比、中位数与方向迁移，其他成员单列未知。两个窗口可能重叠，比较不等于持有收益。复看不覆盖原日期、原事实与想法；同日复核可检查当前缓存修正，早于原日则拒绝。
 
-HTTP入口为`/api/v1/observations`及`/{id}/review`；CLI为`kan observe save request.json`、`list`、`show <id>`、`review <id> --as-of YYYY-MM-DD`。保存输入的`query.as_of`必须明确，`kan observe schema`输出完整契约。MCP `kan_observe` 的`action`为`save/list/show/review`，保存只在用户明确要求时执行。
+HTTP入口为`/api/v1/observations`及`/{id}/review`；CLI为`kan observe save request.json`、`list`、`show <id>`、`review <id> --as-of YYYY-MM-DD`。保存已浏览的结果时，将对应组的`fingerprint`作为`expected_fingerprint`传入；冲突返回HTTP 409 `observation_changed`，不能去掉版本字段重试来绕过。未提供版本的CLI/Python调用表示按明确查询在保存时新建观察。保存输入的`query.as_of`必须明确，`kan observe schema`输出完整契约。MCP `kan_observe` 的`action`为`save/list/show/review`，保存只在用户明确要求时执行。
 
 ## 从缺数据回到原观察
 

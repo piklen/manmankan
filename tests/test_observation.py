@@ -56,14 +56,66 @@ def test_save_full_scope_and_read_edit_delete_without_market_reads(observation_m
     monkeypatch.setattr(observation, "discover_market", unexpected_query)
     assert observation.get_observation(saved.id) == saved
     assert observation.list_observations()[0].total == 3
+    # 已有观察是用户资产：缺少新增指纹仍可读取，且读操作不改写其原始存档。
+    legacy = saved.model_dump(mode="json")
+    del legacy["snapshot"]["group"]["fingerprint"]
+    workspace_db.put_state("observation:" + saved.id, legacy)
+    archived = observation.get_observation(saved.id)
+    assert archived.snapshot.group.fingerprint == ""
+    assert workspace_db.get_state("observation:" + saved.id) == legacy
     edited = observation.edit_observation(saved.id, ObservationEditRequest(title="核对参与范围", note="补充想法"))
-    assert edited.snapshot == saved.snapshot and edited.query == saved.query
+    assert edited.snapshot == archived.snapshot and edited.query == saved.query
     assert edited.created_at == saved.created_at and edited.note == "补充想法"
     assert observation.list_observations()[0].title == edited.title
     assert observation.delete_observation(saved.id)
     assert not observation.delete_observation(saved.id)
     assert observation.list_observations() == []
     assert workspace_db.get_state("existing:user-note") == {"note": "原资料保持"}
+
+
+def test_save_rejects_changed_members_or_prices_without_writing(observation_market, monkeypatch):
+    request, days, frames, industries = observation_market
+    selected = ["000001", "000002", "000003"]
+    names = {code: code for code in frames}
+    monkeypatch.setattr(trend_search, "resolve_study_members", lambda _universe, _codes: [(code, names[code]) for code in selected])
+    request = request.model_copy(update={"query": DiscoveryQuery(universe="personal", as_of=days[4], window=2)})
+    shown = discovery.discover_market(request.query)
+    request = request.model_copy(update={"expected_fingerprint": shown.market.fingerprint})
+    saved = observation.save_observation(request)
+    assert saved.snapshot.group.fingerprint == shown.market.fingerprint
+    index = observation.list_observations()
+
+    def unexpected_write():
+        raise AssertionError("事实冲突时不应进入写事务")
+
+    with monkeypatch.context() as no_writes:
+        no_writes.setattr(workspace_db, "transaction", unexpected_write)
+        client = TestClient(create_app(session_required=False, recover_jobs=False), base_url="http://127.0.0.1")
+        selected.append("000004")
+        response = client.post("/api/v1/observations", json=request.model_dump(mode="json"), headers={"X-Kan-Web": "1"})
+        assert response.status_code == 409
+        assert response.json()["detail"]["code"] == "observation_changed"
+        selected.pop()
+        # 恢复成员后，同一截止日期的日线修订也必须拒绝旧屏幕事实。
+        original = frames["000001"].copy()
+        frames["000001"].loc[4, ["open", "high", "low", "close"]] = 99
+        with pytest.raises(observation.ObservationChangedError, match="没有写入"):
+            observation.save_observation(request)
+        frames["000001"] = original
+        names["000001"] = "修订名称"
+        with pytest.raises(observation.ObservationChangedError):
+            observation.save_observation(request)
+        names["000001"] = "000001"
+        industries["000001"] = "乙"
+        with pytest.raises(observation.ObservationChangedError):
+            observation.save_observation(request)
+    assert observation.list_observations() == index
+    assert observation.get_observation(saved.id) == saved
+    # 用户明确重看、核对后，提交新的事实指纹才可保存。
+    refreshed = discovery.discover_market(request.query)
+    current = observation.save_observation(request.model_copy(update={"expected_fingerprint": refreshed.market.fingerprint}))
+    assert current.snapshot.group.fingerprint == refreshed.market.fingerprint
+    assert current.note == saved.note
 
 
 def test_review_freezes_members_and_keeps_unknown_and_original_note(observation_market):

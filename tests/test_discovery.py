@@ -61,6 +61,7 @@ def test_distribution_paired_windows_fixed_history_and_drilldown(observed_market
     assert counts == {"up_up": 1, "down_up": 1, "up_down": 0, "down_down": 1, "flat": 1, "unknown": 3}
     assert sum(counts.values()) == stats.total
     for group in [result.market, *result.industries]:
+        assert len(group.fingerprint) == 24
         members = result.members if group is result.market else [item for item in result.members if item.industry == group.name]
         assert len(members) == group.total
         for bucket in group.distribution:
@@ -68,6 +69,10 @@ def test_distribution_paired_windows_fixed_history_and_drilldown(observed_market
         for transition in group.transitions:
             assert transition.count == sum(item.transition == transition.key for item in members)
         assert sum(bucket.count for bucket in group.distribution) == group.current.available
+    industry = result.industries[0]
+    scoped = discovery.discover_market(DiscoveryQuery(window=2, as_of=result.as_of, industries=[industry.name]))
+    assert industry.name != scoped.market.name
+    assert industry.fingerprint == scoped.market.fingerprint
 
 
 def test_missing_future_and_explicit_scope_do_not_change_the_facts(observed_market):
@@ -78,6 +83,11 @@ def test_missing_future_and_explicit_scope_do_not_change_the_facts(observed_mark
     assert discovery.discover_market(query) == before
     assert [member.symbol for member in before.members] == ["000001", "000002", "000003", "000004"]
     assert before.market.current.total == 4
+    flat = DiscoveryQuery(window=2, as_of=days[4], universe="codes", codes=["000004"])
+    # 即使成员收益全为零，观察日期或窗口变化仍不能冒充同一次观察。
+    fingerprint = discovery.discover_market(flat).market.fingerprint
+    assert discovery.discover_market(flat.model_copy(update={"window": 3})).market.fingerprint != fingerprint
+    assert discovery.discover_market(flat.model_copy(update={"as_of": days[5]})).market.fingerprint != fingerprint
     for symbol in frames:
         if frames[symbol] is not None:
             frames[symbol] = frames[symbol].iloc[:2]

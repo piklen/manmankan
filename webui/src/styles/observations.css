@@ -505,3 +505,39 @@
   line-height: 1.8;
   margin: 12px 0 18px;
 }
+
+.discovery-market-save {
+  margin: 0 0 30px;
+}
+.observation-facts-changed {
+  padding: 20px;
+  margin: 20px 0;
+  border: 1px solid #d6ddbf;
+  border-radius: 10px;
+  background: #f7f6ea;
+}
+.observation-facts-changed h4 {
+  margin: 0 0 10px;
+  font-size: 15px;
+  font-weight: 550;
+}
+.observation-facts-changed p {
+  font-size: 12px;
+  line-height: 1.9;
+  color: var(--muted);
+  margin: 12px 0 16px;
+}
+.observation-facts-changed .table-scroll {
+  margin: 18px 0 12px;
+  max-width: 620px;
+}
+.observation-facts-changed th,
+.observation-facts-changed td {
+  padding: 10px 12px;
+  font-size: 12px;
+}
+@media (max-width: 700px) {
+  .observation-facts-changed {
+    padding: 16px 12px;
+  }
+}

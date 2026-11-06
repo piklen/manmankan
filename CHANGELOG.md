@@ -9,6 +9,13 @@ explicitly approves a larger bump.
 
 ## [Unreleased]
 
+## [0.0.6.9.46] - 2026-11-07
+
+### Fixed
+
+- 保存观察前核对已展示事实的内容版本；成员或行情变化时不写入，保留草稿供用户重新核对，避免自己的文字对应另一份事实。
+- 全范围观察记录入口移到市场事实之后、行业拆解之前；行业记录仍在对应剖面，保存范围明确。
+
 ## [0.0.6.9.45] - 2026-11-07
 
 ### Added
@@ -830,7 +837,8 @@ explicitly approves a larger bump.
 - **Shell 补全** · zsh / bash / fish / powershell
 - **合规与隐私** · 强制风险提示 + 关键词黑名单（无买卖建议 / 无目标价 / 无评级）· 数据全本地
 
-[Unreleased]: https://github.com/piklen/manmankan/compare/v0.0.6.9.45...HEAD
+[Unreleased]: https://github.com/piklen/manmankan/compare/v0.0.6.9.46...HEAD
+[0.0.6.9.46]: https://github.com/piklen/manmankan/compare/v0.0.6.9.45...v0.0.6.9.46
 [0.0.6.9.45]: https://github.com/piklen/manmankan/compare/v0.0.6.9.44...v0.0.6.9.45
 [0.0.6.9.44]: https://github.com/piklen/manmankan/compare/v0.0.6.9.43...v0.0.6.9.44
 [0.0.6.9.43]: https://github.com/piklen/manmankan/compare/v0.0.6.9.42...v0.0.6.9.43

@@ -17,6 +17,8 @@ router = APIRouter(prefix="/api/v1/observations", tags=["observations"])
 
 
 def _error(exc: ValueError) -> HTTPException:
+    if isinstance(exc, observation.ObservationChangedError):
+        return HTTPException(status_code=409, detail={"code": "observation_changed", "message": str(exc)})
     missing = isinstance(exc, observation.ObservationNotFoundError)
     return HTTPException(status_code=404 if missing else 422, detail={
         "code": "observation_not_found" if missing else "invalid_observation", "message": str(exc),

@@ -105,6 +105,7 @@ export const api = {
     title: string;
     note: string;
     query: DiscoveryQuery;
+    expected_fingerprint: string;
   }) =>
     request<ObservationRecord>("/api/v1/observations", {
       method: "POST",

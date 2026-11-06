@@ -2,7 +2,7 @@
   "openapi": "3.1.0",
   "info": {
     "title": "ManManKan Local API",
-    "version": "0.0.6.9.45"
+    "version": "0.0.6.9.46"
   },
   "paths": {
     "/api/v1/health": {
@@ -1962,6 +1962,10 @@
             "type": "string",
             "title": "Name"
           },
+          "fingerprint": {
+            "type": "string",
+            "title": "Fingerprint"
+          },
           "total": {
             "type": "integer",
             "title": "Total"
@@ -2009,6 +2013,7 @@
         "type": "object",
         "required": [
           "name",
+          "fingerprint",
           "total",
           "current",
           "comparison",
@@ -2771,6 +2776,18 @@
           },
           "query": {
             "$ref": "#/components/schemas/DiscoveryQuery"
+          },
+          "expected_fingerprint": {
+            "anyOf": [
+              {
+                "type": "string",
+                "pattern": "^[0-9a-f]{24}$"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Expected Fingerprint"
           }
         },
         "additionalProperties": false,

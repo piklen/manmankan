@@ -12,6 +12,7 @@ import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import App from "../App";
 import {
   api,
+  ApiError,
   type DiscoveryGroup,
   type DiscoveryResult,
   type ObservationRecord,
@@ -31,6 +32,7 @@ const observationBars = Array.from({ length: 90 }, (_, index) => {
   }));
 
 const group: DiscoveryGroup = {
+  fingerprint: "a".repeat(24),
   name: "测试行业",
   total: 3,
   current: {
@@ -496,13 +498,43 @@ it("saves the complete observation beyond the displayed subgroup and reviews a c
       observations: [],
     },
   };
+  let sourceUpdated = false;
   const discover = vi
     .spyOn(api, "discover")
-    .mockImplementation(async (query) => ({
-      ...(query.universe === "codes" ? result : broaderResult),
-      query,
-    }));
-  const save = vi.spyOn(api, "saveObservation").mockResolvedValue(record);
+    .mockImplementation(async (query) => {
+      const current = query.universe === "codes" ? result : broaderResult;
+      if (!sourceUpdated) return { ...current, query };
+      return {
+        ...current,
+        query,
+        market: { ...current.market, fingerprint: "e".repeat(24) },
+        industries: current.industries.map((item) =>
+          item.name === "测试行业"
+            ? { ...item, fingerprint: "d".repeat(24) }
+            : item,
+        ),
+        members: current.members.map((member) =>
+          member.industry === "测试行业"
+            ? { ...member, source: "test-refreshed" }
+            : member,
+        ),
+      };
+    });
+  record.snapshot.group = {
+    ...record.snapshot.group,
+    fingerprint: "d".repeat(24),
+  };
+  record.snapshot.members = record.snapshot.members.map((member) => ({
+    ...member,
+    source: "test-refreshed",
+  }));
+  const save = vi
+    .spyOn(api, "saveObservation")
+    .mockImplementationOnce(async () => {
+      sourceUpdated = true;
+      throw new ApiError(409, "observation_changed", "保存前资料已变化");
+    })
+    .mockResolvedValue(record);
   const edit = vi.spyOn(api, "updateObservation").mockResolvedValue(record);
   let deleted = false;
   vi.spyOn(api, "observations").mockImplementation(async () =>
@@ -538,7 +570,7 @@ it("saves the complete observation beyond the displayed subgroup and reviews a c
   fireEvent.click(
     screen.getByRole("button", { name: "0% 至 5%，1只，查看成员" }),
   );
-  fireEvent.click(screen.getByRole("button", { name: "记下这个观察" }));
+  fireEvent.click(screen.getByRole("button", { name: "记下测试行业观察" }));
   expect(
     screen.getByText(/保存「测试行业」的完整 3 只范围/),
   ).toBeInTheDocument();
@@ -549,7 +581,7 @@ it("saves the complete observation beyond the displayed subgroup and reviews a c
     target: { value: thought },
   });
   fireEvent.click(screen.getByRole("button", { name: "另一行业" }));
-  fireEvent.click(screen.getByRole("button", { name: "记下这个观察" }));
+  fireEvent.click(screen.getByRole("button", { name: "记下另一行业观察" }));
   expect(screen.getByLabelText("当时的想法")).toHaveValue("");
   fireEvent.click(screen.getByRole("button", { name: "取消记录并清除草稿" }));
   expect(save).not.toHaveBeenCalled();
@@ -564,10 +596,30 @@ it("saves the complete observation beyond the displayed subgroup and reviews a c
   expect(screen.getByLabelText("观察标题")).toHaveValue(title);
   expect(screen.getByLabelText("当时的想法")).toHaveValue(thought);
   fireEvent.click(screen.getByRole("button", { name: "保存观察与想法" }));
-  await screen.findByRole("heading", { name: title });
-  expect(save).toHaveBeenCalledWith({
+  await screen.findByRole("heading", { name: "保存前发现资料变化，尚未保存" });
+  expect(screen.getByLabelText("当时的想法")).toHaveValue(thought);
+  expect(screen.getByRole("button", { name: "保存观察与想法" })).toBeDisabled();
+  expect(save).toHaveBeenLastCalledWith({
     title,
     note: thought,
+    expected_fingerprint: "a".repeat(24),
+    query: { ...result.query, as_of: result.as_of, industries: ["测试行业"] },
+  });
+  fireEvent.click(screen.getByRole("button", { name: "查看更新后的事实" }));
+  await screen.findByRole("button", { name: "已核对当前事实，继续填写" });
+  expect(screen.getByLabelText("观察标题")).toHaveValue(title);
+  expect(screen.getByLabelText("当时的想法")).toHaveValue(thought);
+  expect(screen.getByRole("button", { name: "保存观察与想法" })).toBeDisabled();
+  fireEvent.click(
+    screen.getByRole("button", { name: "已核对当前事实，继续填写" }),
+  );
+  expect(save).toHaveBeenCalledTimes(1);
+  fireEvent.click(screen.getByRole("button", { name: "保存观察与想法" }));
+  await screen.findByRole("heading", { name: title });
+  expect(save).toHaveBeenLastCalledWith({
+    title,
+    note: thought,
+    expected_fingerprint: "d".repeat(24),
     query: { ...result.query, as_of: result.as_of, industries: ["测试行业"] },
   });
   expect(screen.getByText(thought)).toBeInTheDocument();
@@ -583,7 +635,7 @@ it("saves the complete observation beyond the displayed subgroup and reviews a c
   fireEvent.click(screen.getByRole("button", { name: "测试行业" }));
   expect(screen.queryByLabelText("当时的想法")).not.toBeInTheDocument();
   expect(
-    screen.getByRole("button", { name: "记下这个观察" }),
+    screen.getByRole("button", { name: "记下测试行业观察" }),
   ).toBeInTheDocument();
   fireEvent.click(screen.getAllByRole("link", { name: "我的研究" })[0]!);
   await screen.findByRole("heading", { name: "我的研究" });
@@ -602,7 +654,7 @@ it("saves the complete observation beyond the displayed subgroup and reviews a c
   expect(within(comparison).getByText("0%")).toBeInTheDocument();
   expect(within(comparison).getByText("两次无法比较")).toBeInTheDocument();
   expect(screen.getByText(thought)).toBeInTheDocument();
-  expect(discover).toHaveBeenCalledTimes(3);
+  expect(discover).toHaveBeenCalledTimes(4);
   fireEvent.click(screen.getByRole("button", { name: "编辑标题与想法" }));
   fireEvent.change(screen.getByLabelText("自己的想法"), {
     target: { value: "尚未保存的文字" },
