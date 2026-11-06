@@ -284,8 +284,9 @@ export function DiscoveryPage() {
           : null;
     requestAnimationFrame(() => target?.scrollIntoView({ block: "start" }));
   }, [result, initialView]);
-  const group =
-    result?.industries.find((item) => item.name === industry) ?? result?.market;
+  const group = industry
+    ? result?.industries.find((item) => item.name === industry)
+    : result?.market;
   const selected = result?.members.find(
     (member) => member.symbol === selectedSymbol,
   );
@@ -735,15 +736,22 @@ export function DiscoveryPage() {
                   ) : null}
                 </div>
               </section>
-              {group ? (
-                <div ref={detailRef} className="discovery-group-detail">
+              {group || industry ? (
+                <div
+                  ref={detailRef}
+                  className="discovery-group-detail"
+                  role="region"
+                  aria-label={`${industry ?? "整个范围"}分布与成员`}
+                >
                   <div className="observation-context-heading">
                     <header className="discovery-section-heading">
                       <div>
                         <h2>{industry ?? "整个范围"} · 拆开看</h2>
                         <p>
                           {industry
-                            ? `${group.total} 只成员，当前 ${group.current.available} 只可判断。`
+                            ? group
+                              ? `${group.total} 只成员，当前 ${group.current.available} 只可判断。`
+                              : "这个行业已不在当前范围中，原观察草稿仍然保留。"
                             : "每个分布都能下钻，查看组成它的全部成员。"}
                         </p>
                       </div>
@@ -767,62 +775,64 @@ export function DiscoveryPage() {
                       />
                     ) : null}
                   </div>
-                  <div className="group-analysis">
-                    <section>
-                      <h3>本期涨跌分布</h3>
-                      <p className="analysis-description">
-                        中间一半成员的变化在 {percent(group.current.q25, 2)} 至{" "}
-                        {percent(group.current.q75, 2)} 之间
-                      </p>
-                      <ReturnDistribution
-                        group={group}
-                        active={filter?.kind === "bin" ? filter.key : null}
-                        onSelect={(key, label) =>
-                          drill({ kind: "bin", key, label })
-                        }
-                      />
-                    </section>
-                    <section>
-                      <h3>从前期，到本期</h3>
-                      <p className="analysis-description">
-                        相邻两个 {window} 日窗口 · 两期完整{" "}
-                        {number(group.comparison.available, 0)} 只
-                      </p>
-                      <div className="transition-list">
-                        {group.transitions.map((item) => (
-                          <button
-                            type="button"
-                            key={item.key}
-                            aria-label={`${item.label}，${item.count}只，查看成员`}
-                            aria-pressed={
-                              filter?.kind === "transition" &&
-                              filter.key === item.key
-                            }
-                            onClick={() =>
-                              drill({
-                                kind: "transition",
-                                key: item.key,
-                                label: item.label,
-                              })
-                            }
-                            disabled={!item.count}
-                          >
-                            <span>{item.label}</span>
-                            <i>
-                              <b
-                                style={{
-                                  width: `${group.total ? (item.count / group.total) * 100 : 0}%`,
-                                }}
-                              />
-                            </i>
-                            <strong>{number(item.count, 0)}</strong>
-                            <ChevronRight size={14} />
-                          </button>
-                        ))}
-                      </div>
-                    </section>
-                  </div>
-                  {industry ? (
+                  {group ? (
+                    <div className="group-analysis">
+                      <section>
+                        <h3>本期涨跌分布</h3>
+                        <p className="analysis-description">
+                          中间一半成员的变化在 {percent(group.current.q25, 2)}{" "}
+                          至 {percent(group.current.q75, 2)} 之间
+                        </p>
+                        <ReturnDistribution
+                          group={group}
+                          active={filter?.kind === "bin" ? filter.key : null}
+                          onSelect={(key, label) =>
+                            drill({ kind: "bin", key, label })
+                          }
+                        />
+                      </section>
+                      <section>
+                        <h3>从前期，到本期</h3>
+                        <p className="analysis-description">
+                          相邻两个 {window} 日窗口 · 两期完整{" "}
+                          {number(group.comparison.available, 0)} 只
+                        </p>
+                        <div className="transition-list">
+                          {group.transitions.map((item) => (
+                            <button
+                              type="button"
+                              key={item.key}
+                              aria-label={`${item.label}，${item.count}只，查看成员`}
+                              aria-pressed={
+                                filter?.kind === "transition" &&
+                                filter.key === item.key
+                              }
+                              onClick={() =>
+                                drill({
+                                  kind: "transition",
+                                  key: item.key,
+                                  label: item.label,
+                                })
+                              }
+                              disabled={!item.count}
+                            >
+                              <span>{item.label}</span>
+                              <i>
+                                <b
+                                  style={{
+                                    width: `${group.total ? (item.count / group.total) * 100 : 0}%`,
+                                  }}
+                                />
+                              </i>
+                              <strong>{number(item.count, 0)}</strong>
+                              <ChevronRight size={14} />
+                            </button>
+                          ))}
+                        </div>
+                      </section>
+                    </div>
+                  ) : null}
+                  {industry && group ? (
                     <BreadthHistory group={group} window={window} />
                   ) : null}
                 </div>

@@ -684,3 +684,51 @@ it("saves the complete observation beyond the displayed subgroup and reviews a c
     screen.queryByRole("heading", { name: title }),
   ).not.toBeInTheDocument();
 });
+
+it("keeps a vanished industry's draft after refresh without relabelling market statistics as that industry", async () => {
+  const refreshed: DiscoveryResult = {
+    ...result,
+    market: { ...result.market, fingerprint: "c".repeat(24) },
+    industries: [{ ...group, name: "另一行业", fingerprint: "b".repeat(24) }],
+    members: result.members.map((member) => ({
+      ...member,
+      industry: "另一行业",
+    })),
+  };
+  const discover = vi
+    .spyOn(api, "discover")
+    .mockResolvedValueOnce(result)
+    .mockResolvedValue(refreshed);
+  vi.spyOn(api, "saveObservation").mockRejectedValue(
+    new ApiError(409, "observation_changed", "资料已变化"),
+  );
+  mount();
+  fireEvent.click(await screen.findByRole("button", { name: "测试行业" }));
+  fireEvent.click(screen.getByRole("button", { name: "记下测试行业观察" }));
+  fireEvent.change(screen.getByLabelText("当时的想法"), {
+    target: { value: "这段行业观察尚未保存" },
+  });
+  fireEvent.click(screen.getByRole("button", { name: "保存观察与想法" }));
+  fireEvent.click(
+    await screen.findByRole("button", { name: "查看更新后的事实" }),
+  );
+  await screen.findByText("这个行业已不在当前范围中，原观察草稿仍然保留。");
+  const profile = screen.getByRole("region", { name: "测试行业分布与成员" });
+  expect(within(profile).getByLabelText("当时的想法")).toHaveValue(
+    "这段行业观察尚未保存",
+  );
+  expect(
+    within(profile).getByRole("button", { name: "保存观察与想法" }),
+  ).toBeDisabled();
+  expect(
+    within(profile).queryByRole("heading", { name: "本期涨跌分布" }),
+  ).not.toBeInTheDocument();
+  expect(within(profile).queryByRole("img")).not.toBeInTheDocument();
+  fireEvent.click(screen.getByRole("button", { name: "返回整个范围" }));
+  expect(
+    within(
+      screen.getByRole("region", { name: "整个范围分布与成员" }),
+    ).getByRole("heading", { name: "本期涨跌分布" }),
+  ).toBeInTheDocument();
+  expect(discover).toHaveBeenCalledTimes(2);
+});
