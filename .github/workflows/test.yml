@@ -57,6 +57,8 @@ jobs:
       # 不依赖各台 runner 的系统 Node 版本，统一使用同一构建环境。
       - name: Setup Node.js
         uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020
+        env:
+          RUNNER_TOOL_CACHE: ${{ runner.temp }}/kan-node-${{ github.run_id }}-${{ github.run_attempt }}
         with:
           node-version: '24'
       - name: Verify Node.js runtime
