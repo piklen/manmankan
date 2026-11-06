@@ -62,6 +62,7 @@ it("recovers a fresh observation through explicit local configuration and data u
     previous_start: "2026-06-24",
     common_data_date: "2026-10-28",
     common_data_count: 1,
+    data_gaps: [],
     market: {
       name: "全部范围",
       total: 1,

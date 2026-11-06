@@ -653,6 +653,16 @@ export interface components {
             /** Previous Median */
             previous_median: number | null;
         };
+        /** DiscoveryDataGap */
+        DiscoveryDataGap: {
+            /**
+             * Date
+             * Format: date
+             */
+            date: string;
+            /** Missing */
+            missing: number;
+        };
         /** DiscoveryDataPlan */
         DiscoveryDataPlan: {
             query: components["schemas"]["DiscoveryQuery"];
@@ -786,6 +796,8 @@ export interface components {
             industries: components["schemas"]["DiscoveryGroup"][];
             /** Members */
             members: components["schemas"]["DiscoveryMember"][];
+            /** Data Gaps */
+            data_gaps: components["schemas"]["DiscoveryDataGap"][];
             /** Warnings */
             warnings: string[];
         };

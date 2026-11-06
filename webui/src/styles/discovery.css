@@ -860,6 +860,29 @@
   margin-top: 12px;
   max-width: 880px;
 }
+.discovery-data-gaps {
+  margin-top: 18px;
+  padding: 12px 16px;
+  border-left: 2px solid #b89c61;
+  background: #f3f0e7;
+  color: var(--ink);
+  font-size: 13px;
+  line-height: 1.8;
+}
+.discovery-data-gaps summary { cursor: pointer; }
+.discovery-data-gaps p { margin: 10px 0; color: var(--muted); }
+.discovery-data-gaps ul {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 4px 24px;
+  max-height: 200px;
+  overflow: auto;
+  padding: 0;
+  list-style: none;
+  font-variant-numeric: tabular-nums;
+}
+.discovery-data-gaps li { display: flex; justify-content: space-between; }
+.discovery-data-gaps a { display: inline-flex; align-items: center; gap: 6px; }
 @media (max-width: 1100px) {
   .discovery-page {
     padding: 38px 30px;

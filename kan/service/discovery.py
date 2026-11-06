@@ -10,6 +10,7 @@ from kan.core.returns import rolling_returns
 from kan.domain.discovery import (
     DiscoveryBin,
     DiscoveryComparison,
+    DiscoveryDataGap,
     DiscoveryGroup,
     DiscoveryHistoryPoint,
     DiscoveryMember,
@@ -206,11 +207,15 @@ def discover_market(query: DiscoveryQuery) -> DiscoveryResult:
         ))
         industry_indices[industry].append(index)
     common_date = max(cutoffs, key=lambda day: (cutoffs[day], day)) if cutoffs else None
+    data_gaps = [
+        DiscoveryDataGap(date=day, missing=missing_dates[day])
+        for day in sorted(missing_dates, key=lambda day: (missing_dates[day], day), reverse=True)
+    ]
     gap_warnings = []
-    if missing_dates:
-        concentrated = sorted(missing_dates, key=lambda day: (-missing_dates[day], day))[:3]
-        details = "；".join(f"{day} 有 {missing_dates[day]} 只股票缺少有效日线" for day in concentrated)
-        other_dates = f"，另有 {len(missing_dates) - len(concentrated)} 个交易日有缺口" if len(missing_dates) > len(concentrated) else ""
+    if data_gaps:
+        concentrated = data_gaps[:3]
+        details = "；".join(f"{gap.date} 有 {gap.missing} 只股票缺少有效日线" for gap in concentrated)
+        other_dates = f"，另有 {len(data_gaps) - len(concentrated)} 个交易日有缺口" if len(data_gaps) > len(concentrated) else ""
         gap_warnings.append(
             f"所需窗口的共同缺口：{details}{other_dates}。请核对这些日期的来源截面；"
             "仅统计已有有效行情之后的缺日，缺失仍按未知处理，不推断停牌或涨跌。"
@@ -221,7 +226,7 @@ def discover_market(query: DiscoveryQuery) -> DiscoveryResult:
         common_data_count=cutoffs[common_date] if common_date else 0,
         market=_group("全部范围", members, history, days, query.window),
         industries=[_group(name, [members[index] for index in indices], history[indices], days, query.window) for name, indices in sorted(industry_indices.items())],
-        members=members,
+        members=members, data_gaps=data_gaps,
         warnings=[
             *gap_warnings,
             "使用当前上市范围与当前行业归属回溯，不代表历史时点全市场。",

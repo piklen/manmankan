@@ -1904,6 +1904,26 @@
         ],
         "title": "DiscoveryComparison"
       },
+      "DiscoveryDataGap": {
+        "properties": {
+          "date": {
+            "type": "string",
+            "format": "date",
+            "title": "Date"
+          },
+          "missing": {
+            "type": "integer",
+            "title": "Missing"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "date",
+          "missing"
+        ],
+        "title": "DiscoveryDataGap"
+      },
       "DiscoveryDataPlan": {
         "properties": {
           "query": {
@@ -2327,6 +2347,13 @@
             "type": "array",
             "title": "Members"
           },
+          "data_gaps": {
+            "items": {
+              "$ref": "#/components/schemas/DiscoveryDataGap"
+            },
+            "type": "array",
+            "title": "Data Gaps"
+          },
           "warnings": {
             "items": {
               "type": "string"
@@ -2348,6 +2375,7 @@
           "market",
           "industries",
           "members",
+          "data_gaps",
           "warnings"
         ],
         "title": "DiscoveryResult"

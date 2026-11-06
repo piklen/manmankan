@@ -108,6 +108,11 @@ class DiscoveryGroup(StudyModel):
     observations: list[DiscoveryObservation]
 
 
+class DiscoveryDataGap(StudyModel):
+    date: date
+    missing: int
+
+
 class DiscoveryResult(StudyModel):
     query: DiscoveryQuery
     as_of: date
@@ -119,4 +124,5 @@ class DiscoveryResult(StudyModel):
     market: DiscoveryGroup
     industries: list[DiscoveryGroup]
     members: list[DiscoveryMember]
+    data_gaps: list[DiscoveryDataGap]
     warnings: list[str]

@@ -107,12 +107,14 @@ def test_shared_gap_warning_counts_observed_history_without_pre_listing_days(obs
     days, frames = observed_market
     # 两只已交易成员在同日缺行情；较晚上市与完全无缓存者不增加日期缺口数。
     frames["000001"] = frames["000001"].drop(index=3)
+    frames["000002"] = frames["000002"].drop(index=[1, 2])
     result = discovery.discover_market(DiscoveryQuery(window=2))
     warning = next(text for text in result.warnings if "共同缺口" in text)
     assert f"{days[3]} 有 2 只股票缺少有效日线" in warning
-    assert str(days[0]) not in warning and str(days[1]) not in warning
+    assert [(gap.date, gap.missing) for gap in result.data_gaps] == [(days[3], 2), (days[2], 1), (days[1], 1)]
+    assert str(days[0]) not in warning
     assert "不推断停牌或涨跌" in warning
-    assert (result.market.current.total, result.market.current.missing) == (7, 3)
+    assert (result.market.current.total, result.market.current.missing) == (7, 4)
 
 
 def test_http_cli_python_and_mcp_return_one_result(observed_market):

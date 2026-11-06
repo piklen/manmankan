@@ -106,6 +106,7 @@ const result: DiscoveryResult = {
   previous_start: observationBars.at(-41)!.date,
   common_data_date: "2026-10-28",
   common_data_count: 3,
+  data_gaps: [{ date: "2026-10-27", missing: 1 }],
   market: { ...group, name: "全部 A 股" },
   industries: [group],
   warnings: ["使用当前上市范围与当前行业归属。"],
@@ -232,6 +233,7 @@ it("links whole-population observations to industry, exact distribution members 
     }));
   mount();
   await screen.findByRole("heading", { name: "行业剖面" });
+  expect(screen.getByText("行情存在共同缺口：2026-10-27 · 1 只")).toBeVisible();
   expect(discover).toHaveBeenCalledWith({
     universe: "all",
     codes: [],

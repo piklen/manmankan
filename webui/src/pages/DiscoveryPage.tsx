@@ -490,6 +490,23 @@ export function DiscoveryPage() {
             <span>日线事实 · 两期各 {window} 个交易日</span>
           </div>
           <ScopeFacts result={result} />
+          {result.data_gaps.length ? (
+            <details className="discovery-data-gaps">
+              <summary>
+                行情存在共同缺口：{result.data_gaps[0]!.date} · {number(result.data_gaps[0]!.missing, 0)} 只
+              </summary>
+              <p>以下日期缺少有效日线。缺失成员保留为未知，不当作下跌、停牌或退出；请先核对资料，再解释变化。</p>
+              <ul>
+                {result.data_gaps.map((gap) => (
+                  <li key={gap.date}>{gap.date}<span>{number(gap.missing, 0)} 只</span></li>
+                ))}
+              </ul>
+              <p>只统计已有有效行情之后的窗口缺日，不把上市前历史不足计入。</p>
+              <Link to="/data" state={{ returnTo: "/", discoveryQuery: submitted }}>
+                按本次范围核对数据 <ArrowRight size={14} />
+              </Link>
+            </details>
+          ) : null}
           {!hasData ? (
             <section className="discovery-empty">
               <Empty
