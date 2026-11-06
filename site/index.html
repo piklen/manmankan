@@ -1,931 +1,274 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="zh-CN">
-<head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
-
-  <!-- No-FOUC theme bootstrap · 必须在样式 + body 渲染前同步执行 -->
-  <script>
-    (function () {
-      var t = localStorage.getItem('theme') || 'system';
-      var sysDark = window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches;
-      var dark = t === 'dark' || (t === 'system' && sysDark);
-      document.documentElement.classList.toggle('dark', dark);
-      document.documentElement.dataset.theme = t;
-    })();
-  </script>
-
-  <!-- Primary SEO -->
-  <title>慢慢看 · 本地优先的 A 股选股研究工作台</title>
-  <meta name="description" content="慢慢看 (manmankan) 是本地优先的 A 股选股研究工作台：把用户明确规则变成版本化 Screen、不可变运行证据、独立候选池和横向对比。Python、React、CLI、OpenAPI 与 MCP 同源；不登录、不云同步、不遥测。" />
-  <meta name="keywords" content="慢慢看,manmankan,A股,股票筛选,选股工作台,Screen,ScreenRun,候选池,位置百分位,证据,React,TypeScript,CLI,OpenAPI,MCP,Python,本地运行,开源,AGPL-3.0,K线,行业,题材" />
-  <meta name="author" content="piklen" />
-  <meta name="robots" content="index,follow,max-image-preview:large" />
-  <meta name="googlebot" content="index,follow" />
-  <meta name="format-detection" content="telephone=no" />
-  <meta name="theme-color" content="#09090b" media="(prefers-color-scheme: dark)" />
-  <meta name="theme-color" content="#ffffff" media="(prefers-color-scheme: light)" />
-
-  <!-- 国内搜索引擎站长平台验证占位 (maintainer 申请后填) -->
-  <!-- <meta name="baidu-site-verification" content="" /> -->
-  <!-- <meta name="360-site-verification" content="" /> -->
-  <!-- <meta name="sogou_site_verification" content="" /> -->
-
-  <link rel="canonical" href="https://piklen.github.io/manmankan/" />
-  <link rel="sitemap" type="application/xml" href="/manmankan/sitemap.xml" />
-
-  <!-- Open Graph (FB / WeChat / Telegram / Discord) -->
-  <meta property="og:type" content="website" />
-  <meta property="og:site_name" content="慢慢看 · manmankan" />
-  <meta property="og:title" content="慢慢看 · 本地优先的 A 股选股研究工作台" />
-  <meta property="og:description" content="明确规则 → 不可变运行 → 证据 → 候选 → 对比。Web、CLI、Python、HTTP 与 MCP 共用一个事实核心。" />
-  <meta property="og:url" content="https://piklen.github.io/manmankan/" />
-  <meta property="og:image" content="https://piklen.github.io/manmankan/og.png" />
-  <meta property="og:image:type" content="image/png" />
-  <meta property="og:image:width" content="1280" />
-  <meta property="og:image:height" content="640" />
-  <meta property="og:image:alt" content="慢慢看 · 本地优先的 A 股选股研究工作台" />
-  <meta property="og:locale" content="zh_CN" />
-  <meta property="og:locale:alternate" content="en_US" />
-
-  <!-- Twitter / X Card -->
-  <meta name="twitter:card" content="summary_large_image" />
-  <meta name="twitter:title" content="慢慢看 · 本地优先的 A 股选股研究工作台" />
-  <meta name="twitter:description" content="版本化规则、不可变运行、证据、候选和对比都保存在本机" />
-  <meta name="twitter:image" content="https://piklen.github.io/manmankan/og.png" />
-  <meta name="twitter:image:alt" content="慢慢看 · 本地优先的 A 股选股研究工作台" />
-
-  <!-- JSON-LD · Schema.org SoftwareApplication (Google rich result) -->
-  <script type="application/ld+json">
-  {
-    "@context": "https://schema.org",
-    "@type": "SoftwareApplication",
-    "name": "manmankan",
-    "alternateName": "慢慢看",
-    "description": "本地优先的 A 股选股研究工作台 · 版本化 Screen、不可变运行证据、候选研究和横向对比",
-    "applicationCategory": "FinanceApplication",
-    "applicationSubCategory": "InvestmentTool",
-    "operatingSystem": "macOS, Linux, Windows",
-    "softwareRequirements": "Python 3.11+",
-    "downloadUrl": "https://pypi.org/project/manmankan/",
-    "installUrl": "https://github.com/piklen/manmankan#安装",
-    "url": "https://piklen.github.io/manmankan/",
-    "license": "https://www.gnu.org/licenses/agpl-3.0.html",
-    "isAccessibleForFree": true,
-    "offers": {
-      "@type": "Offer",
-      "price": "0",
-      "priceCurrency": "CNY"
-    },
-    "author": {
-      "@type": "Person",
-      "name": "piklen",
-      "url": "https://github.com/piklen"
-    },
-    "codeRepository": "https://github.com/piklen/manmankan",
-    "programmingLanguage": "Python",
-    "inLanguage": ["zh-CN", "en"]
-  }
-  </script>
-
-  <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Crect width='100' height='100' rx='20' fill='%2309090b'/%3E%3Ctext x='50' y='68' font-size='60' text-anchor='middle' fill='%2334d399' font-family='monospace' font-weight='bold'%3E$%3C/text%3E%3C/svg%3E" />
-
-  <link rel="stylesheet" href="styles.css" />
-  <style>
-    /* ===== Theme tokens · CSS 变量驱动 dark/light 双模式 ===== */
-    :root {
-      --bg: #ffffff;
-      --bg-soft: #fafafa;
-      --bg-card: #f4f4f5;
-      --bg-elev: #ffffff;
-      --text: #18181b;
-      --text-soft: #52525b;
-      --text-muted: #71717a;
-      --border: #e4e4e7;
-      --border-soft: #f4f4f5;
-      --accent: #059669;
-      --accent-soft: #d1fae5;
-      --warn: #d97706;
-      --warn-soft: #fef3c7;
-      --shadow-color: 0 0% 60%;
-      --term-shadow: 0 30px 80px -20px rgba(0,0,0,0.25);
-      color-scheme: light;
-    }
-    .dark {
-      --bg: #09090b;
-      --bg-soft: #0a0a0a;
-      --bg-card: #18181b;
-      --bg-elev: #18181b;
-      --text: #fafafa;
-      --text-soft: #d4d4d8;
-      --text-muted: #71717a;
-      --border: #27272a;
-      --border-soft: #18181b;
-      --accent: #34d399;
-      --accent-soft: rgba(52, 211, 153, 0.12);
-      --warn: #fbbf24;
-      --warn-soft: rgba(251, 191, 36, 0.12);
-      --shadow-color: 0 0% 0%;
-      --term-shadow: 0 30px 80px -10px rgba(0,0,0,0.6), 0 10px 30px -10px rgba(52, 211, 153, 0.1);
-      color-scheme: dark;
-    }
-
-    html, body {
-      background: var(--bg);
-      color: var(--text);
-      -webkit-font-smoothing: antialiased;
-      -moz-osx-font-smoothing: grayscale;
-    }
-    body {
-      font-family: -apple-system, BlinkMacSystemFont, 'PingFang SC', 'Microsoft YaHei', system-ui, sans-serif;
-      transition: background-color 0.3s ease, color 0.3s ease;
-    }
-
-    /* ===== Hero background ===== */
-    .hero-bg {
-      background: var(--bg);
-    }
-
-    /* ===== Terminal mock · 始终保持暗色 (CLI brand) ===== */
-    .term {
-      background: #0a0a0a;
-      border: 1px solid #27272a;
-      border-radius: 12px;
-      box-shadow: var(--term-shadow);
-      overflow: hidden;
-    }
-    .term-head {
-      background: #18181b;
-      border-bottom: 1px solid #27272a;
-    }
-    .term pre {
-      font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, 'Liberation Mono', monospace;
-      font-size: 12.5px;
-      line-height: 1.6;
-      white-space: pre;
-      overflow-x: auto;
-      padding: 18px;
-      color: #e4e4e7;
-      margin: 0;
-    }
-    .pct-lo { color: #34d399; font-weight: 700; }
-    .pct-hi { color: #fb923c; font-weight: 700; }
-    .resonance { color: #fbbf24; font-weight: 800; }
-
-    /* ===== Card · 通用 ===== */
-    .card {
-      background: var(--bg-card);
-      border: 1px solid var(--border);
-      border-radius: 12px;
-      transition: transform 0.2s ease, box-shadow 0.2s ease, border-color 0.2s ease;
-    }
-    .hover-lift:hover {
-      transform: translateY(-2px);
-      border-color: var(--accent);
-      box-shadow: 0 10px 30px -10px hsla(var(--shadow-color), 0.3);
-    }
-
-    /* ===== Button · primary/secondary ===== */
-    .btn {
-      display: inline-flex;
-      align-items: center;
-      gap: 8px;
-      padding: 14px 22px;
-      border-radius: 10px;
-      font-weight: 600;
-      font-size: 15px;
-      transition: transform 0.15s ease, box-shadow 0.15s ease, background-color 0.15s ease;
-    }
-    .btn:hover { transform: translateY(-1px); }
-    .btn:active { transform: translateY(0); }
-    .btn-primary {
-      background: var(--text);
-      color: var(--bg);
-      box-shadow: 0 4px 14px -2px hsla(var(--shadow-color), 0.2);
-    }
-    .btn-primary:hover {
-      box-shadow: 0 10px 24px -4px hsla(var(--shadow-color), 0.35);
-    }
-    .btn-secondary {
-      background: var(--bg-card);
-      color: var(--text);
-      border: 1px solid var(--border);
-    }
-    .btn-secondary:hover {
-      border-color: var(--accent);
-      color: var(--accent);
-    }
-
-    /* ===== Copy card · 整张可点击复制 ===== */
-    .copy-card {
-      display: flex;
-      align-items: center;
-      gap: 14px;
-      background: var(--bg-card);
-      border: 1.5px solid var(--border);
-      border-radius: 12px;
-      padding: 16px 22px;
-      cursor: pointer;
-      font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
-      transition: border-color 0.2s ease, transform 0.15s ease, box-shadow 0.2s ease;
-      position: relative;
-      width: 100%;
-      text-align: left;
-    }
-    .copy-card:hover {
-      border-color: var(--accent);
-      transform: translateY(-1px);
-      box-shadow: 0 8px 24px -8px hsla(var(--shadow-color), 0.25);
-    }
-    .copy-card:active { transform: translateY(0); }
-    .copy-card .copy-hint {
-      position: absolute;
-      top: 6px;
-      right: 10px;
-      font-size: 10px;
-      color: var(--text-muted);
-      opacity: 0;
-      transition: opacity 0.2s ease;
-      font-family: -apple-system, BlinkMacSystemFont, sans-serif;
-    }
-    .copy-card:hover .copy-hint { opacity: 1; }
-    .copy-card.copied {
-      border-color: var(--accent);
-      background: var(--accent-soft);
-    }
-    .copy-card .feedback {
-      color: var(--accent);
-      font-weight: 700;
-      position: absolute;
-      right: 22px;
-      opacity: 0;
-      transition: opacity 0.2s ease;
-      font-family: -apple-system, BlinkMacSystemFont, sans-serif;
-    }
-    .copy-card.copied .feedback { opacity: 1 !important; }
-
-    /* ===== Theme toggle · 三态 cycle ===== */
-    .theme-toggle {
-      display: inline-flex;
-      align-items: center;
-      justify-content: center;
-      width: 36px;
-      height: 36px;
-      border-radius: 8px;
-      background: var(--bg-card);
-      border: 1px solid var(--border);
-      color: var(--text-soft);
-      cursor: pointer;
-      transition: background-color 0.2s ease, color 0.2s ease, border-color 0.2s ease;
-    }
-    .theme-toggle:hover { color: var(--accent); border-color: var(--accent); }
-    .theme-icon { display: none; width: 18px; height: 18px; }
-    html[data-theme="dark"] .theme-icon-dark { display: block; }
-    html[data-theme="light"] .theme-icon-light { display: block; }
-    html[data-theme="system"] .theme-icon-system { display: block; }
-
-    /* ===== Nav ===== */
-    .nav {
-      background: color-mix(in srgb, var(--bg) 80%, transparent);
-      backdrop-filter: blur(12px);
-      -webkit-backdrop-filter: blur(12px);
-      border-bottom: 1px solid var(--border-soft);
-    }
-
-    /* ===== Details / FAQ ===== */
-    details > summary { cursor: pointer; list-style: none; }
-    details > summary::-webkit-details-marker { display: none; }
-    details .chevron { transition: transform 0.2s ease; }
-    details[open] .chevron { transform: rotate(180deg); }
-
-    /* ===== Gradient divider ===== */
-    .divider-grad {
-      height: 1px;
-      background: linear-gradient(to right, transparent, var(--border), transparent);
-      border: 0;
-      margin: 0;
-    }
-
-    /* ===== Scroll hint ===== */
-    @keyframes bounce-soft {
-      0%, 100% { transform: translateY(0); opacity: 0.5; }
-      50% { transform: translateY(6px); opacity: 1; }
-    }
-    .scroll-hint { animation: bounce-soft 2s ease-in-out infinite; }
-
-    /* ===== Code inline ===== */
-    code { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }
-    .ci { color: var(--accent); background: var(--accent-soft); padding: 2px 6px; border-radius: 4px; font-size: 0.9em; }
-
-    @media (max-width: 640px) {
-      .term pre { font-size: 10.5px; padding: 14px; }
-    }
-
-    /* Selection */
-    ::selection { background: var(--accent); color: var(--bg); }
-  </style>
-</head>
-<body class="antialiased">
-
-  <!-- ============ Nav ============ -->
-  <nav class="nav sticky top-0 z-50">
-    <div class="max-w-6xl mx-auto px-6 py-3 flex items-center justify-between">
-      <div class="flex items-center gap-3">
-        <!-- Theme toggle (左侧 · 用户要求) -->
-        <button type="button" class="theme-toggle" onclick="cycleTheme(this)" aria-label="切换主题" title="切换主题: 深色 / 浅色 / 跟随系统">
-          <svg class="theme-icon theme-icon-dark" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M21.752 15.002A9.72 9.72 0 0 1 18 15.75c-5.385 0-9.75-4.365-9.75-9.75 0-1.33.266-2.597.748-3.752A9.753 9.753 0 0 0 3 11.25C3 16.635 7.365 21 12.75 21a9.753 9.753 0 0 0 9.002-5.998Z" /></svg>
-          <svg class="theme-icon theme-icon-light" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><circle cx="12" cy="12" r="4"/><line x1="12" y1="2" x2="12" y2="4"/><line x1="12" y1="20" x2="12" y2="22"/><line x1="2" y1="12" x2="4" y2="12"/><line x1="20" y1="12" x2="22" y2="12"/><line x1="5" y1="5" x2="6.5" y2="6.5"/><line x1="17.5" y1="17.5" x2="19" y2="19"/><line x1="5" y1="19" x2="6.5" y2="17.5"/><line x1="17.5" y1="6.5" x2="19" y2="5"/></svg>
-          <svg class="theme-icon theme-icon-system" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="13" rx="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/></svg>
-        </button>
-        <a href="#top" class="flex items-center gap-2 font-semibold" style="color: var(--text);">
-          <span style="color: var(--accent);" class="font-mono">$</span>
-          <span>慢慢看 · manmankan</span>
-        </a>
-      </div>
-      <div class="flex items-center gap-1 sm:gap-4 text-sm">
-        <a href="#retail" class="hidden sm:inline px-2 py-1" style="color: var(--text-soft);">怎么用</a>
-        <a href="#install" class="hidden sm:inline px-2 py-1" style="color: var(--text-soft);">安装</a>
-        <a href="#faq" class="hidden sm:inline px-2 py-1" style="color: var(--text-soft);">FAQ</a>
-        <a href="https://pypi.org/project/manmankan/" class="px-2 py-1" style="color: var(--text-soft);">PyPI</a>
-        <a href="https://github.com/piklen/manmankan" class="btn btn-primary !py-2 !px-4 !text-sm">
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M12 .297c-6.63 0-12 5.373-12 12 0 5.303 3.438 9.8 8.205 11.385.6.113.82-.258.82-.577 0-.285-.01-1.04-.015-2.04-3.338.724-4.042-1.61-4.042-1.61C4.422 18.07 3.633 17.7 3.633 17.7c-1.087-.744.084-.729.084-.729 1.205.084 1.838 1.236 1.838 1.236 1.07 1.835 2.809 1.305 3.495.998.108-.776.417-1.305.76-1.605-2.665-.3-5.466-1.332-5.466-5.93 0-1.31.465-2.38 1.235-3.22-.135-.303-.54-1.523.105-3.176 0 0 1.005-.322 3.3 1.23.96-.267 1.98-.399 3-.405 1.02.006 2.04.138 3 .405 2.28-1.552 3.285-1.23 3.285-1.23.645 1.653.24 2.873.12 3.176.765.84 1.23 1.91 1.23 3.22 0 4.61-2.805 5.625-5.475 5.92.42.36.81 1.096.81 2.22 0 1.606-.015 2.896-.015 3.286 0 .315.21.69.825.57C20.565 22.092 24 17.592 24 12.297c0-6.627-5.373-12-12-12"/></svg>
-          GitHub
-        </a>
-      </div>
-    </div>
-  </nav>
-
-  <!-- ============ Hero ============ -->
-  <section id="top" class="hero-bg relative">
-    <div class="max-w-5xl mx-auto px-6 pt-14 pb-12 sm:pt-24 sm:pb-16 text-center">
-      <div class="inline-flex items-center gap-2 px-3 py-1.5 mb-8 text-xs rounded-full" style="background: var(--bg-card); border: 1px solid var(--border); color: var(--text-soft);">
-        <span class="w-1.5 h-1.5 rounded-full" style="background: var(--accent);"></span>
-        <span>Alpha · AGPL-3.0 · 本地存储</span>
-      </div>
-
-      <h1 class="text-5xl sm:text-7xl lg:text-8xl font-extrabold tracking-tight mb-7 leading-[1.05]" style="color: var(--text);">慢慢看</h1>
-
-      <p class="text-lg sm:text-xl mb-12 leading-relaxed max-w-3xl mx-auto" style="color: var(--text-soft);">
-        <b style="color: var(--text);">慢慢看</b> 是本地优先的 A 股选股研究工作台。
-        它把用户明确的股票池、客观阈值和排序变成<b style="color: var(--text);">可复跑、可审计的 ScreenRun</b>，
-        再把运行证据、候选研究和横向对比串成完整工作流。
-      </p>
-
-      <div class="flex flex-wrap justify-center gap-3">
-        <a href="#retail" class="btn btn-primary">
-          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 5v14"/><path d="m19 12-7 7-7-7"/></svg>
-          看看实际界面
-        </a>
-        <a href="#install" class="btn btn-secondary">
-          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/><polyline points="3.27 6.96 12 12.01 20.73 6.96"/><line x1="12" y1="22.08" x2="12" y2="12"/></svg>
-          安装并打开
-        </a>
-      </div>
-
-      <!-- scroll hint -->
-      <div class="mt-12 scroll-hint" style="color: var(--text-muted);">
-        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="mx-auto">
-          <polyline points="6 9 12 15 18 9"/>
-        </svg>
-      </div>
-    </div>
-  </section>
-
-  <!-- ============ 普通用户主路径 ============ -->
-  <section id="retail" class="max-w-6xl mx-auto px-6 py-12 sm:py-20">
-    <div class="text-center mb-12">
-      <h2 class="text-3xl sm:text-4xl font-bold mb-3">从一条明确规则开始</h2>
-      <p class="max-w-3xl mx-auto leading-relaxed" style="color: var(--text-soft);">
-        新建 Screen 不预置条件、排除项或排序。你明确选择股票池和阈值，Python 核心负责计算、留证和比较多次运行；
-        React 只负责交互与展示，不在浏览器重算金融事实。
-      </p>
-    </div>
-
-    <img
-      src="web-selection-workbench.png"
-      alt="慢慢看选股工作台：规则构建、运行覆盖率与逐条件证据"
-      width="1600"
-      height="1000"
-      loading="eager"
-      style="display:block;width:100%;height:auto;border:1px solid var(--border);border-radius:8px;box-shadow:var(--term-shadow);"
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>慢慢看 · 看见市场变化的脉络</title>
+    <meta
+      name="description"
+      content="慢慢看是本机运行的 A 股市场变化研究工具。把日线加工为市场广度、行业分布、两期变化与成员证据，从整体观察走到可核对的研究。"
     />
-
-    <div class="grid md:grid-cols-3 gap-5 mt-10">
-      <div>
-        <h3 class="text-lg font-bold mb-3">1 · 定义并版本化</h3>
-        <p class="text-sm leading-relaxed" style="color: var(--text-soft);">从六类股票池和 27 类条件中明确组合规则；内容变化才追加版本，历史可预览和恢复。</p>
-      </div>
-      <div>
-        <h3 class="text-lg font-bold mb-3">2 · 运行并核对证据</h3>
-        <p class="text-sm leading-relaxed" style="color: var(--text-soft);">每次运行固化覆盖率、数据日、实际值、阈值、来源和 diff；缺数不会被悄悄当成 0。</p>
-      </div>
-      <div>
-        <h3 class="text-lg font-bold mb-3">3 · 候选、对比与复看</h3>
-        <p class="text-sm leading-relaxed" style="color: var(--text-soft);">候选池独立保留人工状态、备注和来源运行；3–10 股对比只读取最近可追溯事实。</p>
-      </div>
-    </div>
-  </section>
-
-  <hr class="divider-grad max-w-6xl mx-auto" />
-
-  <!-- ============ AI quickstart ============ -->
-  <details id="ai" class="max-w-6xl mx-auto px-6 py-8">
-    <summary class="text-center text-lg font-semibold" style="color:var(--text-soft);">AI / 开发者入口（第二入口）</summary>
-    <div class="pt-12">
-    <div class="text-center mb-12">
-      <h2 class="text-3xl sm:text-4xl font-bold mb-3">AI 与开发者入口</h2>
-      <p class="max-w-3xl mx-auto leading-relaxed" style="color: var(--text-soft);">
-        普通用户优先使用本地 Web；自动化可以从 <code class="ci">kan screen filters --format json</code> 发现契约，
-        再保存/运行同一个 ScreenSpec。MCP 提供 parse / plan / run / get / explain 五个 typed tools，
-        只整理明确阈值、执行确定性服务和引用已有 evidence。
-      </p>
-    </div>
-
-    <div class="grid md:grid-cols-2 lg:grid-cols-4 gap-4">
-      <button type="button" class="copy-card flex-col items-stretch !p-0 overflow-hidden" data-copy="kan screen filters --format json" onclick="copyCmd(this)">
-        <span class="copy-hint">点击复制 ↗</span>
-        <div class="px-4 py-2.5 text-xs font-mono border-b" style="background: var(--bg-soft); border-color: var(--border); color: var(--text-muted);">1 · Screen 发现 · 不拉行情</div>
-        <div class="px-5 py-4 text-xs sm:text-sm font-mono break-all leading-relaxed" style="color: var(--text);">
-          <span style="color: var(--accent);">$</span> <span data-copy-label>kan screen filters --format json</span>
-        </div>
-        <p class="px-5 mb-5 text-xs leading-relaxed" style="color: var(--text-soft);">读取 27 类条件、单位、数据源、频率和全市场支持范围。</p>
-        <span class="feedback" aria-hidden="true" style="bottom: 16px; right: 22px; top: auto;">✓ 已复制</span>
-      </button>
-
-      <button type="button" class="copy-card flex-col items-stretch !p-0 overflow-hidden" data-copy="kan find --codes 600519,000858 --format json --dry-run" onclick="copyCmd(this)">
-        <span class="copy-hint">点击复制 ↗</span>
-        <div class="px-4 py-2.5 text-xs font-mono border-b" style="background: var(--bg-soft); border-color: var(--border); color: var(--text-muted);">2 · 结构 smoke · 不拉行情</div>
-        <div class="px-5 py-4 text-xs sm:text-sm font-mono break-all leading-relaxed" style="color: var(--text);">
-          <span style="color: var(--accent);">$</span> <span data-copy-label>kan find --codes 600519,000858 --format json --dry-run</span>
-        </div>
-        <p class="px-5 mb-5 text-xs leading-relaxed" style="color: var(--text-soft);">验证安装、退出码、JSON envelope 和免责声明；结果只代表显式代码池事实。</p>
-        <span class="feedback" aria-hidden="true" style="bottom: 16px; right: 22px; top: auto;">✓ 已复制</span>
-      </button>
-
-      <button type="button" class="copy-card flex-col items-stretch !p-0 overflow-hidden" data-copy="kan scan --codes 600519,000858 --periods 5,20,60,180 --format json" onclick="copyCmd(this)">
-        <span class="copy-hint">点击复制 ↗</span>
-        <div class="px-4 py-2.5 text-xs font-mono border-b" style="background: var(--bg-soft); border-color: var(--border); color: var(--text-muted);">3 · 真实行情坐标 · 会拉日 K</div>
-        <div class="px-5 py-4 text-xs sm:text-sm font-mono break-all leading-relaxed" style="color: var(--text);">
-          <span style="color: var(--accent);">$</span> <span data-copy-label>kan scan --codes 600519,000858 --periods 5,20,60,180 --format json</span>
-        </div>
-        <p class="px-5 mb-5 text-xs leading-relaxed" style="color: var(--text-soft);">输出多周期位置、区间涨跌、共振和数据截止日；首次缓存可能需要几十秒。</p>
-        <span class="feedback" aria-hidden="true" style="bottom: 16px; right: 22px; top: auto;">✓ 已复制</span>
-      </button>
-
-      <button type="button" class="copy-card flex-col items-stretch !p-0 overflow-hidden" data-copy="kan mcp install --dry-run --format json" onclick="copyCmd(this)">
-        <span class="copy-hint">点击复制 ↗</span>
-        <div class="px-4 py-2.5 text-xs font-mono border-b" style="background: var(--bg-soft); border-color: var(--border); color: var(--text-muted);">4 · MCP dry-run JSON · 不写配置</div>
-        <div class="px-5 py-4 text-xs sm:text-sm font-mono break-all leading-relaxed" style="color: var(--text);">
-          <span style="color: var(--accent);">$</span> <span data-copy-label>kan mcp install --dry-run --format json</span>
-        </div>
-        <p class="px-5 mb-5 text-xs leading-relaxed" style="color: var(--text-soft);">机器可读预览会写入哪些用户级客户端配置；确认后再指定 client 或去掉 dry-run。</p>
-        <span class="feedback" aria-hidden="true" style="bottom: 16px; right: 22px; top: auto;">✓ 已复制</span>
-      </button>
-    </div>
-
-    <p class="text-center text-sm mt-10" style="color: var(--text-muted);">
-      完整规则见
-      <a href="https://github.com/piklen/manmankan/blob/main/docs/china-quickstart.md" style="color: var(--accent);" class="hover:underline">中国用户快速开始</a>
-      ·
-      <a href="https://github.com/piklen/manmankan/blob/main/docs/ai-quickstart.md" style="color: var(--accent);" class="hover:underline">AI quickstart</a>
-      ·
-      <a href="https://github.com/piklen/manmankan/blob/main/docs/mcp.md" style="color: var(--accent);" class="hover:underline">MCP guide</a>
-      ·
-      <a href="https://github.com/piklen/manmankan/blob/main/docs/selection-workbench.md" style="color: var(--accent);" class="hover:underline">Screen contract</a>
-      ·
-      <a href="https://github.com/piklen/manmankan/blob/main/skills/manmankan-skill.md" style="color: var(--accent);" class="hover:underline">Agent skill</a>
-      ·
-      <a href="https://github.com/piklen/manmankan/blob/main/docs/find.md" style="color: var(--accent);" class="hover:underline">JSON contract</a>
-    </p>
-    </div>
-  </details>
-
-  <hr class="divider-grad max-w-6xl mx-auto" />
-
-  <!-- ============ Terminal mock ============ -->
-  <details class="max-w-5xl mx-auto px-6 py-8">
-    <summary class="text-center text-lg font-semibold" style="color:var(--text-soft);">终端 / CLI 示例（进阶）</summary>
-    <div class="pt-10">
-    <div class="text-center mb-8">
-      <h2 class="text-2xl sm:text-3xl font-bold mb-3">一屏看完全部自选</h2>
-      <p style="color: var(--text-soft);">真实终端输出 · 数据为占位示意</p>
-    </div>
-    <div class="term">
-      <div class="term-head px-4 py-2.5 flex items-center gap-2">
-        <span class="w-3 h-3 rounded-full" style="background: #ef4444; opacity: 0.7;"></span>
-        <span class="w-3 h-3 rounded-full" style="background: #fbbf24; opacity: 0.7;"></span>
-        <span class="w-3 h-3 rounded-full" style="background: #34d399; opacity: 0.7;"></span>
-        <span class="ml-3 text-xs font-mono" style="color: #71717a;">~/portfolio — kan scan</span>
-      </div>
-<pre>
-<span style="color: #34d399;">$</span> kan scan
-
-慢慢看 · 自选股位置扫描 · 低点模式 · 数据截止 05-10 收盘 · 16:05 拉取
-┏━━━━━━━━━━━━━━━━━━┳━━━━━━━━━┳━━━━━━┳━━━━━━┳━━━━━━┳━━━━━━┳━━━━━━┳━━━━━━┳━━━━━━┳━━━━━━┳━━━━━━━┳━━━━━━━┳━━━━━┓
-┃股票              ┃    现价 ┃  3日 ┃  5日 ┃  7日 ┃ 10日 ┃ 15日 ┃ 30日 ┃ 60日 ┃ 90日 ┃ 120日 ┃ 180日 ┃共振 ┃
-┡━━━━━━━━━━━━━━━━━━╇━━━━━━━━━╇━━━━━━╇━━━━━━╇━━━━━━╇━━━━━━╇━━━━━━╇━━━━━━╇━━━━━━╇━━━━━━╇━━━━━━━╇━━━━━━━╇━━━━━┩
-│沪深300 000300    │ 3960.20 │ <span class="pct-lo">[2%]</span> │ <span class="pct-lo">[3%]</span> │ <span class="pct-lo">[3%]</span> │ <span class="pct-lo">[3%]</span> │ <span class="pct-lo">[3%]</span> │ <span class="pct-lo">[5%]</span> │ <span class="pct-lo">[5%]</span> │ 10%  │  15%  │  18%  │ <span class="resonance">×6</span>  │
-│上证50  000016    │ 2670.10 │ <span class="pct-lo">[3%]</span> │ <span class="pct-lo">[4%]</span> │ <span class="pct-lo">[4%]</span> │  9%  │ 10%  │ 14%  │ 18%  │ 20%  │  22%  │  25%  │ <span class="resonance">×4</span>  │
-│中证500 000905    │ 5690.50 │ <span class="pct-lo">[0%]</span> │ <span class="pct-lo">[0%]</span> │ <span class="pct-lo">[0%]</span> │ <span class="pct-lo">[1%]</span> │ <span class="pct-lo">[1%]</span> │ <span class="pct-lo">[1%]</span> │  3%  │  8%  │  12%  │  16%  │ <span class="resonance">×8</span>  │
-└──────────────────┴─────────┴──────┴──────┴──────┴──────┴──────┴──────┴──────┴──────┴───────┴───────┴─────┘
-
-  <span class="pct-lo">[x%]</span> = 触及低点(≤5%) · 0%=区间最低 · 越低=越接近 N 日最低价
-
-<span style="color: #fbbf24;">⚠️</span> 创新低 ≠ 见底 · 创新高 ≠ 顶 · 历史价格不预示未来 · 仅供参考,不构成投资建议
-</pre>
-    </div>
-    <p class="text-center text-xs mt-5 font-mono" style="color: var(--text-muted);">
-      ↑ 三大指数仅用于占位示意 · 不构成任何形式的推荐
-    </p>
-    </div>
-  </details>
-
-  <hr class="divider-grad max-w-6xl mx-auto" />
-
-  <!-- ============ 三栏 · 做什么 / 不做什么 / 隐私 ============ -->
-  <section class="max-w-6xl mx-auto px-6 py-20">
-    <div class="text-center mb-14">
-      <h2 class="text-3xl sm:text-4xl font-bold mb-4">极致克制 · 不做的事比做的事更重要</h2>
-      <p style="color: var(--text-soft);">用 6 + 6 + 6 = 18 条说清边界</p>
-    </div>
-
-    <div class="grid md:grid-cols-3 gap-5">
-      <div class="card hover-lift p-7">
-        <div class="w-11 h-11 rounded-lg flex items-center justify-center mb-5" style="background: var(--accent-soft); color: var(--accent);">
-          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
-        </div>
-        <h3 class="text-lg font-bold mb-4">做什么</h3>
-        <ul class="text-sm space-y-2.5 leading-relaxed" style="color: var(--text-soft);">
-          <li>· 保存并版本化用户 Screen</li>
-          <li>· 不可变运行 · coverage · evidence · diff</li>
-          <li>· 六类股票池 · 27 类客观条件</li>
-          <li>· 独立候选池 · 3–10 股对比</li>
-          <li>· SQLite 状态 · Parquet 行情缓存</li>
-          <li>· Web / CLI / Python / HTTP / MCP 同源</li>
-        </ul>
-      </div>
-
-      <div class="card hover-lift p-7" style="border-color: var(--warn);">
-        <div class="w-11 h-11 rounded-lg flex items-center justify-center mb-5" style="background: var(--warn-soft); color: var(--warn);">
-          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
-        </div>
-        <h3 class="text-lg font-bold mb-4">不做什么</h3>
-        <ul class="text-sm space-y-2.5 leading-relaxed" style="color: var(--text-soft);">
-          <li>· 不给买卖建议</li>
-          <li>· 不给评级 / 目标价 / 预测涨跌</li>
-          <li>· 不替人或 AI 下结论</li>
-          <li>· 不接 broker · 不下单</li>
-          <li>· 不做 T+0 短线（数据延时）</li>
-          <li>· 不做港股 / 美股 / 期货</li>
-        </ul>
-      </div>
-
-      <div class="card hover-lift p-7">
-        <div class="w-11 h-11 rounded-lg flex items-center justify-center mb-5" style="background: rgba(96, 165, 250, 0.12); color: #60a5fa;">
-          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
-        </div>
-        <h3 class="text-lg font-bold mb-4">数据 · 隐私</h3>
-        <ul class="text-sm space-y-2.5 leading-relaxed" style="color: var(--text-soft);">
-          <li>· 本地存储 · 不上传自选 · 不遥测</li>
-          <li>· 0 telemetry · 0 广告 · 0 推送</li>
-          <li>· SQLite / Parquet 存 <code class="ci text-xs">~/.local/share/kan/</code></li>
-          <li>· 公开行情 API + PyPI 更新检查</li>
-          <li>· 可选接 TuShare Pro token</li>
-          <li>· <code class="ci text-xs">kan uninstall</code> 一键彻底清</li>
-        </ul>
-      </div>
-    </div>
-  </section>
-
-  <hr class="divider-grad max-w-6xl mx-auto" />
-
-  <!-- ============ 安装 ============ -->
-  <section id="install" class="max-w-6xl mx-auto px-6 py-20">
-    <div class="text-center mb-12">
-      <h2 class="text-3xl sm:text-4xl font-bold mb-3">约 1-2 分钟装好</h2>
-      <p style="color: var(--text-soft);">Python 3.11+ · 安装命令点击即复制</p>
-    </div>
-
-    <!-- 推荐 · uv 安装 -->
-    <div class="grid md:grid-cols-2 gap-4 max-w-4xl mx-auto mb-6">
-      <button type="button" class="copy-card flex-col items-stretch !p-0 overflow-hidden" data-copy="curl -LsSf https://astral.sh/uv/install.sh | sh && uv tool install manmankan" onclick="copyCmd(this)" style="cursor: pointer;">
-        <span class="copy-hint">点击复制 ↗</span>
-        <div class="px-4 py-2.5 text-xs font-mono flex items-center gap-2 border-b" style="background: var(--bg-soft); border-color: var(--border); color: var(--text-muted);">
-          <span style="color: #ef4444;">●</span><span style="color: #fbbf24;">●</span><span style="color: #34d399;">●</span>
-          <span class="ml-2">🍎 mac / Linux · Terminal</span>
-        </div>
-        <div class="px-5 py-4 text-xs sm:text-sm font-mono break-all leading-relaxed" style="color: var(--text);">
-          <span style="color: var(--accent);">$</span> <span data-copy-label>curl -LsSf https://astral.sh/uv/install.sh | sh && uv tool install manmankan</span>
-        </div>
-        <span class="feedback" aria-hidden="true" style="bottom: 16px; right: 22px; top: auto;">✓ 已复制</span>
-      </button>
-
-      <button type="button" class="copy-card flex-col items-stretch !p-0 overflow-hidden" data-copy='irm https://astral.sh/uv/install.ps1 | iex; uv tool install manmankan' onclick="copyCmd(this)" style="cursor: pointer;">
-        <span class="copy-hint">点击复制 ↗</span>
-        <div class="px-4 py-2.5 text-xs font-mono flex items-center gap-2 border-b" style="background: var(--bg-soft); border-color: var(--border); color: var(--text-muted);">
-          <span style="color: #ef4444;">●</span><span style="color: #fbbf24;">●</span><span style="color: #34d399;">●</span>
-          <span class="ml-2">🪟 Windows · PowerShell</span>
-        </div>
-        <div class="px-5 py-4 text-xs sm:text-sm font-mono break-all leading-relaxed" style="color: var(--text);">
-          <span style="color: var(--accent);">&gt;</span> <span data-copy-label>irm https://astral.sh/uv/install.ps1 | iex; uv tool install manmankan</span>
-        </div>
-        <span class="feedback" aria-hidden="true" style="bottom: 16px; right: 22px; top: auto;">✓ 已复制</span>
-      </button>
-    </div>
-
-    <!-- Windows JSON 首跑验证 · AI / 开发者第二入口 -->
-    <details class="max-w-4xl mx-auto mb-6 card p-5">
-      <summary class="font-medium flex items-center justify-between gap-3">
-        <span>AI / 开发者：Windows JSON 首跑验证</span>
-        <span class="chevron" aria-hidden="true">⌄</span>
-      </summary>
-      <div class="mt-4">
-      <button type="button" class="copy-card flex-col items-stretch !p-0 overflow-hidden" data-copy="$env:KAN_NO_UPDATE_CHECK = &quot;1&quot;&#10;$env:PYTHONUTF8 = &quot;1&quot;&#10;$env:NO_COLOR = &quot;1&quot;&#10;kan find --codes 600519,000858 --format json --dry-run" onclick="copyCmd(this)" style="cursor: pointer;">
-        <span class="copy-hint">点击复制 ↗</span>
-        <div class="px-4 py-2.5 text-xs font-mono flex flex-wrap items-center gap-2 border-b" style="background: var(--bg-soft); border-color: var(--border); color: var(--text-muted);">
-          <span style="color: #ef4444;">●</span><span style="color: #fbbf24;">●</span><span style="color: #34d399;">●</span>
-          <span class="ml-2">🪟 Windows · PowerShell JSON 首跑验证</span>
-        </div>
-        <div class="px-5 py-4 text-xs sm:text-sm font-mono text-left leading-relaxed" style="color: var(--text); white-space: pre-wrap; overflow-wrap: anywhere;"><span data-copy-label>$env:KAN_NO_UPDATE_CHECK = "1"
-$env:PYTHONUTF8 = "1"
-$env:NO_COLOR = "1"
-kan find --codes 600519,000858 --format json --dry-run</span></div>
-        <div class="px-5 pb-4 text-xs sm:text-sm text-left leading-relaxed" style="color: var(--text-soft);">
-          不拉行情；只验证安装、入口、JSON envelope、免责声明和 Windows UTF-8 输出，适合新用户或 AI agent 做安装 smoke。
-        </div>
-        <span class="feedback" aria-hidden="true" style="bottom: 16px; right: 22px; top: auto;">✓ 已复制</span>
-      </button>
-      </div>
-    </details>
-
-    <!-- 老手 3 行 -->
-    <div class="max-w-4xl mx-auto">
-      <p class="text-sm mb-3 font-medium" style="color: var(--text-soft);">老手 1 行装（任选其一 · 点击复制）：</p>
-      <div class="grid sm:grid-cols-3 gap-3">
-        <button type="button" class="copy-card !py-3" data-copy="uv tool install manmankan" onclick="copyCmd(this)">
-          <span style="color: var(--accent);" class="font-bold">$</span>
-          <span class="text-sm" data-copy-label>uv tool install manmankan</span>
-          <span class="feedback text-xs" aria-hidden="true">✓</span>
-        </button>
-        <button type="button" class="copy-card !py-3" data-copy="pipx install manmankan" onclick="copyCmd(this)">
-          <span style="color: var(--accent);" class="font-bold">$</span>
-          <span class="text-sm" data-copy-label>pipx install manmankan</span>
-          <span class="feedback text-xs" aria-hidden="true">✓</span>
-        </button>
-        <button type="button" class="copy-card !py-3" data-copy="python -m pip install manmankan" onclick="copyCmd(this)">
-          <span style="color: var(--accent);" class="font-bold">$</span>
-          <span class="text-sm" data-copy-label>python -m pip install manmankan</span>
-          <span class="feedback text-xs" aria-hidden="true">✓</span>
-        </button>
-      </div>
-    </div>
-
-    <div class="max-w-4xl mx-auto mt-6 p-4 rounded-lg text-sm leading-relaxed" style="background: var(--bg-card); border: 1px solid var(--border); color: var(--text-soft);">
-      AI / 开发者在 Windows 首次验证 JSON 时，展开上方「Windows JSON 首跑验证」。
-      这条结构 smoke 不请求行情数据；完整样本见
-      <a href="https://github.com/piklen/manmankan/blob/main/docs/china-quickstart.md#2-windows--powershell-首跑样本" style="color: var(--accent);" class="hover:underline">Windows / PowerShell 首跑说明</a>。
-    </div>
-
-    <div class="max-w-4xl mx-auto mt-7 p-4 rounded-lg text-sm leading-relaxed" style="background: var(--warn-soft); border: 1px solid var(--warn); color: var(--text-soft);">
-      🔒 <b style="color: var(--text);">安装边界</b>
-      推荐用 <code class="ci">uv tool install</code> 从 PyPI 装到隔离环境。
-      <code class="ci">python -m pip install</code> 只建议在你自己创建的虚拟环境里使用。
-    </div>
-  </section>
-
-  <hr class="divider-grad max-w-6xl mx-auto" />
-
-  <!-- ============ 装好之后 ============ -->
-  <section class="max-w-4xl mx-auto px-6 py-20">
-    <div class="text-center mb-12">
-      <h2 class="text-3xl sm:text-4xl font-bold mb-3">装好之后</h2>
-      <p style="color: var(--text-soft);">打开新终端窗口，只运行一条命令</p>
-    </div>
-
-    <div class="term">
-      <div class="term-head px-4 py-2.5 flex items-center gap-2">
-        <span class="w-3 h-3 rounded-full" style="background: #ef4444; opacity: 0.7;"></span>
-        <span class="w-3 h-3 rounded-full" style="background: #fbbf24; opacity: 0.7;"></span>
-        <span class="w-3 h-3 rounded-full" style="background: #34d399; opacity: 0.7;"></span>
-        <span class="ml-3 text-xs font-mono" style="color: #71717a;">~ — 第一次上手</span>
-      </div>
-<pre><span style="color: #34d399;">$</span> kan web                             <span style="color: #71717a;"># 打开选股研究工作台</span>
-
-<span style="color: #71717a;"># 偏好终端时</span>
-<span style="color: #34d399;">$</span> kan screen filters                  <span style="color: #71717a;"># 发现可用条件</span>
-<span style="color: #34d399;">$</span> kan help                            <span style="color: #71717a;"># 完整命令表</span></pre>
-    </div>
-  </section>
-
-  <hr class="divider-grad max-w-6xl mx-auto" />
-
-  <!-- ============ FAQ ============ -->
-  <section id="faq" class="max-w-4xl mx-auto px-6 py-20">
-    <div class="text-center mb-12">
-      <h2 class="text-3xl sm:text-4xl font-bold mb-3">常见问题</h2>
-      <p style="color: var(--text-soft);">直接问出最常被问的 3 件事</p>
-    </div>
-
-    <div class="space-y-3">
-      <details class="card p-6" open>
-        <summary class="font-semibold flex items-center justify-between">
-          <span class="text-base sm:text-lg">这能帮我赚钱吗？</span>
-          <svg class="chevron" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="color: var(--text-muted);"><polyline points="6 9 12 15 18 9"/></svg>
-        </summary>
-        <p class="mt-4 leading-relaxed" style="color: var(--text-soft);">
-          <b style="color: var(--text);">不能</b>。慢慢看只呈现用户明确规则的命中事实、位置百分位、数据边界和来源证据；
-          不输出收益承诺或行动结论，后续决策由用户自己完成。
-          <br /><br />
-          创新低不等于见底 · 创新高不等于顶 · 历史价格不预示未来 · 仅供参考，不构成投资建议。
-        </p>
-      </details>
-
-      <details class="card p-6">
-        <summary class="font-semibold flex items-center justify-between">
-          <span class="text-base sm:text-lg">会不会上传我的自选股？</span>
-          <svg class="chevron" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="color: var(--text-muted);"><polyline points="6 9 12 15 18 9"/></svg>
-        </summary>
-        <p class="mt-4 leading-relaxed" style="color: var(--text-soft);">
-          <b style="color: var(--text);">不会</b>。慢慢看在本机运行，日常入口是本地 Web，CLI 是进阶入口；自选、持仓和缓存都在本机。
-          没有账号 · 没有登录 · 没有 telemetry · 没有推送 · 没有广告。
-          自选股数据存在你机器的 <code class="ci">~/.local/share/kan/</code>（XDG 规范）。
-          <br /><br />
-          网络边界是公开行情 API、PyPI 更新检查，以及你主动配置 TuShare Pro 时的 TuShare API。
-          行情请求通常只发送股票代码;TuShare token 只发往你配置的 TuShare 端点。可用 <code class="ci">KAN_NO_UPDATE_CHECK=1</code> 关闭更新检查。
-          源码 <a href="https://github.com/piklen/manmankan" style="color: var(--accent);" class="hover:underline">AGPL-3.0 开源</a> · 可审。
-        </p>
-      </details>
-
-      <details class="card p-6">
-        <summary class="font-semibold flex items-center justify-between">
-          <span class="text-base sm:text-lg">适合做 T+0 短线吗？</span>
-          <svg class="chevron" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="color: var(--text-muted);"><polyline points="6 9 12 15 18 9"/></svg>
-        </summary>
-        <p class="mt-4 leading-relaxed" style="color: var(--text-soft);">
-          <b style="color: var(--text);">不支持</b>。慢慢看使用盘后日 K 和日/报告期截面，不是分钟级实时行情；
-          产品只描述对应数据粒度下的历史事实，不能承担 T+0 终端功能。
-          <br /><br />
-          也<b>不支持港股 / 美股 / 期货 / 加密货币</b> · 仅 A 股。
-        </p>
-      </details>
-    </div>
-
-    <p class="text-center text-sm mt-10" style="color: var(--text-muted);">
-      更多问题 →
-      <a href="https://github.com/piklen/manmankan#故障排查-faq" style="color: var(--accent);" class="hover:underline">完整 FAQ</a>
-      ·
-      <a href="https://github.com/piklen/manmankan/discussions" style="color: var(--accent);" class="hover:underline">Discussions 交流</a>
-      ·
-      <a href="https://github.com/piklen/manmankan/issues/new/choose" style="color: var(--accent);" class="hover:underline">带复现信息提 Issue</a>
-    </p>
-  </section>
-
-  <hr class="divider-grad max-w-6xl mx-auto" />
-
-  <!-- ============ English summary ============ -->
-  <section class="max-w-4xl mx-auto px-6 py-16">
-    <details class="card p-7">
-      <summary class="font-semibold flex items-center justify-between">
-        <span class="flex items-center gap-2 text-base sm:text-lg">
-          <span>🌐</span><span>English summary</span>
-        </span>
-        <svg class="chevron" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="color: var(--text-muted);"><polyline points="6 9 12 15 18 9"/></svg>
-      </summary>
-      <div class="mt-5 leading-relaxed space-y-3" style="color: var(--text-soft);">
-        <p>
-          <b style="color: var(--text);">manmankan</b> (慢慢看) is a local-first A-share screening and research workbench.
-          Its React Web UI turns explicit rules into versioned Screens, immutable auditable runs, independent candidate lists, and saved comparisons.
-        </p>
-        <p>
-          It stops at auditable data: <b style="color: var(--text);">no buy/sell advice, no ratings, no price targets, and no strategy conclusions.</b>
-          Local storage, no login, no account, no telemetry. Web, CLI, Python API, typed HTTP, and MCP share one Python application service. Data is delayed end-of-day K-line from the AKShare/baostock ecosystem, with optional TuShare Pro sources when configured.
-        </p>
-        <p class="font-mono text-sm">
-          <span style="color: var(--accent);">$</span> uv tool install manmankan &amp;&amp; kan web
-        </p>
-        <p class="text-sm">
-          Python 3.11+ · GNU AGPL-3.0 · A-share only (no HK / US / futures) ·
-          <a href="https://github.com/piklen/manmankan" style="color: var(--accent);" class="hover:underline">GitHub</a> ·
-          <a href="https://pypi.org/project/manmankan/" style="color: var(--accent);" class="hover:underline">PyPI</a>
-        </p>
-      </div>
-    </details>
-  </section>
-
-  <!-- ============ Footer ============ -->
-  <footer style="border-top: 1px solid var(--border);">
-    <div class="max-w-6xl mx-auto px-6 py-12 text-sm" style="color: var(--text-muted);">
-      <div class="grid md:grid-cols-4 gap-8">
-        <div>
-          <div class="font-bold mb-3 flex items-center gap-2" style="color: var(--text);">
-            <span style="color: var(--accent);" class="font-mono">$</span>
-            <span>慢慢看 · manmankan</span>
-          </div>
-          <p class="text-xs leading-relaxed">本地优先的 A 股选股研究工作台 · 规则与证据同源</p>
-        </div>
-        <div>
-          <div class="font-semibold mb-3" style="color: var(--text-soft);">项目</div>
-          <ul class="space-y-2 text-xs">
-            <li><a href="https://github.com/piklen/manmankan" class="hover:underline" style="color: var(--text-muted);">GitHub 仓库</a></li>
-            <li><a href="https://github.com/piklen/manmankan/discussions" class="hover:underline" style="color: var(--text-muted);">Discussions</a></li>
-            <li><a href="https://pypi.org/project/manmankan/" class="hover:underline" style="color: var(--text-muted);">PyPI</a></li>
-            <li><a href="https://github.com/piklen/manmankan/blob/main/docs/china-quickstart.md" class="hover:underline" style="color: var(--text-muted);">中国用户快速开始</a></li>
-            <li><a href="https://github.com/piklen/manmankan/blob/main/docs/contributor-quickstart.md" class="hover:underline" style="color: var(--text-muted);">首次贡献指南</a></li>
-            <li><a href="https://github.com/piklen/manmankan/issues?q=is%3Aissue%20is%3Aopen%20label%3A%22good%20first%20issue%22" class="hover:underline" style="color: var(--text-muted);">good first issue</a></li>
-            <li><a href="https://github.com/piklen/manmankan/blob/main/docs/ai-quickstart.md" class="hover:underline" style="color: var(--text-muted);">AI quickstart</a></li>
-            <li><a href="https://github.com/piklen/manmankan/blob/main/docs/mcp.md" class="hover:underline" style="color: var(--text-muted);">MCP guide</a></li>
-            <li><a href="https://github.com/piklen/manmankan/releases" class="hover:underline" style="color: var(--text-muted);">Release Notes</a></li>
-            <li><a href="https://github.com/piklen/manmankan/blob/main/CHANGELOG.md" class="hover:underline" style="color: var(--text-muted);">CHANGELOG</a></li>
-          </ul>
-        </div>
-        <div>
-          <div class="font-semibold mb-3" style="color: var(--text-soft);">参与</div>
-          <ul class="space-y-2 text-xs">
-            <li><a href="https://github.com/piklen/manmankan/issues" class="hover:underline" style="color: var(--text-muted);">提 Issue</a></li>
-            <li><a href="https://github.com/piklen/manmankan/blob/main/CONTRIBUTING.md" class="hover:underline" style="color: var(--text-muted);">Contributing</a></li>
-            <li><a href="https://github.com/piklen/manmankan/blob/main/CODE_OF_CONDUCT.md" class="hover:underline" style="color: var(--text-muted);">行为准则</a></li>
-            <li><a href="https://github.com/piklen/manmankan/blob/main/SECURITY.md" class="hover:underline" style="color: var(--text-muted);">Security</a></li>
-          </ul>
-        </div>
-        <div>
-          <div class="font-semibold mb-3" style="color: var(--text-soft);">合规</div>
-          <ul class="space-y-2 text-xs">
-            <li><a href="https://github.com/piklen/manmankan/blob/main/docs/compliance.md" class="hover:underline" style="color: var(--text-muted);">合规说明</a></li>
-            <li><a href="https://github.com/piklen/manmankan/blob/main/LICENSE" class="hover:underline" style="color: var(--text-muted);">GNU AGPL-3.0</a></li>
-            <li><a href="https://github.com/piklen/manmankan/blob/main/NOTICE" class="hover:underline" style="color: var(--text-muted);">NOTICE</a></li>
-          </ul>
-        </div>
-      </div>
-
-      <hr class="divider-grad my-8" />
-
-      <div class="text-xs leading-relaxed">
-        <p class="mb-2">
-          <b style="color: var(--text-soft);">免责声明</b>：本工具仅呈现用户规则命中、客观数据和来源证据，不构成任何投资建议、推荐或预测。
-          股市有风险 · 投资需谨慎 · 决策由用户自行做出并自担风险。
-        </p>
-        <p>© 2026 piklen · GNU AGPL-3.0 · Made for A-share retail investors who refuse the black box.</p>
-      </div>
-    </div>
-  </footer>
-
-  <!-- ============ JS · 主题切换 + 点击复制 ============ -->
-  <script>
-    // 主题循环：dark → light → system → dark
-    function applyTheme(t) {
-      var sys = window.matchMedia('(prefers-color-scheme: dark)').matches;
-      var dark = t === 'dark' || (t === 'system' && sys);
-      document.documentElement.classList.toggle('dark', dark);
-      document.documentElement.dataset.theme = t;
-    }
-    function cycleTheme() {
-      var order = ['dark', 'light', 'system'];
-      var cur = localStorage.getItem('theme') || 'system';
-      var next = order[(order.indexOf(cur) + 1) % 3];
-      localStorage.setItem('theme', next);
-      applyTheme(next);
-    }
-    // system 模式下跟随系统主题变化
-    if (window.matchMedia) {
-      window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', function () {
-        if (localStorage.getItem('theme') === 'system') applyTheme('system');
-      });
-    }
-
-    // 安装命令点击复制
-    function copyCmd(btn) {
-      var text = btn.dataset.copy;
-      if (!text) return;
-      var finished = false;
-      var done = function () {
-        if (finished) return;
-        finished = true;
-        btn.classList.add('copied');
-        setTimeout(function () { btn.classList.remove('copied'); }, 1800);
-      };
-      if (navigator.clipboard && navigator.clipboard.writeText) {
-        setTimeout(function () {
-          if (finished) return;
-          fallbackCopy(text);
-          done();
-        }, 300);
-        navigator.clipboard.writeText(text).then(done).catch(function () { fallbackCopy(text); done(); });
-      } else {
-        fallbackCopy(text);
-        done();
+    <meta name="theme-color" content="#f7f8f5" />
+    <link rel="canonical" href="https://piklen.github.io/manmankan/" />
+    <link rel="sitemap" type="application/xml" href="/manmankan/sitemap.xml" />
+    <meta property="og:type" content="website" />
+    <meta property="og:site_name" content="慢慢看 · manmankan" />
+    <meta property="og:title" content="慢慢看 · 看见市场变化的脉络" />
+    <meta
+      property="og:description"
+      content="整体分布 → 行业变化 → 成员证据。把行情变成可理解、可核对的观察。"
+    />
+    <meta property="og:url" content="https://piklen.github.io/manmankan/" />
+    <meta
+      property="og:image"
+      content="https://piklen.github.io/manmankan/og.png"
+    />
+    <meta property="og:image:width" content="1280" />
+    <meta property="og:image:height" content="640" />
+    <meta
+      property="og:image:alt"
+      content="慢慢看：市场整体、行业剖面、成员证据"
+    />
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:title" content="慢慢看 · 看见市场变化的脉络" />
+    <meta
+      name="twitter:description"
+      content="从分散的行情，到可核对的市场变化。"
+    />
+    <meta
+      name="twitter:image"
+      content="https://piklen.github.io/manmankan/og.png"
+    />
+    <link rel="stylesheet" href="styles.css" />
+    <script type="application/ld+json">
+      {
+        "@context": "https://schema.org",
+        "@type": "SoftwareApplication",
+        "name": "manmankan",
+        "alternateName": "慢慢看",
+        "description": "本机运行的 A 股市场变化研究工具",
+        "applicationCategory": "FinanceApplication",
+        "operatingSystem": "macOS, Linux, Windows",
+        "softwareRequirements": "Python 3.11+",
+        "url": "https://piklen.github.io/manmankan/",
+        "downloadUrl": "https://pypi.org/project/manmankan/",
+        "license": "https://www.gnu.org/licenses/agpl-3.0.html",
+        "isAccessibleForFree": true,
+        "offers": { "@type": "Offer", "price": "0", "priceCurrency": "CNY" },
+        "codeRepository": "https://github.com/piklen/manmankan"
       }
-    }
-    function fallbackCopy(text) {
-      var ta = document.createElement('textarea');
-      ta.value = text;
-      ta.style.position = 'fixed';
-      ta.style.left = '-9999px';
-      document.body.appendChild(ta);
-      ta.select();
-      try { document.execCommand('copy'); } catch (e) {}
-      document.body.removeChild(ta);
-    }
-  </script>
-
-</body>
+    </script>
+  </head>
+  <body>
+    <a class="skip-link" href="#main">跳到主要内容</a>
+    <header class="site-header">
+      <a class="brand" href="#"
+        ><strong>慢慢看</strong><span>市场变化研究</span></a
+      >
+      <nav aria-label="主导航">
+        <a href="#how">如何观察</a><a href="#install">开始使用</a
+        ><a href="https://github.com/piklen/manmankan">GitHub ↗</a>
+      </nav>
+    </header>
+    <main id="main">
+      <section class="hero">
+        <h1>看见变化的脉络。</h1>
+        <p class="hero-copy">
+          涨跌不只有一个数字。<br />把整个市场拆开，看看变化在哪里发生、<br
+            class="desktop-break"
+          />又有多少成员一起经历。
+        </p>
+        <div class="hero-actions">
+          <a class="button" href="#install">在本机开始观察 <span>→</span></a
+          ><a
+            class="text-link"
+            href="https://github.com/piklen/manmankan/blob/main/docs/trend-research.md"
+            >了解数据口径 ↗</a
+          >
+        </div>
+        <p class="hero-note">A 股 · 本机运行 · 无需慢慢看账号 · 开源</p>
+      </section>
+      <figure class="product-preview">
+        <a
+          href="market-observation.png"
+          aria-label="查看原始尺寸的市场观察界面"
+        >
+          <img
+            src="market-observation.png"
+            width="1440"
+            height="1000"
+            alt="慢慢看市场观察：2026年9月28日历史截面的群体分布、上涨占比轨迹与资料覆盖"
+            loading="lazy"
+          />
+        </a>
+        <figcaption>
+          真实本机界面 · 2026-09-28 历史截面，未当作当前行情。点击查看原图。
+        </figcaption>
+      </figure>
+      <section class="workflow" id="how" aria-label="从现象到证据">
+        <article>
+          <span class="step">01</span>
+          <h2>先看整体发生了什么</h2>
+          <p>
+            上涨成员有多少？涨跌集中在哪些区间？用广度轨迹和收益分布，让分散的日线变成看得见的群体变化。
+          </p>
+          <span class="feature-note">市场分布 / 固定成员轨迹</span>
+        </article>
+        <article>
+          <span class="step">02</span>
+          <h2>再看行业内部的差异</h2>
+          <p>
+            行业的中位涨跌、上涨占比和分散程度放在一起。比较相邻两个等长窗口，分清两期上涨、前跌后涨与资料不足。
+          </p>
+          <span class="feature-note">行业剖面 / 两期变化</span>
+        </article>
+        <article>
+          <span class="step">03</span>
+          <h2>每个观察，都能拆开核对</h2>
+          <p>
+            点击分布或变化分组，查看组成它的成员与逐日价格。把现象和自己的想法记下来，下一次用同一批成员复看；有明确条件时，再研究历史。
+          </p>
+          <span class="feature-note">成员下钻 / 观察笔记 / 同范围复看</span>
+        </article>
+      </section>
+      <section class="principle">
+        <h2>让数据说清楚，<br />也把不知道的留下。</h2>
+        <div>
+          <p>
+            当前分布、两期对照和历史轨迹各自展示可判断的成员数量。缺行情单列，不填零；已有旧数据明确标日期，不冒充最新。
+          </p>
+          <p>
+            中位数是成员的统计事实，不是行业指数。界面不会把一个筛选命中自动变成推荐，也不会用隐藏评分替你判断。
+          </p>
+          <a
+            class="text-link"
+            href="https://github.com/piklen/manmankan/blob/main/docs/trend-research.md"
+            >查看完整定义与边界 ↗</a
+          >
+        </div>
+      </section>
+      <section class="install" id="install">
+        <div>
+          <h2>把慢慢看，留在自己的电脑上。</h2>
+          <p>需要 Python 3.11+。先安装，再连接自己的数据源并更新行情。</p>
+        </div>
+        <div class="install-steps">
+          <div>
+            <span class="step-label">PyPI 稳定包安装</span>
+            <div class="command">
+              <code>uv tool install manmankan</code
+              ><button type="button" data-copy="uv tool install manmankan">
+                复制
+              </button>
+            </div>
+            <p>
+              还没有 uv？查看
+              <a href="https://docs.astral.sh/uv/getting-started/installation/"
+                >官方安装说明 ↗</a
+              >。macOS、Linux 和 Windows 均可使用。
+            </p>
+          </div>
+          <div>
+            <span class="step-label">打开</span>
+            <div class="command">
+              <code>kan web</code
+              ><button type="button" data-copy="kan web">复制</button>
+            </div>
+            <p>
+              浏览器打开本机界面。主线版本可从“数据”页核对来源、更新行情，再回到“市场观察”。
+            </p>
+          </div>
+        </div>
+        <a
+          class="text-link"
+          href="https://github.com/piklen/manmankan/blob/main/docs/china-quickstart.md"
+          >完整安装与数据连接指引 ↗</a
+        >
+        <p class="release-note">
+          官网介绍主线开发功能；上方命令安装已发布稳定包。体验尚未发行的功能，请按
+          <a href="https://github.com/piklen/manmankan#安装与主线体验"
+            >README 的 Git 主线安装说明</a
+          >选择来源。
+        </p>
+        <p id="copy-status" role="status" aria-live="polite"></p>
+      </section>
+      <section class="interfaces">
+        <div>
+          <h2>同一份事实，按你的方式使用。</h2>
+          <p>
+            日常用 Web 看分布与图证；终端、Python 和 MCP 直接复用同一计算；MCP
+            的 kan_discover 提供相同观察结果。
+          </p>
+        </div>
+        <div class="interface-commands">
+          <code>kan discover --window 20</code
+          ><span>市场与行业的分布和两期变化</span><code>kan tui</code
+          ><span>键盘操作的趋势研究</span><code>kan trend --help</code
+          ><span>表达明确的走势条件</span><code>kan study --help</code
+          ><span>配置并核对历史样本</span><code>kan mcp install</code
+          ><span>连接支持 MCP 的客户端</span>
+        </div>
+        <a
+          class="text-link"
+          href="https://github.com/piklen/manmankan/blob/main/docs/ai-quickstart.md"
+          >程序与 AI 接入说明 ↗</a
+        >
+      </section>
+      <section class="questions">
+        <h2>开始之前</h2>
+        <details>
+          <summary>数据从哪里来？</summary>
+          <p>
+            使用你配置的数据源与本地行情缓存。数据源权限、覆盖和可用性会影响结果，界面保留来源、截止日和缺口。具体设置以快速开始文档为准。
+          </p>
+        </details>
+        <details>
+          <summary>个人记录放在哪里？</summary>
+          <p>
+            自选、持仓、笔记、筛选与研究记录保存在本机。获取行情时只向所选来源发送必要代码及该来源凭据；持仓成本、股数和现金不发送给行情源。
+          </p>
+        </details>
+        <details>
+          <summary>已有走势条件，还能直接筛选吗？</summary>
+          <p>
+            可以。趋势筛选保留连续涨跌、阳阴线、前后连续段、波段结构、多周期位置与形态检索。明确条件后执行，保存筛选仅保存条件，研究历史需要单独明确运行。
+          </p>
+        </details>
+        <details>
+          <summary>怎样理解这些观察？</summary>
+          <p>
+            它们是已经发生的价格与群体结构变化。当前上市范围和行业归属用于回溯，不代表历史时点完整市场；历史价格不预示未来，不提供买卖建议、目标价或收益承诺。
+          </p>
+        </details>
+      </section>
+    </main>
+    <footer class="site-footer">
+      <div>
+        <strong>慢慢看</strong><span>数据帮助理解，判断留给自己。</span>
+      </div>
+      <nav aria-label="相关链接">
+        <a href="https://github.com/piklen/manmankan">源码</a
+        ><a href="https://github.com/piklen/manmankan/issues/new/choose">反馈</a
+        ><a href="https://pypi.org/project/manmankan/">PyPI</a
+        ><a href="https://github.com/piklen/manmankan/blob/main/LICENSE"
+          >AGPL-3.0</a
+        >
+      </nav>
+      <p>仅供事实研究，不构成投资建议、推荐或预测。</p>
+    </footer>
+    <script>
+      document.querySelectorAll("[data-copy]").forEach(function (button) {
+        button.addEventListener("click", async function () {
+          var status = document.getElementById("copy-status");
+          try {
+            await navigator.clipboard.writeText(button.dataset.copy);
+            status.textContent = "已复制：" + button.dataset.copy;
+          } catch {
+            status.textContent =
+              "浏览器未允许复制，请直接选择上方命令文本复制。";
+          }
+        });
+      });
+    </script>
+  </body>
 </html>
