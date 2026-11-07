@@ -9,6 +9,12 @@ explicitly approves a larger bump.
 
 ## [Unreleased]
 
+## [0.0.6.9.47] - 2026-11-07
+
+### Fixed
+
+- 未核实复权口径的缓存仍保留已有有效日期范围，短窗口更新会扩窗，缺少旧有效日期的新响应拒绝覆盖；旧价格仍不参与计算或与新价格拼接。
+
 ## [0.0.6.9.46] - 2026-11-07
 
 ### Fixed
@@ -838,7 +844,8 @@ explicitly approves a larger bump.
 - **Shell 补全** · zsh / bash / fish / powershell
 - **合规与隐私** · 强制风险提示 + 关键词黑名单（无买卖建议 / 无目标价 / 无评级）· 数据全本地
 
-[Unreleased]: https://github.com/piklen/manmankan/compare/v0.0.6.9.46...HEAD
+[Unreleased]: https://github.com/piklen/manmankan/compare/v0.0.6.9.47...HEAD
+[0.0.6.9.47]: https://github.com/piklen/manmankan/compare/v0.0.6.9.46...v0.0.6.9.47
 [0.0.6.9.46]: https://github.com/piklen/manmankan/compare/v0.0.6.9.45...v0.0.6.9.46
 [0.0.6.9.45]: https://github.com/piklen/manmankan/compare/v0.0.6.9.44...v0.0.6.9.45
 [0.0.6.9.44]: https://github.com/piklen/manmankan/compare/v0.0.6.9.43...v0.0.6.9.44

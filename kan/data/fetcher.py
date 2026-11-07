@@ -352,11 +352,17 @@ def _valid_quote_dates(frame: pd.DataFrame) -> set[date]:
 
 
 def _existing_quote_dates(symbol: str) -> set[date]:
+    """保留文件中的有效日期范围；复权口径未核实不等于可以删除旧历史。"""
+    import pandas as pd
+
+    path = _cache_path(symbol)
+    if not path.exists():
+        return set()
     try:
-        previous = get_cached(symbol)
-        return _valid_quote_dates(previous) if previous is not None else set()
+        # 只提取保护范围，不让未核实的旧价格进入计算或与新价格拼接。
+        return _valid_quote_dates(pd.read_parquet(path))
     except (OSError, ValueError, TypeError) as exc:
-        # 损坏或未验证缓存没有可保留的有效事实，允许用完整响应重建。
+        # 无法读取的文件没有可辨认的日期范围，允许重新获取。
         debug_log(__name__, f"cache unavailable for refresh {symbol}", exc)
         return set()
 
