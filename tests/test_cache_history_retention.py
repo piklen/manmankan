@@ -19,7 +19,8 @@ def bars(days, prices, basis):
 
 
 @pytest.mark.parametrize("batch", [False, True])
-def test_single_and_scheduler_batch_expand_request_and_reject_lost_valid_days(tmp_path, monkeypatch, batch):
+@pytest.mark.parametrize("old_basis", ["raw_adj_factor_v1", "unverified_factor_conflict", None])
+def test_single_and_scheduler_batch_expand_request_and_reject_lost_valid_days(tmp_path, monkeypatch, batch, old_basis):
     days = pd.bdate_range("2026-01-05", periods=7).date.tolist()
     monkeypatch.setattr(fetcher, "DATA_DIR", tmp_path)
     monkeypatch.setattr(fetcher, "_ensure_data_dir", lambda: None)
@@ -34,7 +35,14 @@ def test_single_and_scheduler_batch_expand_request_and_reject_lost_valid_days(tm
     monkeypatch.setattr(fetcher, "datetime", FixedNow)
     cache = tmp_path / "600001.parquet"
     old = bars(days[:-1], [100, 102, 104, 106, 108, 110], str(days[-2]))
-    atomic_write_parquet(old, cache, metadata=fetcher._price_basis_metadata(old))
+    if old_basis is None:
+        old.attrs.clear()
+        atomic_write_parquet(old, cache)
+    else:
+        old.attrs["price_basis"] = old_basis
+        atomic_write_parquet(old, cache, metadata=fetcher._price_basis_metadata(old))
+    if old_basis != "raw_adj_factor_v1":
+        assert fetcher.get_cached("600001") is None
     response = bars(days, [50, 51, 52, 53, 54, 55, 56], str(days[-1]))
     starts = []
 
@@ -69,8 +77,15 @@ def test_single_and_scheduler_batch_expand_request_and_reject_lost_valid_days(tm
             return results["600001"]
         return fetcher.fetch_kline("600001", days=2, force=True)
 
+    original = cache.read_bytes()
+    full = response.copy()
+    response = full.tail(2)
+    with pytest.raises(ValueError, match="为保留较长历史，未覆盖原缓存"):
+        run()
+    assert cache.read_bytes() == original
+    response = full
     result = run()
-    assert starts == [days[0].strftime("%Y%m%d")]
+    assert starts == [days[0].strftime("%Y%m%d")] * 2
     assert result.close.tolist() == [50, 51, 52, 53, 54, 55, 56]
     assert fetcher.get_cached("600001").attrs["price_basis_date"] == str(days[-1])
     before = cache.read_bytes()
@@ -82,7 +97,8 @@ def test_single_and_scheduler_batch_expand_request_and_reject_lost_valid_days(tm
         assert cache.read_bytes() == before
 
 
-def test_market_short_refresh_recomputes_whole_history_on_new_basis_and_keeps_partial_failures(tmp_path, monkeypatch):
+@pytest.mark.parametrize("old_basis", ["raw_adj_factor_v1", "unverified_factor_conflict"])
+def test_market_short_refresh_recomputes_whole_history_on_new_basis_and_keeps_partial_failures(tmp_path, monkeypatch, old_basis):
     days = pd.bdate_range("2026-09-01", periods=5).date.tolist()
     monkeypatch.setattr(fetcher, "DATA_DIR", tmp_path)
     monkeypatch.setattr(ohlc_history, "DATA_DIR", tmp_path)
@@ -94,10 +110,15 @@ def test_market_short_refresh_recomputes_whole_history_on_new_basis_and_keeps_pa
                       "vol": [100], "amount": [1000], "adj_factor": [factor]}).to_parquet(tmp_path / f"ohlc_facts_v1_{day:%Y%m%d}.parquet", index=False)
     monkeypatch.setattr(ohlc_history, "_query", lambda *args: pytest.fail("已有原始事实不应联网"))
     assert not fetcher.fetch_batch(["600001"], days=4, market_wide=True, as_of=days[-2])[1]
+    cache = tmp_path / "600001.parquet"
+    old = pd.read_parquet(cache)
+    old.attrs["price_basis"] = old_basis
+    atomic_write_parquet(old, cache, metadata=fetcher._price_basis_metadata(old))
+    if old_basis != "raw_adj_factor_v1":
+        assert fetcher.get_cached("600001") is None
     results, errors = fetcher.fetch_batch(["600001"], days=2, market_wide=True, as_of=days[-1])
     assert not errors
     assert results["600001"].close.tolist() == [2.25, 2.5, 2.5, 2.6, 2.7]
-    cache = tmp_path / "600001.parquet"
     assert pq.read_metadata(cache).metadata[b"kan.requested_days"] == b"5"
     assert fetcher.get_cached("600001").attrs["price_basis_date"] == str(days[-1])
     before = cache.read_bytes()
@@ -119,19 +140,15 @@ def test_market_short_refresh_recomputes_whole_history_on_new_basis_and_keeps_pa
     assert cache.read_bytes() == before
 
 
-@pytest.mark.parametrize("old_kind", ["corrupt", "unverified", "invalid_prices"])
+@pytest.mark.parametrize("old_kind", ["corrupt", "invalid_prices"])
 def test_unusable_cache_can_be_rebuilt_and_new_listing_is_not_blocked(tmp_path, monkeypatch, old_kind):
     monkeypatch.setattr(fetcher, "DATA_DIR", tmp_path)
     path = tmp_path / "600001.parquet"
     if old_kind == "corrupt":
         path.write_bytes(b"invalid parquet")
     else:
-        old = bars([date(2020, 1, 2)], [10. if old_kind == "unverified" else -1.], "2020-01-02")
-        if old_kind == "unverified":
-            old.attrs.clear()
-            old.to_parquet(path, index=False)
-        else:
-            atomic_write_parquet(old, path, metadata=fetcher._price_basis_metadata(old))
+        old = bars([date(2020, 1, 2)], [-1.], "2020-01-02")
+        atomic_write_parquet(old, path, metadata=fetcher._price_basis_metadata(old))
     start = "20260901"
     assert fetcher._preserving_start(["600001"], start) == start
     new = bars([date(2026, 9, 1), date(2026, 9, 2)], [10., 11.], "2026-09-02")

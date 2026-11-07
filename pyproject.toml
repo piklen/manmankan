@@ -1,6 +1,6 @@
 [project]
 name = "manmankan"
-version = "0.0.6.9.46"
+version = "0.0.6.9.47"
 description = "A 股市场变化研究 · 群体分布、行业剖面与可追溯证据"
 requires-python = ">=3.11"
 license = { file = "LICENSE" }
