@@ -883,6 +883,9 @@
 }
 .discovery-data-gaps li { display: flex; justify-content: space-between; }
 .discovery-data-gaps a { display: inline-flex; align-items: center; gap: 6px; }
+.discovery-reasons ul { display: block; }
+.discovery-reasons li { gap: 20px; padding: 5px 0; }
+.discovery-reasons li > span:last-child { flex-shrink: 0; }
 @media (max-width: 1100px) {
   .discovery-page {
     padding: 38px 30px;

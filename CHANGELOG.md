@@ -9,6 +9,16 @@ explicitly approves a larger bump.
 
 ## [Unreleased]
 
+## [0.0.6.9.48] - 2026-11-07
+
+### Added
+
+- 观察复看支持按两次方向迁移下钻成员，并切换原观察与本次日期核对日线；保留原成员、窗口与想法，明确当前日线和存档统计的区别。
+
+### Fixed
+
+- 区分未获取、文件损坏、空日线与明确标记的原价／复权因子冲突；发现页汇总无法判断的实际原因，已有文件不再一概提示未获取。
+
 ## [0.0.6.9.47] - 2026-11-07
 
 ### Fixed
@@ -844,7 +854,8 @@ explicitly approves a larger bump.
 - **Shell 补全** · zsh / bash / fish / powershell
 - **合规与隐私** · 强制风险提示 + 关键词黑名单（无买卖建议 / 无目标价 / 无评级）· 数据全本地
 
-[Unreleased]: https://github.com/piklen/manmankan/compare/v0.0.6.9.47...HEAD
+[Unreleased]: https://github.com/piklen/manmankan/compare/v0.0.6.9.48...HEAD
+[0.0.6.9.48]: https://github.com/piklen/manmankan/compare/v0.0.6.9.47...v0.0.6.9.48
 [0.0.6.9.47]: https://github.com/piklen/manmankan/compare/v0.0.6.9.46...v0.0.6.9.47
 [0.0.6.9.46]: https://github.com/piklen/manmankan/compare/v0.0.6.9.45...v0.0.6.9.46
 [0.0.6.9.45]: https://github.com/piklen/manmankan/compare/v0.0.6.9.44...v0.0.6.9.45

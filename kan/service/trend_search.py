@@ -216,11 +216,16 @@ def _scope(query: TrendSearchQuery) -> tuple[list[tuple[str, str]], dict[str, st
 
 
 def prepare_cached_history(symbol: str, sessions: list[datetime.date]) -> pd.DataFrame:
-    from kan.data.fetcher import get_cached
+    from kan.data.fetcher import cache_unavailable_reason, get_cached
 
-    raw = get_cached(symbol)
-    if raw is None or raw.empty:
-        raise ValueError("缺少可用本地日线，请更新该股票数据")
+    try:
+        raw = get_cached(symbol)
+    except (OSError, ValueError, TypeError) as exc:
+        raise ValueError("本地行情文件无法读取，请重新获取该股票数据") from exc
+    if raw is None:
+        raise ValueError(cache_unavailable_reason(symbol))
+    if raw.empty:
+        raise ValueError("本地日线文件为空，请更新该股票数据")
     if "date" not in raw:
         raise ValueError("本地日线缺少日期列，请更新对应股票行情后重试")
     dates = normalize_history_dates(raw["date"])

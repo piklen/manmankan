@@ -88,3 +88,39 @@ def test_single_stock_missing_cutoff_factor_preserves_existing_cache(monkeypatch
         fetcher.fetch_kline("600001", days=2, force=True)
     assert cache_path.read_bytes() == original
     assert fetcher.get_cached("600001").close.tolist() == [10.]
+
+
+@pytest.mark.parametrize("kind,reason", [
+    ("absent", "缺少可用本地日线"),
+    ("conflict", "原价与复权因子存在待核对冲突"),
+    ("old_basis", "本地行情已存在但不可用"),
+    ("corrupt", "本地行情文件无法读取"),
+    ("empty", "本地日线文件为空"),
+    ("missing_date", "本地日线缺少日期列"),
+])
+def test_research_reports_actual_unusable_cache_reason_without_changing_asset(tmp_path, monkeypatch, kind, reason):
+    from kan.service.trend_search import prepare_cached_history
+    from kan.storage.paths import atomic_write_parquet
+
+    monkeypatch.setattr(fetcher, "DATA_DIR", tmp_path)
+    path = tmp_path / "600001.parquet"
+    day = date(2026, 9, 4)
+    if kind == "corrupt":
+        path.write_bytes(b"not parquet")
+    elif kind != "absent":
+        frame = pd.DataFrame({"date": [day], "open": [10.], "high": [11.], "low": [9.],
+                              "close": [10.], "_source": ["baostock"]})
+        metadata = None
+        if kind in {"conflict", "old_basis"}:
+            frame["_source"] = "tushare"
+            if kind == "conflict":
+                metadata = {"kan.price_basis": "unverified_factor_conflict"}
+        elif kind == "empty":
+            frame = frame.iloc[:0]
+        elif kind == "missing_date":
+            frame = frame.drop(columns="date")
+        atomic_write_parquet(frame, path, metadata=metadata)
+    before = path.read_bytes() if path.exists() else None
+    with pytest.raises(ValueError, match=reason):
+        prepare_cached_history("600001", [day])
+    assert (path.read_bytes() if path.exists() else None) == before

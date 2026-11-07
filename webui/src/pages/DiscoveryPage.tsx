@@ -23,6 +23,7 @@ import {
   BreadthBar,
   BreadthHistory,
   ReturnDistribution,
+  TransitionList,
 } from "../components/DiscoveryCharts";
 import { DiscoveryEvidence } from "../components/DiscoveryEvidence";
 import { SaveObservation } from "../components/SaveObservation";
@@ -321,6 +322,14 @@ export function DiscoveryPage() {
   const window = result?.query.window ?? submitted.window ?? 20;
   const pageRows = listedMembers.slice(page * 12, (page + 1) * 12);
   const hasData = Boolean(result?.market.current.available);
+  const missingReasons = new Map<string, number>();
+  for (const member of result?.members ?? []) {
+    if (member.return_pct == null && member.reason)
+      missingReasons.set(
+        member.reason,
+        (missingReasons.get(member.reason) ?? 0) + 1,
+      );
+  }
   const inputCodes = parseCodes(codes);
   const invalidCodes =
     draft.universe === "codes" &&
@@ -527,6 +536,25 @@ export function DiscoveryPage() {
               </Link>
             </details>
           ) : null}
+          {missingReasons.size ? (
+            <details
+              className="discovery-data-gaps discovery-reasons"
+              aria-label="资料不足原因"
+              open={!hasData}
+            >
+              <summary>
+                无法判断的原因 · {number(result.market.current.missing, 0)} 只
+              </summary>
+              <ul>
+                {[...missingReasons].map(([reason, count]) => (
+                  <li key={reason}>
+                    <span>{reason}</span>
+                    <span>{number(count, 0)} 只</span>
+                  </li>
+                ))}
+              </ul>
+            </details>
+          ) : null}
           {!hasData ? (
             <section className="discovery-empty">
               <Empty
@@ -538,7 +566,7 @@ export function DiscoveryPage() {
               >
                 <p>
                   {result.market.total
-                    ? "缺少完整窗口的行情。先更新数据，或明确切到本地已有资料的日期。"
+                    ? "本窗口没有可判断的成员。先核对上方原因，再决定补齐行情或选择其他日期。"
                     : "可以选择全部 A 股，或在数据页添加自己的观察对象。"}
                 </p>
               </Empty>
@@ -797,38 +825,20 @@ export function DiscoveryPage() {
                           相邻两个 {window} 日窗口 · 两期完整{" "}
                           {number(group.comparison.available, 0)} 只
                         </p>
-                        <div className="transition-list">
-                          {group.transitions.map((item) => (
-                            <button
-                              type="button"
-                              key={item.key}
-                              aria-label={`${item.label}，${item.count}只，查看成员`}
-                              aria-pressed={
-                                filter?.kind === "transition" &&
-                                filter.key === item.key
-                              }
-                              onClick={() =>
-                                drill({
-                                  kind: "transition",
-                                  key: item.key,
-                                  label: item.label,
-                                })
-                              }
-                              disabled={!item.count}
-                            >
-                              <span>{item.label}</span>
-                              <i>
-                                <b
-                                  style={{
-                                    width: `${group.total ? (item.count / group.total) * 100 : 0}%`,
-                                  }}
-                                />
-                              </i>
-                              <strong>{number(item.count, 0)}</strong>
-                              <ChevronRight size={14} />
-                            </button>
-                          ))}
-                        </div>
+                        <TransitionList
+                          transitions={group.transitions}
+                          total={group.total}
+                          selected={
+                            filter?.kind === "transition" ? filter.key : null
+                          }
+                          onSelect={(item) =>
+                            drill({
+                              kind: "transition",
+                              key: item.key,
+                              label: item.label,
+                            })
+                          }
+                        />
                       </section>
                     </div>
                   ) : null}

@@ -303,17 +303,50 @@
   padding: 24px 0;
   margin-top: 24px;
 }
-.review-transitions > div {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  font-size: 12px;
-  color: var(--muted);
+.review-transitions > .transition-list {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  width: 100%;
+  gap: 8px 30px;
+}
+.review-transitions .transition-list button > span {
+  width: 170px;
 }
 .review-transitions strong {
   font-size: 20px;
   font-weight: 500;
   color: var(--ink);
+}
+.observation-member-filter,
+.observation-evidence-context {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 12px;
+  margin-bottom: 18px;
+  font-size: 13px;
+}
+.observation-member-evidence {
+  margin: 30px 0;
+  scroll-margin-top: 100px;
+}
+.observation-evidence-context button {
+  padding: 10px 14px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  color: var(--muted);
+  background: transparent;
+  font-size: 13px;
+}
+.observation-evidence-context button[aria-pressed="true"] {
+  color: var(--ink);
+  background: #e7eee6;
+  border-color: #bccfbe;
+}
+@media (max-width: 700px) {
+  .review-transitions > .transition-list {
+    grid-template-columns: minmax(0, 1fr);
+  }
 }
 .review-coverage-note {
   font-size: 12px;
