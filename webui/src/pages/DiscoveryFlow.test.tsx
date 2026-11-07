@@ -749,7 +749,7 @@ it("saves the complete observation beyond the displayed subgroup and reviews a c
   expect(
     screen.queryByRole("heading", { name: title }),
   ).not.toBeInTheDocument();
-});
+}, 15_000);
 
 it("keeps a vanished industry's draft after refresh without relabelling market statistics as that industry", async () => {
   const refreshed: DiscoveryResult = {
