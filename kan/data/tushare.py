@@ -492,7 +492,7 @@ def _fetch_tushare_detailed(
         df = adjust_history(raw, cutoff).rename(columns={"vol": "volume"})
     except (ValueError, KeyError) as exc:
         return ProviderFetchResult.failed(FetchFailure(FetchFailureKind.INVALID_SCHEMA, message=str(exc)))
-    if df.empty:
+    if df.dropna(subset=["open", "high", "low", "close"]).empty:
         return ProviderFetchResult.failed(FetchFailure(
             FetchFailureKind.EMPTY,
             message=f"截至 {cutoff} 缺少可用日线或复权因子，无法生成统一基准行情",

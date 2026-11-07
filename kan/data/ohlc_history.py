@@ -5,6 +5,7 @@ from collections.abc import Callable
 from concurrent.futures import ThreadPoolExecutor
 from datetime import date, timedelta
 
+import numpy as np
 import pandas as pd
 
 from kan.data.tushare import TushareDataContractError, _post_tushare_api, _resolve_config
@@ -119,16 +120,20 @@ def adjust_history(raw: pd.DataFrame, as_of: str) -> pd.DataFrame:
     df = raw.copy()
     df["symbol"] = df["ts_code"].str.split(".").str[0]
     df["date"] = df["trade_date"].astype(str)
+    quote_rows = df[["open", "high", "low", "close", "vol", "amount"]].notna().any(axis=1)
     for col in ("open", "high", "low", "close", "vol", "amount", "adj_factor"):
         df[col] = pd.to_numeric(df[col], errors="coerce")
     base = df.loc[df["date"].eq(as_of)].set_index("symbol")["adj_factor"]
     df["base_factor"] = df["symbol"].map(base)
+    valid_factors = (
+        np.isfinite(df[["adj_factor", "base_factor"]]).all(axis=1)
+        & df["adj_factor"].gt(0) & df["base_factor"].gt(0)
+    )
     for col in ("open", "high", "low", "close"):
         df[f"raw_{col}"] = df[col]
-        df[col] = (df[col] * df["adj_factor"]).round(10) / df["base_factor"]
-    # 因子可以单独提供截止日分母，但不能生成一根没有真实报价的日线。
-    df = df.dropna(subset=["open", "high", "low", "close"])
-    df = df.loc[df["adj_factor"].gt(0) & df["base_factor"].gt(0)]
+        df[col] = ((df[col] * df["adj_factor"]).round(10) / df["base_factor"]).where(valid_factors)
+    # 仅排除原本无报价的因子行；报价存在但因子错误时保留原始证据供严格校验。
+    df = df.loc[quote_rows]
     df = df.sort_values(["symbol", "date"]).reset_index(drop=True)
     df.attrs = {"price_basis": PRICE_BASIS, "price_basis_date": date.fromisoformat(as_of).isoformat()}
     return df
