@@ -187,7 +187,12 @@ def test_raw_cache_refresh_and_missing_factor(monkeypatch, tmp_path):
         return frame
     monkeypatch.setattr(data, "_query", query)
     panel = data.load_adjusted_history(["20260903", "20260904"])
-    assert panel["adj_factor"].isna().sum() == 2
+    # 因子缺失的报价不能复权，factor-only 行也不能冒充成交日线。
+    assert len(panel) == 5998
+    assert set(panel.ts_code).isdisjoint({"600000.SH", "000001.SZ"})
+    cached = pd.read_parquet(tmp_path / "ohlc_facts_v1_20260904.parquet")
+    assert cached.attrs["factor_scope"] == "trade_date"
+    assert cached.loc[cached.ts_code.eq("000001.SZ"), "close"].isna().all()
     assert len(calls) == 4
     data.load_adjusted_history(["20260903", "20260904"])
     assert len(calls) == 4

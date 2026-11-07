@@ -15,11 +15,13 @@ def test_market_cache_rebuilds_at_explicit_cutoff_without_mixing_bases(monkeypat
     monkeypatch.setattr("kan.core.trading_calendar.get_trade_dates", lambda: days)
     monkeypatch.setattr("kan.core.trading_calendar.latest_trade_date", lambda: days[-1])
     for day, close, factor in zip(days, [9., 10., 5., 5.2], [1., 1., 2., 2.], strict=True):
-        pd.DataFrame({
+        frame = pd.DataFrame({
             "ts_code": ["600001.SH"], "trade_date": [day.strftime("%Y%m%d")],
             "open": [close], "high": [close + .2], "low": [close - .2], "close": [close],
             "vol": [100.], "amount": [1000.], "adj_factor": [factor],
-        }).to_parquet(tmp_path / f"ohlc_facts_v1_{day:%Y%m%d}.parquet", index=False)
+        })
+        frame.attrs["factor_scope"] = "trade_date"
+        frame.to_parquet(tmp_path / f"ohlc_facts_v1_{day:%Y%m%d}.parquet", index=False)
     monkeypatch.setattr(ohlc_history, "_query", lambda *args: pytest.fail("已有原始事实，不应请求网络"))
 
     results, errors = fetcher.fetch_batch(["600001"], days=4, market_wide=True, as_of=days[-1])
@@ -66,6 +68,7 @@ def test_single_stock_missing_cutoff_factor_preserves_existing_cache(monkeypatch
     monkeypatch.setattr(fetcher, "DATA_DIR", tmp_path)
     monkeypatch.setattr(fetcher, "_kline_source_snapshot", lambda: [tushare.TushareKlineSource()])
     monkeypatch.setattr(tushare, "_resolve_config", lambda: ("test-token", "https://example.invalid"))
+    monkeypatch.setattr("kan.core.trading_calendar.latest_trade_date", lambda: date(2026, 9, 3))
     cache_path = tmp_path / "600001.parquet"
     pd.DataFrame({"date": [date(2026, 9, 2)], "open": [10.], "high": [11.],
                   "low": [9.], "close": [10.], "_source": ["baostock"]}).to_parquet(cache_path, index=False)
@@ -84,7 +87,7 @@ def test_single_stock_missing_cutoff_factor_preserves_existing_cache(monkeypatch
         return {"fields": fields, "items": items}, None
 
     monkeypatch.setattr(tushare, "_post_tushare_api", post)
-    with pytest.raises(ValueError, match="无有效行情，未覆盖原缓存"):
+    with pytest.raises(ValueError, match="缺少可用日线或复权因子"):
         fetcher.fetch_kline("600001", days=2, force=True)
     assert cache_path.read_bytes() == original
     assert fetcher.get_cached("600001").close.tolist() == [10.]
@@ -124,3 +127,76 @@ def test_research_reports_actual_unusable_cache_reason_without_changing_asset(tm
     with pytest.raises(ValueError, match=reason):
         prepare_cached_history("600001", [day])
     assert (path.read_bytes() if path.exists() else None) == before
+
+
+@pytest.mark.parametrize("cutoff_has_factor", [True, False])
+def test_old_cutoff_adds_factor_only_rows_once_without_inventing_quotes(tmp_path, monkeypatch, cutoff_has_factor):
+    from kan.domain.discovery import DiscoveryQuery
+    from kan.service import discovery, trend_search
+    from kan.storage.paths import atomic_write_parquet
+
+    days = pd.bdate_range("2026-09-01", periods=5).date.tolist()
+    monkeypatch.setattr(fetcher, "DATA_DIR", tmp_path)
+    monkeypatch.setattr(ohlc_history, "DATA_DIR", tmp_path)
+    monkeypatch.setattr("kan.core.trading_calendar.get_trade_dates", lambda: set(days))
+    monkeypatch.setattr("kan.core.trading_calendar.latest_trade_date", lambda: days[-1])
+    raw_paths = []
+    for index, day in enumerate(days):
+        raw = pd.DataFrame({
+            "ts_code": ["000002.SZ" if day == days[-1] else "600001.SH"],
+            "trade_date": [day.strftime("%Y%m%d")],
+            "open": [10. + index], "high": [11. + index], "low": [9. + index],
+            "close": [10. + index], "pre_close": [10.], "pct_chg": [0.],
+            "vol": [100.], "amount": [1000.], "adj_factor": [1.],
+        })
+        path = tmp_path / f"ohlc_facts_v1_{day:%Y%m%d}.parquet"
+        raw.to_parquet(path, index=False)
+        raw_paths.append(path)
+    history_before = {path: path.read_bytes() for path in raw_paths[:-1]}
+    cutoff_before = pd.read_parquet(raw_paths[-1])
+    old = pd.DataFrame({"date": days[:2], "open": [10., 11.], "high": [11., 12.],
+                        "low": [9., 10.], "close": [10., 11.], "_source": "tushare"})
+    old.attrs = {"price_basis": "raw_adj_factor_v1", "price_basis_date": str(days[1])}
+    cache = tmp_path / "600001.parquet"
+    atomic_write_parquet(old, cache, metadata=fetcher._price_basis_metadata(old))
+    original = cache.read_bytes()
+    calls = []
+
+    def query(api, params, fields):
+        calls.append((api, params["trade_date"]))
+        assert api == "adj_factor" and params["trade_date"] == days[-1].strftime("%Y%m%d")
+        codes = ["000002.SZ", *[f"{700000 + index}.SH" for index in range(2999)]]
+        if cutoff_has_factor:
+            codes[-1] = "600001.SH"
+        return pd.DataFrame({"ts_code": codes, "trade_date": params["trade_date"], "adj_factor": 2.})
+
+    monkeypatch.setattr(ohlc_history, "_query", query)
+    results, errors = fetcher.fetch_batch(["600001"], days=2, market_wide=True, as_of=days[-1])
+    if cutoff_has_factor:
+        assert not errors
+        assert results["600001"].date.tolist() == days[:-1]
+        assert results["600001"].close.tolist() == [5., 5.5, 6., 6.5]
+        assert fetcher.get_cached("600001").attrs["price_basis_date"] == str(days[-1])
+    else:
+        assert not results and "600001" in errors
+        assert cache.read_bytes() == original
+    assert not fetcher.is_fresh("600001", min_rows=2)
+    upgraded = pd.read_parquet(raw_paths[-1])
+    assert upgraded.attrs["factor_scope"] == "trade_date"
+    pd.testing.assert_frame_equal(
+        upgraded.loc[upgraded.ts_code.eq("000002.SZ"), ohlc_history.RAW_FIELDS.split(",")].reset_index(drop=True),
+        cutoff_before[ohlc_history.RAW_FIELDS.split(",")],
+    )
+    assert upgraded.loc[upgraded.ts_code.ne("000002.SZ"), ["open", "high", "low", "close"]].isna().all().all()
+    assert all(path.read_bytes() == before for path, before in history_before.items())
+    progress = []
+    ohlc_history.load_adjusted_history([day.strftime("%Y%m%d") for day in days], on_progress=lambda done, total, day, rows: progress.append((day, rows)))
+    assert calls == [("adj_factor", days[-1].strftime("%Y%m%d"))]
+    assert progress[-1] == (days[-1].strftime("%Y%m%d"), 1)
+
+    monkeypatch.setattr(discovery, "resolve_market_calendar", lambda as_of=None: (days, as_of or days[-1]))
+    monkeypatch.setattr(trend_search, "resolve_study_members", lambda universe, codes: [(code, code) for code in codes])
+    monkeypatch.setattr(trend_search, "_industries", lambda: {"600001": "测试行业"})
+    result = discovery.discover_market(DiscoveryQuery(universe="codes", codes=["600001"], window=2))
+    assert result.market.current.available == 0
+    assert result.members[0].return_pct is None and not result.members[0].latest_available

@@ -457,14 +457,16 @@ def _fetch_tushare_detailed(
 
     import pandas as pd
 
+    from kan.core.trading_calendar import latest_trade_date
     from kan.data.ohlc_history import FACTOR_FIELDS, RAW_FIELDS, adjust_history
 
+    cutoff = latest_trade_date().strftime("%Y%m%d")
     frames = []
     for api_name, fields in (("daily", RAW_FIELDS), ("adj_factor", FACTOR_FIELDS)):
         try:
             data, err = _post_tushare_api(
                 endpoint=endpoint, token=token, api_name=api_name,
-                params={"ts_code": ts_code, "start_date": start}, fields=fields,
+                params={"ts_code": ts_code, "start_date": start, "end_date": cutoff}, fields=fields,
                 allow_transport_retries=False,
             )
         except requests.Timeout as exc:
@@ -486,10 +488,15 @@ def _fetch_tushare_detailed(
             return ProviderFetchResult.failed(FetchFailure(FetchFailureKind.INVALID_SCHEMA, message=f"{api_name} fields or symbol mismatch"))
         frames.append(frame)
     try:
-        raw = frames[0].merge(frames[1], on=["ts_code", "trade_date"], how="left", validate="one_to_one")
-        df = adjust_history(raw, str(raw["trade_date"].max())).rename(columns={"vol": "volume"})
+        raw = frames[0].merge(frames[1], on=["ts_code", "trade_date"], how="outer", validate="one_to_one")
+        df = adjust_history(raw, cutoff).rename(columns={"vol": "volume"})
     except (ValueError, KeyError) as exc:
         return ProviderFetchResult.failed(FetchFailure(FetchFailureKind.INVALID_SCHEMA, message=str(exc)))
+    if df.empty:
+        return ProviderFetchResult.failed(FetchFailure(
+            FetchFailureKind.EMPTY,
+            message=f"截至 {cutoff} 缺少可用日线或复权因子，无法生成统一基准行情",
+        ))
     if record_breaker:
         cb.record("tushare", ok=True)
     return ProviderFetchResult.succeeded(df, breaker_recorded=record_breaker)

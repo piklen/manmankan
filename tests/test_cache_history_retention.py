@@ -105,9 +105,11 @@ def test_market_short_refresh_recomputes_whole_history_on_new_basis_and_keeps_pa
     monkeypatch.setattr("kan.core.trading_calendar.get_trade_dates", lambda: set(days))
     monkeypatch.setattr("kan.core.trading_calendar.latest_trade_date", lambda: days[-1])
     for day, close, factor in zip(days, [9., 10., 5., 5.2, 2.7], [1., 1., 2., 2., 4.], strict=True):
-        pd.DataFrame({"ts_code": ["600001.SH"], "trade_date": [day.strftime("%Y%m%d")],
+        frame = pd.DataFrame({"ts_code": ["600001.SH"], "trade_date": [day.strftime("%Y%m%d")],
                       "open": [close], "high": [close], "low": [close], "close": [close],
-                      "vol": [100], "amount": [1000], "adj_factor": [factor]}).to_parquet(tmp_path / f"ohlc_facts_v1_{day:%Y%m%d}.parquet", index=False)
+                      "vol": [100], "amount": [1000], "adj_factor": [factor]})
+        frame.attrs["factor_scope"] = "trade_date"
+        frame.to_parquet(tmp_path / f"ohlc_facts_v1_{day:%Y%m%d}.parquet", index=False)
     monkeypatch.setattr(ohlc_history, "_query", lambda *args: pytest.fail("已有原始事实不应联网"))
     assert not fetcher.fetch_batch(["600001"], days=4, market_wide=True, as_of=days[-2])[1]
     cache = tmp_path / "600001.parquet"
@@ -167,9 +169,11 @@ def test_current_cache_gap_is_rebuilt_from_raw_facts_without_forcing_network(tmp
     monkeypatch.setattr("kan.core.trading_calendar.get_trade_dates", lambda: set(days))
     monkeypatch.setattr("kan.core.trading_calendar.latest_trade_date", lambda: days[-1])
     for day in days:
-        pd.DataFrame({"ts_code": ["600001.SH"], "trade_date": [day.strftime("%Y%m%d")],
+        frame = pd.DataFrame({"ts_code": ["600001.SH"], "trade_date": [day.strftime("%Y%m%d")],
                       "open": [10.], "high": [11.], "low": [9.], "close": [10.],
-                      "vol": [100], "amount": [1000], "adj_factor": [1.]}).to_parquet(tmp_path / f"ohlc_facts_v1_{day:%Y%m%d}.parquet", index=False)
+                      "vol": [100], "amount": [1000], "adj_factor": [1.]})
+        frame.attrs["factor_scope"] = "trade_date"
+        frame.to_parquet(tmp_path / f"ohlc_facts_v1_{day:%Y%m%d}.parquet", index=False)
     old = bars(days, [10.] * len(days), str(days[-1]))
     if damage == "missing_day":
         old = old.drop(index=len(days) - 5)

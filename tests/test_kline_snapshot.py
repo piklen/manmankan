@@ -34,6 +34,7 @@ def raw_facts(monkeypatch, tmp_path):
              "high": 21., "low": 19., "close": 20.,
              "pre_close": 20., "pct_chg": 0.0, "vol": 2000., "amount": 20000., "adj_factor": 1.},
         ])
+        frame.attrs["factor_scope"] = "trade_date"
         frames[td] = frame
         frame.to_parquet(tmp_path / f"ohlc_facts_v1_{td}.parquet", index=False)
     monkeypatch.setattr(kline_snapshot, "DATA_DIR", tmp_path)
