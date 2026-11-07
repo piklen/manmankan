@@ -17,11 +17,16 @@ export function DiscoveryEvidence({
   result,
   revision,
   onClose,
+  recorded = false,
 }: {
   member: DiscoveryMember;
-  result: DiscoveryResult;
+  result: Pick<
+    DiscoveryResult,
+    "as_of" | "current_start" | "previous_start" | "previous_as_of" | "query"
+  >;
   revision: number;
   onClose: () => void;
+  recorded?: boolean;
 }) {
   const query: TrendSearchQuery = {
     universe: "codes",
@@ -33,7 +38,7 @@ export function DiscoveryEvidence({
   const evidence = useQuery({
     queryKey: ["discovery-evidence", member.symbol, result.as_of, revision],
     queryFn: () => api.trendEvidence(query, member.symbol),
-    enabled: member.latest_available,
+    enabled: recorded || member.latest_available,
     staleTime: Infinity,
     retry: false,
   });
@@ -97,7 +102,12 @@ export function DiscoveryEvidence({
           <strong>{percent(member.previous_return_pct, 2)}</strong>
         </div>
       </div>
-      {!member.latest_available ? (
+      {recorded ? (
+        <p className="evidence-period-note">
+          上方数字保留所选观察的统计。下方日线按当前本地资料回看该日期；原记录没有冻结逐日日线，资料修订可能使图中变化与存档不同。
+        </p>
+      ) : null}
+      {!recorded && !member.latest_available ? (
         <Notice>
           {member.reason || "截止日缺少有效行情，无法绘制价格证据。"}
         </Notice>

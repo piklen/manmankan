@@ -1,5 +1,6 @@
 """kan/tushare.py · TuShare Pro 数据源接入测试"""
 
+from datetime import date
 from typing import ClassVar
 from unittest.mock import MagicMock
 
@@ -328,6 +329,7 @@ class TestFetchTushare:
         monkeypatch.setattr(paths, "CIRCUIT_PATH", tmp_path / "circuit.json")
         monkeypatch.setattr(config, "CONFIG_PATH", tmp_path / "config.json")
         monkeypatch.setattr(circuit_breaker, "_default", None)
+        monkeypatch.setattr("kan.core.trading_calendar.latest_trade_date", lambda: date(2026, 1, 5))
         monkeypatch.delenv("TUSHARE_TOKEN", raising=False)
         monkeypatch.delenv("TUSHARE_ENDPOINT", raising=False)
         return tmp_path
@@ -462,6 +464,35 @@ class TestFetchTushare:
         assert df.attrs == {"price_basis": "raw_adj_factor_v1", "price_basis_date": "2026-01-05"}
         assert [call["api_name"] for call in captured] == ["daily", "adj_factor"]
         assert all(call["allow_transport_retries"] is False for call in captured)
+
+    def test_cutoff_factor_rebases_real_history_without_a_cutoff_quote(self, temp_env, monkeypatch):
+        from kan.data.ohlc_history import FACTOR_FIELDS, RAW_FIELDS
+
+        config.save({**config.DEFAULT_CONFIG, "tushare_token": "tk"})
+        calls = []
+
+        def post(**kwargs):
+            calls.append(kwargs)
+            fields = (RAW_FIELDS if kwargs["api_name"] == "daily" else FACTOR_FIELDS).split(",")
+            values = [("20260102", 10., 1.)]
+            if kwargs["api_name"] == "adj_factor":
+                values.append(("20260105", None, 2.))
+            rows = []
+            for day, close, factor in values:
+                item = {"ts_code": "600519.SH", "trade_date": day, "open": close,
+                        "high": close, "low": close, "close": close, "pre_close": close,
+                        "pct_chg": 0., "vol": 100., "amount": 1000., "adj_factor": factor}
+                rows.append([item[field] for field in fields])
+            return {"fields": fields, "items": rows}, None
+
+        monkeypatch.setattr(tushare, "_post_tushare_api", post)
+        frame = tushare._fetch_tushare("600519", "20260101")
+        assert frame is not None
+        assert frame.date.tolist() == ["20260102"]
+        assert frame.close.tolist() == [5.]
+        assert frame.raw_close.tolist() == [10.]
+        assert frame.attrs["price_basis_date"] == "2026-01-05"
+        assert all(call["params"]["end_date"] == "20260105" for call in calls)
 
     def test_circuit_breaker_skips_when_down(self, temp_env, monkeypatch):
         from kan.infra import circuit_breaker

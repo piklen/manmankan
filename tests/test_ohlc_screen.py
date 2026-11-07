@@ -96,6 +96,21 @@ def test_invalid_data_cannot_enter_results(sample, column, value):
     assert evaluate(sample)["excluded"][0]["reason"] == "invalid_bar_or_factor"
 
 
+@pytest.mark.parametrize("index", [3, 10])
+@pytest.mark.parametrize("factor", [np.nan, 0., -1., np.inf])
+def test_raw_factor_errors_remain_evidence_for_strict_screen(sample, index, factor):
+    request, pool, panel, dates = sample
+    raw = panel.copy()
+    raw.loc[index, "adj_factor"] = factor
+    factor_only = pd.DataFrame([{"ts_code": "600002.SH", "trade_date": dates[-1], "adj_factor": 1.}])
+    adjusted = data.adjust_history(pd.concat([raw, factor_only], ignore_index=True), dates[-1])
+    result = evaluate((request, pool, adjusted, dates))
+    assert result["excluded"][0]["reason"] == "invalid_bar_or_factor"
+    assert adjusted.date.tolist() == dates
+    assert adjusted.raw_close.tolist() == panel.raw_close.tolist()
+    assert adjusted.loc[index, ["open", "high", "low", "close"]].isna().all()
+
+
 def test_zero_range_and_capped_streak(sample):
     panel = sample[2]
     panel[["open", "high", "low", "close"]] = 5
@@ -187,7 +202,14 @@ def test_raw_cache_refresh_and_missing_factor(monkeypatch, tmp_path):
         return frame
     monkeypatch.setattr(data, "_query", query)
     panel = data.load_adjusted_history(["20260903", "20260904"])
+    # 因子缺失的真实报价保留错误证据，factor-only 行不能冒充成交日线。
     assert panel["adj_factor"].isna().sum() == 2
+    assert len(panel) == 6000
+    assert "000001.SZ" not in set(panel.ts_code)
+    assert panel.loc[panel.ts_code.eq("600000.SH"), "close"].isna().all()
+    cached = pd.read_parquet(tmp_path / "ohlc_facts_v1_20260904.parquet")
+    assert cached.attrs["factor_scope"] == "trade_date"
+    assert cached.loc[cached.ts_code.eq("000001.SZ"), "close"].isna().all()
     assert len(calls) == 4
     data.load_adjusted_history(["20260903", "20260904"])
     assert len(calls) == 4

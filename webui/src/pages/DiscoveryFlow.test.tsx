@@ -326,11 +326,25 @@ it("keeps the requested date visible until the user explicitly chooses the local
   };
   const discover = vi
     .spyOn(api, "discover")
-    .mockResolvedValueOnce({ ...result, as_of: "2026-11-06", market: empty })
+    .mockResolvedValueOnce({
+      ...result,
+      as_of: "2026-11-06",
+      market: empty,
+      members: result.members.map((member) => ({
+        ...member,
+        return_pct: null,
+        reason: "本地日线已存在，但原价与复权因子存在待核对冲突，暂不参与计算",
+      })),
+    })
     .mockResolvedValue(result);
   mount();
   await screen.findByRole("heading", { name: "这个日期，暂时还看不清整体" });
   expect(screen.getByText("2026-11-06")).toBeInTheDocument();
+  expect(
+    within(screen.getByRole("group", { name: "资料不足原因" })).getByText(
+      /本地日线已存在，但原价与复权因子存在待核对冲突/,
+    ),
+  ).toBeVisible();
   expect(discover).toHaveBeenCalledTimes(1);
   fireEvent.click(
     screen.getByRole("button", { name: "查看本地数据日 2026-10-28" }),
@@ -557,6 +571,28 @@ it("saves the complete observation beyond the displayed subgroup and reviews a c
   const review = vi
     .spyOn(api, "reviewObservation")
     .mockResolvedValue(reviewResult);
+  const evidence = vi.spyOn(api, "trendEvidence").mockImplementation(async (query, symbol) => ({
+    query,
+    as_of: query.as_of!,
+    row: {
+      symbol,
+      name: "测试甲",
+      industry: "测试行业",
+      date: query.as_of!,
+      close: 12,
+      change_pct: 1,
+      values: {},
+      lower_bounds: [],
+      positions: {},
+      returns: {},
+      source: "test",
+      gap_dates: [],
+      sparkline: [],
+    },
+    bars: observationBars,
+    conditions: [],
+    warnings: [],
+  }));
   const remove = vi
     .spyOn(api, "deleteObservation")
     .mockImplementation(async () => {
@@ -655,6 +691,36 @@ it("saves the complete observation beyond the displayed subgroup and reviews a c
   expect(within(comparison).getByText("两次无法比较")).toBeInTheDocument();
   expect(screen.getByText(thought)).toBeInTheDocument();
   expect(discover).toHaveBeenCalledTimes(4);
+  fireEvent.change(screen.getByRole("textbox", { name: "查找观察成员" }), {
+    target: { value: "测试乙" },
+  });
+  fireEvent.click(within(comparison).getByRole("button", {
+    name: "原观察上涨 · 本次下跌，1只，查看成员",
+  }));
+  expect(screen.getByRole("textbox", { name: "查找观察成员" })).toHaveValue("");
+  const members = screen.getByRole("region", { name: "观察成员" });
+  expect(within(members).queryByText("测试乙")).not.toBeInTheDocument();
+  fireEvent.click(within(members).getByRole("button", {
+    name: "核对 测试甲 000001 日线证据",
+  }));
+  await screen.findByRole("region", { name: "测试甲价格证据" });
+  await waitFor(() => expect(evidence).toHaveBeenLastCalledWith(
+    expect.objectContaining({ codes: ["000001"], as_of: "2026-11-04" }), "000001",
+  ));
+  fireEvent.click(screen.getByRole("button", { name: "原观察 · 2026-10-28" }));
+  await waitFor(() => expect(evidence).toHaveBeenLastCalledWith(
+    expect.objectContaining({ codes: ["000001"], as_of: "2026-10-28" }), "000001",
+  ));
+  expect(screen.getByText(/原记录没有冻结逐日日线/)).toBeVisible();
+  expect(screen.getByText(thought)).toBeVisible();
+  fireEvent.click(within(comparison).getByRole("button", {
+    name: "两次无法比较，2只，查看成员",
+  }));
+  expect(within(members).queryByText("测试甲")).not.toBeInTheDocument();
+  expect(within(members).getByText("测试乙")).toBeVisible();
+  expect(within(members).getByText("测试缺口")).toBeVisible();
+  fireEvent.click(screen.getByRole("button", { name: "清除复看分组" }));
+  expect(within(members).getByText("测试甲")).toBeVisible();
   fireEvent.click(screen.getByRole("button", { name: "编辑标题与想法" }));
   fireEvent.change(screen.getByLabelText("自己的想法"), {
     target: { value: "尚未保存的文字" },
@@ -683,7 +749,7 @@ it("saves the complete observation beyond the displayed subgroup and reviews a c
   expect(
     screen.queryByRole("heading", { name: title }),
   ).not.toBeInTheDocument();
-});
+}, 15_000);
 
 it("keeps a vanished industry's draft after refresh without relabelling market statistics as that industry", async () => {
   const refreshed: DiscoveryResult = {

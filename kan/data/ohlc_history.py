@@ -5,6 +5,7 @@ from collections.abc import Callable
 from concurrent.futures import ThreadPoolExecutor
 from datetime import date, timedelta
 
+import numpy as np
 import pandas as pd
 
 from kan.data.tushare import TushareDataContractError, _post_tushare_api, _resolve_config
@@ -68,19 +69,29 @@ def load_session_dates(as_of: date, count: int) -> list[str]:
     return calendars[0][-count:]
 
 
-def _daily_evidence(td: str, *, refresh: bool) -> pd.DataFrame:
+def _daily_frame(api: str, td: str, fields: str) -> pd.DataFrame:
+    frame = _query(api, {"trade_date": td}, fields)
+    if (len(frame) < 3000 or not frame["trade_date"].astype(str).eq(td).all()
+            or frame["ts_code"].duplicated().any()):
+        raise TushareDataContractError(api, f"{td} 截面不完整、日期不符或代码重复")
+    return frame
+
+
+def _daily_evidence(td: str, *, refresh: bool, require_factors: bool = False) -> pd.DataFrame:
     # 缓存原始价格和因子，不缓存随未来分红变化的 qfq 分母。
     path = DATA_DIR / f"ohlc_facts_v1_{td}.parquet"
     if path.exists() and not refresh:
-        return pd.read_parquet(path)
-    frames = []
-    for api, fields in (("daily", RAW_FIELDS), ("adj_factor", FACTOR_FIELDS)):
-        df = _query(api, {"trade_date": td}, fields)
-        if (len(df) < 3000 or not df["trade_date"].astype(str).eq(td).all()
-                or df["ts_code"].duplicated().any()):
-            raise TushareDataContractError(api, f"{td} 截面不完整、日期不符或代码重复")
-        frames.append(df)
-    merged = frames[0].merge(frames[1], on=["ts_code", "trade_date"], how="left", validate="one_to_one")
+        daily = pd.read_parquet(path)
+        if not require_factors or daily.attrs.get("factor_scope") == "trade_date":
+            return daily
+        # 旧截面只留有报价股票的因子；仅补本次截止日，不重新获取旧 OHLC。
+        daily = daily.drop(columns="adj_factor", errors="ignore")
+    else:
+        daily = _daily_frame("daily", td, RAW_FIELDS)
+    factors = _daily_frame("adj_factor", td, FACTOR_FIELDS)
+    merged = daily.merge(factors, on=["ts_code", "trade_date"], how="outer", validate="one_to_one")
+    # 声明保留了该日期的因子响应形状，不表示所有股票均有报价或因子。
+    merged.attrs = {**daily.attrs, "factor_scope": "trade_date"}
     atomic_write_parquet(merged, path)
     return merged
 
@@ -92,10 +103,15 @@ def load_adjusted_history(
     """复用原始日线与因子缓存，整个窗口只使用截止日的一个分母。"""
     frames = []
     with ThreadPoolExecutor(max_workers=max_workers) as executor:
-        for completed, frame in enumerate(executor.map(lambda td: _daily_evidence(td, refresh=refresh), dates), 1):
+        loaded = executor.map(
+            lambda td: _daily_evidence(td, refresh=refresh, require_factors=td == dates[-1]),
+            dates,
+        )
+        for completed, frame in enumerate(loaded, 1):
             frames.append(frame)
             if on_progress is not None:
-                on_progress(completed, len(dates), dates[completed - 1], len(frame))
+                quotes = int(frame[["open", "high", "low", "close"]].notna().all(axis=1).sum())
+                on_progress(completed, len(dates), dates[completed - 1], quotes)
     return adjust_history(pd.concat(frames, ignore_index=True), dates[-1])
 
 
@@ -104,13 +120,20 @@ def adjust_history(raw: pd.DataFrame, as_of: str) -> pd.DataFrame:
     df = raw.copy()
     df["symbol"] = df["ts_code"].str.split(".").str[0]
     df["date"] = df["trade_date"].astype(str)
+    quote_rows = df[["open", "high", "low", "close", "vol", "amount"]].notna().any(axis=1)
     for col in ("open", "high", "low", "close", "vol", "amount", "adj_factor"):
         df[col] = pd.to_numeric(df[col], errors="coerce")
     base = df.loc[df["date"].eq(as_of)].set_index("symbol")["adj_factor"]
     df["base_factor"] = df["symbol"].map(base)
+    valid_factors = (
+        np.isfinite(df[["adj_factor", "base_factor"]]).all(axis=1)
+        & df["adj_factor"].gt(0) & df["base_factor"].gt(0)
+    )
     for col in ("open", "high", "low", "close"):
         df[f"raw_{col}"] = df[col]
-        df[col] = (df[col] * df["adj_factor"]).round(10) / df["base_factor"]
+        df[col] = ((df[col] * df["adj_factor"]).round(10) / df["base_factor"]).where(valid_factors)
+    # 仅排除原本无报价的因子行；报价存在但因子错误时保留原始证据供严格校验。
+    df = df.loc[quote_rows]
     df = df.sort_values(["symbol", "date"]).reset_index(drop=True)
-    df.attrs.update(price_basis=PRICE_BASIS, price_basis_date=date.fromisoformat(as_of).isoformat())
+    df.attrs = {"price_basis": PRICE_BASIS, "price_basis_date": date.fromisoformat(as_of).isoformat()}
     return df

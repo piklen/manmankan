@@ -872,6 +872,22 @@ def has_cache(symbol: str) -> bool:
     return _cache_path(symbol).exists()
 
 
+def cache_unavailable_reason(symbol: str) -> str:
+    """解释未取到可用缓存的原因，只读元数据，不把旧价格重新纳入统计。"""
+    import pyarrow.parquet as pq
+
+    path = _cache_path(symbol)
+    if not path.exists():
+        return "缺少可用本地日线，请更新该股票数据"
+    try:
+        metadata = pq.read_metadata(path).metadata or {}
+    except (OSError, ValueError, TypeError):
+        return "本地行情文件无法读取，请重新获取该股票数据"
+    if metadata.get(b"kan.price_basis") == b"unverified_factor_conflict":
+        return "本地日线已存在，但原价与复权因子存在待核对冲突，暂不参与计算；请先核对来源，再更新数据"
+    return "本地行情已存在但不可用，请核对数据来源后重新获取"
+
+
 def _price_basis_metadata(frame: pd.DataFrame) -> dict[str, str]:
     return {
         "kan.price_basis": frame.attrs.get("price_basis", "provider_adjusted"),

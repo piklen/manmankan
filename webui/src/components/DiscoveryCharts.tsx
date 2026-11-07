@@ -1,6 +1,41 @@
 import { useState } from "react";
+import { ChevronRight } from "lucide-react";
 import type { DiscoveryGroup } from "../api/client";
 import { number, percent } from "../lib/format";
+
+export function TransitionList({
+  transitions,
+  total,
+  selected,
+  onSelect,
+}: {
+  transitions: DiscoveryGroup["transitions"];
+  total: number;
+  selected: string | null;
+  onSelect: (item: DiscoveryGroup["transitions"][number]) => void;
+}) {
+  return (
+    <div className="transition-list">
+      {transitions.map((item) => (
+        <button
+          type="button"
+          key={item.key}
+          aria-label={`${item.label}，${item.count}只，查看成员`}
+          aria-pressed={selected === item.key}
+          onClick={() => onSelect(item)}
+          disabled={!item.count}
+        >
+          <span>{item.label}</span>
+          <i>
+            <b style={{ width: `${total ? (item.count / total) * 100 : 0}%` }} />
+          </i>
+          <strong>{number(item.count, 0)}</strong>
+          <ChevronRight size={14} />
+        </button>
+      ))}
+    </div>
+  );
+}
 
 export function BreadthBar({ stats }: { stats: DiscoveryGroup["current"] }) {
   const parts = [

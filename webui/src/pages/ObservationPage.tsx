@@ -8,18 +8,26 @@ import {
   Pencil,
   RefreshCw,
   Search,
+  X,
 } from "lucide-react";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import {
   api,
+  type DiscoveryGroup,
   type ObservationRecord,
   type ObservationReviewResult,
 } from "../api/client";
-import { BreadthBar, BreadthHistory } from "../components/DiscoveryCharts";
+import {
+  BreadthBar,
+  BreadthHistory,
+  TransitionList,
+} from "../components/DiscoveryCharts";
+import { DiscoveryEvidence } from "../components/DiscoveryEvidence";
 import { Button, Loading, Notice } from "../components/ui";
 import { errorMessage, number, percent, shortDate } from "../lib/format";
 import "../styles/observations.css";
+import "../styles/discovery.css";
 
 function readEditDraft(key: string): { title: string; note: string } | null {
   try {
@@ -30,6 +38,17 @@ function readEditDraft(key: string): { title: string; note: string } | null {
   } catch {
     return null;
   }
+}
+
+type ReviewTransition = DiscoveryGroup["transitions"][number];
+function reviewTransition(
+  previous: number | null,
+  current: number | null | undefined,
+): ReviewTransition["key"] {
+  if (previous == null || current == null) return "unknown";
+  if (previous === 0 || current === 0) return "flat";
+  if (previous > 0) return current > 0 ? "up_up" : "up_down";
+  return current > 0 ? "down_up" : "down_down";
 }
 
 function ObservationBody({ record }: { record: ObservationRecord }) {
@@ -49,6 +68,14 @@ function ObservationBody({ record }: { record: ObservationRecord }) {
   const [date, setDate] = useState("");
   const [search, setSearch] = useState("");
   const [page, setPage] = useState(0);
+  const [transitionFilter, setTransitionFilter] =
+    useState<ReviewTransition | null>(null);
+  const [selectedSymbol, setSelectedSymbol] = useState<string | null>(null);
+  const [evidencePeriod, setEvidencePeriod] = useState<"original" | "current">(
+    "current",
+  );
+  const membersRef = useRef<HTMLElement>(null);
+  const evidenceRef = useRef<HTMLDivElement>(null);
   const snapshot = record.snapshot;
   const stats = snapshot.group.current;
   const window = record.query.window ?? 20;
@@ -64,6 +91,11 @@ function ObservationBody({ record }: { record: ObservationRecord }) {
   });
   const review = useMutation({
     mutationFn: () => api.reviewObservation(record.id, date || null),
+    onSuccess: () => {
+      setTransitionFilter(null);
+      setSelectedSymbol(null);
+      setPage(0);
+    },
   });
   const remove = useMutation({
     mutationFn: () => api.deleteObservation(record.id),
@@ -84,10 +116,37 @@ function ObservationBody({ record }: { record: ObservationRecord }) {
       ),
     [checked],
   );
-  const members = snapshot.members.filter((member) =>
-    `${member.symbol} ${member.name} ${member.industry}`
+  const members = snapshot.members.filter((member) => {
+    if (
+      transitionFilter &&
+      reviewTransition(member.return_pct, currentMembers.get(member.symbol)?.return_pct) !==
+        transitionFilter.key
+    )
+      return false;
+    return `${member.symbol} ${member.name} ${member.industry}`
       .toLowerCase()
-      .includes(search.trim().toLowerCase()),
+      .includes(search.trim().toLowerCase());
+  });
+  const selectTransition = (item: ReviewTransition) => {
+    setTransitionFilter(transitionFilter?.key === item.key ? null : item);
+    setSearch("");
+    setSelectedSymbol(null);
+    setPage(0);
+    requestAnimationFrame(() =>
+      membersRef.current?.scrollIntoView({ behavior: "smooth", block: "start" }),
+    );
+  };
+  const selectMember = (symbol: string) => {
+    setSelectedSymbol(symbol);
+    setEvidencePeriod(checked ? "current" : "original");
+    requestAnimationFrame(() =>
+      evidenceRef.current?.scrollIntoView({ behavior: "smooth", block: "start" }),
+    );
+  };
+  const evidenceSnapshot =
+    evidencePeriod === "current" && checked ? checked.current : snapshot;
+  const evidenceMember = evidenceSnapshot.members.find(
+    (member) => member.symbol === selectedSymbol,
   );
   const comparison = checked?.comparison;
   const readonlyQuery = {
@@ -299,14 +358,23 @@ function ObservationBody({ record }: { record: ObservationRecord }) {
         ) : review.error ? (
           <Notice error>{errorMessage(review.error)}</Notice>
         ) : checked && comparison ? (
-          <ReviewComparison record={record} checked={checked} />
+          <ReviewComparison
+            record={record}
+            checked={checked}
+            selected={transitionFilter?.key ?? null}
+            onSelect={selectTransition}
+          />
         ) : (
           <p className="observation-review-empty">
             复看由你明确开始。原观察的事实已经保存在这里。
           </p>
         )}
       </section>
-      <section className="observation-members">
+      <section
+        ref={membersRef}
+        className="observation-members"
+        aria-label="观察成员"
+      >
         <header className="observation-section-heading">
           <div>
             <h2>{checked ? "逐个成员核对" : "原观察的成员"}</h2>
@@ -325,6 +393,22 @@ function ObservationBody({ record }: { record: ObservationRecord }) {
             />
           </label>
         </header>
+        {transitionFilter ? (
+          <div className="observation-member-filter" role="status">
+            <span>
+              {transitionFilter.label} · {members.length} 只
+            </span>
+            <Button
+              variant="ghost"
+              onClick={() => {
+                setTransitionFilter(null);
+                setPage(0);
+              }}
+            >
+              <X size={14} />清除复看分组
+            </Button>
+          </div>
+        ) : null}
         <div className="table-scroll">
           <table>
             <thead>
@@ -345,8 +429,15 @@ function ObservationBody({ record }: { record: ObservationRecord }) {
                 return (
                   <tr key={member.symbol}>
                     <td>
-                      <strong>{member.name}</strong>
-                      <small>{member.symbol}</small>
+                      <button
+                        type="button"
+                        className="member-name"
+                        aria-label={`核对 ${member.name} ${member.symbol} 日线证据`}
+                        onClick={() => selectMember(member.symbol)}
+                      >
+                        <strong>{member.name}</strong>
+                        <small>{member.symbol}</small>
+                      </button>
                     </td>
                     <td>{percent(member.return_pct, 2)}</td>
                     <td>
@@ -397,6 +488,40 @@ function ObservationBody({ record }: { record: ObservationRecord }) {
           </div>
         ) : null}
       </section>
+      {evidenceMember ? (
+        <div ref={evidenceRef} className="observation-member-evidence">
+          <div
+            className="observation-evidence-context"
+            role="group"
+            aria-label="选择图证日期"
+          >
+            <button
+              type="button"
+              aria-pressed={evidenceSnapshot === snapshot}
+              onClick={() => setEvidencePeriod("original")}
+            >
+              原观察 · {snapshot.as_of}
+            </button>
+            {checked ? (
+              <button
+                type="button"
+                aria-pressed={evidenceSnapshot === checked.current}
+                onClick={() => setEvidencePeriod("current")}
+              >
+                本次复看 · {checked.current.as_of}
+              </button>
+            ) : null}
+          </div>
+          <DiscoveryEvidence
+            key={`${evidenceMember.symbol}-${evidenceSnapshot.as_of}`}
+            member={evidenceMember}
+            result={{ ...evidenceSnapshot, query: record.query }}
+            revision={review.submittedAt}
+            recorded
+            onClose={() => setSelectedSymbol(null)}
+          />
+        </div>
+      ) : null}
       <p className="observation-boundary">
         原观察使用保存时的成员范围与行业归属回看指定日期，不代表那个历史日期的完整市场。记录保留当时的统计、成员事实与自己的文字；复看不证明变化原因，也不预测后续走势。
       </p>
@@ -446,9 +571,13 @@ function ObservationBody({ record }: { record: ObservationRecord }) {
 function ReviewComparison({
   record,
   checked,
+  selected,
+  onSelect,
 }: {
   record: ObservationRecord;
   checked: ObservationReviewResult;
+  selected: string | null;
+  onSelect: (item: ReviewTransition) => void;
 }) {
   const comparison = checked.comparison;
   const delta = comparison.breadth_delta_pp;
@@ -501,12 +630,12 @@ function ReviewComparison({
         </div>
       </div>
       <div className="review-transitions">
-        {checked.transitions.map((item) => (
-          <div key={item.key}>
-            <span>{item.label}</span>
-            <strong>{number(item.count, 0)}</strong>
-          </div>
-        ))}
+        <TransitionList
+          transitions={checked.transitions}
+          total={record.snapshot.members.length}
+          selected={selected}
+          onSelect={onSelect}
+        />
       </div>
       <p className="review-coverage-note">
         本次完整窗口 {checked.current.group.current.available} /{" "}

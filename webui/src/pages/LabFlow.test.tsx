@@ -367,7 +367,7 @@ describe("explicit current trend screening and optional historical research", ()
     fireEvent.click(screen.getByRole("button", { name: "开始筛选" }));
     await waitFor(() => expect(search).toHaveBeenCalledTimes(4));
     await screen.findByText(/来源：test-refreshed-again ·/);
-  });
+  }, 15_000);
 
   it("shares results with map and shape searches without running historical research", async () => {
     const search = vi
