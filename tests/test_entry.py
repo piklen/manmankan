@@ -1,5 +1,7 @@
 """帮助命令不应加载数据源或原生执行器。"""
 
+import os
+import subprocess
 import sys
 from unittest.mock import MagicMock, patch
 
@@ -24,3 +26,15 @@ def test_find_help_skips_data_source_bootstrap():
     mock_patch.assert_not_called()
     mock_install.assert_not_called()
     mock_cli.cli_main.assert_called_once()
+
+
+def test_redirected_start_page_uses_utf8_with_a_western_default():
+    # 模拟英文 Windows 的重定向流，在所有 CI 平台保留同一条用户路径。
+    env = os.environ.copy()
+    env.pop("PYTHONIOENCODING", None)
+    result = subprocess.run(
+        [sys.executable, "-c", "import sys; sys.stdout.reconfigure(encoding='cp1252'); "
+         "from kan._entry import main; main()"],
+        env=env, stdout=subprocess.PIPE, check=True,
+    )
+    assert "慢慢看" in result.stdout.decode("utf-8")

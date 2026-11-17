@@ -36,15 +36,19 @@ with tempfile.TemporaryDirectory(prefix="kan-installed-smoke-") as state:
         "KAN_NO_NAMES_BACKGROUND_REFRESH": "1",
         "NO_COLOR": "1",
     }
+    if os.name == "nt":
+        # 验证普通 Windows 父进程的默认管道，避免 CI 的 UTF-8 模式遮蔽启动失败。
+        env["PYTHONUTF8"] = "0"
+        env.pop("PYTHONIOENCODING", None)
     for args in ([], ["--version"], ["web", "--help"]):
         result = subprocess.run(
             [str(command), *args], cwd=state, env=env,
-            capture_output=True, text=True, encoding="utf-8", check=True,
+            stdout=subprocess.PIPE, text=True, encoding="utf-8", check=True,
         )
         assert result.stdout.strip(), f"empty output for {args}"
     planned = subprocess.run(
         [str(command), "find", "--codes", "600519,000858", "--format", "json", "--dry-run"],
-        cwd=state, env=env, capture_output=True, text=True, encoding="utf-8", check=True,
+        cwd=state, env=env, stdout=subprocess.PIPE, text=True, encoding="utf-8", check=True,
     )
     payload = json.loads(planned.stdout)
     assert payload["mode"] == "query_plan"

@@ -23,6 +23,7 @@ from kan.domain.discovery import DiscoveryQuery, DiscoveryResult
 from kan.domain.observation import ObservationSaveRequest
 from kan.domain.research import ResearchBundle, ResearchRequest
 from kan.infra.log import redact_text
+from kan.infra.stdio import utf8_pipes
 from kan.service import observation
 from kan.service.discovery import discover_market
 from kan.service.trend_search import TrendSearchQuery, TrendSearchResult, search_trends
@@ -805,8 +806,10 @@ def serve(infile=None, outfile=None) -> None:
     """Run newline-delimited JSON-RPC over stdio."""
     if infile is None:
         infile = sys.stdin
+        utf8_pipes(infile)
     if outfile is None:
         outfile = sys.stdout
+        utf8_pipes(outfile)
     for line in infile:
         raw = line.strip()
         if not raw:
