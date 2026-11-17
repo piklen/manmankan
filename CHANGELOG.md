@@ -9,6 +9,10 @@ explicitly approves a larger bump.
 
 ## [Unreleased]
 
+## [0.1.1] - 2026-11-18
+
+- 修复英文 Windows 重定向中文启动页时的编码错误。CLI 默认通过 UTF-8 管道输出；MCP stdio 使用 UTF-8 传输中文请求和回答。
+
 ## [0.1.0] - 2026-11-18
 
 - 市场观察改为趋势工作台。切换 5、20 或 60 日窗口，按行业相对整个范围的涨跌差和上涨参与变化读图，下钻到行业、成员与实际日线。保存行业观察时同时冻结成员和参照范围。
@@ -863,7 +867,8 @@ explicitly approves a larger bump.
 - **Shell 补全** · zsh / bash / fish / powershell
 - **合规与隐私** · 强制风险提示 + 关键词黑名单（无买卖建议 / 无目标价 / 无评级）· 数据全本地
 
-[Unreleased]: https://github.com/piklen/manmankan/compare/v0.1.0...HEAD
+[Unreleased]: https://github.com/piklen/manmankan/compare/v0.1.1...HEAD
+[0.1.1]: https://github.com/piklen/manmankan/compare/v0.1.0...v0.1.1
 [0.1.0]: https://github.com/piklen/manmankan/compare/v0.0.6.9.44...v0.1.0
 [0.0.6.9.48]: https://github.com/piklen/manmankan/pull/312
 [0.0.6.9.47]: https://github.com/piklen/manmankan/pull/311

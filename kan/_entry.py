@@ -5,6 +5,8 @@ from __future__ import annotations
 import os
 import sys
 
+from kan.infra.stdio import utf8_pipes
+
 _BOOT_BANNER_COMMANDS = {
     "add", "scan", "fetch", "low", "high", "info", "trend", "find", "theme", "board",
     "index", "daily", "guide", "range", "discover",
@@ -108,6 +110,9 @@ def _patch_mini_racer() -> None:
 
 
 def main() -> None:
+    # 重定向默认输出 UTF-8；交互终端和用户显式指定的编码沿用 Python 配置。
+    if not os.environ.get("PYTHONIOENCODING"):
+        utf8_pipes(sys.stdout, sys.stderr)
     _maybe_print_boot_banner()
     if _should_print_fast_start():
         _print_fast_start()
