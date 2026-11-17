@@ -896,17 +896,22 @@ def _price_basis_metadata(frame: pd.DataFrame) -> dict[str, str]:
 
 
 def _read_usable_cache(path: Path) -> pd.DataFrame | None:
-    import pandas as pd
+    import json
+
     import pyarrow.parquet as pq
 
-    df = pd.read_parquet(path)
-    metadata = pq.read_metadata(path).metadata or {}
+    # 单股文件很小，一次打开即可同时检查价格口径和读取表，避免启动 dataset 扫描与线程池。
+    with pq.ParquetFile(path) as parquet:
+        metadata = parquet.schema_arrow.metadata or {}
+        df = parquet.read(use_threads=False, use_pandas_metadata=True).to_pandas(use_threads=False)
+    if b"PANDAS_ATTRS" in metadata:
+        df.attrs = json.loads(metadata[b"PANDAS_ATTRS"])
     basis = metadata.get(b"kan.price_basis", b"provider_adjusted").decode()
     basis_date = metadata.get(b"kan.price_basis_date", b"").decode() or None
     from kan.data.ohlc_history import PRICE_BASIS
 
-    if ("_source" in df and df["_source"].isin(["tushare", "tushare_market_batch"]).any()
-            and (basis != PRICE_BASIS or basis_date is None)):
+    if ((basis != PRICE_BASIS or basis_date is None) and "_source" in df
+            and df["_source"].isin(["tushare", "tushare_market_batch"]).any()):
         return None
     df.attrs.update(price_basis=basis, price_basis_date=basis_date)
     return df

@@ -58,10 +58,16 @@ def test_save_full_scope_and_read_edit_delete_without_market_reads(observation_m
     assert observation.list_observations()[0].total == 3
     # 已有观察是用户资产：缺少新增指纹仍可读取，且读操作不改写其原始存档。
     legacy = saved.model_dump(mode="json")
-    del legacy["snapshot"]["group"]["fingerprint"]
+    for key in ("fingerprint", "benchmark", "relative_return_pp"):
+        del legacy["snapshot"]["group"][key]
+    del legacy["benchmark_codes"]
+    for member in legacy["snapshot"]["members"]:
+        del member["relative_return_pp"]
     workspace_db.put_state("observation:" + saved.id, legacy)
     archived = observation.get_observation(saved.id)
     assert archived.snapshot.group.fingerprint == ""
+    assert archived.snapshot.group.benchmark is None
+    assert archived.snapshot.members[0].relative_return_pp is None
     assert workspace_db.get_state("observation:" + saved.id) == legacy
     edited = observation.edit_observation(saved.id, ObservationEditRequest(title="核对参与范围", note="补充想法"))
     assert edited.snapshot == archived.snapshot and edited.query == saved.query
@@ -139,6 +145,47 @@ def test_review_freezes_members_and_keeps_unknown_and_original_note(observation_
     assert observation.review_observation(saved.id, days[4]).observation == saved
     with pytest.raises(ValueError, match="不能早于"):
         observation.review_observation(saved.id, days[3])
+
+
+def test_industry_observation_freezes_original_comparison_scope(observation_market):
+    from kan.mcp.server import TOOLS
+
+    _request, days, frames, industries = observation_market
+    query = DiscoveryQuery(window=2, as_of=days[4])
+    shown = discovery.discover_market(query)
+    group = next(item for item in shown.industries if item.name == "甲")
+    request = ObservationSaveRequest(query=query, industry="甲", expected_fingerprint=group.fingerprint)
+    tool = TOOLS["kan_observe"]
+    assert {"industry", "expected_fingerprint"} <= tool.input_schema["properties"].keys()
+    payload = {"action": "save", **request.model_dump(mode="json")}
+    record = json.loads(tool.handler(payload)["stdout"])
+    saved = observation.get_observation(record["id"])
+    assert saved.scope_label == "甲"
+    assert saved.snapshot.group == group
+    assert group.relative_return_pp == pytest.approx(-5)
+    assert saved.benchmark_codes == ["000001", "000002", "000003", "000004"]
+    assert saved.snapshot.members == [member for member in shown.members if member.industry == "甲"]
+
+    # 只修改行业外的基准成员，也可能改变写下观察时看到的相对强度。
+    frames["000004"].loc[4, ["open", "high", "low", "close"]] = 90
+    with pytest.raises(observation.ObservationChangedError):
+        tool.handler(payload)
+    assert [item.id for item in observation.list_observations()] == [saved.id]
+
+    # 复看固定两个池：行业迁移不增删原成员，原范围之外也不会被纳入新基准。
+    industries["000001"], industries["000004"] = "乙", "甲"
+    reviewed = observation.review_observation(saved.id, days[6])
+    assert [member.symbol for member in reviewed.current.members] == ["000001", "000002", "000003"]
+    assert reviewed.current.group.benchmark.total == 4
+    assert reviewed.current.group.benchmark.available == 3
+    assert reviewed.current.group.benchmark.median_return == pytest.approx(0)
+    assert reviewed.current.group.relative_return_pp == pytest.approx((99 / 121 - 1) * 50)
+    assert reviewed.current.members[0].relative_return_pp == pytest.approx((99 / 121 - 1) * 100)
+    assert observation.get_observation(saved.id) == saved
+    for symbol in industries:
+        industries[symbol] = "乙"
+    with pytest.raises(observation.ObservationChangedError):
+        observation.save_observation(request)
 
 
 def test_save_requires_fixed_date_and_some_observable_data(observation_market):

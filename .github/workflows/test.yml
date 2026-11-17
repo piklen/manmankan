@@ -69,6 +69,7 @@ jobs:
         working-directory: webui
         run: |
           npm ci
+          npm run generate:api
           npm test
           npm run build
       - name: Check generated API and bundled UI

@@ -25,7 +25,6 @@ from kan.service.market_study import (
     FIELD_CATALOG,
     calculate_metrics,
     evaluate_condition,
-    normalize_history_dates,
     prepare_history,
     prepare_reference,
     resolve_market_calendar,
@@ -226,19 +225,7 @@ def prepare_cached_history(symbol: str, sessions: list[datetime.date]) -> pd.Dat
         raise ValueError(cache_unavailable_reason(symbol))
     if raw.empty:
         raise ValueError("本地日线文件为空，请更新该股票数据")
-    if "date" not in raw:
-        raise ValueError("本地日线缺少日期列，请更新对应股票行情后重试")
-    dates = normalize_history_dates(raw["date"])
-    included = dates <= sessions[-1]
-    raw = raw.loc[included].copy(deep=False)
-    if raw.empty:
-        raise ValueError("截止日前没有本地行情")
-    dates = dates.loc[included]
-    raw["date"] = dates
-    # 保留缓存中完整的连续段；不把固定 180 日边界冒充真实段首。
-    first_date = dates.min()
-    calendar = [day for day in sessions if day >= first_date]
-    return prepare_history(raw, calendar)
+    return prepare_history(raw, sessions, through_cutoff=True)
 
 
 def _checks_at(query: TrendSearchQuery, metrics: pd.DataFrame, exact: pd.DataFrame, days: list[datetime.date]) -> dict[datetime.date, list[StudyCheck]]:

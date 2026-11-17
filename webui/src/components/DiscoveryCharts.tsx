@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useId, useRef, useState } from "react";
 import { ChevronRight } from "lucide-react";
 import type { DiscoveryGroup } from "../api/client";
 import { number, percent } from "../lib/format";
@@ -27,7 +27,9 @@ export function TransitionList({
         >
           <span>{item.label}</span>
           <i>
-            <b style={{ width: `${total ? (item.count / total) * 100 : 0}%` }} />
+            <b
+              style={{ width: `${total ? (item.count / total) * 100 : 0}%` }}
+            />
           </i>
           <strong>{number(item.count, 0)}</strong>
           <ChevronRight size={14} />
@@ -78,46 +80,100 @@ export function BreadthHistory({
   group: DiscoveryGroup;
   window: number;
 }) {
+  const [metric, setMetric] = useState<"median_return" | "positive_share">(
+    "median_return",
+  );
   const [hover, setHover] = useState<number | null>(null);
+  const gradientId = useId();
   const points = group.history;
-  const active = points[hover ?? points.length - 1];
-  const width = 600,
-    left = 38,
-    right = 18,
-    top = 18,
-    bottom = 175;
+  const activeIndex = Math.min(hover ?? points.length - 1, points.length - 1);
+  const active = points[activeIndex];
+  const title = metric === "median_return" ? "涨跌中位数" : "上涨占比";
+  const plotContainer = useRef<HTMLDivElement>(null);
+  const [width, setWidth] = useState(500);
+  useEffect(() => {
+    if (!plotContainer.current) return;
+    const observer = new ResizeObserver(([entry]) => {
+      if (entry?.contentRect.width)
+        setWidth(Math.max(160, entry.contentRect.width));
+    });
+    observer.observe(plotContainer.current);
+    return () => observer.disconnect();
+  }, []);
+  const left = 38,
+    right = 14,
+    top = 12,
+    bottom = 166;
+  const values = points.flatMap((point) =>
+    point[metric] == null ? [] : [point[metric]],
+  );
+  const low = Math.min(0, ...values),
+    high = Math.max(0, ...values);
+  const range = high - low;
+  const rawStep = (range || 4) / 4;
+  const scale = 10 ** Math.floor(Math.log10(rawStep));
+  const step =
+    ([1, 2, 2.5, 5, 10].find((n) => n * scale >= rawStep) ?? 10) * scale;
+  const min = metric === "positive_share" ? 0 : Math.floor(low / step) * step;
+  const max =
+    metric === "positive_share"
+      ? 100
+      : Math.max(min + step, Math.ceil(high / step) * step);
+  const interval = metric === "positive_share" ? 25 : step;
+  const ticks = Array.from(
+    { length: Math.round((max - min) / interval) + 1 },
+    (_, i) => min + i * interval,
+  );
   const x = (index: number) =>
     left + (index / Math.max(1, points.length - 1)) * (width - left - right);
-  const y = (value: number) => bottom - (value / 100) * (bottom - top);
+  const y = (value: number) =>
+    bottom - ((value - min) / (max - min)) * (bottom - top);
   let connected = false;
   const path = points
     .map((point, i) => {
-      if (point.positive_share == null) {
+      if (point[metric] == null) {
         connected = false;
         return "";
       }
       const command = connected ? "L" : "M";
       connected = true;
-      return `${command}${x(i).toFixed(1)},${y(point.positive_share).toFixed(1)}`;
+      return `${command}${x(i).toFixed(1)},${y(point[metric]).toFixed(1)}`;
     })
     .join(" ");
   const tickIndexes = [
     ...new Set([0, Math.floor((points.length - 1) / 2), points.length - 1]),
   ].filter((i) => i >= 0);
   return (
-    <div className="breadth-history">
-      <div className="chart-heading">
-        <h3>上涨占比的变化</h3>
-        <span>
-          滚动 {window} 日 · 固定 {number(group.history_available, 0)} 只
-        </span>
-      </div>
-      {group.history_available ? (
+    <div ref={plotContainer} className="breadth-history chart-panel">
+      <header className="panel-heading">
+        <h2>趋势轨迹</h2>
+        <div
+          className="chart-toggle"
+          role="group"
+          aria-label={`${group.name}轨迹指标`}
+        >
+          {(["median_return", "positive_share"] as const).map((key) => (
+            <button
+              key={key}
+              type="button"
+              aria-pressed={metric === key}
+              onClick={() => setMetric(key)}
+            >
+              {key === "median_return" ? "涨跌中位数" : "上涨占比"}
+            </button>
+          ))}
+        </div>
+      </header>
+      <p className="axis-title">
+        {group.name} · 滚动 {window} 日 · 固定{" "}
+        {number(group.history_available, 0)} 只
+      </p>
+      {values.length ? (
         <>
           <svg
-            viewBox={`0 0 ${width} 205`}
+            viewBox={`0 0 ${width} 198`}
             role="img"
-            aria-label={`${group.name}上涨占比轨迹，固定${group.history_available}只成员，窗口${window}个交易日`}
+            aria-label={`${group.name}${title}轨迹，固定${group.history_available}只成员，窗口${window}个交易日`}
             onMouseLeave={() => setHover(null)}
             onMouseMove={(event) => {
               const box = event.currentTarget.getBoundingClientRect();
@@ -135,33 +191,57 @@ export function BreadthHistory({
               );
             }}
           >
-            {[0, 25, 50, 75, 100].map((tick) => (
+            {ticks.map((tick) => (
               <g key={tick}>
                 <line
                   x1={left}
                   x2={width - right}
                   y1={y(tick)}
                   y2={y(tick)}
-                  className={tick === 50 ? "history-midline" : "history-grid"}
+                  className={
+                    tick === (metric === "positive_share" ? 50 : 0)
+                      ? "history-midline"
+                      : "history-grid"
+                  }
                 />
                 <text x={left - 10} y={y(tick) + 4} textAnchor="end">
-                  {tick}%
+                  {number(tick, 3)}%
                 </text>
               </g>
             ))}
+            <defs>
+              <linearGradient id={gradientId} x1="0" y1="0" x2="0" y2="1">
+                <stop
+                  offset="0%"
+                  stopColor="var(--chart-line)"
+                  stopOpacity=".18"
+                />
+                <stop
+                  offset="100%"
+                  stopColor="var(--chart-line)"
+                  stopOpacity=".01"
+                />
+              </linearGradient>
+            </defs>
+            {values.length === points.length && (
+              <path
+                d={`${path} L${x(points.length - 1)},${bottom} L${x(0)},${bottom} Z`}
+                fill={`url(#${gradientId})`}
+              />
+            )}
             <path d={path} className="history-line" />
-            {active?.positive_share != null ? (
+            {active?.[metric] != null ? (
               <g>
                 <line
-                  x1={x(hover ?? points.length - 1)}
-                  x2={x(hover ?? points.length - 1)}
+                  x1={x(activeIndex)}
+                  x2={x(activeIndex)}
                   y1={top}
                   y2={bottom}
                   className="history-cursor"
                 />
                 <circle
-                  cx={x(hover ?? points.length - 1)}
-                  cy={y(active.positive_share)}
+                  cx={x(activeIndex)}
+                  cy={y(active[metric])}
                   r="4"
                   className="history-dot"
                 />
@@ -171,7 +251,7 @@ export function BreadthHistory({
               <text
                 key={i}
                 x={x(i)}
-                y="199"
+                y="188"
                 textAnchor={
                   i === 0 ? "start" : i === points.length - 1 ? "end" : "middle"
                 }
@@ -182,7 +262,9 @@ export function BreadthHistory({
           </svg>
           <div className="history-readout">
             <span>{active?.date}</span>
-            <strong>{percent(active?.positive_share)}</strong>
+            <strong>
+              {title} {percent(active?.[metric], 2)}
+            </strong>
             <span>
               {number(active?.up, 0)} / {number(active?.available, 0)} 只上涨
             </span>
@@ -201,6 +283,7 @@ export function BreadthHistory({
                     <th>下跌</th>
                     <th>持平</th>
                     <th>上涨占比</th>
+                    <th>涨跌中位数</th>
                     <th>可比较成员</th>
                   </tr>
                 </thead>
@@ -212,6 +295,7 @@ export function BreadthHistory({
                       <td>{point.down}</td>
                       <td>{point.flat}</td>
                       <td>{percent(point.positive_share)}</td>
+                      <td>{percent(point.median_return, 2)}</td>
                       <td>{point.available}</td>
                     </tr>
                   ))}

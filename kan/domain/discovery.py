@@ -82,12 +82,24 @@ class DiscoveryObservation(StudyModel):
     detail: str
 
 
+class DiscoveryBenchmark(StudyModel):
+    total: int
+    available: int
+    median_return: float | None
+
+    def relative_to_median(self, value: float | None) -> float | None:
+        if self.median_return is None or value is None:
+            return None
+        return value - self.median_return
+
+
 class DiscoveryMember(StudyModel):
     symbol: str
     name: str
     industry: str
     latest_available: bool
     return_pct: float | None
+    relative_return_pp: float | None = None
     previous_return_pct: float | None
     change_pct: float | None
     transition: TransitionKey
@@ -100,6 +112,8 @@ class DiscoveryGroup(StudyModel):
     name: str
     fingerprint: str
     total: int
+    benchmark: DiscoveryBenchmark | None = None
+    relative_return_pp: float | None = None
     current: DiscoveryStats
     comparison: DiscoveryComparison
     history: list[DiscoveryHistoryPoint]

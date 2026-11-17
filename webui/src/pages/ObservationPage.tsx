@@ -302,6 +302,11 @@ function ObservationBody({ record }: { record: ObservationRecord }) {
                 <small>完整范围 {number(snapshot.group.total, 0)} 只</small>
               </div>
             </div>
+            {snapshot.group.benchmark && <p className="observation-original-statement">
+              原观察范围的涨跌中位数为 {percent(snapshot.group.benchmark.median_return, 2)}，
+              当时可判断 {number(snapshot.group.benchmark.available, 0)} / {number(snapshot.group.benchmark.total, 0)} 只。
+              {snapshot.group.relative_return_pp != null && `该组相对强度为 ${number(snapshot.group.relative_return_pp, 2)} 个百分点。`}
+            </p>}
             <BreadthBar stats={stats} />
             {snapshot.group.observations
               .slice(0, 2)
@@ -515,6 +520,7 @@ function ObservationBody({ record }: { record: ObservationRecord }) {
           <DiscoveryEvidence
             key={`${evidenceMember.symbol}-${evidenceSnapshot.as_of}`}
             member={evidenceMember}
+            benchmark={evidenceSnapshot.group.benchmark}
             result={{ ...evidenceSnapshot, query: record.query }}
             revision={review.submittedAt}
             recorded

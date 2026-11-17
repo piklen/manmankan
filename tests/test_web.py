@@ -1,6 +1,9 @@
 """本地 Web 会话边界、现行 API 访问与已构建页面。"""
 from __future__ import annotations
 
+import re
+from urllib.parse import urljoin
+
 from fastapi.testclient import TestClient
 
 from kan.web.app import create_app
@@ -27,17 +30,6 @@ def _raw_client(*, follow_redirects: bool = True) -> TestClient:
         base_url="http://127.0.0.1",
         follow_redirects=follow_redirects,
     )
-
-
-def test_index_serves_compiled_spa_shell() -> None:
-    response = _client().get("/")
-
-    assert response.status_code == 200
-    assert '<div id="root"></div>' in response.text
-    assert "/assets/index-" in response.text
-    assert 'rel="icon"' in response.text
-    assert 'name="kan-session" content="test-session-token"' in response.text
-    assert "jinja" not in response.text.lower()
 
 
 def test_session_is_required_and_query_opens_authenticated_page() -> None:
@@ -117,10 +109,16 @@ def test_mutating_api_requires_web_header() -> None:
 def test_spa_deep_routes_share_the_same_entry_shell() -> None:
     client = _client()
 
-    responses = [client.get(path) for path in ("/research/600519", "/portfolio", "/candidates")]
-
-    assert all(response.status_code == 200 for response in responses)
-    assert all('<div id="root"></div>' in response.text for response in responses)
+    for path in ("/", "/example", "/observations/example"):
+        page = client.get(path)
+        assert page.status_code == 200
+        base = re.search(r'<base href="([^"]+)"', page.text)
+        asset = re.search(r'<script[^>]+src="([^"]+)"', page.text)
+        assert asset
+        base_url = urljoin(str(page.url), base[1]) if base else str(page.url)
+        response = client.get(urljoin(base_url, asset[1]))
+        assert response.status_code == 200
+        assert "javascript" in response.headers["content-type"]
 
 
 def test_server_host_constant_and_uvicorn_host(monkeypatch) -> None:

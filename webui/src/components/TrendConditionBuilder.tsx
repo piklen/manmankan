@@ -34,9 +34,11 @@ const labels: Partial<Record<StudyCondition["field"], string>> = {
 export function TrendConditionBuilder({
   conditions,
   onChange,
+  onAdd,
 }: {
   conditions: ConditionDraft[];
   onChange: (items: ConditionDraft[]) => void;
+  onAdd: () => void;
 }) {
   const update = (id: number, changes: Partial<ConditionDraft>) =>
     onChange(
@@ -47,31 +49,20 @@ export function TrendConditionBuilder({
   return (
     <div className="trend-condition-builder">
       {conditions.map((item, index) => (
-        <div className="trend-condition-row" key={item.id}>
+        <div className="trend-condition-row" key={item.id} id={`trend-rule-${item.id}`}>
           <div className="trend-condition-label">
-            {item.field && labels[item.field] ? (
-              <strong>{labels[item.field]}</strong>
-            ) : (
-              <select
-                aria-label={`条件 ${index + 1} 字段`}
-                value={item.field}
-                onChange={(e) =>
-                  update(item.id, {
-                    field: e.target.value as StudyCondition["field"],
-                    operator: ENUM_VALUES[e.target.value as StudyCondition["field"]] ? "eq" : "gte",
-                    value: "",
-                    window: "",
-                  })
-                }
-              >
-                <option value="">选择条件</option>
-                {Object.entries(FIELDS).map(([field, meta]) => (
-                  <option key={field} value={field}>
-                    {meta.label}
-                  </option>
-                ))}
-              </select>
-            )}
+            <select
+              aria-label={`条件 ${index + 1} 字段`}
+              value={item.field}
+              onChange={(event) => {
+                const field = event.target.value as StudyCondition["field"];
+                update(item.id, { field, operator: ENUM_VALUES[field] ? "eq" : field === "shape_distance" ? "lte" : "gte", value: "", window: "" });
+              }}
+            >
+              {Object.entries(FIELDS).map(([key, meta]) => (
+                <option key={key} value={key}>{labels[key as StudyCondition["field"]] ?? meta.label}</option>
+              ))}
+            </select>
             <button
               type="button"
               className="icon-button"
@@ -217,21 +208,9 @@ export function TrendConditionBuilder({
         className="add-condition"
         type="button"
         disabled={conditions.length >= 10}
-        onClick={() =>
-          onChange([
-            ...conditions,
-            {
-              id: Math.max(0, ...conditions.map((item) => item.id)) + 1,
-              field: "",
-              operator: "gte",
-              value: "",
-              window: "",
-            },
-          ])
-        }
+        onClick={onAdd}
       >
-        <Plus size={15} />
-        叠加位置、涨幅或其他条件
+        <Plus size={15} /> 添加指标
       </button>
     </div>
   );

@@ -1,0 +1,1 @@
+import{b as e,t,x as n}from"./global-SO6_xez8.js";var r=e(),i=n();(0,r.createRoot)(document.getElementById(`root`)).render((0,i.jsx)(t,{publicSite:!0}));

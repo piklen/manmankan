@@ -9,7 +9,14 @@ from uuid import uuid4
 import numpy as np
 from pydantic import TypeAdapter
 
-from kan.domain.discovery import DiscoveryQuery, DiscoveryResult, DiscoveryTransition, TransitionKey
+from kan.domain.discovery import (
+    DiscoveryGroup,
+    DiscoveryMember,
+    DiscoveryQuery,
+    DiscoveryResult,
+    DiscoveryTransition,
+    TransitionKey,
+)
 from kan.domain.observation import (
     ObservationEditRequest,
     ObservationRecord,
@@ -39,11 +46,11 @@ class ObservationChangedError(ValueError):
     """保存时事实已不同于已展示内容，可由入口映射为 409。"""
 
 
-def _snapshot(result: DiscoveryResult) -> ObservationSnapshot:
+def _snapshot(result: DiscoveryResult, group: DiscoveryGroup, members: list[DiscoveryMember]) -> ObservationSnapshot:
     return ObservationSnapshot(
         as_of=result.as_of, current_start=result.current_start,
         previous_as_of=result.previous_as_of, previous_start=result.previous_start,
-        group=result.market, members=result.members,
+        group=group, members=members,
     )
 
 
@@ -81,15 +88,26 @@ def _default_title(scope_label: str, window: int) -> str:
 def save_observation(request: ObservationSaveRequest) -> ObservationRecord:
     """重算明确日期的完整范围；有浏览指纹时，核对一致才保存。"""
     result = discover_market(request.query)
-    if request.expected_fingerprint is not None and request.expected_fingerprint != result.market.fingerprint:
+    group = result.market
+    members = result.members
+    if request.industry is not None:
+        selected = next((item for item in result.industries if item.name == request.industry), None)
+        if selected is None:
+            if request.expected_fingerprint:
+                raise ObservationChangedError("所选行业已不在当前范围，请刷新后核对；本次没有写入记录")
+            raise ValueError("所选行业不在当前范围")
+        group = selected
+        members = [item for item in result.members if item.industry == group.name]
+    if request.expected_fingerprint is not None and request.expected_fingerprint != group.fingerprint:
         raise ObservationChangedError("成员范围或数据已变化，请刷新观察并核对事实后再保存；本次没有写入记录")
-    if not result.members or not result.market.current.available:
+    if not members or not group.current.available:
         raise ValueError("当前范围没有可判断的成员，请先确认日期、范围与数据后再保存")
-    scope_label = "、".join(request.query.industries) or {"all": "全市场", "personal": "个人池", "codes": "指定股票"}[request.query.universe]
+    scope_label = request.industry or "、".join(request.query.industries) or {"all": "全市场", "personal": "个人池", "codes": "指定股票"}[request.query.universe]
     record = ObservationRecord(
         id=uuid4().hex, title=request.title.strip() or _default_title(scope_label, request.query.window),
         note=request.note, created_at=datetime.now(UTC), query=request.query,
-        scope_label=scope_label, snapshot=_snapshot(result),
+        scope_label=scope_label, snapshot=_snapshot(result, group, members),
+        benchmark_codes=[item.symbol for item in result.members] if len(members) != len(result.members) else None,
     )
     with workspace_db.transaction() as conn:
         workspace_db.put_state(_RECORD + record.id, record.model_dump(mode="json"), conn=conn)
@@ -131,11 +149,12 @@ def review_observation(observation_id: str, as_of: date | None = None) -> Observ
     if as_of is not None and as_of < record.snapshot.as_of:
         raise ValueError("复看日期不能早于原观察日期")
     # 冻结的是成员和窗口；行业归属、上市名单或个人池后续变化不能改动范围。
+    original_codes = [item.symbol for item in record.snapshot.members]
     query = DiscoveryQuery(
-        universe="codes", codes=[item.symbol for item in record.snapshot.members],
+        universe="codes", codes=record.benchmark_codes or original_codes,
         as_of=as_of, window=record.query.window,
     )
-    result = discover_market(query)
+    result = discover_market(query, frozen_members=set(original_codes) if record.benchmark_codes else None)
     if result.as_of < record.snapshot.as_of:
         raise ValueError("复看日期不能早于原观察日期")
     current = {item.symbol: item.return_pct for item in result.members}
@@ -143,7 +162,7 @@ def review_observation(observation_id: str, as_of: date | None = None) -> Observ
     current_values = [current[item.symbol] for item in record.snapshot.members]
     counts = Counter(return_transition(previous, now) for previous, now in zip(previous_values, current_values, strict=True))
     return ObservationReviewResult(
-        observation=record, current=_snapshot(result),
+        observation=record, current=_snapshot(result, result.market, result.members),
         comparison=compare_returns(np.array(previous_values, dtype=float), np.array(current_values, dtype=float)),
         transitions=[DiscoveryTransition(key=key, label=label, count=counts[key]) for key, label in _TRANSITIONS],
     )

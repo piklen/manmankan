@@ -1,0 +1,1367 @@
+[
+  {
+    "days": 5,
+    "start": "2026-10-28",
+    "as_of": "2026-11-04",
+    "market": {
+      "name": "全部范围",
+      "total": 5578,
+      "available": 5565,
+      "median": -1.8610747051114096,
+      "relative_return_pp": 0.0,
+      "up": 2018,
+      "paired": 5559,
+      "previous_share": 27.037236913113873,
+      "current_share": 36.30149307429394,
+      "comparison": {
+        "breadth_delta_pp": 9.264256161180064
+      }
+    },
+    "industries": [
+      {
+        "name": "交通运输",
+        "total": 128,
+        "available": 127,
+        "median": 1.3550135501354976,
+        "relative_return_pp": 3.2160882552469072,
+        "up": 76,
+        "paired": 127,
+        "previous_share": 29.92125984251969,
+        "current_share": 59.84251968503938,
+        "comparison": {
+          "breadth_delta_pp": 29.92125984251969
+        }
+      },
+      {
+        "name": "传媒",
+        "total": 131,
+        "available": 131,
+        "median": 0.8888888888888946,
+        "relative_return_pp": 2.749963594000304,
+        "up": 75,
+        "paired": 131,
+        "previous_share": 30.53435114503817,
+        "current_share": 57.25190839694656,
+        "comparison": {
+          "breadth_delta_pp": 26.717557251908392
+        }
+      },
+      {
+        "name": "公用事业",
+        "total": 139,
+        "available": 139,
+        "median": 0.0,
+        "relative_return_pp": 1.8610747051114096,
+        "up": 67,
+        "paired": 139,
+        "previous_share": 17.26618705035971,
+        "current_share": 48.201438848920866,
+        "comparison": {
+          "breadth_delta_pp": 30.935251798561154
+        }
+      },
+      {
+        "name": "农林牧渔",
+        "total": 114,
+        "available": 113,
+        "median": 0.23255813953488857,
+        "relative_return_pp": 2.093632844646298,
+        "up": 58,
+        "paired": 113,
+        "previous_share": 7.079646017699115,
+        "current_share": 51.32743362831859,
+        "comparison": {
+          "breadth_delta_pp": 44.24778761061947
+        }
+      },
+      {
+        "name": "医药生物",
+        "total": 508,
+        "available": 508,
+        "median": 0.33550625828113745,
+        "relative_return_pp": 2.196580963392547,
+        "up": 268,
+        "paired": 508,
+        "previous_share": 26.968503937007878,
+        "current_share": 52.75590551181102,
+        "comparison": {
+          "breadth_delta_pp": 25.787401574803145
+        }
+      },
+      {
+        "name": "商贸零售",
+        "total": 100,
+        "available": 100,
+        "median": 0.0,
+        "relative_return_pp": 1.8610747051114096,
+        "up": 47,
+        "paired": 100,
+        "previous_share": 40.0,
+        "current_share": 47.0,
+        "comparison": {
+          "breadth_delta_pp": 7.0
+        }
+      },
+      {
+        "name": "国防军工",
+        "total": 141,
+        "available": 141,
+        "median": -0.8883248730964355,
+        "relative_return_pp": 0.9727498320149741,
+        "up": 63,
+        "paired": 141,
+        "previous_share": 8.51063829787234,
+        "current_share": 44.680851063829785,
+        "comparison": {
+          "breadth_delta_pp": 36.170212765957444
+        }
+      },
+      {
+        "name": "基础化工",
+        "total": 452,
+        "available": 450,
+        "median": -2.780717259810972,
+        "relative_return_pp": -0.9196425546995624,
+        "up": 129,
+        "paired": 450,
+        "previous_share": 16.88888888888889,
+        "current_share": 28.666666666666668,
+        "comparison": {
+          "breadth_delta_pp": 11.777777777777779
+        }
+      },
+      {
+        "name": "家用电器",
+        "total": 103,
+        "available": 103,
+        "median": -2.348993288590595,
+        "relative_return_pp": -0.4879185834791855,
+        "up": 34,
+        "paired": 102,
+        "previous_share": 34.31372549019608,
+        "current_share": 33.33333333333333,
+        "comparison": {
+          "breadth_delta_pp": -0.9803921568627487
+        }
+      },
+      {
+        "name": "建筑材料",
+        "total": 76,
+        "available": 76,
+        "median": -0.45383433033518994,
+        "relative_return_pp": 1.4072403747762197,
+        "up": 31,
+        "paired": 76,
+        "previous_share": 15.789473684210526,
+        "current_share": 40.78947368421053,
+        "comparison": {
+          "breadth_delta_pp": 25.0
+        }
+      },
+      {
+        "name": "建筑装饰",
+        "total": 156,
+        "available": 154,
+        "median": -1.8268780603123758,
+        "relative_return_pp": 0.03419664479903384,
+        "up": 50,
+        "paired": 154,
+        "previous_share": 14.285714285714285,
+        "current_share": 32.467532467532465,
+        "comparison": {
+          "breadth_delta_pp": 18.18181818181818
+        }
+      },
+      {
+        "name": "房地产",
+        "total": 95,
+        "available": 95,
+        "median": -2.94784580498868,
+        "relative_return_pp": -1.0867710998772706,
+        "up": 18,
+        "paired": 95,
+        "previous_share": 11.578947368421053,
+        "current_share": 18.947368421052634,
+        "comparison": {
+          "breadth_delta_pp": 7.3684210526315805
+        }
+      },
+      {
+        "name": "有色金属",
+        "total": 147,
+        "available": 146,
+        "median": -0.3909568187185519,
+        "relative_return_pp": 1.4701178863928577,
+        "up": 65,
+        "paired": 146,
+        "previous_share": 18.493150684931507,
+        "current_share": 44.52054794520548,
+        "comparison": {
+          "breadth_delta_pp": 26.027397260273972
+        }
+      },
+      {
+        "name": "机械设备",
+        "total": 618,
+        "available": 616,
+        "median": -3.8280773368104426,
+        "relative_return_pp": -1.967002631699033,
+        "up": 137,
+        "paired": 616,
+        "previous_share": 42.532467532467535,
+        "current_share": 22.24025974025974,
+        "comparison": {
+          "breadth_delta_pp": -20.292207792207794
+        }
+      },
+      {
+        "name": "汽车",
+        "total": 327,
+        "available": 327,
+        "median": -4.298874104401218,
+        "relative_return_pp": -2.4377993992898084,
+        "up": 73,
+        "paired": 327,
+        "previous_share": 56.269113149847094,
+        "current_share": 22.32415902140673,
+        "comparison": {
+          "breadth_delta_pp": -33.944954128440365
+        }
+      },
+      {
+        "name": "煤炭",
+        "total": 33,
+        "available": 33,
+        "median": -0.3759398496240518,
+        "relative_return_pp": 1.4851348554873578,
+        "up": 11,
+        "paired": 33,
+        "previous_share": 15.151515151515152,
+        "current_share": 33.33333333333333,
+        "comparison": {
+          "breadth_delta_pp": 18.181818181818176
+        }
+      },
+      {
+        "name": "环保",
+        "total": 134,
+        "available": 134,
+        "median": -2.3878764731558144,
+        "relative_return_pp": -0.5268017680444048,
+        "up": 41,
+        "paired": 134,
+        "previous_share": 22.388059701492537,
+        "current_share": 30.597014925373134,
+        "comparison": {
+          "breadth_delta_pp": 8.208955223880597
+        }
+      },
+      {
+        "name": "电力设备",
+        "total": 418,
+        "available": 416,
+        "median": -0.5315942346687086,
+        "relative_return_pp": 1.329480470442701,
+        "up": 190,
+        "paired": 416,
+        "previous_share": 31.009615384615387,
+        "current_share": 45.67307692307692,
+        "comparison": {
+          "breadth_delta_pp": 14.663461538461533
+        }
+      },
+      {
+        "name": "电子",
+        "total": 521,
+        "available": 519,
+        "median": -4.287515762925609,
+        "relative_return_pp": -2.4264410578141993,
+        "up": 122,
+        "paired": 518,
+        "previous_share": 22.779922779922778,
+        "current_share": 23.552123552123554,
+        "comparison": {
+          "breadth_delta_pp": 0.772200772200776
+        }
+      },
+      {
+        "name": "石油石化",
+        "total": 48,
+        "available": 48,
+        "median": -1.4047376324991367,
+        "relative_return_pp": 0.45633707261227285,
+        "up": 17,
+        "paired": 48,
+        "previous_share": 41.66666666666667,
+        "current_share": 35.41666666666667,
+        "comparison": {
+          "breadth_delta_pp": -6.25
+        }
+      },
+      {
+        "name": "社会服务",
+        "total": 86,
+        "available": 86,
+        "median": 0.5981512915295362,
+        "relative_return_pp": 2.4592259966409458,
+        "up": 46,
+        "paired": 86,
+        "previous_share": 20.930232558139537,
+        "current_share": 53.48837209302325,
+        "comparison": {
+          "breadth_delta_pp": 32.558139534883715
+        }
+      },
+      {
+        "name": "纺织服饰",
+        "total": 108,
+        "available": 108,
+        "median": -1.4433230725589663,
+        "relative_return_pp": 0.4177516325524433,
+        "up": 41,
+        "paired": 107,
+        "previous_share": 22.429906542056074,
+        "current_share": 38.31775700934579,
+        "comparison": {
+          "breadth_delta_pp": 15.887850467289717
+        }
+      },
+      {
+        "name": "综合",
+        "total": 20,
+        "available": 20,
+        "median": -1.4531680440771355,
+        "relative_return_pp": 0.4079066610342741,
+        "up": 5,
+        "paired": 20,
+        "previous_share": 10.0,
+        "current_share": 25.0,
+        "comparison": {
+          "breadth_delta_pp": 15.0
+        }
+      },
+      {
+        "name": "美容护理",
+        "total": 32,
+        "available": 32,
+        "median": -1.6601821230068592,
+        "relative_return_pp": 0.2008925821045504,
+        "up": 11,
+        "paired": 32,
+        "previous_share": 21.875,
+        "current_share": 34.375,
+        "comparison": {
+          "breadth_delta_pp": 12.5
+        }
+      },
+      {
+        "name": "计算机",
+        "total": 357,
+        "available": 357,
+        "median": -3.3984092552422074,
+        "relative_return_pp": -1.5373345501307978,
+        "up": 87,
+        "paired": 357,
+        "previous_share": 24.649859943977592,
+        "current_share": 24.369747899159663,
+        "comparison": {
+          "breadth_delta_pp": -0.28011204481792973
+        }
+      },
+      {
+        "name": "轻工制造",
+        "total": 168,
+        "available": 168,
+        "median": -2.8031281841195854,
+        "relative_return_pp": -0.9420534790081758,
+        "up": 42,
+        "paired": 168,
+        "previous_share": 16.071428571428573,
+        "current_share": 25.0,
+        "comparison": {
+          "breadth_delta_pp": 8.928571428571427
+        }
+      },
+      {
+        "name": "通信",
+        "total": 128,
+        "available": 128,
+        "median": -5.3164915945740185,
+        "relative_return_pp": -3.455416889462609,
+        "up": 21,
+        "paired": 126,
+        "previous_share": 16.666666666666664,
+        "current_share": 16.666666666666664,
+        "comparison": {
+          "breadth_delta_pp": 0.0
+        }
+      },
+      {
+        "name": "钢铁",
+        "total": 44,
+        "available": 44,
+        "median": 1.4826318179820386,
+        "relative_return_pp": 3.343706523093448,
+        "up": 26,
+        "paired": 44,
+        "previous_share": 6.8181818181818175,
+        "current_share": 59.09090909090909,
+        "comparison": {
+          "breadth_delta_pp": 52.27272727272727
+        }
+      },
+      {
+        "name": "银行",
+        "total": 42,
+        "available": 42,
+        "median": 1.504799548277802,
+        "relative_return_pp": 3.3658742533892116,
+        "up": 27,
+        "paired": 42,
+        "previous_share": 78.57142857142857,
+        "current_share": 64.28571428571429,
+        "comparison": {
+          "breadth_delta_pp": -14.285714285714278
+        }
+      },
+      {
+        "name": "非银金融",
+        "total": 77,
+        "available": 77,
+        "median": 2.2086824067022004,
+        "relative_return_pp": 4.06975711181361,
+        "up": 56,
+        "paired": 76,
+        "previous_share": 15.789473684210526,
+        "current_share": 73.68421052631578,
+        "comparison": {
+          "breadth_delta_pp": 57.89473684210525
+        }
+      },
+      {
+        "name": "食品饮料",
+        "total": 127,
+        "available": 127,
+        "median": 3.3066132264529147,
+        "relative_return_pp": 5.167687931564324,
+        "up": 84,
+        "paired": 127,
+        "previous_share": 29.92125984251969,
+        "current_share": 66.14173228346458,
+        "comparison": {
+          "breadth_delta_pp": 36.22047244094489
+        }
+      }
+    ]
+  },
+  {
+    "days": 20,
+    "start": "2026-09-30",
+    "as_of": "2026-11-04",
+    "market": {
+      "name": "全部范围",
+      "total": 5578,
+      "available": 5540,
+      "median": -9.25525649559885,
+      "relative_return_pp": 0.0,
+      "up": 1113,
+      "paired": 5499,
+      "previous_share": 26.24113475177305,
+      "current_share": 20.22185851973086,
+      "comparison": {
+        "breadth_delta_pp": -6.019276232042191
+      }
+    },
+    "industries": [
+      {
+        "name": "交通运输",
+        "total": 128,
+        "available": 126,
+        "median": -1.0690582963226891,
+        "relative_return_pp": 8.186198199276161,
+        "up": 59,
+        "paired": 126,
+        "previous_share": 27.77777777777778,
+        "current_share": 46.82539682539682,
+        "comparison": {
+          "breadth_delta_pp": 19.047619047619044
+        }
+      },
+      {
+        "name": "传媒",
+        "total": 131,
+        "available": 130,
+        "median": 2.4907256141388667,
+        "relative_return_pp": 11.745982109737717,
+        "up": 76,
+        "paired": 129,
+        "previous_share": 29.457364341085274,
+        "current_share": 58.91472868217055,
+        "comparison": {
+          "breadth_delta_pp": 29.457364341085274
+        }
+      },
+      {
+        "name": "公用事业",
+        "total": 139,
+        "available": 139,
+        "median": -7.132867132867126,
+        "relative_return_pp": 2.122389362731724,
+        "up": 25,
+        "paired": 139,
+        "previous_share": 25.179856115107913,
+        "current_share": 17.985611510791365,
+        "comparison": {
+          "breadth_delta_pp": -7.194244604316548
+        }
+      },
+      {
+        "name": "农林牧渔",
+        "total": 114,
+        "available": 113,
+        "median": -10.505836575875483,
+        "relative_return_pp": -1.2505800802766327,
+        "up": 22,
+        "paired": 113,
+        "previous_share": 14.15929203539823,
+        "current_share": 19.469026548672566,
+        "comparison": {
+          "breadth_delta_pp": 5.309734513274336
+        }
+      },
+      {
+        "name": "医药生物",
+        "total": 508,
+        "available": 507,
+        "median": -8.707238745192791,
+        "relative_return_pp": 0.5480177504060588,
+        "up": 113,
+        "paired": 504,
+        "previous_share": 44.24603174603175,
+        "current_share": 22.42063492063492,
+        "comparison": {
+          "breadth_delta_pp": -21.825396825396826
+        }
+      },
+      {
+        "name": "商贸零售",
+        "total": 100,
+        "available": 100,
+        "median": -3.912900928197538,
+        "relative_return_pp": 5.342355567401312,
+        "up": 29,
+        "paired": 100,
+        "previous_share": 18.0,
+        "current_share": 28.999999999999996,
+        "comparison": {
+          "breadth_delta_pp": 10.999999999999996
+        }
+      },
+      {
+        "name": "国防军工",
+        "total": 141,
+        "available": 140,
+        "median": -7.331998811788121,
+        "relative_return_pp": 1.9232576838107294,
+        "up": 36,
+        "paired": 139,
+        "previous_share": 23.741007194244602,
+        "current_share": 25.899280575539567,
+        "comparison": {
+          "breadth_delta_pp": 2.158273381294965
+        }
+      },
+      {
+        "name": "基础化工",
+        "total": 452,
+        "available": 449,
+        "median": -12.07904258279987,
+        "relative_return_pp": -2.82378608720102,
+        "up": 50,
+        "paired": 444,
+        "previous_share": 24.0990990990991,
+        "current_share": 11.26126126126126,
+        "comparison": {
+          "breadth_delta_pp": -12.837837837837839
+        }
+      },
+      {
+        "name": "家用电器",
+        "total": 103,
+        "available": 101,
+        "median": -6.960556844547572,
+        "relative_return_pp": 2.2946996510512783,
+        "up": 20,
+        "paired": 101,
+        "previous_share": 34.65346534653465,
+        "current_share": 19.801980198019802,
+        "comparison": {
+          "breadth_delta_pp": -14.85148514851485
+        }
+      },
+      {
+        "name": "建筑材料",
+        "total": 76,
+        "available": 75,
+        "median": -8.16599732262382,
+        "relative_return_pp": 1.08925917297503,
+        "up": 14,
+        "paired": 75,
+        "previous_share": 30.666666666666664,
+        "current_share": 18.666666666666668,
+        "comparison": {
+          "breadth_delta_pp": -11.999999999999996
+        }
+      },
+      {
+        "name": "建筑装饰",
+        "total": 156,
+        "available": 154,
+        "median": -10.675666925666931,
+        "relative_return_pp": -1.420410430068081,
+        "up": 26,
+        "paired": 151,
+        "previous_share": 23.178807947019866,
+        "current_share": 17.218543046357617,
+        "comparison": {
+          "breadth_delta_pp": -5.960264900662249
+        }
+      },
+      {
+        "name": "房地产",
+        "total": 95,
+        "available": 94,
+        "median": -16.714285714285708,
+        "relative_return_pp": -7.459029218686858,
+        "up": 4,
+        "paired": 94,
+        "previous_share": 69.14893617021278,
+        "current_share": 4.25531914893617,
+        "comparison": {
+          "breadth_delta_pp": -64.89361702127661
+        }
+      },
+      {
+        "name": "有色金属",
+        "total": 147,
+        "available": 146,
+        "median": -11.635468164693862,
+        "relative_return_pp": -2.3802116690950115,
+        "up": 11,
+        "paired": 143,
+        "previous_share": 6.293706293706294,
+        "current_share": 7.6923076923076925,
+        "comparison": {
+          "breadth_delta_pp": 1.3986013986013983
+        }
+      },
+      {
+        "name": "机械设备",
+        "total": 618,
+        "available": 615,
+        "median": -9.606986899563319,
+        "relative_return_pp": -0.35173040396446886,
+        "up": 122,
+        "paired": 607,
+        "previous_share": 24.71169686985173,
+        "current_share": 19.934102141680395,
+        "comparison": {
+          "breadth_delta_pp": -4.777594728171334
+        }
+      },
+      {
+        "name": "汽车",
+        "total": 327,
+        "available": 325,
+        "median": -7.314285714285718,
+        "relative_return_pp": 1.9409707813131325,
+        "up": 71,
+        "paired": 319,
+        "previous_share": 25.391849529780565,
+        "current_share": 22.25705329153605,
+        "comparison": {
+          "breadth_delta_pp": -3.1347962382445154
+        }
+      },
+      {
+        "name": "煤炭",
+        "total": 33,
+        "available": 33,
+        "median": -6.959706959706957,
+        "relative_return_pp": 2.295549535891893,
+        "up": 8,
+        "paired": 33,
+        "previous_share": 9.090909090909092,
+        "current_share": 24.242424242424242,
+        "comparison": {
+          "breadth_delta_pp": 15.15151515151515
+        }
+      },
+      {
+        "name": "环保",
+        "total": 134,
+        "available": 133,
+        "median": -11.497326203208546,
+        "relative_return_pp": -2.242069707609696,
+        "up": 17,
+        "paired": 133,
+        "previous_share": 13.533834586466165,
+        "current_share": 12.781954887218044,
+        "comparison": {
+          "breadth_delta_pp": -0.7518796992481214
+        }
+      },
+      {
+        "name": "电力设备",
+        "total": 418,
+        "available": 416,
+        "median": -10.25152574272275,
+        "relative_return_pp": -0.9962692471238999,
+        "up": 72,
+        "paired": 413,
+        "previous_share": 24.69733656174334,
+        "current_share": 17.433414043583532,
+        "comparison": {
+          "breadth_delta_pp": -7.263922518159809
+        }
+      },
+      {
+        "name": "电子",
+        "total": 521,
+        "available": 517,
+        "median": -17.807211184694626,
+        "relative_return_pp": -8.551954689095776,
+        "up": 40,
+        "paired": 513,
+        "previous_share": 28.460038986354775,
+        "current_share": 7.797270955165692,
+        "comparison": {
+          "breadth_delta_pp": -20.66276803118908
+        }
+      },
+      {
+        "name": "石油石化",
+        "total": 48,
+        "available": 48,
+        "median": -4.289647347097891,
+        "relative_return_pp": 4.965609148500959,
+        "up": 17,
+        "paired": 48,
+        "previous_share": 16.666666666666664,
+        "current_share": 35.41666666666667,
+        "comparison": {
+          "breadth_delta_pp": 18.750000000000007
+        }
+      },
+      {
+        "name": "社会服务",
+        "total": 86,
+        "available": 85,
+        "median": -6.400000000000006,
+        "relative_return_pp": 2.8552564955988444,
+        "up": 17,
+        "paired": 85,
+        "previous_share": 20.0,
+        "current_share": 20.0,
+        "comparison": {
+          "breadth_delta_pp": 0.0
+        }
+      },
+      {
+        "name": "纺织服饰",
+        "total": 108,
+        "available": 107,
+        "median": -9.58503798947985,
+        "relative_return_pp": -0.32978149388100064,
+        "up": 29,
+        "paired": 107,
+        "previous_share": 25.233644859813083,
+        "current_share": 27.102803738317753,
+        "comparison": {
+          "breadth_delta_pp": 1.8691588785046704
+        }
+      },
+      {
+        "name": "综合",
+        "total": 20,
+        "available": 20,
+        "median": -11.381223079234697,
+        "relative_return_pp": -2.1259665836358472,
+        "up": 0,
+        "paired": 20,
+        "previous_share": 30.0,
+        "current_share": 0.0,
+        "comparison": {
+          "breadth_delta_pp": -30.0
+        }
+      },
+      {
+        "name": "美容护理",
+        "total": 32,
+        "available": 32,
+        "median": -9.04610403305438,
+        "relative_return_pp": 0.20915246254446984,
+        "up": 4,
+        "paired": 32,
+        "previous_share": 37.5,
+        "current_share": 12.5,
+        "comparison": {
+          "breadth_delta_pp": -25.0
+        }
+      },
+      {
+        "name": "计算机",
+        "total": 357,
+        "available": 357,
+        "median": -6.9620253164556996,
+        "relative_return_pp": 2.2932311791431506,
+        "up": 80,
+        "paired": 355,
+        "previous_share": 19.718309859154928,
+        "current_share": 22.535211267605636,
+        "comparison": {
+          "breadth_delta_pp": 2.8169014084507076
+        }
+      },
+      {
+        "name": "轻工制造",
+        "total": 168,
+        "available": 167,
+        "median": -12.041884816753923,
+        "relative_return_pp": -2.7866283211550726,
+        "up": 17,
+        "paired": 167,
+        "previous_share": 32.33532934131736,
+        "current_share": 10.179640718562874,
+        "comparison": {
+          "breadth_delta_pp": -22.15568862275449
+        }
+      },
+      {
+        "name": "通信",
+        "total": 128,
+        "available": 125,
+        "median": -14.819136522753784,
+        "relative_return_pp": -5.563880027154934,
+        "up": 12,
+        "paired": 124,
+        "previous_share": 19.35483870967742,
+        "current_share": 9.67741935483871,
+        "comparison": {
+          "breadth_delta_pp": -9.67741935483871
+        }
+      },
+      {
+        "name": "钢铁",
+        "total": 44,
+        "available": 44,
+        "median": -5.912731351654527,
+        "relative_return_pp": 3.3425251439443233,
+        "up": 2,
+        "paired": 44,
+        "previous_share": 6.8181818181818175,
+        "current_share": 4.545454545454546,
+        "comparison": {
+          "breadth_delta_pp": -2.2727272727272716
+        }
+      },
+      {
+        "name": "银行",
+        "total": 42,
+        "available": 42,
+        "median": 2.5799815869727794,
+        "relative_return_pp": 11.83523808257163,
+        "up": 31,
+        "paired": 42,
+        "previous_share": 45.23809523809524,
+        "current_share": 73.80952380952381,
+        "comparison": {
+          "breadth_delta_pp": 28.57142857142857
+        }
+      },
+      {
+        "name": "非银金融",
+        "total": 77,
+        "available": 75,
+        "median": -2.29907867420559,
+        "relative_return_pp": 6.9561778213932595,
+        "up": 27,
+        "paired": 74,
+        "previous_share": 4.054054054054054,
+        "current_share": 36.486486486486484,
+        "comparison": {
+          "breadth_delta_pp": 32.43243243243243
+        }
+      },
+      {
+        "name": "食品饮料",
+        "total": 127,
+        "available": 125,
+        "median": -0.22271714922047492,
+        "relative_return_pp": 9.032539346378375,
+        "up": 62,
+        "paired": 125,
+        "previous_share": 22.400000000000002,
+        "current_share": 49.6,
+        "comparison": {
+          "breadth_delta_pp": 27.2
+        }
+      }
+    ]
+  },
+  {
+    "days": 60,
+    "start": "2026-08-04",
+    "as_of": "2026-11-04",
+    "market": {
+      "name": "全部范围",
+      "total": 5578,
+      "available": 5460,
+      "median": -7.571268959913329,
+      "relative_return_pp": 0.0,
+      "up": 1320,
+      "paired": 5312,
+      "previous_share": 9.243222891566266,
+      "current_share": 24.435240963855424,
+      "comparison": {
+        "breadth_delta_pp": 15.192018072289159
+      }
+    },
+    "industries": [
+      {
+        "name": "交通运输",
+        "total": 128,
+        "available": 126,
+        "median": -0.62806886079943,
+        "relative_return_pp": 6.943200099113899,
+        "up": 57,
+        "paired": 123,
+        "previous_share": 17.073170731707318,
+        "current_share": 44.71544715447154,
+        "comparison": {
+          "breadth_delta_pp": 27.642276422764223
+        }
+      },
+      {
+        "name": "传媒",
+        "total": 131,
+        "available": 129,
+        "median": 1.6129032258064502,
+        "relative_return_pp": 9.18417218571978,
+        "up": 74,
+        "paired": 124,
+        "previous_share": 8.870967741935484,
+        "current_share": 57.25806451612904,
+        "comparison": {
+          "breadth_delta_pp": 48.38709677419355
+        }
+      },
+      {
+        "name": "公用事业",
+        "total": 139,
+        "available": 138,
+        "median": -9.752517404804534,
+        "relative_return_pp": -2.181248444891205,
+        "up": 26,
+        "paired": 134,
+        "previous_share": 11.940298507462686,
+        "current_share": 19.402985074626866,
+        "comparison": {
+          "breadth_delta_pp": 7.46268656716418
+        }
+      },
+      {
+        "name": "农林牧渔",
+        "total": 114,
+        "available": 113,
+        "median": -2.6433464667148687,
+        "relative_return_pp": 4.92792249319846,
+        "up": 43,
+        "paired": 108,
+        "previous_share": 4.62962962962963,
+        "current_share": 38.88888888888889,
+        "comparison": {
+          "breadth_delta_pp": 34.25925925925927
+        }
+      },
+      {
+        "name": "医药生物",
+        "total": 508,
+        "available": 503,
+        "median": -3.8735983690111997,
+        "relative_return_pp": 3.6976705909021295,
+        "up": 162,
+        "paired": 491,
+        "previous_share": 13.441955193482688,
+        "current_share": 32.382892057026474,
+        "comparison": {
+          "breadth_delta_pp": 18.940936863543786
+        }
+      },
+      {
+        "name": "商贸零售",
+        "total": 100,
+        "available": 100,
+        "median": -3.1808471262667446,
+        "relative_return_pp": 4.390421833646585,
+        "up": 39,
+        "paired": 98,
+        "previous_share": 7.142857142857142,
+        "current_share": 39.795918367346935,
+        "comparison": {
+          "breadth_delta_pp": 32.65306122448979
+        }
+      },
+      {
+        "name": "国防军工",
+        "total": 141,
+        "available": 137,
+        "median": -9.04205607476637,
+        "relative_return_pp": -1.4707871148530405,
+        "up": 32,
+        "paired": 133,
+        "previous_share": 1.5037593984962405,
+        "current_share": 23.308270676691727,
+        "comparison": {
+          "breadth_delta_pp": 21.804511278195488
+        }
+      },
+      {
+        "name": "基础化工",
+        "total": 452,
+        "available": 440,
+        "median": -8.191960891886302,
+        "relative_return_pp": -0.6206919319729725,
+        "up": 85,
+        "paired": 425,
+        "previous_share": 6.8235294117647065,
+        "current_share": 19.058823529411764,
+        "comparison": {
+          "breadth_delta_pp": 12.235294117647058
+        }
+      },
+      {
+        "name": "家用电器",
+        "total": 103,
+        "available": 101,
+        "median": -4.127257093723136,
+        "relative_return_pp": 3.444011866190193,
+        "up": 34,
+        "paired": 95,
+        "previous_share": 12.631578947368421,
+        "current_share": 34.73684210526316,
+        "comparison": {
+          "breadth_delta_pp": 22.105263157894736
+        }
+      },
+      {
+        "name": "建筑材料",
+        "total": 76,
+        "available": 75,
+        "median": -7.397260273972616,
+        "relative_return_pp": 0.17400868594071284,
+        "up": 15,
+        "paired": 75,
+        "previous_share": 6.666666666666667,
+        "current_share": 20.0,
+        "comparison": {
+          "breadth_delta_pp": 13.333333333333332
+        }
+      },
+      {
+        "name": "建筑装饰",
+        "total": 156,
+        "available": 149,
+        "median": -8.324817861282941,
+        "relative_return_pp": -0.7535489013696122,
+        "up": 30,
+        "paired": 144,
+        "previous_share": 5.555555555555555,
+        "current_share": 20.833333333333336,
+        "comparison": {
+          "breadth_delta_pp": 15.27777777777778
+        }
+      },
+      {
+        "name": "房地产",
+        "total": 95,
+        "available": 93,
+        "median": -6.222222222222207,
+        "relative_return_pp": 1.349046737691122,
+        "up": 14,
+        "paired": 90,
+        "previous_share": 4.444444444444445,
+        "current_share": 15.555555555555555,
+        "comparison": {
+          "breadth_delta_pp": 11.11111111111111
+        }
+      },
+      {
+        "name": "有色金属",
+        "total": 147,
+        "available": 142,
+        "median": -13.311858103871238,
+        "relative_return_pp": -5.740589143957909,
+        "up": 12,
+        "paired": 141,
+        "previous_share": 6.382978723404255,
+        "current_share": 8.51063829787234,
+        "comparison": {
+          "breadth_delta_pp": 2.127659574468085
+        }
+      },
+      {
+        "name": "机械设备",
+        "total": 618,
+        "available": 598,
+        "median": -7.508759212274979,
+        "relative_return_pp": 0.06250974763834982,
+        "up": 149,
+        "paired": 581,
+        "previous_share": 7.917383820998279,
+        "current_share": 25.47332185886403,
+        "comparison": {
+          "breadth_delta_pp": 17.55593803786575
+        }
+      },
+      {
+        "name": "汽车",
+        "total": 327,
+        "available": 314,
+        "median": -7.714556661925082,
+        "relative_return_pp": -0.14328770201175267,
+        "up": 73,
+        "paired": 309,
+        "previous_share": 4.207119741100324,
+        "current_share": 23.300970873786408,
+        "comparison": {
+          "breadth_delta_pp": 19.093851132686083
+        }
+      },
+      {
+        "name": "煤炭",
+        "total": 33,
+        "available": 33,
+        "median": -1.157407407407407,
+        "relative_return_pp": 6.413861552505923,
+        "up": 14,
+        "paired": 33,
+        "previous_share": 24.242424242424242,
+        "current_share": 42.42424242424242,
+        "comparison": {
+          "breadth_delta_pp": 18.18181818181818
+        }
+      },
+      {
+        "name": "环保",
+        "total": 134,
+        "available": 132,
+        "median": -8.168555231517406,
+        "relative_return_pp": -0.5972862716040765,
+        "up": 21,
+        "paired": 129,
+        "previous_share": 5.426356589147287,
+        "current_share": 16.27906976744186,
+        "comparison": {
+          "breadth_delta_pp": 10.852713178294575
+        }
+      },
+      {
+        "name": "电力设备",
+        "total": 418,
+        "available": 411,
+        "median": -12.819383259911898,
+        "relative_return_pp": -5.248114299998569,
+        "up": 51,
+        "paired": 402,
+        "previous_share": 3.482587064676617,
+        "current_share": 12.437810945273633,
+        "comparison": {
+          "breadth_delta_pp": 8.955223880597016
+        }
+      },
+      {
+        "name": "电子",
+        "total": 521,
+        "available": 511,
+        "median": -11.924348704443076,
+        "relative_return_pp": -4.353079744529747,
+        "up": 112,
+        "paired": 492,
+        "previous_share": 17.276422764227643,
+        "current_share": 22.5609756097561,
+        "comparison": {
+          "breadth_delta_pp": 5.284552845528456
+        }
+      },
+      {
+        "name": "石油石化",
+        "total": 48,
+        "available": 48,
+        "median": -4.639544658976585,
+        "relative_return_pp": 2.931724300936744,
+        "up": 17,
+        "paired": 45,
+        "previous_share": 15.555555555555555,
+        "current_share": 37.77777777777778,
+        "comparison": {
+          "breadth_delta_pp": 22.22222222222222
+        }
+      },
+      {
+        "name": "社会服务",
+        "total": 86,
+        "available": 85,
+        "median": -5.564263322884033,
+        "relative_return_pp": 2.0070056370292964,
+        "up": 20,
+        "paired": 81,
+        "previous_share": 8.641975308641975,
+        "current_share": 24.691358024691358,
+        "comparison": {
+          "breadth_delta_pp": 16.049382716049383
+        }
+      },
+      {
+        "name": "纺织服饰",
+        "total": 108,
+        "available": 107,
+        "median": -5.88235294117646,
+        "relative_return_pp": 1.6889160187368688,
+        "up": 34,
+        "paired": 103,
+        "previous_share": 12.62135922330097,
+        "current_share": 32.038834951456316,
+        "comparison": {
+          "breadth_delta_pp": 19.417475728155345
+        }
+      },
+      {
+        "name": "综合",
+        "total": 20,
+        "available": 20,
+        "median": -7.141898691714182,
+        "relative_return_pp": 0.4293702681991469,
+        "up": 3,
+        "paired": 20,
+        "previous_share": 5.0,
+        "current_share": 15.0,
+        "comparison": {
+          "breadth_delta_pp": 10.0
+        }
+      },
+      {
+        "name": "美容护理",
+        "total": 32,
+        "available": 31,
+        "median": -7.801236556039825,
+        "relative_return_pp": -0.22996759612649598,
+        "up": 6,
+        "paired": 29,
+        "previous_share": 6.896551724137931,
+        "current_share": 20.689655172413794,
+        "comparison": {
+          "breadth_delta_pp": 13.793103448275863
+        }
+      },
+      {
+        "name": "计算机",
+        "total": 357,
+        "available": 352,
+        "median": -10.236615115064518,
+        "relative_return_pp": -2.6653461551511892,
+        "up": 58,
+        "paired": 346,
+        "previous_share": 7.225433526011561,
+        "current_share": 16.76300578034682,
+        "comparison": {
+          "breadth_delta_pp": 9.53757225433526
+        }
+      },
+      {
+        "name": "轻工制造",
+        "total": 168,
+        "available": 164,
+        "median": -7.096158731640045,
+        "relative_return_pp": 0.47511022827328375,
+        "up": 34,
+        "paired": 161,
+        "previous_share": 3.7267080745341614,
+        "current_share": 20.496894409937887,
+        "comparison": {
+          "breadth_delta_pp": 16.770186335403725
+        }
+      },
+      {
+        "name": "通信",
+        "total": 128,
+        "available": 124,
+        "median": -13.327319034913748,
+        "relative_return_pp": -5.756050075000418,
+        "up": 15,
+        "paired": 120,
+        "previous_share": 5.833333333333333,
+        "current_share": 11.666666666666666,
+        "comparison": {
+          "breadth_delta_pp": 5.833333333333333
+        }
+      },
+      {
+        "name": "钢铁",
+        "total": 44,
+        "available": 43,
+        "median": -10.034602076124555,
+        "relative_return_pp": -2.463333116211226,
+        "up": 4,
+        "paired": 43,
+        "previous_share": 2.3255813953488373,
+        "current_share": 9.30232558139535,
+        "comparison": {
+          "breadth_delta_pp": 6.976744186046512
+        }
+      },
+      {
+        "name": "银行",
+        "total": 42,
+        "available": 42,
+        "median": 6.642062554581408,
+        "relative_return_pp": 14.213331514494737,
+        "up": 32,
+        "paired": 42,
+        "previous_share": 76.19047619047619,
+        "current_share": 76.19047619047619,
+        "comparison": {
+          "breadth_delta_pp": 0.0
+        }
+      },
+      {
+        "name": "非银金融",
+        "total": 77,
+        "available": 74,
+        "median": -6.242315968880858,
+        "relative_return_pp": 1.3289529910324713,
+        "up": 9,
+        "paired": 74,
+        "previous_share": 16.216216216216218,
+        "current_share": 12.162162162162163,
+        "comparison": {
+          "breadth_delta_pp": -4.054054054054054
+        }
+      },
+      {
+        "name": "食品饮料",
+        "total": 127,
+        "available": 125,
+        "median": -2.46727155801697,
+        "relative_return_pp": 5.103997401896359,
+        "up": 45,
+        "paired": 121,
+        "previous_share": 8.264462809917356,
+        "current_share": 37.1900826446281,
+        "comparison": {
+          "breadth_delta_pp": 28.925619834710744
+        }
+      }
+    ]
+  }
+]

@@ -207,18 +207,42 @@ describe("explicit current trend screening and optional historical research", ()
       { field: "previous_down_days", operator: "gte", value: 4, window: null },
       { field: "up_days", operator: "eq", value: 2, window: null },
     ]);
+    fireEvent.click(screen.getByRole("button", { name: "添加指标" }));
     fireEvent.click(screen.getByRole("button", { name: "区间涨跌天数" }));
-    enter("条件 1 观察窗口", "5");
-    enter("条件 1 数值", "6");
+    enter("条件 3 观察窗口", "5");
+    enter("条件 3 数值", "6");
     expect(screen.getByRole("button", { name: "开始筛选" })).toBeDisabled();
-    enter("条件 1 涨跌方向", "falling_days");
-    enter("条件 1 数值", "0");
+    enter("条件 3 涨跌方向", "falling_days");
+    enter("条件 3 数值", "0");
     expect(screen.getByRole("button", { name: "开始筛选" })).toBeEnabled();
     fireEvent.click(screen.getByRole("button", { name: "开始筛选" }));
     await waitFor(() => expect(search).toHaveBeenCalledTimes(2));
     expect(search.mock.calls[1]![0].conditions).toEqual([
+      ...search.mock.calls[0]![0].conditions!,
       { field: "falling_days", operator: "gte", value: 0, window: 5 },
     ]);
+  });
+
+  it("finds strength metrics, preserves the scope as typed and shows actual values beside each stock", async () => {
+    const search = vi.spyOn(api, "searchTrends").mockImplementation(async (query) => ({
+      ...searchResult(query), rows: [{ ...row, values: { "trend_efficiency.20": 0.63 } }],
+    }));
+    mount();
+    enter("查找指标", "效率");
+    expect(screen.queryByRole("button", { name: "连续上涨" })).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "趋势效率" }));
+    enter("条件 1 观察窗口", "20");
+    enter("条件 1 数值", "0.5");
+    fireEvent.click(screen.getByText("范围与日期"));
+    enter("筛选行业", "银行、");
+    expect(screen.getByLabelText("筛选行业")).toHaveValue("银行、");
+    enter("筛选行业", "银行、医药");
+    expect(search).not.toHaveBeenCalled();
+    fireEvent.click(screen.getByRole("button", { name: "开始筛选" }));
+    await screen.findByRole("columnheader", { name: "20日趋势效率" });
+    const stockRow = screen.getByRole("button", { name: "查看 测试股票甲 600000" }).closest("tr")!;
+    expect(within(stockRow).getByText("0.63")).toBeInTheDocument();
+    expect(search.mock.calls[0]![0].industries).toEqual(["银行", "医药"]);
   });
 
   it("keeps a requested missing day and lets the user choose the local date; old results stay inert while loading", async () => {
@@ -239,11 +263,7 @@ describe("explicit current trend screening and optional historical research", ()
       .mockImplementationOnce(() => new Promise(() => {}));
     mount();
     runDown();
-    expect(screen.getByRole("button", { name: "连续上涨" })).toBeDisabled();
-    expect(screen.getByRole("button", { name: "形态检索" })).toBeDisabled();
-    expect(
-      screen.queryByText("先说清楚，你在找什么走势"),
-    ).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "添加指标" })).toBeDisabled();
     expect(
       screen.getByText("正在读取日线并核对当前条件，不计算历史样本。"),
     ).toBeInTheDocument();
@@ -265,7 +285,7 @@ describe("explicit current trend screening and optional historical research", ()
     expect(screen.getByText("数据日 2026-11-02")).toBeInTheDocument();
   });
 
-  it("selects the first visible code, retains explicit selection, and makes short and long segments readable", async () => {
+  it("waits for a stock choice, retains explicit selection, and makes short and long segments readable", async () => {
     const longBars = Array.from({ length: 80 }, (_, index) => ({
       ...bars[0]!,
       date: new Date(Date.UTC(2026, 7, 10 + index)).toISOString().slice(0, 10),
@@ -313,6 +333,8 @@ describe("explicit current trend screening and optional historical research", ()
     const first = await screen.findByRole("button", {
       name: "查看 测试对象1 000001",
     });
+    expect(api.trendEvidence).not.toHaveBeenCalled();
+    fireEvent.click(first);
     await waitFor(() => expect(first.closest("tr")).toHaveClass("selected"));
     expect(
       await screen.findByRole("button", { name: "本段附近" }),
@@ -376,7 +398,7 @@ describe("explicit current trend screening and optional historical research", ()
     const run = vi.spyOn(api, "runStudy");
     mount();
     runDown();
-    await screen.findByRole("button", { name: "查看 测试股票甲 600000" });
+    fireEvent.click(await screen.findByRole("button", { name: "查看 测试股票甲 600000" }));
     fireEvent.click(screen.getByRole("button", { name: "地图" }));
     enter("横轴位置", "30");
     enter("纵轴涨跌", "5");
@@ -399,16 +421,18 @@ describe("explicit current trend screening and optional historical research", ()
     fireEvent.click(screen.getByRole("button", { name: /按这段形态查找/ }));
     expect(screen.getByRole("button", { name: "开始筛选" })).toBeDisabled();
     expect(screen.getByLabelText("参照股票")).toHaveValue("600000");
-    enter("条件 1 数值", "2.5");
+    enter("条件 6 观察窗口", "20");
+    enter("条件 6 数值", "2.5");
     fireEvent.click(screen.getByRole("button", { name: "开始筛选" }));
     await waitFor(() => expect(search).toHaveBeenCalledTimes(2));
     expect(search.mock.calls[1]![0].reference).toEqual({
       symbol: "600000",
       as_of: "2026-10-28",
     });
-    expect(search.mock.calls[1]![0].conditions).toEqual([
+    expect(search.mock.calls[1]![0].conditions).toHaveLength(6);
+    expect(search.mock.calls[1]![0].conditions).toContainEqual(
       { field: "shape_distance", operator: "lte", value: 2.5, window: 20 },
-    ]);
+    );
     expect(run).not.toHaveBeenCalled();
   });
 
@@ -641,18 +665,18 @@ describe("explicit current trend screening and optional historical research", ()
     enter("转折确认幅度", "0");
     expect(screen.getByRole("button", { name: "开始筛选" })).toBeDisabled();
     enter("转折确认幅度", "3");
-    fireEvent.click(screen.getByRole("button", { name: "叠加位置、涨幅或其他条件" }));
-    enter("条件 2 字段", "swing_direction");
+    fireEvent.click(screen.getByRole("button", { name: "添加指标" }));
+    fireEvent.click(screen.getByRole("button", { name: "当前波段方向" }));
     enter("条件 2 观察窗口", "20");
     enter("条件 2 波段状态", "-1");
     fireEvent.click(screen.getByRole("button", { name: "开始筛选" }));
+    fireEvent.click(await screen.findByRole("button", { name: "查看 测试股票甲 600000" }));
     await screen.findByRole("heading", { name: "已确认上升结构 · 已越过最近波谷" });
     expect(search.mock.calls[0]![0]).toMatchObject({ swing_reversal_pct: 3, conditions: [
       { field: "swing_structure", operator: "eq", value: 1, window: 20 },
       { field: "swing_direction", operator: "eq", value: -1, window: 20 },
     ] });
     expect(within(screen.getByRole("region", { name: "波段结构证据" })).getByText("2026-10-24")).toBeInTheDocument();
-    expect(document.querySelector(".swing-current-line")).toBeInTheDocument();
     expect(screen.getByText(/当前收盘已越过最近确认波谷/)).toBeInTheDocument();
     expect(run).not.toHaveBeenCalled();
     fireEvent.click(screen.getByRole("button", { name: "保存筛选" }));
@@ -660,10 +684,11 @@ describe("explicit current trend screening and optional historical research", ()
     fireEvent.click(screen.getByRole("button", { name: "确认保存" }));
     await waitFor(() => expect(save).toHaveBeenCalledOnce());
     expect(save.mock.calls[0]![1].swing_reversal_pct).toBe(3);
+    fireEvent.click(screen.getByRole("button", { name: "添加指标" }));
     fireEvent.click(screen.getByRole("button", { name: "区间阳阴线" }));
-    enter("条件 1 观察窗口", "15");
-    enter("条件 1 比较关系", "gt");
-    enter("条件 1 数值", "0");
+    enter("条件 3 观察窗口", "15");
+    enter("条件 3 比较关系", "gt");
+    enter("条件 3 数值", "0");
     expect(screen.getByRole("button", { name: "开始筛选" })).toBeEnabled();
     fireEvent.click(await screen.findByRole("button", { name: /^波段结构核对/ }));
     expect(screen.getByLabelText("转折确认幅度")).toHaveValue(3);

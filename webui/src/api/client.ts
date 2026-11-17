@@ -105,6 +105,7 @@ export const api = {
     title: string;
     note: string;
     query: DiscoveryQuery;
+    industry: string | null;
     expected_fingerprint: string;
   }) =>
     request<ObservationRecord>("/api/v1/observations", {

@@ -627,6 +627,15 @@ export interface components {
             /** Deleted */
             deleted: boolean;
         };
+        /** DiscoveryBenchmark */
+        DiscoveryBenchmark: {
+            /** Total */
+            total: number;
+            /** Available */
+            available: number;
+            /** Median Return */
+            median_return: number | null;
+        };
         /** DiscoveryBin */
         DiscoveryBin: {
             /** Key */
@@ -682,6 +691,9 @@ export interface components {
             fingerprint: string;
             /** Total */
             total: number;
+            benchmark?: components["schemas"]["DiscoveryBenchmark"] | null;
+            /** Relative Return Pp */
+            relative_return_pp?: number | null;
             current: components["schemas"]["DiscoveryStats"];
             comparison: components["schemas"]["DiscoveryComparison"];
             /** History */
@@ -727,6 +739,8 @@ export interface components {
             latest_available: boolean;
             /** Return Pct */
             return_pct: number | null;
+            /** Relative Return Pp */
+            relative_return_pp?: number | null;
             /** Previous Return Pct */
             previous_return_pct: number | null;
             /** Change Pct */
@@ -928,6 +942,8 @@ export interface components {
             query: components["schemas"]["DiscoveryQuery"];
             /** Scope Label */
             scope_label: string;
+            /** Benchmark Codes */
+            benchmark_codes?: string[] | null;
             snapshot: components["schemas"]["ObservationSnapshot"];
         };
         /** ObservationReviewRequest */
@@ -956,6 +972,8 @@ export interface components {
              */
             note: string;
             query: components["schemas"]["DiscoveryQuery"];
+            /** Industry */
+            industry?: string | null;
             /** Expected Fingerprint */
             expected_fingerprint?: string | null;
         };

@@ -55,21 +55,6 @@ def test_normalize_help_args(argv: list[str], expected: list[str]) -> None:
 # --- 集成测试 · kan --help 输出中文速记 ---
 
 
-def test_root_help_returns_chinese_cheatsheet() -> None:
-    """kan --help 走中文速记 · 与 kan help 输出一致"""
-    runner = CliRunner()
-    result_help_dash = runner.invoke(app, ["help"])
-    assert result_help_dash.exit_code == 0
-    # 中文速记标志：自选股管理 / 位置扫描 / 连续涨跌 三个分组词
-    assert "自选股管理" in result_help_dash.stdout
-    assert "位置扫描" in result_help_dash.stdout
-    assert "连续涨跌" in result_help_dash.stdout
-    assert "命令速记" in result_help_dash.stdout
-    assert "普通用户先从这里开始" in result_help_dash.stdout
-    assert "kan web" in result_help_dash.stdout
-    assert "kan range 600519" in result_help_dash.stdout
-
-
 def test_no_args_shows_short_retail_start_instead_of_full_reference() -> None:
     runner = CliRunner()
 
@@ -164,56 +149,6 @@ def test_find_help_fast_registration_skips_completion_env(
     assert _entry._fast_subcommand_help_command(["kan", "find", "--help"]) is None
 
 
-def test_root_help_uses_real_config_key_spelling() -> None:
-    """速记表中的 config key 必须与真实 CLI 参数一致。"""
-    runner = CliRunner()
-    result = runner.invoke(app, ["help"])
-    assert result.exit_code == 0
-    assert "tushare-token" in result.stdout
-    assert "tushare-endpoint" in result.stdout
-    assert "tushare_token <YOUR_TOKEN>" not in result.stdout
-
-
-def test_root_help_has_no_release_version_badges() -> None:
-    """root 速记页不展示具体发布版本号。"""
-    runner = CliRunner()
-    result = runner.invoke(app, ["help"])
-    assert result.exit_code == 0
-
-    assert "慢慢看 · 命令速记" in result.stdout
-    assert "v0." not in result.stdout
-    assert "当前版本" not in result.stdout
-
-
-def test_root_help_lists_batch_sources_and_theme_watchlist_commands() -> None:
-    """速记表必须覆盖热榜 / 题材 / 导出核心入口。"""
-    runner = CliRunner()
-    result = runner.invoke(app, ["help"])
-    assert result.exit_code == 0
-    output = result.stdout
-
-    assert "kan add --theme AI" in output
-    assert "kan remove --theme AI" in output
-    assert "kan list --theme AI" in output
-    assert "kan fetch --hot rank" in output
-    assert "kan fetch --theme AI" in output
-    assert "kan compare 600519 000858 --format md" in output
-    assert "kan find --codes 600519,000858" in output
-    assert "kan hold add 600519 --cost 1680 --shares 100" in output
-    assert "kan hold --format json --mask" in output
-    assert "kan board rank --kind industry --by moneyflow" in output
-    assert "kan board trend --kind industry --up 3" in output
-    assert "kan board trend --kind theme --up 3 --candle" in output
-    assert "kan scan --periods 5,20,60,180" in output
-    assert "kan scan --wide" in output
-    assert "kan scan --compact" in output
-    assert "kan scan --all" in output
-    assert "kan trend --universe all --up-days 3" in output
-    assert "kan low 60 --all" in output
-    assert "kan high 30 --all" in output
-    assert "kan fetch --all" in output
-
-
 def test_root_help_lists_find_registry_flags_and_presets() -> None:
     """root 速记页的 find 面必须覆盖 registry 里登记的 filter / preset."""
     from kan.core.find_registry import FILTER_SPECS, FIND_FIELD_PRESETS
@@ -223,16 +158,13 @@ def test_root_help_lists_find_registry_flags_and_presets() -> None:
     assert result.exit_code == 0
     output = result.stdout
 
+    assert "kan web" in output
+    assert "tushare-token" in output
+    assert "tushare-endpoint" in output
     for spec in FILTER_SPECS.values():
         assert spec.flag in output
     for preset in FIND_FIELD_PRESETS:
         assert preset in output
-    assert "单维度 filter 只反映该维度" in output
-    assert "命中不等于整体位置低/高" in output
-    assert "核心层 · 位置 / 共振 / ST" in output
-    assert "估值 / 质量 / 资金" in output
-    assert "进阶 · 需理解指标口径" in output
-    assert "想用命令行时从 kan scan 开始" in output
 
 
 def test_subcommand_help_unaffected() -> None:

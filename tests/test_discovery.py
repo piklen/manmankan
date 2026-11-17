@@ -69,10 +69,20 @@ def test_distribution_paired_windows_fixed_history_and_drilldown(observed_market
         for transition in group.transitions:
             assert transition.count == sum(item.transition == transition.key for item in members)
         assert sum(bucket.count for bucket in group.distribution) == group.current.available
-    industry = result.industries[0]
+    industry = next(group for group in result.industries if group.name == "甲")
     scoped = discovery.discover_market(DiscoveryQuery(window=2, as_of=result.as_of, industries=[industry.name]))
     assert industry.name != scoped.market.name
-    assert industry.fingerprint == scoped.market.fingerprint
+    # 同一行业在大范围内浏览和明确只查询该行业，参考中位数及其事实版本不同。
+    assert industry.current == scoped.market.current
+    assert industry.fingerprint != scoped.market.fingerprint
+    assert industry.benchmark.median_return == pytest.approx(10)
+    assert (industry.benchmark.available, industry.benchmark.total) == (5, 7)
+    assert industry.relative_return_pp == pytest.approx(-5)
+    assert scoped.market.relative_return_pp == 0
+    assert scoped.market.benchmark.median_return == pytest.approx(5)
+    assert [member.relative_return_pp for member in result.members[:5]] == pytest.approx([10, -30, 0, -10, 10])
+    assert all(member.relative_return_pp is None for member in result.members[5:])
+    assert scoped.members[0].relative_return_pp == pytest.approx(15)
 
 
 def test_missing_future_and_explicit_scope_do_not_change_the_facts(observed_market):
@@ -95,6 +105,9 @@ def test_missing_future_and_explicit_scope_do_not_change_the_facts(observed_mark
     assert stale.as_of == days[4] and stale.common_data_date < stale.as_of
     assert stale.market.current.available == 0 and stale.market.current.missing == 7
     assert stale.market.current.median_return is None
+    assert stale.market.relative_return_pp is None and stale.market.benchmark.available == 0
+    assert all(group.relative_return_pp is None for group in stale.industries)
+    assert all(member.relative_return_pp is None for member in stale.members)
     assert all(point.positive_share is None for point in stale.market.history)
     assert all(item.transition == "unknown" for item in stale.members)
     empty = discovery.discover_market(DiscoveryQuery(window=2, industries=["不存在的行业"]))

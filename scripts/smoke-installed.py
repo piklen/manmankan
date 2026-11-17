@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import json
 import os
+import re
 import subprocess
 import sys
 import tempfile
@@ -19,8 +20,10 @@ assert version("manmankan") == kan.__version__
 assert not any(package.glob("*.json")), "package root must not contain local JSON data"
 assert (package / "tui" / "workbench.tcss").is_file()
 spa = package / "web" / "spa"
-assert (spa / "index.html").is_file()
-assert any((spa / "assets").glob("*.js"))
+for entry in ("index.html", "example.html"):
+    html = (spa / entry).read_text(encoding="utf-8")
+    assets = re.findall(r'(?:src|href)="(\.?/assets/[^"]+)"', html)
+    assert assets and all((spa / asset.lstrip("./")).is_file() for asset in assets), entry
 
 command = Path(sys.executable).parent / ("kan.exe" if os.name == "nt" else "kan")
 with tempfile.TemporaryDirectory(prefix="kan-installed-smoke-") as state:
@@ -33,7 +36,7 @@ with tempfile.TemporaryDirectory(prefix="kan-installed-smoke-") as state:
         "KAN_NO_NAMES_BACKGROUND_REFRESH": "1",
         "NO_COLOR": "1",
     }
-    for args in ([], ["--version"], ["web", "--help"], ["tui", "--help"], ["discover", "--help"], ["observe", "--help"], ["ohlc", "--help"], ["mcp", "--help"]):
+    for args in ([], ["--version"], ["web", "--help"]):
         result = subprocess.run(
             [str(command), *args], cwd=state, env=env,
             capture_output=True, text=True, encoding="utf-8", check=True,

@@ -1,5 +1,7 @@
 # AI agent 快速开始
 
+`kan discover` 的行业和成员字段 `relative_return_pp` 以原查询范围有效股票的窗口涨跌中位数为基准，单位为百分点。保存图中选取的行业时，提交原 `query`（将 `as_of` 固定为已查看日期）、顶层 `industry` 和所选行业的 `expected_fingerprint`。缩小查询范围会同时改变基准。
+
 > 本文对应 `main` 主线契约。`uv tool install manmankan` 安装 PyPI 稳定包；调用新入口前按 [README 的安装与主线说明](../README.md#安装与主线体验) 核对安装来源，再通过 `kan --version` 和 `--help` 发现实际能力。
 
 当前主线是观察群体现象、核对成员证据，再明确条件研究。先用 `kan discover --format json` 或 MCP `kan_discover` 获取完整范围的分布、行业剖面和同组变化；保留日期、窗口和各自分母。用户明确要求保留时，用 `kan observe` / MCP `kan_observe` 保存当时的事实与用户文字，之后显式复看同一批成员，不自动生成候选或判断。

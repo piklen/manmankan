@@ -27,6 +27,7 @@ class ObservationSaveRequest(StudyModel):
     title: str = Field(default="", max_length=120)
     note: str = Field(default="", max_length=4_000)
     query: DiscoveryQuery
+    industry: str | None = Field(default=None, min_length=1, max_length=120)
     expected_fingerprint: str | None = Field(default=None, pattern=r"^[0-9a-f]{24}$")
 
     @model_validator(mode="after")
@@ -52,6 +53,7 @@ class ObservationRecord(StudyModel):
     created_at: datetime
     query: DiscoveryQuery
     scope_label: str
+    benchmark_codes: list[str] | None = None
     snapshot: ObservationSnapshot
 
 

@@ -235,6 +235,7 @@ it("links whole-population observations to industry, exact distribution members 
     }));
   mount();
   await screen.findByRole("heading", { name: "行业剖面" });
+  fireEvent.click(screen.getByText(/数据覆盖 ·/));
   expect(screen.getByText("行情存在共同缺口：2026-10-27 · 1 只")).toBeVisible();
   expect(discover).toHaveBeenCalledWith({
     universe: "all",
@@ -282,7 +283,8 @@ it("links whole-population observations to industry, exact distribution members 
     target: { value: "测试甲" },
   });
   fireEvent.click(screen.getByRole("link", { name: "在这个完整范围继续筛选" }));
-  await screen.findByRole("heading", { name: "筛出你要找的走势" });
+  expect(await screen.findByLabelText("截止日期")).toHaveValue(result.as_of);
+  await waitFor(() => expect(api.searchTrends).toHaveBeenCalledWith(expect.objectContaining({ as_of: result.as_of, industries: ["测试行业"] })));
   fireEvent.click(screen.getByRole("link", { name: "市场观察" }));
   await screen.findByRole("heading", { name: "测试行业 · 拆开看" });
   expect(
@@ -307,6 +309,34 @@ it("links whole-population observations to industry, exact distribution members 
     screen.queryByRole("button", { name: "查看 测试甲 000001 价格证据" }),
   ).not.toBeInTheDocument();
   expect(discover).toHaveBeenCalledTimes(1);
+});
+
+it("switches windows directly and drills down using comparable strength without ranking unknowns", async () => {
+  const discover = vi.spyOn(api, "discover").mockImplementation(async (query) => ({
+    ...result,
+    query,
+    industries: [{ ...group, relative_return_pp: 0 }],
+    members: result.members.map((row, i) => ({ ...row, return_pct: [-2, 4, null][i] ?? null, relative_return_pp: [-3, 3, null][i] ?? null })),
+  }));
+  mount();
+  await screen.findByRole("region", { name: "行业强度分布" });
+  fireEvent.click(screen.getByRole("button", { name: "5 日" }));
+  await waitFor(() => expect(discover).toHaveBeenLastCalledWith(expect.objectContaining({
+    universe: "all", window: 5, as_of: null,
+  })));
+  fireEvent.click(await screen.findByRole("button", { name: /查看测试行业，相对范围0个百分点/ }));
+  expect(screen.getByRole("region", { name: "测试行业分布与成员" })).toBeInTheDocument();
+  const order = screen.getByLabelText("成员排序");
+  const displayed = () => screen.getAllByRole("button", { name: /查看 测试.+价格证据/ })
+    .map((button) => button.getAttribute("aria-label")!.split(" ")[2]);
+  expect(displayed()).toEqual(["000001", "000002", "000003"]);
+  fireEvent.change(order, { target: { value: "high" } });
+  expect(displayed()).toEqual(["000002", "000001", "000003"]);
+  fireEvent.change(order, { target: { value: "low" } });
+  expect(displayed()).toEqual(["000001", "000002", "000003"]);
+  const trajectory = screen.getByRole("group", { name: "全部 A 股轨迹指标" });
+  fireEvent.click(within(trajectory).getByRole("button", { name: "上涨占比" }));
+  expect(screen.getByRole("img", { name: /全部 A 股上涨占比轨迹/ })).toBeInTheDocument();
 });
 
 it("keeps the requested date visible until the user explicitly chooses the local data date", async () => {
@@ -639,7 +669,8 @@ it("saves the complete observation beyond the displayed subgroup and reviews a c
     title,
     note: thought,
     expected_fingerprint: "a".repeat(24),
-    query: { ...result.query, as_of: result.as_of, industries: ["测试行业"] },
+    industry: "测试行业",
+    query: { ...result.query, as_of: result.as_of },
   });
   fireEvent.click(screen.getByRole("button", { name: "查看更新后的事实" }));
   await screen.findByRole("button", { name: "已核对当前事实，继续填写" });
@@ -656,7 +687,8 @@ it("saves the complete observation beyond the displayed subgroup and reviews a c
     title,
     note: thought,
     expected_fingerprint: "d".repeat(24),
-    query: { ...result.query, as_of: result.as_of, industries: ["测试行业"] },
+    industry: "测试行业",
+    query: { ...result.query, as_of: result.as_of },
   });
   expect(screen.getByText(thought)).toBeInTheDocument();
   fireEvent.click(screen.getByRole("link", { name: "回到这个范围" }));
