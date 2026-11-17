@@ -45,7 +45,7 @@ uv run pytest -q tests/test_trend_search.py
 uv run ruff check kan/service/trend_search.py tests/test_trend_search.py
 ```
 
-前端 `build` 已执行 API 生成、TypeScript 检查和打包，不必再重复执行 `check`。`webui/` 是源码，`kan/web/spa/` 是 wheel 中的构建产物，API schema 与构建产物由命令生成并一同提交。
+纯界面迭代只需 Node。前端 `build` 执行 TypeScript 检查和打包。变更 HTTP 模型时先运行 `npm --prefix webui run generate:api`；CI 重新生成并检查已提交的契约。`webui/` 是源码，`kan/web/spa/` 是 wheel 中的构建产物，API schema 与构建产物由命令生成并一同提交。
 
 CI 集中执行 Linux 离线回归、Web 流程、真实 PTY 输出与恢复，以及 macOS/Windows 干净安装。本地无需复跑完整平台矩阵。确需排查集成问题时使用 `uv run pytest -q -m "not network and not tty"`；启动耗时基准在修改启动路径时按需运行 `scripts/measure_slo.py`。
 

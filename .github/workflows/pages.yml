@@ -18,6 +18,8 @@ on:
     branches: [main]
     paths:
       - 'site/**'
+      - 'kan/web/spa/**'
+      - 'docs/assets/readme-market-observation.png'
       - '.github/workflows/pages.yml'
   workflow_dispatch:
 
@@ -38,6 +40,12 @@ jobs:
 
       - name: Setup Pages
         uses: actions/configure-pages@45bfe0192ca1faeb007ade9deae92b16b8254a0d  # v5 (pinned 2026-05-27)
+
+      - name: Include offline historical example and current product preview
+        run: |
+          cp kan/web/spa/example.html site/example.html
+          cp -R kan/web/spa/assets site/assets
+          cp docs/assets/readme-market-observation.png site/market-observation.png
 
       - name: Upload site/ as Pages artifact
         uses: actions/upload-pages-artifact@fc324d3547104276b827a68afc52ff2a11cc49c9  # v5 (pinned 2026-05-27)

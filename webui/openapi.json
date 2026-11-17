@@ -2,7 +2,7 @@
   "openapi": "3.1.0",
   "info": {
     "title": "ManManKan Local API",
-    "version": "0.0.6.9.48"
+    "version": "0.1.0"
   },
   "paths": {
     "/api/v1/health": {
@@ -1801,6 +1801,37 @@
         ],
         "title": "DeleteResponse"
       },
+      "DiscoveryBenchmark": {
+        "properties": {
+          "total": {
+            "type": "integer",
+            "title": "Total"
+          },
+          "available": {
+            "type": "integer",
+            "title": "Available"
+          },
+          "median_return": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Median Return"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "total",
+          "available",
+          "median_return"
+        ],
+        "title": "DiscoveryBenchmark"
+      },
       "DiscoveryBin": {
         "properties": {
           "key": {
@@ -1970,6 +2001,27 @@
             "type": "integer",
             "title": "Total"
           },
+          "benchmark": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/DiscoveryBenchmark"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "relative_return_pp": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Relative Return Pp"
+          },
           "current": {
             "$ref": "#/components/schemas/DiscoveryStats"
           },
@@ -2112,6 +2164,17 @@
               }
             ],
             "title": "Return Pct"
+          },
+          "relative_return_pp": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Relative Return Pp"
           },
           "previous_return_pct": {
             "anyOf": [
@@ -2695,6 +2758,20 @@
             "type": "string",
             "title": "Scope Label"
           },
+          "benchmark_codes": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Benchmark Codes"
+          },
           "snapshot": {
             "$ref": "#/components/schemas/ObservationSnapshot"
           }
@@ -2776,6 +2853,19 @@
           },
           "query": {
             "$ref": "#/components/schemas/DiscoveryQuery"
+          },
+          "industry": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 120,
+                "minLength": 1
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Industry"
           },
           "expected_fingerprint": {
             "anyOf": [

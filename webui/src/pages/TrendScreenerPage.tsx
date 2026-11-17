@@ -5,11 +5,10 @@ import {
   ChevronLeft,
   ChevronRight,
   Filter,
-  Grid2X2,
+  Layers3,
   List,
   MapPin,
   Search,
-  SlidersHorizontal,
   Trash2,
 } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
@@ -17,6 +16,7 @@ import { Link, useLocation, useNavigate } from "react-router-dom";
 import {
   api,
   type SavedTrendSearch,
+  type StudyCondition,
   type TrendSearchQuery,
   type TrendSearchRow,
 } from "../api/client";
@@ -25,6 +25,8 @@ import {
   TrendChangesTable,
   type ChangeFilter,
 } from "../components/TrendComparison";
+import { TrendMetricLibrary } from "../components/TrendMetricLibrary";
+import "../styles/trend-workspace.css";
 import { SwingSettings } from "../components/SwingSettings";
 import { TrendConditionBuilder } from "../components/TrendConditionBuilder";
 import {
@@ -38,7 +40,7 @@ import {
   type TrendPoint,
 } from "../components/TrendScatter";
 import { Button, Empty, Loading, Notice } from "../components/ui";
-import { conditionText, fieldValue, parseCodes, SWING_FIELDS, UNIVERSE_LABELS } from "../lib/study";
+import { conditionLabel, conditionText, ENUM_VALUES, fieldValue, parseCodes, SWING_FIELDS, UNIVERSE_LABELS } from "../lib/study";
 import {
   blankScreenDraft,
   conditionsToDraft,
@@ -47,31 +49,27 @@ import {
   screenDraftToQuery,
   screenInputError,
   screenQueryToDraft,
-  taskConditions,
-  TREND_TASKS,
   type ScreenerDraft,
-  type TrendTask,
 } from "../lib/screener";
 import { errorMessage, number, percent } from "../lib/format";
 
-const storageKey = "manmankan.trend-screen.v3";
+const storageKey = "manmankan.trend-screen.v4";
 function remembered(): {
   draft: ScreenerDraft;
   submitted: TrendSearchQuery | null;
-  task: TrendTask | null;
 } {
   try {
     const saved = JSON.parse(sessionStorage.getItem(storageKey) ?? "null");
     if (
       saved?.draft &&
       Array.isArray(saved.draft.conditions) &&
-      Array.isArray(saved.draft.industries)
+      typeof saved.draft.industries === "string"
     )
       return saved;
   } catch {
     /* 没有有效草稿时从空白问题开始。 */
   }
-  return { draft: blankScreenDraft(), submitted: null, task: null };
+  return { draft: blankScreenDraft(), submitted: null };
 }
 function summary(query: TrendSearchQuery) {
   if (!query.conditions?.length) return "浏览当前股票池";
@@ -118,14 +116,16 @@ export function TrendScreenerPage() {
   const [initial] = useState(() => {
     const query = location.state?.discoveryQuery as TrendSearchQuery | undefined;
     return query
-      ? { draft: screenQueryToDraft(query), submitted: query, task: null }
+      ? { draft: screenQueryToDraft(query), submitted: query }
       : remembered();
   });
   const [draft, setDraft] = useState(initial.draft);
   const [submitted, setSubmitted] = useState<TrendSearchQuery | null>(
     initial.submitted,
   );
-  const [task, setTask] = useState<TrendTask | null>(initial.task);
+  const [catalogOpen, setCatalogOpen] = useState(!initial.submitted);
+  const catalogRef = useRef<HTMLDivElement>(null);
+  const detailRef = useRef<HTMLDivElement>(null);
   const [search, setSearch] = useState("");
   const [selectedSymbol, setSelectedSymbol] = useState<string | null>(null);
   const explicitSelection = useRef<string | null>(null);
@@ -135,7 +135,7 @@ export function TrendScreenerPage() {
   );
   const [changeFilter, setChangeFilter] = useState<ChangeFilter>("all");
   const [page, setPage] = useState(0);
-  const [editorOpen, setEditorOpen] = useState(!initial.submitted);
+  const [editorOpen, setEditorOpen] = useState(!initial.submitted && initial.draft.conditions.length > 0);
   const [mobileDetail, setMobileDetail] = useState(false);
   const [saveOpen, setSaveOpen] = useState(false),
     [saveTitle, setSaveTitle] = useState("");
@@ -172,9 +172,7 @@ export function TrendScreenerPage() {
       void client.invalidateQueries({ queryKey: ["saved-trends"] });
       setSaveOpen(false);
       setSaveTitle("");
-      setFeedback(
-        "已保存筛选。下次载入后可直接筛选。日期留空的筛选会使用最近完整交易日。",
-      );
+      setFeedback(`已保存筛选「${saveTitle.trim()}」。`);
     },
   });
   const remove = useMutation({
@@ -226,7 +224,14 @@ export function TrendScreenerPage() {
       ),
     [sortedChanges, changeFilter, search],
   );
-  const swingWindows = [...new Set(result?.query.conditions?.filter((item) => SWING_FIELDS.has(item.field)).map((item) => item.window) ?? [])];
+  const metricColumns = useMemo(() => {
+    const columns = new Map<string, StudyCondition>();
+    for (const condition of result?.query.conditions ?? []) {
+      const key = condition.window ? `${condition.field}.${condition.window}` : condition.field;
+      columns.set(key, condition);
+    }
+    return Array.from(columns.entries());
+  }, [result]);
   const selectedRow = result?.rows.find((row) => row.symbol === selectedSymbol);
   const selectedChange = sortedChanges.find(
     (row) => row.symbol === selectedSymbol,
@@ -252,7 +257,7 @@ export function TrendScreenerPage() {
           .includes(search.trim().toLowerCase()),
     );
     if (!available.some((row) => row.symbol === selectedSymbol)) {
-      setSelectedSymbol(available[0]?.symbol ?? null);
+      setSelectedSymbol(null);
       explicitSelection.current = null;
     }
   };
@@ -276,18 +281,18 @@ export function TrendScreenerPage() {
     try {
       sessionStorage.setItem(
         storageKey,
-        JSON.stringify({ draft, submitted, task }),
+        JSON.stringify({ draft, submitted }),
       );
     } catch {
       /* 当前筛选仍可正常运行。 */
     }
-  }, [draft, submitted, task]);
+  }, [draft, submitted]);
   useEffect(() => {
     if (result && !query.isFetching) {
       const retained =
         sortedRows.find((row) => row.symbol === explicitSelection.current) ??
         sortedChanges.find((row) => row.symbol === explicitSelection.current);
-      const next = retained ?? sortedRows[0] ?? sortedChanges[0];
+      const next = retained;
       if (!retained) explicitSelection.current = null;
       setSelectedSymbol(next?.symbol ?? null);
       const currentIndex = next
@@ -317,12 +322,29 @@ export function TrendScreenerPage() {
     key: K,
     value: ScreenerDraft[K],
   ) => setDraft((previous) => ({ ...previous, [key]: value }));
-  const selectTask = (value: TrendTask) => {
-    setTask(value);
-    update("conditions", taskConditions(value));
+  const openCatalog = () => {
+    setCatalogOpen(true);
+    setEditorOpen(false);
+    setMobileDetail(false);
+    requestAnimationFrame(() => catalogRef.current?.querySelector("input")?.focus());
+  };
+  const addMetrics = (fields: StudyCondition["field"][]) => {
+    if (draft.conditions.length + fields.length > 10) return;
+    const firstId = Math.max(0, ...draft.conditions.map((item) => item.id)) + 1;
+    update("conditions", [...draft.conditions, ...fields.map((field, index) => ({
+      id: firstId + index,
+      field,
+      operator: ENUM_VALUES[field] ? "eq" as const : field === "shape_distance" ? "lte" as const : "gte" as const,
+      value: "",
+      window: "",
+    }))]);
     setEditorOpen(true);
     setMobileDetail(false);
+    if (result) setCatalogOpen(false);
     setFeedback("");
+    requestAnimationFrame(() => {
+      document.getElementById(`trend-rule-${firstId}`)?.querySelector<HTMLElement>("input, select[aria-label$='波段状态']")?.focus();
+    });
   };
   const run = (next = screenDraftToQuery(draft)) => {
     // 明确执行始终读当前缓存；返回页面仍可复用未主动重跑的结果。
@@ -331,6 +353,7 @@ export function TrendScreenerPage() {
       exact: true,
       refetchType: "none",
     });
+    setCatalogOpen(false);
     setSubmitted(next);
     setSearch("");
     setPage(0);
@@ -349,15 +372,23 @@ export function TrendScreenerPage() {
       ...screenDraftToQuery({ ...draft, conditions: [] }),
       reference: null,
     };
-    setDraft(screenQueryToDraft(next));
-    setTask(null);
     run(next);
   };
   const pick = (symbol: string) => {
     explicitSelection.current = symbol;
     setSelectedSymbol(symbol);
     setMobileDetail(true);
-    if (window.innerWidth <= 700) window.scrollTo(0, 0);
+    requestAnimationFrame(() => detailRef.current?.querySelector<HTMLButtonElement>("button")?.focus());
+  };
+  const backToResults = () => {
+    setMobileDetail(false);
+    setSelectedSymbol(null);
+    explicitSelection.current = null;
+    requestAnimationFrame(() => {
+      const source = document.getElementById(`trend-stock-${selectedSymbol}`) ??
+        document.getElementById("trend-result-title");
+      source?.focus();
+    });
   };
   const openHistory = () => {
     if (result && result.query.conditions?.length)
@@ -369,34 +400,33 @@ export function TrendScreenerPage() {
   };
   const loadSaved = (item: SavedTrendSearch) => {
     setDraft(screenQueryToDraft(item.query));
-    setTask(null);
+    setCatalogOpen(!result);
     setEditorOpen(true);
     setMobileDetail(false);
     setFeedback(`已载入「${item.title}」，点击开始筛选查看当前匹配。`);
   };
   const shape = (row: TrendSearchRow) => {
-    if (!result) return;
-    setTask(null);
+    const existing = draft.conditions.find((item) => item.field === "shape_distance");
+    if (!existing && draft.conditions.length >= 10) {
+      setFeedback("已有 10 项条件。请先移除一项，再加入形态条件。");
+      setMobileDetail(false);
+      setEditorOpen(true);
+      return;
+    }
+    const id = existing?.id ?? Math.max(0, ...draft.conditions.map((item) => item.id)) + 1;
     setDraft({
-      ...screenQueryToDraft(result.query),
-      conditions: [
-        {
-          id: 1,
-          field: "shape_distance",
-          operator: "lte",
-          value: "",
-          window: "20",
-        },
-      ],
+      ...draft,
+      conditions: existing ? draft.conditions : [...draft.conditions, {
+        id, field: "shape_distance", operator: "lte", value: "", window: "",
+      }],
       referenceSymbol: row.symbol,
       referenceDate: row.date,
     });
+    setCatalogOpen(false);
     setEditorOpen(true);
     setMobileDetail(false);
-    if (window.innerWidth <= 700) window.scrollTo(0, 0);
-    setFeedback(
-      "已选定参照。填写最大均方根距离后筛选当前形态，不会自动运行历史研究。",
-    );
+    setFeedback(`已将 ${row.name} 在 ${row.date} 的收盘路径设为参照。`);
+    requestAnimationFrame(() => document.getElementById(`trend-rule-${id}`)?.querySelector("input")?.focus());
   };
   const changeBounds = (value: MapBounds | null) => {
     setBounds(value);
@@ -449,7 +479,6 @@ export function TrendScreenerPage() {
       ],
     };
     setDraft(screenQueryToDraft(next));
-    setTask(null);
     setEditorOpen(true);
     setFeedback("框选已转成可见的位置与涨幅条件，确认后点击开始筛选。");
   };
@@ -460,50 +489,11 @@ export function TrendScreenerPage() {
         parseCodes(draft.codes).some((code) => !/^\d{6}$/.test(code))));
   return (
     <div
-      className={`screener-page${mobileDetail && selected ? " screener-page--detail" : ""}`}
+      className={`screener-page${catalogOpen && !query.isFetching ? " screener-page--catalog" : ""}${editorOpen ? " screener-page--editing" : ""}${mobileDetail && selected ? " screener-page--detail" : ""}`}
     >
       <header className="screener-heading">
-        <h1>筛出你要找的走势</h1>
-        <p>看整体方向、波段结构和当前阶段，再核对每一段的价格证据。</p>
-        <div className="trend-task-tabs" role="group" aria-label="趋势问题">
-          {Object.entries(TREND_TASKS).map(([value, label]) => (
-            <button
-              type="button"
-              key={value}
-              disabled={query.isFetching}
-              aria-pressed={task === value}
-              onClick={() => selectTask(value as TrendTask)}
-            >
-              {label}
-            </button>
-          ))}
-          <button
-            type="button"
-            disabled={query.isFetching}
-            onClick={() => {
-              setTask(null);
-              setDraft({
-                ...draft,
-                conditions: [
-                  {
-                    id: 1,
-                    field: "shape_distance",
-                    operator: "lte",
-                    value: "",
-                    window: "",
-                  },
-                ],
-              });
-              setEditorOpen(true);
-              setMobileDetail(false);
-            }}
-            aria-pressed={draft.conditions.some(
-              (item) => item.field === "shape_distance",
-            )}
-          >
-            形态检索
-          </button>
-        </div>
+        <h1>趋势筛选</h1>
+        <p>用自己的条件筛选股票，再逐只核对匹配当日的价格与走势。</p>
       </header>
       <button
         className="mobile-filter-toggle"
@@ -529,6 +519,49 @@ export function TrendScreenerPage() {
               }}
             >
               <fieldset disabled={query.isFetching}>
+                <div className="rule-editor-title"><h2><Layers3 size={18} />筛选条件</h2><span>{draft.conditions.length} 项</span></div>
+                {!draft.conditions.length && <p className="rule-empty">从指标目录加入第一项条件。</p>}
+                <TrendConditionBuilder
+                  onAdd={openCatalog}
+                  conditions={draft.conditions}
+                  onChange={(items) => update("conditions", items)}
+                />
+                {draft.conditions.some((item) => item.field && SWING_FIELDS.has(item.field)) ? (
+                  <SwingSettings value={draft.swingReversal} onChange={(value) => update("swingReversal", value)} />
+                ) : null}
+                {draft.conditions.some(
+                  (item) => item.field === "shape_distance",
+                ) ? (
+                  <div className="trend-reference">
+                    <label>
+                      参照股票
+                      <input
+                        value={draft.referenceSymbol}
+                        maxLength={6}
+                        placeholder="6位股票代码"
+                        onChange={(e) =>
+                          update("referenceSymbol", e.target.value)
+                        }
+                      />
+                    </label>
+                    <label>
+                      参照截止日
+                      <input
+                        type="date"
+                        value={draft.referenceDate}
+                        onChange={(e) =>
+                          update("referenceDate", e.target.value)
+                        }
+                      />
+                    </label>
+                    <p className="field-hint">
+                      相似度采用归一收盘的均方根距离，不代表后续走势相同。
+                    </p>
+                  </div>
+                ) : null}
+                <details className="rule-scope">
+                  <summary>范围与日期<small>{UNIVERSE_LABELS[draft.universe]} · {draft.asOf || "最近完整交易日"}</small></summary>
+                  <div className="rule-scope-inputs">
                 <label>
                   筛选范围
                   <select
@@ -538,7 +571,7 @@ export function TrendScreenerPage() {
                         "universe",
                         e.target.value as ScreenerDraft["universe"],
                       );
-                      update("industries", []);
+                      update("industries", "");
                     }}
                   >
                     {Object.entries(UNIVERSE_LABELS).map(([value, label]) => (
@@ -602,59 +635,14 @@ export function TrendScreenerPage() {
                     />
                   </label>
                 ) : null}
-                <TrendConditionBuilder
-                  conditions={draft.conditions}
-                  onChange={(items) => update("conditions", items)}
-                />
-                {draft.conditions.some((item) => item.field && SWING_FIELDS.has(item.field)) ? (
-                  <SwingSettings value={draft.swingReversal} onChange={(value) => update("swingReversal", value)} />
-                ) : null}
-                {draft.conditions.some(
-                  (item) => item.field === "shape_distance",
-                ) ? (
-                  <div className="trend-reference">
-                    <label>
-                      参照股票
-                      <input
-                        value={draft.referenceSymbol}
-                        maxLength={6}
-                        placeholder="6位股票代码"
-                        onChange={(e) =>
-                          update("referenceSymbol", e.target.value)
-                        }
-                      />
-                    </label>
-                    <label>
-                      参照截止日
-                      <input
-                        type="date"
-                        value={draft.referenceDate}
-                        onChange={(e) =>
-                          update("referenceDate", e.target.value)
-                        }
-                      />
-                    </label>
-                    <p className="field-hint">
-                      相似度采用归一收盘的均方根距离，不代表后续走势相同。
-                    </p>
-                  </div>
-                ) : null}
                 <label>
                   行业
                   <input
                     list="trend-industry-options"
                     aria-label="筛选行业"
-                    value={draft.industries.join("、")}
+                    value={draft.industries}
                     placeholder="全部行业"
-                    onChange={(e) =>
-                      update(
-                        "industries",
-                        e.target.value
-                          .split(/[、,，]/)
-                          .map((name) => name.trim())
-                          .filter(Boolean),
-                      )
-                    }
+                    onChange={(event) => update("industries", event.target.value)}
                   />
                   <datalist id="trend-industry-options">
                     {result?.industries.map((industry) => (
@@ -665,6 +653,8 @@ export function TrendScreenerPage() {
                   </datalist>
                   <small>行业归属按当前股票池；多个行业用顿号分隔</small>
                 </label>
+                  </div>
+                </details>
               </fieldset>
             </form>
             {saveOpen ? (
@@ -672,7 +662,7 @@ export function TrendScreenerPage() {
                 className="save-screen-form"
                 onSubmit={(e) => {
                   e.preventDefault();
-                  if (saveTitle.trim()) save.mutate();
+                  if (saveTitle.trim() && !validation && !save.isPending) save.mutate();
                 }}
               >
                 <label>
@@ -688,7 +678,7 @@ export function TrendScreenerPage() {
                 <div className="button-row">
                   <Button
                     type="submit"
-                    disabled={!saveTitle.trim() || save.isPending}
+                    disabled={!saveTitle.trim() || Boolean(validation) || save.isPending}
                   >
                     确认保存
                   </Button>
@@ -789,7 +779,17 @@ export function TrendScreenerPage() {
                 : "正在读取同一截止日的日线并核对条件，不计算历史样本。"}
             </Loading>
           ) : null}
-          {!result && query.isFetching && submitted ? (
+          {catalogOpen && !query.isFetching ? (
+            <div ref={catalogRef}>
+              <TrendMetricLibrary
+                count={draft.conditions.length}
+                onPick={addMetrics}
+                onBrowse={browse}
+                browseDisabled={Boolean(scopeError)}
+                onClose={result ? () => setCatalogOpen(false) : undefined}
+              />
+            </div>
+          ) : !result && query.isFetching && submitted ? (
             <div className="screener-pending">
               <h2>{summary(submitted)}</h2>
               <p>
@@ -804,45 +804,14 @@ export function TrendScreenerPage() {
               </p>
               <Loading>正在读取日线并核对当前条件，不计算历史样本。</Loading>
             </div>
-          ) : !result ? (
-            <div className="screener-start">
-              <div className="empty-trend-icon">
-                <SlidersHorizontal size={42} strokeWidth={1.4} />
-              </div>
-              <h2>先说清楚，你在找什么走势</h2>
-              <p>
-                选择上方的趋势问题，填写天数与比较关系。
-                <br />
-                结果会告诉你哪些股票满足，以及每一项条件的依据。
-              </p>
-              <div className="screen-start-steps">
-                <span>
-                  <b>1</b>定义条件
-                </span>
-                <span>
-                  <b>2</b>查看当前匹配
-                </span>
-                <span>
-                  <b>3</b>按需核对历史
-                </span>
-              </div>
-              <Button
-                variant="secondary"
-                onClick={browse}
-                disabled={Boolean(scopeError) || query.isFetching}
-              >
-                先浏览全部股票池
-              </Button>
-              <small>无预置条件，按股票代码排列。</small>
-            </div>
-          ) : (
+          ) : !result ? null : (
             <div
               className="screen-result-body"
               aria-busy={query.isFetching}
               inert={query.isFetching}
             >
               <header className="screen-result-heading">
-                <h2>{summary(result.query)}</h2>
+                <h2 id="trend-result-title" tabIndex={-1}>{summary(result.query)}</h2>
                 <span className="result-data-date">数据日 {result.as_of}</span>
               </header>
               <div className="screen-coverage">
@@ -1161,11 +1130,9 @@ export function TrendScreenerPage() {
                     <thead>
                       <tr>
                         <th>股票</th>
-                        <th>{swingWindows.length ? "波段结构 / 阶段" : "当前连续段"}</th>
-                        <th>{swingWindows.length ? "当日涨跌" : "本段变化"}</th>
-                        <th>30日位置</th>
-                        <th>60日位置</th>
-                        <th>180日位置</th>
+                        {metricColumns.map(([key, condition]) => <th key={key}>{conditionLabel(condition)}</th>)}
+                        <th>当前连续段</th>
+                        <th>本段变化</th>
                         <th>近20日走势</th>
                       </tr>
                     </thead>
@@ -1181,37 +1148,21 @@ export function TrendScreenerPage() {
                           <td>
                             <button
                               type="button"
+                              id={`trend-stock-${row.symbol}`}
                               className="stock-button"
                               aria-label={`查看 ${row.name} ${row.symbol}`}
-                              onClick={() => pick(row.symbol)}
                             >
                               <small>{row.symbol}</small>
                               <strong>{row.name}</strong>
                             </button>
                           </td>
-                          <td>
-                            <span className="segment-tag">
-                              {swingWindows.length ? swingWindows.map((window) => <span className="swing-row-fact" key={window}>
-                                <small>{window} 日 · 已确认点关系</small>
-                                {fieldValue("swing_structure", row.values[`swing_structure.${window}`])}
-                                <small>{fieldValue("swing_direction", row.values[`swing_direction.${window}`])} · {fieldValue("swing_count", row.values[`swing_count.${window}`])}</small>
-                              </span>) : segmentLabel(row)}
-                            </span>
-                          </td>
-                          <td
-                            className={
-                              (swingWindows.length ? row.change_pct ?? 0 : row.current_segment?.return_pct ?? 0) >= 0
-                                ? "value-up"
-                                : "value-down"
-                            }
-                          >
-                            {percent(swingWindows.length ? row.change_pct : row.current_segment?.return_pct, 2)}
-                          </td>
-                          {[30, 60, 180].map((period) => (
-                            <td key={period}>
-                              {percent(row.positions[String(period)], 0)}
+                          {metricColumns.map(([key, condition]) => (
+                            <td key={key} className="metric-actual">
+                              {row.lower_bounds.includes(key) ? "≥ " : ""}{fieldValue(condition.field, row.values[key])}
                             </td>
                           ))}
+                          <td><span className="segment-tag">{segmentLabel(row)}</span></td>
+                          <td>{percent(row.current_segment?.return_pct, 2)}</td>
                           <td>
                             <PriceSparkline points={row.sparkline} />
                           </td>
@@ -1285,8 +1236,8 @@ export function TrendScreenerPage() {
             </div>
           )}
         </section>
-        {selected && result ? (
-          <div className="trend-detail-holder" inert={query.isFetching}>
+        {selected && result && !catalogOpen ? (
+          <div className="trend-detail-holder" ref={detailRef} inert={query.isFetching}>
             <TrendStockDetail
               key={`${selected.symbol}-${result.as_of}-${result.comparison?.as_of ?? ""}`}
               selection={selected}
@@ -1297,18 +1248,12 @@ export function TrendScreenerPage() {
               revision={query.dataUpdatedAt}
               query={{ ...result.query, as_of: result.as_of }}
               busy={query.isFetching}
-              onBack={() => setMobileDetail(false)}
+              onBack={backToResults}
               onHistory={openHistory}
               onShape={shape}
             />
           </div>
-        ) : (
-          <aside className="trend-detail-empty">
-            <Grid2X2 size={34} strokeWidth={1.3} />
-            <h3>让每个结果都有依据</h3>
-            <p>选择一只股票，核对真实日线、连续段与每项条件。</p>
-          </aside>
-        )}
+        ) : null}
       </div>
     </div>
   );

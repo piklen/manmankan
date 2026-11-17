@@ -60,6 +60,8 @@ jobs:
     timeout-minutes: 30
     environment: pypi
     permissions:
+      actions: read
+      checks: read
       id-token: write  # trusted publisher OIDC
       contents: read
     steps:
@@ -110,17 +112,16 @@ jobs:
               print("Release version mismatch:", actual, file=sys.stderr)
               sys.exit(1)
           PY
-      - name: Lockfile is current
-        run: uv lock --check
-      - name: Install dependencies
-        run: uv sync --frozen --all-groups --all-extras
-      - name: Release privacy gate
-        run: bash scripts/check-privacy-leaks.sh
-      - name: Release test gate
+      - name: Verify main CI for the tagged commit
+        env:
+          GH_TOKEN: ${{ github.token }}
         run: |
-          uv run ruff check kan/ tests/
-          uv run mypy
-          uv run pytest -q -m "not tty and not network" -n 2 --dist worksteal --durations=10
+          run_id=$(gh run list --workflow test.yml --branch main --event push --commit "$GITHUB_SHA" --limit 1 --json databaseId --jq '.[0].databaseId // empty')
+          if [ -z "$run_id" ]; then
+            echo "Missing main CI for tagged commit $GITHUB_SHA" >&2
+            exit 1
+          fi
+          gh run watch "$run_id" --exit-status --compact
       - name: Build
         run: uv build --clear
       - name: Verify dist artifacts

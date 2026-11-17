@@ -7,16 +7,22 @@ import { DataPage } from "./pages/DataPage";
 import { DiscoveryPage } from "./pages/DiscoveryPage";
 import { ObservationPage } from "./pages/ObservationPage";
 
+import { HistoricalExample } from "./pages/HistoricalExample";
+
 export default function App() {
   return (
     <Routes>
       <Route element={<AppShell />}>
         <Route index element={<DiscoveryPage />} />
+        <Route path="example" element={<HistoricalExample />} />
         <Route path="explore" element={<TrendScreenerPage />} />
         <Route path="studies/new" element={<StudyPage key="new" />} />
         <Route path="studies" element={<StudiesPage />} />
         <Route path="studies/:studyId" element={<SavedStudyPage />} />
-        <Route path="observations/:observationId" element={<ObservationPage />} />
+        <Route
+          path="observations/:observationId"
+          element={<ObservationPage />}
+        />
         <Route path="data" element={<DataPage />} />
         <Route
           path="*"

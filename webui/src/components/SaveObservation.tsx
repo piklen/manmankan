@@ -14,7 +14,10 @@ import { Button, Notice } from "./ui";
 type DraftFacts = Pick<
   DiscoveryGroup["current"],
   "total" | "available" | "up" | "median_return"
->;
+> & {
+  benchmark?: DiscoveryGroup["benchmark"];
+  relative_return_pp?: number | null;
+};
 type ObservationDraft = {
   title: string;
   note: string;
@@ -36,7 +39,14 @@ function readDraft(key: string): ObservationDraft | null {
 function summary(group?: DiscoveryGroup): DraftFacts | null {
   if (!group) return null;
   const { total, available, up, median_return } = group.current;
-  return { total, available, up, median_return };
+  return {
+    total,
+    available,
+    up,
+    median_return,
+    benchmark: group.benchmark,
+    relative_return_pp: group.relative_return_pp,
+  };
 }
 
 export function SaveObservation({
@@ -175,11 +185,8 @@ function ObservationForm({
         title: title.trim(),
         note,
         expected_fingerprint: fingerprint!,
-        query: {
-          ...result.query,
-          as_of: result.as_of,
-          industries: industry ? [industry] : result.query.industries,
-        },
+        industry,
+        query: { ...result.query, as_of: result.as_of },
       }),
     onError: (error) => {
       if (error instanceof ApiError && error.code === "observation_changed")
@@ -309,6 +316,35 @@ function ObservationForm({
                           <td>{percent(facts?.median_return, 2)}</td>
                           <td>{percent(group.current.median_return, 2)}</td>
                         </tr>
+                        {group.benchmark && (
+                          <>
+                            <tr>
+                              <th>原范围中位数</th>
+                              <td>
+                                {percent(facts?.benchmark?.median_return, 2)}
+                              </td>
+                              <td>
+                                {percent(group.benchmark.median_return, 2)}
+                              </td>
+                            </tr>
+                            <tr>
+                              <th>原范围有效 / 总数</th>
+                              <td>
+                                {number(facts?.benchmark?.available, 0)} /{" "}
+                                {number(facts?.benchmark?.total, 0)}
+                              </td>
+                              <td>
+                                {number(group.benchmark.available, 0)} /{" "}
+                                {number(group.benchmark.total, 0)}
+                              </td>
+                            </tr>
+                            <tr>
+                              <th>相对强度（百分点）</th>
+                              <td>{number(facts?.relative_return_pp, 2)}</td>
+                              <td>{number(group.relative_return_pp, 2)}</td>
+                            </tr>
+                          </>
+                        )}
                       </tbody>
                     </table>
                   </div>

@@ -42,7 +42,7 @@ class DiscoveryScreen(Screen[str]):
 
     def compose(self) -> ComposeResult:
         yield Static("慢慢看  /  市场观察", id="discovery-brand")
-        yield Static("看参与范围怎样改变，再进入行业与日线核对。", id="discovery-intro")
+        yield Static("比较行业与个股同期涨跌，再回到日线核对。", id="discovery-intro")
         with Horizontal(id="discovery-controls", classes="form-row"):
             yield Select([("全市场", "all"), ("个人范围", "personal")], value="all", allow_blank=False, id="discovery-universe")
             yield Static("窗口/日", id="discovery-window-label")
@@ -151,7 +151,10 @@ class DiscoveryScreen(Screen[str]):
             f"上涨 {stats.up} / 下跌 {stats.down} / 持平 {stats.flat} · 中位数 {number(stats.median_return, '%', signed=True)}\n"
             f"两段同组 {comparison.available}/{stats.total} · 上涨占比变化 {number(comparison.breadth_delta_pp, ' 个百分点', signed=True)}"
         )
-        self.query_one("#discovery-observations", Static).update("\n".join(item.title for item in group.observations[1:]))
+        benchmark = result.market.current
+        self.query_one("#discovery-observations", Static).update(
+            f"相对强度基准：所选范围中位涨跌 {number(benchmark.median_return, '%', signed=True)} · 有效 {benchmark.available}/{benchmark.total}"
+        )
         stale = result.common_data_date is not None and result.common_data_date < result.as_of
         self.query_one("#discovery-common").display = stale
         self.query_one("#discovery-common-text", Static).update(f"本地主要行情 {result.common_data_date} · {result.common_data_count} 只")
@@ -164,17 +167,17 @@ class DiscoveryScreen(Screen[str]):
         table = self.query_one("#discovery-results", DataTable)
         table.clear(columns=True)
         if self.view == "industries":
-            for label, width in (("行业", 14), ("有效/范围", 10), ("上涨占比", 10), ("涨跌中位数", 12), ("变化/百分点", 12)):
+            for label, width in (("行业", 10), ("有效/范围", 10), ("上涨占比", 8), ("中位涨跌", 8), ("较范围/点", 10), ("广度变化/点", 12)):
                 table.add_column(label, width=width)
             for item in result.industries:
-                table.add_row(Text(item.name), f"{item.current.available}/{item.total}", number(item.current.positive_share, "%"), number(item.current.median_return, "%", signed=True), number(item.comparison.breadth_delta_pp, signed=True), key=item.name)
+                table.add_row(Text(item.name), f"{item.current.available}/{item.total}", number(item.current.positive_share, "%"), number(item.current.median_return, "%", signed=True), number(item.relative_return_pp, signed=True), number(item.comparison.breadth_delta_pp, signed=True), key=item.name)
         else:
             labels = {item.key: item.label for item in group.transitions}
-            for label, width in (("代码", 7), ("名称", 12), ("本段%", 9), ("前段%", 9), ("两段关系", 24)):
+            for label, width in (("代码", 6), ("名称", 10), ("本段%", 8), ("较范围/点", 9), ("前段%", 8), ("两段关系", 21)):
                 table.add_column(label, width=width)
             for member in result.members:
                 if member.industry == self.industry:
-                    table.add_row(member.symbol, Text(member.name), number(member.return_pct, signed=True), number(member.previous_return_pct, signed=True), labels[member.transition], key=member.symbol)
+                    table.add_row(member.symbol, Text(member.name), number(member.return_pct, signed=True), number(member.relative_return_pp, signed=True), number(member.previous_return_pct, signed=True), labels[member.transition], key=member.symbol)
         self.query_one("#discovery-preview", Static).update("完整范围为空：先在数据工具中添加个人关注或更新市场范围。" if not table.row_count else "↑ ↓ 选择 · Enter 下钻 · Esc 返回上一层；缺行情成员仍保留在范围中。")
         table.move_cursor(row=self.industry_cursor if self.view == "industries" else self.member_cursor)
         table.focus() if table.row_count else self.query_one("#discovery-universe", Select).focus()

@@ -6,30 +6,11 @@ import type {
 } from "../api/client";
 import { ENUM_VALUES, FIELDS, parseCodes, SWING_FIELDS, swingInputError, type ConditionDraft } from "./study";
 
-export type TrendTask = "up" | "down" | "down_up" | "up_down" | "count" | "candles" | "swings";
-export const TREND_TASKS: Record<TrendTask, string> = {
-  up: "连续上涨",
-  down: "连续下跌",
-  down_up: "先跌后涨",
-  up_down: "先涨后跌",
-  count: "区间涨跌天数",
-  candles: "区间阳阴线",
-  swings: "波段结构",
-};
-const taskFields: Record<TrendTask, StudyCondition["field"][]> = {
-  up: ["up_days"],
-  down: ["down_days"],
-  down_up: ["previous_down_days", "up_days"],
-  up_down: ["previous_up_days", "down_days"],
-  count: ["rising_days"],
-  candles: ["candle_balance"],
-  swings: ["swing_structure"],
-};
 export const DAY_OPERATORS = { gte: "至少", eq: "恰好", lte: "最多" } as const;
 export type ScreenerDraft = {
   universe: StudyQuery["universe"];
   codes: string;
-  industries: string[];
+  industries: string;
   asOf: string;
   compareMode: "none" | "previous_session" | "date";
   compareDate: string;
@@ -41,7 +22,7 @@ export type ScreenerDraft = {
 export const blankScreenDraft = (): ScreenerDraft => ({
   universe: "all",
   codes: "",
-  industries: [],
+  industries: "",
   asOf: "",
   compareMode: "none",
   compareDate: "",
@@ -65,15 +46,6 @@ const countedDays = new Set<StudyCondition["field"]>([
   "bull_count",
   "bear_count",
 ]);
-
-export const taskConditions = (task: TrendTask): ConditionDraft[] =>
-  taskFields[task].map((field, index) => ({
-    id: index + 1,
-    field,
-    operator: ENUM_VALUES[field] ? "eq" : "gte",
-    value: "",
-    window: "",
-  }));
 
 export function conditionInputError(
   conditions: ConditionDraft[],
@@ -192,7 +164,7 @@ export function screenDraftToQuery(draft: ScreenerDraft): TrendSearchQuery {
   return {
     universe: draft.universe,
     codes: draft.universe === "codes" ? parseCodes(draft.codes) : [],
-    industries: draft.industries,
+    industries: [...new Set(draft.industries.split(/[、,，]/).map((name) => name.trim()).filter(Boolean))],
     as_of: draft.asOf || null,
     compare_to:
       draft.compareMode === "previous_session"
@@ -212,7 +184,7 @@ export function screenQueryToDraft(query: TrendSearchQuery): ScreenerDraft {
   return {
     universe: query.universe,
     codes: (query.codes ?? []).join(", "),
-    industries: query.industries ?? [],
+    industries: (query.industries ?? []).join("、"),
     asOf: query.as_of ?? "",
     compareMode: !query.compare_to
       ? "none"

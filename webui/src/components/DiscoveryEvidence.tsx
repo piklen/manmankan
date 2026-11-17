@@ -15,6 +15,7 @@ import { Loading, Notice } from "./ui";
 export function DiscoveryEvidence({
   member,
   result,
+  benchmark,
   revision,
   onClose,
   recorded = false,
@@ -24,6 +25,11 @@ export function DiscoveryEvidence({
     DiscoveryResult,
     "as_of" | "current_start" | "previous_start" | "previous_as_of" | "query"
   >;
+  benchmark?: {
+    median_return: number | null;
+    available: number;
+    total: number;
+  } | null;
   revision: number;
   onClose: () => void;
   recorded?: boolean;
@@ -102,6 +108,18 @@ export function DiscoveryEvidence({
           <strong>{percent(member.previous_return_pct, 2)}</strong>
         </div>
       </div>
+      {benchmark && (
+        <div className="relative-evidence">
+          <strong>
+            相对强度 {number(member.relative_return_pp, 2)} 个百分点
+          </strong>
+          <span>
+            本期涨跌减原范围中位数 {percent(benchmark.median_return, 2)}
+            ，基准可判断 {number(benchmark.available, 0)} /{" "}
+            {number(benchmark.total, 0)} 只。
+          </span>
+        </div>
+      )}
       {recorded ? (
         <p className="evidence-period-note">
           上方数字保留所选观察的统计。下方日线按当前本地资料回看该日期；原记录没有冻结逐日日线，资料修订可能使图中变化与存档不同。

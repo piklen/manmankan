@@ -47,13 +47,25 @@ def discover(
         console.print(f"\n[bold]{observation.title}[/bold]\n{observation.detail}")
     if not result.market.current.available and result.common_data_date:
         console.print(f"\n本地主要数据日 {result.common_data_date}（{result.common_data_count} 只）；可显式 --as-of {result.common_data_date}，未自动改用旧行情。")
-    table = Table("行业", "覆盖", "上涨", "中位涨跌", "同组占比变化")
+    benchmark = result.market.current
+    median = f"{benchmark.median_return:+.2f}%" if benchmark.median_return is not None else "—"
+    console.print(f"\n相对强度基准 · 所选范围中位涨跌 {median} · 有效 {benchmark.available}/{benchmark.total} 只")
+    table = Table("行业", "覆盖", "上涨", "中位涨跌", "较范围/百分点", "同组占比变化")
     for group in result.industries:
         stats, comparison = group.current, group.comparison
         table.add_row(
             group.name, f"{stats.available}/{stats.total}", f"{stats.up}/{stats.available}",
             f"{stats.median_return:+.2f}%" if stats.median_return is not None else "—",
+            f"{group.relative_return_pp:+.2f}" if group.relative_return_pp is not None else "—",
             f"{comparison.breadth_delta_pp:+.1f}pp ({comparison.available}只)" if comparison.breadth_delta_pp is not None else "—",
         )
     console.print(table)
+    if codes:
+        selected = Table("代码", "名称", "本期涨跌", "较范围/百分点")
+        for member in result.members:
+            selected.add_row(
+                member.symbol, member.name, f"{member.return_pct:+.2f}%" if member.return_pct is not None else "—",
+                f"{member.relative_return_pp:+.2f}" if member.relative_return_pp is not None else "—",
+            )
+        console.print(selected)
     console.print("当前成员与行业归属回溯；中位数不是行业指数。历史价格不预示未来，仅供参考，不构成投资建议。")

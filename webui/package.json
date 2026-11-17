@@ -6,8 +6,8 @@
   "scripts": {
     "dev": "vite",
     "generate:api": "uv run --project .. python ../scripts/export-openapi.py --output openapi.json && openapi-typescript openapi.json -o src/api/schema.ts",
-    "build": "npm run generate:api && tsc -b && vite build",
-    "check": "npm run generate:api && tsc -b --pretty false",
+    "build": "tsc -b && vite build",
+    "check": "tsc -b --pretty false",
     "test": "vitest run",
     "test:watch": "vitest"
   },

@@ -237,7 +237,7 @@ def _kan_observe(payload: dict[str, Any]) -> dict[str, Any]:
     if action not in {"list", "show", "save", "review"}:
         raise ValueError("action 必须为 list / show / save / review")
     if action == "save":
-        request = ObservationSaveRequest.model_validate({key: payload[key] for key in ("query", "title", "note") if key in payload})
+        request = ObservationSaveRequest.model_validate({key: value for key, value in payload.items() if key != "action"})
         return _model_result(observation.save_observation(request))
     if action == "list":
         return {"exit_code": 0, "stdout": json.dumps({"observations": [item.model_dump(mode="json") for item in observation.list_observations()]}, ensure_ascii=False), "stderr": ""}
@@ -306,18 +306,18 @@ def _kan_hold(payload: dict[str, Any]) -> dict[str, Any]:
     raise ValueError(f"unsupported hold action: {action}")
 
 
+_OBSERVATION_SAVE_SCHEMA = ObservationSaveRequest.model_json_schema()
+
 TOOLS = {
     "kan_observe": ToolSpec(
         name="kan_observe",
-        description="保存用户明确要求保留的观察，或读取/复看已有观察。save需要固定日期query，保留完整范围与用户自己的想法；review只比较原/新共同完整成员，不覆盖原事实。不得自动替用户创建观察、候选或判断。",
+        description="保存用户明确要求保留的观察，或读取/复看已有观察。save需要固定日期query，保存行业下钻时保留原query并单独传industry；保存已浏览事实须传对应组的expected_fingerprint；review只比较原/新共同完整成员，不覆盖原事实。不得自动替用户创建观察、候选或判断。",
         input_schema={
-            "type": "object", "additionalProperties": False, "required": ["action"],
+            **_OBSERVATION_SAVE_SCHEMA, "title": "ObservationAction", "required": ["action"],
             "properties": {
+                **_OBSERVATION_SAVE_SCHEMA["properties"],
                 "action": {"type": "string", "enum": ["list", "show", "save", "review"]},
                 "id": {"type": "string", "description": "show/review的观察ID"},
-                "query": DiscoveryQuery.model_json_schema(),
-                "title": {"type": "string", "maxLength": 120},
-                "note": {"type": "string", "maxLength": 4000},
                 "as_of": {"type": "string", "format": "date", "description": "明确复看日；不填使用最近收盘"},
             },
         },
@@ -325,7 +325,7 @@ TOOLS = {
     ),
     "kan_discover": ToolSpec(
         name="kan_discover",
-        description="观察完整范围的涨跌分布、行业差异、相邻等长窗口参与变化及固定成员轨迹。全部统计保留分母、缺口与成员，不预置选股条件或推荐评分。与 Web、CLI 共用同一结果。",
+        description="观察完整范围的涨跌分布、行业和成员相对范围中位涨跌的百分点差、相邻等长窗口参与变化及固定成员轨迹。全部统计保留分母、缺口与成员，不预置选股条件或推荐评分。与 Web、CLI 共用同一结果。",
         input_schema=DiscoveryQuery.model_json_schema(),
         handler=_kan_discover,
         output_schema=DiscoveryResult.model_json_schema(),

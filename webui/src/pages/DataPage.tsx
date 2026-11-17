@@ -646,7 +646,7 @@ export function DataPage() {
       <header className="page-heading">
         <div>
           <h1>数据与个人资料</h1>
-          <p>看清数据覆盖，再运行研究。个人资料只保存在本机。</p>
+          <p>配置行情、准备日线，或管理本机的个人资料。</p>
         </div>
       </header>
       <nav className="page-tabs" aria-label="数据工具">
@@ -728,7 +728,11 @@ export function DataPage() {
               )}
             </section>
           ) : null}
-          <ConnectionTool settings={settings.data} />
+          {settings.data?.tushare_configured ? (
+            <details className="data-connection"><summary>行情来源已配置 · 查看或修改连接</summary>
+              <ConnectionTool settings={settings.data} />
+            </details>
+          ) : <ConnectionTool settings={settings.data} />}
           <section className="data-section">
             <div className="section-heading">
               <h2>

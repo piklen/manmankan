@@ -14,6 +14,7 @@ export function StudiesPage() {
     queryFn: api.observations,
   });
   const [search, setSearch] = useState("");
+  const [kind, setKind] = useState<"all" | "observation" | "study">("all");
   const records = [
     ...(studies.data ?? []).map((study) => ({
       kind: "study" as const,
@@ -28,8 +29,10 @@ export function StudiesPage() {
       text: `${observation.title} ${observation.note} ${observation.scope_label}`,
     })),
   ]
-    .filter((record) =>
-      record.text.toLowerCase().includes(search.trim().toLowerCase()),
+    .filter(
+      (record) =>
+        (kind === "all" || record.kind === kind) &&
+        record.text.toLowerCase().includes(search.trim().toLowerCase()),
     )
     .sort((a, b) => b.at.localeCompare(a.at));
   return (
@@ -44,15 +47,35 @@ export function StudiesPage() {
           自定义条件研究
         </Link>
       </header>
-      <label className="search-field">
-        <Search size={17} />
-        <input
-          aria-label="搜索研究记录"
-          placeholder="搜索名称、想法或代码"
-          value={search}
-          onChange={(event) => setSearch(event.target.value)}
-        />
-      </label>
+      <div className="archive-toolbar">
+        <div className="archive-kinds" role="group" aria-label="记录类型">
+          {(
+            [
+              ["all", "全部"],
+              ["observation", "观察笔记"],
+              ["study", "条件研究"],
+            ] as const
+          ).map(([value, label]) => (
+            <button
+              key={value}
+              type="button"
+              aria-pressed={kind === value}
+              onClick={() => setKind(value)}
+            >
+              {label}
+            </button>
+          ))}
+        </div>
+        <label className="search-field">
+          <Search size={17} />
+          <input
+            aria-label="搜索研究记录"
+            placeholder="搜索名称、想法或代码"
+            value={search}
+            onChange={(event) => setSearch(event.target.value)}
+          />
+        </label>
+      </div>
       {observations.error ? (
         <Notice error>观察记录：{errorMessage(observations.error)}</Notice>
       ) : null}
@@ -71,10 +94,7 @@ export function StudiesPage() {
                 <div>
                   <span className="research-record-kind">观察记录</span>
                   <h2>{record.value.title}</h2>
-                  <p>
-                    {record.value.note ||
-                      "已保留当时的群体事实，自己的想法可随时补充。"}
-                  </p>
+                  <p>{record.value.note || "已保留观察当天的统计和成员。"}</p>
                   <small>
                     {record.value.scope_label} · {record.value.window} 日窗口 ·
                     观察截至 {record.value.as_of}
@@ -122,7 +142,15 @@ export function StudiesPage() {
       ) : studies.isPending || observations.isPending ? (
         <Loading>读取观察与研究记录</Loading>
       ) : !studies.error && !observations.error ? (
-        <Empty title={search ? "没有匹配的研究" : "把一个观察，留给下一次核对"}>
+        <Empty
+          title={
+            search
+              ? "没有匹配的研究"
+              : kind === "study"
+                ? "尚无条件研究"
+                : "把一个观察，留给下一次核对"
+          }
+        >
           <p>
             在市场观察中记下一个现象和自己的想法；已有明确条件时，也可以直接做历史研究。
           </p>

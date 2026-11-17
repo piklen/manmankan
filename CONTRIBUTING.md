@@ -11,7 +11,7 @@ git config core.hooksPath .githooks
 uv run kan web
 ```
 
-使用 Python 3.11+、uv 和 Node.js 24。Python 使用类型注解、Pydantic v2 和 ruff；界面源码位于 `webui/`，由 `npm --prefix webui run build` 生成 API 类型和 wheel 中的静态资产。
+使用 Python 3.11+、uv 和 Node.js 24。Python 使用类型注解、Pydantic v2 和 ruff；界面源码位于 `webui/`，由 `npm --prefix webui run build` 生成 wheel 中的静态资产。修改 HTTP 契约后用 `npm --prefix webui run generate:api` 刷新类型。
 
 从受影响的测试和真实用户路径验证，不要求每次改动在本地重跑全套。计算逻辑检查手算事实与数据缺口；交互变化实际操作页面或命令；依赖和制品变化才验证干净安装。具体命令和 CI 分工见 [按改动验证](docs/contributor-quickstart.md#按改动验证)。
 

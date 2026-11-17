@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import math
 import operator
+from bisect import bisect_left
 from collections.abc import Iterable
 from datetime import UTC, date, datetime
 from pathlib import Path
@@ -136,10 +137,18 @@ def normalize_history_dates(values: pd.Series) -> pd.Series:
     return pd.to_datetime(values).dt.date
 
 
-def prepare_history(frame: pd.DataFrame, sessions: list[date]) -> pd.DataFrame:
+def prepare_history(frame: pd.DataFrame, sessions: list[date], *, through_cutoff: bool = False) -> pd.DataFrame:
     if "date" not in frame:
         raise ValueError("本地日线缺少日期列，请更新对应股票行情后重试")
     dates = normalize_history_dates(frame["date"])
+    if through_cutoff:
+        # 只验证截止日前的行情。保留全部已知连续段，并跳过首根行情之前的市场日。
+        included = dates <= sessions[-1]
+        if not included.all():
+            frame, dates = frame.loc[included], dates.loc[included]
+        if dates.empty:
+            raise ValueError("截止日前没有本地行情")
+        sessions = sessions[bisect_left(sessions, dates.min()):]
     if dates.duplicated().any():
         raise ValueError("本地日线存在重复交易日，请更新对应股票行情后重试")
     # set_index 已建立独立工作帧，无需在它之前再复制整份行情。

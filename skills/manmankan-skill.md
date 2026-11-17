@@ -1,5 +1,7 @@
 # manmankan Skill · AI Agent 能力清单
 
+`kan discover` 的行业和成员字段 `relative_return_pp` 以原查询范围有效股票的窗口涨跌中位数为基准，单位为百分点。保存图中选取的行业时，提交原 `query`（将 `as_of` 固定为已查看日期）、顶层 `industry` 和所选行业的 `expected_fingerprint`。缩小查询范围会同时改变基准。
+
 当前主线是 **发现群体现象 → 核对成员证据 → 留下观察与自己的想法 → 显式复看同一批成员**。先用 `kan discover` / MCP `kan_discover` 获取完整范围的分布、行业变化与各自分母；用户明确要求留存时再用 `kan observe` / MCP `kan_observe` 保存原事实与用户文字。复看保持原成员和窗口，不覆盖原记录；两个滚动窗口可能重叠，不是持有收益或因果验证。
 
 已有明确走势条件时用 `kan trend`；财务/估值筛选用 `kan find`，指定公司材料用 `kan research`；历史事件才用 `kan study`。价格、分组和统计由共享 Python 核心计算，模型不另算，也不自动把观察变成股票候选。本文为主线契约，安装来源见 [README](../README.md#安装与主线体验)。

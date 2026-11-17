@@ -1,17 +1,14 @@
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import {
-  ArrowDown,
   ArrowRight,
-  ArrowUp,
-  Check,
   ChevronLeft,
   ChevronRight,
   RefreshCw,
   Search,
-  SlidersHorizontal,
+  CalendarDays,
   X,
 } from "lucide-react";
-import { Fragment, useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import {
   api,
@@ -20,11 +17,11 @@ import {
   type DiscoveryResult,
 } from "../api/client";
 import {
-  BreadthBar,
   BreadthHistory,
   ReturnDistribution,
   TransitionList,
 } from "../components/DiscoveryCharts";
+import { IndustryStrengthMap } from "../components/IndustryStrengthMap";
 import { DiscoveryEvidence } from "../components/DiscoveryEvidence";
 import { SaveObservation } from "../components/SaveObservation";
 import { Button, Empty, Loading, Notice } from "../components/ui";
@@ -55,21 +52,10 @@ function rememberedQuery(): DiscoveryQuery {
   }
   return initialQuery;
 }
-function change(value: number | null | undefined) {
-  return value == null ? "—" : `${value > 0 ? "+" : ""}${number(value, 1)}`;
-}
-function Delta({ value }: { value: number | null | undefined }) {
-  return (
-    <span className="discovery-delta">
-      {value == null ? null : value > 0 ? (
-        <ArrowUp size={13} />
-      ) : value < 0 ? (
-        <ArrowDown size={13} />
-      ) : null}
-      {change(value)}
-      <small>个百分点</small>
-    </span>
-  );
+function change(value: number | null | undefined, digits = 1) {
+  return value == null
+    ? "—"
+    : `${value > 0 ? "+" : ""}${number(value, digits)}`;
 }
 type MemberFilter = {
   kind: "transition" | "bin";
@@ -98,6 +84,8 @@ function industryChange(group: DiscoveryGroup): IndustryChange {
 type ObservationView = {
   industry: string | null;
   industrySearch: string;
+  industryOrder: StrengthOrder;
+  memberOrder: StrengthOrder;
   industryFilter: IndustryChange | null;
   filter: MemberFilter;
   memberSearch: string;
@@ -107,6 +95,8 @@ type ObservationView = {
 const emptyView: ObservationView = {
   industry: null,
   industrySearch: "",
+  industryOrder: "default",
+  memberOrder: "default",
   industryFilter: null,
   filter: null,
   memberSearch: "",
@@ -125,70 +115,69 @@ function rememberedView(query: DiscoveryQuery): ObservationView {
   return emptyView;
 }
 
-function ScopeFacts({ result }: { result: DiscoveryResult }) {
-  return (
-    <div className="discovery-scope-facts">
-      <span>
-        <Check size={13} />
-        {number(result.market.current.available, 0)} /{" "}
-        {number(result.market.total, 0)} 只可判断
-      </span>
-      <span>{number(result.market.current.missing, 0)} 只资料不足</span>
-      <span>
-        本期 {result.current_start} → {result.as_of}
-      </span>
-      <span>
-        前期 {result.previous_start} → {result.previous_as_of}
-      </span>
-    </div>
-  );
+type StrengthOrder = "default" | "high" | "low";
+function compareStrength(
+  a: number | null | undefined,
+  b: number | null | undefined,
+  order: StrengthOrder,
+) {
+  if (a == null || b == null) return a == null ? Number(b != null) : -1;
+  return order === "high" ? b - a : a - b;
 }
-function GroupSummary({
-  group,
-  window,
+
+function StrengthOrderSelect({
+  value,
+  onChange,
+  kind,
 }: {
-  group: DiscoveryGroup;
-  window: number;
+  value: StrengthOrder;
+  onChange: (order: StrengthOrder) => void;
+  kind: "行业" | "成员";
 }) {
   return (
-    <section className="market-overview" aria-label={`${group.name}整体观察`}>
-      <div className="market-overview-copy">
-        <h2>涨跌如何分布</h2>
-        <p>
-          近 {window} 个交易日 · {group.name}
-        </p>
-        <div className="market-breadth-value">
-          <strong>{percent(group.current.positive_share)}</strong>
-          <span>
-            成员上涨
-            <br />
-            <b>
-              {number(group.current.up, 0)} /{" "}
-              {number(group.current.available, 0)}
-            </b>{" "}
-            只
-          </span>
-        </div>
-        <BreadthBar stats={group.current} />
-        <div className="market-comparison">
-          <div>
-            <span>本期涨跌中位数</span>
-            <strong>{percent(group.current.median_return, 2)}</strong>
-          </div>
-          <div>
-            <span>上涨占比较前期</span>
-            <Delta value={group.comparison.breadth_delta_pp} />
-          </div>
-        </div>
-        <p className="comparison-denominator">
-          两期变化按同一批 {number(group.comparison.available, 0)} 只成员比较
-        </p>
-      </div>
-      <BreadthHistory group={group} window={window} />
-    </section>
+    <select
+      className="strength-order"
+      aria-label={`${kind}排序`}
+      value={value}
+      onChange={(event) => onChange(event.target.value as StrengthOrder)}
+    >
+      <option value="default">
+        {kind === "成员" ? "按股票代码" : "按行业名称"}
+      </option>
+      <option value="high">相对强度从高到低</option>
+      <option value="low">相对强度从低到高</option>
+    </select>
   );
 }
 
+function MarketSummary({ result }: { result: DiscoveryResult }) {
+  const group = result.market;
+  const { current, comparison } = group;
+  return (
+    <section className="market-summary" aria-label={`${group.name}整体观察`}>
+      <div>
+        <span>本期区间涨跌中位数</span>
+        <strong>
+          {current.median_return != null && current.median_return > 0
+            ? "+"
+            : ""}
+          {percent(current.median_return, 2)}
+        </strong>
+        <small>
+          {group.name} · {number(current.available, 0)} 只有效
+        </small>
+      </div>
+      <div>
+        <span>参与度 · 上涨成员占比</span>
+        <strong>{percent(current.positive_share)}</strong>
+        <small>
+          同一批 {number(comparison.available, 0)} 只，较前期{" "}
+          {change(comparison.breadth_delta_pp)} 个百分点
+        </small>
+      </div>
+    </section>
+  );
+}
 export function DiscoveryPage() {
   const client = useQueryClient();
   const location = useLocation();
@@ -207,6 +196,12 @@ export function DiscoveryPage() {
   const [draft, setDraft] = useState(initial);
   const [codes, setCodes] = useState((initial.codes ?? []).join(", "));
   const [industry, setIndustry] = useState(initialView.industry);
+  const [industryOrder, setIndustryOrder] = useState(
+    initialView.industryOrder ?? "default",
+  );
+  const [memberOrder, setMemberOrder] = useState(
+    initialView.memberOrder ?? "default",
+  );
   const [industrySearch, setIndustrySearch] = useState(
     initialView.industrySearch,
   );
@@ -220,7 +215,9 @@ export function DiscoveryPage() {
   );
   const [page, setPage] = useState(initialView.page);
   const [refreshingObservation, setRefreshingObservation] = useState(false);
+  const scopeRef = useRef<HTMLDetailsElement>(null);
   const membersRef = useRef<HTMLElement>(null);
+  const industriesRef = useRef<HTMLDivElement>(null);
   const detailRef = useRef<HTMLDivElement>(null);
   const evidenceRef = useRef<HTMLDivElement>(null);
   const restored = useRef(false);
@@ -255,6 +252,8 @@ export function DiscoveryPage() {
         view: {
           industry,
           industrySearch,
+          industryOrder,
+          memberOrder,
           industryFilter,
           filter,
           memberSearch,
@@ -265,6 +264,8 @@ export function DiscoveryPage() {
     );
   }, [
     submitted,
+    industryOrder,
+    memberOrder,
     industry,
     industrySearch,
     industryFilter,
@@ -291,26 +292,45 @@ export function DiscoveryPage() {
   const selected = result?.members.find(
     (member) => member.symbol === selectedSymbol,
   );
-  const listedMembers = useMemo(
-    () =>
-      result?.members.filter((member) => {
-        if (industry && member.industry !== industry) return false;
-        if (filter?.kind === "transition" && member.transition !== filter.key)
-          return false;
-        if (filter?.kind === "bin" && member.distribution_bin !== filter.key)
-          return false;
-        return `${member.symbol} ${member.name} ${member.industry}`
-          .toLowerCase()
-          .includes(memberSearch.trim().toLowerCase());
-      }) ?? [],
-    [result, industry, filter, memberSearch],
-  );
-  const industryRows =
-    result?.industries.filter(
+  const listedMembers = useMemo(() => {
+    const search = memberSearch.trim().toLowerCase();
+    const rows = (result?.members ?? []).filter((member) => {
+      if (industry && member.industry !== industry) return false;
+      if (filter?.kind === "transition" && member.transition !== filter.key)
+        return false;
+      if (filter?.kind === "bin" && member.distribution_bin !== filter.key)
+        return false;
+      return `${member.symbol} ${member.name} ${member.industry}`
+        .toLowerCase()
+        .includes(search);
+    });
+    return rows.sort(
+      (a, b) =>
+        (memberOrder === "default"
+          ? 0
+          : compareStrength(
+              a.relative_return_pp,
+              b.relative_return_pp,
+              memberOrder,
+            )) || a.symbol.localeCompare(b.symbol),
+    );
+  }, [result, industry, filter, memberSearch, memberOrder]);
+  const industryRows = (result?.industries ?? [])
+    .filter(
       (item) =>
         item.name.includes(industrySearch.trim()) &&
         (!industryFilter || industryChange(item) === industryFilter),
-    ) ?? [];
+    )
+    .sort(
+      (a, b) =>
+        (industryOrder === "default"
+          ? 0
+          : compareStrength(
+              a.relative_return_pp,
+              b.relative_return_pp,
+              industryOrder,
+            )) || a.name.localeCompare(b.name, "zh-CN"),
+    );
   const industryCounts = {
     increased: 0,
     decreased: 0,
@@ -347,10 +367,13 @@ export function DiscoveryPage() {
       exact: true,
       refetchType: "none",
     });
+    if (scopeRef.current) scopeRef.current.open = false;
     setSubmitted(next);
     setDraft(next);
     setIndustry(null);
     setIndustryFilter(null);
+    setIndustryOrder("default");
+    setMemberOrder("default");
     setIndustrySearch("");
     setFilter(null);
     setPage(0);
@@ -361,6 +384,10 @@ export function DiscoveryPage() {
   };
   const chooseIndustry = (name: string | null) => {
     setIndustry(name);
+    if (name)
+      requestAnimationFrame(() =>
+        membersRef.current?.scrollIntoView({ block: "start" }),
+      );
     setFilter(null);
     setPage(0);
     setMemberSearch("");
@@ -399,93 +426,140 @@ export function DiscoveryPage() {
   return (
     <div className="discovery-page">
       <header className="discovery-heading">
-        <div>
-          <h1>看见变化的脉络</h1>
-          <p>从市场整体到行业内部，把每个观察还原为可核对的事实。</p>
+        <h1>市场观察</h1>
+        <div className="observation-controls">
+          <details
+            className="scope-popover"
+            ref={scopeRef}
+            onBlur={(event) => {
+              if (
+                event.relatedTarget &&
+                !event.currentTarget.contains(event.relatedTarget)
+              )
+                event.currentTarget.open = false;
+            }}
+            onKeyDown={(event) => {
+              if (event.key === "Escape") {
+                event.currentTarget.open = false;
+                event.currentTarget.querySelector("summary")?.focus();
+              }
+            }}
+          >
+            <summary>
+              <CalendarDays size={15} />
+              <span>
+                {result?.market.name ?? "观察范围"} · 截至{" "}
+                <strong>
+                  {result?.as_of || submitted.as_of || "最近收盘"}
+                </strong>
+              </span>
+              <ChevronRight size={13} />
+            </summary>
+            <form
+              className="discovery-toolbar"
+              onSubmit={(event) => {
+                event.preventDefault();
+                if (!invalidCodes) run(inputQuery);
+              }}
+            >
+              <label>
+                观察范围
+                <select
+                  value={draft.universe}
+                  onChange={(event) =>
+                    setDraft({
+                      ...draft,
+                      universe: event.target
+                        .value as DiscoveryQuery["universe"],
+                      industries: [],
+                    })
+                  }
+                >
+                  <option value="all">全部 A 股</option>
+                  <option value="personal">我的股票池</option>
+                  <option value="codes">指定股票</option>
+                </select>
+              </label>
+
+              <label>
+                截至日期
+                <input
+                  type="date"
+                  aria-label="观察截至日期"
+                  value={draft.as_of ?? ""}
+                  onChange={(event) =>
+                    setDraft({ ...draft, as_of: event.target.value || null })
+                  }
+                />
+                <small>留空使用最近完整交易日</small>
+              </label>
+              <Button
+                variant="secondary"
+                type="submit"
+                disabled={Boolean(invalidCodes) || query.isFetching}
+              >
+                <RefreshCw
+                  size={15}
+                  className={query.isFetching ? "spin" : ""}
+                />
+                {query.isFetching ? "正在观察" : "应用范围"}
+              </Button>
+              {draft.universe === "codes" ? (
+                <label className="discovery-code-input">
+                  股票代码
+                  <input
+                    value={codes}
+                    onChange={(event) => setCodes(event.target.value)}
+                    placeholder="输入 6 位代码，用逗号或空格分隔"
+                  />
+                  {invalidCodes ? (
+                    <small>请填写有效的 6 位股票代码。</small>
+                  ) : null}
+                </label>
+              ) : null}
+              {dirty && !query.isFetching ? (
+                <p className="discovery-draft-note">
+                  条件已修改，应用范围后更新结果。
+                </p>
+              ) : null}
+            </form>
+          </details>
+          <fieldset className="window-picker">
+            <legend>观察窗口</legend>
+            <div role="group" aria-label="切换观察窗口">
+              {[...new Set([5, 20, 60, submitted.window ?? 20])]
+                .sort((a, b) => a - b)
+                .map((days) => (
+                  <button
+                    key={days}
+                    type="button"
+                    aria-pressed={(submitted.window ?? 20) === days}
+                    onClick={() => run({ ...submitted, window: days })}
+                  >
+                    {days} 日
+                  </button>
+                ))}
+            </div>
+          </fieldset>
+          <button
+            type="button"
+            aria-label="重新观察"
+            title="重新观察"
+            className="refresh-observation"
+            disabled={query.isFetching}
+            onClick={() => run(submitted)}
+          >
+            <RefreshCw size={16} />
+          </button>
         </div>
-        <Link to="/explore" className="discovery-text-link">
-          <SlidersHorizontal size={16} />
-          有明确条件？去筛选
-          <ArrowRight size={15} />
-        </Link>
       </header>
-      <form
-        className="discovery-toolbar"
-        onSubmit={(event) => {
-          event.preventDefault();
-          if (!invalidCodes) run(inputQuery);
-        }}
-      >
-        <label>
-          观察范围
-          <select
-            value={draft.universe}
-            onChange={(event) =>
-              setDraft({
-                ...draft,
-                universe: event.target.value as DiscoveryQuery["universe"],
-                industries: [],
-              })
-            }
-          >
-            <option value="all">全部 A 股</option>
-            <option value="personal">我的股票池</option>
-            <option value="codes">指定股票</option>
-          </select>
-        </label>
-        <label>
-          观察窗口
-          <select
-            value={draft.window}
-            onChange={(event) =>
-              setDraft({ ...draft, window: Number(event.target.value) })
-            }
-          >
-            <option value={5}>5 个交易日</option>
-            <option value={20}>20 个交易日</option>
-            <option value={60}>60 个交易日</option>
-          </select>
-        </label>
-        <label>
-          截至日期
-          <input
-            type="date"
-            aria-label="观察截至日期"
-            value={draft.as_of ?? ""}
-            onChange={(event) =>
-              setDraft({ ...draft, as_of: event.target.value || null })
-            }
-          />
-          <small>留空使用最近完整交易日</small>
-        </label>
-        <Button
-          type="submit"
-          disabled={Boolean(invalidCodes) || query.isFetching}
-        >
-          <RefreshCw size={15} className={query.isFetching ? "spin" : ""} />
-          {query.isFetching ? "正在观察" : "重新观察"}
-        </Button>
-        {draft.universe === "codes" ? (
-          <label className="discovery-code-input">
-            股票代码
-            <input
-              value={codes}
-              onChange={(event) => setCodes(event.target.value)}
-              placeholder="输入 6 位代码，用逗号或空格分隔"
-            />
-            {invalidCodes ? <small>请填写有效的 6 位股票代码。</small> : null}
-          </label>
-        ) : null}
-        {dirty && !query.isFetching ? (
-          <p className="discovery-draft-note">
-            条件已修改，点击“重新观察”后更新结果。
-          </p>
-        ) : null}
-      </form>
       {query.isFetching && !refreshingObservation ? (
         <div className="discovery-loading">
           <Loading>正在从日线汇集分布与变化</Loading>
           <p>同一批成员、相邻两个观察窗口。首次读取全市场需要一点时间。</p>
+          <Link className="discovery-text-link" to="/example">
+            先看历史样本 <ArrowRight size={14} />
+          </Link>
         </div>
       ) : query.error ? (
         <Notice error>
@@ -500,61 +574,80 @@ export function DiscoveryPage() {
           >
             检查数据配置
           </Link>
+          <Link className="discovery-text-link" to="/example">
+            先看历史样本 <ArrowRight size={14} />
+          </Link>
         </Notice>
       ) : result ? (
         <>
-          <div className="discovery-result-heading">
-            <span>
-              观察截至 <strong>{result.as_of}</strong>
-            </span>
-            <span>日线事实 · 两期各 {window} 个交易日</span>
-          </div>
-          <ScopeFacts result={result} />
-          {result.data_gaps.length ? (
-            <details className="discovery-data-gaps">
-              <summary>
-                行情存在共同缺口：{result.data_gaps[0]!.date} ·{" "}
-                {number(result.data_gaps[0]!.missing, 0)} 只
-              </summary>
-              <p>
-                以下日期缺少有效日线。缺失成员保留为未知，不当作下跌、停牌或退出；请先核对资料，再解释变化。
-              </p>
-              <ul>
-                {result.data_gaps.map((gap) => (
-                  <li key={gap.date}>
-                    {gap.date}
-                    <span>{number(gap.missing, 0)} 只</span>
-                  </li>
-                ))}
-              </ul>
-              <p>只统计已有有效行情之后的窗口缺日，不把上市前历史不足计入。</p>
-              <Link
-                to="/data"
-                state={{ returnTo: "/", discoveryQuery: submitted }}
+          {hasData && (
+            <div className="market-front">
+              <MarketSummary result={result} />
+              <BreadthHistory
+                key={result.market.name}
+                group={result.market}
+                window={window}
+              />
+            </div>
+          )}
+          <details className="coverage-details" open={!hasData}>
+            <summary>
+              数据覆盖 · {number(result.market.current.available, 0)} /{" "}
+              {number(result.market.total, 0)} 只可判断 ·{" "}
+              {number(result.market.current.missing, 0)} 只资料不足
+            </summary>
+            <p>
+              本期 {result.current_start} 至 {result.as_of}，前期{" "}
+              {result.previous_start} 至 {result.previous_as_of}。
+            </p>
+            {result.data_gaps.length ? (
+              <details className="discovery-data-gaps">
+                <summary>
+                  行情存在共同缺口：{result.data_gaps[0]!.date} ·{" "}
+                  {number(result.data_gaps[0]!.missing, 0)} 只
+                </summary>
+                <p>
+                  以下日期缺少有效日线。缺失成员保留为未知，不当作下跌、停牌或退出；请先核对资料，再解释变化。
+                </p>
+                <ul>
+                  {result.data_gaps.map((gap) => (
+                    <li key={gap.date}>
+                      {gap.date}
+                      <span>{number(gap.missing, 0)} 只</span>
+                    </li>
+                  ))}
+                </ul>
+                <p>
+                  只统计已有有效行情之后的窗口缺日，不把上市前历史不足计入。
+                </p>
+                <Link
+                  to="/data"
+                  state={{ returnTo: "/", discoveryQuery: submitted }}
+                >
+                  按本次范围核对数据 <ArrowRight size={14} />
+                </Link>
+              </details>
+            ) : null}
+            {missingReasons.size ? (
+              <details
+                className="discovery-data-gaps discovery-reasons"
+                aria-label="资料不足原因"
+                open={!hasData}
               >
-                按本次范围核对数据 <ArrowRight size={14} />
-              </Link>
-            </details>
-          ) : null}
-          {missingReasons.size ? (
-            <details
-              className="discovery-data-gaps discovery-reasons"
-              aria-label="资料不足原因"
-              open={!hasData}
-            >
-              <summary>
-                无法判断的原因 · {number(result.market.current.missing, 0)} 只
-              </summary>
-              <ul>
-                {[...missingReasons].map(([reason, count]) => (
-                  <li key={reason}>
-                    <span>{reason}</span>
-                    <span>{number(count, 0)} 只</span>
-                  </li>
-                ))}
-              </ul>
-            </details>
-          ) : null}
+                <summary>
+                  无法判断的原因 · {number(result.market.current.missing, 0)} 只
+                </summary>
+                <ul>
+                  {[...missingReasons].map(([reason, count]) => (
+                    <li key={reason}>
+                      <span>{reason}</span>
+                      <span>{number(count, 0)} 只</span>
+                    </li>
+                  ))}
+                </ul>
+              </details>
+            ) : null}
+          </details>
           {!hasData ? (
             <section className="discovery-empty">
               <Empty
@@ -589,6 +682,9 @@ export function DiscoveryPage() {
                 >
                   去更新数据 <ArrowRight size={15} />
                 </Link>
+                <Link className="button button--secondary" to="/example">
+                  先看历史样本
+                </Link>
               </div>
               {result.common_data_date ? (
                 <p>
@@ -599,93 +695,82 @@ export function DiscoveryPage() {
             </section>
           ) : (
             <>
-              <GroupSummary group={result.market} window={window} />
-              {result.market.observations.length ? (
-                <div className="discovery-observations">
-                  {result.market.observations.map((observation, i) => (
-                    <div key={`${observation.kind}-${i}`}>
-                      <span>{String(i + 1).padStart(2, "0")}</span>
-                      <div>
-                        <h3>{observation.title}</h3>
-                        <p>{observation.detail}</p>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              ) : null}
-              <div className="discovery-market-save">
-                <SaveObservation
-                  result={result}
-                  industry={null}
-                  onRefresh={refreshObservationFacts}
+              <div className="industry-workbench" ref={industriesRef}>
+                <IndustryStrengthMap
+                  groups={result.industries}
+                  selected={industry}
+                  onSelect={chooseIndustry}
                 />
-              </div>
-              <section className="industry-section">
-                <header className="discovery-section-heading">
-                  <div>
-                    <h2>行业剖面</h2>
-                    <p>看变化在哪里发生，以及行业内部是否一致。</p>
-                  </div>
-                  <label className="search-field">
-                    <Search size={15} />
-                    <input
-                      aria-label="查找行业"
-                      placeholder="查找行业"
-                      value={industrySearch}
-                      onChange={(event) =>
-                        setIndustrySearch(event.target.value)
-                      }
-                    />
-                  </label>
-                </header>
-                <div
-                  className="industry-changes"
-                  role="group"
-                  aria-label="按行业上涨占比变化查看"
-                >
-                  <button
-                    type="button"
-                    aria-pressed={industryFilter === null}
-                    onClick={() => setIndustryFilter(null)}
-                  >
-                    全部行业 <strong>{result.industries.length}</strong>
-                  </button>
-                  {(Object.keys(industryChangeLabels) as IndustryChange[]).map(
-                    (key) => (
-                      <button
-                        type="button"
-                        key={key}
-                        aria-label={`${industryChangeLabels[key]}，${industryCounts[key]}个行业`}
-                        aria-pressed={industryFilter === key}
-                        onClick={() =>
-                          setIndustryFilter(industryFilter === key ? null : key)
+                <section className="industry-section">
+                  <header className="discovery-section-heading">
+                    <div>
+                      <h2>行业剖面</h2>
+                      <p>
+                        相对强度为行业涨跌中位数减原范围中位数（
+                        {percent(result.market.current.median_return, 2)}
+                        ），单位为百分点。
+                      </p>
+                    </div>
+                    <div className="list-controls">
+                      <select
+                        className="strength-order"
+                        aria-label="按行业上涨占比变化查看"
+                        value={industryFilter ?? ""}
+                        onChange={(event) =>
+                          setIndustryFilter(
+                            (event.target.value ||
+                              null) as IndustryChange | null,
+                          )
                         }
                       >
-                        <span>{industryChangeLabels[key]}</span>
-                        <strong>{industryCounts[key]}</strong>
-                      </button>
-                    ),
-                  )}
-                </div>
-                <p className="industry-comparison-note">
-                  各行业在同一批可比较成员中，对照相邻两个 {window}{" "}
-                  日窗口；点击数量查看对应行业。
-                </p>
-                <div className="industry-table-scroll">
-                  <table className="industry-table">
-                    <thead>
-                      <tr>
-                        <th>行业 / 成员</th>
-                        <th>上涨占比</th>
-                        <th>涨跌中位数</th>
-                        <th>占比较前期</th>
-                        <th>可判断 / 范围</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {industryRows.map((item) => (
-                        <Fragment key={item.name}>
+                        <option value="">
+                          全部行业（{result.industries.length}）
+                        </option>
+                        {(
+                          Object.keys(industryChangeLabels) as IndustryChange[]
+                        ).map((key) => (
+                          <option key={key} value={key}>
+                            {industryChangeLabels[key]}（{industryCounts[key]}）
+                          </option>
+                        ))}
+                      </select>
+                      <StrengthOrderSelect
+                        kind="行业"
+                        value={industryOrder}
+                        onChange={setIndustryOrder}
+                      />
+                      <label className="search-field">
+                        <Search size={15} />
+                        <input
+                          aria-label="查找行业"
+                          placeholder="查找行业"
+                          value={industrySearch}
+                          onChange={(event) =>
+                            setIndustrySearch(event.target.value)
+                          }
+                        />
+                      </label>
+                    </div>
+                  </header>
+                  <div className="industry-table-scroll">
+                    <table className="industry-table">
+                      <thead>
+                        <tr>
+                          <th>行业名称</th>
+                          <th>涨跌中位数</th>
+                          <th title="行业减原范围中位数，单位百分点">
+                            相对强度
+                          </th>
+                          <th>上涨占比</th>
+                          <th title="共同成员的上涨占比变化，单位百分点">
+                            占比变化
+                          </th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {industryRows.map((item) => (
                           <tr
+                            key={item.name}
                             className={
                               industry === item.name ? "is-selected" : ""
                             }
@@ -694,7 +779,7 @@ export function DiscoveryPage() {
                               <button
                                 type="button"
                                 className="industry-select"
-                                aria-expanded={industry === item.name}
+                                aria-pressed={industry === item.name}
                                 onClick={() =>
                                   chooseIndustry(
                                     industry === item.name ? null : item.name,
@@ -704,6 +789,10 @@ export function DiscoveryPage() {
                                 <ChevronRight size={15} />
                                 <strong>{item.name}</strong>
                               </button>
+                            </td>
+                            <td>{percent(item.current.median_return, 2)}</td>
+                            <td className="strength-number">
+                              {change(item.relative_return_pp, 2)}
                             </td>
                             <td>
                               <div className="industry-breadth">
@@ -719,51 +808,213 @@ export function DiscoveryPage() {
                                 </i>
                               </div>
                             </td>
-                            <td>{percent(item.current.median_return, 2)}</td>
-                            <td>
-                              <Delta value={item.comparison.breadth_delta_pp} />
-                            </td>
-                            <td>
-                              {number(item.current.available, 0)}
-                              <span className="muted">
-                                {" "}
-                                / {number(item.total, 0)}
-                              </span>
-                            </td>
+                            <td>{change(item.comparison.breadth_delta_pp)}</td>
                           </tr>
-                          {industry === item.name ? (
-                            <tr className="industry-expanded">
-                              <td colSpan={5}>
-                                <div>
-                                  <p>
-                                    {item.observations[0]?.detail ||
-                                      `当前 ${item.current.available} 只资料完整，${item.current.missing} 只资料不足。`}
-                                  </p>
-                                  <button
-                                    type="button"
-                                    className="discovery-text-link"
-                                    onClick={() =>
-                                      detailRef.current?.scrollIntoView({
-                                        behavior: "smooth",
-                                        block: "start",
-                                      })
-                                    }
-                                  >
-                                    展开分布与成员 <ArrowRight size={15} />
-                                  </button>
-                                </div>
-                              </td>
-                            </tr>
-                          ) : null}
-                        </Fragment>
+                        ))}
+                      </tbody>
+                    </table>
+                    {!industryRows.length ? (
+                      <p className="industry-no-results">
+                        没有符合当前名称和条件的行业。
+                      </p>
+                    ) : null}
+                  </div>
+                </section>
+              </div>
+            </>
+          )}
+          <section className="discovery-members" ref={membersRef}>
+            <header className="discovery-section-heading">
+              <div>
+                <h2>
+                  {industry ? industry + " · " : ""}成员与证据{" "}
+                  <span>{number(listedMembers.length, 0)}</span>
+                </h2>
+                <p>
+                  {industry ?? "整个范围"}
+                  {filter ? ` · ${filter.label}` : " · 全部成员"} ·
+                  相对原观察范围中位数{" "}
+                  {percent(result.market.current.median_return, 2)}
+                </p>
+              </div>
+              <div className="member-heading-actions">
+                {industry && (
+                  <button
+                    type="button"
+                    className="discovery-text-link"
+                    onClick={() => {
+                      chooseIndustry(null);
+                      industriesRef.current?.scrollIntoView({ block: "start" });
+                    }}
+                  >
+                    返回行业比较 <ArrowRight size={14} />
+                  </button>
+                )}
+                <StrengthOrderSelect
+                  kind="成员"
+                  value={memberOrder}
+                  onChange={(order) => {
+                    setMemberOrder(order);
+                    setPage(0);
+                  }}
+                />
+                {filter ? (
+                  <button
+                    type="button"
+                    className="discovery-text-link"
+                    onClick={() => drill(null)}
+                  >
+                    清除分组
+                    <X size={14} />
+                  </button>
+                ) : null}
+                <label className="search-field">
+                  <Search size={15} />
+                  <input
+                    aria-label="查找成员"
+                    placeholder="名称或代码"
+                    value={memberSearch}
+                    onChange={(event) => {
+                      setMemberSearch(event.target.value);
+                      setPage(0);
+                    }}
+                  />
+                </label>
+              </div>
+            </header>
+            <div
+              className={`discovery-member-layout${selected ? " has-evidence" : ""}`}
+            >
+              <div className="member-list">
+                <div className="table-scroll">
+                  <table>
+                    <thead>
+                      <tr>
+                        <th>股票</th>
+                        <th>相对强度（百分点）</th>
+                        <th>本期涨跌</th>
+                        <th>前期涨跌</th>
+                        <th>变化 / 资料</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {pageRows.map((member) => (
+                        <tr
+                          key={member.symbol}
+                          className={
+                            selectedSymbol === member.symbol ? "selected" : ""
+                          }
+                        >
+                          <td>
+                            <button
+                              type="button"
+                              className="member-name"
+                              aria-label={`查看 ${member.name} ${member.symbol} 价格证据`}
+                              onClick={() => selectMember(member.symbol)}
+                            >
+                              <strong>{member.name}</strong>
+                              <small>
+                                {member.symbol} · {member.industry}
+                              </small>
+                            </button>
+                          </td>
+                          <td className="strength-number">
+                            {change(member.relative_return_pp, 2)}
+                          </td>
+                          <td>{percent(member.return_pct, 2)}</td>
+                          <td>{percent(member.previous_return_pct, 2)}</td>
+                          <td className="member-status">
+                            {member.reason ??
+                              group?.transitions.find(
+                                (item) => item.key === member.transition,
+                              )?.label ??
+                              "—"}
+                          </td>
+                        </tr>
                       ))}
                     </tbody>
                   </table>
-                  {!industryRows.length ? (
-                    <p className="industry-no-results">没有符合名称的行业。</p>
-                  ) : null}
                 </div>
-              </section>
+                {!listedMembers.length ? (
+                  <Empty title="这个分组里没有成员">
+                    <p>清除分组或调整名称搜索，查看完整范围。</p>
+                  </Empty>
+                ) : null}
+                {listedMembers.length > 12 ? (
+                  <div className="pagination">
+                    <span>
+                      {page + 1} / {Math.ceil(listedMembers.length / 12)} 页
+                    </span>
+                    <Button
+                      variant="ghost"
+                      aria-label="上一页成员"
+                      disabled={!page}
+                      onClick={() => setPage(page - 1)}
+                    >
+                      <ChevronLeft size={15} />
+                    </Button>
+                    <Button
+                      variant="ghost"
+                      aria-label="下一页成员"
+                      disabled={(page + 1) * 12 >= listedMembers.length}
+                      onClick={() => setPage(page + 1)}
+                    >
+                      <ChevronRight size={15} />
+                    </Button>
+                  </div>
+                ) : null}
+              </div>
+              {selected ? (
+                <div ref={evidenceRef} className="discovery-evidence-holder">
+                  <DiscoveryEvidence
+                    key={`${selected.symbol}-${result.as_of}`}
+                    member={selected}
+                    benchmark={result.market.current}
+                    result={result}
+                    revision={query.dataUpdatedAt}
+                    onClose={() => setSelectedSymbol(null)}
+                  />
+                </div>
+              ) : null}
+            </div>
+            {hasData && (
+              <button
+                type="button"
+                className="discovery-explore-link"
+                onClick={() =>
+                  detailRef.current?.scrollIntoView({ block: "start" })
+                }
+              >
+                查看涨跌分布与前后期变化 <ArrowRight size={16} />
+              </button>
+            )}
+            <Link
+              className="discovery-explore-link"
+              to="/explore"
+              state={{
+                discoveryQuery: {
+                  universe: submitted.universe,
+                  codes: submitted.codes,
+                  industries: industry ? [industry] : submitted.industries,
+                  as_of: result.as_of,
+                  conditions: [],
+                  swing_reversal_pct: 5,
+                },
+              }}
+            >
+              在这个完整范围继续筛选
+              <ArrowRight size={16} />
+            </Link>
+          </section>
+          {hasData ? (
+            <>
+              <div className="discovery-market-save">
+                <SaveObservation
+                  result={result}
+                  industry={null}
+                  onRefresh={refreshObservationFacts}
+                />
+              </div>
               {group || industry ? (
                 <div
                   ref={detailRef}
@@ -783,6 +1034,15 @@ export function DiscoveryPage() {
                             : "每个分布都能下钻，查看组成它的全部成员。"}
                         </p>
                       </div>
+                      {industry && group && (
+                        <button
+                          type="button"
+                          className="discovery-text-link"
+                          onClick={() => drill(null)}
+                        >
+                          查看 {group.total} 只成员 <ArrowRight size={14} />
+                        </button>
+                      )}
                       {industry ? (
                         <button
                           type="button"
@@ -848,153 +1108,17 @@ export function DiscoveryPage() {
                 </div>
               ) : null}
             </>
-          )}
-          <section className="discovery-members" ref={membersRef}>
-            <header className="discovery-section-heading">
-              <div>
-                <h2>
-                  成员与证据 <span>{number(listedMembers.length, 0)}</span>
-                </h2>
-                <p>
-                  {industry ?? "整个范围"}
-                  {filter ? ` · ${filter.label}` : " · 全部成员"} · 按代码排列
-                </p>
-              </div>
-              <div className="member-heading-actions">
-                {filter ? (
-                  <button
-                    type="button"
-                    className="discovery-text-link"
-                    onClick={() => drill(null)}
-                  >
-                    清除分组
-                    <X size={14} />
-                  </button>
-                ) : null}
-                <label className="search-field">
-                  <Search size={15} />
-                  <input
-                    aria-label="查找成员"
-                    placeholder="名称或代码"
-                    value={memberSearch}
-                    onChange={(event) => {
-                      setMemberSearch(event.target.value);
-                      setPage(0);
-                    }}
-                  />
-                </label>
-              </div>
-            </header>
-            <div
-              className={`discovery-member-layout${selected ? " has-evidence" : ""}`}
-            >
-              <div className="member-list">
-                <div className="table-scroll">
-                  <table>
-                    <thead>
-                      <tr>
-                        <th>股票</th>
-                        <th>本期涨跌</th>
-                        <th>前期涨跌</th>
-                        <th>变化 / 资料</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {pageRows.map((member) => (
-                        <tr
-                          key={member.symbol}
-                          className={
-                            selectedSymbol === member.symbol ? "selected" : ""
-                          }
-                        >
-                          <td>
-                            <button
-                              type="button"
-                              className="member-name"
-                              aria-label={`查看 ${member.name} ${member.symbol} 价格证据`}
-                              onClick={() => selectMember(member.symbol)}
-                            >
-                              <strong>{member.name}</strong>
-                              <small>
-                                {member.symbol} · {member.industry}
-                              </small>
-                            </button>
-                          </td>
-                          <td>{percent(member.return_pct, 2)}</td>
-                          <td>{percent(member.previous_return_pct, 2)}</td>
-                          <td className="member-status">
-                            {member.reason ??
-                              group?.transitions.find(
-                                (item) => item.key === member.transition,
-                              )?.label ??
-                              "—"}
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-                {!listedMembers.length ? (
-                  <Empty title="这个分组里没有成员">
-                    <p>清除分组或调整名称搜索，查看完整范围。</p>
-                  </Empty>
-                ) : null}
-                {listedMembers.length > 12 ? (
-                  <div className="pagination">
-                    <span>
-                      {page + 1} / {Math.ceil(listedMembers.length / 12)} 页
-                    </span>
-                    <Button
-                      variant="ghost"
-                      aria-label="上一页成员"
-                      disabled={!page}
-                      onClick={() => setPage(page - 1)}
-                    >
-                      <ChevronLeft size={15} />
-                    </Button>
-                    <Button
-                      variant="ghost"
-                      aria-label="下一页成员"
-                      disabled={(page + 1) * 12 >= listedMembers.length}
-                      onClick={() => setPage(page + 1)}
-                    >
-                      <ChevronRight size={15} />
-                    </Button>
-                  </div>
-                ) : null}
-              </div>
-              {selected ? (
-                <div ref={evidenceRef} className="discovery-evidence-holder">
-                  <DiscoveryEvidence
-                    key={`${selected.symbol}-${result.as_of}`}
-                    member={selected}
-                    result={result}
-                    revision={query.dataUpdatedAt}
-                    onClose={() => setSelectedSymbol(null)}
-                  />
-                </div>
-              ) : null}
-            </div>
-            <Link
-              className="discovery-explore-link"
-              to="/explore"
-              state={{
-                discoveryQuery: {
-                  universe: submitted.universe,
-                  codes: submitted.codes,
-                  industries: industry ? [industry] : submitted.industries,
-                  as_of: result.as_of,
-                  conditions: [],
-                  swing_reversal_pct: 5,
-                },
-              }}
-            >
-              在这个完整范围继续筛选
-              <ArrowRight size={16} />
-            </Link>
-          </section>
+          ) : null}
           <details className="discovery-method">
-            <summary>数据口径与解释边界</summary>
+            <summary>日期、数据来源与统计口径</summary>
+            <Link className="discovery-text-link" to="/example">
+              先看历史样本 <ArrowRight size={14} />
+            </Link>
+            <p>
+              本期 {result.current_start} 至 {result.as_of}，前期{" "}
+              {result.previous_start} 至 {result.previous_as_of}
+              。相对强度比较同一窗口，单位为百分点。负收益的成员也可能高于范围中位数。
+            </p>
             <p>
               上涨与下跌描述收盘价格在观察窗口内的变化，不是股票评级。中位数按成员等权统计，不是行业指数收益。前期为紧邻本期的同长度窗口。
             </p>
